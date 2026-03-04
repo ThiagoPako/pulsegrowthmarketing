@@ -1,0 +1,380 @@
+import { useState, useMemo, useRef, useCallback } from 'react';
+import { useApp } from '@/contexts/AppContext';
+import { SCRIPT_VIDEO_TYPE_LABELS } from '@/types';
+import type { Script, ScriptVideoType } from '@/types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+import {
+  Plus, Pencil, Trash2, FileText, Download, Check, Eye, Search, Filter
+} from 'lucide-react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
+import TextAlign from '@tiptap/extension-text-align';
+import { TextStyle } from '@tiptap/extension-text-style';
+import { Color } from '@tiptap/extension-color';
+import pulseLogo from '@/assets/pulse_logo.png';
+
+const VIDEO_TYPES: ScriptVideoType[] = ['vendas', 'institucional', 'reconhecimento', 'educacional', 'bastidores', 'depoimento', 'lancamento'];
+
+function RichEditor({ content, onChange }: { content: string; onChange: (html: string) => void }) {
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Underline,
+      TextStyle,
+      Color,
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+    ],
+    content,
+    onUpdate: ({ editor }) => onChange(editor.getHTML()),
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm max-w-none min-h-[300px] p-4 focus:outline-none',
+      },
+    },
+  });
+
+  if (!editor) return null;
+
+  const btnClass = (active: boolean) =>
+    `p-1.5 rounded text-xs font-medium transition-colors ${active ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-accent'}`;
+
+  return (
+    <div className="border border-border rounded-xl overflow-hidden bg-background">
+      <div className="flex flex-wrap gap-1 p-2 border-b border-border bg-muted/30">
+        <button type="button" className={btnClass(editor.isActive('bold'))} onClick={() => editor.chain().focus().toggleBold().run()}>
+          <strong>B</strong>
+        </button>
+        <button type="button" className={btnClass(editor.isActive('italic'))} onClick={() => editor.chain().focus().toggleItalic().run()}>
+          <em>I</em>
+        </button>
+        <button type="button" className={btnClass(editor.isActive('underline'))} onClick={() => editor.chain().focus().toggleUnderline().run()}>
+          <u>U</u>
+        </button>
+        <div className="w-px h-6 bg-border mx-1" />
+        <button type="button" className={btnClass(editor.isActive('heading', { level: 1 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>
+          H1
+        </button>
+        <button type="button" className={btnClass(editor.isActive('heading', { level: 2 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
+          H2
+        </button>
+        <button type="button" className={btnClass(editor.isActive('heading', { level: 3 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>
+          H3
+        </button>
+        <div className="w-px h-6 bg-border mx-1" />
+        <button type="button" className={btnClass(editor.isActive({ textAlign: 'left' }))} onClick={() => editor.chain().focus().setTextAlign('left').run()}>
+          ≡
+        </button>
+        <button type="button" className={btnClass(editor.isActive({ textAlign: 'center' }))} onClick={() => editor.chain().focus().setTextAlign('center').run()}>
+          ≡̈
+        </button>
+        <button type="button" className={btnClass(editor.isActive({ textAlign: 'right' }))} onClick={() => editor.chain().focus().setTextAlign('right').run()}>
+          ≡̃
+        </button>
+        <div className="w-px h-6 bg-border mx-1" />
+        <button type="button" className={btnClass(editor.isActive('bulletList'))} onClick={() => editor.chain().focus().toggleBulletList().run()}>
+          • Lista
+        </button>
+        <button type="button" className={btnClass(editor.isActive('orderedList'))} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
+          1. Lista
+        </button>
+        <div className="w-px h-6 bg-border mx-1" />
+        <button type="button" className={btnClass(editor.isActive('blockquote'))} onClick={() => editor.chain().focus().toggleBlockquote().run()}>
+          ❝ Citação
+        </button>
+        <button type="button" className={btnClass(false)} onClick={() => editor.chain().focus().setHorizontalRule().run()}>
+          — Linha
+        </button>
+      </div>
+      <EditorContent editor={editor} />
+    </div>
+  );
+}
+
+export default function Scripts() {
+  const { clients, scripts, addScript, updateScript, deleteScript } = useApp();
+  const [open, setOpen] = useState(false);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [editing, setEditing] = useState<Script | null>(null);
+  const [viewing, setViewing] = useState<Script | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterClient, setFilterClient] = useState('all');
+  const [filterType, setFilterType] = useState('all');
+
+  const [form, setForm] = useState({
+    clientId: '',
+    title: '',
+    videoType: 'vendas' as ScriptVideoType,
+    content: '',
+  });
+
+  const printRef = useRef<HTMLDivElement>(null);
+
+  const filteredScripts = useMemo(() => {
+    let result = scripts;
+    if (filterClient !== 'all') result = result.filter(s => s.clientId === filterClient);
+    if (filterType !== 'all') result = result.filter(s => s.videoType === filterType);
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(s =>
+        s.title.toLowerCase().includes(term) ||
+        clients.find(c => c.id === s.clientId)?.companyName.toLowerCase().includes(term)
+      );
+    }
+    return result.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }, [scripts, filterClient, filterType, searchTerm, clients]);
+
+  const handleOpen = (script?: Script) => {
+    if (script) {
+      setEditing(script);
+      setForm({ clientId: script.clientId, title: script.title, videoType: script.videoType, content: script.content });
+    } else {
+      setEditing(null);
+      setForm({ clientId: '', title: '', videoType: 'vendas', content: '' });
+    }
+    setOpen(true);
+  };
+
+  const handleSave = () => {
+    if (!form.clientId || !form.title) {
+      toast.error('Preencha o cliente e o título'); return;
+    }
+    const now = new Date().toISOString();
+    if (editing) {
+      updateScript({ ...editing, ...form, updatedAt: now });
+      toast.success('Roteiro atualizado');
+    } else {
+      addScript({ ...form, id: crypto.randomUUID(), recorded: false, createdAt: now, updatedAt: now });
+      toast.success('Roteiro criado');
+    }
+    setOpen(false);
+  };
+
+  const handleDelete = (id: string) => {
+    deleteScript(id);
+    toast.success('Roteiro removido');
+  };
+
+  const toggleRecorded = (script: Script) => {
+    updateScript({ ...script, recorded: !script.recorded, updatedAt: new Date().toISOString() });
+    toast.success(script.recorded ? 'Marcado como pendente' : 'Marcado como gravado');
+  };
+
+  const handleDownloadPdf = useCallback(async (script: Script) => {
+    const client = clients.find(c => c.id === script.clientId);
+    const { default: html2canvas } = await import('html2canvas');
+    const { default: jsPDF } = await import('jspdf');
+
+    // Create a temporary div for rendering
+    const container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:white;padding:0;';
+    container.innerHTML = `
+      <div style="padding: 40px; font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a;">
+        <div style="text-align:center; margin-bottom:30px; padding-bottom:20px; border-bottom:2px solid #e5e5e5;">
+          <img src="${pulseLogo}" style="height:60px; margin-bottom:12px;" />
+          <h1 style="font-size:22px; margin:0 0 6px;">${script.title}</h1>
+          <p style="font-size:13px; color:#666; margin:0;">
+            ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
+          </p>
+        </div>
+        <div style="font-size:14px; line-height:1.7;">
+          ${script.content}
+        </div>
+        <div style="margin-top:40px; padding-top:16px; border-top:1px solid #e5e5e5; text-align:center;">
+          <p style="font-size:11px; color:#999;">Roteiro gerado por Pulse · ${new Date().toLocaleDateString('pt-BR')}</p>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(container);
+
+    try {
+      const canvas = await html2canvas(container, { scale: 2, useCORS: true });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`roteiro-${script.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+      toast.success('PDF baixado');
+    } finally {
+      document.body.removeChild(container);
+    }
+  }, [clients]);
+
+  const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || '—';
+  const getClientColor = (id: string) => clients.find(c => c.id === id)?.color || '220 10% 50%';
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h1 className="text-2xl font-display font-bold">Roteiros</h1>
+        <Button onClick={() => handleOpen()}><Plus size={16} className="mr-2" /> Novo Roteiro</Button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input placeholder="Buscar roteiros..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-9" />
+        </div>
+        <Select value={filterClient} onValueChange={setFilterClient}>
+          <SelectTrigger className="w-44"><SelectValue placeholder="Cliente" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os Clientes</SelectItem>
+            {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={filterType} onValueChange={setFilterType}>
+          <SelectTrigger className="w-40"><SelectValue placeholder="Tipo" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os Tipos</SelectItem>
+            {VIDEO_TYPES.map(t => <SelectItem key={t} value={t}>{SCRIPT_VIDEO_TYPE_LABELS[t]}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Scripts list */}
+      {filteredScripts.length === 0 ? (
+        <div className="glass-card p-12 text-center text-muted-foreground">
+          <FileText size={40} className="mx-auto mb-3 opacity-50" />
+          <p>Nenhum roteiro encontrado</p>
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {filteredScripts.map(script => (
+            <div key={script.id} className="glass-card p-4 flex flex-col gap-3"
+              style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${getClientColor(script.clientId)})` }}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-sm truncate">{script.title}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">
+                    {getClientName(script.clientId)} · {SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}
+                  </p>
+                </div>
+                <Badge variant={script.recorded ? 'default' : 'outline'} className={`shrink-0 text-[10px] ${script.recorded ? 'bg-success text-success-foreground' : ''}`}>
+                  {script.recorded ? 'Gravado' : 'Pendente'}
+                </Badge>
+              </div>
+
+              <div className="text-xs text-muted-foreground line-clamp-3"
+                dangerouslySetInnerHTML={{ __html: script.content || '<em>Sem conteúdo</em>' }} />
+
+              <div className="flex items-center gap-1 mt-auto pt-2 border-t border-border">
+                <Button variant="ghost" size="icon" className="h-7 w-7" title="Visualizar"
+                  onClick={() => { setViewing(script); setViewOpen(true); }}>
+                  <Eye size={14} />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7" title="Editar" onClick={() => handleOpen(script)}>
+                  <Pencil size={14} />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7" title="Baixar PDF" onClick={() => handleDownloadPdf(script)}>
+                  <Download size={14} />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7" title={script.recorded ? 'Desmarcar gravado' : 'Marcar como gravado'}
+                  onClick={() => toggleRecorded(script)}>
+                  <Check size={14} className={script.recorded ? 'text-success' : ''} />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7 ml-auto" title="Excluir" onClick={() => handleDelete(script.id)}>
+                  <Trash2 size={14} />
+                </Button>
+              </div>
+
+              <p className="text-[10px] text-muted-foreground">
+                Atualizado em {new Date(script.updatedAt).toLocaleDateString('pt-BR')}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Create/Edit Dialog */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{editing ? 'Editar Roteiro' : 'Novo Roteiro'}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Cliente *</Label>
+                <Select value={form.clientId} onValueChange={v => setForm({ ...form, clientId: v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    {clients.map(c => (
+                      <SelectItem key={c.id} value={c.id}>
+                        <span className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: `hsl(${c.color})` }} />
+                          {c.companyName}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Tipo de Vídeo</Label>
+                <Select value={form.videoType} onValueChange={v => setForm({ ...form, videoType: v as ScriptVideoType })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {VIDEO_TYPES.map(t => <SelectItem key={t} value={t}>{SCRIPT_VIDEO_TYPE_LABELS[t]}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Título do Roteiro *</Label>
+              <Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Ex: Roteiro de Vendas - Black Friday" />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Conteúdo do Roteiro</Label>
+              <RichEditor key={editing?.id || 'new'} content={form.content} onChange={html => setForm(prev => ({ ...prev, content: html }))} />
+            </div>
+
+            <Button onClick={handleSave} className="w-full">{editing ? 'Salvar Alterações' : 'Criar Roteiro'}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Dialog */}
+      <Dialog open={viewOpen} onOpenChange={setViewOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          {viewing && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3">
+                  <span className="w-4 h-4 rounded-full" style={{ backgroundColor: `hsl(${getClientColor(viewing.clientId)})` }} />
+                  {viewing.title}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>{getClientName(viewing.clientId)}</span>
+                <span>·</span>
+                <Badge variant="outline" className="text-[10px]">{SCRIPT_VIDEO_TYPE_LABELS[viewing.videoType]}</Badge>
+                <span>·</span>
+                <Badge variant={viewing.recorded ? 'default' : 'outline'} className={`text-[10px] ${viewing.recorded ? 'bg-success text-success-foreground' : ''}`}>
+                  {viewing.recorded ? 'Gravado' : 'Pendente'}
+                </Badge>
+              </div>
+              <div className="prose prose-sm max-w-none mt-4 p-4 rounded-xl bg-muted/30 border border-border"
+                dangerouslySetInnerHTML={{ __html: viewing.content || '<em>Sem conteúdo</em>' }} />
+              <div className="flex gap-2 mt-4">
+                <Button variant="outline" className="flex-1" onClick={() => handleDownloadPdf(viewing)}>
+                  <Download size={16} className="mr-2" /> Baixar PDF
+                </Button>
+                <Button variant="outline" className="flex-1" onClick={() => toggleRecorded(viewing)}>
+                  <Check size={16} className="mr-2" /> {viewing.recorded ? 'Desmarcar Gravado' : 'Marcar como Gravado'}
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

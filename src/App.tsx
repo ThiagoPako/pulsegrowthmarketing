@@ -12,6 +12,7 @@ import Schedule from "@/pages/Schedule";
 import KanbanBoard from "@/pages/KanbanBoard";
 import Goals from "@/pages/Goals";
 import CompanySettings from "@/pages/CompanySettings";
+import Scripts from "@/pages/Scripts";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,7 @@ function AppRoutes() {
       <Route path="/clientes" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
       <Route path="/equipe" element={<ProtectedRoute><Team /></ProtectedRoute>} />
       <Route path="/kanban" element={<ProtectedRoute><KanbanBoard /></ProtectedRoute>} />
+      <Route path="/roteiros" element={<ProtectedRoute><Scripts /></ProtectedRoute>} />
       <Route path="/metas" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
       <Route path="/configuracoes" element={<ProtectedRoute><CompanySettings /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />

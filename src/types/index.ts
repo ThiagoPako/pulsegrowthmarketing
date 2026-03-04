@@ -109,3 +109,26 @@ export const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
   story: 'Story',
   produto: 'Produto',
 };
+
+export type ScriptVideoType = 'vendas' | 'institucional' | 'reconhecimento' | 'educacional' | 'bastidores' | 'depoimento' | 'lancamento';
+
+export const SCRIPT_VIDEO_TYPE_LABELS: Record<ScriptVideoType, string> = {
+  vendas: 'Vendas',
+  institucional: 'Institucional',
+  reconhecimento: 'Reconhecimento',
+  educacional: 'Educacional',
+  bastidores: 'Bastidores',
+  depoimento: 'Depoimento',
+  lancamento: 'Lançamento',
+};
+
+export interface Script {
+  id: string;
+  clientId: string;
+  title: string;
+  videoType: ScriptVideoType;
+  content: string; // HTML from rich editor
+  recorded: boolean;
+  createdAt: string; // ISO date
+  updatedAt: string; // ISO date
+}

@@ -145,26 +145,32 @@ export type Database = {
       }
       company_settings: {
         Row: {
-          end_time: string
           id: string
           recording_duration: number
-          start_time: string
+          shift_a_end: string
+          shift_a_start: string
+          shift_b_end: string
+          shift_b_start: string
           updated_at: string
           work_days: string[]
         }
         Insert: {
-          end_time?: string
           id?: string
           recording_duration?: number
-          start_time?: string
+          shift_a_end?: string
+          shift_a_start?: string
+          shift_b_end?: string
+          shift_b_start?: string
           updated_at?: string
           work_days?: string[]
         }
         Update: {
-          end_time?: string
           id?: string
           recording_duration?: number
-          start_time?: string
+          shift_a_end?: string
+          shift_a_start?: string
+          shift_b_end?: string
+          shift_b_start?: string
           updated_at?: string
           work_days?: string[]
         }

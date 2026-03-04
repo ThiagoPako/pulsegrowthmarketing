@@ -57,9 +57,11 @@ export default function Clients() {
 
     const targetVideomakers = form.videomaker ? [form.videomaker] : videomakers.map(v => v.id);
     const slots: SlotInfo[] = [];
-    const workStart = timeToMinutes(settings.startTime);
-    const workEnd = timeToMinutes(settings.endTime);
-    const duration = 120; // 2 hours
+    const shiftAStart = timeToMinutes(settings.shiftAStart);
+    const shiftAEnd = timeToMinutes(settings.shiftAEnd);
+    const shiftBStart = timeToMinutes(settings.shiftBStart);
+    const shiftBEnd = timeToMinutes(settings.shiftBEnd);
+    const duration = settings.recordingDuration;
 
     for (const vmId of targetVideomakers) {
       const vm = users.find(u => u.id === vmId);
@@ -69,8 +71,10 @@ export default function Clients() {
         let totalSlots = 0;
         let occupiedSlots = 0;
 
-        // Count how many 2h slots fit and how many are taken
-        for (let t = workStart; t + duration <= workEnd; t += duration) {
+        // Count slots in both shifts
+        const shiftRanges = [[shiftAStart, shiftAEnd], [shiftBStart, shiftBEnd]];
+        for (const [sStart, sEnd] of shiftRanges) {
+        for (let t = sStart; t + duration <= sEnd; t += duration) {
           totalSlots++;
           const timeStr = minutesToTime(t);
 
@@ -92,8 +96,9 @@ export default function Clients() {
             });
           } else {
             occupiedSlots++;
-          }
         }
+        } // end shiftRanges
+      }
       }
     }
 

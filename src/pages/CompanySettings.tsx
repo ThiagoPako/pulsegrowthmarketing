@@ -29,14 +29,33 @@ export default function CompanySettings() {
       <h1 className="text-2xl font-display font-bold">Configurações</h1>
 
       <div className="glass-card p-6 space-y-5">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <Label>Início do Expediente</Label>
-            <Input type="time" value={form.startTime} onChange={e => setForm({ ...form, startTime: e.target.value })} />
+        {/* Turno A */}
+        <div className="space-y-2">
+          <Label className="text-sm font-semibold text-primary">Turno A (Manhã)</Label>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label>Início</Label>
+              <Input type="time" value={form.shiftAStart} onChange={e => setForm({ ...form, shiftAStart: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>Fim</Label>
+              <Input type="time" value={form.shiftAEnd} onChange={e => setForm({ ...form, shiftAEnd: e.target.value })} />
+            </div>
           </div>
-          <div className="space-y-1">
-            <Label>Fim do Expediente</Label>
-            <Input type="time" value={form.endTime} onChange={e => setForm({ ...form, endTime: e.target.value })} />
+        </div>
+
+        {/* Turno B */}
+        <div className="space-y-2">
+          <Label className="text-sm font-semibold text-primary">Turno B (Tarde)</Label>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label>Início</Label>
+              <Input type="time" value={form.shiftBStart} onChange={e => setForm({ ...form, shiftBStart: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>Fim</Label>
+              <Input type="time" value={form.shiftBEnd} onChange={e => setForm({ ...form, shiftBEnd: e.target.value })} />
+            </div>
           </div>
         </div>
 
@@ -53,9 +72,16 @@ export default function CompanySettings() {
         </div>
 
         <div className="space-y-1">
-          <Label>Duração da Gravação (horas)</Label>
-          <Input type="number" value={form.recordingDuration} disabled className="opacity-60" />
-          <p className="text-xs text-muted-foreground">Valor fixo: 2 horas</p>
+          <Label>Duração da Gravação (minutos)</Label>
+          <Input
+            type="number"
+            min={30}
+            max={480}
+            step={15}
+            value={form.recordingDuration}
+            onChange={e => setForm({ ...form, recordingDuration: Number(e.target.value) })}
+          />
+          <p className="text-xs text-muted-foreground">Duração padrão de cada sessão de gravação</p>
         </div>
 
         <Button onClick={handleSave} className="w-full">Salvar Configurações</Button>

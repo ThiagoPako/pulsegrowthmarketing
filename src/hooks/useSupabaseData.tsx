@@ -132,8 +132,10 @@ function scriptToRow(s: Script) {
 
 function rowToSettings(r: any): CompanySettings {
   return {
-    startTime: r.start_time,
-    endTime: r.end_time,
+    shiftAStart: r.shift_a_start,
+    shiftAEnd: r.shift_a_end,
+    shiftBStart: r.shift_b_start,
+    shiftBEnd: r.shift_b_end,
     workDays: r.work_days as DayOfWeek[],
     recordingDuration: r.recording_duration,
   };
@@ -149,10 +151,12 @@ function rowToActiveRecording(r: any): ActiveRecording {
 }
 
 const defaultSettings: CompanySettings = {
-  startTime: '08:00',
-  endTime: '18:00',
+  shiftAStart: '08:00',
+  shiftAEnd: '12:00',
+  shiftBStart: '13:00',
+  shiftBEnd: '18:00',
   workDays: ['segunda', 'terca', 'quarta', 'quinta', 'sexta'],
-  recordingDuration: 2,
+  recordingDuration: 120,
 };
 
 export function useSupabaseData() {
@@ -294,8 +298,10 @@ export function useSupabaseData() {
   const updateSettings = useCallback(async (s: CompanySettings) => {
     if (settingsId) {
       await supabase.from('company_settings').update({
-        start_time: s.startTime,
-        end_time: s.endTime,
+        shift_a_start: s.shiftAStart,
+        shift_a_end: s.shiftAEnd,
+        shift_b_start: s.shiftBStart,
+        shift_b_end: s.shiftBEnd,
         work_days: s.workDays,
         recording_duration: s.recordingDuration,
       } as any).eq('id', settingsId);

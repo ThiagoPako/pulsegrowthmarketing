@@ -122,6 +122,14 @@ export const SCRIPT_VIDEO_TYPE_LABELS: Record<ScriptVideoType, string> = {
   lancamento: 'Lançamento',
 };
 
+export type ScriptPriority = 'normal' | 'priority' | 'urgent';
+
+export const SCRIPT_PRIORITY_LABELS: Record<ScriptPriority, string> = {
+  normal: 'Normal',
+  priority: 'Prioritário',
+  urgent: 'Urgente',
+};
+
 export interface Script {
   id: string;
   clientId: string;
@@ -129,6 +137,7 @@ export interface Script {
   videoType: ScriptVideoType;
   content: string; // HTML from rich editor
   recorded: boolean;
+  priority: ScriptPriority;
   createdAt: string; // ISO date
   updatedAt: string; // ISO date
 }

@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { SCRIPT_VIDEO_TYPE_LABELS } from '@/types';
-import type { Script, ScriptVideoType } from '@/types';
+import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS } from '@/types';
+import type { Script, ScriptVideoType, ScriptPriority } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
-  Plus, Pencil, Trash2, FileText, Download, Check, Eye, Search, Filter
+  Plus, Pencil, Trash2, FileText, Download, Check, Eye, Search, Filter, AlertTriangle, Star
 } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -112,6 +112,7 @@ export default function Scripts() {
     title: '',
     videoType: 'vendas' as ScriptVideoType,
     content: '',
+    priority: 'normal' as ScriptPriority,
   });
 
   const printRef = useRef<HTMLDivElement>(null);
@@ -127,16 +128,23 @@ export default function Scripts() {
         clients.find(c => c.id === s.clientId)?.companyName.toLowerCase().includes(term)
       );
     }
-    return result.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return result.sort((a, b) => {
+      // Priority order: urgent > priority > normal
+      const priorityOrder = { urgent: 0, priority: 1, normal: 2 };
+      const pA = priorityOrder[a.priority || 'normal'];
+      const pB = priorityOrder[b.priority || 'normal'];
+      if (pA !== pB) return pA - pB;
+      return b.updatedAt.localeCompare(a.updatedAt);
+    });
   }, [scripts, filterClient, filterType, searchTerm, clients]);
 
   const handleOpen = (script?: Script) => {
     if (script) {
       setEditing(script);
-      setForm({ clientId: script.clientId, title: script.title, videoType: script.videoType, content: script.content });
+      setForm({ clientId: script.clientId, title: script.title, videoType: script.videoType, content: script.content, priority: script.priority || 'normal' });
     } else {
       setEditing(null);
-      setForm({ clientId: '', title: '', videoType: 'vendas', content: '' });
+      setForm({ clientId: '', title: '', videoType: 'vendas', content: '', priority: 'normal' });
     }
     setOpen(true);
   };
@@ -150,7 +158,7 @@ export default function Scripts() {
       updateScript({ ...editing, ...form, updatedAt: now });
       toast.success('Roteiro atualizado');
     } else {
-      addScript({ ...form, id: crypto.randomUUID(), recorded: false, createdAt: now, updatedAt: now });
+      addScript({ ...form, id: crypto.randomUUID(), recorded: false, priority: form.priority, createdAt: now, updatedAt: now });
       toast.success('Roteiro criado');
     }
     setOpen(false);
@@ -254,14 +262,26 @@ export default function Scripts() {
               style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${getClientColor(script.clientId)})` }}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm truncate">{script.title}</p>
+                  <div className="flex items-center gap-1.5">
+                    {(script.priority === 'urgent') && <AlertTriangle size={13} className="text-destructive shrink-0" />}
+                    {(script.priority === 'priority') && <Star size={13} className="text-warning shrink-0" />}
+                    <p className="font-medium text-sm truncate">{script.title}</p>
+                  </div>
                   <p className="text-[11px] text-muted-foreground truncate">
                     {getClientName(script.clientId)} · {SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}
                   </p>
                 </div>
-                <Badge variant={script.recorded ? 'default' : 'outline'} className={`shrink-0 text-[10px] ${script.recorded ? 'bg-success text-success-foreground' : ''}`}>
-                  {script.recorded ? 'Gravado' : 'Pendente'}
-                </Badge>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <Badge variant={script.recorded ? 'default' : 'outline'} className={`text-[10px] ${script.recorded ? 'bg-success text-success-foreground' : ''}`}>
+                    {script.recorded ? 'Gravado' : 'Pendente'}
+                  </Badge>
+                  {script.priority === 'urgent' && (
+                    <Badge className="text-[9px] bg-destructive/20 text-destructive border-destructive/30">Urgente</Badge>
+                  )}
+                  {script.priority === 'priority' && (
+                    <Badge className="text-[9px] bg-warning/20 text-warning border-warning/30">Prioritário</Badge>
+                  )}
+                </div>
               </div>
 
               <div className="text-xs text-muted-foreground line-clamp-3"
@@ -326,6 +346,18 @@ export default function Scripts() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Prioridade</Label>
+              <Select value={form.priority} onValueChange={v => setForm({ ...form, priority: v as ScriptPriority })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="priority">⭐ Prioritário</SelectItem>
+                  <SelectItem value="urgent">🚨 Urgente</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1">

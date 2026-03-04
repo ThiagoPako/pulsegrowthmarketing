@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import type { Recording, Script } from '@/types';
-import { SCRIPT_VIDEO_TYPE_LABELS } from '@/types';
+import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import {
   Play, Square, FileText, Check, Clock, Video, Users as UsersIcon,
-  TrendingUp, BarChart3, Undo2
+  TrendingUp, BarChart3, Undo2, AlertTriangle, Star, Eye, ChevronLeft
 } from 'lucide-react';
 import { format, addDays, startOfWeek, startOfMonth, endOfMonth, endOfWeek, isWithinInterval, parseISO, getDay, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -24,7 +24,9 @@ export default function VideomakerDashboard() {
 
   const [scriptsOpen, setScriptsOpen] = useState(false);
   const [scriptsClientId, setScriptsClientId] = useState('');
+  const [scriptsRecordingId, setScriptsRecordingId] = useState('');
   const [selectedScriptIds, setSelectedScriptIds] = useState<Set<string>>(new Set());
+  const [viewingScript, setViewingScript] = useState<Script | null>(null);
 
   const vmId = currentUser?.id || '';
   const today = new Date();
@@ -60,6 +62,15 @@ export default function VideomakerDashboard() {
   const myActiveRec = activeRecordings.find(a => a.videomarkerId === vmId);
 
   const handleStartRecording = (rec: Recording) => {
+    // Open scripts dialog first so videomaker can review scripts before starting
+    setScriptsClientId(rec.clientId);
+    setScriptsRecordingId(rec.id);
+    setSelectedScriptIds(new Set());
+    setViewingScript(null);
+    setScriptsOpen(true);
+  };
+
+  const confirmStartRecording = (rec: Recording) => {
     startActiveRecording({
       recordingId: rec.id,
       videomarkerId: vmId,
@@ -67,6 +78,7 @@ export default function VideomakerDashboard() {
       startedAt: new Date().toISOString(),
     });
     toast.success(`Gravação iniciada — ${getClientName(rec.clientId)}`);
+    setScriptsOpen(false);
   };
 
   const handleFinishRecording = (rec: Recording) => {
@@ -78,13 +90,23 @@ export default function VideomakerDashboard() {
   // ── Scripts ──
   const openScripts = (clientId: string) => {
     setScriptsClientId(clientId);
+    setScriptsRecordingId('');
     setSelectedScriptIds(new Set());
+    setViewingScript(null);
     setScriptsOpen(true);
   };
 
   const clientScripts = useMemo(() => {
     if (!scriptsClientId) return [];
-    return scripts.filter(s => s.clientId === scriptsClientId && !s.recorded);
+    const pending = scripts.filter(s => s.clientId === scriptsClientId && !s.recorded);
+    // Sort by priority: urgent > priority > normal
+    const priorityOrder = { urgent: 0, priority: 1, normal: 2 };
+    return pending.sort((a, b) => {
+      const pA = priorityOrder[a.priority || 'normal'];
+      const pB = priorityOrder[b.priority || 'normal'];
+      if (pA !== pB) return pA - pB;
+      return b.updatedAt.localeCompare(a.updatedAt);
+    });
   }, [scripts, scriptsClientId]);
 
   const handleMarkScriptsRecorded = () => {
@@ -323,74 +345,136 @@ export default function VideomakerDashboard() {
       </div>
 
       {/* ── Scripts Dialog ── */}
-      <Dialog open={scriptsOpen} onOpenChange={setScriptsOpen}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+      <Dialog open={scriptsOpen} onOpenChange={(open) => { setScriptsOpen(open); if (!open) setViewingScript(null); }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FileText size={18} />
-              Roteiros — {clients.find(c => c.id === scriptsClientId)?.companyName}
+              {viewingScript ? (
+                <>
+                  <button onClick={() => setViewingScript(null)} className="p-1 rounded hover:bg-muted"><ChevronLeft size={18} /></button>
+                  {viewingScript.title}
+                </>
+              ) : (
+                <>
+                  <FileText size={18} />
+                  Roteiros — {clients.find(c => c.id === scriptsClientId)?.companyName}
+                </>
+              )}
             </DialogTitle>
           </DialogHeader>
 
-          {clientScripts.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <FileText size={32} className="mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Nenhum roteiro pendente</p>
+          {viewingScript ? (
+            /* ── Full script view ── */
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Badge variant="outline" className="text-[10px]">{SCRIPT_VIDEO_TYPE_LABELS[viewingScript.videoType]}</Badge>
+                {viewingScript.priority === 'urgent' && (
+                  <Badge className="text-[10px] bg-destructive/20 text-destructive border-destructive/30"><AlertTriangle size={10} className="mr-0.5" /> Urgente</Badge>
+                )}
+                {viewingScript.priority === 'priority' && (
+                  <Badge className="text-[10px] bg-warning/20 text-warning border-warning/30"><Star size={10} className="mr-0.5" /> Prioritário</Badge>
+                )}
+              </div>
+              <div className="prose prose-sm max-w-none p-4 rounded-xl bg-muted/30 border border-border min-h-[200px]"
+                dangerouslySetInnerHTML={{ __html: viewingScript.content || '<em>Sem conteúdo</em>' }} />
             </div>
           ) : (
+            /* ── Scripts list ── */
             <>
-              <p className="text-sm text-muted-foreground">Selecione os roteiros para esta gravação:</p>
-              <div className="space-y-2">
-                {clientScripts.map(script => (
-                  <label key={script.id} className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 cursor-pointer transition-colors">
-                    <Checkbox
-                      checked={selectedScriptIds.has(script.id)}
-                      onCheckedChange={checked => {
-                        const next = new Set(selectedScriptIds);
-                        checked ? next.add(script.id) : next.delete(script.id);
-                        setSelectedScriptIds(next);
-                      }}
-                      className="mt-0.5"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-sm">{script.title}</p>
-                      <Badge variant="outline" className="text-[10px] mt-1">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
-                    </div>
-                  </label>
-                ))}
-              </div>
-              {selectedScriptIds.size > 0 && (
-                <Button onClick={handleMarkScriptsRecorded} className="w-full">
-                  <Check size={16} className="mr-2" />
-                  Marcar {selectedScriptIds.size} como gravado(s)
-                </Button>
+              {scriptsRecordingId && (
+                <p className="text-sm text-muted-foreground">
+                  Revise os roteiros disponíveis, selecione os que vai gravar e inicie a gravação.
+                </p>
               )}
-            </>
-          )}
 
-          {/* Already recorded */}
-          {(() => {
-            const recorded = scripts.filter(s => s.clientId === scriptsClientId && s.recorded);
-            if (recorded.length === 0) return null;
-            return (
-              <div className="mt-4 pt-4 border-t border-border">
-                <p className="text-sm font-medium mb-2">Roteiros já gravados</p>
+              {clientScripts.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <FileText size={32} className="mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Nenhum roteiro pendente</p>
+                </div>
+              ) : (
                 <div className="space-y-2">
-                  {recorded.map(script => (
-                    <div key={script.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/20">
+                  {clientScripts.map(script => (
+                    <div key={script.id} className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
+                      script.priority === 'urgent' ? 'border-destructive/40 bg-destructive/5' :
+                      script.priority === 'priority' ? 'border-warning/40 bg-warning/5' : 'border-border hover:bg-muted/30'
+                    }`}>
+                      <Checkbox
+                        checked={selectedScriptIds.has(script.id)}
+                        onCheckedChange={checked => {
+                          const next = new Set(selectedScriptIds);
+                          checked ? next.add(script.id) : next.delete(script.id);
+                          setSelectedScriptIds(next);
+                        }}
+                        className="mt-1"
+                      />
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium">{script.title}</p>
-                        <Badge className="text-[10px] bg-success/20 text-success border-success/30">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                        <div className="flex items-center gap-1.5">
+                          {script.priority === 'urgent' && <AlertTriangle size={13} className="text-destructive shrink-0" />}
+                          {script.priority === 'priority' && <Star size={13} className="text-warning shrink-0" />}
+                          <p className="font-medium text-sm">{script.title}</p>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge variant="outline" className="text-[10px]">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                          {script.priority === 'urgent' && <Badge className="text-[9px] bg-destructive/20 text-destructive border-destructive/30">Urgente</Badge>}
+                          {script.priority === 'priority' && <Badge className="text-[9px] bg-warning/20 text-warning border-warning/30">Prioritário</Badge>}
+                        </div>
+                        {/* Preview of content */}
+                        <div className="text-xs text-muted-foreground line-clamp-2 mt-1.5"
+                          dangerouslySetInnerHTML={{ __html: script.content || '<em>Sem conteúdo</em>' }} />
                       </div>
-                      <Button variant="ghost" size="sm" onClick={() => handleReturnScript(script)}>
-                        <Undo2 size={14} className="mr-1" /> Retornar
+                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" title="Ler roteiro"
+                        onClick={() => setViewingScript(script)}>
+                        <Eye size={14} />
                       </Button>
                     </div>
                   ))}
                 </div>
+              )}
+
+              <div className="flex gap-2 mt-2">
+                {selectedScriptIds.size > 0 && (
+                  <Button onClick={handleMarkScriptsRecorded} variant="outline" className="flex-1">
+                    <Check size={16} className="mr-2" />
+                    Marcar {selectedScriptIds.size} como gravado(s)
+                  </Button>
+                )}
+                {scriptsRecordingId && (() => {
+                  const rec = recordings.find(r => r.id === scriptsRecordingId);
+                  if (!rec || rec.status !== 'agendada') return null;
+                  return (
+                    <Button onClick={() => confirmStartRecording(rec)} className="flex-1 gap-1.5">
+                      <Play size={16} /> Iniciar Gravação
+                    </Button>
+                  );
+                })()}
               </div>
-            );
-          })()}
+
+              {/* Already recorded */}
+              {(() => {
+                const recorded = scripts.filter(s => s.clientId === scriptsClientId && s.recorded);
+                if (recorded.length === 0) return null;
+                return (
+                  <div className="mt-4 pt-4 border-t border-border">
+                    <p className="text-sm font-medium mb-2">Roteiros já gravados</p>
+                    <div className="space-y-2">
+                      {recorded.map(script => (
+                        <div key={script.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/20">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium">{script.title}</p>
+                            <Badge className="text-[10px] bg-success/20 text-success border-success/30">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                          </div>
+                          <Button variant="ghost" size="sm" onClick={() => handleReturnScript(script)}>
+                            <Undo2 size={14} className="mr-1" /> Retornar
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

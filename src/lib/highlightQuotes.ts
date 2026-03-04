@@ -49,6 +49,15 @@ export function highlightQuotesForPdf(html: string): string {
   const normalized = normalizeQuotes(cleaned);
   return normalized.replace(
     /"([^"]+)"/g,
-    '<span style="background-color: #fef08a; padding: 2px 0; -webkit-box-decoration-break: clone; box-decoration-break: clone; display: inline;">&ldquo;$1&rdquo;</span>'
+    (_match, content: string) => {
+      // Wrap each word individually so html2canvas doesn't misalign multi-line backgrounds
+      const words = content.split(/(\s+)/);
+      const highlighted = words.map(w =>
+        /\S/.test(w)
+          ? `<span style="background-color:#fef08a;">${w}</span>`
+          : w
+      ).join('');
+      return `&ldquo;${highlighted}&rdquo;`;
+    }
   );
 }

@@ -5,6 +5,8 @@ import { ROLE_LABELS } from '@/types';
 import pulseLogo from '@/assets/pulse_logo.png';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import ProfileDialog from '@/components/ProfileDialog';
 import {
   LayoutDashboard, Users, Building2, Calendar, Settings, LogOut, Target, Search, Plus, Bell, FileText
 } from 'lucide-react';
@@ -55,13 +57,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="p-2 border-t border-sidebar-border flex flex-col items-center gap-2">
-          <button
-            className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold"
-            title={currentUser?.name}
-            onClick={() => {}}
-          >
-            {currentUser?.name.charAt(0)}
-          </button>
+          <ProfileDialog>
+            <button
+              className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center"
+              title={currentUser?.displayName || currentUser?.name}
+            >
+              <Avatar className="w-9 h-9">
+                {currentUser?.avatarUrl ? (
+                  <AvatarImage src={currentUser.avatarUrl} alt="Avatar" />
+                ) : null}
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">
+                  {currentUser?.name.charAt(0)}
+                </AvatarFallback>
+              </Avatar>
+            </button>
+          </ProfileDialog>
           <button
             onClick={() => { logout(); navigate('/'); }}
             className="nav-icon-btn w-full"

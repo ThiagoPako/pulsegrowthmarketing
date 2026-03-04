@@ -3,92 +3,113 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { ROLE_LABELS } from '@/types';
 import pulseLogo from '@/assets/pulse_logo.png';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import {
-  LayoutDashboard, Users, Building2, Calendar, Kanban, Settings, LogOut, Menu, X, Target
+  LayoutDashboard, Users, Building2, Calendar, Kanban, Settings, LogOut, Target, Search, Plus, Bell
 } from 'lucide-react';
 
 const navItems = [
-  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'videomaker', 'social_media', 'editor'] },
+  { path: '/dashboard', label: 'Início', icon: LayoutDashboard, roles: ['admin', 'videomaker', 'social_media', 'editor'] },
   { path: '/agenda', label: 'Agenda', icon: Calendar, roles: ['admin', 'videomaker'] },
+  { path: '/kanban', label: 'Tarefas', icon: Kanban, roles: ['admin', 'social_media', 'videomaker'] },
   { path: '/clientes', label: 'Clientes', icon: Building2, roles: ['admin'] },
   { path: '/equipe', label: 'Equipe', icon: Users, roles: ['admin'] },
-  { path: '/kanban', label: 'Endomarketing', icon: Kanban, roles: ['admin', 'social_media', 'videomaker'] },
   { path: '/metas', label: 'Metas', icon: Target, roles: ['admin'] },
-  { path: '/configuracoes', label: 'Configurações', icon: Settings, roles: ['admin'] },
+  { path: '/configuracoes', label: 'Config', icon: Settings, roles: ['admin'] },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { currentUser, logout } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const filteredNav = navItems.filter(item =>
     currentUser && item.roles.includes(currentUser.role)
   );
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />
-      )}
-
-      {/* Sidebar */}
-      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-sidebar border-r border-sidebar-border flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className="p-4 border-b border-sidebar-border">
-          <img src={pulseLogo} alt="Pulse" className="h-10 object-contain" />
+    <div className="flex h-screen overflow-hidden bg-background">
+      {/* Icon sidebar */}
+      <aside className="hidden md:flex flex-col w-[72px] bg-sidebar border-r border-sidebar-border shrink-0">
+        <div className="p-3 flex justify-center border-b border-sidebar-border">
+          <img src={pulseLogo} alt="Pulse" className="w-10 h-10 rounded-lg object-cover" />
         </div>
 
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 flex flex-col items-center gap-1 py-3 px-1.5 overflow-y-auto">
           {filteredNav.map(item => {
             const active = location.pathname === item.path;
             return (
               <button
                 key={item.path}
-                onClick={() => { navigate(item.path); setSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${active ? 'bg-primary text-primary-foreground' : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}`}
+                onClick={() => navigate(item.path)}
+                className={`nav-icon-btn w-full ${active ? 'active' : ''}`}
+                title={item.label}
               >
-                <item.icon size={18} />
-                {item.label}
+                <item.icon size={20} strokeWidth={active ? 2.2 : 1.5} />
+                <span className="text-[10px] font-medium leading-none">{item.label}</span>
               </button>
             );
           })}
         </nav>
 
-        <div className="p-4 border-t border-sidebar-border">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold">
-              {currentUser?.name.charAt(0)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-sidebar-foreground truncate">{currentUser?.name}</p>
-              <p className="text-xs text-muted-foreground">{currentUser && ROLE_LABELS[currentUser.role]}</p>
-            </div>
-          </div>
+        <div className="p-2 border-t border-sidebar-border flex flex-col items-center gap-2">
+          <button
+            className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold"
+            title={currentUser?.name}
+            onClick={() => {}}
+          >
+            {currentUser?.name.charAt(0)}
+          </button>
           <button
             onClick={() => { logout(); navigate('/'); }}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent transition-colors"
+            className="nav-icon-btn w-full"
+            title="Sair"
           >
-            <LogOut size={16} /> Sair
+            <LogOut size={18} />
           </button>
         </div>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-14 border-b border-border flex items-center px-4 lg:px-6 shrink-0">
-          <button className="lg:hidden mr-3" onClick={() => setSidebarOpen(true)}>
-            <Menu size={20} />
-          </button>
-          <h2 className="font-display font-semibold text-lg">
-            {filteredNav.find(n => n.path === location.pathname)?.label || 'Pulse'}
-          </h2>
+      {/* Main area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top bar */}
+        <header className="h-14 bg-card border-b border-border flex items-center px-4 lg:px-6 gap-4 shrink-0">
+          {/* Mobile nav */}
+          <div className="flex md:hidden gap-1 overflow-x-auto shrink-0">
+            {filteredNav.slice(0, 5).map(item => {
+              const active = location.pathname === item.path;
+              return (
+                <button key={item.path} onClick={() => navigate(item.path)}
+                  className={`p-2 rounded-lg shrink-0 ${active ? 'bg-accent text-primary' : 'text-muted-foreground'}`}>
+                  <item.icon size={18} />
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex-1 flex items-center gap-3 max-w-xl">
+            <div className="relative flex-1">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Buscar clientes, gravações..." className="pl-9 bg-secondary border-0 h-9" />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 ml-auto">
+            <Button size="sm" className="gap-1.5 hidden sm:flex">
+              <Plus size={16} /> Criar
+            </Button>
+            <button className="w-9 h-9 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary transition-colors">
+              <Bell size={18} />
+            </button>
+          </div>
         </header>
-        <div className="flex-1 overflow-y-auto p-4 lg:p-6">
+
+        {/* Content */}
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
           {children}
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }

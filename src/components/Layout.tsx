@@ -8,17 +8,19 @@ import { Button } from '@/components/ui/button';
 import UserAvatar from '@/components/UserAvatar';
 import ProfileDialog from '@/components/ProfileDialog';
 import {
-  LayoutDashboard, Users, Building2, Calendar, Settings, LogOut, Target, Search, Plus, Bell, FileText
+  LayoutDashboard, Users, Building2, Calendar, Settings, LogOut, Target, Search, Plus, Bell, FileText, Megaphone
 } from 'lucide-react';
 
 const navItems = [
-  { path: '/dashboard', label: 'Início', icon: LayoutDashboard, roles: ['admin', 'videomaker', 'social_media', 'editor'] },
+  { path: '/dashboard', label: 'Início', icon: LayoutDashboard, roles: ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing'] },
   { path: '/agenda', label: 'Agenda', icon: Calendar, roles: ['admin', 'videomaker'] },
-  
   { path: '/roteiros', label: 'Roteiros', icon: FileText, roles: ['admin', 'social_media', 'videomaker'] },
   { path: '/clientes', label: 'Clientes', icon: Building2, roles: ['admin'] },
   { path: '/equipe', label: 'Equipe', icon: Users, roles: ['admin'] },
   { path: '/metas', label: 'Metas', icon: Target, roles: ['admin'] },
+  { path: '/endomarketing', label: 'Endomkt', icon: Megaphone, roles: ['admin', 'endomarketing'] },
+  { path: '/endomarketing/clientes', label: 'Clientes E.', icon: Building2, roles: ['endomarketing'] },
+  { path: '/endomarketing/agenda', label: 'Agenda E.', icon: Calendar, roles: ['endomarketing'] },
   { path: '/configuracoes', label: 'Config', icon: Settings, roles: ['admin'] },
 ];
 

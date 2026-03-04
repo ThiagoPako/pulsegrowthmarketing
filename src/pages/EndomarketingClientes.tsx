@@ -334,6 +334,339 @@ export default function EndomarketingClientes() {
     }
   };
 
+  const renderDialog = () => (
+    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            {editingCliente ? 'Editar Cliente' : (
+              step === 'select_client' ? '1. Selecionar Cliente' :
+              step === 'plan_config' ? '2. Tipo de Gravação' :
+              '3. Configuração do Plano'
+            )}
+          </DialogTitle>
+          {!editingCliente && (
+            <div className="flex gap-1 mt-2">
+              {['select_client', 'plan_config', 'details'].map((s, i) => (
+                <div key={s} className={`h-1 flex-1 rounded-full transition-colors ${
+                  (['select_client', 'plan_config', 'details'].indexOf(step) >= i) ? 'bg-primary' : 'bg-secondary'
+                }`} />
+              ))}
+            </div>
+          )}
+        </DialogHeader>
+
+        {/* ── Step 1: Select client ── */}
+        {step === 'select_client' && !editingCliente && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">Selecione um cliente ativo do sistema ou cadastre um novo:</p>
+            
+            {availableClients.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Clientes ativos</Label>
+                <div className="grid gap-2 max-h-[300px] overflow-y-auto">
+                  {availableClients.map(c => (
+                    <button key={c.id} onClick={() => selectExistingClient(c.id)}
+                      className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary hover:bg-accent/50 transition-all text-left group">
+                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: `hsl(${c.color})` }} />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{c.companyName}</p>
+                        <p className="text-xs text-muted-foreground">{c.responsiblePerson} · {c.phone}</p>
+                      </div>
+                      <Badge variant="secondary" className="text-[10px] shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        Selecionar
+                      </Badge>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <Separator />
+
+            <button onClick={selectNewClient}
+              className="w-full flex items-center gap-3 p-3 rounded-lg border border-dashed border-border hover:border-primary hover:bg-accent/50 transition-all text-left">
+              <Plus size={16} className="text-primary" />
+              <div>
+                <p className="font-medium text-sm">Cadastrar novo cliente</p>
+                <p className="text-xs text-muted-foreground">Cliente ainda não está no sistema</p>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* ── Step 2: Plan type ── */}
+        {step === 'plan_config' && (
+          <div className="space-y-4">
+            {form.company_name && (
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-secondary">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: `hsl(${form.color})` }} />
+                <span className="text-sm font-medium">{form.company_name}</span>
+                {!editingCliente && (
+                  <button onClick={() => setStep('select_client')} className="ml-auto text-xs text-muted-foreground hover:text-foreground">Trocar</button>
+                )}
+              </div>
+            )}
+
+            {!form.client_id && !editingCliente && (
+              <div className="space-y-3">
+                <div>
+                  <Label>Nome da empresa *</Label>
+                  <Input value={form.company_name} onChange={e => setForm(p => ({ ...p, company_name: e.target.value }))} placeholder="Nome do cliente" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Responsável</Label>
+                    <Input value={form.responsible_person} onChange={e => setForm(p => ({ ...p, responsible_person: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label>Telefone</Label>
+                    <Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
+                  </div>
+                </div>
+                <div>
+                  <Label>Cor</Label>
+                  <div className="flex gap-1.5 flex-wrap mt-1">
+                    {CLIENT_COLORS.map(c => (
+                      <button key={c.value} className={`w-6 h-6 rounded-full border-2 transition-transform ${form.color === c.value ? 'border-foreground scale-110' : 'border-transparent'}`}
+                        style={{ backgroundColor: `hsl(${c.value})` }} onClick={() => setForm(p => ({ ...p, color: c.value }))} title={c.name} />
+                    ))}
+                  </div>
+                </div>
+                <Separator />
+              </div>
+            )}
+
+            <p className="text-sm font-medium">Qual o tipo de gravação?</p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => selectPlanType('presencial_recorrente')}
+                className={`p-4 rounded-xl border-2 text-left transition-all ${
+                  form.plan_type === 'presencial_recorrente' ? 'border-primary bg-accent/50' : 'border-border hover:border-primary/50'
+                }`}>
+                <UsersIcon size={24} className="text-primary mb-2" />
+                <p className="font-semibold text-sm">Presencial Recorrente</p>
+                <p className="text-[11px] text-muted-foreground mt-1">Visitas presenciais em múltiplos dias da semana com duração flexível</p>
+              </button>
+              <button onClick={() => selectPlanType('gravacao_concentrada')}
+                className={`p-4 rounded-xl border-2 text-left transition-all ${
+                  form.plan_type === 'gravacao_concentrada' ? 'border-primary bg-accent/50' : 'border-border hover:border-primary/50'
+                }`}>
+                <Video size={24} className="text-primary mb-2" />
+                <p className="font-semibold text-sm">Gravação Concentrada</p>
+                <p className="text-[11px] text-muted-foreground mt-1">1 dia por semana · 2 horas fixas · Videomaker obrigatório</p>
+              </button>
+            </div>
+
+            {editingCliente && form.plan_type && (
+              <div className="flex justify-end">
+                <Button size="sm" onClick={() => setStep('details')}>Continuar →</Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Step 3: Details ── */}
+        {step === 'details' && (
+          <div className="space-y-4">
+            {editingCliente && (
+              <>
+                <div className="space-y-3">
+                  <div>
+                    <Label>Nome da empresa *</Label>
+                    <Input value={form.company_name} onChange={e => setForm(p => ({ ...p, company_name: e.target.value }))} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Responsável</Label>
+                      <Input value={form.responsible_person} onChange={e => setForm(p => ({ ...p, responsible_person: e.target.value }))} />
+                    </div>
+                    <div>
+                      <Label>Telefone</Label>
+                      <Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Cor</Label>
+                    <div className="flex gap-1.5 flex-wrap mt-1">
+                      {CLIENT_COLORS.map(c => (
+                        <button key={c.value} className={`w-6 h-6 rounded-full border-2 transition-transform ${form.color === c.value ? 'border-foreground scale-110' : 'border-transparent'}`}
+                          style={{ backgroundColor: `hsl(${c.value})` }} onClick={() => setForm(p => ({ ...p, color: c.value }))} title={c.name} />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Tipo de gravação</Label>
+                    <Select value={form.plan_type} onValueChange={v => {
+                      if (v === 'gravacao_concentrada') {
+                        setForm(p => ({ ...p, plan_type: v, session_duration: 120, execution_type: 'com_videomaker', presence_days_per_week: 1, selected_days: p.selected_days.length > 0 ? [p.selected_days[0]] : ['segunda'] }));
+                      } else {
+                        setForm(p => ({ ...p, plan_type: v, session_duration: 60 }));
+                      }
+                    }}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="presencial_recorrente">🏢 Presencial Recorrente</SelectItem>
+                        <SelectItem value="gravacao_concentrada">🎬 Gravação Concentrada</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox checked={form.active} onCheckedChange={v => setForm(p => ({ ...p, active: !!v }))} id="active-check" />
+                    <Label htmlFor="active-check">Cliente ativo</Label>
+                  </div>
+                </div>
+                <Separator />
+              </>
+            )}
+
+            {!editingCliente && (
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-secondary">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: `hsl(${form.color})` }} />
+                <span className="text-sm font-medium">{form.company_name}</span>
+                <Badge variant="outline" className="text-[10px] ml-auto">
+                  {form.plan_type === 'gravacao_concentrada' ? '🎬 Concentrada' : '🏢 Recorrente'}
+                </Badge>
+              </div>
+            )}
+
+            {form.plan_type === 'gravacao_concentrada' && (
+              <Card className="bg-accent/30 border-primary/20">
+                <CardContent className="p-3 space-y-2 text-sm">
+                  <p className="font-medium flex items-center gap-2"><Clock size={14} /> Duração: <strong>2 horas</strong> (fixo)</p>
+                  <p className="font-medium flex items-center gap-2"><Video size={14} /> Videomaker: <strong>Obrigatório</strong></p>
+                  <p className="font-medium flex items-center gap-2"><CalIcon size={14} /> Frequência: <strong>1x por semana</strong></p>
+                </CardContent>
+              </Card>
+            )}
+
+            <div>
+              <Label>{form.plan_type === 'gravacao_concentrada' ? 'Dia da gravação semanal' : 'Dias da semana'}</Label>
+              <div className="flex gap-2 mt-1.5">
+                {DAYS.map(d => (
+                  <button key={d.value} onClick={() => toggleDay(d.value)}
+                    className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all border ${
+                      form.selected_days.includes(d.value)
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-secondary text-muted-foreground border-transparent hover:border-primary/30'
+                    }`}>
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {form.plan_type === 'presencial_recorrente' && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Duração por sessão</Label>
+                    <Select value={String(form.session_duration)} onValueChange={v => setForm(p => ({ ...p, session_duration: +v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {DURATION_OPTIONS.map(o => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Tipo de execução</Label>
+                    <Select value={form.execution_type} onValueChange={v => setForm(p => ({ ...p, execution_type: v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sozinho">Sozinho</SelectItem>
+                        <SelectItem value="com_videomaker">Com Videomaker</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Dias presenciais/semana</Label>
+                    <Input type="number" min={1} max={5} value={form.presence_days_per_week} onChange={e => setForm(p => ({ ...p, presence_days_per_week: +e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label>Horas contratadas/mês</Label>
+                    <Input type="number" min={0} step={0.5} value={form.total_contracted_hours} onChange={e => setForm(p => ({ ...p, total_contracted_hours: +e.target.value }))} />
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div>
+              <Label>Stories por semana</Label>
+              <Input type="number" min={0} value={form.stories_per_week} onChange={e => setForm(p => ({ ...p, stories_per_week: +e.target.value }))} />
+            </div>
+
+            {!editingCliente && (
+              <>
+                <Separator />
+                <p className="text-sm font-medium flex items-center gap-2">
+                  <CalIcon size={14} className="text-primary" />
+                  Agendamento automático
+                </p>
+                <p className="text-[11px] text-muted-foreground -mt-2">
+                  Os agendamentos serão criados automaticamente para as próximas 4 semanas nos dias selecionados.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Profissional responsável *</Label>
+                    <Select value={form.profissional_user_id} onValueChange={v => setForm(p => ({ ...p, profissional_user_id: v }))}>
+                      <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        {users.map(u => (
+                          <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Horário fixo *</Label>
+                    <Input type="time" value={form.start_time} onChange={e => setForm(p => ({ ...p, start_time: e.target.value }))} />
+                  </div>
+                </div>
+              </>
+            )}
+
+            <Separator />
+
+            <div>
+              <Label className="flex items-center gap-2">
+                <FileText size={14} className="text-primary" />
+                Editorial do Cliente
+              </Label>
+              <p className="text-[11px] text-muted-foreground mb-1.5">
+                Descreva o posicionamento, tom de voz, público-alvo e diretrizes de conteúdo para que toda equipe entenda este cliente.
+              </p>
+              <Textarea
+                value={form.editorial}
+                onChange={e => setForm(p => ({ ...p, editorial: e.target.value }))}
+                rows={4}
+                placeholder="Ex: Cliente do ramo alimentício, foco em público jovem (18-30). Tom de voz descontraído e direto. Prioridade em conteúdo de bastidores e receitas rápidas. Evitar linguagem formal..."
+              />
+            </div>
+
+            <div>
+              <Label>Observações estratégicas</Label>
+              <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2} placeholder="Notas internas sobre o cliente..." />
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          {step !== 'select_client' && !editingCliente && (
+            <Button variant="ghost" size="sm" onClick={() => setStep(step === 'details' ? 'plan_config' : 'select_client')} className="mr-auto">
+              ← Voltar
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+          {(step === 'details' || editingCliente) && (
+            <Button onClick={handleSave}>{editingCliente ? 'Salvar' : 'Cadastrar'}</Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   // ─── Detail view ───
   if (detailCliente) {
     const clientSchedules = agendamentos.filter(a => a.cliente_id === detailCliente.id);
@@ -347,101 +680,103 @@ export default function EndomarketingClientes() {
     const totalHoursExecuted = clientSchedules.filter(a => a.status === 'concluido').reduce((s, a) => s + a.duration, 0) / 60;
 
     return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => setSearchParams({})}>
-            <ArrowLeft size={16} className="mr-1" /> Voltar
-          </Button>
-          <h1 className="text-xl font-bold font-display" style={{ color: `hsl(${detailCliente.color})` }}>
-            {detailCliente.company_name}
-          </h1>
-          <Button variant="outline" size="sm" onClick={() => openEdit(detailCliente)}>
-            <Edit2 size={14} className="mr-1" /> Editar
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => handleRegenerate(detailCliente)} disabled={regenerating}>
-            <RefreshCw size={14} className={`mr-1 ${regenerating ? 'animate-spin' : ''}`} />
-            {regenerating ? 'Regenerando...' : 'Regerar 4 semanas'}
-          </Button>
-        </div>
+      <>
+        <div className="space-y-6">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => setSearchParams({})}>
+              <ArrowLeft size={16} className="mr-1" /> Voltar
+            </Button>
+            <h1 className="text-xl font-bold font-display" style={{ color: `hsl(${detailCliente.color})` }}>
+              {detailCliente.company_name}
+            </h1>
+            <Button variant="outline" size="sm" onClick={() => openEdit(detailCliente)}>
+              <Edit2 size={14} className="mr-1" /> Editar
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => handleRegenerate(detailCliente)} disabled={regenerating}>
+              <RefreshCw size={14} className={`mr-1 ${regenerating ? 'animate-spin' : ''}`} />
+              {regenerating ? 'Regenerando...' : 'Regerar 4 semanas'}
+            </Button>
+          </div>
 
-        <div className="grid md:grid-cols-2 gap-4">
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Dados do Cliente</CardTitle></CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <p><strong>Responsável:</strong> {detailCliente.responsible_person || '–'}</p>
-              <p><strong>Telefone:</strong> {detailCliente.phone || '–'}</p>
-              <p><strong>Tipo:</strong> {detailCliente.plan_type === 'gravacao_concentrada' ? 'Gravação Concentrada' : 'Presencial Recorrente'}</p>
-              <p><strong>Execução:</strong> {detailCliente.execution_type === 'com_videomaker' ? 'Com Videomaker' : 'Sozinho'}</p>
-              <p><strong>Duração/sessão:</strong> {detailCliente.session_duration}min</p>
-              <p><strong>Stories/semana:</strong> {detailCliente.stories_per_week}</p>
-              <p><strong>Dias presenciais:</strong> {detailCliente.presence_days_per_week}</p>
-              <p><strong>Horas contratadas:</strong> {detailCliente.total_contracted_hours}h</p>
-              <div className="flex gap-1 flex-wrap">
-                <strong>Dias fixos:</strong>
-                {detailCliente.selected_days.map(d => (
-                  <Badge key={d} variant="secondary" className="text-[10px]">{DAY_LABELS[d as keyof typeof DAY_LABELS] || d}</Badge>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Performance</CardTitle></CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <p><strong>Gravações realizadas:</strong> {completedCount}</p>
-              <p><strong>Cancelamentos:</strong> {cancelledCount}</p>
-              <p><strong>Taxa de cancelamento:</strong> {clientSchedules.length > 0 ? ((cancelledCount / clientSchedules.length) * 100).toFixed(0) : 0}%</p>
-              <p><strong>Horas executadas:</strong> {totalHoursExecuted.toFixed(1)}h</p>
-              <p><strong>Esta semana:</strong> {weekSchedules.length} agendamentos</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Editorial */}
-        {detailCliente.editorial && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <FileText size={14} className="text-primary" /> Editorial do Cliente
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm whitespace-pre-wrap">{detailCliente.editorial}</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {detailCliente.notes && (
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Observações Estratégicas</CardTitle></CardHeader>
-            <CardContent><p className="text-sm text-muted-foreground">{detailCliente.notes}</p></CardContent>
-          </Card>
-        )}
-
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Próximos Agendamentos</CardTitle></CardHeader>
-          <CardContent>
-            {clientSchedules.filter(a => a.date >= format(new Date(), 'yyyy-MM-dd') && a.status !== 'cancelado').length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhum agendamento futuro.</p>
-            ) : (
-              <div className="space-y-2">
-                {clientSchedules
-                  .filter(a => a.date >= format(new Date(), 'yyyy-MM-dd') && a.status !== 'cancelado')
-                  .slice(0, 10)
-                  .map(a => (
-                    <div key={a.id} className="flex items-center gap-3 text-sm p-2 rounded-lg bg-secondary">
-                      <CalIcon size={14} className="text-muted-foreground" />
-                      <span>{format(parseISO(a.date), "dd/MM (EEE)", { locale: ptBR })}</span>
-                      <Clock size={14} className="text-muted-foreground" />
-                      <span>{a.start_time} ({a.duration}min)</span>
-                      <Badge variant="outline" className="text-[10px] ml-auto">{a.status}</Badge>
-                    </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">Dados do Cliente</CardTitle></CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <p><strong>Responsável:</strong> {detailCliente.responsible_person || '–'}</p>
+                <p><strong>Telefone:</strong> {detailCliente.phone || '–'}</p>
+                <p><strong>Tipo:</strong> {detailCliente.plan_type === 'gravacao_concentrada' ? 'Gravação Concentrada' : 'Presencial Recorrente'}</p>
+                <p><strong>Execução:</strong> {detailCliente.execution_type === 'com_videomaker' ? 'Com Videomaker' : 'Sozinho'}</p>
+                <p><strong>Duração/sessão:</strong> {detailCliente.session_duration}min</p>
+                <p><strong>Stories/semana:</strong> {detailCliente.stories_per_week}</p>
+                <p><strong>Dias presenciais:</strong> {detailCliente.presence_days_per_week}</p>
+                <p><strong>Horas contratadas:</strong> {detailCliente.total_contracted_hours}h</p>
+                <div className="flex gap-1 flex-wrap">
+                  <strong>Dias fixos:</strong>
+                  {detailCliente.selected_days.map(d => (
+                    <Badge key={d} variant="secondary" className="text-[10px]">{DAY_LABELS[d as keyof typeof DAY_LABELS] || d}</Badge>
                   ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">Performance</CardTitle></CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <p><strong>Gravações realizadas:</strong> {completedCount}</p>
+                <p><strong>Cancelamentos:</strong> {cancelledCount}</p>
+                <p><strong>Taxa de cancelamento:</strong> {clientSchedules.length > 0 ? ((cancelledCount / clientSchedules.length) * 100).toFixed(0) : 0}%</p>
+                <p><strong>Horas executadas:</strong> {totalHoursExecuted.toFixed(1)}h</p>
+                <p><strong>Esta semana:</strong> {weekSchedules.length} agendamentos</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {detailCliente.editorial && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <FileText size={14} className="text-primary" /> Editorial do Cliente
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm whitespace-pre-wrap">{detailCliente.editorial}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {detailCliente.notes && (
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">Observações Estratégicas</CardTitle></CardHeader>
+              <CardContent><p className="text-sm text-muted-foreground">{detailCliente.notes}</p></CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Próximos Agendamentos</CardTitle></CardHeader>
+            <CardContent>
+              {clientSchedules.filter(a => a.date >= format(new Date(), 'yyyy-MM-dd') && a.status !== 'cancelado').length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhum agendamento futuro.</p>
+              ) : (
+                <div className="space-y-2">
+                  {clientSchedules
+                    .filter(a => a.date >= format(new Date(), 'yyyy-MM-dd') && a.status !== 'cancelado')
+                    .slice(0, 10)
+                    .map(a => (
+                      <div key={a.id} className="flex items-center gap-3 text-sm p-2 rounded-lg bg-secondary">
+                        <CalIcon size={14} className="text-muted-foreground" />
+                        <span>{format(parseISO(a.date), "dd/MM (EEE)", { locale: ptBR })}</span>
+                        <Clock size={14} className="text-muted-foreground" />
+                        <span>{a.start_time} ({a.duration}min)</span>
+                        <Badge variant="outline" className="text-[10px] ml-auto">{a.status}</Badge>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+        {renderDialog()}
+      </>
     );
   }
 
@@ -496,349 +831,7 @@ export default function EndomarketingClientes() {
         </div>
       )}
 
-      {/* ─── Create/Edit Dialog (Step-based) ─── */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {editingCliente ? 'Editar Cliente' : (
-                step === 'select_client' ? '1. Selecionar Cliente' :
-                step === 'plan_config' ? '2. Tipo de Gravação' :
-                '3. Configuração do Plano'
-              )}
-            </DialogTitle>
-            {!editingCliente && (
-              <div className="flex gap-1 mt-2">
-                {['select_client', 'plan_config', 'details'].map((s, i) => (
-                  <div key={s} className={`h-1 flex-1 rounded-full transition-colors ${
-                    (['select_client', 'plan_config', 'details'].indexOf(step) >= i) ? 'bg-primary' : 'bg-secondary'
-                  }`} />
-                ))}
-              </div>
-            )}
-          </DialogHeader>
-
-          {/* ── Step 1: Select client ── */}
-          {step === 'select_client' && !editingCliente && (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Selecione um cliente ativo do sistema ou cadastre um novo:</p>
-              
-              {availableClients.length > 0 && (
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Clientes ativos</Label>
-                  <div className="grid gap-2 max-h-[300px] overflow-y-auto">
-                    {availableClients.map(c => (
-                      <button key={c.id} onClick={() => selectExistingClient(c.id)}
-                        className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary hover:bg-accent/50 transition-all text-left group">
-                        <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: `hsl(${c.color})` }} />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{c.companyName}</p>
-                          <p className="text-xs text-muted-foreground">{c.responsiblePerson} · {c.phone}</p>
-                        </div>
-                        <Badge variant="secondary" className="text-[10px] shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                          Selecionar
-                        </Badge>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <Separator />
-
-              <button onClick={selectNewClient}
-                className="w-full flex items-center gap-3 p-3 rounded-lg border border-dashed border-border hover:border-primary hover:bg-accent/50 transition-all text-left">
-                <Plus size={16} className="text-primary" />
-                <div>
-                  <p className="font-medium text-sm">Cadastrar novo cliente</p>
-                  <p className="text-xs text-muted-foreground">Cliente ainda não está no sistema</p>
-                </div>
-              </button>
-            </div>
-          )}
-
-          {/* ── Step 2: Plan type ── */}
-          {step === 'plan_config' && (
-            <div className="space-y-4">
-              {/* Show selected client info */}
-              {form.company_name && (
-                <div className="flex items-center gap-2 p-2 rounded-lg bg-secondary">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: `hsl(${form.color})` }} />
-                  <span className="text-sm font-medium">{form.company_name}</span>
-                  {!editingCliente && (
-                    <button onClick={() => setStep('select_client')} className="ml-auto text-xs text-muted-foreground hover:text-foreground">Trocar</button>
-                  )}
-                </div>
-              )}
-
-              {/* If new client, show name input */}
-              {!form.client_id && !editingCliente && (
-                <div className="space-y-3">
-                  <div>
-                    <Label>Nome da empresa *</Label>
-                    <Input value={form.company_name} onChange={e => setForm(p => ({ ...p, company_name: e.target.value }))} placeholder="Nome do cliente" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label>Responsável</Label>
-                      <Input value={form.responsible_person} onChange={e => setForm(p => ({ ...p, responsible_person: e.target.value }))} />
-                    </div>
-                    <div>
-                      <Label>Telefone</Label>
-                      <Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
-                    </div>
-                  </div>
-                  <div>
-                    <Label>Cor</Label>
-                    <div className="flex gap-1.5 flex-wrap mt-1">
-                      {CLIENT_COLORS.map(c => (
-                        <button key={c.value} className={`w-6 h-6 rounded-full border-2 transition-transform ${form.color === c.value ? 'border-foreground scale-110' : 'border-transparent'}`}
-                          style={{ backgroundColor: `hsl(${c.value})` }} onClick={() => setForm(p => ({ ...p, color: c.value }))} title={c.name} />
-                      ))}
-                    </div>
-                  </div>
-                  <Separator />
-                </div>
-              )}
-
-              <p className="text-sm font-medium">Qual o tipo de gravação?</p>
-
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => selectPlanType('presencial_recorrente')}
-                  className={`p-4 rounded-xl border-2 text-left transition-all ${
-                    form.plan_type === 'presencial_recorrente' ? 'border-primary bg-accent/50' : 'border-border hover:border-primary/50'
-                  }`}>
-                  <UsersIcon size={24} className="text-primary mb-2" />
-                  <p className="font-semibold text-sm">Presencial Recorrente</p>
-                  <p className="text-[11px] text-muted-foreground mt-1">Visitas presenciais em múltiplos dias da semana com duração flexível</p>
-                </button>
-                <button onClick={() => selectPlanType('gravacao_concentrada')}
-                  className={`p-4 rounded-xl border-2 text-left transition-all ${
-                    form.plan_type === 'gravacao_concentrada' ? 'border-primary bg-accent/50' : 'border-border hover:border-primary/50'
-                  }`}>
-                  <Video size={24} className="text-primary mb-2" />
-                  <p className="font-semibold text-sm">Gravação Concentrada</p>
-                  <p className="text-[11px] text-muted-foreground mt-1">1 dia por semana · 2 horas fixas · Videomaker obrigatório</p>
-                </button>
-              </div>
-
-              {editingCliente && form.plan_type && (
-                <div className="flex justify-end">
-                  <Button size="sm" onClick={() => setStep('details')}>Continuar →</Button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── Step 3: Details ── */}
-          {step === 'details' && (
-            <div className="space-y-4">
-              {/* Editable client info when editing */}
-              {editingCliente && (
-                <>
-                  <div className="space-y-3">
-                    <div>
-                      <Label>Nome da empresa *</Label>
-                      <Input value={form.company_name} onChange={e => setForm(p => ({ ...p, company_name: e.target.value }))} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label>Responsável</Label>
-                        <Input value={form.responsible_person} onChange={e => setForm(p => ({ ...p, responsible_person: e.target.value }))} />
-                      </div>
-                      <div>
-                        <Label>Telefone</Label>
-                        <Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
-                      </div>
-                    </div>
-                    <div>
-                      <Label>Cor</Label>
-                      <div className="flex gap-1.5 flex-wrap mt-1">
-                        {CLIENT_COLORS.map(c => (
-                          <button key={c.value} className={`w-6 h-6 rounded-full border-2 transition-transform ${form.color === c.value ? 'border-foreground scale-110' : 'border-transparent'}`}
-                            style={{ backgroundColor: `hsl(${c.value})` }} onClick={() => setForm(p => ({ ...p, color: c.value }))} title={c.name} />
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <Label>Tipo de gravação</Label>
-                      <Select value={form.plan_type} onValueChange={v => {
-                        if (v === 'gravacao_concentrada') {
-                          setForm(p => ({ ...p, plan_type: v, session_duration: 120, execution_type: 'com_videomaker', presence_days_per_week: 1, selected_days: p.selected_days.length > 0 ? [p.selected_days[0]] : ['segunda'] }));
-                        } else {
-                          setForm(p => ({ ...p, plan_type: v, session_duration: 60 }));
-                        }
-                      }}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="presencial_recorrente">🏢 Presencial Recorrente</SelectItem>
-                          <SelectItem value="gravacao_concentrada">🎬 Gravação Concentrada</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Checkbox checked={form.active} onCheckedChange={v => setForm(p => ({ ...p, active: !!v }))} id="active-check" />
-                      <Label htmlFor="active-check">Cliente ativo</Label>
-                    </div>
-                  </div>
-                  <Separator />
-                </>
-              )}
-
-              {/* Summary header (only for new clients) */}
-              {!editingCliente && (
-                <div className="flex items-center gap-2 p-2 rounded-lg bg-secondary">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: `hsl(${form.color})` }} />
-                  <span className="text-sm font-medium">{form.company_name}</span>
-                  <Badge variant="outline" className="text-[10px] ml-auto">
-                    {form.plan_type === 'gravacao_concentrada' ? '🎬 Concentrada' : '🏢 Recorrente'}
-                  </Badge>
-                </div>
-              )}
-
-              {/* Concentrada: fixed config shown */}
-              {form.plan_type === 'gravacao_concentrada' && (
-                <Card className="bg-accent/30 border-primary/20">
-                  <CardContent className="p-3 space-y-2 text-sm">
-                    <p className="font-medium flex items-center gap-2"><Clock size={14} /> Duração: <strong>2 horas</strong> (fixo)</p>
-                    <p className="font-medium flex items-center gap-2"><Video size={14} /> Videomaker: <strong>Obrigatório</strong></p>
-                    <p className="font-medium flex items-center gap-2"><CalIcon size={14} /> Frequência: <strong>1x por semana</strong></p>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Day selection */}
-              <div>
-                <Label>{form.plan_type === 'gravacao_concentrada' ? 'Dia da gravação semanal' : 'Dias da semana'}</Label>
-                <div className="flex gap-2 mt-1.5">
-                  {DAYS.map(d => (
-                    <button key={d.value} onClick={() => toggleDay(d.value)}
-                      className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all border ${
-                        form.selected_days.includes(d.value)
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'bg-secondary text-muted-foreground border-transparent hover:border-primary/30'
-                      }`}>
-                      {d.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Recorrente: extra options */}
-              {form.plan_type === 'presencial_recorrente' && (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label>Duração por sessão</Label>
-                      <Select value={String(form.session_duration)} onValueChange={v => setForm(p => ({ ...p, session_duration: +v }))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {DURATION_OPTIONS.map(o => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Tipo de execução</Label>
-                      <Select value={form.execution_type} onValueChange={v => setForm(p => ({ ...p, execution_type: v }))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="sozinho">Sozinho</SelectItem>
-                          <SelectItem value="com_videomaker">Com Videomaker</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label>Dias presenciais/semana</Label>
-                      <Input type="number" min={1} max={5} value={form.presence_days_per_week} onChange={e => setForm(p => ({ ...p, presence_days_per_week: +e.target.value }))} />
-                    </div>
-                    <div>
-                      <Label>Horas contratadas/mês</Label>
-                      <Input type="number" min={0} step={0.5} value={form.total_contracted_hours} onChange={e => setForm(p => ({ ...p, total_contracted_hours: +e.target.value }))} />
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* Common fields */}
-              <div>
-                <Label>Stories por semana</Label>
-                <Input type="number" min={0} value={form.stories_per_week} onChange={e => setForm(p => ({ ...p, stories_per_week: +e.target.value }))} />
-              </div>
-
-              {/* Profissional + Horário (only for new clients) */}
-              {!editingCliente && (
-                <>
-                  <Separator />
-                  <p className="text-sm font-medium flex items-center gap-2">
-                    <CalIcon size={14} className="text-primary" />
-                    Agendamento automático
-                  </p>
-                  <p className="text-[11px] text-muted-foreground -mt-2">
-                    Os agendamentos serão criados automaticamente para as próximas 4 semanas nos dias selecionados.
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label>Profissional responsável *</Label>
-                      <Select value={form.profissional_user_id} onValueChange={v => setForm(p => ({ ...p, profissional_user_id: v }))}>
-                        <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                        <SelectContent>
-                          {users.map(u => (
-                            <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Horário fixo *</Label>
-                      <Input type="time" value={form.start_time} onChange={e => setForm(p => ({ ...p, start_time: e.target.value }))} />
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <Separator />
-
-              {/* Editorial */}
-              <div>
-                <Label className="flex items-center gap-2">
-                  <FileText size={14} className="text-primary" />
-                  Editorial do Cliente
-                </Label>
-                <p className="text-[11px] text-muted-foreground mb-1.5">
-                  Descreva o posicionamento, tom de voz, público-alvo e diretrizes de conteúdo para que toda equipe entenda este cliente.
-                </p>
-                <Textarea
-                  value={form.editorial}
-                  onChange={e => setForm(p => ({ ...p, editorial: e.target.value }))}
-                  rows={4}
-                  placeholder="Ex: Cliente do ramo alimentício, foco em público jovem (18-30). Tom de voz descontraído e direto. Prioridade em conteúdo de bastidores e receitas rápidas. Evitar linguagem formal..."
-                />
-              </div>
-
-              {/* Notes */}
-              <div>
-                <Label>Observações estratégicas</Label>
-                <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2} placeholder="Notas internas sobre o cliente..." />
-              </div>
-            </div>
-          )}
-
-          {/* Footer */}
-          <DialogFooter>
-            {step !== 'select_client' && !editingCliente && (
-              <Button variant="ghost" size="sm" onClick={() => setStep(step === 'details' ? 'plan_config' : 'select_client')} className="mr-auto">
-                ← Voltar
-              </Button>
-            )}
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            {(step === 'details' || editingCliente) && (
-              <Button onClick={handleSave}>{editingCliente ? 'Salvar' : 'Cadastrar'}</Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {renderDialog()}
     </div>
   );
 }

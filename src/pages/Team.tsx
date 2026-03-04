@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Users } from 'lucide-react';
+import UserAvatar from '@/components/UserAvatar';
 
 const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor'];
 
@@ -80,10 +81,10 @@ export default function Team() {
           {users.map(u => (
             <div key={u.id} className="glass-card p-4 flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
-                  {u.name.charAt(0)}
-                </div>
+                <UserAvatar user={u} size="lg" />
                 <div>
+                  <p className="font-medium">{u.displayName || u.name}</p>
+                  <p className="text-xs text-muted-foreground">{u.email}{u.jobTitle ? ` · ${u.jobTitle}` : ''}</p>
                   <p className="font-medium">{u.name}</p>
                   <p className="text-xs text-muted-foreground">{u.email}</p>
                 </div>

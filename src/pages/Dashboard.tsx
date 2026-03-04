@@ -10,6 +10,7 @@ import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInter
 import { ptBR } from 'date-fns/locale';
 import { Progress } from '@/components/ui/progress';
 import { useNavigate } from 'react-router-dom';
+import UserAvatar from '@/components/UserAvatar';
 
 export default function Dashboard() {
   const { currentUser, recordings, clients, users, tasks, cancelRecording, updateRecording, getSuggestionsForCancellation, activeRecordings } = useApp();
@@ -184,8 +185,8 @@ export default function Dashboard() {
                 return (
                   <div key={vm.id} className="space-y-2">
                     <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${activeRec ? 'bg-success/20 text-success ring-2 ring-success/40 animate-pulse' : 'bg-primary/15 text-primary'}`}>
-                        {vm.name.charAt(0)}
+                      <div className={`w-8 h-8 rounded-full overflow-hidden flex items-center justify-center shrink-0 ${activeRec ? 'ring-2 ring-success/40 animate-pulse' : ''}`}>
+                        <UserAvatar user={vm} size="sm" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{vm.name}</p>

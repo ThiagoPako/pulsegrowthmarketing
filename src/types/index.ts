@@ -6,6 +6,9 @@ export interface User {
   email: string;
   password: string;
   role: UserRole;
+  avatarUrl?: string; // base64 data URL
+  displayName?: string;
+  jobTitle?: string;
 }
 
 export type DayOfWeek = 'segunda' | 'terca' | 'quarta' | 'quinta' | 'sexta' | 'sabado' | 'domingo';

@@ -14,6 +14,162 @@ export type Database = {
   }
   public: {
     Tables: {
+      active_recordings: {
+        Row: {
+          client_id: string
+          id: string
+          recording_id: string
+          started_at: string
+          videomaker_id: string
+        }
+        Insert: {
+          client_id: string
+          id?: string
+          recording_id: string
+          started_at?: string
+          videomaker_id: string
+        }
+        Update: {
+          client_id?: string
+          id?: string
+          recording_id?: string
+          started_at?: string
+          videomaker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "active_recordings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "active_recordings_recording_id_fkey"
+            columns: ["recording_id"]
+            isOneToOne: true
+            referencedRelation: "recordings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "active_recordings_videomaker_id_fkey"
+            columns: ["videomaker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          accepts_extra: boolean
+          backup_day: string
+          backup_time: string
+          color: string
+          company_name: string
+          created_at: string
+          extra_client_appears: boolean
+          extra_content_types: string[]
+          extra_day: string
+          fixed_day: string
+          fixed_time: string
+          has_endomarketing: boolean
+          id: string
+          phone: string
+          presence_days: number
+          responsible_person: string
+          updated_at: string
+          videomaker_id: string | null
+          weekly_creatives: number
+          weekly_goal: number
+          weekly_reels: number
+          weekly_stories: number
+        }
+        Insert: {
+          accepts_extra?: boolean
+          backup_day?: string
+          backup_time?: string
+          color?: string
+          company_name: string
+          created_at?: string
+          extra_client_appears?: boolean
+          extra_content_types?: string[]
+          extra_day?: string
+          fixed_day?: string
+          fixed_time?: string
+          has_endomarketing?: boolean
+          id?: string
+          phone?: string
+          presence_days?: number
+          responsible_person?: string
+          updated_at?: string
+          videomaker_id?: string | null
+          weekly_creatives?: number
+          weekly_goal?: number
+          weekly_reels?: number
+          weekly_stories?: number
+        }
+        Update: {
+          accepts_extra?: boolean
+          backup_day?: string
+          backup_time?: string
+          color?: string
+          company_name?: string
+          created_at?: string
+          extra_client_appears?: boolean
+          extra_content_types?: string[]
+          extra_day?: string
+          fixed_day?: string
+          fixed_time?: string
+          has_endomarketing?: boolean
+          id?: string
+          phone?: string
+          presence_days?: number
+          responsible_person?: string
+          updated_at?: string
+          videomaker_id?: string | null
+          weekly_creatives?: number
+          weekly_goal?: number
+          weekly_reels?: number
+          weekly_stories?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clients_videomaker_id_fkey"
+            columns: ["videomaker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_settings: {
+        Row: {
+          end_time: string
+          id: string
+          recording_duration: number
+          start_time: string
+          updated_at: string
+          work_days: string[]
+        }
+        Insert: {
+          end_time?: string
+          id?: string
+          recording_duration?: number
+          start_time?: string
+          updated_at?: string
+          work_days?: string[]
+        }
+        Update: {
+          end_time?: string
+          id?: string
+          recording_duration?: number
+          start_time?: string
+          updated_at?: string
+          work_days?: string[]
+        }
+        Relationships: []
+      }
       endomarketing_agendamentos: {
         Row: {
           cancellation_reason: string | null
@@ -218,6 +374,50 @@ export type Database = {
         }
         Relationships: []
       }
+      kanban_tasks: {
+        Row: {
+          checklist: Json
+          client_id: string
+          column: string
+          created_at: string
+          id: string
+          recording_date: string | null
+          title: string
+          updated_at: string
+          week_start: string
+        }
+        Insert: {
+          checklist?: Json
+          client_id: string
+          column?: string
+          created_at?: string
+          id?: string
+          recording_date?: string | null
+          title: string
+          updated_at?: string
+          week_start: string
+        }
+        Update: {
+          checklist?: Json
+          client_id?: string
+          column?: string
+          created_at?: string
+          id?: string
+          recording_date?: string | null
+          title?: string
+          updated_at?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kanban_tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -253,6 +453,98 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      recordings: {
+        Row: {
+          client_id: string
+          created_at: string
+          date: string
+          id: string
+          start_time: string
+          status: string
+          type: string
+          videomaker_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          date: string
+          id?: string
+          start_time: string
+          status?: string
+          type?: string
+          videomaker_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          date?: string
+          id?: string
+          start_time?: string
+          status?: string
+          type?: string
+          videomaker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recordings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recordings_videomaker_id_fkey"
+            columns: ["videomaker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scripts: {
+        Row: {
+          client_id: string
+          content: string
+          created_at: string
+          id: string
+          priority: string
+          recorded: boolean
+          title: string
+          updated_at: string
+          video_type: string
+        }
+        Insert: {
+          client_id: string
+          content?: string
+          created_at?: string
+          id?: string
+          priority?: string
+          recorded?: boolean
+          title: string
+          updated_at?: string
+          video_type?: string
+        }
+        Update: {
+          client_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          priority?: string
+          recorded?: boolean
+          title?: string
+          updated_at?: string
+          video_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scripts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {

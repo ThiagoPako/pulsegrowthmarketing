@@ -101,72 +101,47 @@ export default function Schedule() {
     if (!client) return false;
 
     const today = format(new Date(), 'yyyy-MM-dd');
+    // Use the client's assigned videomaker — each client has their own
+    const assignedVm = client.videomaker;
+    const assignedVmName = getVideomakerName(assignedVm);
 
-    // Attempt 1: backup day + backup time with same videomaker
+    // Attempt 1: backup day + backup time with client's videomaker
     const backupDate = findNextDateForDay(client.backupDay, today);
     const backupDayOfWeek = DATE_TO_DAY[getDay(new Date(backupDate + 'T12:00:00'))];
     if (isWithinWorkHours(backupDayOfWeek, client.backupTime)) {
-      if (!hasConflict(rec.videomakerId, backupDate, client.backupTime)) {
+      if (!hasConflict(assignedVm, backupDate, client.backupTime)) {
         const ok = addRecording({
-          id: crypto.randomUUID(), clientId: rec.clientId, videomakerId: rec.videomakerId,
+          id: crypto.randomUUID(), clientId: rec.clientId, videomakerId: assignedVm,
           date: backupDate, startTime: client.backupTime, type: 'secundaria', status: 'agendada',
         });
         if (ok) {
-          toast.success(`Reagendado automaticamente para ${format(new Date(backupDate + 'T12:00:00'), 'dd/MM')} (backup) às ${client.backupTime}`);
+          toast.success(`Reagendado para ${format(new Date(backupDate + 'T12:00:00'), 'dd/MM')} (backup) às ${client.backupTime} com ${assignedVmName}`);
           return true;
-        }
-      }
-      // Try other videomakers on backup day
-      for (const vm of videomakers) {
-        if (vm.id === rec.videomakerId) continue;
-        if (!hasConflict(vm.id, backupDate, client.backupTime)) {
-          const ok = addRecording({
-            id: crypto.randomUUID(), clientId: rec.clientId, videomakerId: vm.id,
-            date: backupDate, startTime: client.backupTime, type: 'secundaria', status: 'agendada',
-          });
-          if (ok) {
-            toast.success(`Reagendado para ${format(new Date(backupDate + 'T12:00:00'), 'dd/MM')} com ${vm.name}`);
-            return true;
-          }
         }
       }
     }
 
-    // Attempt 2: extra day + fixed time with same videomaker
+    // Attempt 2: extra day + fixed time with client's videomaker
     if (client.acceptsExtra) {
       const extraDate = findNextDateForDay(client.extraDay, today);
       const extraDayOfWeek = DATE_TO_DAY[getDay(new Date(extraDate + 'T12:00:00'))];
       if (isWithinWorkHours(extraDayOfWeek, client.fixedTime)) {
-        if (!hasConflict(rec.videomakerId, extraDate, client.fixedTime)) {
+        if (!hasConflict(assignedVm, extraDate, client.fixedTime)) {
           const ok = addRecording({
-            id: crypto.randomUUID(), clientId: rec.clientId, videomakerId: rec.videomakerId,
+            id: crypto.randomUUID(), clientId: rec.clientId, videomakerId: assignedVm,
             date: extraDate, startTime: client.fixedTime, type: 'extra', status: 'agendada',
           });
           if (ok) {
-            toast.success(`Reagendado para dia extra ${format(new Date(extraDate + 'T12:00:00'), 'dd/MM')} às ${client.fixedTime}`);
+            toast.success(`Reagendado para dia extra ${format(new Date(extraDate + 'T12:00:00'), 'dd/MM')} às ${client.fixedTime} com ${assignedVmName}`);
             return true;
-          }
-        }
-        // Try other videomakers on extra day
-        for (const vm of videomakers) {
-          if (vm.id === rec.videomakerId) continue;
-          if (!hasConflict(vm.id, extraDate, client.fixedTime)) {
-            const ok = addRecording({
-              id: crypto.randomUUID(), clientId: rec.clientId, videomakerId: vm.id,
-              date: extraDate, startTime: client.fixedTime, type: 'extra', status: 'agendada',
-            });
-            if (ok) {
-              toast.success(`Reagendado para dia extra ${format(new Date(extraDate + 'T12:00:00'), 'dd/MM')} com ${vm.name}`);
-              return true;
-            }
           }
         }
       }
     }
 
-    toast.warning('Não foi possível reagendar automaticamente — sem vagas disponíveis');
+    toast.warning(`Não foi possível reagendar — ${assignedVmName} sem vagas disponíveis no backup ou extra`);
     return false;
-  }, [clients, videomakers, hasConflict, isWithinWorkHours, addRecording]);
+  }, [clients, hasConflict, isWithinWorkHours, addRecording]);
 
   const handleAdd = () => {
     if (!form.clientId || !form.videomakerId || !form.date || !form.startTime) {

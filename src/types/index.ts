@@ -14,10 +14,12 @@ export interface User {
 export type DayOfWeek = 'segunda' | 'terca' | 'quarta' | 'quinta' | 'sexta' | 'sabado' | 'domingo';
 
 export interface CompanySettings {
-  startTime: string; // HH:mm
-  endTime: string;
+  shiftAStart: string; // HH:mm
+  shiftAEnd: string;
+  shiftBStart: string;
+  shiftBEnd: string;
   workDays: DayOfWeek[];
-  recordingDuration: number; // always 2 hours
+  recordingDuration: number; // in minutes
 }
 
 export type ContentType = 'reels' | 'story' | 'produto';

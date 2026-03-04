@@ -96,21 +96,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string) => {
     const newStart = timeToMinutes(startTime);
-    const newEnd = newStart + 120;
+    const newEnd = newStart + data.settings.recordingDuration;
     return data.recordings.some(r => {
       if (r.id === excludeId || r.status === 'cancelada') return false;
       if (r.videomakerId !== videomakerId || r.date !== date) return false;
       const existStart = timeToMinutes(r.startTime);
-      const existEnd = existStart + 120;
+      const existEnd = existStart + data.settings.recordingDuration;
       return newStart < existEnd && newEnd > existStart;
     });
-  }, [data.recordings]);
+  }, [data.recordings, data.settings.recordingDuration]);
 
   const isWithinWorkHours = useCallback((day: DayOfWeek, startTime: string) => {
     if (!data.settings.workDays.includes(day)) return false;
     const start = timeToMinutes(startTime);
-    const end = start + 120;
-    return start >= timeToMinutes(data.settings.startTime) && end <= timeToMinutes(data.settings.endTime);
+    const end = start + data.settings.recordingDuration;
+    const s = data.settings;
+    // Must fit within Shift A or Shift B
+    const inA = start >= timeToMinutes(s.shiftAStart) && end <= timeToMinutes(s.shiftAEnd);
+    const inB = start >= timeToMinutes(s.shiftBStart) && end <= timeToMinutes(s.shiftBEnd);
+    return inA || inB;
   }, [data.settings]);
 
   const addRecording = useCallback((recording: Recording): boolean => {

@@ -234,9 +234,13 @@ export default function Dashboard() {
                   {dayRecs.slice(0, 5).map(rec => {
                     const color = getClientColor(rec.clientId);
                     return (
-                      <div key={rec.id} className="rounded px-1.5 py-1 text-[10px] leading-tight" style={{ backgroundColor: `hsl(${color} / 0.1)`, borderLeft: `2px solid hsl(${color})` }}>
+                      <div key={rec.id} className="rounded px-1.5 py-1 text-[10px] leading-tight group relative cursor-pointer" style={{ backgroundColor: `hsl(${color} / 0.1)`, borderLeft: `2px solid hsl(${color})` }}>
                         <p className="font-medium truncate" style={{ color: `hsl(${color})` }}>{getClientName(rec.clientId)}</p>
                         <p className="text-muted-foreground">{rec.startTime}</p>
+                        <div className="absolute left-0 top-full mt-0.5 hidden group-hover:flex items-center gap-1.5 bg-card rounded-lg p-2 shadow-lg border border-border z-20 min-w-[120px]">
+                          {(() => { const vm = users.find(u => u.id === rec.videomakerId); return vm ? <UserAvatar user={vm} size="sm" className="w-5 h-5 text-[8px]" /> : null; })()}
+                          <span className="text-[10px] font-medium truncate">{getVideomakerName(rec.videomakerId)}</span>
+                        </div>
                       </div>
                     );
                   })}

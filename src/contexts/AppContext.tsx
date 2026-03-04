@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek, Script, ActiveRecording } from '@/types';
+import { useAuth, type Profile } from '@/hooks/useAuth';
+import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek, Script, ActiveRecording, UserRole } from '@/types';
 
 interface AppState {
   currentUser: User | null;
@@ -13,7 +14,6 @@ interface AppState {
 }
 
 interface AppContextType extends AppState {
-  login: (email: string, password: string) => boolean;
   logout: () => void;
   addUser: (user: User) => boolean;
   updateUser: (user: User) => void;
@@ -45,13 +45,18 @@ const defaultSettings: CompanySettings = {
   recordingDuration: 2,
 };
 
-const defaultAdmin: User = {
-  id: 'admin-1',
-  name: 'Administrador',
-  email: 'admin@pulse.com',
-  password: 'admin123',
-  role: 'admin',
-};
+function profileToUser(profile: Profile): User {
+  return {
+    id: profile.id,
+    name: profile.name,
+    email: profile.email,
+    password: '', // Not used with Supabase Auth
+    role: profile.role as UserRole,
+    avatarUrl: profile.avatar_url || undefined,
+    displayName: profile.display_name || undefined,
+    jobTitle: profile.job_title || undefined,
+  };
+}
 
 function loadState<T>(key: string, fallback: T): T {
   try {
@@ -63,8 +68,13 @@ function loadState<T>(key: string, fallback: T): T {
 const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(() => loadState('pulse_currentUser', null));
-  const [users, setUsers] = useState<User[]>(() => loadState('pulse_users', [defaultAdmin]));
+  const { profile, signOut, loading: authLoading } = useAuth();
+
+  // Derive currentUser from Supabase Auth profile
+  const currentUser = profile ? profileToUser(profile) : null;
+
+  // Non-auth data still in localStorage for now
+  const [users, setUsers] = useState<User[]>(() => loadState('pulse_users', []));
   const [clients, setClients] = useState<Client[]>(() => loadState('pulse_clients', []));
   const [recordings, setRecordings] = useState<Recording[]>(() => loadState('pulse_recordings', []));
   const [tasks, setTasks] = useState<KanbanTask[]>(() => loadState('pulse_tasks', []));
@@ -79,15 +89,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { localStorage.setItem('pulse_scripts', JSON.stringify(scripts)); }, [scripts]);
   useEffect(() => { localStorage.setItem('pulse_settings', JSON.stringify(settings)); }, [settings]);
   useEffect(() => { localStorage.setItem('pulse_activeRecordings', JSON.stringify(activeRecordings)); }, [activeRecordings]);
-  useEffect(() => { localStorage.setItem('pulse_currentUser', JSON.stringify(currentUser)); }, [currentUser]);
 
-  const login = useCallback((email: string, password: string) => {
-    const user = users.find(u => u.email === email && u.password === password);
-    if (user) { setCurrentUser(user); return true; }
-    return false;
-  }, [users]);
-
-  const logout = useCallback(() => setCurrentUser(null), []);
+  const logout = useCallback(async () => {
+    await signOut();
+  }, [signOut]);
 
   const addUser = useCallback((user: User) => {
     if (users.some(u => u.email === user.email)) return false;
@@ -158,41 +163,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setRecordings(prev => prev.map(r => r.id === id ? { ...r, status: 'cancelada' as const } : r));
   }, []);
 
-  const addTask = useCallback((task: KanbanTask) => {
-    setTasks(prev => [...prev, task]);
-  }, []);
-
-  const updateTask = useCallback((task: KanbanTask) => {
-    setTasks(prev => prev.map(t => t.id === task.id ? task : t));
-  }, []);
-
-  const deleteTask = useCallback((id: string) => {
-    setTasks(prev => prev.filter(t => t.id !== id));
-  }, []);
-
-  const addScript = useCallback((script: Script) => {
-    setScripts(prev => [...prev, script]);
-  }, []);
-
-  const updateScript = useCallback((script: Script) => {
-    setScripts(prev => prev.map(s => s.id === script.id ? script : s));
-  }, []);
-
-  const deleteScript = useCallback((id: string) => {
-    setScripts(prev => prev.filter(s => s.id !== id));
-  }, []);
-
-  const updateSettings = useCallback((s: CompanySettings) => {
-    setSettings(s);
-  }, []);
-
-  const startActiveRecording = useCallback((rec: ActiveRecording) => {
-    setActiveRecordings(prev => [...prev.filter(a => a.recordingId !== rec.recordingId), rec]);
-  }, []);
-
-  const stopActiveRecording = useCallback((recordingId: string) => {
-    setActiveRecordings(prev => prev.filter(a => a.recordingId !== recordingId));
-  }, []);
+  const addTask = useCallback((task: KanbanTask) => setTasks(prev => [...prev, task]), []);
+  const updateTask = useCallback((task: KanbanTask) => setTasks(prev => prev.map(t => t.id === task.id ? task : t)), []);
+  const deleteTask = useCallback((id: string) => setTasks(prev => prev.filter(t => t.id !== id)), []);
+  const addScript = useCallback((script: Script) => setScripts(prev => [...prev, script]), []);
+  const updateScript = useCallback((script: Script) => setScripts(prev => prev.map(s => s.id === script.id ? script : s)), []);
+  const deleteScript = useCallback((id: string) => setScripts(prev => prev.filter(s => s.id !== id)), []);
+  const updateSettings = useCallback((s: CompanySettings) => setSettings(s), []);
+  const startActiveRecording = useCallback((rec: ActiveRecording) => setActiveRecordings(prev => [...prev.filter(a => a.recordingId !== rec.recordingId), rec]), []);
+  const stopActiveRecording = useCallback((recordingId: string) => setActiveRecordings(prev => prev.filter(a => a.recordingId !== recordingId)), []);
 
   const getSuggestionsForCancellation = useCallback((recording: Recording) => {
     return clients.filter(c => {
@@ -205,7 +184,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppContext.Provider value={{
       currentUser, users, clients, recordings, tasks, scripts, settings, activeRecordings,
-      login, logout, addUser, updateUser, deleteUser,
+      logout, addUser, updateUser, deleteUser,
       addClient, updateClient, deleteClient,
       addRecording, updateRecording, cancelRecording,
       addTask, updateTask, deleteTask,

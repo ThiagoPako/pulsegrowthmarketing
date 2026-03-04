@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { useApp } from '@/contexts/AppContext';
+import { useAuth } from '@/hooks/useAuth';
 import { ROLE_LABELS } from '@/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,8 @@ import { Camera, Save } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function ProfileDialog({ children }: { children: React.ReactNode }) {
-  const { currentUser, updateUser } = useApp();
+  const { currentUser } = useApp();
+  const { updateProfile } = useAuth();
   const [open, setOpen] = useState(false);
   const [displayName, setDisplayName] = useState(currentUser?.displayName || currentUser?.name || '');
   const [jobTitle, setJobTitle] = useState(currentUser?.jobTitle || '');
@@ -33,12 +35,11 @@ export default function ProfileDialog({ children }: { children: React.ReactNode 
     reader.readAsDataURL(file);
   };
 
-  const handleSave = () => {
-    updateUser({
-      ...currentUser,
-      displayName,
-      jobTitle,
-      avatarUrl,
+  const handleSave = async () => {
+    await updateProfile({
+      display_name: displayName,
+      job_title: jobTitle,
+      avatar_url: avatarUrl,
     });
     toast.success('Perfil atualizado!');
     setOpen(false);

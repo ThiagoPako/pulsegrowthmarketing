@@ -129,7 +129,7 @@ export default function EndomarketingClientes() {
       profissional_user_id: '',
       start_time: '09:00',
     });
-    setStep('plan_config');
+    setStep('details');
     setDialogOpen(true);
   };
 
@@ -575,14 +575,68 @@ export default function EndomarketingClientes() {
           {/* ── Step 3: Details ── */}
           {step === 'details' && (
             <div className="space-y-4">
-              {/* Summary header */}
-              <div className="flex items-center gap-2 p-2 rounded-lg bg-secondary">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: `hsl(${form.color})` }} />
-                <span className="text-sm font-medium">{form.company_name}</span>
-                <Badge variant="outline" className="text-[10px] ml-auto">
-                  {form.plan_type === 'gravacao_concentrada' ? '🎬 Concentrada' : '🏢 Recorrente'}
-                </Badge>
-              </div>
+              {/* Editable client info when editing */}
+              {editingCliente && (
+                <>
+                  <div className="space-y-3">
+                    <div>
+                      <Label>Nome da empresa *</Label>
+                      <Input value={form.company_name} onChange={e => setForm(p => ({ ...p, company_name: e.target.value }))} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label>Responsável</Label>
+                        <Input value={form.responsible_person} onChange={e => setForm(p => ({ ...p, responsible_person: e.target.value }))} />
+                      </div>
+                      <div>
+                        <Label>Telefone</Label>
+                        <Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div>
+                      <Label>Cor</Label>
+                      <div className="flex gap-1.5 flex-wrap mt-1">
+                        {CLIENT_COLORS.map(c => (
+                          <button key={c.value} className={`w-6 h-6 rounded-full border-2 transition-transform ${form.color === c.value ? 'border-foreground scale-110' : 'border-transparent'}`}
+                            style={{ backgroundColor: `hsl(${c.value})` }} onClick={() => setForm(p => ({ ...p, color: c.value }))} title={c.name} />
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <Label>Tipo de gravação</Label>
+                      <Select value={form.plan_type} onValueChange={v => {
+                        if (v === 'gravacao_concentrada') {
+                          setForm(p => ({ ...p, plan_type: v, session_duration: 120, execution_type: 'com_videomaker', presence_days_per_week: 1, selected_days: p.selected_days.length > 0 ? [p.selected_days[0]] : ['segunda'] }));
+                        } else {
+                          setForm(p => ({ ...p, plan_type: v, session_duration: 60 }));
+                        }
+                      }}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="presencial_recorrente">🏢 Presencial Recorrente</SelectItem>
+                          <SelectItem value="gravacao_concentrada">🎬 Gravação Concentrada</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox checked={form.active} onCheckedChange={v => setForm(p => ({ ...p, active: !!v }))} id="active-check" />
+                      <Label htmlFor="active-check">Cliente ativo</Label>
+                    </div>
+                  </div>
+                  <Separator />
+                </>
+              )}
+
+              {/* Summary header (only for new clients) */}
+              {!editingCliente && (
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-secondary">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: `hsl(${form.color})` }} />
+                  <span className="text-sm font-medium">{form.company_name}</span>
+                  <Badge variant="outline" className="text-[10px] ml-auto">
+                    {form.plan_type === 'gravacao_concentrada' ? '🎬 Concentrada' : '🏢 Recorrente'}
+                  </Badge>
+                </div>
+              )}
 
               {/* Concentrada: fixed config shown */}
               {form.plan_type === 'gravacao_concentrada' && (

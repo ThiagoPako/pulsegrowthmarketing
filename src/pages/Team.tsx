@@ -80,27 +80,29 @@ export default function Team() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-display font-bold">Equipe</h1>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => setForm({ name: '', email: '', password: '', role: 'videomaker' })}><Plus size={16} className="mr-2" /> Novo Usuário</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Novo Usuário</DialogTitle></DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-1"><Label>Nome</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
-              <div className="space-y-1"><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
-              <div className="space-y-1"><Label>Senha</Label><Input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="Mínimo 6 caracteres" /></div>
-              <div className="space-y-1">
-                <Label>Função</Label>
-                <Select value={form.role} onValueChange={v => setForm({ ...form, role: v as UserRole })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{ROLES.map(r => <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>)}</SelectContent>
-                </Select>
+        {currentUser?.role === 'admin' && (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => setForm({ name: '', email: '', password: '', role: 'videomaker' })}><Plus size={16} className="mr-2" /> Novo Usuário</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Novo Usuário</DialogTitle></DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-1"><Label>Nome</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Senha</Label><Input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="Mínimo 6 caracteres" /></div>
+                <div className="space-y-1">
+                  <Label>Função</Label>
+                  <Select value={form.role} onValueChange={v => setForm({ ...form, role: v as UserRole })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{ROLES.map(r => <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={handleSave} className="w-full">Cadastrar</Button>
               </div>
-              <Button onClick={handleSave} className="w-full">Cadastrar</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {loading ? (

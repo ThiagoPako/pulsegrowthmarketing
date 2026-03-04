@@ -1,8 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useCallback, useState, useEffect } from 'react';
 import { useAuth, type Profile } from '@/hooks/useAuth';
+import { useSupabaseData } from '@/hooks/useSupabaseData';
+import { supabase } from '@/integrations/supabase/client';
 import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek, Script, ActiveRecording, UserRole } from '@/types';
 
-interface AppState {
+interface AppContextType {
   currentUser: User | null;
   users: User[];
   clients: Client[];
@@ -11,9 +13,6 @@ interface AppState {
   scripts: Script[];
   settings: CompanySettings;
   activeRecordings: ActiveRecording[];
-}
-
-interface AppContextType extends AppState {
   logout: () => void;
   addUser: (user: User) => boolean;
   updateUser: (user: User) => void;
@@ -38,19 +37,12 @@ interface AppContextType extends AppState {
   getSuggestionsForCancellation: (recording: Recording) => Client[];
 }
 
-const defaultSettings: CompanySettings = {
-  startTime: '08:00',
-  endTime: '18:00',
-  workDays: ['segunda', 'terca', 'quarta', 'quinta', 'sexta'],
-  recordingDuration: 2,
-};
-
 function profileToUser(profile: Profile): User {
   return {
     id: profile.id,
     name: profile.name,
     email: profile.email,
-    password: '', // Not used with Supabase Auth
+    password: '',
     role: profile.role as UserRole,
     avatarUrl: profile.avatar_url || undefined,
     displayName: profile.display_name || undefined,
@@ -58,72 +50,44 @@ function profileToUser(profile: Profile): User {
   };
 }
 
-function loadState<T>(key: string, fallback: T): T {
-  try {
-    const stored = localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : fallback;
-  } catch { return fallback; }
-}
-
 const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const { profile, signOut, loading: authLoading } = useAuth();
+  const { profile, signOut } = useAuth();
+  const data = useSupabaseData();
 
-  // Derive currentUser from Supabase Auth profile
   const currentUser = profile ? profileToUser(profile) : null;
+  
+  // Fetch all profiles for the users list
+  const [users, setUsers] = useState<User[]>([]);
+  useEffect(() => {
+    supabase.from('profiles').select('*').then(({ data: profiles }) => {
+      if (profiles) setUsers(profiles.map((p: any) => profileToUser(p as Profile)));
+    });
+  }, [profile]);
 
-  // Non-auth data still in localStorage for now
-  const [users, setUsers] = useState<User[]>(() => loadState('pulse_users', []));
-  const [clients, setClients] = useState<Client[]>(() => loadState('pulse_clients', []));
-  const [recordings, setRecordings] = useState<Recording[]>(() => loadState('pulse_recordings', []));
-  const [tasks, setTasks] = useState<KanbanTask[]>(() => loadState('pulse_tasks', []));
-  const [scripts, setScripts] = useState<Script[]>(() => loadState('pulse_scripts', []));
-  const [settings, setSettings] = useState<CompanySettings>(() => loadState('pulse_settings', defaultSettings));
-  const [activeRecordings, setActiveRecordings] = useState<ActiveRecording[]>(() => loadState('pulse_activeRecordings', []));
+  const logout = useCallback(async () => { await signOut(); }, [signOut]);
 
-  useEffect(() => { localStorage.setItem('pulse_users', JSON.stringify(users)); }, [users]);
-  useEffect(() => { localStorage.setItem('pulse_clients', JSON.stringify(clients)); }, [clients]);
-  useEffect(() => { localStorage.setItem('pulse_recordings', JSON.stringify(recordings)); }, [recordings]);
-  useEffect(() => { localStorage.setItem('pulse_tasks', JSON.stringify(tasks)); }, [tasks]);
-  useEffect(() => { localStorage.setItem('pulse_scripts', JSON.stringify(scripts)); }, [scripts]);
-  useEffect(() => { localStorage.setItem('pulse_settings', JSON.stringify(settings)); }, [settings]);
-  useEffect(() => { localStorage.setItem('pulse_activeRecordings', JSON.stringify(activeRecordings)); }, [activeRecordings]);
+  // User management (still via profiles table in useAuth)
+  const addUser = useCallback((_user: User) => false, []);
+  const updateUser = useCallback((_user: User) => {}, []);
+  const deleteUser = useCallback((_id: string) => {}, []);
 
-  const logout = useCallback(async () => {
-    await signOut();
-  }, [signOut]);
-
-  const addUser = useCallback((user: User) => {
-    if (users.some(u => u.email === user.email)) return false;
-    setUsers(prev => [...prev, user]);
+  // Sync wrappers to keep the interface compatible (sync return for optimistic UI)
+  const addClient = useCallback((client: Client): boolean => {
+    if (data.clients.some(c => c.companyName.toLowerCase() === client.companyName.toLowerCase())) return false;
+    data.addClient(client);
     return true;
-  }, [users]);
+  }, [data]);
 
-  const updateUser = useCallback((user: User) => {
-    setUsers(prev => prev.map(u => u.id === user.id ? user : u));
-  }, []);
+  const updateClient = useCallback((client: Client) => { data.updateClient(client); }, [data]);
 
-  const deleteUser = useCallback((id: string) => {
-    setUsers(prev => prev.filter(u => u.id !== id));
-  }, []);
-
-  const addClient = useCallback((client: Client) => {
-    if (clients.some(c => c.companyName.toLowerCase() === client.companyName.toLowerCase())) return false;
-    setClients(prev => [...prev, client]);
-    return true;
-  }, [clients]);
-
-  const updateClient = useCallback((client: Client) => {
-    setClients(prev => prev.map(c => c.id === client.id ? client : c));
-  }, []);
-
-  const deleteClient = useCallback((id: string) => {
-    const hasFuture = recordings.some(r => r.clientId === id && r.status === 'agendada' && r.date >= new Date().toISOString().split('T')[0]);
+  const deleteClient = useCallback((id: string): boolean => {
+    const hasFuture = data.recordings.some(r => r.clientId === id && r.status === 'agendada' && r.date >= new Date().toISOString().split('T')[0]);
     if (hasFuture) return false;
-    setClients(prev => prev.filter(c => c.id !== id));
+    data.deleteClient(id);
     return true;
-  }, [recordings]);
+  }, [data]);
 
   const timeToMinutes = (t: string) => {
     const [h, m] = t.split(':').map(Number);
@@ -133,57 +97,53 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string) => {
     const newStart = timeToMinutes(startTime);
     const newEnd = newStart + 120;
-    return recordings.some(r => {
+    return data.recordings.some(r => {
       if (r.id === excludeId || r.status === 'cancelada') return false;
       if (r.videomakerId !== videomakerId || r.date !== date) return false;
       const existStart = timeToMinutes(r.startTime);
       const existEnd = existStart + 120;
       return newStart < existEnd && newEnd > existStart;
     });
-  }, [recordings]);
+  }, [data.recordings]);
 
   const isWithinWorkHours = useCallback((day: DayOfWeek, startTime: string) => {
-    if (!settings.workDays.includes(day)) return false;
+    if (!data.settings.workDays.includes(day)) return false;
     const start = timeToMinutes(startTime);
     const end = start + 120;
-    return start >= timeToMinutes(settings.startTime) && end <= timeToMinutes(settings.endTime);
-  }, [settings]);
+    return start >= timeToMinutes(data.settings.startTime) && end <= timeToMinutes(data.settings.endTime);
+  }, [data.settings]);
 
-  const addRecording = useCallback((recording: Recording) => {
+  const addRecording = useCallback((recording: Recording): boolean => {
     if (hasConflict(recording.videomakerId, recording.date, recording.startTime)) return false;
-    setRecordings(prev => [...prev, recording]);
+    data.addRecording(recording);
     return true;
-  }, [hasConflict]);
+  }, [hasConflict, data]);
 
-  const updateRecording = useCallback((recording: Recording) => {
-    setRecordings(prev => prev.map(r => r.id === recording.id ? recording : r));
-  }, []);
-
-  const cancelRecording = useCallback((id: string) => {
-    setRecordings(prev => prev.map(r => r.id === id ? { ...r, status: 'cancelada' as const } : r));
-  }, []);
-
-  const addTask = useCallback((task: KanbanTask) => setTasks(prev => [...prev, task]), []);
-  const updateTask = useCallback((task: KanbanTask) => setTasks(prev => prev.map(t => t.id === task.id ? task : t)), []);
-  const deleteTask = useCallback((id: string) => setTasks(prev => prev.filter(t => t.id !== id)), []);
-  const addScript = useCallback((script: Script) => setScripts(prev => [...prev, script]), []);
-  const updateScript = useCallback((script: Script) => setScripts(prev => prev.map(s => s.id === script.id ? script : s)), []);
-  const deleteScript = useCallback((id: string) => setScripts(prev => prev.filter(s => s.id !== id)), []);
-  const updateSettings = useCallback((s: CompanySettings) => setSettings(s), []);
-  const startActiveRecording = useCallback((rec: ActiveRecording) => setActiveRecordings(prev => [...prev.filter(a => a.recordingId !== rec.recordingId), rec]), []);
-  const stopActiveRecording = useCallback((recordingId: string) => setActiveRecordings(prev => prev.filter(a => a.recordingId !== recordingId)), []);
+  const updateRecording = useCallback((recording: Recording) => { data.updateRecording(recording); }, [data]);
+  const cancelRecording = useCallback((id: string) => { data.cancelRecording(id); }, [data]);
+  const addTask = useCallback((task: KanbanTask) => { data.addTask(task); }, [data]);
+  const updateTask = useCallback((task: KanbanTask) => { data.updateTask(task); }, [data]);
+  const deleteTask = useCallback((id: string) => { data.deleteTask(id); }, [data]);
+  const addScript = useCallback((script: Script) => { data.addScript(script); }, [data]);
+  const updateScript = useCallback((script: Script) => { data.updateScript(script); }, [data]);
+  const deleteScript = useCallback((id: string) => { data.deleteScript(id); }, [data]);
+  const updateSettings = useCallback((s: CompanySettings) => { data.updateSettings(s); }, [data]);
+  const startActiveRecording = useCallback((rec: ActiveRecording) => { data.startActiveRecording(rec); }, [data]);
+  const stopActiveRecording = useCallback((recordingId: string) => { data.stopActiveRecording(recordingId); }, [data]);
 
   const getSuggestionsForCancellation = useCallback((recording: Recording) => {
-    return clients.filter(c => {
+    return data.clients.filter(c => {
       if (c.id === recording.clientId) return false;
       if (!c.acceptsExtra) return false;
       return !hasConflict(recording.videomakerId, recording.date, c.backupTime, recording.id);
     });
-  }, [clients, hasConflict]);
+  }, [data.clients, hasConflict]);
 
   return (
     <AppContext.Provider value={{
-      currentUser, users, clients, recordings, tasks, scripts, settings, activeRecordings,
+      currentUser, users, clients: data.clients, recordings: data.recordings,
+      tasks: data.tasks, scripts: data.scripts, settings: data.settings,
+      activeRecordings: data.activeRecordings,
       logout, addUser, updateUser, deleteUser,
       addClient, updateClient, deleteClient,
       addRecording, updateRecording, cancelRecording,

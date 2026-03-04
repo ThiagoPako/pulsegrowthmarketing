@@ -110,18 +110,22 @@ export default function Schedule() {
                 {format(day, 'EEE d', { locale: ptBR })}
               </p>
               <div className="space-y-1.5">
-                {dayRecs.map(rec => (
-                  <div key={rec.id} className={`border-l-2 ${statusColors[rec.status]} bg-secondary/50 rounded-r px-2 py-1.5 text-xs group relative`}>
-                    <p className="font-medium truncate">{getClientName(rec.clientId)}</p>
-                    <p className="text-muted-foreground">{rec.startTime} · {typeLabels[rec.type]}</p>
-                    {rec.status === 'agendada' && (
-                      <div className="absolute top-1 right-1 hidden group-hover:flex gap-1">
-                        <button onClick={() => handleComplete(rec)} className="p-0.5 rounded bg-success/20 text-success hover:bg-success/30"><Check size={12} /></button>
-                        <button onClick={() => handleCancel(rec)} className="p-0.5 rounded bg-destructive/20 text-destructive hover:bg-destructive/30"><XCircle size={12} /></button>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                {dayRecs.map(rec => {
+                  const clientColor = clients.find(c => c.id === rec.clientId)?.color || '220 10% 50%';
+                  return (
+                    <div key={rec.id} className="bg-secondary/50 rounded-r px-2 py-1.5 text-xs group relative"
+                      style={{ borderLeft: `2px solid hsl(${clientColor})` }}>
+                      <p className="font-medium truncate">{getClientName(rec.clientId)}</p>
+                      <p className="text-muted-foreground">{rec.startTime} · {typeLabels[rec.type]}</p>
+                      {rec.status === 'agendada' && (
+                        <div className="absolute top-1 right-1 hidden group-hover:flex gap-1">
+                          <button onClick={() => handleComplete(rec)} className="p-0.5 rounded bg-success/20 text-success hover:bg-success/30"><Check size={12} /></button>
+                          <button onClick={() => handleCancel(rec)} className="p-0.5 rounded bg-destructive/20 text-destructive hover:bg-destructive/30"><XCircle size={12} /></button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );

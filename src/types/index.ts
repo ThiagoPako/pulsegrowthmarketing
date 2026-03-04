@@ -19,11 +19,25 @@ export interface CompanySettings {
 
 export type ContentType = 'reels' | 'story' | 'produto';
 
+export const CLIENT_COLORS = [
+  { name: 'Vermelho', value: '0 72% 51%' },
+  { name: 'Laranja', value: '25 95% 53%' },
+  { name: 'Amarelo', value: '45 93% 47%' },
+  { name: 'Verde', value: '142 71% 45%' },
+  { name: 'Ciano', value: '187 85% 43%' },
+  { name: 'Azul', value: '217 91% 60%' },
+  { name: 'Roxo', value: '262 83% 58%' },
+  { name: 'Rosa', value: '330 81% 60%' },
+  { name: 'Marrom', value: '25 50% 38%' },
+  { name: 'Cinza', value: '220 10% 50%' },
+] as const;
+
 export interface Client {
   id: string;
   companyName: string;
   responsiblePerson: string;
   phone: string;
+  color: string; // HSL value e.g. "0 72% 51%"
   fixedDay: DayOfWeek;
   fixedTime: string; // HH:mm
   videomaker: string; // user id

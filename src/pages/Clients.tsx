@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { DAY_LABELS, CONTENT_TYPE_LABELS } from '@/types';
+import { DAY_LABELS, CONTENT_TYPE_LABELS, CLIENT_COLORS } from '@/types';
 import type { Client, DayOfWeek, ContentType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,8 @@ const DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sab
 const CONTENT_TYPES: ContentType[] = ['reels', 'story', 'produto'];
 
 const emptyClient = (): Partial<Client> => ({
-  companyName: '', responsiblePerson: '', phone: '', fixedDay: 'segunda', fixedTime: '09:00',
+  companyName: '', responsiblePerson: '', phone: '', color: CLIENT_COLORS[0].value,
+  fixedDay: 'segunda', fixedTime: '09:00',
   videomaker: '', backupTime: '14:00', backupDay: 'terca', extraDay: 'quarta',
   extraContentTypes: [], acceptsExtra: false, weeklyGoal: 10,
 });
@@ -50,9 +51,7 @@ export default function Clients() {
   };
 
   const handleDelete = (id: string) => {
-    if (!deleteClient(id)) {
-      toast.error('Não é possível excluir cliente com gravações futuras'); return;
-    }
+    if (!deleteClient(id)) { toast.error('Não é possível excluir cliente com gravações futuras'); return; }
     toast.success('Cliente removido');
   };
 
@@ -77,6 +76,21 @@ export default function Clients() {
                   <Label>Nome da Empresa *</Label>
                   <Input value={form.companyName} onChange={e => setForm({ ...form, companyName: e.target.value })} />
                 </div>
+
+                {/* Color picker */}
+                <div className="col-span-2 space-y-2">
+                  <Label>Cor de Identificação</Label>
+                  <div className="flex gap-2 flex-wrap">
+                    {CLIENT_COLORS.map(c => (
+                      <button key={c.value} onClick={() => setForm({ ...form, color: c.value })}
+                        title={c.name}
+                        className={`w-8 h-8 rounded-lg transition-all ${form.color === c.value ? 'ring-2 ring-offset-2 ring-foreground scale-110' : 'hover:scale-105'}`}
+                        style={{ backgroundColor: `hsl(${c.value})` }}
+                      />
+                    ))}
+                  </div>
+                </div>
+
                 <div className="space-y-1">
                   <Label>Responsável *</Label>
                   <Input value={form.responsiblePerson} onChange={e => setForm({ ...form, responsiblePerson: e.target.value })} />
@@ -158,23 +172,25 @@ export default function Clients() {
           <p>Nenhum cliente cadastrado</p>
         </div>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {clients.map(c => (
-            <div key={c.id} className="glass-card p-4 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
-                  {c.companyName.charAt(0)}
+            <div key={c.id} className="glass-card p-4 flex items-center justify-between"
+              style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${c.color || '220 10% 50%'})` }}>
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm shrink-0"
+                  style={{ backgroundColor: `hsl(${c.color || '220 10% 50%'} / 0.15)`, color: `hsl(${c.color || '220 10% 50%'})` }}>
+                  {c.companyName.substring(0, 2).toUpperCase()}
                 </div>
-                <div>
-                  <p className="font-medium">{c.companyName}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {DAY_LABELS[c.fixedDay]} às {c.fixedTime} · {users.find(u => u.id === c.videomaker)?.name || '—'}
+                <div className="min-w-0">
+                  <p className="font-medium text-sm truncate">{c.companyName}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">
+                    {DAY_LABELS[c.fixedDay]} · {c.fixedTime} · {users.find(u => u.id === c.videomaker)?.name || '—'}
                   </p>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button variant="ghost" size="icon" onClick={() => handleOpen(c)}><Pencil size={16} /></Button>
-                <Button variant="ghost" size="icon" onClick={() => handleDelete(c.id)}><Trash2 size={16} /></Button>
+              <div className="flex gap-1 shrink-0">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpen(c)}><Pencil size={14} /></Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(c.id)}><Trash2 size={14} /></Button>
               </div>
             </div>
           ))}

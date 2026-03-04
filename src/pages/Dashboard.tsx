@@ -1,151 +1,276 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { ROLE_LABELS } from '@/types';
+import { DAY_LABELS } from '@/types';
 import { motion } from 'framer-motion';
-import { Video, Plus, XCircle, RefreshCw, TrendingUp, Users as UsersIcon, Calendar, ArrowUpRight } from 'lucide-react';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
+import {
+  Video, Plus, XCircle, RefreshCw, TrendingUp, Calendar, Check,
+  ChevronLeft, ChevronRight, Clock, Users as UsersIcon
+} from 'lucide-react';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Progress } from '@/components/ui/progress';
 import { useNavigate } from 'react-router-dom';
 
-function StatCard({ icon: Icon, label, value, accent, delay = 0 }: { icon: any; label: string; value: number | string; accent: string; delay?: number }) {
-  return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }} className="stat-card">
-      <div className="flex items-center justify-between mb-3">
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${accent}`}>
-          <Icon size={18} />
-        </div>
-        <ArrowUpRight size={14} className="text-muted-foreground" />
-      </div>
-      <p className="text-2xl font-display font-bold">{value}</p>
-      <p className="text-xs text-muted-foreground mt-1">{label}</p>
-    </motion.div>
-  );
-}
-
 export default function Dashboard() {
-  const { currentUser, recordings, clients, users, tasks } = useApp();
+  const { currentUser, recordings, clients, users, tasks, cancelRecording, updateRecording, getSuggestionsForCancellation } = useApp();
   const navigate = useNavigate();
   const today = format(new Date(), 'yyyy-MM-dd');
+  const [weekOffset, setWeekOffset] = useState(0);
 
+  const weekStart = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const currentWeekStr = format(weekStart, 'yyyy-MM-dd');
+
+  // ── Stats ──
   const stats = useMemo(() => {
     const todayRecs = recordings.filter(r => r.date === today);
-    const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-    const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });
     const monthStart = startOfMonth(new Date());
     const monthEnd = endOfMonth(new Date());
-
     const weekRecs = recordings.filter(r => { const d = parseISO(r.date); return isWithinInterval(d, { start: weekStart, end: weekEnd }); });
     const monthRecs = recordings.filter(r => { const d = parseISO(r.date); return isWithinInterval(d, { start: monthStart, end: monthEnd }); });
 
-    const rel = (recs: typeof recordings) => currentUser?.role === 'videomaker' ? recs.filter(r => r.videomakerId === currentUser.id) : recs;
-
-    const rToday = rel(todayRecs);
-    const rWeek = rel(weekRecs);
-    const rMonth = rel(monthRecs);
-
     return {
-      todayTotal: rToday.filter(r => r.status === 'concluida').length,
-      todayExtras: rToday.filter(r => r.type === 'extra' && r.status === 'concluida').length,
-      todayCancelled: rToday.filter(r => r.status === 'cancelada').length,
-      todaySecondary: rToday.filter(r => r.type === 'secundaria').length,
-      weekTotal: rWeek.filter(r => r.status === 'concluida').length,
-      weekExtras: rWeek.filter(r => r.type === 'extra' && r.status === 'concluida').length,
-      monthTotal: rMonth.filter(r => r.status === 'concluida').length,
-      weekScheduled: rWeek.filter(r => r.status === 'agendada').length,
+      todayDone: todayRecs.filter(r => r.status === 'concluida').length,
+      todayExtras: todayRecs.filter(r => r.type === 'extra' && r.status !== 'cancelada').length,
+      todayCancelled: todayRecs.filter(r => r.status === 'cancelada').length,
+      todaySecondary: todayRecs.filter(r => r.type === 'secundaria' && r.status !== 'cancelada').length,
+      todayScheduled: todayRecs.filter(r => r.status === 'agendada').length,
+      weekDone: weekRecs.filter(r => r.status === 'concluida').length,
+      weekScheduled: weekRecs.filter(r => r.status === 'agendada').length,
+      monthDone: monthRecs.filter(r => r.status === 'concluida').length,
+      totalClients: clients.length,
     };
-  }, [recordings, today, currentUser]);
+  }, [recordings, today, weekStart, weekEnd, clients]);
 
+  // ── Today recordings ──
   const todayRecordings = useMemo(() => {
     let recs = recordings.filter(r => r.date === today && r.status !== 'cancelada');
     if (currentUser?.role === 'videomaker') recs = recs.filter(r => r.videomakerId === currentUser.id);
     return recs.sort((a, b) => a.startTime.localeCompare(b.startTime));
   }, [recordings, today, currentUser]);
 
+  // ── Videomaker progress ──
   const videomakers = users.filter(u => u.role === 'videomaker');
-  const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || '—';
+  const videomakerStats = useMemo(() => {
+    return videomakers.map(vm => {
+      const weekRecs = recordings.filter(r => r.videomakerId === vm.id && isWithinInterval(parseISO(r.date), { start: weekStart, end: weekEnd }));
+      const done = weekRecs.filter(r => r.status === 'concluida').length;
+      const total = weekRecs.length;
+      const todayRecs = weekRecs.filter(r => r.date === today);
+      const todayDone = todayRecs.filter(r => r.status === 'concluida').length;
+      const todayTotal = todayRecs.filter(r => r.status !== 'cancelada').length;
+      return { vm, weekDone: done, weekTotal: total, todayDone, todayTotal };
+    });
+  }, [videomakers, recordings, weekStart, weekEnd, today]);
+
+  // ── Client progress ──
+  const clientProgress = useMemo(() => {
+    return clients.map(client => {
+      const weekTasks = tasks.filter(t => t.clientId === client.id && t.weekStart === currentWeekStr);
+      const done = weekTasks.filter(t => t.column === 'finalizado').length;
+      const goal = client.weeklyGoal || 10;
+      const weekRecs = recordings.filter(r => r.clientId === client.id && isWithinInterval(parseISO(r.date), { start: weekStart, end: weekEnd }));
+      const recsDone = weekRecs.filter(r => r.status === 'concluida').length;
+      const recsTotal = weekRecs.filter(r => r.status !== 'cancelada').length;
+      return { client, tasksDone: done, tasksTotal: weekTasks.length, goal, recsDone, recsTotal, progress: Math.min(100, Math.round((done / goal) * 100)) };
+    });
+  }, [clients, tasks, recordings, currentWeekStr, weekStart, weekEnd]);
+
+  // ── Week agenda ──
+  const getRecsForDay = (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return recordings.filter(r => r.date === dateStr && r.status !== 'cancelada').sort((a, b) => a.startTime.localeCompare(b.startTime));
+  };
+
+  const getClient = (id: string) => clients.find(c => c.id === id);
+  const getClientName = (id: string) => getClient(id)?.companyName || '—';
+  const getClientColor = (id: string) => getClient(id)?.color || '220 10% 50%';
   const getVideomakerName = (id: string) => users.find(u => u.id === id)?.name || '—';
 
-  const typeLabels = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Secundária' };
-  const typeColors = { fixa: 'bg-info/10 text-info', extra: 'bg-warning/10 text-warning', secundaria: 'bg-primary/10 text-primary' };
+  const typeLabels: Record<string, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.' };
+  const statusIcons: Record<string, React.ReactNode> = {
+    agendada: <Clock size={12} className="text-info" />,
+    concluida: <Check size={12} className="text-success" />,
+  };
 
   return (
-    <div className="space-y-6 max-w-6xl">
+    <div className="space-y-5 max-w-[1400px]">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-display font-bold">
-          {currentUser?.role === 'videomaker' ? `Olá, ${currentUser.name} 👋` : 'Bem-vindo ao Pulse 👋'}
-        </h1>
-        <p className="text-muted-foreground text-sm mt-0.5">
-          {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })}
-        </p>
-      </div>
-
-      {/* Team avatars */}
-      {currentUser?.role === 'admin' && videomakers.length > 0 && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card p-5">
-          <h3 className="text-sm font-semibold mb-4">Meu Time</h3>
-          <div className="flex gap-6 overflow-x-auto pb-1">
-            <button onClick={() => navigate('/equipe')} className="flex flex-col items-center gap-2 shrink-0">
-              <div className="w-14 h-14 rounded-full border-2 border-dashed border-primary/40 flex items-center justify-center text-primary">
-                <Plus size={20} />
-              </div>
-              <span className="text-[11px] text-primary font-medium">Convidar</span>
-            </button>
-            {videomakers.map(v => (
-              <div key={v.id} className="flex flex-col items-center gap-2 shrink-0">
-                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 border-2 border-border flex items-center justify-center text-foreground font-bold text-lg">
-                  {v.name.charAt(0)}
-                </div>
-                <span className="text-[11px] text-muted-foreground font-medium max-w-[80px] text-center truncate">{v.name}</span>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Stats */}
-      <div>
-        <h3 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">Indicadores do Dia</h3>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard icon={Video} label="Gravados Hoje" value={stats.todayTotal} accent="bg-success/15 text-success" delay={0} />
-          <StatCard icon={Plus} label="Extras Hoje" value={stats.todayExtras} accent="bg-warning/15 text-warning" delay={0.05} />
-          <StatCard icon={XCircle} label="Cancelados" value={stats.todayCancelled} accent="bg-destructive/15 text-destructive" delay={0.1} />
-          <StatCard icon={RefreshCw} label="Secundários" value={stats.todaySecondary} accent="bg-info/15 text-info" delay={0.15} />
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-display font-bold">
+            {currentUser?.role === 'videomaker' ? `Olá, ${currentUser.name} 👋` : 'Painel de Controle'}
+          </h1>
+          <p className="text-muted-foreground text-sm">{format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-        <StatCard icon={TrendingUp} label="Gravados na Semana" value={stats.weekTotal} accent="bg-success/15 text-success" />
-        <StatCard icon={Calendar} label="Agendados Semana" value={stats.weekScheduled} accent="bg-info/15 text-info" />
-        <StatCard icon={UsersIcon} label="Clientes Ativos" value={clients.length} accent="bg-primary/15 text-primary" />
+      {/* ── ROW 1: Quick Stats ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {[
+          { label: 'Gravados Hoje', value: stats.todayDone, icon: Video, color: 'bg-success/15 text-success' },
+          { label: 'Agendados Hoje', value: stats.todayScheduled, icon: Clock, color: 'bg-info/15 text-info' },
+          { label: 'Extras', value: stats.todayExtras, icon: Plus, color: 'bg-warning/15 text-warning' },
+          { label: 'Cancelados', value: stats.todayCancelled, icon: XCircle, color: 'bg-destructive/15 text-destructive' },
+          { label: 'Semana', value: stats.weekDone, icon: TrendingUp, color: 'bg-primary/15 text-primary' },
+          { label: 'Clientes', value: stats.totalClients, icon: UsersIcon, color: 'bg-info/15 text-info' },
+        ].map((s, i) => (
+          <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }} className="stat-card">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${s.color}`}>
+              <s.icon size={16} />
+            </div>
+            <p className="text-xl font-display font-bold">{s.value}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{s.label}</p>
+          </motion.div>
+        ))}
       </div>
 
-      {/* Today schedule */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Gravações de Hoje</h3>
-          <button onClick={() => navigate('/agenda')} className="text-xs text-primary font-semibold hover:underline">VER AGENDA</button>
-        </div>
-        {todayRecordings.length === 0 ? (
-          <div className="glass-card p-10 text-center text-muted-foreground text-sm">
-            Nenhuma gravação agendada para hoje
+      {/* ── ROW 2: Today Schedule + Videomaker Progress ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Today schedule - 2 cols */}
+        <div className="lg:col-span-2 glass-card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display font-semibold text-sm">Gravações de Hoje</h3>
+            <span className="text-xs text-muted-foreground">{todayRecordings.length} gravações</span>
           </div>
-        ) : (
-          <div className="grid gap-2">
-            {todayRecordings.map((rec, i) => (
-              <motion.div key={rec.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
-                className="glass-card p-4 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="text-lg font-display font-bold text-primary w-14">{rec.startTime}</div>
-                  <div>
-                    <p className="font-medium text-sm">{getClientName(rec.clientId)}</p>
-                    <p className="text-xs text-muted-foreground">{getVideomakerName(rec.videomakerId)}</p>
+          {todayRecordings.length === 0 ? (
+            <div className="py-8 text-center text-muted-foreground text-sm">Nenhuma gravação hoje</div>
+          ) : (
+            <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+              {todayRecordings.map((rec, i) => {
+                const clientColor = getClientColor(rec.clientId);
+                return (
+                  <motion.div key={rec.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
+                    className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50 group">
+                    <div className="w-1 h-10 rounded-full shrink-0" style={{ backgroundColor: `hsl(${clientColor})` }} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm truncate">{getClientName(rec.clientId)}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                          style={{ backgroundColor: `hsl(${clientColor} / 0.12)`, color: `hsl(${clientColor})` }}>
+                          {typeLabels[rec.type]}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{getVideomakerName(rec.videomakerId)}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="font-display font-bold text-sm">{rec.startTime}</p>
+                      <div className="flex items-center justify-end gap-1 mt-0.5">{statusIcons[rec.status]}<span className="text-[10px] text-muted-foreground capitalize">{rec.status}</span></div>
+                    </div>
+                    {rec.status === 'agendada' && (
+                      <div className="hidden group-hover:flex gap-1 shrink-0">
+                        <button onClick={() => updateRecording({ ...rec, status: 'concluida' })} className="w-7 h-7 rounded-md bg-success/15 text-success flex items-center justify-center hover:bg-success/25"><Check size={14} /></button>
+                        <button onClick={() => cancelRecording(rec.id)} className="w-7 h-7 rounded-md bg-destructive/15 text-destructive flex items-center justify-center hover:bg-destructive/25"><XCircle size={14} /></button>
+                      </div>
+                    )}
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Videomaker progress - 1 col */}
+        <div className="glass-card p-5">
+          <h3 className="font-display font-semibold text-sm mb-4">Progresso do Time</h3>
+          {videomakerStats.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">Cadastre videomakers</p>
+          ) : (
+            <div className="space-y-4">
+              {videomakerStats.map(({ vm, weekDone, weekTotal, todayDone, todayTotal }) => (
+                <div key={vm.id} className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-primary text-xs font-bold shrink-0">
+                      {vm.name.charAt(0)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{vm.name}</p>
+                      <p className="text-[11px] text-muted-foreground">Hoje: {todayDone}/{todayTotal} · Semana: {weekDone}/{weekTotal}</p>
+                    </div>
                   </div>
+                  <Progress value={weekTotal > 0 ? (weekDone / weekTotal) * 100 : 0} className="h-1.5" />
                 </div>
-                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${typeColors[rec.type]}`}>
-                  {typeLabels[rec.type]}
-                </span>
-              </motion.div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── ROW 3: Week Agenda ── */}
+      <div className="glass-card p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-display font-semibold text-sm">Agenda Semanal</h3>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setWeekOffset(w => w - 1)} className="w-7 h-7 rounded-md bg-secondary flex items-center justify-center hover:bg-secondary/80"><ChevronLeft size={14} /></button>
+            <span className="text-xs font-medium min-w-[160px] text-center">
+              {format(weekDays[0], "d MMM", { locale: ptBR })} — {format(weekDays[6], "d MMM", { locale: ptBR })}
+            </span>
+            <button onClick={() => setWeekOffset(w => w + 1)} className="w-7 h-7 rounded-md bg-secondary flex items-center justify-center hover:bg-secondary/80"><ChevronRight size={14} /></button>
+            {weekOffset !== 0 && <button onClick={() => setWeekOffset(0)} className="text-[11px] text-primary font-medium ml-1">Hoje</button>}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-7 gap-1.5 min-h-[160px]">
+          {weekDays.map(day => {
+            const dateStr = format(day, 'yyyy-MM-dd');
+            const isToday = dateStr === today;
+            const dayRecs = getRecsForDay(day);
+            return (
+              <div key={dateStr} className={`rounded-lg p-2 min-h-[140px] ${isToday ? 'bg-primary/5 ring-1 ring-primary/30' : 'bg-secondary/40'}`}>
+                <p className={`text-[11px] font-semibold mb-1.5 ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
+                  {format(day, 'EEE d', { locale: ptBR })}
+                </p>
+                <div className="space-y-1">
+                  {dayRecs.slice(0, 5).map(rec => {
+                    const color = getClientColor(rec.clientId);
+                    return (
+                      <div key={rec.id} className="rounded px-1.5 py-1 text-[10px] leading-tight" style={{ backgroundColor: `hsl(${color} / 0.1)`, borderLeft: `2px solid hsl(${color})` }}>
+                        <p className="font-medium truncate" style={{ color: `hsl(${color})` }}>{getClientName(rec.clientId)}</p>
+                        <p className="text-muted-foreground">{rec.startTime}</p>
+                      </div>
+                    );
+                  })}
+                  {dayRecs.length > 5 && <p className="text-[10px] text-muted-foreground text-center">+{dayRecs.length - 5}</p>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── ROW 4: Client Progress ── */}
+      <div className="glass-card p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-display font-semibold text-sm">Progresso por Cliente</h3>
+          <button onClick={() => navigate('/metas')} className="text-[11px] text-primary font-semibold hover:underline">VER METAS</button>
+        </div>
+        {clientProgress.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-6">Nenhum cliente cadastrado</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {clientProgress.map(({ client, tasksDone, goal, recsDone, recsTotal, progress }) => (
+              <div key={client.id} className="rounded-xl p-4 border border-border bg-secondary/30" style={{ borderLeftWidth: 3, borderLeftColor: `hsl(${client.color || '220 10% 50%'})` }}>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
+                    style={{ backgroundColor: `hsl(${client.color || '220 10% 50%'} / 0.15)`, color: `hsl(${client.color || '220 10% 50%'})` }}>
+                    {client.companyName.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate">{client.companyName}</p>
+                    <p className="text-[11px] text-muted-foreground">{DAY_LABELS[client.fixedDay]} · {client.fixedTime}</p>
+                  </div>
+                  <span className="text-lg font-display font-bold" style={{ color: progress >= 80 ? 'hsl(var(--success))' : progress >= 40 ? 'hsl(var(--warning))' : 'hsl(var(--destructive))' }}>
+                    {progress}%
+                  </span>
+                </div>
+                <Progress value={progress} className="h-1.5 mb-2" />
+                <div className="flex gap-3 text-[11px] text-muted-foreground">
+                  <span>Meta: {goal}</span>
+                  <span>Feitas: {tasksDone}</span>
+                  <span>Gravações: {recsDone}/{recsTotal}</span>
+                </div>
+              </div>
             ))}
           </div>
         )}

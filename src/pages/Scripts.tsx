@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
+import { highlightQuotes, highlightQuotesForPdf } from '@/lib/highlightQuotes';
 import { useApp } from '@/contexts/AppContext';
 import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS } from '@/types';
 import type { Script, ScriptVideoType, ScriptPriority } from '@/types';
@@ -193,7 +194,7 @@ export default function Scripts() {
             ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
           </p>
           <div style="font-size:14px; line-height:1.7;">
-            ${script.content}
+            ${highlightQuotesForPdf(script.content)}
           </div>
           <div style="margin-top:40px; padding-top:16px; border-top:1px solid #e5e5e5; text-align:center;">
             <p style="font-size:11px; color:#999;">Roteiro gerado por Pulse · ${new Date().toLocaleDateString('pt-BR')}</p>
@@ -285,7 +286,7 @@ export default function Scripts() {
               </div>
 
               <div className="text-xs text-muted-foreground line-clamp-3"
-                dangerouslySetInnerHTML={{ __html: script.content || '<em>Sem conteúdo</em>' }} />
+                dangerouslySetInnerHTML={{ __html: highlightQuotes(script.content) || '<em>Sem conteúdo</em>' }} />
 
               <div className="flex items-center gap-1 mt-auto pt-2 border-t border-border">
                 <Button variant="ghost" size="icon" className="h-7 w-7" title="Visualizar"
@@ -396,7 +397,7 @@ export default function Scripts() {
                 </Badge>
               </div>
               <div className="prose prose-sm max-w-none mt-4 p-4 rounded-xl bg-muted/30 border border-border"
-                dangerouslySetInnerHTML={{ __html: viewing.content || '<em>Sem conteúdo</em>' }} />
+                dangerouslySetInnerHTML={{ __html: highlightQuotes(viewing.content) || '<em>Sem conteúdo</em>' }} />
               <div className="flex gap-2 mt-4">
                 <Button variant="outline" className="flex-1" onClick={() => handleDownloadPdf(viewing)}>
                   <Download size={16} className="mr-2" /> Baixar PDF

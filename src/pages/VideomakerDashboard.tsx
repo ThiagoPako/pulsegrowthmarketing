@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useApp } from '@/contexts/AppContext';
+import { highlightQuotes, highlightQuotesForPdf } from '@/lib/highlightQuotes';
 import type { Recording, Script } from '@/types';
 import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS } from '@/types';
 import { Badge } from '@/components/ui/badge';
@@ -157,7 +158,7 @@ export default function VideomakerDashboard() {
               ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · Roteiro ${i + 1} de ${selectedScripts.length}
             </p>
             <div style="font-size:14px; line-height:1.7;">
-              ${script.content}
+              ${highlightQuotesForPdf(script.content)}
             </div>
             <div style="margin-top:40px; padding-top:16px; border-top:1px solid #e5e5e5; text-align:center;">
               <p style="font-size:11px; color:#999;">Roteiro gerado por Pulse · ${new Date().toLocaleDateString('pt-BR')}</p>
@@ -433,7 +434,7 @@ export default function VideomakerDashboard() {
                 )}
               </div>
               <div className="prose prose-sm max-w-none p-4 rounded-xl bg-muted/30 border border-border min-h-[200px]"
-                dangerouslySetInnerHTML={{ __html: viewingScript.content || '<em>Sem conteúdo</em>' }} />
+                dangerouslySetInnerHTML={{ __html: highlightQuotes(viewingScript.content) || '<em>Sem conteúdo</em>' }} />
             </div>
           ) : (
             /* ── Scripts list ── */
@@ -478,7 +479,7 @@ export default function VideomakerDashboard() {
                         </div>
                         {/* Preview of content */}
                         <div className="text-xs text-muted-foreground line-clamp-2 mt-1.5"
-                          dangerouslySetInnerHTML={{ __html: script.content || '<em>Sem conteúdo</em>' }} />
+                          dangerouslySetInnerHTML={{ __html: highlightQuotes(script.content) || '<em>Sem conteúdo</em>' }} />
                       </div>
                       <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" title="Ler roteiro"
                         onClick={() => setViewingScript(script)}>

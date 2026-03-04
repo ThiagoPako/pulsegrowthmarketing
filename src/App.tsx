@@ -10,7 +10,7 @@ import VideomakerDashboard from "@/pages/VideomakerDashboard";
 import Clients from "@/pages/Clients";
 import Team from "@/pages/Team";
 import Schedule from "@/pages/Schedule";
-import KanbanBoard from "@/pages/KanbanBoard";
+
 import Goals from "@/pages/Goals";
 import CompanySettings from "@/pages/CompanySettings";
 import Scripts from "@/pages/Scripts";
@@ -33,7 +33,7 @@ function AppRoutes() {
       <Route path="/agenda" element={<ProtectedRoute><Schedule /></ProtectedRoute>} />
       <Route path="/clientes" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
       <Route path="/equipe" element={<ProtectedRoute><Team /></ProtectedRoute>} />
-      <Route path="/kanban" element={<ProtectedRoute><KanbanBoard /></ProtectedRoute>} />
+      
       <Route path="/roteiros" element={<ProtectedRoute><Scripts /></ProtectedRoute>} />
       <Route path="/metas" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
       <Route path="/configuracoes" element={<ProtectedRoute><CompanySettings /></ProtectedRoute>} />

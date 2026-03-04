@@ -332,17 +332,23 @@ export default function Schedule() {
                         {rec.status === 'concluida' && <Check size={8} className="inline ml-0.5 text-success" />}
                         {rec.status === 'cancelada' && <XCircle size={8} className="inline ml-0.5 text-destructive" />}
 
-                        {/* Hover actions — always show edit */}
-                        <div className="absolute top-0 right-0 hidden group-hover:flex gap-0.5 bg-card rounded p-0.5 shadow z-10">
-                          <button onClick={() => openEditRecording(rec)} className="p-0.5 rounded hover:bg-muted text-muted-foreground" title="Editar"><Pencil size={10} /></button>
-                          {rec.status === 'agendada' && (
-                            <>
-                              <button onClick={() => openScriptsForClient(rec.clientId)} className="p-0.5 rounded hover:bg-primary/20 text-primary" title="Roteiros"><FileText size={10} /></button>
-                              <button onClick={() => handleComplete(rec)} className="p-0.5 rounded hover:bg-success/20 text-success"><Check size={10} /></button>
-                              <button onClick={() => handleNoShow(rec)} className="p-0.5 rounded hover:bg-warning/20 text-warning" title="Não gravou"><XCircle size={10} /></button>
-                              <button onClick={() => handleCancel(rec)} className="p-0.5 rounded hover:bg-destructive/20 text-destructive" title="Cancelar"><XCircle size={10} /></button>
-                            </>
-                          )}
+                        {/* Hover tooltip with avatar + actions */}
+                        <div className="absolute left-0 top-full mt-0.5 hidden group-hover:flex flex-col gap-1 bg-card rounded-lg p-2 shadow-lg border border-border z-20 min-w-[140px]">
+                          <div className="flex items-center gap-1.5">
+                            {(() => { const vm = getVideomaker(rec.videomakerId); return vm ? <UserAvatar user={vm} size="sm" className="w-5 h-5 text-[8px]" /> : null; })()}
+                            <span className="text-[10px] font-medium truncate">{getVideomakerName(rec.videomakerId)}</span>
+                          </div>
+                          <div className="flex gap-0.5 pt-0.5">
+                            <button onClick={() => openEditRecording(rec)} className="p-0.5 rounded hover:bg-muted text-muted-foreground" title="Editar"><Pencil size={10} /></button>
+                            {rec.status === 'agendada' && (
+                              <>
+                                <button onClick={() => openScriptsForClient(rec.clientId)} className="p-0.5 rounded hover:bg-primary/20 text-primary" title="Roteiros"><FileText size={10} /></button>
+                                <button onClick={() => handleComplete(rec)} className="p-0.5 rounded hover:bg-success/20 text-success"><Check size={10} /></button>
+                                <button onClick={() => handleNoShow(rec)} className="p-0.5 rounded hover:bg-warning/20 text-warning" title="Não gravou"><XCircle size={10} /></button>
+                                <button onClick={() => handleCancel(rec)} className="p-0.5 rounded hover:bg-destructive/20 text-destructive" title="Cancelar"><XCircle size={10} /></button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}

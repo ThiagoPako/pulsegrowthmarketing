@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import type { Recording, RecordingType, Script, KanbanColumn, KanbanTask } from '@/types';
-import { SCRIPT_VIDEO_TYPE_LABELS, COLUMN_LABELS } from '@/types';
+import type { Recording, RecordingType, Script, DayOfWeek } from '@/types';
+import { SCRIPT_VIDEO_TYPE_LABELS, DAY_LABELS } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,39 +9,49 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, GripVertical } from 'lucide-react';
-import { format, addDays, startOfWeek } from 'date-fns';
+import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3 } from 'lucide-react';
+import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 
-const KANBAN_COLUMNS: KanbanColumn[] = ['backlog', 'em_producao', 'gravado', 'finalizado'];
-const kanbanColumnColors: Record<KanbanColumn, string> = {
-  backlog: 'border-t-muted-foreground',
-  em_producao: 'border-t-warning',
-  gravado: 'border-t-info',
-  finalizado: 'border-t-success',
+const DATE_TO_DAY: Record<number, DayOfWeek> = {
+  0: 'domingo', 1: 'segunda', 2: 'terca', 3: 'quarta', 4: 'quinta', 5: 'sexta', 6: 'sabado',
 };
 
 export default function Schedule() {
-  const { clients, users, recordings, scripts, updateScript, addRecording, updateRecording, cancelRecording, hasConflict, getSuggestionsForCancellation, tasks, addTask, updateTask } = useApp();
-  const [weekOffset, setWeekOffset] = useState(0);
+  const {
+    clients, users, recordings, scripts, settings,
+    updateScript, addRecording, updateRecording, cancelRecording,
+    hasConflict, isWithinWorkHours,
+  } = useApp();
+
+  const [monthOffset, setMonthOffset] = useState(0);
   const [newOpen, setNewOpen] = useState(false);
-  const [suggestOpen, setSuggestOpen] = useState(false);
   const [scriptsOpen, setScriptsOpen] = useState(false);
   const [scriptsClientId, setScriptsClientId] = useState('');
   const [selectedScriptIds, setSelectedScriptIds] = useState<Set<string>>(new Set());
-  const [selectedRec, setSelectedRec] = useState<Recording | null>(null);
   const [form, setForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '09:00', type: 'fixa' as RecordingType });
   const [filterVideomaker, setFilterVideomaker] = useState('all');
-  const [filterKanbanClient, setFilterKanbanClient] = useState('all');
 
   const videomakers = users.filter(u => u.role === 'videomaker');
-  const weekStart = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  const currentWeek = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+  const currentMonth = addMonths(new Date(), monthOffset);
+  const monthStart = startOfMonth(currentMonth);
+  const monthEnd = endOfMonth(currentMonth);
+  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+
+  // Build calendar grid days
+  const calendarDays = useMemo(() => {
+    const days: Date[] = [];
+    let d = calendarStart;
+    while (d <= calendarEnd) {
+      days.push(d);
+      d = addDays(d, 1);
+    }
+    return days;
+  }, [calendarStart, calendarEnd]);
 
   const filteredRecordings = useMemo(() => {
     let recs = recordings;
@@ -49,11 +59,11 @@ export default function Schedule() {
     return recs;
   }, [recordings, filterVideomaker]);
 
-  // Low-script warning: clients with ≤2 unrecorded scripts
+  // Low-script warning
   const lowScriptClients = useMemo(() => {
     return clients.filter(c => {
       const pending = scripts.filter(s => s.clientId === c.id && !s.recorded);
-      return pending.length <= 2 && pending.length >= 0;
+      return pending.length <= 2;
     }).map(c => ({
       ...c,
       pendingCount: scripts.filter(s => s.clientId === c.id && !s.recorded).length,
@@ -64,6 +74,99 @@ export default function Schedule() {
     const dateStr = format(date, 'yyyy-MM-dd');
     return filteredRecordings.filter(r => r.date === dateStr).sort((a, b) => a.startTime.localeCompare(b.startTime));
   };
+
+  const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || '—';
+  const getVideomakerName = (id: string) => users.find(u => u.id === id)?.name || '—';
+  const getClientColor = (id: string) => clients.find(c => c.id === id)?.color || '220 10% 50%';
+
+  const typeLabels: Record<RecordingType, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.' };
+
+  // ====== AUTO-RESCHEDULING LOGIC ======
+  const findNextDateForDay = (dayOfWeek: DayOfWeek, afterDate: string): string => {
+    const base = new Date(afterDate + 'T12:00:00');
+    const targetDayNum = Object.entries(DATE_TO_DAY).find(([_, v]) => v === dayOfWeek)?.[0];
+    if (!targetDayNum) return afterDate;
+    const target = parseInt(targetDayNum);
+    for (let i = 0; i <= 14; i++) {
+      const candidate = addDays(base, i);
+      if (getDay(candidate) === target && format(candidate, 'yyyy-MM-dd') >= afterDate) {
+        return format(candidate, 'yyyy-MM-dd');
+      }
+    }
+    return afterDate;
+  };
+
+  const tryAutoReschedule = useCallback((rec: Recording) => {
+    const client = clients.find(c => c.id === rec.clientId);
+    if (!client) return false;
+
+    const today = format(new Date(), 'yyyy-MM-dd');
+
+    // Attempt 1: backup day + backup time with same videomaker
+    const backupDate = findNextDateForDay(client.backupDay, today);
+    const backupDayOfWeek = DATE_TO_DAY[getDay(new Date(backupDate + 'T12:00:00'))];
+    if (isWithinWorkHours(backupDayOfWeek, client.backupTime)) {
+      if (!hasConflict(rec.videomakerId, backupDate, client.backupTime)) {
+        const ok = addRecording({
+          id: crypto.randomUUID(), clientId: rec.clientId, videomakerId: rec.videomakerId,
+          date: backupDate, startTime: client.backupTime, type: 'secundaria', status: 'agendada',
+        });
+        if (ok) {
+          toast.success(`Reagendado automaticamente para ${format(new Date(backupDate + 'T12:00:00'), 'dd/MM')} (backup) às ${client.backupTime}`);
+          return true;
+        }
+      }
+      // Try other videomakers on backup day
+      for (const vm of videomakers) {
+        if (vm.id === rec.videomakerId) continue;
+        if (!hasConflict(vm.id, backupDate, client.backupTime)) {
+          const ok = addRecording({
+            id: crypto.randomUUID(), clientId: rec.clientId, videomakerId: vm.id,
+            date: backupDate, startTime: client.backupTime, type: 'secundaria', status: 'agendada',
+          });
+          if (ok) {
+            toast.success(`Reagendado para ${format(new Date(backupDate + 'T12:00:00'), 'dd/MM')} com ${vm.name}`);
+            return true;
+          }
+        }
+      }
+    }
+
+    // Attempt 2: extra day + fixed time with same videomaker
+    if (client.acceptsExtra) {
+      const extraDate = findNextDateForDay(client.extraDay, today);
+      const extraDayOfWeek = DATE_TO_DAY[getDay(new Date(extraDate + 'T12:00:00'))];
+      if (isWithinWorkHours(extraDayOfWeek, client.fixedTime)) {
+        if (!hasConflict(rec.videomakerId, extraDate, client.fixedTime)) {
+          const ok = addRecording({
+            id: crypto.randomUUID(), clientId: rec.clientId, videomakerId: rec.videomakerId,
+            date: extraDate, startTime: client.fixedTime, type: 'extra', status: 'agendada',
+          });
+          if (ok) {
+            toast.success(`Reagendado para dia extra ${format(new Date(extraDate + 'T12:00:00'), 'dd/MM')} às ${client.fixedTime}`);
+            return true;
+          }
+        }
+        // Try other videomakers on extra day
+        for (const vm of videomakers) {
+          if (vm.id === rec.videomakerId) continue;
+          if (!hasConflict(vm.id, extraDate, client.fixedTime)) {
+            const ok = addRecording({
+              id: crypto.randomUUID(), clientId: rec.clientId, videomakerId: vm.id,
+              date: extraDate, startTime: client.fixedTime, type: 'extra', status: 'agendada',
+            });
+            if (ok) {
+              toast.success(`Reagendado para dia extra ${format(new Date(extraDate + 'T12:00:00'), 'dd/MM')} com ${vm.name}`);
+              return true;
+            }
+          }
+        }
+      }
+    }
+
+    toast.warning('Não foi possível reagendar automaticamente — sem vagas disponíveis');
+    return false;
+  }, [clients, videomakers, hasConflict, isWithinWorkHours, addRecording]);
 
   const handleAdd = () => {
     if (!form.clientId || !form.videomakerId || !form.date || !form.startTime) {
@@ -80,12 +183,14 @@ export default function Schedule() {
 
   const handleCancel = (rec: Recording) => {
     cancelRecording(rec.id);
-    const suggestions = getSuggestionsForCancellation(rec);
-    if (suggestions.length > 0) {
-      setSelectedRec(rec);
-      setSuggestOpen(true);
-    }
-    toast.success('Gravação cancelada');
+    toast.info('Gravação cancelada — tentando reagendar...');
+    tryAutoReschedule(rec);
+  };
+
+  const handleNoShow = (rec: Recording) => {
+    updateRecording({ ...rec, status: 'cancelada' });
+    toast.warning(`${getClientName(rec.clientId)} — não gravou`);
+    tryAutoReschedule(rec);
   };
 
   const handleComplete = (rec: Recording) => {
@@ -93,11 +198,7 @@ export default function Schedule() {
     toast.success('Gravação concluída');
   };
 
-  const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || '—';
-  const getVideomakerName = (id: string) => users.find(u => u.id === id)?.name || '—';
-
-  const typeLabels = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.' };
-
+  // Scripts
   const clientScripts = useMemo(() => {
     if (!scriptsClientId) return [];
     return scripts.filter(s => s.clientId === scriptsClientId && !s.recorded);
@@ -124,28 +225,17 @@ export default function Schedule() {
     toast.success('Roteiro retornado ao banco de dados');
   };
 
-  // Kanban helpers
-  const kanbanTasks = useMemo(() => {
-    let t = tasks.filter(t => t.weekStart === currentWeek);
-    if (filterKanbanClient !== 'all') t = t.filter(t => t.clientId === filterKanbanClient);
-    return t;
-  }, [tasks, filterKanbanClient, currentWeek]);
+  // ====== KANBAN: grouped by day of current week ======
+  const kanbanWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const kanbanDays = Array.from({ length: 7 }, (_, i) => addDays(kanbanWeekStart, i));
 
-  const getColumnTasks = (col: KanbanColumn) => kanbanTasks.filter(t => t.column === col);
-
-  const moveTask = (task: KanbanTask, newCol: KanbanColumn) => {
-    updateTask({ ...task, column: newCol });
+  const statusTag = (rec: Recording) => {
+    if (rec.status === 'concluida') return <Badge className="bg-success/20 text-success border-success/30 text-[10px]">Gravado</Badge>;
+    if (rec.status === 'cancelada') return <Badge className="bg-destructive/20 text-destructive border-destructive/30 text-[10px]">Não Gravou</Badge>;
+    return <Badge variant="outline" className="text-[10px]">{typeLabels[rec.type]}</Badge>;
   };
 
-  const toggleChecklist = (task: KanbanTask, checkId: string) => {
-    const updated = { ...task, checklist: task.checklist.map(c => c.id === checkId ? { ...c, done: !c.done } : c) };
-    updateTask(updated);
-  };
-
-  const getProgress = (task: KanbanTask) => {
-    if (task.checklist.length === 0) return task.column === 'finalizado' ? 100 : 0;
-    return Math.round((task.checklist.filter(c => c.done).length / task.checklist.length) * 100);
-  };
+  const today = new Date();
 
   return (
     <div className="space-y-4">
@@ -163,7 +253,7 @@ export default function Schedule() {
             <div key={c.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-warning/10 border border-warning/30 text-sm">
               <AlertTriangle size={16} className="text-warning shrink-0" />
               <span>
-                <strong>{c.companyName}</strong> tem apenas <strong>{c.pendingCount}</strong> roteiro{c.pendingCount !== 1 ? 's' : ''} pendente{c.pendingCount !== 1 ? 's' : ''}. 
+                <strong>{c.companyName}</strong> tem apenas <strong>{c.pendingCount}</strong> roteiro{c.pendingCount !== 1 ? 's' : ''} pendente{c.pendingCount !== 1 ? 's' : ''}.
                 <span className="text-muted-foreground ml-1">Crie novos roteiros!</span>
               </span>
             </div>
@@ -177,7 +267,7 @@ export default function Schedule() {
           <TabsTrigger value="kanban" className="gap-1.5"><Columns3 size={14} /> Kanban</TabsTrigger>
         </TabsList>
 
-        {/* ===== CALENDAR VIEW ===== */}
+        {/* ===== MONTHLY CALENDAR VIEW ===== */}
         <TabsContent value="calendar" className="space-y-3 mt-3">
           <div className="flex items-center gap-3 flex-wrap">
             <Select value={filterVideomaker} onValueChange={setFilterVideomaker}>
@@ -188,43 +278,66 @@ export default function Schedule() {
               </SelectContent>
             </Select>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" onClick={() => setWeekOffset(w => w - 1)}><ChevronLeft size={18} /></Button>
-              <span className="font-display font-semibold text-sm">
-                {format(weekDays[0], "d MMM", { locale: ptBR })} — {format(weekDays[6], "d MMM yyyy", { locale: ptBR })}
+              <Button variant="ghost" size="icon" onClick={() => setMonthOffset(m => m - 1)}><ChevronLeft size={18} /></Button>
+              <span className="font-display font-semibold text-sm capitalize">
+                {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
               </span>
-              <Button variant="ghost" size="icon" onClick={() => setWeekOffset(w => w + 1)}><ChevronRight size={18} /></Button>
-              <Button variant="outline" size="sm" onClick={() => setWeekOffset(0)}>Hoje</Button>
+              <Button variant="ghost" size="icon" onClick={() => setMonthOffset(m => m + 1)}><ChevronRight size={18} /></Button>
+              <Button variant="outline" size="sm" onClick={() => setMonthOffset(0)}>Hoje</Button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-7 gap-2">
-            {weekDays.map(day => {
+          {/* Weekday headers */}
+          <div className="grid grid-cols-7 gap-1">
+            {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map(d => (
+              <div key={d} className="text-xs font-semibold text-muted-foreground text-center py-1">{d}</div>
+            ))}
+          </div>
+
+          {/* Calendar grid */}
+          <div className="grid grid-cols-7 gap-1">
+            {calendarDays.map(day => {
               const dateStr = format(day, 'yyyy-MM-dd');
-              const isToday = dateStr === format(new Date(), 'yyyy-MM-dd');
+              const isCurrentMonth = isSameMonth(day, currentMonth);
+              const isToday = isSameDay(day, today);
               const dayRecs = getRecsForDay(day);
+
               return (
-                <div key={dateStr} className={`glass-card p-3 min-h-[160px] ${isToday ? 'ring-1 ring-primary' : ''}`}>
-                  <p className={`text-xs font-semibold mb-2 ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
-                    {format(day, 'EEE d', { locale: ptBR })}
+                <div
+                  key={dateStr}
+                  className={`glass-card p-1.5 min-h-[90px] transition-all ${
+                    !isCurrentMonth ? 'opacity-40' : ''
+                  } ${isToday ? 'ring-1 ring-primary' : ''}`}
+                >
+                  <p className={`text-xs font-semibold mb-1 text-center ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
+                    {format(day, 'd')}
                   </p>
-                  <div className="space-y-1.5">
-                    {dayRecs.map(rec => {
-                      const clientColor = clients.find(c => c.id === rec.clientId)?.color || '220 10% 50%';
-                      return (
-                        <div key={rec.id} className="bg-secondary/50 rounded-r px-2 py-1.5 text-xs group relative"
-                          style={{ borderLeft: `2px solid hsl(${clientColor})` }}>
-                          <p className="font-medium truncate">{getClientName(rec.clientId)}</p>
-                          <p className="text-muted-foreground">{rec.startTime} · {typeLabels[rec.type]}</p>
-                          {rec.status === 'agendada' && (
-                            <div className="absolute top-1 right-1 hidden group-hover:flex gap-1">
-                              <button onClick={() => openScriptsForClient(rec.clientId)} className="p-0.5 rounded bg-primary/20 text-primary hover:bg-primary/30" title="Ver roteiros"><FileText size={12} /></button>
-                              <button onClick={() => handleComplete(rec)} className="p-0.5 rounded bg-success/20 text-success hover:bg-success/30"><Check size={12} /></button>
-                              <button onClick={() => handleCancel(rec)} className="p-0.5 rounded bg-destructive/20 text-destructive hover:bg-destructive/30"><XCircle size={12} /></button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                  <div className="space-y-0.5">
+                    {dayRecs.slice(0, 3).map(rec => (
+                      <div
+                        key={rec.id}
+                        className="rounded px-1 py-0.5 text-[10px] truncate cursor-pointer group relative"
+                        style={{ backgroundColor: `hsl(${getClientColor(rec.clientId)} / 0.15)`, borderLeft: `2px solid hsl(${getClientColor(rec.clientId)})` }}
+                      >
+                        <span className="font-medium">{getClientName(rec.clientId)}</span>
+                        <span className="text-muted-foreground ml-1">{rec.startTime}</span>
+                        {rec.status === 'concluida' && <Check size={8} className="inline ml-0.5 text-success" />}
+                        {rec.status === 'cancelada' && <XCircle size={8} className="inline ml-0.5 text-destructive" />}
+
+                        {/* Hover actions */}
+                        {rec.status === 'agendada' && (
+                          <div className="absolute top-0 right-0 hidden group-hover:flex gap-0.5 bg-card rounded p-0.5 shadow z-10">
+                            <button onClick={() => openScriptsForClient(rec.clientId)} className="p-0.5 rounded hover:bg-primary/20 text-primary" title="Roteiros"><FileText size={10} /></button>
+                            <button onClick={() => handleComplete(rec)} className="p-0.5 rounded hover:bg-success/20 text-success"><Check size={10} /></button>
+                            <button onClick={() => handleNoShow(rec)} className="p-0.5 rounded hover:bg-warning/20 text-warning" title="Não gravou"><XCircle size={10} /></button>
+                            <button onClick={() => handleCancel(rec)} className="p-0.5 rounded hover:bg-destructive/20 text-destructive" title="Cancelar"><XCircle size={10} /></button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {dayRecs.length > 3 && (
+                      <p className="text-[9px] text-muted-foreground text-center">+{dayRecs.length - 3} mais</p>
+                    )}
                   </div>
                 </div>
               );
@@ -232,57 +345,74 @@ export default function Schedule() {
           </div>
         </TabsContent>
 
-        {/* ===== KANBAN VIEW ===== */}
+        {/* ===== KANBAN VIEW — Recording cards grouped by day ===== */}
         <TabsContent value="kanban" className="space-y-3 mt-3">
-          <div className="flex items-center gap-3">
-            <Select value={filterKanbanClient} onValueChange={setFilterKanbanClient}>
-              <SelectTrigger className="w-40"><SelectValue placeholder="Cliente" /></SelectTrigger>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Select value={filterVideomaker} onValueChange={setFilterVideomaker}>
+              <SelectTrigger className="w-40"><SelectValue placeholder="Videomaker" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
-                {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+                {videomakers.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            <span className="text-sm text-muted-foreground">Semana atual</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 min-h-[400px]">
-            {KANBAN_COLUMNS.map(col => (
-              <div key={col} className={`glass-card border-t-2 ${kanbanColumnColors[col]} p-3`}>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold">{COLUMN_LABELS[col]}</h3>
-                  <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">{getColumnTasks(col).length}</span>
-                </div>
-                <div className="space-y-2">
-                  {getColumnTasks(col).map(task => (
-                    <motion.div key={task.id} layout className="bg-secondary/60 rounded-lg p-3 space-y-2">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="text-sm font-medium">{task.title}</p>
-                          <p className="text-xs text-muted-foreground">{getClientName(task.clientId)}</p>
+          <div className="grid grid-cols-1 md:grid-cols-7 gap-2 min-h-[400px]">
+            {kanbanDays.map(day => {
+              const dateStr = format(day, 'yyyy-MM-dd');
+              const isToday = isSameDay(day, today);
+              const dayRecs = getRecsForDay(day);
+
+              return (
+                <div key={dateStr} className={`glass-card p-3 ${isToday ? 'ring-1 ring-primary' : ''}`}>
+                  <div className="text-center mb-3">
+                    <p className={`text-xs font-semibold uppercase ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
+                      {format(day, 'EEE', { locale: ptBR })}
+                    </p>
+                    <p className={`text-lg font-display font-bold ${isToday ? 'text-primary' : ''}`}>
+                      {format(day, 'd')}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">{format(day, 'MMM', { locale: ptBR })}</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    {dayRecs.length === 0 && (
+                      <p className="text-[10px] text-muted-foreground text-center py-4">Sem gravações</p>
+                    )}
+                    {dayRecs.map(rec => (
+                      <motion.div
+                        key={rec.id}
+                        layout
+                        className="rounded-lg border border-border p-2.5 space-y-1.5 bg-card hover:shadow-md transition-shadow group relative"
+                        style={{ borderLeft: `3px solid hsl(${getClientColor(rec.clientId)})` }}
+                      >
+                        <div className="flex items-start justify-between gap-1">
+                          <p className="font-medium text-xs truncate">{getClientName(rec.clientId)}</p>
+                          {statusTag(rec)}
                         </div>
-                        <GripVertical size={14} className="text-muted-foreground" />
-                      </div>
-                      <Progress value={getProgress(task)} className="h-1.5" />
-                      <div className="space-y-1">
-                        {task.checklist.map(item => (
-                          <label key={item.id} className="flex items-center gap-2 text-xs cursor-pointer">
-                            <Checkbox checked={item.done} onCheckedChange={() => toggleChecklist(task, item.id)} />
-                            <span className={item.done ? 'line-through text-muted-foreground' : ''}>{item.text}</span>
-                          </label>
-                        ))}
-                      </div>
-                      <div className="flex gap-1 pt-1 flex-wrap">
-                        {KANBAN_COLUMNS.filter(c => c !== col).map(c => (
-                          <button key={c} onClick={() => moveTask(task, c)}
-                            className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors">
-                            → {COLUMN_LABELS[c].split(' ')[0]}
-                          </button>
-                        ))}
-                      </div>
-                    </motion.div>
-                  ))}
+                        <p className="text-[10px] text-muted-foreground">{rec.startTime} — {getVideomakerName(rec.videomakerId)}</p>
+
+                        {/* Actions for agendada */}
+                        {rec.status === 'agendada' && (
+                          <div className="flex gap-1 pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => openScriptsForClient(rec.clientId)} className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 flex items-center gap-0.5">
+                              <FileText size={10} /> Roteiros
+                            </button>
+                            <button onClick={() => handleComplete(rec)} className="text-[10px] px-1.5 py-0.5 rounded bg-success/10 text-success hover:bg-success/20 flex items-center gap-0.5">
+                              <Check size={10} /> Gravado
+                            </button>
+                            <button onClick={() => handleNoShow(rec)} className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive hover:bg-destructive/20 flex items-center gap-0.5">
+                              <XCircle size={10} /> Não Gravou
+                            </button>
+                          </div>
+                        )}
+                      </motion.div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </TabsContent>
       </Tabs>
@@ -322,32 +452,6 @@ export default function Schedule() {
               </Select>
             </div>
             <Button onClick={handleAdd} className="w-full">Agendar</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Suggestion dialog */}
-      <Dialog open={suggestOpen} onOpenChange={setSuggestOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><AlertTriangle size={18} className="text-warning" /> Horário Liberado</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground mb-3">Clientes disponíveis para este horário:</p>
-          <div className="space-y-2">
-            {selectedRec && getSuggestionsForCancellation(selectedRec).map(c => (
-              <div key={c.id} className="glass-card p-3 flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-sm">{c.companyName}</p>
-                  <p className="text-xs text-muted-foreground">Backup: {c.backupTime} · {c.extraContentTypes.join(', ')}</p>
-                </div>
-                <Button size="sm" onClick={() => {
-                  addRecording({
-                    id: crypto.randomUUID(), clientId: c.id, videomakerId: selectedRec.videomakerId,
-                    date: selectedRec.date, startTime: c.backupTime, type: 'secundaria', status: 'agendada',
-                  });
-                  setSuggestOpen(false);
-                  toast.success('Gravação secundária criada');
-                }}>Agendar</Button>
-              </div>
-            ))}
           </div>
         </DialogContent>
       </Dialog>
@@ -398,7 +502,7 @@ export default function Schedule() {
             </>
           )}
 
-          {/* Already recorded scripts that can be returned */}
+          {/* Already recorded scripts */}
           {(() => {
             const recorded = scripts.filter(s => s.clientId === scriptsClientId && s.recorded);
             if (recorded.length === 0) return null;
@@ -410,7 +514,7 @@ export default function Schedule() {
                     <div key={script.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/20">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium">{script.title}</p>
-                        <Badge className="text-[10px] bg-success text-success-foreground">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                        <Badge className="text-[10px] bg-success/20 text-success border-success/30">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
                       </div>
                       <Button variant="ghost" size="sm" onClick={() => handleReturnScript(script)} title="Retornar ao banco">
                         <Undo2 size={14} className="mr-1" /> Retornar

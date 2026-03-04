@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useApp } from '@/contexts/AppContext';
 import { useEndoClientes, useEndoAgendamentos, type EndoCliente } from '@/hooks/useEndomarketing';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,9 +10,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
-import { Plus, Building2, ArrowLeft, Edit2, Trash2, Phone, Clock, Calendar as CalIcon } from 'lucide-react';
+import { Plus, Building2, ArrowLeft, Edit2, Trash2, Clock, Calendar as CalIcon, FileText, Video, Users as UsersIcon } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CLIENT_COLORS, DAY_LABELS } from '@/types';
 import { format, parseISO, isWithinInterval, startOfWeek, endOfWeek } from 'date-fns';
@@ -31,7 +33,28 @@ const DURATION_OPTIONS = [
   { value: 90, label: '1h30' },
 ];
 
-const emptyCliente: Omit<EndoCliente, 'id' | 'created_at' | 'updated_at'> = {
+type FormStep = 'select_client' | 'plan_config' | 'details';
+
+interface FormData {
+  client_id: string;
+  company_name: string;
+  responsible_person: string;
+  phone: string;
+  color: string;
+  active: boolean;
+  stories_per_week: number;
+  presence_days_per_week: number;
+  selected_days: string[];
+  session_duration: number;
+  execution_type: string;
+  plan_type: string;
+  total_contracted_hours: number;
+  notes: string;
+  editorial: string;
+}
+
+const emptyForm: FormData = {
+  client_id: '',
   company_name: '',
   responsible_person: '',
   phone: '',
@@ -42,19 +65,22 @@ const emptyCliente: Omit<EndoCliente, 'id' | 'created_at' | 'updated_at'> = {
   selected_days: ['segunda', 'quarta', 'sexta'],
   session_duration: 60,
   execution_type: 'sozinho',
-  plan_type: 'presencial_recorrente',
+  plan_type: '',
   total_contracted_hours: 0,
   notes: '',
+  editorial: '',
 };
 
 export default function EndomarketingClientes() {
+  const { clients: appClients } = useApp();
   const { clientes, addCliente, updateCliente, deleteCliente } = useEndoClientes();
   const { agendamentos } = useEndoAgendamentos();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCliente, setEditingCliente] = useState<EndoCliente | null>(null);
-  const [form, setForm] = useState(emptyCliente);
+  const [form, setForm] = useState<FormData>(emptyForm);
+  const [step, setStep] = useState<FormStep>('select_client');
 
   const detailId = searchParams.get('detail');
   const detailCliente = clientes.find(c => c.id === detailId);
@@ -62,15 +88,23 @@ export default function EndomarketingClientes() {
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });
 
+  // Active clients from the main system that are NOT yet in endomarketing
+  const availableClients = useMemo(() => {
+    const endoClientIds = clientes.map(c => c.client_id).filter(Boolean);
+    return appClients.filter(c => !endoClientIds.includes(c.id));
+  }, [appClients, clientes]);
+
   const openCreate = () => {
     setEditingCliente(null);
-    setForm(emptyCliente);
+    setForm(emptyForm);
+    setStep('select_client');
     setDialogOpen(true);
   };
 
   const openEdit = (c: EndoCliente) => {
     setEditingCliente(c);
     setForm({
+      client_id: c.client_id || '',
       company_name: c.company_name,
       responsible_person: c.responsible_person || '',
       phone: c.phone || '',
@@ -84,18 +118,66 @@ export default function EndomarketingClientes() {
       plan_type: c.plan_type,
       total_contracted_hours: c.total_contracted_hours,
       notes: c.notes || '',
+      editorial: c.editorial || '',
     });
+    setStep('plan_config');
     setDialogOpen(true);
+  };
+
+  const selectExistingClient = (clientId: string) => {
+    const client = appClients.find(c => c.id === clientId);
+    if (client) {
+      setForm(prev => ({
+        ...prev,
+        client_id: client.id,
+        company_name: client.companyName,
+        responsible_person: client.responsiblePerson,
+        phone: client.phone,
+        color: client.color,
+      }));
+    }
+    setStep('plan_config');
+  };
+
+  const selectNewClient = () => {
+    setForm(prev => ({ ...prev, client_id: '' }));
+    setStep('plan_config');
+  };
+
+  const selectPlanType = (planType: string) => {
+    if (planType === 'gravacao_concentrada') {
+      setForm(prev => ({
+        ...prev,
+        plan_type: planType,
+        session_duration: 120,
+        execution_type: 'com_videomaker',
+        presence_days_per_week: 1,
+        selected_days: prev.selected_days.length > 0 ? [prev.selected_days[0]] : ['segunda'],
+      }));
+    } else {
+      setForm(prev => ({
+        ...prev,
+        plan_type: planType,
+        session_duration: 60,
+      }));
+    }
+    setStep('details');
   };
 
   const handleSave = async () => {
     if (!form.company_name.trim()) { toast.error('Nome é obrigatório'); return; }
+    if (!form.plan_type) { toast.error('Selecione o tipo de plano'); return; }
+    
+    const payload: any = { ...form };
+    delete payload.client_id;
+    if (form.client_id) payload.client_id = form.client_id;
+
     if (editingCliente) {
-      await updateCliente(editingCliente.id, form as any);
+      await updateCliente(editingCliente.id, payload);
       toast.success('Cliente atualizado');
     } else {
-      const ok = await addCliente(form as any);
-      if (ok) toast.success('Cliente adicionado');
+      const ok = await addCliente(payload);
+      if (ok) toast.success('Cliente de endomarketing cadastrado!');
       else toast.error('Erro ao adicionar');
     }
     setDialogOpen(false);
@@ -108,15 +190,20 @@ export default function EndomarketingClientes() {
   };
 
   const toggleDay = (day: string) => {
-    setForm(prev => ({
-      ...prev,
-      selected_days: prev.selected_days.includes(day)
-        ? prev.selected_days.filter(d => d !== day)
-        : [...prev.selected_days, day],
-    }));
+    if (form.plan_type === 'gravacao_concentrada') {
+      // Concentrada: only 1 day allowed
+      setForm(prev => ({ ...prev, selected_days: [day] }));
+    } else {
+      setForm(prev => ({
+        ...prev,
+        selected_days: prev.selected_days.includes(day)
+          ? prev.selected_days.filter(d => d !== day)
+          : [...prev.selected_days, day],
+      }));
+    }
   };
 
-  // Detail view
+  // ─── Detail view ───
   if (detailCliente) {
     const clientSchedules = agendamentos.filter(a => a.cliente_id === detailCliente.id);
     const weekSchedules = clientSchedules.filter(a => {
@@ -175,6 +262,20 @@ export default function EndomarketingClientes() {
           </Card>
         </div>
 
+        {/* Editorial */}
+        {detailCliente.editorial && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <FileText size={14} className="text-primary" /> Editorial do Cliente
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm whitespace-pre-wrap">{detailCliente.editorial}</p>
+            </CardContent>
+          </Card>
+        )}
+
         {detailCliente.notes && (
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm">Observações Estratégicas</CardTitle></CardHeader>
@@ -209,7 +310,7 @@ export default function EndomarketingClientes() {
     );
   }
 
-  // List view
+  // ─── List view ───
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -246,6 +347,12 @@ export default function EndomarketingClientes() {
                     <p>📱 {c.stories_per_week} stories/sem · 📅 {c.presence_days_per_week} dias/sem</p>
                     <p>⏱ {c.session_duration}min · {c.plan_type === 'gravacao_concentrada' ? '🎬 Concentrada' : '🏢 Recorrente'}</p>
                     {c.execution_type === 'com_videomaker' && <Badge variant="outline" className="text-[10px]">Com videomaker</Badge>}
+                    {c.editorial && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <FileText size={10} className="text-primary" />
+                        <span className="text-[10px] text-primary">Editorial disponível</span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -254,108 +361,261 @@ export default function EndomarketingClientes() {
         </div>
       )}
 
-      {/* Create/Edit Dialog */}
+      {/* ─── Create/Edit Dialog (Step-based) ─── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingCliente ? 'Editar Cliente' : 'Novo Cliente de Endomarketing'}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <Label>Nome da empresa *</Label>
-                <Input value={form.company_name} onChange={e => setForm(p => ({ ...p, company_name: e.target.value }))} />
-              </div>
-              <div>
-                <Label>Responsável</Label>
-                <Input value={form.responsible_person} onChange={e => setForm(p => ({ ...p, responsible_person: e.target.value }))} />
-              </div>
-              <div>
-                <Label>Telefone</Label>
-                <Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
-              </div>
-            </div>
-
-            <div>
-              <Label>Cor</Label>
-              <div className="flex gap-1.5 flex-wrap mt-1">
-                {CLIENT_COLORS.map(c => (
-                  <button key={c.value} className={`w-6 h-6 rounded-full border-2 ${form.color === c.value ? 'border-foreground scale-110' : 'border-transparent'}`}
-                    style={{ backgroundColor: `hsl(${c.value})` }} onClick={() => setForm(p => ({ ...p, color: c.value }))} title={c.name} />
+            <DialogTitle>
+              {editingCliente ? 'Editar Cliente' : (
+                step === 'select_client' ? '1. Selecionar Cliente' :
+                step === 'plan_config' ? '2. Tipo de Gravação' :
+                '3. Configuração do Plano'
+              )}
+            </DialogTitle>
+            {!editingCliente && (
+              <div className="flex gap-1 mt-2">
+                {['select_client', 'plan_config', 'details'].map((s, i) => (
+                  <div key={s} className={`h-1 flex-1 rounded-full transition-colors ${
+                    (['select_client', 'plan_config', 'details'].indexOf(step) >= i) ? 'bg-primary' : 'bg-secondary'
+                  }`} />
                 ))}
               </div>
-            </div>
+            )}
+          </DialogHeader>
 
-            <div className="grid grid-cols-2 gap-3">
+          {/* ── Step 1: Select client ── */}
+          {step === 'select_client' && !editingCliente && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Selecione um cliente ativo do sistema ou cadastre um novo:</p>
+              
+              {availableClients.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Clientes ativos</Label>
+                  <div className="grid gap-2 max-h-[300px] overflow-y-auto">
+                    {availableClients.map(c => (
+                      <button key={c.id} onClick={() => selectExistingClient(c.id)}
+                        className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary hover:bg-accent/50 transition-all text-left group">
+                        <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: `hsl(${c.color})` }} />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{c.companyName}</p>
+                          <p className="text-xs text-muted-foreground">{c.responsiblePerson} · {c.phone}</p>
+                        </div>
+                        <Badge variant="secondary" className="text-[10px] shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          Selecionar
+                        </Badge>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <Separator />
+
+              <button onClick={selectNewClient}
+                className="w-full flex items-center gap-3 p-3 rounded-lg border border-dashed border-border hover:border-primary hover:bg-accent/50 transition-all text-left">
+                <Plus size={16} className="text-primary" />
+                <div>
+                  <p className="font-medium text-sm">Cadastrar novo cliente</p>
+                  <p className="text-xs text-muted-foreground">Cliente ainda não está no sistema</p>
+                </div>
+              </button>
+            </div>
+          )}
+
+          {/* ── Step 2: Plan type ── */}
+          {step === 'plan_config' && (
+            <div className="space-y-4">
+              {/* Show selected client info */}
+              {form.company_name && (
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-secondary">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: `hsl(${form.color})` }} />
+                  <span className="text-sm font-medium">{form.company_name}</span>
+                  {!editingCliente && (
+                    <button onClick={() => setStep('select_client')} className="ml-auto text-xs text-muted-foreground hover:text-foreground">Trocar</button>
+                  )}
+                </div>
+              )}
+
+              {/* If new client, show name input */}
+              {!form.client_id && !editingCliente && (
+                <div className="space-y-3">
+                  <div>
+                    <Label>Nome da empresa *</Label>
+                    <Input value={form.company_name} onChange={e => setForm(p => ({ ...p, company_name: e.target.value }))} placeholder="Nome do cliente" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Responsável</Label>
+                      <Input value={form.responsible_person} onChange={e => setForm(p => ({ ...p, responsible_person: e.target.value }))} />
+                    </div>
+                    <div>
+                      <Label>Telefone</Label>
+                      <Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Cor</Label>
+                    <div className="flex gap-1.5 flex-wrap mt-1">
+                      {CLIENT_COLORS.map(c => (
+                        <button key={c.value} className={`w-6 h-6 rounded-full border-2 transition-transform ${form.color === c.value ? 'border-foreground scale-110' : 'border-transparent'}`}
+                          style={{ backgroundColor: `hsl(${c.value})` }} onClick={() => setForm(p => ({ ...p, color: c.value }))} title={c.name} />
+                      ))}
+                    </div>
+                  </div>
+                  <Separator />
+                </div>
+              )}
+
+              <p className="text-sm font-medium">Qual o tipo de gravação?</p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => selectPlanType('presencial_recorrente')}
+                  className={`p-4 rounded-xl border-2 text-left transition-all ${
+                    form.plan_type === 'presencial_recorrente' ? 'border-primary bg-accent/50' : 'border-border hover:border-primary/50'
+                  }`}>
+                  <UsersIcon size={24} className="text-primary mb-2" />
+                  <p className="font-semibold text-sm">Presencial Recorrente</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">Visitas presenciais em múltiplos dias da semana com duração flexível</p>
+                </button>
+                <button onClick={() => selectPlanType('gravacao_concentrada')}
+                  className={`p-4 rounded-xl border-2 text-left transition-all ${
+                    form.plan_type === 'gravacao_concentrada' ? 'border-primary bg-accent/50' : 'border-border hover:border-primary/50'
+                  }`}>
+                  <Video size={24} className="text-primary mb-2" />
+                  <p className="font-semibold text-sm">Gravação Concentrada</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">1 dia por semana · 2 horas fixas · Videomaker obrigatório</p>
+                </button>
+              </div>
+
+              {editingCliente && form.plan_type && (
+                <div className="flex justify-end">
+                  <Button size="sm" onClick={() => setStep('details')}>Continuar →</Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Step 3: Details ── */}
+          {step === 'details' && (
+            <div className="space-y-4">
+              {/* Summary header */}
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-secondary">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: `hsl(${form.color})` }} />
+                <span className="text-sm font-medium">{form.company_name}</span>
+                <Badge variant="outline" className="text-[10px] ml-auto">
+                  {form.plan_type === 'gravacao_concentrada' ? '🎬 Concentrada' : '🏢 Recorrente'}
+                </Badge>
+              </div>
+
+              {/* Concentrada: fixed config shown */}
+              {form.plan_type === 'gravacao_concentrada' && (
+                <Card className="bg-accent/30 border-primary/20">
+                  <CardContent className="p-3 space-y-2 text-sm">
+                    <p className="font-medium flex items-center gap-2"><Clock size={14} /> Duração: <strong>2 horas</strong> (fixo)</p>
+                    <p className="font-medium flex items-center gap-2"><Video size={14} /> Videomaker: <strong>Obrigatório</strong></p>
+                    <p className="font-medium flex items-center gap-2"><CalIcon size={14} /> Frequência: <strong>1x por semana</strong></p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Day selection */}
               <div>
-                <Label>Stories/semana</Label>
+                <Label>{form.plan_type === 'gravacao_concentrada' ? 'Dia da gravação semanal' : 'Dias da semana'}</Label>
+                <div className="flex gap-2 mt-1.5">
+                  {DAYS.map(d => (
+                    <button key={d.value} onClick={() => toggleDay(d.value)}
+                      className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all border ${
+                        form.selected_days.includes(d.value)
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-secondary text-muted-foreground border-transparent hover:border-primary/30'
+                      }`}>
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Recorrente: extra options */}
+              {form.plan_type === 'presencial_recorrente' && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Duração por sessão</Label>
+                      <Select value={String(form.session_duration)} onValueChange={v => setForm(p => ({ ...p, session_duration: +v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {DURATION_OPTIONS.map(o => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Tipo de execução</Label>
+                      <Select value={form.execution_type} onValueChange={v => setForm(p => ({ ...p, execution_type: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="sozinho">Sozinho</SelectItem>
+                          <SelectItem value="com_videomaker">Com Videomaker</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Dias presenciais/semana</Label>
+                      <Input type="number" min={1} max={5} value={form.presence_days_per_week} onChange={e => setForm(p => ({ ...p, presence_days_per_week: +e.target.value }))} />
+                    </div>
+                    <div>
+                      <Label>Horas contratadas/mês</Label>
+                      <Input type="number" min={0} step={0.5} value={form.total_contracted_hours} onChange={e => setForm(p => ({ ...p, total_contracted_hours: +e.target.value }))} />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Common fields */}
+              <div>
+                <Label>Stories por semana</Label>
                 <Input type="number" min={0} value={form.stories_per_week} onChange={e => setForm(p => ({ ...p, stories_per_week: +e.target.value }))} />
               </div>
-              <div>
-                <Label>Dias presenciais/semana</Label>
-                <Input type="number" min={1} max={5} value={form.presence_days_per_week} onChange={e => setForm(p => ({ ...p, presence_days_per_week: +e.target.value }))} />
-              </div>
-            </div>
 
-            <div>
-              <Label>Dias da semana</Label>
-              <div className="flex gap-2 mt-1">
-                {DAYS.map(d => (
-                  <label key={d.value} className="flex items-center gap-1.5 text-sm">
-                    <Checkbox checked={form.selected_days.includes(d.value)} onCheckedChange={() => toggleDay(d.value)} />
-                    {d.label}
-                  </label>
-                ))}
-              </div>
-            </div>
+              <Separator />
 
-            <div className="grid grid-cols-2 gap-3">
+              {/* Editorial */}
               <div>
-                <Label>Duração por sessão</Label>
-                <Select value={String(form.session_duration)} onValueChange={v => setForm(p => ({ ...p, session_duration: +v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {DURATION_OPTIONS.map(o => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label className="flex items-center gap-2">
+                  <FileText size={14} className="text-primary" />
+                  Editorial do Cliente
+                </Label>
+                <p className="text-[11px] text-muted-foreground mb-1.5">
+                  Descreva o posicionamento, tom de voz, público-alvo e diretrizes de conteúdo para que toda equipe entenda este cliente.
+                </p>
+                <Textarea
+                  value={form.editorial}
+                  onChange={e => setForm(p => ({ ...p, editorial: e.target.value }))}
+                  rows={4}
+                  placeholder="Ex: Cliente do ramo alimentício, foco em público jovem (18-30). Tom de voz descontraído e direto. Prioridade em conteúdo de bastidores e receitas rápidas. Evitar linguagem formal..."
+                />
               </div>
-              <div>
-                <Label>Tipo de execução</Label>
-                <Select value={form.execution_type} onValueChange={v => setForm(p => ({ ...p, execution_type: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="sozinho">Sozinho</SelectItem>
-                    <SelectItem value="com_videomaker">Com Videomaker</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-3">
+              {/* Notes */}
               <div>
-                <Label>Tipo de plano</Label>
-                <Select value={form.plan_type} onValueChange={v => setForm(p => ({ ...p, plan_type: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="presencial_recorrente">Presencial Recorrente</SelectItem>
-                    <SelectItem value="gravacao_concentrada">Gravação Concentrada</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Horas contratadas/mês</Label>
-                <Input type="number" min={0} step={0.5} value={form.total_contracted_hours} onChange={e => setForm(p => ({ ...p, total_contracted_hours: +e.target.value }))} />
+                <Label>Observações estratégicas</Label>
+                <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2} placeholder="Notas internas sobre o cliente..." />
               </div>
             </div>
+          )}
 
-            <div>
-              <Label>Observações estratégicas</Label>
-              <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={3} />
-            </div>
-          </div>
+          {/* Footer */}
           <DialogFooter>
+            {step !== 'select_client' && !editingCliente && (
+              <Button variant="ghost" size="sm" onClick={() => setStep(step === 'details' ? 'plan_config' : 'select_client')} className="mr-auto">
+                ← Voltar
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave}>{editingCliente ? 'Salvar' : 'Criar'}</Button>
+            {(step === 'details' || editingCliente) && (
+              <Button onClick={handleSave}>{editingCliente ? 'Salvar' : 'Cadastrar'}</Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

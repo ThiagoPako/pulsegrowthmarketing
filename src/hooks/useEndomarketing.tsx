@@ -18,6 +18,7 @@ export interface EndoCliente {
   plan_type: string;
   total_contracted_hours: number;
   notes?: string;
+  editorial?: string;
   created_at: string;
   updated_at: string;
 }

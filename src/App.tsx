@@ -22,16 +22,21 @@ import NotFound from "@/pages/NotFound";
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { currentUser } = useApp();
-  if (!currentUser) return <Navigate to="/" replace />;
+  const { user, loading } = useAuth();
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-background"><p className="text-muted-foreground">Carregando...</p></div>;
+  if (!user) return <Navigate to="/" replace />;
   return <Layout>{children}</Layout>;
 }
 
 function AppRoutes() {
+  const { user, loading } = useAuth();
   const { currentUser } = useApp();
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-background"><p className="text-muted-foreground">Carregando...</p></div>;
+
   return (
     <Routes>
-      <Route path="/" element={currentUser ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
       <Route path="/dashboard" element={
         <ProtectedRoute>
           {currentUser?.role === 'videomaker' ? <VideomakerDashboard /> :
@@ -45,7 +50,6 @@ function AppRoutes() {
       <Route path="/roteiros" element={<ProtectedRoute><Scripts /></ProtectedRoute>} />
       <Route path="/metas" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
       <Route path="/configuracoes" element={<ProtectedRoute><CompanySettings /></ProtectedRoute>} />
-      {/* Endomarketing routes */}
       <Route path="/endomarketing" element={<ProtectedRoute><EndomarketingDashboard /></ProtectedRoute>} />
       <Route path="/endomarketing/clientes" element={<ProtectedRoute><EndomarketingClientes /></ProtectedRoute>} />
       <Route path="/endomarketing/agenda" element={<ProtectedRoute><EndomarketingAgenda /></ProtectedRoute>} />
@@ -59,11 +63,11 @@ const App = () => (
     <TooltipProvider>
       <Sonner />
       <AuthProvider>
-        <AppProvider>
-          <BrowserRouter>
+        <BrowserRouter>
+          <AppProvider>
             <AppRoutes />
-          </BrowserRouter>
-        </AppProvider>
+          </AppProvider>
+        </BrowserRouter>
       </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>

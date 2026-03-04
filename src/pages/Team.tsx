@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
+import { useAuth, type AppRole } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { ROLE_LABELS } from '@/types';
-import type { User, UserRole } from '@/types';
+import type { UserRole } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,31 +13,59 @@ import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Users } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 
-const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor'];
+const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing'];
+
+interface TeamMember {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  avatarUrl?: string;
+  displayName?: string;
+  jobTitle?: string;
+}
 
 export default function Team() {
-  const { users, addUser, updateUser, deleteUser } = useApp();
+  const { currentUser } = useApp();
+  const { signUp } = useAuth();
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<User | null>(null);
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'videomaker' as UserRole });
 
-  const handleOpen = (user?: User) => {
-    if (user) { setEditing(user); setForm({ name: user.name, email: user.email, password: user.password, role: user.role }); }
-    else { setEditing(null); setForm({ name: '', email: '', password: '', role: 'videomaker' }); }
-    setOpen(true);
+  // Fetch all profiles from Supabase
+  const fetchMembers = async () => {
+    const { data } = await supabase.from('profiles').select('*');
+    if (data) {
+      setMembers(data.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        role: p.role as UserRole,
+        avatarUrl: p.avatar_url,
+        displayName: p.display_name,
+        jobTitle: p.job_title,
+      })));
+    }
+    setLoading(false);
   };
 
-  const handleSave = () => {
+  useEffect(() => { fetchMembers(); }, []);
+
+  const handleSave = async () => {
     if (!form.name || !form.email || !form.password) { toast.error('Preencha todos os campos'); return; }
-    if (editing) {
-      updateUser({ ...editing, ...form });
-      toast.success('Usuário atualizado');
+    if (form.password.length < 6) { toast.error('Senha deve ter no mínimo 6 caracteres'); return; }
+
+    const { error } = await signUp(form.email, form.password, form.name, form.role as AppRole);
+    if (error) {
+      toast.error(error);
     } else {
-      const ok = addUser({ ...form, id: crypto.randomUUID() });
-      if (!ok) { toast.error('Email já cadastrado'); return; }
-      toast.success('Usuário cadastrado');
+      toast.success('Usuário cadastrado com sucesso!');
+      setOpen(false);
+      setForm({ name: '', email: '', password: '', role: 'videomaker' });
+      // Refresh members list after a short delay for the trigger to run
+      setTimeout(fetchMembers, 1000);
     }
-    setOpen(false);
   };
 
   const roleColors: Record<UserRole, string> = {
@@ -52,14 +82,14 @@ export default function Team() {
         <h1 className="text-2xl font-display font-bold">Equipe</h1>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => handleOpen()}><Plus size={16} className="mr-2" /> Novo Usuário</Button>
+            <Button onClick={() => setForm({ name: '', email: '', password: '', role: 'videomaker' })}><Plus size={16} className="mr-2" /> Novo Usuário</Button>
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>{editing ? 'Editar Usuário' : 'Novo Usuário'}</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>Novo Usuário</DialogTitle></DialogHeader>
             <div className="space-y-4">
               <div className="space-y-1"><Label>Nome</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
               <div className="space-y-1"><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
-              <div className="space-y-1"><Label>Senha</Label><Input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} /></div>
+              <div className="space-y-1"><Label>Senha</Label><Input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="Mínimo 6 caracteres" /></div>
               <div className="space-y-1">
                 <Label>Função</Label>
                 <Select value={form.role} onValueChange={v => setForm({ ...form, role: v as UserRole })}>
@@ -67,33 +97,33 @@ export default function Team() {
                   <SelectContent>{ROLES.map(r => <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <Button onClick={handleSave} className="w-full">{editing ? 'Salvar' : 'Cadastrar'}</Button>
+              <Button onClick={handleSave} className="w-full">Cadastrar</Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {users.length === 0 ? (
+      {loading ? (
+        <div className="glass-card p-12 text-center text-muted-foreground">
+          <p>Carregando equipe...</p>
+        </div>
+      ) : members.length === 0 ? (
         <div className="glass-card p-12 text-center text-muted-foreground">
           <Users size={40} className="mx-auto mb-3 opacity-50" /><p>Nenhum usuário cadastrado</p>
         </div>
       ) : (
         <div className="grid gap-3">
-          {users.map(u => (
+          {members.map(u => (
             <div key={u.id} className="glass-card p-4 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <UserAvatar user={u} size="lg" />
                 <div>
                   <p className="font-medium">{u.displayName || u.name}</p>
                   <p className="text-xs text-muted-foreground">{u.email}{u.jobTitle ? ` · ${u.jobTitle}` : ''}</p>
-                  <p className="font-medium">{u.name}</p>
-                  <p className="text-xs text-muted-foreground">{u.email}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${roleColors[u.role]}`}>{ROLE_LABELS[u.role]}</span>
-                <Button variant="ghost" size="icon" onClick={() => handleOpen(u)}><Pencil size={16} /></Button>
-                <Button variant="ghost" size="icon" onClick={() => { deleteUser(u.id); toast.success('Removido'); }}><Trash2 size={16} /></Button>
               </div>
             </div>
           ))}

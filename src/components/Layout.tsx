@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
+import { useAuth } from '@/hooks/useAuth';
 import { ROLE_LABELS } from '@/types';
 import pulseLogo from '@/assets/pulse_logo.png';
 import { Input } from '@/components/ui/input';
@@ -25,13 +26,19 @@ const navItems = [
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { currentUser, logout } = useApp();
+  const { currentUser } = useApp();
+  const { signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const filteredNav = navItems.filter(item =>
     currentUser && item.roles.includes(currentUser.role)
   );
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/');
+  };
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -68,7 +75,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </button>
           </ProfileDialog>
           <button
-            onClick={() => { logout(); navigate('/'); }}
+            onClick={handleLogout}
             className="nav-icon-btn w-full"
             title="Sair"
           >

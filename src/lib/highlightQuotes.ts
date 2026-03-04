@@ -1,7 +1,7 @@
 /**
  * Cleans pasted HTML artifacts: removes inline styles and unwraps empty spans.
  */
-function cleanHtml(html: string): string {
+export function cleanHtml(html: string): string {
   // Remove style attributes
   let cleaned = html.replace(/\s*style="[^"]*"/gi, '');
   // Unwrap empty spans (no attributes left)

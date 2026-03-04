@@ -47,6 +47,9 @@ export interface Client {
   extraContentTypes: ContentType[];
   acceptsExtra: boolean;
   weeklyGoal: number;
+  hasEndomarketing: boolean;
+  weeklyStories: number;
+  presenceDays: number;
 }
 
 export type RecordingType = 'fixa' | 'extra' | 'secundaria';

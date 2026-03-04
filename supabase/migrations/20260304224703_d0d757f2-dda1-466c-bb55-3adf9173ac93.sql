@@ -1,0 +1,1 @@
+ALTER TABLE public.endomarketing_clientes ADD COLUMN editorial TEXT DEFAULT '';

@@ -84,6 +84,7 @@ export type Database = {
           color: string | null
           company_name: string
           created_at: string
+          editorial: string | null
           execution_type: string
           id: string
           notes: string | null
@@ -103,6 +104,7 @@ export type Database = {
           color?: string | null
           company_name: string
           created_at?: string
+          editorial?: string | null
           execution_type?: string
           id?: string
           notes?: string | null
@@ -122,6 +124,7 @@ export type Database = {
           color?: string | null
           company_name?: string
           created_at?: string
+          editorial?: string | null
           execution_type?: string
           id?: string
           notes?: string | null

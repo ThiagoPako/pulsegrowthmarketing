@@ -38,6 +38,18 @@ function RichEditor({ content, onChange }: { content: string; onChange: (html: s
       attributes: {
         class: 'prose prose-sm max-w-none min-h-[300px] p-4 focus:outline-none',
       },
+      transformPastedHTML(html) {
+        // Strip all inline styles and unnecessary spans from pasted content
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        doc.querySelectorAll('[style]').forEach(el => el.removeAttribute('style'));
+        doc.querySelectorAll('span').forEach(span => {
+          // Unwrap empty spans (no meaningful attributes left)
+          if (!span.attributes.length) {
+            span.replaceWith(...Array.from(span.childNodes));
+          }
+        });
+        return doc.body.innerHTML;
+      },
     },
   });
 

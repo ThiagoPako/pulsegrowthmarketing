@@ -44,7 +44,7 @@ const DATE_TO_DAY: Record<number, DayOfWeek> = {
 export default function Schedule() {
   const {
     clients, users, recordings, scripts, settings,
-    updateScript, addRecording, updateRecording, cancelRecording,
+    updateScript, addRecording, updateRecording, cancelRecording, cancelAndReschedule,
     hasConflict, isWithinWorkHours,
   } = useApp();
 
@@ -151,67 +151,7 @@ export default function Schedule() {
 
   const typeLabels: Record<RecordingType, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.' };
 
-  // ====== AUTO-RESCHEDULING LOGIC ======
-  const findNextDateForDay = (dayOfWeek: DayOfWeek, afterDate: string): string => {
-    const base = new Date(afterDate + 'T12:00:00');
-    const targetDayNum = Object.entries(DATE_TO_DAY).find(([_, v]) => v === dayOfWeek)?.[0];
-    if (!targetDayNum) return afterDate;
-    const target = parseInt(targetDayNum);
-    for (let i = 0; i <= 14; i++) {
-      const candidate = addDays(base, i);
-      if (getDay(candidate) === target && format(candidate, 'yyyy-MM-dd') >= afterDate) {
-        return format(candidate, 'yyyy-MM-dd');
-      }
-    }
-    return afterDate;
-  };
-
-  const tryAutoReschedule = useCallback((rec: Recording) => {
-    const client = clients.find(c => c.id === rec.clientId);
-    if (!client) return false;
-
-    const today = format(new Date(), 'yyyy-MM-dd');
-    // Use the client's assigned videomaker — each client has their own
-    const assignedVm = client.videomaker;
-    const assignedVmName = getVideomakerName(assignedVm);
-
-    // Attempt 1: backup day + backup time with client's videomaker
-    const backupDate = findNextDateForDay(client.backupDay, today);
-    const backupDayOfWeek = DATE_TO_DAY[getDay(new Date(backupDate + 'T12:00:00'))];
-    if (isWithinWorkHours(backupDayOfWeek, client.backupTime)) {
-      if (!hasConflict(assignedVm, backupDate, client.backupTime)) {
-        const ok = addRecording({
-          id: crypto.randomUUID(), clientId: rec.clientId, videomakerId: assignedVm,
-          date: backupDate, startTime: client.backupTime, type: 'secundaria', status: 'agendada',
-        });
-        if (ok) {
-          toast.success(`Reagendado para ${format(new Date(backupDate + 'T12:00:00'), 'dd/MM')} (backup) às ${client.backupTime} com ${assignedVmName}`);
-          return true;
-        }
-      }
-    }
-
-    // Attempt 2: extra day + fixed time with client's videomaker
-    if (client.acceptsExtra) {
-      const extraDate = findNextDateForDay(client.extraDay, today);
-      const extraDayOfWeek = DATE_TO_DAY[getDay(new Date(extraDate + 'T12:00:00'))];
-      if (isWithinWorkHours(extraDayOfWeek, client.fixedTime)) {
-        if (!hasConflict(assignedVm, extraDate, client.fixedTime)) {
-          const ok = addRecording({
-            id: crypto.randomUUID(), clientId: rec.clientId, videomakerId: assignedVm,
-            date: extraDate, startTime: client.fixedTime, type: 'extra', status: 'agendada',
-          });
-          if (ok) {
-            toast.success(`Reagendado para dia extra ${format(new Date(extraDate + 'T12:00:00'), 'dd/MM')} às ${client.fixedTime} com ${assignedVmName}`);
-            return true;
-          }
-        }
-      }
-    }
-
-    toast.warning(`Não foi possível reagendar — ${assignedVmName} sem vagas disponíveis no backup ou extra`);
-    return false;
-  }, [clients, hasConflict, isWithinWorkHours, addRecording]);
+  // Legacy findNextDateForDay kept for reference but auto-reschedule moved to AppContext
 
   const handleAdd = () => {
     if (!form.clientId || !form.videomakerId || !form.date || !form.startTime) {
@@ -227,15 +167,23 @@ export default function Schedule() {
   };
 
   const handleCancel = (rec: Recording) => {
-    cancelRecording(rec.id);
-    toast.info('Gravação cancelada — tentando reagendar...');
-    tryAutoReschedule(rec);
+    const result = cancelAndReschedule(rec);
+    if (result.success && result.rescheduled) {
+      const vmName = getVideomakerName(result.rescheduled.videomakerId);
+      toast.success(`Cancelada e reagendada para ${result.rescheduled.date} às ${result.rescheduled.startTime} com ${vmName}`);
+    } else {
+      toast.warning('Gravação cancelada — sem vagas disponíveis para reagendamento');
+    }
   };
 
   const handleNoShow = (rec: Recording) => {
-    updateRecording({ ...rec, status: 'cancelada' });
-    toast.warning(`${getClientName(rec.clientId)} — não gravou`);
-    tryAutoReschedule(rec);
+    const result = cancelAndReschedule(rec);
+    if (result.success && result.rescheduled) {
+      const vmName = getVideomakerName(result.rescheduled.videomakerId);
+      toast.warning(`${getClientName(rec.clientId)} não gravou — reagendado para ${result.rescheduled.date} às ${result.rescheduled.startTime} com ${vmName}`);
+    } else {
+      toast.warning(`${getClientName(rec.clientId)} — não gravou. Sem vagas para reagendamento.`);
+    }
   };
 
   const handleComplete = (rec: Recording) => {

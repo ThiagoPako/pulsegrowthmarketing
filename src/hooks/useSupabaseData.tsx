@@ -217,6 +217,16 @@ export function useSupabaseData() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
+  // ── Bulk insert recordings ──
+  const addRecordingsBulk = useCallback(async (recs: Recording[]): Promise<boolean> => {
+    if (recs.length === 0) return true;
+    const rows = recs.map(r => recordingToRow(r));
+    const { error } = await supabase.from('recordings').insert(rows as any);
+    if (error) { console.error('addRecordingsBulk error:', error); return false; }
+    setRecordings(prev => [...prev, ...recs]);
+    return true;
+  }, []);
+
   // ── Client CRUD ──
   const addClient = useCallback(async (client: Client): Promise<boolean> => {
     // Check duplicate
@@ -330,7 +340,7 @@ export function useSupabaseData() {
   return {
     clients, recordings, tasks, scripts, settings, activeRecordings, loading,
     addClient, updateClient, deleteClient,
-    addRecording, updateRecording, cancelRecording,
+    addRecording, addRecordingsBulk, updateRecording, cancelRecording,
     addTask, updateTask, deleteTask,
     addScript, updateScript, deleteScript,
     updateSettings, startActiveRecording, stopActiveRecording,

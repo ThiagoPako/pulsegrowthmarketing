@@ -6,13 +6,14 @@ import pulseLogo from '@/assets/pulse_logo.png';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
-  LayoutDashboard, Users, Building2, Calendar, Kanban, Settings, LogOut, Target, Search, Plus, Bell
+  LayoutDashboard, Users, Building2, Calendar, Kanban, Settings, LogOut, Target, Search, Plus, Bell, FileText
 } from 'lucide-react';
 
 const navItems = [
   { path: '/dashboard', label: 'Início', icon: LayoutDashboard, roles: ['admin', 'videomaker', 'social_media', 'editor'] },
   { path: '/agenda', label: 'Agenda', icon: Calendar, roles: ['admin', 'videomaker'] },
   { path: '/kanban', label: 'Tarefas', icon: Kanban, roles: ['admin', 'social_media', 'videomaker'] },
+  { path: '/roteiros', label: 'Roteiros', icon: FileText, roles: ['admin', 'social_media', 'videomaker'] },
   { path: '/clientes', label: 'Clientes', icon: Building2, roles: ['admin'] },
   { path: '/equipe', label: 'Equipe', icon: Users, roles: ['admin'] },
   { path: '/metas', label: 'Metas', icon: Target, roles: ['admin'] },

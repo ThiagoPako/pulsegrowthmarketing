@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek } from '@/types';
+import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek, Script } from '@/types';
 
 interface AppState {
   currentUser: User | null;
@@ -7,6 +7,7 @@ interface AppState {
   clients: Client[];
   recordings: Recording[];
   tasks: KanbanTask[];
+  scripts: Script[];
   settings: CompanySettings;
 }
 
@@ -25,6 +26,9 @@ interface AppContextType extends AppState {
   addTask: (task: KanbanTask) => void;
   updateTask: (task: KanbanTask) => void;
   deleteTask: (id: string) => void;
+  addScript: (script: Script) => void;
+  updateScript: (script: Script) => void;
+  deleteScript: (id: string) => void;
   updateSettings: (settings: CompanySettings) => void;
   hasConflict: (videomakerId: string, date: string, startTime: string, excludeId?: string) => boolean;
   isWithinWorkHours: (day: DayOfWeek, startTime: string) => boolean;
@@ -61,12 +65,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [clients, setClients] = useState<Client[]>(() => loadState('pulse_clients', []));
   const [recordings, setRecordings] = useState<Recording[]>(() => loadState('pulse_recordings', []));
   const [tasks, setTasks] = useState<KanbanTask[]>(() => loadState('pulse_tasks', []));
+  const [scripts, setScripts] = useState<Script[]>(() => loadState('pulse_scripts', []));
   const [settings, setSettings] = useState<CompanySettings>(() => loadState('pulse_settings', defaultSettings));
 
   useEffect(() => { localStorage.setItem('pulse_users', JSON.stringify(users)); }, [users]);
   useEffect(() => { localStorage.setItem('pulse_clients', JSON.stringify(clients)); }, [clients]);
   useEffect(() => { localStorage.setItem('pulse_recordings', JSON.stringify(recordings)); }, [recordings]);
   useEffect(() => { localStorage.setItem('pulse_tasks', JSON.stringify(tasks)); }, [tasks]);
+  useEffect(() => { localStorage.setItem('pulse_scripts', JSON.stringify(scripts)); }, [scripts]);
   useEffect(() => { localStorage.setItem('pulse_settings', JSON.stringify(settings)); }, [settings]);
   useEffect(() => { localStorage.setItem('pulse_currentUser', JSON.stringify(currentUser)); }, [currentUser]);
 
@@ -159,6 +165,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setTasks(prev => prev.filter(t => t.id !== id));
   }, []);
 
+  const addScript = useCallback((script: Script) => {
+    setScripts(prev => [...prev, script]);
+  }, []);
+
+  const updateScript = useCallback((script: Script) => {
+    setScripts(prev => prev.map(s => s.id === script.id ? script : s));
+  }, []);
+
+  const deleteScript = useCallback((id: string) => {
+    setScripts(prev => prev.filter(s => s.id !== id));
+  }, []);
+
   const updateSettings = useCallback((s: CompanySettings) => {
     setSettings(s);
   }, []);
@@ -173,11 +191,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      currentUser, users, clients, recordings, tasks, settings,
+      currentUser, users, clients, recordings, tasks, scripts, settings,
       login, logout, addUser, updateUser, deleteUser,
       addClient, updateClient, deleteClient,
       addRecording, updateRecording, cancelRecording,
       addTask, updateTask, deleteTask,
+      addScript, updateScript, deleteScript,
       updateSettings, hasConflict, isWithinWorkHours,
       getSuggestionsForCancellation,
     }}>

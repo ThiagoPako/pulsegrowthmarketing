@@ -2,6 +2,7 @@ import React, { createContext, useContext, useCallback, useState, useEffect } fr
 import { useAuth, type Profile } from '@/hooks/useAuth';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { supabase } from '@/integrations/supabase/client';
+import { generateFixedRecordings, generateExtraRecordings, findRescheduleSlot } from '@/lib/schedulingUtils';
 import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek, Script, ActiveRecording, UserRole } from '@/types';
 
 interface AppContextType {
@@ -23,6 +24,8 @@ interface AppContextType {
   addRecording: (recording: Recording) => boolean;
   updateRecording: (recording: Recording) => void;
   cancelRecording: (id: string) => void;
+  cancelAndReschedule: (recording: Recording) => { success: boolean; rescheduled?: { date: string; startTime: string; videomakerId: string; type: string } };
+  generateScheduleForClient: (client: Client) => Promise<number>;
   addTask: (task: KanbanTask) => void;
   updateTask: (task: KanbanTask) => void;
   deleteTask: (id: string) => void;
@@ -58,7 +61,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const currentUser = profile ? profileToUser(profile) : null;
   
-  // Fetch all profiles for the users list
   const [users, setUsers] = useState<User[]>([]);
   useEffect(() => {
     supabase.from('profiles').select('*').then(({ data: profiles }) => {
@@ -68,12 +70,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => { await signOut(); }, [signOut]);
 
-  // User management (still via profiles table in useAuth)
   const addUser = useCallback((_user: User) => false, []);
   const updateUser = useCallback((_user: User) => {}, []);
   const deleteUser = useCallback((_id: string) => {}, []);
 
-  // Sync wrappers to keep the interface compatible (sync return for optimistic UI)
   const addClient = useCallback((client: Client): boolean => {
     if (data.clients.some(c => c.companyName.toLowerCase() === client.companyName.toLowerCase())) return false;
     data.addClient(client);
@@ -111,7 +111,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const start = timeToMinutes(startTime);
     const end = start + data.settings.recordingDuration;
     const s = data.settings;
-    // Must fit within Shift A or Shift B
     const inA = start >= timeToMinutes(s.shiftAStart) && end <= timeToMinutes(s.shiftAEnd);
     const inB = start >= timeToMinutes(s.shiftBStart) && end <= timeToMinutes(s.shiftBEnd);
     return inA || inB;
@@ -122,6 +121,55 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     data.addRecording(recording);
     return true;
   }, [hasConflict, data]);
+
+  /** Generate fixed + extra recordings for a client until end of month */
+  const generateScheduleForClient = useCallback(async (client: Client): Promise<number> => {
+    const videomakerIds = users.filter(u => u.role === 'videomaker').map(u => u.id);
+    
+    // Generate fixed recordings
+    const fixedRecs = generateFixedRecordings(client, data.recordings, data.settings);
+    
+    // Generate extra recordings (with any available videomaker)
+    const allRecsAfterFixed = [...data.recordings, ...fixedRecs];
+    const extraRecs = generateExtraRecordings(client, allRecsAfterFixed, data.settings, videomakerIds);
+    
+    const allNew = [...fixedRecs, ...extraRecs];
+    if (allNew.length > 0) {
+      await data.addRecordingsBulk(allNew);
+    }
+    return allNew.length;
+  }, [data, users]);
+
+  /** Cancel a recording and try to reschedule automatically */
+  const cancelAndReschedule = useCallback((recording: Recording) => {
+    data.cancelRecording(recording.id);
+    
+    const client = data.clients.find(c => c.id === recording.clientId);
+    if (!client) return { success: false };
+
+    const videomakerIds = users.filter(u => u.role === 'videomaker').map(u => u.id);
+    
+    // Use recordings after cancel
+    const recsAfterCancel = data.recordings.map(r => r.id === recording.id ? { ...r, status: 'cancelada' as const } : r);
+    
+    const slot = findRescheduleSlot(recording, client, recsAfterCancel, data.settings, videomakerIds);
+    
+    if (slot) {
+      const newRec: Recording = {
+        id: crypto.randomUUID(),
+        clientId: recording.clientId,
+        videomakerId: slot.videomakerId,
+        date: slot.date,
+        startTime: slot.startTime,
+        type: slot.type,
+        status: 'agendada',
+      };
+      data.addRecording(newRec);
+      return { success: true, rescheduled: slot };
+    }
+    
+    return { success: false };
+  }, [data, users]);
 
   const updateRecording = useCallback((recording: Recording) => { data.updateRecording(recording); }, [data]);
   const cancelRecording = useCallback((id: string) => { data.cancelRecording(id); }, [data]);
@@ -151,6 +199,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       logout, addUser, updateUser, deleteUser,
       addClient, updateClient, deleteClient,
       addRecording, updateRecording, cancelRecording,
+      cancelAndReschedule, generateScheduleForClient,
       addTask, updateTask, deleteTask,
       addScript, updateScript, deleteScript,
       updateSettings, startActiveRecording, stopActiveRecording,

@@ -44,7 +44,7 @@ interface SlotInfo {
 }
 
 export default function Clients() {
-  const { clients, users, recordings, settings, addClient, updateClient, deleteClient } = useApp();
+  const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient } = useApp();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
   const [form, setForm] = useState<Partial<Client>>(emptyClient());
@@ -144,7 +144,7 @@ export default function Clients() {
     setOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.companyName || !form.responsiblePerson || !form.phone || !form.videomaker) {
       toast.error('Preencha todos os campos obrigatórios'); return;
     }
@@ -152,9 +152,16 @@ export default function Clients() {
       updateClient({ ...editing, ...form } as Client);
       toast.success('Cliente atualizado');
     } else {
-      const ok = addClient({ ...form, id: crypto.randomUUID() } as Client);
+      const newClient = { ...form, id: crypto.randomUUID() } as Client;
+      const ok = addClient(newClient);
       if (!ok) { toast.error('Empresa já cadastrada'); return; }
-      toast.success('Cliente cadastrado');
+      // Auto-generate schedule
+      const count = await generateScheduleForClient(newClient);
+      if (count > 0) {
+        toast.success(`Cliente cadastrado — ${count} gravação(ões) criada(s) na agenda`);
+      } else {
+        toast.success('Cliente cadastrado');
+      }
     }
     setOpen(false);
   };

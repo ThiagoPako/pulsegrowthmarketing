@@ -19,7 +19,8 @@ const emptyClient = (): Partial<Client> => ({
   companyName: '', responsiblePerson: '', phone: '', color: CLIENT_COLORS[0].value,
   fixedDay: 'segunda', fixedTime: '09:00',
   videomaker: '', backupTime: '14:00', backupDay: 'terca', extraDay: 'quarta',
-  extraContentTypes: [], acceptsExtra: false, weeklyGoal: 10,
+  extraContentTypes: [], acceptsExtra: false, extraClientAppears: false,
+  weeklyReels: 0, weeklyCreatives: 0, weeklyGoal: 10,
   hasEndomarketing: false, weeklyStories: 0, presenceDays: 1,
 });
 
@@ -302,7 +303,28 @@ export default function Clients() {
                 </div>
               </div>
 
-              {/* Backup + Extra */}
+              {/* Metas de Entrega */}
+              <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
+                <p className="text-sm font-semibold flex items-center gap-2">
+                  <CalendarCheck size={16} className="text-primary" /> Metas de Entrega Semanal
+                </p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <Label>Qtd. Reels</Label>
+                    <Input type="number" min={0} value={form.weeklyReels ?? 0} onChange={e => setForm({ ...form, weeklyReels: Number(e.target.value) })} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Qtd. Criativos</Label>
+                    <Input type="number" min={0} value={form.weeklyCreatives ?? 0} onChange={e => setForm({ ...form, weeklyCreatives: Number(e.target.value) })} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Meta Total (vídeos)</Label>
+                    <Input type="number" min={1} value={form.weeklyGoal} onChange={e => setForm({ ...form, weeklyGoal: Number(e.target.value) })} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Backup */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label>Dia Backup</Label>
@@ -315,56 +337,62 @@ export default function Clients() {
                   <Label>Horário Backup</Label>
                   <Input type="time" value={form.backupTime} onChange={e => setForm({ ...form, backupTime: e.target.value })} />
                 </div>
-                <div className="space-y-1">
-                  <Label>Dia Extra</Label>
-                  <Select value={form.extraDay} onValueChange={v => setForm({ ...form, extraDay: v as DayOfWeek })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{DAYS.filter(d => settings.workDays.includes(d)).map(d => <SelectItem key={d} value={d}>{DAY_LABELS[d]}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label>Meta Semanal (vídeos)</Label>
-                  <Input type="number" min={1} value={form.weeklyGoal} onChange={e => setForm({ ...form, weeklyGoal: Number(e.target.value) })} />
-                </div>
               </div>
 
-              {/* New fields: Stories, Presença, Endomarketing */}
-              <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
-                <p className="text-sm font-semibold flex items-center gap-2">
-                  <CalendarCheck size={16} className="text-primary" /> Produção Semanal
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label>Qtd. Stories por Semana</Label>
-                    <Input type="number" min={0} value={form.weeklyStories ?? 0} onChange={e => setForm({ ...form, weeklyStories: Number(e.target.value) })} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Dias de Presença</Label>
-                    <Input type="number" min={1} max={7} value={form.presenceDays ?? 1} onChange={e => setForm({ ...form, presenceDays: Number(e.target.value) })} />
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Switch checked={form.hasEndomarketing ?? false} onCheckedChange={v => setForm({ ...form, hasEndomarketing: v })} />
-                  <Label>Tem Endomarketing?</Label>
-                </div>
+              {/* Endomarketing toggle */}
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-border">
+                <Switch checked={form.hasEndomarketing ?? false} onCheckedChange={v => setForm({ ...form, hasEndomarketing: v, weeklyStories: v ? (form.weeklyStories || 5) : 0, presenceDays: v ? (form.presenceDays || 1) : 0 })} />
+                <Label className="font-medium">Tem Endomarketing?</Label>
               </div>
 
-              {/* Extra content */}
-              <div className="flex items-center gap-3">
+              {form.hasEndomarketing && (
+                <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-4">
+                  <p className="text-sm font-semibold text-primary">Produção de Endomarketing</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label>Qtd. Stories por Semana</Label>
+                      <Input type="number" min={0} value={form.weeklyStories ?? 0} onChange={e => setForm({ ...form, weeklyStories: Number(e.target.value) })} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Dias de Presença</Label>
+                      <Input type="number" min={1} max={7} value={form.presenceDays ?? 1} onChange={e => setForm({ ...form, presenceDays: Number(e.target.value) })} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Extra content toggle */}
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-border">
                 <Switch checked={form.acceptsExtra} onCheckedChange={v => setForm({ ...form, acceptsExtra: v })} />
-                <Label>Aceita conteúdo extra?</Label>
+                <Label className="font-medium">Aceita conteúdo extra?</Label>
               </div>
 
               {form.acceptsExtra && (
-                <div className="space-y-2">
-                  <Label>Tipos de Conteúdo Extra</Label>
-                  <div className="flex gap-2">
-                    {CONTENT_TYPES.map(ct => (
-                      <button key={ct} onClick={() => toggleContentType(ct)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${form.extraContentTypes?.includes(ct) ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>
-                        {CONTENT_TYPE_LABELS[ct]}
-                      </button>
-                    ))}
+                <div className="p-4 rounded-xl bg-accent/50 border border-border space-y-4">
+                  <p className="text-sm font-semibold">Configuração de Conteúdo Extra</p>
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <Label>Dia Extra</Label>
+                      <Select value={form.extraDay} onValueChange={v => setForm({ ...form, extraDay: v as DayOfWeek })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>{DAYS.filter(d => settings.workDays.includes(d)).map(d => <SelectItem key={d} value={d}>{DAY_LABELS[d]}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Tipos de Conteúdo Extra</Label>
+                      <div className="flex gap-2">
+                        {CONTENT_TYPES.map(ct => (
+                          <button key={ct} onClick={() => toggleContentType(ct)}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${form.extraContentTypes?.includes(ct) ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>
+                            {CONTENT_TYPE_LABELS[ct]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Switch checked={form.extraClientAppears ?? false} onCheckedChange={v => setForm({ ...form, extraClientAppears: v })} />
+                      <Label>Cliente aparece no conteúdo extra?</Label>
+                    </div>
                   </div>
                 </div>
               )}
@@ -395,10 +423,11 @@ export default function Clients() {
                   <p className="text-[11px] text-muted-foreground truncate">
                     {DAY_LABELS[c.fixedDay]} · {c.fixedTime} · {users.find(u => u.id === c.videomaker)?.name || '—'}
                   </p>
-                  <div className="flex gap-1 mt-1">
-                    {c.hasEndomarketing && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">Endo</Badge>}
-                    {(c.weeklyStories ?? 0) > 0 && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{c.weeklyStories} stories</Badge>}
-                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{c.presenceDays ?? 1}d presença</Badge>
+                  <div className="flex gap-1 mt-1 flex-wrap">
+                    {(c.weeklyReels ?? 0) > 0 && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{c.weeklyReels} reels</Badge>}
+                    {(c.weeklyCreatives ?? 0) > 0 && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{c.weeklyCreatives} criativos</Badge>}
+                    {c.hasEndomarketing && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-primary/30 text-primary">Endo · {c.weeklyStories}st · {c.presenceDays}d</Badge>}
+                    {c.acceptsExtra && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">Extra{c.extraClientAppears ? ' · Aparece' : ''}</Badge>}
                   </div>
                 </div>
               </div>

@@ -46,6 +46,9 @@ export interface Client {
   extraDay: DayOfWeek;
   extraContentTypes: ContentType[];
   acceptsExtra: boolean;
+  extraClientAppears: boolean;
+  weeklyReels: number;
+  weeklyCreatives: number;
   weeklyGoal: number;
   hasEndomarketing: boolean;
   weeklyStories: number;

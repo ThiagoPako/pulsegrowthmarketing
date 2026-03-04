@@ -18,7 +18,7 @@ import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
-import pulseLogo from '@/assets/pulse_logo.png';
+import pulseHeader from '@/assets/pulse_header.png';
 
 const VIDEO_TYPES: ScriptVideoType[] = ['vendas', 'institucional', 'reconhecimento', 'educacional', 'bastidores', 'depoimento', 'lancamento'];
 
@@ -175,19 +175,21 @@ export default function Scripts() {
     const container = document.createElement('div');
     container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:white;padding:0;';
     container.innerHTML = `
-      <div style="padding: 40px; font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a;">
-        <div style="text-align:center; margin-bottom:30px; padding-bottom:20px; border-bottom:2px solid #e5e5e5;">
-          <img src="${pulseLogo}" style="height:60px; margin-bottom:12px;" />
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a;">
+        <div style="margin-bottom:0;">
+          <img src="${pulseHeader}" style="width:100%; display:block;" />
+        </div>
+        <div style="padding: 30px 40px;">
           <h1 style="font-size:22px; margin:0 0 6px;">${script.title}</h1>
-          <p style="font-size:13px; color:#666; margin:0;">
+          <p style="font-size:13px; color:#666; margin:0 0 20px;">
             ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
           </p>
-        </div>
-        <div style="font-size:14px; line-height:1.7;">
-          ${script.content}
-        </div>
-        <div style="margin-top:40px; padding-top:16px; border-top:1px solid #e5e5e5; text-align:center;">
-          <p style="font-size:11px; color:#999;">Roteiro gerado por Pulse · ${new Date().toLocaleDateString('pt-BR')}</p>
+          <div style="font-size:14px; line-height:1.7;">
+            ${script.content}
+          </div>
+          <div style="margin-top:40px; padding-top:16px; border-top:1px solid #e5e5e5; text-align:center;">
+            <p style="font-size:11px; color:#999;">Roteiro gerado por Pulse · ${new Date().toLocaleDateString('pt-BR')}</p>
+          </div>
         </div>
       </div>
     `;

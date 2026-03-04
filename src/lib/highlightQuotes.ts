@@ -49,6 +49,6 @@ export function highlightQuotesForPdf(html: string): string {
   const normalized = normalizeQuotes(cleaned);
   return normalized.replace(
     /"([^"]+)"/g,
-    '<div style="background-color:#fef08a; padding:4px 8px; margin:2px 0; border-radius:3px; display:block;">&ldquo;$1&rdquo;</div>'
+    '<div style="background-color:#fef9c3; border:1px solid #eab308; padding:6px 12px; margin:4px 0; border-radius:8px;">&ldquo;$1&rdquo;</div>'
   );
 }

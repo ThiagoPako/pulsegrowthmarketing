@@ -1,21 +1,27 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import type { Recording, RecordingType } from '@/types';
+import type { Recording, RecordingType, Script } from '@/types';
+import { SCRIPT_VIDEO_TYPE_LABELS } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle } from 'lucide-react';
-import { format, addDays, startOfWeek, parseISO } from 'date-fns';
+import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2 } from 'lucide-react';
+import { format, addDays, startOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function Schedule() {
-  const { clients, users, recordings, addRecording, updateRecording, cancelRecording, hasConflict, getSuggestionsForCancellation } = useApp();
+  const { clients, users, recordings, scripts, updateScript, addRecording, updateRecording, cancelRecording, hasConflict, getSuggestionsForCancellation } = useApp();
   const [weekOffset, setWeekOffset] = useState(0);
   const [newOpen, setNewOpen] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
+  const [scriptsOpen, setScriptsOpen] = useState(false);
+  const [scriptsClientId, setScriptsClientId] = useState('');
+  const [selectedScriptIds, setSelectedScriptIds] = useState<Set<string>>(new Set());
   const [selectedRec, setSelectedRec] = useState<Recording | null>(null);
   const [form, setForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '09:00', type: 'fixa' as RecordingType });
   const [filterVideomaker, setFilterVideomaker] = useState('all');
@@ -69,6 +75,32 @@ export default function Schedule() {
   const statusColors = { agendada: 'border-l-info', concluida: 'border-l-success', cancelada: 'border-l-destructive' };
   const typeLabels = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.' };
 
+  const clientScripts = useMemo(() => {
+    if (!scriptsClientId) return [];
+    return scripts.filter(s => s.clientId === scriptsClientId && !s.recorded);
+  }, [scripts, scriptsClientId]);
+
+  const openScriptsForClient = (clientId: string) => {
+    setScriptsClientId(clientId);
+    setSelectedScriptIds(new Set());
+    setScriptsOpen(true);
+  };
+
+  const handleMarkScriptsRecorded = () => {
+    const now = new Date().toISOString();
+    selectedScriptIds.forEach(id => {
+      const script = scripts.find(s => s.id === id);
+      if (script) updateScript({ ...script, recorded: true, updatedAt: now });
+    });
+    toast.success(`${selectedScriptIds.size} roteiro(s) marcado(s) como gravado(s)`);
+    setScriptsOpen(false);
+  };
+
+  const handleReturnScript = (script: Script) => {
+    updateScript({ ...script, recorded: false, updatedAt: new Date().toISOString() });
+    toast.success('Roteiro retornado ao banco de dados');
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -119,6 +151,7 @@ export default function Schedule() {
                       <p className="text-muted-foreground">{rec.startTime} · {typeLabels[rec.type]}</p>
                       {rec.status === 'agendada' && (
                         <div className="absolute top-1 right-1 hidden group-hover:flex gap-1">
+                          <button onClick={() => openScriptsForClient(rec.clientId)} className="p-0.5 rounded bg-primary/20 text-primary hover:bg-primary/30" title="Ver roteiros"><FileText size={12} /></button>
                           <button onClick={() => handleComplete(rec)} className="p-0.5 rounded bg-success/20 text-success hover:bg-success/30"><Check size={12} /></button>
                           <button onClick={() => handleCancel(rec)} className="p-0.5 rounded bg-destructive/20 text-destructive hover:bg-destructive/30"><XCircle size={12} /></button>
                         </div>
@@ -194,6 +227,78 @@ export default function Schedule() {
               </div>
             ))}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Scripts for client dialog */}
+      <Dialog open={scriptsOpen} onOpenChange={setScriptsOpen}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText size={18} />
+              Roteiros — {clients.find(c => c.id === scriptsClientId)?.companyName}
+            </DialogTitle>
+          </DialogHeader>
+
+          {clientScripts.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <FileText size={32} className="mx-auto mb-2 opacity-50" />
+              <p className="text-sm">Nenhum roteiro pendente para este cliente</p>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">Selecione os roteiros que serão gravados nesta sessão:</p>
+              <div className="space-y-2">
+                {clientScripts.map(script => (
+                  <label key={script.id} className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 cursor-pointer transition-colors">
+                    <Checkbox
+                      checked={selectedScriptIds.has(script.id)}
+                      onCheckedChange={checked => {
+                        const next = new Set(selectedScriptIds);
+                        checked ? next.add(script.id) : next.delete(script.id);
+                        setSelectedScriptIds(next);
+                      }}
+                      className="mt-0.5"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm">{script.title}</p>
+                      <Badge variant="outline" className="text-[10px] mt-1">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                    </div>
+                  </label>
+                ))}
+              </div>
+              {selectedScriptIds.size > 0 && (
+                <Button onClick={handleMarkScriptsRecorded} className="w-full">
+                  <Check size={16} className="mr-2" />
+                  Marcar {selectedScriptIds.size} como gravado(s)
+                </Button>
+              )}
+            </>
+          )}
+
+          {/* Already recorded scripts that can be returned */}
+          {(() => {
+            const recorded = scripts.filter(s => s.clientId === scriptsClientId && s.recorded);
+            if (recorded.length === 0) return null;
+            return (
+              <div className="mt-4 pt-4 border-t border-border">
+                <p className="text-sm font-medium mb-2">Roteiros já gravados</p>
+                <div className="space-y-2">
+                  {recorded.map(script => (
+                    <div key={script.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/20">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">{script.title}</p>
+                        <Badge className="text-[10px] bg-success text-success-foreground">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => handleReturnScript(script)} title="Retornar ao banco">
+                        <Undo2 size={14} className="mr-1" /> Retornar
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

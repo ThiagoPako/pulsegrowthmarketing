@@ -202,7 +202,14 @@ export default function Schedule() {
 
   // ====== KANBAN: grouped by day of current week ======
   const kanbanWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-  const kanbanDays = Array.from({ length: 7 }, (_, i) => addDays(kanbanWeekStart, i));
+  const kanbanAllDays = Array.from({ length: 7 }, (_, i) => addDays(kanbanWeekStart, i));
+  const kanbanDays = kanbanAllDays.filter(day => {
+    const dayNum = getDay(day);
+    if (dayNum >= 1 && dayNum <= 5) return true; // seg-sex always
+    // Show weekend only if there are recordings
+    const dateStr = format(day, 'yyyy-MM-dd');
+    return filteredRecordings.some(r => r.date === dateStr);
+  });
 
   const statusTag = (rec: Recording) => {
     if (rec.status === 'concluida') return <Badge className="bg-success/20 text-success border-success/30 text-[10px]">Gravado</Badge>;
@@ -333,7 +340,7 @@ export default function Schedule() {
             <span className="text-sm text-muted-foreground">Semana atual</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-7 gap-2 min-h-[400px]">
+          <div className={`grid grid-cols-1 gap-2 min-h-[400px]`} style={{ gridTemplateColumns: `repeat(${kanbanDays.length}, minmax(0, 1fr))` }}>
             {kanbanDays.map(day => {
               const dateStr = format(day, 'yyyy-MM-dd');
               const isToday = isSameDay(day, today);

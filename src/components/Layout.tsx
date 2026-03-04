@@ -5,7 +5,7 @@ import { ROLE_LABELS } from '@/types';
 import pulseLogo from '@/assets/pulse_logo.png';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import UserAvatar from '@/components/UserAvatar';
 import ProfileDialog from '@/components/ProfileDialog';
 import {
   LayoutDashboard, Users, Building2, Calendar, Settings, LogOut, Target, Search, Plus, Bell, FileText
@@ -62,14 +62,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center"
               title={currentUser?.displayName || currentUser?.name}
             >
-              <Avatar className="w-9 h-9">
-                {currentUser?.avatarUrl ? (
-                  <AvatarImage src={currentUser.avatarUrl} alt="Avatar" />
-                ) : null}
-                <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">
-                  {currentUser?.name.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
+              {currentUser && <UserAvatar user={currentUser} />}
             </button>
           </ProfileDialog>
           <button
@@ -113,6 +106,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <button className="w-9 h-9 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary transition-colors">
               <Bell size={18} />
             </button>
+            {/* Mobile avatar */}
+            <div className="md:hidden">
+              <ProfileDialog>
+                <button className="rounded-full overflow-hidden">
+                  {currentUser && <UserAvatar user={currentUser} size="sm" />}
+                </button>
+              </ProfileDialog>
+            </div>
           </div>
         </header>
 

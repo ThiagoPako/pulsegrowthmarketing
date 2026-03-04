@@ -15,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
-import { Plus, Building2, ArrowLeft, Edit2, Trash2, Clock, Calendar as CalIcon, FileText, Video, Users as UsersIcon } from 'lucide-react';
+import { Plus, Building2, ArrowLeft, Edit2, Trash2, Clock, Calendar as CalIcon, FileText, Video, Users as UsersIcon, RefreshCw } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CLIENT_COLORS, DAY_LABELS } from '@/types';
 import { format, parseISO, isWithinInterval, startOfWeek, endOfWeek, addDays, getDay, addWeeks } from 'date-fns';
@@ -88,6 +88,7 @@ export default function EndomarketingClientes() {
   const [editingCliente, setEditingCliente] = useState<EndoCliente | null>(null);
   const [form, setForm] = useState<FormData>(emptyForm);
   const [step, setStep] = useState<FormStep>('select_client');
+  const [regenerating, setRegenerating] = useState(false);
 
   const detailId = searchParams.get('detail');
   const detailCliente = clientes.find(c => c.id === detailId);
@@ -266,6 +267,59 @@ export default function EndomarketingClientes() {
     if (detailId === id) setSearchParams({});
   };
 
+  const handleRegenerate = async (cliente: EndoCliente) => {
+    setRegenerating(true);
+    try {
+      // Find profissional from existing agendamentos
+      const existingAg = agendamentos.find(a => a.cliente_id === cliente.id && a.status !== 'cancelado');
+      if (!existingAg) {
+        toast.error('Nenhum profissional encontrado. Crie um agendamento primeiro.');
+        return;
+      }
+      const profId = existingAg.profissional_id;
+      const startTime = existingAg.start_time;
+
+      // Delete future agendamentos that are still 'agendado'
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const futureIds = agendamentos
+        .filter(a => a.cliente_id === cliente.id && a.date >= today && a.status === 'agendado')
+        .map(a => a.id);
+      
+      if (futureIds.length > 0) {
+        await supabase.from('endomarketing_agendamentos').delete().in('id', futureIds);
+      }
+
+      // Generate new agendamentos for next 4 weeks
+      const weeks = 4;
+      const todayDate = new Date();
+      for (let w = 0; w < weeks; w++) {
+        const ws = startOfWeek(addWeeks(todayDate, w), { weekStartsOn: 1 });
+        for (const day of cliente.selected_days) {
+          const jsDayNum = DAY_TO_JS[day];
+          if (jsDayNum === undefined) continue;
+          const dayOffset = jsDayNum === 0 ? 6 : jsDayNum - 1;
+          const date = addDays(ws, dayOffset);
+          if (date < todayDate) continue;
+          const dateStr = format(date, 'yyyy-MM-dd');
+          await addAgendamento({
+            cliente_id: cliente.id,
+            profissional_id: profId,
+            date: dateStr,
+            start_time: startTime,
+            duration: cliente.session_duration,
+            status: 'agendado',
+            checklist: { stories: false, reels: false, institucional: false, estrategico: false },
+          });
+        }
+      }
+      toast.success('Agenda regenerada para as próximas 4 semanas!');
+    } catch {
+      toast.error('Erro ao regenerar agenda');
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
   const toggleDay = (day: string) => {
     if (form.plan_type === 'gravacao_concentrada') {
       // Concentrada: only 1 day allowed
@@ -303,6 +357,10 @@ export default function EndomarketingClientes() {
           </h1>
           <Button variant="outline" size="sm" onClick={() => openEdit(detailCliente)}>
             <Edit2 size={14} className="mr-1" /> Editar
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => handleRegenerate(detailCliente)} disabled={regenerating}>
+            <RefreshCw size={14} className={`mr-1 ${regenerating ? 'animate-spin' : ''}`} />
+            {regenerating ? 'Regenerando...' : 'Regerar 4 semanas'}
           </Button>
         </div>
 

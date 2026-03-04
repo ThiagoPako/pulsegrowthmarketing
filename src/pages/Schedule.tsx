@@ -15,6 +15,7 @@ import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileTex
 import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
+import UserAvatar from '@/components/UserAvatar';
 
 const DATE_TO_DAY: Record<number, DayOfWeek> = {
   0: 'domingo', 1: 'segunda', 2: 'terca', 3: 'quarta', 4: 'quinta', 5: 'sexta', 6: 'sabado',
@@ -79,7 +80,8 @@ export default function Schedule() {
   };
 
   const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || '—';
-  const getVideomakerName = (id: string) => users.find(u => u.id === id)?.name || '—';
+  const getVideomaker = (id: string) => users.find(u => u.id === id);
+  const getVideomakerName = (id: string) => getVideomaker(id)?.name || '—';
   const getClientColor = (id: string) => clients.find(c => c.id === id)?.color || '220 10% 50%';
 
   const typeLabels: Record<RecordingType, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.' };
@@ -400,7 +402,10 @@ export default function Schedule() {
                           <p className="font-medium text-xs truncate">{getClientName(rec.clientId)}</p>
                           {statusTag(rec)}
                         </div>
-                        <p className="text-[10px] text-muted-foreground">{rec.startTime} — {getVideomakerName(rec.videomakerId)}</p>
+                        <div className="flex items-center gap-1.5">
+                          {(() => { const vm = getVideomaker(rec.videomakerId); return vm ? <UserAvatar user={vm} size="sm" className="w-5 h-5 text-[8px]" /> : null; })()}
+                          <p className="text-[10px] text-muted-foreground">{rec.startTime} — {getVideomakerName(rec.videomakerId)}</p>
+                        </div>
 
                         {/* Actions — edit always visible, status actions for agendada */}
                         <div className="flex gap-1 pt-1 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap">

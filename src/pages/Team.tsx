@@ -43,6 +43,7 @@ export default function Team() {
     videomaker: 'bg-info/20 text-info',
     social_media: 'bg-warning/20 text-warning',
     editor: 'bg-success/20 text-success',
+    endomarketing: 'bg-accent text-accent-foreground',
   };
 
   return (

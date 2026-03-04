@@ -14,16 +14,285 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      endomarketing_agendamentos: {
+        Row: {
+          cancellation_reason: string | null
+          checklist: Json | null
+          cliente_id: string
+          created_at: string
+          date: string
+          duration: number
+          id: string
+          notes: string | null
+          profissional_id: string
+          start_time: string
+          status: string
+          updated_at: string
+          videomaker_id: string | null
+        }
+        Insert: {
+          cancellation_reason?: string | null
+          checklist?: Json | null
+          cliente_id: string
+          created_at?: string
+          date: string
+          duration?: number
+          id?: string
+          notes?: string | null
+          profissional_id: string
+          start_time: string
+          status?: string
+          updated_at?: string
+          videomaker_id?: string | null
+        }
+        Update: {
+          cancellation_reason?: string | null
+          checklist?: Json | null
+          cliente_id?: string
+          created_at?: string
+          date?: string
+          duration?: number
+          id?: string
+          notes?: string | null
+          profissional_id?: string
+          start_time?: string
+          status?: string
+          updated_at?: string
+          videomaker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "endomarketing_agendamentos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "endomarketing_clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "endomarketing_agendamentos_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "endomarketing_profissionais"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      endomarketing_clientes: {
+        Row: {
+          active: boolean
+          client_id: string | null
+          color: string | null
+          company_name: string
+          created_at: string
+          execution_type: string
+          id: string
+          notes: string | null
+          phone: string | null
+          plan_type: string
+          presence_days_per_week: number
+          responsible_person: string | null
+          selected_days: string[]
+          session_duration: number
+          stories_per_week: number
+          total_contracted_hours: number | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          client_id?: string | null
+          color?: string | null
+          company_name: string
+          created_at?: string
+          execution_type?: string
+          id?: string
+          notes?: string | null
+          phone?: string | null
+          plan_type?: string
+          presence_days_per_week?: number
+          responsible_person?: string | null
+          selected_days?: string[]
+          session_duration?: number
+          stories_per_week?: number
+          total_contracted_hours?: number | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          client_id?: string | null
+          color?: string | null
+          company_name?: string
+          created_at?: string
+          execution_type?: string
+          id?: string
+          notes?: string | null
+          phone?: string | null
+          plan_type?: string
+          presence_days_per_week?: number
+          responsible_person?: string | null
+          selected_days?: string[]
+          session_duration?: number
+          stories_per_week?: number
+          total_contracted_hours?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      endomarketing_logs: {
+        Row: {
+          action: string
+          agendamento_id: string | null
+          cliente_id: string | null
+          created_at: string
+          details: Json | null
+          id: string
+          performed_by: string | null
+        }
+        Insert: {
+          action: string
+          agendamento_id?: string | null
+          cliente_id?: string | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+          performed_by?: string | null
+        }
+        Update: {
+          action?: string
+          agendamento_id?: string | null
+          cliente_id?: string | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+          performed_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "endomarketing_logs_agendamento_id_fkey"
+            columns: ["agendamento_id"]
+            isOneToOne: false
+            referencedRelation: "endomarketing_agendamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "endomarketing_logs_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "endomarketing_clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      endomarketing_profissionais: {
+        Row: {
+          active: boolean
+          available_days: string[]
+          created_at: string
+          end_time: string
+          id: string
+          max_hours_per_day: number
+          start_time: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          available_days?: string[]
+          created_at?: string
+          end_time?: string
+          id?: string
+          max_hours_per_day?: number
+          start_time?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          available_days?: string[]
+          created_at?: string
+          end_time?: string
+          id?: string
+          max_hours_per_day?: number
+          start_time?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          email: string
+          id: string
+          job_title: string | null
+          name: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          email: string
+          id: string
+          job_title?: string | null
+          name: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          email?: string
+          id?: string
+          job_title?: string | null
+          name?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_role: {
+        Args: { _user_id: string }
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role:
+        | "admin"
+        | "videomaker"
+        | "social_media"
+        | "editor"
+        | "endomarketing"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +419,14 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: [
+        "admin",
+        "videomaker",
+        "social_media",
+        "editor",
+        "endomarketing",
+      ],
+    },
   },
 } as const

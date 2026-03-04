@@ -12,7 +12,7 @@ import { Progress } from '@/components/ui/progress';
 import { useNavigate } from 'react-router-dom';
 
 export default function Dashboard() {
-  const { currentUser, recordings, clients, users, tasks, cancelRecording, updateRecording, getSuggestionsForCancellation } = useApp();
+  const { currentUser, recordings, clients, users, tasks, cancelRecording, updateRecording, getSuggestionsForCancellation, activeRecordings } = useApp();
   const navigate = useNavigate();
   const today = format(new Date(), 'yyyy-MM-dd');
   const [weekOffset, setWeekOffset] = useState(0);
@@ -178,20 +178,28 @@ export default function Dashboard() {
             <p className="text-sm text-muted-foreground text-center py-6">Cadastre videomakers</p>
           ) : (
             <div className="space-y-4">
-              {videomakerStats.map(({ vm, weekDone, weekTotal, todayDone, todayTotal }) => (
-                <div key={vm.id} className="space-y-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-primary text-xs font-bold shrink-0">
-                      {vm.name.charAt(0)}
+              {videomakerStats.map(({ vm, weekDone, weekTotal, todayDone, todayTotal }) => {
+                const activeRec = activeRecordings.find(a => a.videomarkerId === vm.id);
+                const activeClientName = activeRec ? getClientName(activeRec.clientId) : null;
+                return (
+                  <div key={vm.id} className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${activeRec ? 'bg-success/20 text-success ring-2 ring-success/40 animate-pulse' : 'bg-primary/15 text-primary'}`}>
+                        {vm.name.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{vm.name}</p>
+                        {activeRec ? (
+                          <p className="text-[11px] text-success font-medium">● Gravando — {activeClientName}</p>
+                        ) : (
+                          <p className="text-[11px] text-muted-foreground">Hoje: {todayDone}/{todayTotal} · Semana: {weekDone}/{weekTotal}</p>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{vm.name}</p>
-                      <p className="text-[11px] text-muted-foreground">Hoje: {todayDone}/{todayTotal} · Semana: {weekDone}/{weekTotal}</p>
-                    </div>
+                    <Progress value={weekTotal > 0 ? (weekDone / weekTotal) * 100 : 0} className="h-1.5" />
                   </div>
-                  <Progress value={weekTotal > 0 ? (weekDone / weekTotal) * 100 : 0} className="h-1.5" />
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

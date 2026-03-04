@@ -132,3 +132,10 @@ export interface Script {
   createdAt: string; // ISO date
   updatedAt: string; // ISO date
 }
+
+export interface ActiveRecording {
+  recordingId: string;
+  videomarkerId: string;
+  clientId: string;
+  startedAt: string; // ISO datetime
+}

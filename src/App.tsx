@@ -6,6 +6,7 @@ import { AppProvider, useApp } from "@/contexts/AppContext";
 import Layout from "@/components/Layout";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
+import VideomakerDashboard from "@/pages/VideomakerDashboard";
 import Clients from "@/pages/Clients";
 import Team from "@/pages/Team";
 import Schedule from "@/pages/Schedule";
@@ -28,7 +29,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={currentUser ? <Navigate to="/dashboard" replace /> : <Login />} />
-      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+      <Route path="/dashboard" element={<ProtectedRoute>{currentUser?.role === 'videomaker' ? <VideomakerDashboard /> : <Dashboard />}</ProtectedRoute>} />
       <Route path="/agenda" element={<ProtectedRoute><Schedule /></ProtectedRoute>} />
       <Route path="/clientes" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
       <Route path="/equipe" element={<ProtectedRoute><Team /></ProtectedRoute>} />

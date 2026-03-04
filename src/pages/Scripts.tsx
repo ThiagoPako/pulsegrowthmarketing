@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
-import { highlightQuotes, highlightQuotesForPdf } from '@/lib/highlightQuotes';
+import { highlightQuotes, highlightQuotesForPdf, cleanHtml } from '@/lib/highlightQuotes';
 import { useApp } from '@/contexts/AppContext';
 import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS } from '@/types';
 import type { Script, ScriptVideoType, ScriptPriority } from '@/types';
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
-  Plus, Pencil, Trash2, FileText, Download, Check, Eye, Search, Filter, AlertTriangle, Star
+  Plus, Pencil, Trash2, FileText, Download, Check, Eye, Search, Filter, AlertTriangle, Star, Eraser
 } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -230,6 +230,18 @@ export default function Scripts() {
     }
   }, [clients]);
 
+  const handleCleanAll = () => {
+    let count = 0;
+    scripts.forEach(script => {
+      const cleaned = cleanHtml(script.content);
+      if (cleaned !== script.content) {
+        updateScript({ ...script, content: cleaned, updatedAt: new Date().toISOString() });
+        count++;
+      }
+    });
+    toast.success(count > 0 ? `${count} roteiro(s) limpo(s)` : 'Nenhum roteiro precisava de limpeza');
+  };
+
   const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || '—';
   const getClientColor = (id: string) => clients.find(c => c.id === id)?.color || '220 10% 50%';
 
@@ -237,7 +249,14 @@ export default function Scripts() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-display font-bold">Roteiros</h1>
-        <Button onClick={() => handleOpen()}><Plus size={16} className="mr-2" /> Novo Roteiro</Button>
+        <div className="flex items-center gap-2">
+          {scripts.length > 0 && (
+            <Button variant="outline" size="sm" onClick={handleCleanAll}>
+              <Eraser size={14} className="mr-1.5" /> Limpar Formatação
+            </Button>
+          )}
+          <Button onClick={() => handleOpen()}><Plus size={16} className="mr-2" /> Novo Roteiro</Button>
+        </div>
       </div>
 
       {/* Filters */}

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek, Script } from '@/types';
+import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek, Script, ActiveRecording } from '@/types';
 
 interface AppState {
   currentUser: User | null;
@@ -9,6 +9,7 @@ interface AppState {
   tasks: KanbanTask[];
   scripts: Script[];
   settings: CompanySettings;
+  activeRecordings: ActiveRecording[];
 }
 
 interface AppContextType extends AppState {
@@ -30,6 +31,8 @@ interface AppContextType extends AppState {
   updateScript: (script: Script) => void;
   deleteScript: (id: string) => void;
   updateSettings: (settings: CompanySettings) => void;
+  startActiveRecording: (rec: ActiveRecording) => void;
+  stopActiveRecording: (recordingId: string) => void;
   hasConflict: (videomakerId: string, date: string, startTime: string, excludeId?: string) => boolean;
   isWithinWorkHours: (day: DayOfWeek, startTime: string) => boolean;
   getSuggestionsForCancellation: (recording: Recording) => Client[];
@@ -67,6 +70,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [tasks, setTasks] = useState<KanbanTask[]>(() => loadState('pulse_tasks', []));
   const [scripts, setScripts] = useState<Script[]>(() => loadState('pulse_scripts', []));
   const [settings, setSettings] = useState<CompanySettings>(() => loadState('pulse_settings', defaultSettings));
+  const [activeRecordings, setActiveRecordings] = useState<ActiveRecording[]>(() => loadState('pulse_activeRecordings', []));
 
   useEffect(() => { localStorage.setItem('pulse_users', JSON.stringify(users)); }, [users]);
   useEffect(() => { localStorage.setItem('pulse_clients', JSON.stringify(clients)); }, [clients]);
@@ -74,6 +78,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { localStorage.setItem('pulse_tasks', JSON.stringify(tasks)); }, [tasks]);
   useEffect(() => { localStorage.setItem('pulse_scripts', JSON.stringify(scripts)); }, [scripts]);
   useEffect(() => { localStorage.setItem('pulse_settings', JSON.stringify(settings)); }, [settings]);
+  useEffect(() => { localStorage.setItem('pulse_activeRecordings', JSON.stringify(activeRecordings)); }, [activeRecordings]);
   useEffect(() => { localStorage.setItem('pulse_currentUser', JSON.stringify(currentUser)); }, [currentUser]);
 
   const login = useCallback((email: string, password: string) => {
@@ -181,6 +186,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSettings(s);
   }, []);
 
+  const startActiveRecording = useCallback((rec: ActiveRecording) => {
+    setActiveRecordings(prev => [...prev.filter(a => a.recordingId !== rec.recordingId), rec]);
+  }, []);
+
+  const stopActiveRecording = useCallback((recordingId: string) => {
+    setActiveRecordings(prev => prev.filter(a => a.recordingId !== recordingId));
+  }, []);
+
   const getSuggestionsForCancellation = useCallback((recording: Recording) => {
     return clients.filter(c => {
       if (c.id === recording.clientId) return false;
@@ -191,13 +204,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      currentUser, users, clients, recordings, tasks, scripts, settings,
+      currentUser, users, clients, recordings, tasks, scripts, settings, activeRecordings,
       login, logout, addUser, updateUser, deleteUser,
       addClient, updateClient, deleteClient,
       addRecording, updateRecording, cancelRecording,
       addTask, updateTask, deleteTask,
       addScript, updateScript, deleteScript,
-      updateSettings, hasConflict, isWithinWorkHours,
+      updateSettings, startActiveRecording, stopActiveRecording,
+      hasConflict, isWithinWorkHours,
       getSuggestionsForCancellation,
     }}>
       {children}

@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { useEndoClientes, useEndoAgendamentos, type EndoCliente } from '@/hooks/useEndomarketing';
+import { useEndoClientes, useEndoAgendamentos, useEndoProfissionais, type EndoCliente } from '@/hooks/useEndomarketing';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +18,7 @@ import { motion } from 'framer-motion';
 import { Plus, Building2, ArrowLeft, Edit2, Trash2, Clock, Calendar as CalIcon, FileText, Video, Users as UsersIcon } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CLIENT_COLORS, DAY_LABELS } from '@/types';
-import { format, parseISO, isWithinInterval, startOfWeek, endOfWeek } from 'date-fns';
+import { format, parseISO, isWithinInterval, startOfWeek, endOfWeek, addDays, getDay, addWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const DAYS = [
@@ -51,6 +53,8 @@ interface FormData {
   total_contracted_hours: number;
   notes: string;
   editorial: string;
+  profissional_user_id: string;
+  start_time: string;
 }
 
 const emptyForm: FormData = {
@@ -69,12 +73,15 @@ const emptyForm: FormData = {
   total_contracted_hours: 0,
   notes: '',
   editorial: '',
+  profissional_user_id: '',
+  start_time: '09:00',
 };
 
 export default function EndomarketingClientes() {
-  const { clients: appClients } = useApp();
+  const { clients: appClients, users } = useApp();
   const { clientes, addCliente, updateCliente, deleteCliente } = useEndoClientes();
-  const { agendamentos } = useEndoAgendamentos();
+  const { agendamentos, addAgendamento } = useEndoAgendamentos();
+  const { profissionais, addProfissional } = useEndoProfissionais();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -119,6 +126,8 @@ export default function EndomarketingClientes() {
       total_contracted_hours: c.total_contracted_hours,
       notes: c.notes || '',
       editorial: c.editorial || '',
+      profissional_user_id: '',
+      start_time: '09:00',
     });
     setStep('plan_config');
     setDialogOpen(true);
@@ -164,21 +173,89 @@ export default function EndomarketingClientes() {
     setStep('details');
   };
 
+  const DAY_TO_JS: Record<string, number> = {
+    domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6,
+  };
+
+  const generateAgendamentos = async (clienteId: string, profissionalId: string) => {
+    const weeks = 4;
+    const today = new Date();
+    
+    for (let w = 0; w < weeks; w++) {
+      const weekStart = startOfWeek(addWeeks(today, w), { weekStartsOn: 1 });
+      for (const day of form.selected_days) {
+        const jsDayNum = DAY_TO_JS[day];
+        if (jsDayNum === undefined) continue;
+        // Monday=0 offset in our week
+        const dayOffset = jsDayNum === 0 ? 6 : jsDayNum - 1;
+        const date = addDays(weekStart, dayOffset);
+        // Skip past dates
+        if (date < today) continue;
+        const dateStr = format(date, 'yyyy-MM-dd');
+        await addAgendamento({
+          cliente_id: clienteId,
+          profissional_id: profissionalId,
+          date: dateStr,
+          start_time: form.start_time,
+          duration: form.session_duration,
+          status: 'agendado',
+          checklist: { stories: false, reels: false, institucional: false, estrategico: false },
+        });
+      }
+    }
+  };
+
+  const ensureProfissional = async (userId: string): Promise<string> => {
+    // Check if profissional already exists for this user
+    const existing = profissionais.find(p => p.user_id === userId);
+    if (existing) return existing.id;
+    // Create profissional entry
+    const { data } = await supabase
+      .from('endomarketing_profissionais')
+      .insert({ user_id: userId, active: true } as any)
+      .select('id')
+      .single();
+    return data?.id || '';
+  };
+
   const handleSave = async () => {
     if (!form.company_name.trim()) { toast.error('Nome é obrigatório'); return; }
     if (!form.plan_type) { toast.error('Selecione o tipo de plano'); return; }
     
     const payload: any = { ...form };
     delete payload.client_id;
+    delete payload.profissional_user_id;
+    delete payload.start_time;
     if (form.client_id) payload.client_id = form.client_id;
 
     if (editingCliente) {
       await updateCliente(editingCliente.id, payload);
       toast.success('Cliente atualizado');
     } else {
-      const ok = await addCliente(payload);
-      if (ok) toast.success('Cliente de endomarketing cadastrado!');
-      else toast.error('Erro ao adicionar');
+      if (!form.profissional_user_id) { toast.error('Selecione o profissional responsável'); return; }
+      
+      // Insert client and get ID
+      const { data: newClient, error } = await supabase
+        .from('endomarketing_clientes')
+        .insert(payload)
+        .select('id')
+        .single();
+      
+      if (error || !newClient) {
+        toast.error('Erro ao adicionar cliente');
+        return;
+      }
+
+      // Ensure profissional exists
+      const profId = await ensureProfissional(form.profissional_user_id);
+      if (!profId) {
+        toast.error('Erro ao configurar profissional');
+        return;
+      }
+
+      // Auto-generate agendamentos for next 4 weeks
+      await generateAgendamentos(newClient.id, profId);
+      toast.success('Cliente cadastrado e agenda gerada para as próximas 4 semanas!');
     }
     setDialogOpen(false);
   };
@@ -577,6 +654,37 @@ export default function EndomarketingClientes() {
                 <Label>Stories por semana</Label>
                 <Input type="number" min={0} value={form.stories_per_week} onChange={e => setForm(p => ({ ...p, stories_per_week: +e.target.value }))} />
               </div>
+
+              {/* Profissional + Horário (only for new clients) */}
+              {!editingCliente && (
+                <>
+                  <Separator />
+                  <p className="text-sm font-medium flex items-center gap-2">
+                    <CalIcon size={14} className="text-primary" />
+                    Agendamento automático
+                  </p>
+                  <p className="text-[11px] text-muted-foreground -mt-2">
+                    Os agendamentos serão criados automaticamente para as próximas 4 semanas nos dias selecionados.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Profissional responsável *</Label>
+                      <Select value={form.profissional_user_id} onValueChange={v => setForm(p => ({ ...p, profissional_user_id: v }))}>
+                        <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          {users.map(u => (
+                            <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Horário fixo *</Label>
+                      <Input type="time" value={form.start_time} onChange={e => setForm(p => ({ ...p, start_time: e.target.value }))} />
+                    </div>
+                  </div>
+                </>
+              )}
 
               <Separator />
 

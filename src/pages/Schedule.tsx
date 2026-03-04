@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3 } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil } from 'lucide-react';
 import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
@@ -29,10 +29,13 @@ export default function Schedule() {
 
   const [monthOffset, setMonthOffset] = useState(0);
   const [newOpen, setNewOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingRec, setEditingRec] = useState<Recording | null>(null);
   const [scriptsOpen, setScriptsOpen] = useState(false);
   const [scriptsClientId, setScriptsClientId] = useState('');
   const [selectedScriptIds, setSelectedScriptIds] = useState<Set<string>>(new Set());
   const [form, setForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '09:00', type: 'fixa' as RecordingType });
+  const [editForm, setEditForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '', type: 'fixa' as RecordingType, status: 'agendada' as Recording['status'] });
   const [filterVideomaker, setFilterVideomaker] = useState('all');
 
   const videomakers = users.filter(u => u.role === 'videomaker');
@@ -173,7 +176,28 @@ export default function Schedule() {
     toast.success('Gravação concluída');
   };
 
-  // Scripts
+  const openEditRecording = (rec: Recording) => {
+    setEditingRec(rec);
+    setEditForm({ clientId: rec.clientId, videomakerId: rec.videomakerId, date: rec.date, startTime: rec.startTime, type: rec.type, status: rec.status });
+    setEditOpen(true);
+  };
+
+  const handleEditSave = () => {
+    if (!editingRec) return;
+    if (!editForm.clientId || !editForm.videomakerId || !editForm.date || !editForm.startTime) {
+      toast.error('Preencha todos os campos'); return;
+    }
+    // Check conflict only if date/time/videomaker changed
+    const changed = editForm.date !== editingRec.date || editForm.startTime !== editingRec.startTime || editForm.videomakerId !== editingRec.videomakerId;
+    if (changed && editForm.status !== 'cancelada' && hasConflict(editForm.videomakerId, editForm.date, editForm.startTime, editingRec.id)) {
+      toast.error('Conflito de horário!'); return;
+    }
+    updateRecording({ ...editingRec, ...editForm });
+    toast.success('Gravação atualizada');
+    setEditOpen(false);
+    setEditingRec(null);
+  };
+
   const clientScripts = useMemo(() => {
     if (!scriptsClientId) return [];
     return scripts.filter(s => s.clientId === scriptsClientId && !s.recorded);
@@ -306,15 +330,18 @@ export default function Schedule() {
                         {rec.status === 'concluida' && <Check size={8} className="inline ml-0.5 text-success" />}
                         {rec.status === 'cancelada' && <XCircle size={8} className="inline ml-0.5 text-destructive" />}
 
-                        {/* Hover actions */}
-                        {rec.status === 'agendada' && (
-                          <div className="absolute top-0 right-0 hidden group-hover:flex gap-0.5 bg-card rounded p-0.5 shadow z-10">
-                            <button onClick={() => openScriptsForClient(rec.clientId)} className="p-0.5 rounded hover:bg-primary/20 text-primary" title="Roteiros"><FileText size={10} /></button>
-                            <button onClick={() => handleComplete(rec)} className="p-0.5 rounded hover:bg-success/20 text-success"><Check size={10} /></button>
-                            <button onClick={() => handleNoShow(rec)} className="p-0.5 rounded hover:bg-warning/20 text-warning" title="Não gravou"><XCircle size={10} /></button>
-                            <button onClick={() => handleCancel(rec)} className="p-0.5 rounded hover:bg-destructive/20 text-destructive" title="Cancelar"><XCircle size={10} /></button>
-                          </div>
-                        )}
+                        {/* Hover actions — always show edit */}
+                        <div className="absolute top-0 right-0 hidden group-hover:flex gap-0.5 bg-card rounded p-0.5 shadow z-10">
+                          <button onClick={() => openEditRecording(rec)} className="p-0.5 rounded hover:bg-muted text-muted-foreground" title="Editar"><Pencil size={10} /></button>
+                          {rec.status === 'agendada' && (
+                            <>
+                              <button onClick={() => openScriptsForClient(rec.clientId)} className="p-0.5 rounded hover:bg-primary/20 text-primary" title="Roteiros"><FileText size={10} /></button>
+                              <button onClick={() => handleComplete(rec)} className="p-0.5 rounded hover:bg-success/20 text-success"><Check size={10} /></button>
+                              <button onClick={() => handleNoShow(rec)} className="p-0.5 rounded hover:bg-warning/20 text-warning" title="Não gravou"><XCircle size={10} /></button>
+                              <button onClick={() => handleCancel(rec)} className="p-0.5 rounded hover:bg-destructive/20 text-destructive" title="Cancelar"><XCircle size={10} /></button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     ))}
                     {dayRecs.length > 3 && (
@@ -375,20 +402,25 @@ export default function Schedule() {
                         </div>
                         <p className="text-[10px] text-muted-foreground">{rec.startTime} — {getVideomakerName(rec.videomakerId)}</p>
 
-                        {/* Actions for agendada */}
-                        {rec.status === 'agendada' && (
-                          <div className="flex gap-1 pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => openScriptsForClient(rec.clientId)} className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 flex items-center gap-0.5">
-                              <FileText size={10} /> Roteiros
-                            </button>
-                            <button onClick={() => handleComplete(rec)} className="text-[10px] px-1.5 py-0.5 rounded bg-success/10 text-success hover:bg-success/20 flex items-center gap-0.5">
-                              <Check size={10} /> Gravado
-                            </button>
-                            <button onClick={() => handleNoShow(rec)} className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive hover:bg-destructive/20 flex items-center gap-0.5">
-                              <XCircle size={10} /> Não Gravou
-                            </button>
-                          </div>
-                        )}
+                        {/* Actions — edit always visible, status actions for agendada */}
+                        <div className="flex gap-1 pt-1 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap">
+                          <button onClick={() => openEditRecording(rec)} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground hover:bg-muted/80 flex items-center gap-0.5">
+                            <Pencil size={10} /> Editar
+                          </button>
+                          {rec.status === 'agendada' && (
+                            <>
+                              <button onClick={() => openScriptsForClient(rec.clientId)} className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 flex items-center gap-0.5">
+                                <FileText size={10} /> Roteiros
+                              </button>
+                              <button onClick={() => handleComplete(rec)} className="text-[10px] px-1.5 py-0.5 rounded bg-success/10 text-success hover:bg-success/20 flex items-center gap-0.5">
+                                <Check size={10} /> Gravado
+                              </button>
+                              <button onClick={() => handleNoShow(rec)} className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive hover:bg-destructive/20 flex items-center gap-0.5">
+                                <XCircle size={10} /> Não Gravou
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </motion.div>
                     ))}
                   </div>
@@ -438,7 +470,58 @@ export default function Schedule() {
         </DialogContent>
       </Dialog>
 
-      {/* Scripts for client dialog */}
+      {/* Edit recording dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Pencil size={18} /> Editar Gravação</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label>Cliente</Label>
+              <Select value={editForm.clientId} onValueChange={v => setEditForm({ ...editForm, clientId: v })}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Videomaker</Label>
+              <Select value={editForm.videomakerId} onValueChange={v => setEditForm({ ...editForm, videomakerId: v })}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>{videomakers.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1"><Label>Data</Label><Input type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} /></div>
+              <div className="space-y-1"><Label>Horário</Label><Input type="time" value={editForm.startTime} onChange={e => setEditForm({ ...editForm, startTime: e.target.value })} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Tipo</Label>
+                <Select value={editForm.type} onValueChange={v => setEditForm({ ...editForm, type: v as RecordingType })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fixa">Fixa</SelectItem>
+                    <SelectItem value="extra">Extra</SelectItem>
+                    <SelectItem value="secundaria">Secundária</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Status</Label>
+                <Select value={editForm.status} onValueChange={v => setEditForm({ ...editForm, status: v as Recording['status'] })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="agendada">Agendada</SelectItem>
+                    <SelectItem value="concluida">Concluída</SelectItem>
+                    <SelectItem value="cancelada">Cancelada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button onClick={handleEditSave} className="w-full">Salvar Alterações</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={scriptsOpen} onOpenChange={setScriptsOpen}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>

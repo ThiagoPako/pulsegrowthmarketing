@@ -107,8 +107,6 @@ export default function WhatsAppDashboard() {
     manual: 'Manual',
     auto_recording: 'Agendamento',
     auto_reminder: 'Lembrete',
-    auto_approval: 'Aprovação',
-    auto_approved: 'Aprovado',
     auto_confirmation: 'Confirmação',
     auto_backup: 'Backup',
   };
@@ -156,18 +154,6 @@ export default function WhatsAppDashboard() {
       label: '🎯 Backup Confirmado',
       description: 'Enviada quando um cliente backup aceita a vaga',
       variables: '{nome_cliente}',
-    },
-    {
-      key: 'msgVideoApproval',
-      label: 'Vídeo para Aprovação',
-      description: 'Enviada quando o vídeo é enviado para aprovação',
-      variables: '{link_video}',
-    },
-    {
-      key: 'msgVideoApproved',
-      label: 'Vídeo Aprovado',
-      description: 'Enviada quando o vídeo é aprovado',
-      variables: '(sem variáveis)',
     },
   ];
 
@@ -479,20 +465,6 @@ export default function WhatsAppDashboard() {
                         <p className="text-[10px] text-muted-foreground">Enviar confirmação com opções 24h antes da gravação</p>
                       </div>
                       <Switch checked={config.autoConfirmation} onCheckedChange={v => setConfig({ ...config, autoConfirmation: v })} />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label>Envio para Aprovação</Label>
-                        <p className="text-[10px] text-muted-foreground">Notificar quando vídeo for enviado para aprovação</p>
-                      </div>
-                      <Switch checked={config.autoVideoApproval} onCheckedChange={v => setConfig({ ...config, autoVideoApproval: v })} />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label>Vídeo Aprovado</Label>
-                        <p className="text-[10px] text-muted-foreground">Notificar quando vídeo for aprovado</p>
-                      </div>
-                      <Switch checked={config.autoVideoApproved} onCheckedChange={v => setConfig({ ...config, autoVideoApproved: v })} />
                     </div>
                   </CardContent>
                 </Card>

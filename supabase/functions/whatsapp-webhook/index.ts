@@ -25,6 +25,46 @@ function applyTemplate(template: string, vars: Record<string, string>): string {
   return result
 }
 
+// Extract phone and message from various webhook payload formats
+function extractPayload(body: any): { phone: string; message: string } {
+  let phone = ''
+  let message = ''
+
+  // Try common field names for phone number
+  phone = body.from || body.number || body.phone || body.remoteJid || body.contact?.number || body.ticket?.contact?.number || ''
+  
+  // Try common field names for message text  
+  message = body.body || body.message || body.text || body.msg || body.content || ''
+  
+  // If message is an object, try to get text from it
+  if (typeof message === 'object' && message !== null) {
+    message = message.body || message.text || message.content || message.conversation || ''
+  }
+
+  // Try nested structures (Whaticket/AtendeClique patterns)
+  if (!phone && body.data) {
+    phone = body.data.from || body.data.number || body.data.phone || body.data.remoteJid || ''
+    if (!message) {
+      message = body.data.body || body.data.message || body.data.text || ''
+    }
+  }
+
+  // Try ticket-based structure
+  if (!phone && body.ticket) {
+    phone = body.ticket.contact?.number || body.ticket.number || ''
+  }
+  if (!message && body.ticket) {
+    message = body.ticket.lastMessage || ''
+  }
+
+  // Clean phone number
+  phone = phone.replace(/\D/g, '')
+  // Remove @s.whatsapp.net or similar suffixes
+  phone = phone.replace(/@.*/, '')
+  
+  return { phone, message: typeof message === 'string' ? message : '' }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -35,32 +75,61 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    const body = await req.json()
+    let body: any
+    const rawBody = await req.text()
     
-    // AtendeClique webhook payload - adapt based on actual format
-    // Common fields: from/number (phone), body/message (text)
-    const phoneNumber = (body.from || body.number || body.phone || '').replace(/\D/g, '')
-    const messageText = body.body || body.message || body.text || ''
+    // Log the raw payload for debugging
+    console.log('=== WEBHOOK RECEIVED ===')
+    console.log('Method:', req.method)
+    console.log('Headers:', JSON.stringify(Object.fromEntries(req.headers.entries())))
+    console.log('Raw body:', rawBody)
+    
+    try {
+      body = JSON.parse(rawBody)
+    } catch {
+      console.log('Failed to parse JSON, trying URL-encoded')
+      body = Object.fromEntries(new URLSearchParams(rawBody))
+    }
+
+    console.log('Parsed body:', JSON.stringify(body))
+
+    const { phone: phoneNumber, message: messageText } = extractPayload(body)
+    
+    console.log('Extracted phone:', phoneNumber)
+    console.log('Extracted message:', messageText)
 
     if (!phoneNumber || !messageText) {
-      return new Response(JSON.stringify({ ok: true, skipped: 'no_phone_or_message' }), {
+      console.log('No phone or message found in payload')
+      return new Response(JSON.stringify({ ok: true, skipped: 'no_phone_or_message', raw_keys: Object.keys(body) }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
     // Find pending confirmation for this phone number
-    const { data: confirmations } = await supabase
+    // Try with and without country code prefix
+    const phoneVariants = [phoneNumber]
+    if (phoneNumber.startsWith('55') && phoneNumber.length > 10) {
+      phoneVariants.push(phoneNumber.slice(2)) // without country code
+    } else {
+      phoneVariants.push('55' + phoneNumber) // with country code
+    }
+
+    console.log('Searching confirmations for phone variants:', phoneVariants)
+
+    const { data: confirmations, error: confError } = await supabase
       .from('whatsapp_confirmations')
       .select('*, recordings(*), clients(*)')
-      .eq('phone_number', phoneNumber)
+      .in('phone_number', phoneVariants)
       .eq('status', 'pending')
       .not('sent_at', 'is', null)
       .order('sent_at', { ascending: false })
       .limit(1)
 
+    console.log('Confirmations query result:', JSON.stringify(confirmations), 'Error:', confError)
+
     if (!confirmations || confirmations.length === 0) {
-      // No pending confirmation for this phone
-      return new Response(JSON.stringify({ ok: true, skipped: 'no_pending_confirmation' }), {
+      console.log('No pending confirmation found for these phone numbers')
+      return new Response(JSON.stringify({ ok: true, skipped: 'no_pending_confirmation', phone: phoneNumber }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -70,8 +139,10 @@ Deno.serve(async (req) => {
     const client = confirmation.clients
     const classification = classifyResponse(messageText)
 
+    console.log('Classification:', classification, 'for message:', messageText)
+
     if (classification === 'unknown') {
-      return new Response(JSON.stringify({ ok: true, skipped: 'unrecognized_response' }), {
+      return new Response(JSON.stringify({ ok: true, skipped: 'unrecognized_response', message: messageText }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -93,7 +164,6 @@ Deno.serve(async (req) => {
 
     if (confirmation.type === 'confirmation') {
       if (classification === 'confirm') {
-        // Update confirmation status
         await supabase.from('whatsapp_confirmations').update({
           status: 'confirmed',
           responded_at: new Date().toISOString(),
@@ -101,17 +171,15 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString(),
         }).eq('id', confirmation.id)
 
-        // Update recording confirmation_status
         await supabase.from('recordings').update({
           confirmation_status: 'confirmada',
         }).eq('id', confirmation.recording_id)
 
-        // Send confirmation reply
         const replyMessage = applyTemplate(configData.msg_confirmation_confirmed, templateVars)
-        await sendWhatsApp(configData, phoneNumber, replyMessage, client?.id, 'auto_confirmation')
+        await sendWhatsApp(configData, confirmation.phone_number, replyMessage, client?.id, 'auto_confirmation')
+        console.log('Confirmation CONFIRMED for recording:', confirmation.recording_id)
 
       } else {
-        // CANCEL flow
         await supabase.from('whatsapp_confirmations').update({
           status: 'cancelled',
           responded_at: new Date().toISOString(),
@@ -119,22 +187,19 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString(),
         }).eq('id', confirmation.id)
 
-        // Update recording
         await supabase.from('recordings').update({
           status: 'cancelada',
           confirmation_status: 'cancelada',
         }).eq('id', confirmation.recording_id)
 
-        // Send cancellation reply
         const replyMessage = applyTemplate(configData.msg_confirmation_cancelled, templateVars)
-        await sendWhatsApp(configData, phoneNumber, replyMessage, client?.id, 'auto_confirmation')
+        await sendWhatsApp(configData, confirmation.phone_number, replyMessage, client?.id, 'auto_confirmation')
 
-        // Auto-backup flow: find backup clients and send invite to first one
         await initiateBackupFlow(supabase, configData, confirmation, recording)
+        console.log('Confirmation CANCELLED for recording:', confirmation.recording_id)
       }
     } else if (confirmation.type === 'backup_invite') {
       if (classification === 'confirm') {
-        // Backup client accepted
         await supabase.from('whatsapp_confirmations').update({
           status: 'confirmed',
           responded_at: new Date().toISOString(),
@@ -142,7 +207,6 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString(),
         }).eq('id', confirmation.id)
 
-        // Update recording with new client
         await supabase.from('recordings').update({
           client_id: confirmation.client_id,
           status: 'agendada',
@@ -150,12 +214,10 @@ Deno.serve(async (req) => {
           type: 'backup',
         }).eq('id', confirmation.recording_id)
 
-        // Send confirmed message
         const replyMessage = applyTemplate(configData.msg_backup_confirmed, templateVars)
-        await sendWhatsApp(configData, phoneNumber, replyMessage, confirmation.client_id, 'auto_backup')
+        await sendWhatsApp(configData, confirmation.phone_number, replyMessage, confirmation.client_id, 'auto_backup')
 
       } else {
-        // Backup client refused - try next backup
         await supabase.from('whatsapp_confirmations').update({
           status: 'cancelled',
           responded_at: new Date().toISOString(),
@@ -163,14 +225,12 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString(),
         }).eq('id', confirmation.id)
 
-        // Try next backup client
         const backupIds = confirmation.backup_client_ids || []
         const nextIndex = (confirmation.backup_index || 0) + 1
         
         if (nextIndex < backupIds.length) {
           await sendBackupInvite(supabase, configData, confirmation.recording_id, backupIds, nextIndex, recording)
         }
-        // If no more backups, recording stays cancelled
       }
     }
 
@@ -229,7 +289,6 @@ async function sendWhatsApp(config: any, number: string, message: string, client
 async function initiateBackupFlow(supabase: any, config: any, confirmation: any, recording: any) {
   if (!recording) return
 
-  // Find backup clients: accepts_extra=true, same videomaker, not the original client
   const { data: backupClients } = await supabase
     .from('clients')
     .select('id, company_name, whatsapp')
@@ -259,7 +318,6 @@ async function sendBackupInvite(supabase: any, config: any, recordingId: string,
 
   const message = applyTemplate(config.msg_backup_invite, templateVars)
 
-  // Create backup invite confirmation record
   await supabase.from('whatsapp_confirmations').insert({
     recording_id: recordingId,
     client_id: clientId,
@@ -271,6 +329,5 @@ async function sendBackupInvite(supabase: any, config: any, recordingId: string,
     backup_index: index,
   })
 
-  // Send the invite
   await sendWhatsApp(config, client.whatsapp, message, clientId, 'auto_backup')
 }

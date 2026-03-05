@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from 'recharts';
-import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Users, FileText, CreditCard, ArrowRight, BarChart3, CalendarClock, CheckCircle, Wallet } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Users, FileText, CreditCard, ArrowRight, BarChart3, CalendarClock, CheckCircle, Wallet, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -17,7 +17,7 @@ const COLORS = ['hsl(0,72%,51%)', 'hsl(25,95%,53%)', 'hsl(45,93%,47%)', 'hsl(142
 
 export default function FinancialDashboard() {
   const navigate = useNavigate();
-  const { contracts, revenues, expenses, categories, loading, updateRevenue } = useFinancialData();
+  const { contracts, revenues, expenses, categories, cashMovements, loading, updateRevenue } = useFinancialData();
   const { clients, recordings } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
 
@@ -377,6 +377,47 @@ export default function FinancialDashboard() {
               ))}
             </div>
           ) : <p className="text-muted-foreground text-sm text-center py-4">Nenhum contrato ativo</p>}
+        </CardContent>
+      </Card>
+
+      {/* Recent Cash Movements */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-sm flex items-center gap-2"><Wallet size={16} /> Últimas Movimentações do Caixa</CardTitle>
+          <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => navigate('/financeiro/caixa')}>
+            Ver tudo <ArrowRight size={14} />
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {cashMovements.length > 0 ? (
+            <div className="space-y-2">
+              {cashMovements.slice(0, 5).map(m => (
+                <div key={m.id} className="flex items-center justify-between p-2 rounded-lg bg-secondary/50">
+                  <div className="flex items-center gap-3">
+                    {m.type === 'entrada' ? (
+                      <ArrowUpCircle className="w-4 h-4 text-green-600" />
+                    ) : (
+                      <ArrowDownCircle className="w-4 h-4 text-red-600" />
+                    )}
+                    <span className="text-sm">{m.description}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {format(new Date(m.date + 'T12:00:00'), 'dd/MM/yyyy')}
+                    </span>
+                  </div>
+                  <span className={`text-sm font-bold ${m.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>
+                    {m.type === 'entrada' ? '+' : '-'}{fmt(m.amount)}
+                  </span>
+                </div>
+              ))}
+              <div className="text-center pt-2">
+                <p className="text-xs text-muted-foreground">
+                  Saldo atual: <span className="font-bold">{fmt(cashMovements.reduce((acc, m) => acc + (m.type === 'entrada' ? m.amount : -m.amount), 0))}</span>
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-sm text-center py-4">Nenhuma movimentação registrada</p>
+          )}
         </CardContent>
       </Card>
 

@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Users } from 'lucide-react';
+import { Plus, Pencil, Trash2, Users, KeyRound } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 
 const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing'];
@@ -27,13 +27,18 @@ interface TeamMember {
 
 export default function Team() {
   const { currentUser } = useApp();
-  const { signUp } = useAuth();
+  const { signUp, session } = useAuth();
   const [open, setOpen] = useState(false);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'videomaker' as UserRole });
 
-  // Fetch all profiles from Supabase
+  // Reset password state
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetTarget, setResetTarget] = useState<TeamMember | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [resetting, setResetting] = useState(false);
+
   const fetchMembers = async () => {
     const { data } = await supabase.from('profiles').select('*');
     if (data) {
@@ -63,8 +68,29 @@ export default function Team() {
       toast.success('Usuário cadastrado com sucesso!');
       setOpen(false);
       setForm({ name: '', email: '', password: '', role: 'videomaker' });
-      // Refresh members list after a short delay for the trigger to run
       setTimeout(fetchMembers, 1000);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetTarget || !newPassword) { toast.error('Digite a nova senha'); return; }
+    if (newPassword.length < 6) { toast.error('Senha deve ter no mínimo 6 caracteres'); return; }
+
+    setResetting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('reset-password', {
+        body: { userId: resetTarget.id, newPassword },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Senha de ${resetTarget.displayName || resetTarget.name} redefinida!`);
+      setResetOpen(false);
+      setNewPassword('');
+      setResetTarget(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao redefinir senha');
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -105,6 +131,27 @@ export default function Team() {
         )}
       </div>
 
+      {/* Reset Password Dialog */}
+      <Dialog open={resetOpen} onOpenChange={(v) => { setResetOpen(v); if (!v) { setNewPassword(''); setResetTarget(null); } }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Redefinir Senha</DialogTitle></DialogHeader>
+          {resetTarget && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Redefinindo senha de <span className="font-medium text-foreground">{resetTarget.displayName || resetTarget.name}</span> ({resetTarget.email})
+              </p>
+              <div className="space-y-1">
+                <Label>Nova Senha</Label>
+                <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+              </div>
+              <Button onClick={handleResetPassword} className="w-full" disabled={resetting}>
+                {resetting ? 'Redefinindo...' : 'Redefinir Senha'}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {loading ? (
         <div className="glass-card p-12 text-center text-muted-foreground">
           <p>Carregando equipe...</p>
@@ -126,6 +173,17 @@ export default function Team() {
               </div>
               <div className="flex items-center gap-3">
                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${roleColors[u.role]}`}>{ROLE_LABELS[u.role]}</span>
+                {currentUser?.role === 'admin' && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    title="Redefinir senha"
+                    onClick={() => { setResetTarget(u); setResetOpen(true); }}
+                  >
+                    <KeyRound size={16} />
+                  </Button>
+                )}
               </div>
             </div>
           ))}

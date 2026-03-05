@@ -30,6 +30,7 @@ import FinancialExpenses from "@/pages/FinancialExpenses";
 import FinancialDelinquency from "@/pages/FinancialDelinquency";
 import FinancialReports from "@/pages/FinancialReports";
 import FinancialSettings from "@/pages/FinancialSettings";
+import FinancialCashReserve from "@/pages/FinancialCashReserve";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -79,6 +80,7 @@ function AppRoutes() {
       <Route path="/financeiro/inadimplencia" element={<ProtectedRoute><FinancialDelinquency /></ProtectedRoute>} />
       <Route path="/financeiro/relatorios" element={<ProtectedRoute><FinancialReports /></ProtectedRoute>} />
       <Route path="/financeiro/configuracoes" element={<ProtectedRoute><FinancialSettings /></ProtectedRoute>} />
+      <Route path="/financeiro/caixa" element={<ProtectedRoute><FinancialCashReserve /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

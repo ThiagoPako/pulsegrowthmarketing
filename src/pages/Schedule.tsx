@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles, RefreshCw, MessageSquare } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles, RefreshCw, MessageSquare, Play, Square } from 'lucide-react';
 import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
@@ -51,8 +51,8 @@ const DATE_TO_DAY: Record<number, DayOfWeek> = {
 export default function Schedule() {
   const {
     clients, users, recordings, scripts, settings, activeRecordings,
-    updateScript, addRecording, updateRecording, cancelRecording, cancelAndReschedule,
-    regenerateScheduleForClient,
+    currentUser, updateScript, addRecording, updateRecording, cancelRecording, cancelAndReschedule,
+    regenerateScheduleForClient, startActiveRecording, stopActiveRecording,
     hasConflict, isWithinWorkHours,
   } = useApp();
 
@@ -363,6 +363,23 @@ export default function Schedule() {
 
   const isRecordingActive = (recId: string) => activeRecordings.some(a => a.recordingId === recId);
 
+  const handleToggleRecording = (rec: Recording) => {
+    if (isRecordingActive(rec.id)) {
+      stopActiveRecording(rec.id);
+      updateRecording({ ...rec, status: 'concluida' });
+      toast.success(`Gravação finalizada — ${getClientName(rec.clientId)}`);
+    } else {
+      const vmId = rec.videomakerId;
+      startActiveRecording({
+        recordingId: rec.id,
+        videomarkerId: vmId,
+        clientId: rec.clientId,
+        startedAt: new Date().toISOString(),
+      });
+      toast.success(`Gravação iniciada — ${getClientName(rec.clientId)}`);
+    }
+  };
+
   const statusTag = (rec: Recording) => {
     if (isRecordingActive(rec.id)) return <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px] animate-pulse">● Gravando</Badge>;
     if (rec.status === 'concluida') return <Badge className="bg-success/20 text-success border-success/30 text-[10px]">Gravado</Badge>;
@@ -507,6 +524,11 @@ export default function Schedule() {
                                 <button onClick={() => openEditRecording(evt.recording!)} className="p-0.5 rounded hover:bg-muted text-muted-foreground" title="Editar"><Pencil size={10} /></button>
                                 {evt.recording!.status === 'agendada' && (
                                   <>
+                                    {isRecordingActive(evt.recording!.id) ? (
+                                      <button onClick={() => handleToggleRecording(evt.recording!)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Finalizar"><Square size={10} /></button>
+                                    ) : (
+                                      <button onClick={() => handleToggleRecording(evt.recording!)} className="p-0.5 rounded hover:bg-primary/20 text-primary" title="Iniciar Gravação"><Play size={10} /></button>
+                                    )}
                                     <button onClick={() => openScriptsForClient(evt.recording!.clientId)} className="p-0.5 rounded hover:bg-primary/20 text-primary" title="Roteiros"><FileText size={10} /></button>
                                     <button onClick={() => handleSendConfirmation(evt.recording!)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Enviar Confirmação"><MessageSquare size={10} /></button>
                                     <button onClick={() => handleComplete(evt.recording!)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Gravado"><Check size={10} /></button>
@@ -592,7 +614,6 @@ export default function Schedule() {
                           </div>
                         )}
 
-                        {/* Actions — only for recordings */}
                         {evt.type === 'recording' && evt.recording && (
                           <div className="grid grid-cols-2 gap-1 pt-1.5 border-t border-border/50 hidden group-hover:grid transition-all">
                             <button onClick={() => openEditRecording(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-muted/60 text-muted-foreground hover:bg-muted transition-colors flex items-center justify-center gap-1">
@@ -600,6 +621,15 @@ export default function Schedule() {
                             </button>
                             {evt.recording.status === 'agendada' && (
                               <>
+                                {isRecordingActive(evt.recording.id) ? (
+                                  <button onClick={() => handleToggleRecording(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-success/10 text-success hover:bg-success/20 transition-colors flex items-center justify-center gap-1 col-span-2">
+                                    <Square size={10} /> Finalizar Gravação
+                                  </button>
+                                ) : (
+                                  <button onClick={() => handleToggleRecording(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/15 transition-colors flex items-center justify-center gap-1">
+                                    <Play size={10} /> Iniciar
+                                  </button>
+                                )}
                                 <button onClick={() => openScriptsForClient(evt.recording!.clientId)} className="text-[10px] py-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/15 transition-colors flex items-center justify-center gap-1">
                                   <FileText size={10} /> Roteiros
                                 </button>

@@ -376,21 +376,35 @@ export default function VideomakerDashboard() {
                   {dayRecs.map(rec => {
                     const color = getClientColor(rec.clientId);
                     const isActive = myActiveRec?.recordingId === rec.id;
+                    const isDone = rec.status === 'concluida';
                     return (
                       <div key={rec.id}
-                        className={`rounded-lg border p-2 text-xs space-y-1 ${
-                          isActive ? 'border-primary bg-primary/5' :
-                          rec.status === 'concluida' ? 'border-success/30 bg-success/5' : 'border-border bg-card'
+                        onClick={() => {
+                          if (isDone) return;
+                          if (isActive) {
+                            handleFinishRecording(rec);
+                          } else if (rec.status === 'agendada') {
+                            handleStartRecording(rec);
+                          }
+                        }}
+                        className={`rounded-lg border p-2 text-xs space-y-1 cursor-pointer transition-all hover:shadow-md ${
+                          isActive ? 'border-primary bg-primary/5 ring-1 ring-primary/30' :
+                          isDone ? 'border-success/30 bg-success/5 cursor-default' : 'border-border bg-card hover:border-primary/40'
                         }`}
                         style={{ borderLeftWidth: 3, borderLeftColor: `hsl(${color})` }}
                       >
                         <p className="font-medium truncate">{getClientName(rec.clientId)}</p>
                         <p className="text-muted-foreground">{rec.startTime}</p>
-                        {rec.status === 'concluida' && (
+                        {isDone && (
                           <Badge className="bg-success/20 text-success border-success/30 text-[9px]">Gravado</Badge>
                         )}
                         {isActive && (
                           <Badge className="bg-primary/20 text-primary border-primary/30 text-[9px] animate-pulse">● Ao vivo</Badge>
+                        )}
+                        {!isActive && !isDone && rec.status === 'agendada' && (
+                          <div className="flex items-center gap-1 text-primary text-[9px]">
+                            <Play size={9} /> Clique para iniciar
+                          </div>
                         )}
                       </div>
                     );

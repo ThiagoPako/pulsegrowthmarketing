@@ -8,15 +8,16 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from 'recharts';
-import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Users, FileText, CreditCard, ArrowRight, BarChart3 } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
+import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Users, FileText, CreditCard, ArrowRight, BarChart3, CalendarClock, CheckCircle } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toast } from 'sonner';
 
 const COLORS = ['hsl(0,72%,51%)', 'hsl(25,95%,53%)', 'hsl(45,93%,47%)', 'hsl(142,71%,45%)', 'hsl(187,85%,43%)', 'hsl(217,91%,60%)', 'hsl(262,83%,58%)', 'hsl(330,81%,60%)', 'hsl(25,50%,38%)'];
 
 export default function FinancialDashboard() {
   const navigate = useNavigate();
-  const { contracts, revenues, expenses, categories, loading } = useFinancialData();
+  const { contracts, revenues, expenses, categories, loading, updateRevenue } = useFinancialData();
   const { clients, recordings } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
 
@@ -110,6 +111,50 @@ export default function FinancialDashboard() {
   }, [contracts, monthRevenues, clients, recordings, totalExpenses]);
 
   const clientsComPrejuizo = clientProfitability.filter(c => c.lucro < 0);
+
+  // Clients due this week
+  const dueThisWeek = useMemo(() => {
+    const today = new Date();
+    const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+    const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
+    const refMonth = format(today, 'yyyy-MM-dd').slice(0, 8) + '01';
+
+    return contracts
+      .filter(c => c.status === 'ativo')
+      .map(contract => {
+        const client = clients.find(cl => cl.id === contract.client_id);
+        const dueDate = new Date(today.getFullYear(), today.getMonth(), contract.due_day);
+        const isDueThisWeek = isWithinInterval(dueDate, { start: weekStart, end: weekEnd });
+
+        // Check if already paid this month
+        const monthRevenue = revenues.find(
+          r => r.client_id === contract.client_id && r.reference_month === refMonth
+        );
+        const isPaid = monthRevenue?.status === 'recebida';
+
+        return {
+          contractId: contract.id,
+          clientId: contract.client_id,
+          clientName: client?.companyName || 'Cliente',
+          dueDay: contract.due_day,
+          dueDate: format(dueDate, 'dd/MM'),
+          value: contract.contract_value,
+          isDueThisWeek,
+          isPaid,
+          revenueId: monthRevenue?.id,
+        };
+      })
+      .filter(c => c.isDueThisWeek);
+  }, [contracts, clients, revenues]);
+
+  const handleMarkPaid = async (item: typeof dueThisWeek[0]) => {
+    if (item.revenueId) {
+      const ok = await updateRevenue(item.revenueId, { status: 'recebida', paid_at: new Date().toISOString().split('T')[0] });
+      if (ok) toast.success(`${item.clientName} marcado como pago`);
+    } else {
+      toast.error('Gere as receitas do mês primeiro em Receitas');
+    }
+  };
 
   // Cash forecast
   const previsaoCaixa = useMemo(() => {
@@ -211,7 +256,40 @@ export default function FinancialDashboard() {
         ))}
       </div>
 
-      {/* Charts */}
+      {/* Due This Week */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <CalendarClock size={16} /> Vencimentos desta Semana
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {dueThisWeek.length > 0 ? (
+            <div className="space-y-2">
+              {dueThisWeek.map(item => (
+                <div key={item.clientId} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium">{item.clientName}</span>
+                    <Badge variant="outline" className="text-xs">Dia {item.dueDay} ({item.dueDate})</Badge>
+                    <span className="text-sm font-bold">{fmt(Number(item.value))}</span>
+                  </div>
+                  <div>
+                    {item.isPaid ? (
+                      <Badge variant="default" className="gap-1"><CheckCircle size={12} /> Pago</Badge>
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={() => handleMarkPaid(item)} className="gap-1">
+                        <CheckCircle size={14} /> Marcar como Pago
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-sm text-center py-4">Nenhum vencimento esta semana</p>
+          )}
+        </CardContent>
+      </Card>
       <div className="grid md:grid-cols-2 gap-6">
         <Card>
           <CardHeader><CardTitle className="text-sm">Despesas por Categoria</CardTitle></CardHeader>

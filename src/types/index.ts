@@ -61,7 +61,7 @@ export interface Client {
   presenceDays: number;
 }
 
-export type RecordingType = 'fixa' | 'extra' | 'secundaria';
+export type RecordingType = 'fixa' | 'extra' | 'secundaria' | 'backup';
 export type RecordingStatus = 'agendada' | 'concluida' | 'cancelada';
 
 export interface Recording {

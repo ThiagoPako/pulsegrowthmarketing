@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import type { Recording, RecordingType, Script, DayOfWeek } from '@/types';
+import type { Recording, RecordingType, Script, DayOfWeek, Client } from '@/types';
 import { SCRIPT_VIDEO_TYPE_LABELS, DAY_LABELS } from '@/types';
 import { useEndoClientes, useEndoAgendamentos } from '@/hooks/useEndomarketing';
 import { Button } from '@/components/ui/button';
@@ -68,6 +68,8 @@ export default function Schedule() {
   const [regenOpen, setRegenOpen] = useState(false);
   const [regenClientId, setRegenClientId] = useState('');
   const [regenLoading, setRegenLoading] = useState(false);
+  const [backupOpen, setBackupOpen] = useState(false);
+  const [cancellingRec, setCancellingRec] = useState<Recording | null>(null);
 
   const videomakers = users.filter(u => u.role === 'videomaker');
   const currentMonth = addMonths(new Date(), monthOffset);
@@ -154,7 +156,7 @@ export default function Schedule() {
   const getVideomakerName = (id: string) => getVideomaker(id)?.name || '—';
   const getClientColor = (id: string) => clients.find(c => c.id === id)?.color || '220 10% 50%';
 
-  const typeLabels: Record<RecordingType, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.' };
+  const typeLabels: Record<RecordingType, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.', backup: 'Backup' };
 
   const handleRegenerate = async () => {
     if (!regenClientId) { toast.error('Selecione um cliente'); return; }
@@ -184,24 +186,60 @@ export default function Schedule() {
     setNewOpen(false);
   };
 
+  // Get eligible backup clients for a cancelled slot
+  const backupCandidates = useMemo(() => {
+    if (!cancellingRec) return [];
+    const recDate = new Date(cancellingRec.date + 'T12:00:00');
+    const dayNum = getDay(recDate);
+    const dayMap: Record<number, DayOfWeek> = { 0: 'domingo', 1: 'segunda', 2: 'terca', 3: 'quarta', 4: 'quinta', 5: 'sexta', 6: 'sabado' };
+    const recDayOfWeek = dayMap[dayNum];
+    return clients.filter(c => {
+      if (c.id === cancellingRec.clientId) return false;
+      // Client must have this day as their backup day
+      if (c.backupDay !== recDayOfWeek) return false;
+      // Check if the backup time fits in the cancelled slot's time
+      // Or simply: client has a backup configured for this day
+      // Check no conflict for the client's videomaker on this slot
+      return !hasConflict(cancellingRec.videomakerId, cancellingRec.date, cancellingRec.startTime, cancellingRec.id);
+    });
+  }, [cancellingRec, clients, hasConflict]);
+
   const handleCancel = (rec: Recording) => {
-    const result = cancelAndReschedule(rec);
-    if (result.success && result.rescheduled) {
-      const vmName = getVideomakerName(result.rescheduled.videomakerId);
-      toast.success(`Cancelada e reagendada para ${result.rescheduled.date} às ${result.rescheduled.startTime} com ${vmName}`);
-    } else {
-      toast.warning('Gravação cancelada — sem vagas disponíveis para reagendamento');
-    }
+    setCancellingRec(rec);
+    setBackupOpen(true);
+  };
+
+  const handleCancelWithoutBackup = () => {
+    if (!cancellingRec) return;
+    cancelRecording(cancellingRec.id);
+    toast.warning('Gravação cancelada sem substituição');
+    setBackupOpen(false);
+    setCancellingRec(null);
+  };
+
+  const handleSelectBackup = (backupClient: Client) => {
+    if (!cancellingRec) return;
+    // Cancel original
+    cancelRecording(cancellingRec.id);
+    // Create backup recording in same slot
+    const newRec: Recording = {
+      id: crypto.randomUUID(),
+      clientId: backupClient.id,
+      videomakerId: cancellingRec.videomakerId,
+      date: cancellingRec.date,
+      startTime: cancellingRec.startTime,
+      type: 'backup',
+      status: 'agendada',
+    };
+    addRecording(newRec);
+    toast.success(`${backupClient.companyName} encaixado como Backup no lugar de ${getClientName(cancellingRec.clientId)}`);
+    setBackupOpen(false);
+    setCancellingRec(null);
   };
 
   const handleNoShow = (rec: Recording) => {
-    const result = cancelAndReschedule(rec);
-    if (result.success && result.rescheduled) {
-      const vmName = getVideomakerName(result.rescheduled.videomakerId);
-      toast.warning(`${getClientName(rec.clientId)} não gravou — reagendado para ${result.rescheduled.date} às ${result.rescheduled.startTime} com ${vmName}`);
-    } else {
-      toast.warning(`${getClientName(rec.clientId)} — não gravou. Sem vagas para reagendamento.`);
-    }
+    updateRecording({ ...rec, status: 'cancelada' });
+    toast.warning(`${getClientName(rec.clientId)} — não gravou`);
   };
 
   const handleComplete = (rec: Recording) => {
@@ -270,6 +308,7 @@ export default function Schedule() {
   const statusTag = (rec: Recording) => {
     if (rec.status === 'concluida') return <Badge className="bg-success/20 text-success border-success/30 text-[10px]">Gravado</Badge>;
     if (rec.status === 'cancelada') return <Badge className="bg-destructive/20 text-destructive border-destructive/30 text-[10px]">Não Gravou</Badge>;
+    if (rec.type === 'backup') return <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[10px]">Backup</Badge>;
     return <Badge variant="outline" className="text-[10px]">{typeLabels[rec.type]}</Badge>;
   };
 
@@ -548,6 +587,7 @@ export default function Schedule() {
                   <SelectItem value="fixa">Fixa</SelectItem>
                   <SelectItem value="extra">Extra</SelectItem>
                   <SelectItem value="secundaria">Secundária</SelectItem>
+                  <SelectItem value="backup">Backup</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -584,11 +624,12 @@ export default function Schedule() {
                 <Label>Tipo</Label>
                 <Select value={editForm.type} onValueChange={v => setEditForm({ ...editForm, type: v as RecordingType })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="fixa">Fixa</SelectItem>
-                    <SelectItem value="extra">Extra</SelectItem>
-                    <SelectItem value="secundaria">Secundária</SelectItem>
-                  </SelectContent>
+                <SelectContent>
+                  <SelectItem value="fixa">Fixa</SelectItem>
+                  <SelectItem value="extra">Extra</SelectItem>
+                  <SelectItem value="secundaria">Secundária</SelectItem>
+                  <SelectItem value="backup">Backup</SelectItem>
+                </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
@@ -719,6 +760,69 @@ export default function Schedule() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+      {/* Backup selection dialog */}
+      <Dialog open={backupOpen} onOpenChange={(open) => { if (!open) { setBackupOpen(false); setCancellingRec(null); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle size={18} className="text-warning" /> Cancelar Gravação
+            </DialogTitle>
+          </DialogHeader>
+          {cancellingRec && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                <p className="text-sm">
+                  <strong>{getClientName(cancellingRec.clientId)}</strong> — {cancellingRec.date} às {cancellingRec.startTime}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Videomaker: {getVideomakerName(cancellingRec.videomakerId)}
+                </p>
+              </div>
+
+              {backupCandidates.length > 0 ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Clientes disponíveis para preencher esta vaga como <strong>Backup</strong>:
+                  </p>
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                    {backupCandidates.map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => handleSelectBackup(c)}
+                        className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-primary/5 hover:border-primary/30 transition-colors text-left"
+                      >
+                        <ClientLogo client={c} size="sm" className="w-8 h-8 rounded" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{c.companyName}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            Backup: {DAY_LABELS[c.backupDay]} às {c.backupTime}
+                          </p>
+                        </div>
+                        <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[10px] shrink-0">
+                          Encaixar
+                        </Badge>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Nenhum cliente com backup configurado para este dia.
+                </p>
+              )}
+
+              <div className="flex gap-2 justify-end pt-2 border-t border-border">
+                <Button variant="outline" onClick={() => { setBackupOpen(false); setCancellingRec(null); }}>
+                  Voltar
+                </Button>
+                <Button variant="destructive" onClick={handleCancelWithoutBackup}>
+                  <XCircle size={14} className="mr-1" /> Cancelar sem Backup
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

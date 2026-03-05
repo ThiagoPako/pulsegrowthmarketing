@@ -48,6 +48,9 @@ export interface PaymentConfig {
   receiver_name: string;
   bank: string;
   document: string;
+  msg_billing_due: string;
+  msg_billing_overdue: string;
+  include_delivery_report: boolean;
 }
 
 export interface BillingMessage {

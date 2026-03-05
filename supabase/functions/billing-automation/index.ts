@@ -120,16 +120,17 @@ Deno.serve(async (req) => {
       const socialReels = socialDeliveries?.filter(d => d.content_type === 'reels' && d.status === 'postado').length || 0;
       const socialStories = socialDeliveries?.filter(d => d.content_type === 'story' && d.status === 'postado').length || 0;
 
-      // Build delivery summary lines (skip zero values)
       const summaryLines = [];
-      if (stats.gravacoes > 0) summaryLines.push(`📹 ${stats.gravacoes} gravações realizadas`);
-      if (stats.videos > 0) summaryLines.push(`🎬 ${stats.videos} vídeos gravados`);
-      if (stats.videos > 0 && stats.gravacoes > 0) summaryLines.push(`📊 Média de ${(stats.videos / stats.gravacoes).toFixed(1)} vídeos por gravação`);
-      if (socialReels > 0 || stats.reels > 0) summaryLines.push(`🎥 ${Math.max(socialReels, stats.reels)} reels publicados`);
-      if (socialStories > 0 || stats.stories > 0) summaryLines.push(`📱 ${Math.max(socialStories, stats.stories)} stories entregues`);
-      if (stats.artes > 0) summaryLines.push(`🎨 ${stats.artes} artes entregues`);
-      if (stats.criativos > 0) summaryLines.push(`✨ ${stats.criativos} criativos produzidos`);
-      if (stats.extras > 0) summaryLines.push(`➕ ${stats.extras} conteúdos extras produzidos`);
+      if (paymentConfig?.include_delivery_report !== false) {
+        if (stats.gravacoes > 0) summaryLines.push(`📹 ${stats.gravacoes} gravações realizadas`);
+        if (stats.videos > 0) summaryLines.push(`🎬 ${stats.videos} vídeos gravados`);
+        if (stats.videos > 0 && stats.gravacoes > 0) summaryLines.push(`📊 Média de ${(stats.videos / stats.gravacoes).toFixed(1)} vídeos por gravação`);
+        if (socialReels > 0 || stats.reels > 0) summaryLines.push(`🎥 ${Math.max(socialReels, stats.reels)} reels publicados`);
+        if (socialStories > 0 || stats.stories > 0) summaryLines.push(`📱 ${Math.max(socialStories, stats.stories)} stories entregues`);
+        if (stats.artes > 0) summaryLines.push(`🎨 ${stats.artes} artes entregues`);
+        if (stats.criativos > 0) summaryLines.push(`✨ ${stats.criativos} criativos produzidos`);
+        if (stats.extras > 0) summaryLines.push(`➕ ${stats.extras} conteúdos extras produzidos`);
+      }
 
       const deliverySummary = summaryLines.length > 0
         ? `\n\n📋 *Resumo de entregas do mês:*\n${summaryLines.join('\n')}`
@@ -148,17 +149,26 @@ Deno.serve(async (req) => {
       const value = Number(contract.contract_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
       let message: string;
+      const applyVars = (tpl: string) => tpl
+        .replace(/\{nome_cliente\}/g, clientData.company_name)
+        .replace(/\{valor\}/g, value)
+        .replace(/\{dia_vencimento\}/g, String(contract.due_day))
+        .replace(/\{dados_pagamento\}/g, paymentInfo)
+        .replace(/\{relatorio_entregas\}/g, deliverySummary);
+
       if (isReminder) {
-        // 3-day reminder
-        message = `Olá, ${clientData.company_name}! 😊\n\nEsperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de ${value}.\n\nSe já realizou o pagamento, por favor desconsidere esta mensagem.${paymentInfo}\n\nQualquer dúvida, estamos à disposição!\n\nEquipe Pulse Growth Marketing 🚀`;
+        const template = paymentConfig?.msg_billing_overdue ||
+          `Olá, {nome_cliente}! 😊\n\nEsperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de {valor}.\n\nSe já realizou o pagamento, por favor desconsidere esta mensagem.{dados_pagamento}\n\nQualquer dúvida, estamos à disposição!\n\nEquipe Pulse Growth Marketing 🚀`;
+        message = applyVars(template);
 
         // Mark revenue as overdue
         if (revenue) {
           await supabase.from('revenues').update({ status: 'em_atraso' }).eq('id', revenue.id);
         }
       } else {
-        // Due day billing
-        message = `Olá, ${clientData.company_name}! 🚀\n\nAgradecemos a parceria neste mês! Foi um prazer contribuir com o crescimento da sua marca.${deliverySummary}\n\n💰 *Mensalidade:* ${value}\n📅 *Vencimento:* Dia ${contract.due_day}${paymentInfo}\n\nQualquer dúvida, estamos à disposição!\n\nEquipe Pulse Growth Marketing 🚀`;
+        const template = paymentConfig?.msg_billing_due ||
+          `Olá, {nome_cliente}! 🚀\n\nAgradecemos a parceria neste mês!{relatorio_entregas}\n\n💰 *Mensalidade:* {valor}\n📅 *Vencimento:* Dia {dia_vencimento}{dados_pagamento}\n\nQualquer dúvida, estamos à disposição!\n\nEquipe Pulse Growth Marketing 🚀`;
+        message = applyVars(template);
       }
 
       // Send via WhatsApp if configured

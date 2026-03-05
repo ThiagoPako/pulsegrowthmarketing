@@ -25,6 +25,7 @@ export default function FinancialRevenues() {
   const { clients } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
   const [sendingBilling, setSendingBilling] = useState<string | null>(null);
+  const [sendingAll, setSendingAll] = useState(false);
 
   const monthOptions = useMemo(() => {
     const options = [];
@@ -121,13 +122,54 @@ export default function FinancialRevenues() {
     }
   };
 
+  const pendingRevenues = filtered.filter(r => r.status !== 'recebida');
+
+  const handleSendAllBilling = async () => {
+    if (pendingRevenues.length === 0) { toast.info('Nenhuma receita pendente'); return; }
+    setSendingAll(true);
+    let sent = 0;
+    let errors = 0;
+    for (const r of pendingRevenues) {
+      const client = clients.find(c => c.id === r.client_id);
+      if (!client?.whatsapp) { errors++; continue; }
+      setSendingBilling(r.id);
+      try {
+        const value = fmt(Number(r.amount));
+        const dueDay = r.due_date?.split('-')[2] || '—';
+        let paymentInfo = '';
+        if (paymentConfig && (paymentConfig.pix_key || paymentConfig.receiver_name)) {
+          paymentInfo = '\n\n💳 *Dados para pagamento:*';
+          if (paymentConfig.receiver_name) paymentInfo += `\nNome: ${paymentConfig.receiver_name}`;
+          if (paymentConfig.bank) paymentInfo += `\nBanco: ${paymentConfig.bank}`;
+          if (paymentConfig.pix_key) paymentInfo += `\nChave PIX: ${paymentConfig.pix_key}`;
+          if (paymentConfig.document) paymentInfo += `\nCPF/CNPJ: ${paymentConfig.document}`;
+        }
+        const isOverdue = r.status === 'em_atraso';
+        const template = isOverdue
+          ? (paymentConfig?.msg_billing_overdue || 'Olá, {nome_cliente}! Lembrete: {valor}. {dados_pagamento}')
+          : (paymentConfig?.msg_billing_due || 'Olá, {nome_cliente}! Mensalidade {valor} vence dia {dia_vencimento}. {dados_pagamento}');
+        const message = template
+          .replace(/\{nome_cliente\}/g, client.companyName)
+          .replace(/\{valor\}/g, value)
+          .replace(/\{dia_vencimento\}/g, dueDay)
+          .replace(/\{dados_pagamento\}/g, paymentInfo)
+          .replace(/\{relatorio_entregas\}/g, '');
+        const result = await sendWhatsAppMessage({ number: client.whatsapp, message, clientId: client.id, triggerType: 'manual' });
+        if (result.success) sent++; else errors++;
+      } catch { errors++; }
+    }
+    setSendingBilling(null);
+    setSendingAll(false);
+    toast.success(`${sent} cobrança(s) enviada(s)${errors > 0 ? `, ${errors} com erro` : ''}`);
+  };
+
   const total = filtered.reduce((s, r) => s + Number(r.amount), 0);
   const recebida = filtered.filter(r => r.status === 'recebida').reduce((s, r) => s + Number(r.amount), 0);
   const atraso = filtered.filter(r => r.status === 'em_atraso').reduce((s, r) => s + Number(r.amount), 0);
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro')}><ArrowLeft size={18} /></Button>
         <div className="flex-1">
           <h1 className="text-xl font-bold">Receitas</h1>
@@ -140,6 +182,12 @@ export default function FinancialRevenues() {
           </SelectContent>
         </Select>
         <Button size="sm" variant="outline" onClick={handleGenerate}><RefreshCw size={14} className="mr-1" /> Gerar Receitas</Button>
+        {pendingRevenues.length > 0 && (
+          <Button size="sm" onClick={handleSendAllBilling} disabled={sendingAll}>
+            {sendingAll ? <Loader2 size={14} className="mr-1 animate-spin" /> : <MessageCircle size={14} className="mr-1" />}
+            Cobrar Todos ({pendingRevenues.length})
+          </Button>
+        )}
       </div>
 
       <Card>

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import UserAvatar from '@/components/UserAvatar';
 import ProfileDialog from '@/components/ProfileDialog';
 import {
-  LayoutDashboard, Users, Building2, Calendar, Settings, LogOut, Target, Search, Plus, Bell, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3
+  LayoutDashboard, Users, Building2, Calendar, Settings, LogOut, Target, Search, Plus, Bell, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2
 } from 'lucide-react';
 
 const navItems = [
@@ -24,6 +24,7 @@ const navItems = [
   { path: '/endomarketing/agenda', label: 'Agenda E.', icon: Calendar, roles: ['endomarketing'] },
   { path: '/planos', label: 'Planos', icon: Package, roles: ['admin'] },
   { path: '/entregas', label: 'Entregas', icon: ClipboardList, roles: ['admin'] },
+  { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media'] },
   { path: '/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin'] },
   { path: '/desempenho', label: 'Desempenho', icon: Target, roles: ['admin'] },
   { path: '/whatsapp', label: 'WhatsApp', icon: MessageSquare, roles: ['admin'] },

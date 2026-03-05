@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { useApp } from '@/contexts/AppContext';
 import { highlightQuotes, highlightQuotesForPdf } from '@/lib/highlightQuotes';
 import type { Recording, Script } from '@/types';
@@ -12,8 +13,9 @@ import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import {
   Play, Square, FileText, Check, Clock, Video, Users as UsersIcon,
-  TrendingUp, BarChart3, Undo2, AlertTriangle, Star, Eye, ChevronLeft, Download
+  TrendingUp, BarChart3, Undo2, AlertTriangle, Star, Eye, ChevronLeft, Download, Link, ArrowRight
 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import pulseHeader from '@/assets/pulse_header.png';
 import { format, addDays, startOfWeek, startOfMonth, endOfMonth, endOfWeek, isWithinInterval, parseISO, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -33,10 +35,12 @@ export default function VideomakerDashboard() {
   // Track planned scripts per active recording (recordingId -> script IDs)
   const [plannedScripts, setPlannedScripts] = useState<Record<string, string[]>>({});
 
-  // Finish dialog state
+  // Finish dialog state - multi-step wizard
   const [finishDialogOpen, setFinishDialogOpen] = useState(false);
   const [finishRecordingId, setFinishRecordingId] = useState('');
   const [completedScriptIds, setCompletedScriptIds] = useState<Set<string>>(new Set());
+  const [finishStep, setFinishStep] = useState<'scripts' | 'drive'>('scripts');
+  const [driveLink, setDriveLink] = useState('');
 
   const vmId = currentUser?.id || '';
   const today = new Date();
@@ -111,9 +115,10 @@ export default function VideomakerDashboard() {
 
   // ── Finish recording flow ──
   const handleFinishRecording = (rec: Recording) => {
-    // Open finish dialog with pending scripts for this client
     setFinishRecordingId(rec.id);
     setCompletedScriptIds(new Set());
+    setFinishStep('scripts');
+    setDriveLink('');
     setFinishDialogOpen(true);
   };
 
@@ -139,7 +144,20 @@ export default function VideomakerDashboard() {
       });
   }, [finishRecordingId, recordings, scripts, plannedScripts]);
 
-  const confirmFinish = () => {
+  const handleGoToDriveStep = () => {
+    if (completedScriptIds.size === 0) {
+      toast.error('Selecione pelo menos 1 roteiro gravado');
+      return;
+    }
+    setFinishStep('drive');
+  };
+
+  const confirmFinish = async () => {
+    if (!driveLink.trim()) {
+      toast.error('Adicione o link da pasta do Google Drive com os materiais');
+      return;
+    }
+
     const rec = recordings.find(r => r.id === finishRecordingId);
     if (!rec) return;
 
@@ -154,7 +172,7 @@ export default function VideomakerDashboard() {
       }
     });
 
-    // Auto-return unrecorded planned scripts back to pending (ensure recorded: false)
+    // Auto-return unrecorded planned scripts back to pending
     const returnedCount = planned.filter(id => !completedScriptIds.has(id)).length;
     planned.forEach(id => {
       if (!completedScriptIds.has(id)) {
@@ -173,14 +191,39 @@ export default function VideomakerDashboard() {
     }, completedIds);
     updateRecording({ ...rec, status: 'concluida' });
 
-    let msg = `Gravação concluída! ${reelsCount} roteiro(s) gravado(s)`;
+    // Create content_tasks in "edicao" column for each completed script with drive link and 2-day deadline
+    const editingDeadline = new Date();
+    editingDeadline.setDate(editingDeadline.getDate() + 2);
+
+    for (const scriptId of completedIds) {
+      const script = scripts.find(s => s.id === scriptId);
+      if (!script) continue;
+      await supabase.from('content_tasks').insert({
+        client_id: rec.clientId,
+        title: script.title,
+        content_type: script.contentFormat || 'reels',
+        kanban_column: 'edicao',
+        description: `Roteiro gravado pelo videomaker. Link dos materiais: ${driveLink.trim()}`,
+        script_id: scriptId,
+        recording_id: rec.id,
+        assigned_to: null,
+        created_by: vmId,
+        drive_link: driveLink.trim(),
+        editing_deadline: editingDeadline.toISOString(),
+        editing_started_at: new Date().toISOString(),
+      } as any);
+    }
+
+    let msg = `Gravação concluída! ${reelsCount} roteiro(s) enviado(s) para edição`;
     if (returnedCount > 0) msg += ` · ${returnedCount} retornado(s) ao banco`;
     toast.success(msg);
 
-    // Clean up planned scripts for this recording
+    // Clean up
     setPlannedScripts(prev => { const next = { ...prev }; delete next[finishRecordingId]; return next; });
     setFinishDialogOpen(false);
     setCompletedScriptIds(new Set());
+    setDriveLink('');
+    setFinishStep('scripts');
   };
 
   // ── Scripts ──
@@ -519,8 +562,8 @@ export default function VideomakerDashboard() {
         </div>
       </div>
 
-      {/* ── Finish Recording Dialog ── */}
-      <Dialog open={finishDialogOpen} onOpenChange={setFinishDialogOpen}>
+      {/* ── Finish Recording Dialog (Multi-step) ── */}
+      <Dialog open={finishDialogOpen} onOpenChange={v => { if (!v) { setFinishDialogOpen(false); setFinishStep('scripts'); setDriveLink(''); } }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -532,56 +575,118 @@ export default function VideomakerDashboard() {
             </DialogTitle>
           </DialogHeader>
 
-          <p className="text-sm text-muted-foreground">
-            Selecione os roteiros que foram gravados nesta sessão. Os não selecionados permanecerão no banco de roteiros pendentes.
-          </p>
-
-          {finishClientScripts.length === 0 ? (
-            <div className="text-center py-6 text-muted-foreground">
-              <FileText size={32} className="mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Nenhum roteiro planejado para esta sessão</p>
+          {/* Step indicators */}
+          <div className="flex items-center gap-2 mb-2">
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
+              finishStep === 'scripts' ? 'bg-primary text-primary-foreground' : 'bg-success/20 text-success'
+            }`}>
+              <span>1</span> Roteiros Gravados
             </div>
+            <ArrowRight size={14} className="text-muted-foreground" />
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
+              finishStep === 'drive' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+            }`}>
+              <span>2</span> Link do Drive
+            </div>
+          </div>
+
+          {finishStep === 'scripts' ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Selecione os roteiros que foram gravados nesta sessão. Os não selecionados permanecerão no banco de roteiros pendentes.
+              </p>
+
+              {finishClientScripts.length === 0 ? (
+                <div className="text-center py-6 text-muted-foreground">
+                  <FileText size={32} className="mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Nenhum roteiro planejado para esta sessão</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {finishClientScripts.map(script => (
+                    <div key={script.id} className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
+                      completedScriptIds.has(script.id) ? 'border-success/40 bg-success/5' :
+                      script.priority === 'urgent' ? 'border-destructive/40 bg-destructive/5' :
+                      script.priority === 'priority' ? 'border-warning/40 bg-warning/5' : 'border-border hover:bg-muted/30'
+                    }`}>
+                      <Checkbox
+                        checked={completedScriptIds.has(script.id)}
+                        onCheckedChange={checked => {
+                          const next = new Set(completedScriptIds);
+                          checked ? next.add(script.id) : next.delete(script.id);
+                          setCompletedScriptIds(next);
+                        }}
+                        className="mt-1"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          {script.priority === 'urgent' && <AlertTriangle size={13} className="text-destructive shrink-0" />}
+                          {script.priority === 'priority' && <Star size={13} className="text-warning shrink-0" />}
+                          <p className="font-medium text-sm">{script.title}</p>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge variant="outline" className="text-[10px]">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-2 mt-3">
+                <Button variant="outline" onClick={() => setFinishDialogOpen(false)} className="flex-1">
+                  Cancelar
+                </Button>
+                <Button onClick={handleGoToDriveStep} className="flex-1 gap-1.5">
+                  <ArrowRight size={16} />
+                  Próximo ({completedScriptIds.size} selecionado{completedScriptIds.size !== 1 ? 's' : ''})
+                </Button>
+              </div>
+            </>
           ) : (
-            <div className="space-y-2">
-              {finishClientScripts.map(script => (
-                <div key={script.id} className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
-                  completedScriptIds.has(script.id) ? 'border-success/40 bg-success/5' :
-                  script.priority === 'urgent' ? 'border-destructive/40 bg-destructive/5' :
-                  script.priority === 'priority' ? 'border-warning/40 bg-warning/5' : 'border-border hover:bg-muted/30'
-                }`}>
-                  <Checkbox
-                    checked={completedScriptIds.has(script.id)}
-                    onCheckedChange={checked => {
-                      const next = new Set(completedScriptIds);
-                      checked ? next.add(script.id) : next.delete(script.id);
-                      setCompletedScriptIds(next);
-                    }}
-                    className="mt-1"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      {script.priority === 'urgent' && <AlertTriangle size={13} className="text-destructive shrink-0" />}
-                      {script.priority === 'priority' && <Star size={13} className="text-warning shrink-0" />}
-                      <p className="font-medium text-sm">{script.title}</p>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="outline" className="text-[10px]">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
-                    </div>
+            <>
+              <p className="text-sm text-muted-foreground">
+                Adicione o link da pasta do Google Drive com os materiais da gravação. O editor terá <strong>2 dias úteis</strong> para editar os vídeos.
+              </p>
+
+              <div className="space-y-3">
+                <div className="p-4 rounded-xl bg-muted/30 border border-border">
+                  <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">📁 Link do Google Drive</p>
+                  <div className="flex items-center gap-2">
+                    <Link size={16} className="text-muted-foreground shrink-0" />
+                    <Input
+                      value={driveLink}
+                      onChange={e => setDriveLink(e.target.value)}
+                      placeholder="https://drive.google.com/drive/folders/..."
+                      className="h-9"
+                    />
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
 
-          <div className="flex gap-2 mt-3">
-            <Button variant="outline" onClick={() => setFinishDialogOpen(false)} className="flex-1">
-              Cancelar
-            </Button>
-            <Button onClick={confirmFinish} className="flex-1 gap-1.5 bg-success hover:bg-success/90 text-success-foreground">
-              <Check size={16} />
-              Finalizar ({completedScriptIds.size} roteiro{completedScriptIds.size !== 1 ? 's' : ''})
-            </Button>
-          </div>
+                <div className="p-3 rounded-lg bg-accent/30 border border-border">
+                  <p className="text-xs font-semibold mb-1">📝 Roteiros selecionados ({completedScriptIds.size}):</p>
+                  <div className="space-y-1">
+                    {Array.from(completedScriptIds).map(id => {
+                      const s = scripts.find(s => s.id === id);
+                      return s ? (
+                        <p key={id} className="text-xs text-muted-foreground">• {s.title}</p>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2 mt-3">
+                <Button variant="outline" onClick={() => setFinishStep('scripts')} className="flex-1 gap-1.5">
+                  <ChevronLeft size={16} /> Voltar
+                </Button>
+                <Button onClick={confirmFinish} className="flex-1 gap-1.5 bg-success hover:bg-success/90 text-success-foreground">
+                  <Check size={16} />
+                  Finalizar e Enviar para Edição
+                </Button>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 

@@ -114,9 +114,13 @@ export function useFinancialData() {
     return !error;
   };
 
-  const generateMonthlyRevenues = async (month: Date) => {
+  const generateMonthlyRevenues = async (monthStr: string) => {
+    // monthStr format: "YYYY-MM"
+    const [yearStr, monthNumStr] = monthStr.split('-');
+    const year = parseInt(yearStr);
+    const monthNum = parseInt(monthNumStr);
     const activeContracts = contracts.filter(c => c.status === 'ativo');
-    const refMonth = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-01`;
+    const refMonth = `${year}-${String(monthNum).padStart(2, '0')}-01`;
 
     const existing = revenues.filter(r => r.reference_month === refMonth);
     const existingClientIds = new Set(existing.map(r => r.client_id));
@@ -128,7 +132,7 @@ export function useFinancialData() {
         contract_id: c.id,
         reference_month: refMonth,
         amount: c.contract_value,
-        due_date: `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-${String(c.due_day).padStart(2, '0')}`,
+        due_date: `${year}-${String(monthNum).padStart(2, '0')}-${String(c.due_day).padStart(2, '0')}`,
         status: 'prevista',
       }));
 

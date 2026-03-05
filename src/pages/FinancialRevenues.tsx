@@ -38,7 +38,7 @@ export default function FinancialRevenues() {
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   const handleGenerate = async () => {
-    const count = await generateMonthlyRevenues(new Date(refMonth));
+    const count = await generateMonthlyRevenues(selectedMonth);
     toast.success(`${count} receitas geradas`);
   };
 

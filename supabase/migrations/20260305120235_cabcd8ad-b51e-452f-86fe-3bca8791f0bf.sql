@@ -1,0 +1,1 @@
+ALTER TABLE public.clients ADD COLUMN monthly_recordings integer NOT NULL DEFAULT 4;

@@ -78,6 +78,7 @@ export type Database = {
           has_endomarketing: boolean
           id: string
           logo_url: string | null
+          monthly_recordings: number
           phone: string
           plan_id: string | null
           presence_days: number
@@ -107,6 +108,7 @@ export type Database = {
           has_endomarketing?: boolean
           id?: string
           logo_url?: string | null
+          monthly_recordings?: number
           phone?: string
           plan_id?: string | null
           presence_days?: number
@@ -136,6 +138,7 @@ export type Database = {
           has_endomarketing?: boolean
           id?: string
           logo_url?: string | null
+          monthly_recordings?: number
           phone?: string
           plan_id?: string | null
           presence_days?: number

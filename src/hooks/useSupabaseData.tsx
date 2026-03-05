@@ -28,6 +28,7 @@ function rowToClient(r: any): Client {
     hasEndomarketing: r.has_endomarketing,
     weeklyStories: r.weekly_stories,
     presenceDays: r.presence_days,
+    monthlyRecordings: r.monthly_recordings ?? 4,
   };
 }
 
@@ -55,6 +56,7 @@ function clientToRow(c: Client) {
     has_endomarketing: c.hasEndomarketing,
     weekly_stories: c.weeklyStories,
     presence_days: c.presenceDays,
+    monthly_recordings: c.monthlyRecordings,
   };
 }
 

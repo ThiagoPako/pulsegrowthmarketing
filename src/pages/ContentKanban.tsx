@@ -555,79 +555,81 @@ function TaskCard({ task, client, assignedUser, isDragging, onDragStart, onEdit,
     <div
       draggable
       onDragStart={onDragStart}
-      className={`group relative bg-card border border-border rounded-lg p-3 cursor-grab active:cursor-grabbing transition-all hover:shadow-md ${
-        isDragging ? 'opacity-40 scale-95' : ''
+      className={`group relative bg-card rounded-xl overflow-hidden cursor-grab active:cursor-grabbing transition-all hover:shadow-lg hover:-translate-y-0.5 ${
+        isDragging ? 'opacity-40 scale-95 rotate-2' : ''
       }`}
+      style={{ borderLeft: `4px solid hsl(${clientColor})` }}
     >
-      {/* Actions on hover */}
-      <div className="absolute top-1.5 right-1.5 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button onClick={onEdit} className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent">
-          <Edit size={12} />
-        </button>
-        <button onClick={onDelete} className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10">
-          <Trash2 size={12} />
-        </button>
-      </div>
+      {/* Top color accent */}
+      <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, hsl(${clientColor}), hsl(${clientColor} / 0.3))` }} />
 
-      {/* Content type badge */}
-      {task.kanban_column === 'envio' && (
-        <Badge className="mb-2 text-[10px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-0">
-          Novo {typeConfig.label}
-        </Badge>
-      )}
-
-      {/* Client name */}
-      <h3 className="text-sm font-semibold text-foreground mb-1.5 pr-12 leading-tight">
-        {client?.companyName || 'Cliente'}
-      </h3>
-
-      <div className="space-y-1 text-xs text-muted-foreground">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Cliente</span>
+      <div className="p-3">
+        {/* Actions on hover */}
+        <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+          <button onClick={e => { e.stopPropagation(); onEdit(); }} className="w-6 h-6 rounded-md flex items-center justify-center bg-card/90 backdrop-blur text-muted-foreground hover:text-foreground hover:bg-accent shadow-sm border border-border">
+            <Edit size={11} />
+          </button>
+          <button onClick={e => { e.stopPropagation(); onDelete(); }} className="w-6 h-6 rounded-md flex items-center justify-center bg-card/90 backdrop-blur text-muted-foreground hover:text-destructive hover:bg-destructive/10 shadow-sm border border-border">
+            <Trash2 size={11} />
+          </button>
         </div>
-        <p className="text-xs text-foreground/80">{client?.companyName}</p>
 
-        <div className="flex items-center gap-1.5 mt-1.5">
-          <TypeIcon size={12} className={typeConfig.color.split(' ')[0]} />
-          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Tipo</span>
+        {/* Type badge */}
+        <div className="flex items-center gap-2 mb-2.5">
+          <Badge className={`text-[10px] font-semibold px-2 py-0.5 border-0 gap-1 ${typeConfig.color}`}>
+            <TypeIcon size={10} />
+            {typeConfig.label}
+          </Badge>
+          {task.kanban_column === 'envio' && (
+            <Badge className="text-[10px] font-semibold px-2 py-0.5 border-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+              Novo
+            </Badge>
+          )}
         </div>
-        <p className="text-xs text-foreground/80">{typeConfig.label}</p>
 
-        <div className="flex items-center gap-1.5 mt-1.5">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Título do Conteúdo</span>
-        </div>
-        <p className="text-xs font-medium text-foreground">"{task.title}"</p>
-      </div>
-
-      {/* Scheduled date */}
-      {task.scheduled_recording_date && (
-        <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
-          <Calendar size={11} />
-          <span>
-            {format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
-            {task.scheduled_recording_time ? ` ${task.scheduled_recording_time}` : ''}
+        {/* Client row with logo */}
+        <div className="flex items-center gap-2 mb-2">
+          {client && <ClientLogo client={client} size="sm" />}
+          <span className="text-xs font-semibold text-foreground truncate flex-1">
+            {client?.companyName || 'Cliente'}
           </span>
         </div>
-      )}
 
-      {/* Assigned user avatar */}
-      {assignedUser && (
-        <div className="mt-2 flex items-center gap-1.5">
-          <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center overflow-hidden">
-            {assignedUser.avatarUrl ? (
-              <img src={assignedUser.avatarUrl} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <User size={12} className="text-muted-foreground" />
-            )}
-          </div>
+        {/* Title */}
+        <p className="text-[13px] font-medium text-foreground leading-snug mb-2 line-clamp-2">
+          {task.title}
+        </p>
+
+        {/* Description preview */}
+        {task.description && (
+          <p className="text-[11px] text-muted-foreground line-clamp-1 mb-2">{task.description}</p>
+        )}
+
+        {/* Footer: date + avatar */}
+        <div className="flex items-center justify-between mt-1">
+          {task.scheduled_recording_date ? (
+            <div className="flex items-center gap-1 text-[11px] text-muted-foreground bg-muted/50 rounded-md px-1.5 py-0.5">
+              <Calendar size={10} />
+              <span>
+                {format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
+                {task.scheduled_recording_time ? ` ${task.scheduled_recording_time}` : ''}
+              </span>
+            </div>
+          ) : <div />}
+
+          {assignedUser && (
+            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-card shrink-0" title={assignedUser.name}>
+              {assignedUser.avatarUrl ? (
+                <img src={assignedUser.avatarUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-[9px] font-bold text-muted-foreground">
+                  {assignedUser.name.substring(0, 2).toUpperCase()}
+                </span>
+              )}
+            </div>
+          )}
         </div>
-      )}
-
-      {/* Color bar */}
-      <div
-        className="absolute bottom-0 left-0 right-0 h-1 rounded-b-lg"
-        style={{ backgroundColor: `hsl(${clientColor})` }}
-      />
+      </div>
     </div>
   );
 }

@@ -446,8 +446,7 @@ export default function Schedule() {
                                 {evt.recording!.status === 'agendada' && (
                                   <>
                                     <button onClick={() => openScriptsForClient(evt.recording!.clientId)} className="p-0.5 rounded hover:bg-primary/20 text-primary" title="Roteiros"><FileText size={10} /></button>
-                                    <button onClick={() => handleComplete(evt.recording!)} className="p-0.5 rounded hover:bg-success/20 text-success"><Check size={10} /></button>
-                                    <button onClick={() => handleNoShow(evt.recording!)} className="p-0.5 rounded hover:bg-warning/20 text-warning" title="Não gravou"><XCircle size={10} /></button>
+                                    <button onClick={() => handleComplete(evt.recording!)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Gravado"><Check size={10} /></button>
                                     <button onClick={() => handleCancel(evt.recording!)} className="p-0.5 rounded hover:bg-destructive/20 text-destructive" title="Cancelar"><XCircle size={10} /></button>
                                   </>
                                 )}
@@ -527,22 +526,19 @@ export default function Schedule() {
 
                         {/* Actions — only for recordings */}
                         {evt.type === 'recording' && evt.recording && (
-                          <div className="flex gap-1 pt-1 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap">
-                            <button onClick={() => openEditRecording(evt.recording!)} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground hover:bg-muted/80 flex items-center gap-0.5">
+                          <div className="flex items-center gap-1.5 pt-1.5 border-t border-border/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => openEditRecording(evt.recording!)} className="flex-1 text-[10px] py-1 rounded-md bg-muted/60 text-muted-foreground hover:bg-muted transition-colors flex items-center justify-center gap-1">
                               <Pencil size={10} /> Editar
                             </button>
                             {evt.recording.status === 'agendada' && (
                               <>
-                                <button onClick={() => openScriptsForClient(evt.recording!.clientId)} className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 flex items-center gap-0.5">
+                                <button onClick={() => openScriptsForClient(evt.recording!.clientId)} className="flex-1 text-[10px] py-1 rounded-md bg-primary/8 text-primary hover:bg-primary/15 transition-colors flex items-center justify-center gap-1">
                                   <FileText size={10} /> Roteiros
                                 </button>
-                                <button onClick={() => handleComplete(evt.recording!)} className="text-[10px] px-1.5 py-0.5 rounded bg-success/10 text-success hover:bg-success/20 flex items-center gap-0.5">
+                                <button onClick={() => handleComplete(evt.recording!)} className="flex-1 text-[10px] py-1 rounded-md bg-success/10 text-success hover:bg-success/20 transition-colors flex items-center justify-center gap-1">
                                   <Check size={10} /> Gravado
                                 </button>
-                                <button onClick={() => handleNoShow(evt.recording!)} className="text-[10px] px-1.5 py-0.5 rounded bg-warning/10 text-warning hover:bg-warning/20 flex items-center gap-0.5">
-                                  <XCircle size={10} /> Não Gravou
-                                </button>
-                                <button onClick={() => handleCancel(evt.recording!)} className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive hover:bg-destructive/20 flex items-center gap-0.5">
+                                <button onClick={() => handleCancel(evt.recording!)} className="flex-1 text-[10px] py-1 rounded-md bg-destructive/8 text-destructive hover:bg-destructive/15 transition-colors flex items-center justify-center gap-1">
                                   <XCircle size={10} /> Cancelar
                                 </button>
                               </>

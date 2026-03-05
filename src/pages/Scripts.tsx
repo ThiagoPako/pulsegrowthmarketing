@@ -219,7 +219,9 @@ export default function Scripts() {
     setOpen(false);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    // Delete linked content_task first
+    await supabase.from('content_tasks').delete().eq('script_id', id);
     deleteScript(id);
     toast.success('Roteiro removido');
   };

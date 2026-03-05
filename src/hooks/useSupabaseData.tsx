@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import type { Client, Recording, KanbanTask, Script, CompanySettings, DayOfWeek, ActiveRecording, ContentType, RecordingType, RecordingStatus, ConfirmationStatus, KanbanColumn, ScriptVideoType, ScriptPriority } from '@/types';
+import type { Client, Recording, KanbanTask, Script, CompanySettings, DayOfWeek, ActiveRecording, ContentType, RecordingType, RecordingStatus, ConfirmationStatus, KanbanColumn, ScriptVideoType, ScriptPriority, ScriptContentFormat } from '@/types';
 
 // ── Mappers: DB row ↔ App type ──
 
@@ -115,6 +115,7 @@ function rowToScript(r: any): Script {
     clientId: r.client_id,
     title: r.title,
     videoType: r.video_type as ScriptVideoType,
+    contentFormat: (r.content_format || 'reels') as ScriptContentFormat,
     content: r.content,
     recorded: r.recorded,
     priority: (r.priority || 'normal') as ScriptPriority,
@@ -132,6 +133,7 @@ function scriptToRow(s: Script) {
     client_id: s.clientId,
     title: s.title,
     video_type: s.videoType,
+    content_format: s.contentFormat,
     content: s.content,
     recorded: s.recorded,
     priority: s.priority,
@@ -408,7 +410,7 @@ export function useSupabaseData() {
           const script = scripts.find(s => s.id === scriptId);
           return {
             client_id: active.clientId,
-            content_type: 'reels',
+            content_type: script?.contentFormat || 'reels',
             title: script?.title || 'Vídeo gravado',
             status: 'entregue',
             delivered_at: new Date().toISOString().split('T')[0],

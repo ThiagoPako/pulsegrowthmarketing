@@ -14,9 +14,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, Film, Palette, Image, Megaphone, Trash2, Edit, CheckCircle2, Clock, TrendingUp, CalendarClock, CalendarCheck, Send } from 'lucide-react';
+import { Plus, Film, Palette, Image, Megaphone, Trash2, Edit, CheckCircle2, Clock, TrendingUp, CalendarClock, CalendarCheck, Send, Zap } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
-import { format, startOfMonth, endOfMonth, isToday, isPast, parseISO } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isToday, isPast, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface SocialDelivery {
@@ -91,6 +91,12 @@ export default function SocialMediaDeliveries() {
   const [schedDate, setSchedDate] = useState('');
   const [schedTime, setSchedTime] = useState('');
   const [schedPlatform, setSchedPlatform] = useState('');
+
+  // Stories batch
+  const [storiesDialogOpen, setStoriesDialogOpen] = useState(false);
+  const [storiesClientId, setStoriesClientId] = useState('');
+  const [storiesCount, setStoriesCount] = useState(5);
+  const [storiesDate, setStoriesDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   const fetchData = useCallback(async () => {
     const [dRes, pRes, cRes] = await Promise.all([
@@ -246,6 +252,62 @@ export default function SocialMediaDeliveries() {
     toast.success('Entrega removida'); fetchData();
   };
 
+  // Stories batch handlers
+  const handleStoriesBatch = async () => {
+    if (!storiesClientId) { toast.error('Selecione o cliente'); return; }
+    const rows = Array.from({ length: storiesCount }, (_, i) => ({
+      client_id: storiesClientId,
+      content_type: 'story',
+      title: `Story ${i + 1} - ${format(new Date(storiesDate + 'T12:00:00'), 'dd/MM', { locale: ptBR })}`,
+      status: 'postado',
+      delivered_at: storiesDate,
+      posted_at: storiesDate,
+      platform: 'Instagram',
+      created_by: user?.id || null,
+    }));
+    const { error } = await supabase.from('social_media_deliveries').insert(rows as any);
+    if (error) { toast.error('Erro ao registrar stories'); return; }
+    toast.success(`${storiesCount} stories registrados para ${getClientName(storiesClientId)}`);
+    setStoriesDialogOpen(false);
+    fetchData();
+  };
+
+  const handleSingleStory = async (clientId: string) => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const { error } = await supabase.from('social_media_deliveries').insert({
+      client_id: clientId,
+      content_type: 'story',
+      title: `Story - ${format(new Date(), 'dd/MM', { locale: ptBR })}`,
+      status: 'postado',
+      delivered_at: today,
+      posted_at: today,
+      platform: 'Instagram',
+      created_by: user?.id || null,
+    } as any);
+    if (error) { toast.error('Erro'); return; }
+    toast.success('Story registrado');
+    fetchData();
+  };
+
+  // Weekly stories tracking per client
+  const weeklyStoriesData = useMemo(() => {
+    const now = new Date();
+    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+    const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
+    const startStr = format(weekStart, 'yyyy-MM-dd');
+    const endStr = format(weekEnd, 'yyyy-MM-dd');
+
+    return clients
+      .filter(c => c.weeklyStories > 0)
+      .map(c => {
+        const thisWeekStories = deliveries.filter(d =>
+          d.client_id === c.id && d.content_type === 'story' &&
+          d.delivered_at >= startStr && d.delivered_at <= endStr
+        );
+        return { client: c, delivered: thisWeekStories.length, goal: c.weeklyStories };
+      });
+  }, [clients, deliveries]);
+
   const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || '—';
   const getClientObj = (id: string) => clients.find(c => c.id === id);
   const getTypeConfig = (type: string) => CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];
@@ -321,7 +383,45 @@ export default function SocialMediaDeliveries() {
         ))}
       </div>
 
-      {/* Client Progress vs Plan */}
+      {/* Stories Semanal */}
+      {weeklyStoriesData.length > 0 && (
+        <Card className="border-border">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Image size={16} className="text-pink-600" /> Stories Semanal
+              </CardTitle>
+              <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => { setStoriesClientId(weeklyStoriesData[0]?.client.id || ''); setStoriesCount(5); setStoriesDate(format(new Date(), 'yyyy-MM-dd')); setStoriesDialogOpen(true); }}>
+                <Zap size={14} /> Registrar Stories em Lote
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {weeklyStoriesData.map(({ client, delivered, goal }) => {
+              const pct = Math.min(Math.round((delivered / goal) * 100), 100);
+              const isComplete = delivered >= goal;
+              return (
+                <div key={client.id} className="flex items-center gap-4 p-3 rounded-lg border border-border bg-muted/20">
+                  <ClientLogo client={client} size="sm" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium text-sm text-foreground">{client.companyName}</span>
+                      <span className={`text-xs font-semibold ${isComplete ? 'text-green-600' : 'text-muted-foreground'}`}>
+                        {delivered}/{goal} stories
+                      </span>
+                    </div>
+                    <Progress value={pct} className="h-2" />
+                  </div>
+                  <Button size="sm" variant={isComplete ? 'outline' : 'default'} className="gap-1 h-8 shrink-0" onClick={() => handleSingleStory(client.id)}>
+                    <Plus size={14} /> +1 Story
+                  </Button>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
       {clientsWithProgress.length > 0 && (
         <Card className="border-border">
           <CardHeader className="pb-3">
@@ -696,6 +796,48 @@ export default function SocialMediaDeliveries() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave}>{editingId ? 'Salvar' : 'Registrar'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stories Batch Dialog */}
+      <Dialog open={storiesDialogOpen} onOpenChange={setStoriesDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap size={18} className="text-pink-600" />
+              Registrar Stories em Lote
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Cliente *</Label>
+              <Select value={storiesClientId} onValueChange={setStoriesClientId}>
+                <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
+                <SelectContent>
+                  {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Quantidade</Label>
+                <Input type="number" min={1} max={20} value={storiesCount} onChange={e => setStoriesCount(Number(e.target.value))} />
+              </div>
+              <div>
+                <Label>Data</Label>
+                <Input type="date" value={storiesDate} onChange={e => setStoriesDate(e.target.value)} />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Serão criados {storiesCount} registros de story como "Postado" na data selecionada.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStoriesDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleStoriesBatch} className="gap-1.5">
+              <Zap size={14} /> Registrar {storiesCount} Stories
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

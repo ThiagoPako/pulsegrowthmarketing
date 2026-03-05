@@ -133,6 +133,14 @@ export const SCRIPT_VIDEO_TYPE_LABELS: Record<ScriptVideoType, string> = {
   lancamento: 'Lançamento',
 };
 
+export type ScriptContentFormat = 'reels' | 'story' | 'criativo';
+
+export const SCRIPT_CONTENT_FORMAT_LABELS: Record<ScriptContentFormat, string> = {
+  reels: 'Reels',
+  story: 'Story',
+  criativo: 'Criativo',
+};
+
 export type ScriptPriority = 'normal' | 'priority' | 'urgent';
 
 export const SCRIPT_PRIORITY_LABELS: Record<ScriptPriority, string> = {
@@ -146,6 +154,7 @@ export interface Script {
   clientId: string;
   title: string;
   videoType: ScriptVideoType;
+  contentFormat: ScriptContentFormat;
   content: string; // HTML from rich editor
   recorded: boolean;
   priority: ScriptPriority;

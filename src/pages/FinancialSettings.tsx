@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useFinancialData } from '@/hooks/useFinancialData';
+import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,9 +8,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Save, Info } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ArrowLeft, Save, Info, Eye, Pencil, Smartphone } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { generateDeliveryReport } from '@/lib/billingReport';
 
 const TEMPLATE_VARS = [
   { var: '{nome_cliente}', desc: 'Nome da empresa' },
@@ -21,12 +25,17 @@ const TEMPLATE_VARS = [
 
 export default function FinancialSettings() {
   const navigate = useNavigate();
-  const { paymentConfig, updatePaymentConfig, categories, addCategory } = useFinancialData();
+  const { paymentConfig, updatePaymentConfig, categories, addCategory, contracts } = useFinancialData();
+  const { clients } = useApp();
   const [form, setForm] = useState({
     pix_key: '', receiver_name: '', bank: '', document: '',
     msg_billing_due: '', msg_billing_overdue: '', include_delivery_report: true,
   });
   const [newCat, setNewCat] = useState('');
+  const [previewClientId, setPreviewClientId] = useState<string>('');
+  const [previewTab, setPreviewTab] = useState<'due' | 'overdue'>('due');
+  const [deliveryReportText, setDeliveryReportText] = useState('');
+  const [loadingReport, setLoadingReport] = useState(false);
 
   useEffect(() => {
     if (paymentConfig) {
@@ -42,6 +51,80 @@ export default function FinancialSettings() {
     }
   }, [paymentConfig]);
 
+  // Auto-select first client with contract
+  const clientsWithContract = useMemo(() => {
+    const contractClientIds = new Set(contracts.filter(c => c.status === 'ativo').map(c => c.client_id));
+    return clients.filter(c => contractClientIds.has(c.id));
+  }, [clients, contracts]);
+
+  useEffect(() => {
+    if (!previewClientId && clientsWithContract.length > 0) {
+      setPreviewClientId(clientsWithContract[0].id);
+    }
+  }, [clientsWithContract, previewClientId]);
+
+  // Fetch delivery report for selected client
+  const fetchReport = useCallback(async (clientId: string) => {
+    if (!clientId || !form.include_delivery_report) {
+      setDeliveryReportText('');
+      return;
+    }
+    setLoadingReport(true);
+    try {
+      const contract = contracts.find(c => c.client_id === clientId && c.status === 'ativo');
+      const client = clients.find(c => c.id === clientId);
+      const planId = contract?.plan_id || (client as any)?.plan_id || null;
+      const report = await generateDeliveryReport(clientId, planId);
+      setDeliveryReportText(report.text);
+    } catch {
+      setDeliveryReportText('');
+    } finally {
+      setLoadingReport(false);
+    }
+  }, [contracts, clients, form.include_delivery_report]);
+
+  useEffect(() => {
+    if (previewClientId) {
+      fetchReport(previewClientId);
+    }
+  }, [previewClientId, fetchReport]);
+
+  // Build preview message
+  const previewMessage = useMemo(() => {
+    const client = clients.find(c => c.id === previewClientId);
+    const contract = contracts.find(c => c.client_id === previewClientId && c.status === 'ativo');
+    if (!client || !contract) return '';
+
+    const value = Number(contract.contract_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    let paymentInfo = '';
+    if (form.pix_key || form.receiver_name) {
+      paymentInfo = '\n\n💳 *Dados para pagamento:*';
+      if (form.receiver_name) paymentInfo += `\nNome: ${form.receiver_name}`;
+      if (form.bank) paymentInfo += `\nBanco: ${form.bank}`;
+      if (form.pix_key) paymentInfo += `\nChave PIX: ${form.pix_key}`;
+      if (form.document) paymentInfo += `\nCPF/CNPJ: ${form.document}`;
+    }
+
+    const template = previewTab === 'overdue'
+      ? (form.msg_billing_overdue || 'Olá, {nome_cliente}! Lembrete de pendência: {valor}. {dados_pagamento}')
+      : (form.msg_billing_due || 'Olá, {nome_cliente}! Mensalidade {valor} vence dia {dia_vencimento}. {dados_pagamento}');
+
+    let message = template
+      .replace(/\{nome_cliente\}/g, client.companyName)
+      .replace(/\{valor\}/g, value)
+      .replace(/\{dia_vencimento\}/g, String(contract.due_day))
+      .replace(/\{dados_pagamento\}/g, paymentInfo)
+      .replace(/\{relatorio_entregas\}/g, deliveryReportText);
+
+    // If template doesn't have the variable but report exists, append it
+    if (deliveryReportText && !template.includes('{relatorio_entregas}')) {
+      message += deliveryReportText;
+    }
+
+    return message;
+  }, [previewClientId, previewTab, form, clients, contracts, deliveryReportText]);
+
   const handleSave = async () => {
     await updatePaymentConfig(form);
     toast.success('Configurações atualizadas');
@@ -53,6 +136,24 @@ export default function FinancialSettings() {
       setNewCat('');
       toast.success('Categoria criada');
     }
+  };
+
+  // Format preview text: bold (*text*) and line breaks
+  const formatPreview = (text: string) => {
+    return text.split('\n').map((line, i) => {
+      const parts = line.split(/(\*[^*]+\*)/g);
+      return (
+        <span key={i}>
+          {i > 0 && <br />}
+          {parts.map((part, j) => {
+            if (part.startsWith('*') && part.endsWith('*')) {
+              return <strong key={j}>{part.slice(1, -1)}</strong>;
+            }
+            return <span key={j}>{part}</span>;
+          })}
+        </span>
+      );
+    });
   };
 
   return (
@@ -100,26 +201,94 @@ export default function FinancialSettings() {
             />
           </div>
 
-          <div>
-            <Label>Mensagem de Cobrança (Vencimento)</Label>
-            <Textarea
-              value={form.msg_billing_due}
-              onChange={e => setForm({ ...form, msg_billing_due: e.target.value })}
-              rows={8}
-              className="mt-1 font-mono text-xs"
-              placeholder="Mensagem enviada no dia do vencimento..."
-            />
-          </div>
+          <Tabs defaultValue="due" onValueChange={v => setPreviewTab(v as 'due' | 'overdue')}>
+            <TabsList className="w-full">
+              <TabsTrigger value="due" className="flex-1 gap-1.5"><Pencil size={12} /> Vencimento</TabsTrigger>
+              <TabsTrigger value="overdue" className="flex-1 gap-1.5"><Pencil size={12} /> Em Atraso</TabsTrigger>
+            </TabsList>
 
-          <div>
-            <Label>Mensagem de Lembrete (Em Atraso)</Label>
-            <Textarea
-              value={form.msg_billing_overdue}
-              onChange={e => setForm({ ...form, msg_billing_overdue: e.target.value })}
-              rows={8}
-              className="mt-1 font-mono text-xs"
-              placeholder="Mensagem enviada para receitas em atraso..."
-            />
+            <TabsContent value="due" className="space-y-3 mt-3">
+              <Label>Mensagem de Cobrança (Vencimento)</Label>
+              <Textarea
+                value={form.msg_billing_due}
+                onChange={e => setForm({ ...form, msg_billing_due: e.target.value })}
+                rows={8}
+                className="font-mono text-xs"
+                placeholder="Mensagem enviada no dia do vencimento..."
+              />
+            </TabsContent>
+
+            <TabsContent value="overdue" className="space-y-3 mt-3">
+              <Label>Mensagem de Lembrete (Em Atraso)</Label>
+              <Textarea
+                value={form.msg_billing_overdue}
+                onChange={e => setForm({ ...form, msg_billing_overdue: e.target.value })}
+                rows={8}
+                className="font-mono text-xs"
+                placeholder="Mensagem enviada para receitas em atraso..."
+              />
+            </TabsContent>
+          </Tabs>
+
+          {/* Live Preview */}
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Eye size={14} className="text-muted-foreground" />
+                <Label className="text-sm font-medium">Preview da Mensagem</Label>
+              </div>
+              {clientsWithContract.length > 0 && (
+                <Select value={previewClientId} onValueChange={setPreviewClientId}>
+                  <SelectTrigger className="w-[220px] h-8 text-xs">
+                    <SelectValue placeholder="Selecione um cliente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clientsWithContract.map(c => (
+                      <SelectItem key={c.id} value={c.id} className="text-xs">{c.companyName}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {previewMessage ? (
+              <div className="relative mx-auto max-w-sm">
+                {/* Phone frame */}
+                <div className="rounded-[2rem] border-[3px] border-foreground/20 bg-background shadow-lg overflow-hidden">
+                  {/* Status bar */}
+                  <div className="flex items-center justify-between px-5 py-1.5 bg-muted/50">
+                    <span className="text-[10px] text-muted-foreground font-medium">WhatsApp</span>
+                    <Smartphone size={10} className="text-muted-foreground" />
+                  </div>
+                  {/* Chat header */}
+                  <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 border-b">
+                    <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center">
+                      <span className="text-[10px] font-bold text-primary">P</span>
+                    </div>
+                    <span className="text-xs font-semibold">Pulse Growth Marketing</span>
+                  </div>
+                  {/* Chat body */}
+                  <div className="p-3 min-h-[280px] max-h-[400px] overflow-y-auto bg-[hsl(var(--muted)/0.15)]">
+                    <div className="bg-background rounded-lg rounded-tl-none px-3 py-2 shadow-sm border text-xs leading-relaxed">
+                      {loadingReport ? (
+                        <span className="text-muted-foreground italic">Carregando dados...</span>
+                      ) : (
+                        formatPreview(previewMessage)
+                      )}
+                    </div>
+                    <p className="text-[9px] text-muted-foreground mt-1 text-right">
+                      {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-md border border-dashed p-6 text-center text-xs text-muted-foreground">
+                {clientsWithContract.length === 0
+                  ? 'Nenhum cliente com contrato ativo para preview'
+                  : 'Selecione um cliente para ver o preview'}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

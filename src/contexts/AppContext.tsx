@@ -31,7 +31,7 @@ interface AppContextType {
   addTask: (task: KanbanTask) => void;
   updateTask: (task: KanbanTask) => void;
   deleteTask: (id: string) => void;
-  addScript: (script: Script) => void;
+  addScript: (script: Script) => Promise<void>;
   updateScript: (script: Script) => void;
   deleteScript: (id: string) => void;
   updateSettings: (settings: CompanySettings) => void;
@@ -198,7 +198,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const addTask = useCallback((task: KanbanTask) => { data.addTask(task); }, [data]);
   const updateTask = useCallback((task: KanbanTask) => { data.updateTask(task); }, [data]);
   const deleteTask = useCallback((id: string) => { data.deleteTask(id); }, [data]);
-  const addScript = useCallback((script: Script) => { data.addScript(script); }, [data]);
+  const addScript = useCallback(async (script: Script) => { return data.addScript(script); }, [data]);
   const updateScript = useCallback((script: Script) => { data.updateScript(script); }, [data]);
   const deleteScript = useCallback((id: string) => { data.deleteScript(id); }, [data]);
   const updateSettings = useCallback((s: CompanySettings) => { data.updateSettings(s); }, [data]);

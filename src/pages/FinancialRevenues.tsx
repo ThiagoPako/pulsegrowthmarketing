@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useFinancialData } from '@/hooks/useFinancialData';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -37,7 +37,20 @@ export default function FinancialRevenues() {
   const filtered = revenues.filter(r => r.reference_month === refMonth);
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+  // Auto-generate revenues when month has none and data is loaded
+  const autoGenRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (loading || autoGenRef.current === selectedMonth) return;
+    if (filtered.length === 0 && clients.length > 0) {
+      autoGenRef.current = selectedMonth;
+      generateMonthlyRevenues(selectedMonth).then(count => {
+        if (count > 0) toast.success(`${count} receitas geradas automaticamente`);
+      });
+    }
+  }, [selectedMonth, loading, filtered.length, clients.length]);
+
   const handleGenerate = async () => {
+    autoGenRef.current = selectedMonth;
     const count = await generateMonthlyRevenues(selectedMonth);
     toast.success(`${count} receitas geradas`);
   };

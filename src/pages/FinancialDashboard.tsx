@@ -14,7 +14,7 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
-import { generateDeliveryReport } from '@/lib/billingReport';
+import { generateDeliveryReport, resolvePaymentInfo } from '@/lib/billingReport';
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
 
 const fadeUp = {
@@ -217,14 +217,7 @@ export default function FinancialDashboard() {
       if (!client?.whatsapp) { errors++; continue; }
       try {
         const value = fmt(Number(r.amount));
-        let paymentInfo = '';
-        if (paymentConfig && (paymentConfig.pix_key || paymentConfig.receiver_name)) {
-          paymentInfo = '\n\n💳 *Dados para pagamento:*';
-          if (paymentConfig.receiver_name) paymentInfo += `\nNome: ${paymentConfig.receiver_name}`;
-          if (paymentConfig.bank) paymentInfo += `\nBanco: ${paymentConfig.bank}`;
-          if (paymentConfig.pix_key) paymentInfo += `\nChave PIX: ${paymentConfig.pix_key}`;
-          if (paymentConfig.document) paymentInfo += `\nCPF/CNPJ: ${paymentConfig.document}`;
-        }
+        const paymentInfo = resolvePaymentInfo(paymentConfig);
 
         // Get plan_id from contract
         const contract = contracts.find(c => c.client_id === r.client_id);

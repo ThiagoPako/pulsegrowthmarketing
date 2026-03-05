@@ -1,5 +1,17 @@
 import { supabase } from '@/integrations/supabase/client';
 
+const DEFAULT_PAYMENT_TEMPLATE = '💳 *Dados para pagamento:*\nNome: {nome_recebedor}\nBanco: {banco}\nChave PIX: {chave_pix}\nCPF/CNPJ: {documento}';
+
+export function resolvePaymentInfo(config: { pix_key?: string; receiver_name?: string; bank?: string; document?: string; msg_payment_data?: string } | null): string {
+  if (!config || (!config.pix_key && !config.receiver_name)) return '';
+  const template = config.msg_payment_data || DEFAULT_PAYMENT_TEMPLATE;
+  return template
+    .replace(/\{nome_recebedor\}/g, config.receiver_name || '')
+    .replace(/\{banco\}/g, config.bank || '')
+    .replace(/\{chave_pix\}/g, config.pix_key || '')
+    .replace(/\{documento\}/g, config.document || '');
+}
+
 interface DeliveryReport {
   text: string;
 }

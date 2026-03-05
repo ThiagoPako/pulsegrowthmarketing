@@ -195,11 +195,12 @@ Deno.serve(async (req) => {
       // Payment info
       let paymentInfo = '';
       if (paymentConfig && (paymentConfig.pix_key || paymentConfig.receiver_name)) {
-        paymentInfo = '\n\n💳 *Dados para pagamento:*';
-        if (paymentConfig.receiver_name) paymentInfo += `\nNome: ${paymentConfig.receiver_name}`;
-        if (paymentConfig.bank) paymentInfo += `\nBanco: ${paymentConfig.bank}`;
-        if (paymentConfig.pix_key) paymentInfo += `\nChave PIX: ${paymentConfig.pix_key}`;
-        if (paymentConfig.document) paymentInfo += `\nCPF/CNPJ: ${paymentConfig.document}`;
+        const template = paymentConfig.msg_payment_data || '💳 *Dados para pagamento:*\nNome: {nome_recebedor}\nBanco: {banco}\nChave PIX: {chave_pix}\nCPF/CNPJ: {documento}';
+        paymentInfo = template
+          .replace(/\{nome_recebedor\}/g, paymentConfig.receiver_name || '')
+          .replace(/\{banco\}/g, paymentConfig.bank || '')
+          .replace(/\{chave_pix\}/g, paymentConfig.pix_key || '')
+          .replace(/\{documento\}/g, paymentConfig.document || '');
       }
 
       const value = Number(contract.contract_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });

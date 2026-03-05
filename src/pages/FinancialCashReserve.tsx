@@ -9,14 +9,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Wallet, TrendingUp, TrendingDown, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Plus, Wallet, TrendingUp, TrendingDown, ArrowUpCircle, ArrowDownCircle, Pencil, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 
 export default function FinancialCashReserve() {
-  const { cashMovements, addCashMovement, loading } = useFinancialData();
+  const { cashMovements, addCashMovement, updateCashMovement, deleteCashMovement, loading } = useFinancialData();
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<'entrada' | 'saida'>('entrada');
   const [description, setDescription] = useState('');
@@ -39,22 +41,63 @@ export default function FinancialCashReserve() {
     [cashMovements]
   );
 
+  const resetForm = () => {
+    setAmount('');
+    setDescription('');
+    setType('entrada');
+    setDate(format(new Date(), 'yyyy-MM-dd'));
+    setEditingId(null);
+  };
+
+  const openNew = () => {
+    resetForm();
+    setOpen(true);
+  };
+
+  const openEdit = (m: typeof cashMovements[0]) => {
+    setEditingId(m.id);
+    setAmount(String(m.amount));
+    setType(m.type as 'entrada' | 'saida');
+    setDescription(m.description);
+    setDate(m.date);
+    setOpen(true);
+  };
+
   const handleSubmit = async () => {
     const val = parseFloat(amount);
     if (!val || val <= 0) { toast.error('Informe um valor válido'); return; }
     if (!description.trim()) { toast.error('Informe uma descrição'); return; }
 
-    const ok = await addCashMovement({ amount: val, type, description: description.trim(), date });
-    if (ok) {
-      toast.success(`Movimentação de ${type === 'entrada' ? 'entrada' : 'saída'} registrada`);
-      setOpen(false);
-      setAmount('');
-      setDescription('');
-      setType('entrada');
-      setDate(format(new Date(), 'yyyy-MM-dd'));
+    if (editingId) {
+      const ok = await updateCashMovement(editingId, { amount: val, type, description: description.trim(), date });
+      if (ok) {
+        toast.success('Movimentação atualizada');
+        setOpen(false);
+        resetForm();
+      } else {
+        toast.error('Erro ao atualizar movimentação');
+      }
     } else {
-      toast.error('Erro ao registrar movimentação');
+      const ok = await addCashMovement({ amount: val, type, description: description.trim(), date });
+      if (ok) {
+        toast.success(`Movimentação de ${type === 'entrada' ? 'entrada' : 'saída'} registrada`);
+        setOpen(false);
+        resetForm();
+      } else {
+        toast.error('Erro ao registrar movimentação');
+      }
     }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    const ok = await deleteCashMovement(deleteId);
+    if (ok) {
+      toast.success('Movimentação excluída');
+    } else {
+      toast.error('Erro ao excluir movimentação');
+    }
+    setDeleteId(null);
   };
 
   if (loading) return <div className="p-6 text-muted-foreground">Carregando...</div>;
@@ -66,13 +109,13 @@ export default function FinancialCashReserve() {
           <h1 className="text-2xl font-bold">Caixa (Reserva)</h1>
           <p className="text-sm text-muted-foreground">Controle da reserva financeira da empresa</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
-            <Button><Plus className="w-4 h-4 mr-2" /> Nova Movimentação</Button>
+            <Button onClick={openNew}><Plus className="w-4 h-4 mr-2" /> Nova Movimentação</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Registrar Movimentação</DialogTitle>
+              <DialogTitle>{editingId ? 'Editar Movimentação' : 'Registrar Movimentação'}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div>
@@ -97,7 +140,9 @@ export default function FinancialCashReserve() {
                 <Label>Data</Label>
                 <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
               </div>
-              <Button className="w-full" onClick={handleSubmit}>Registrar</Button>
+              <Button className="w-full" onClick={handleSubmit}>
+                {editingId ? 'Salvar Alterações' : 'Registrar'}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -150,6 +195,7 @@ export default function FinancialCashReserve() {
                   <TableHead>Tipo</TableHead>
                   <TableHead>Descrição</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
+                  <TableHead className="text-right w-[100px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -166,6 +212,16 @@ export default function FinancialCashReserve() {
                     <TableCell className={`text-right font-medium ${m.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>
                       {m.type === 'entrada' ? '+' : '-'}{fmt(m.amount)}
                     </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(m)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteId(m.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -173,6 +229,20 @@ export default function FinancialCashReserve() {
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteId} onOpenChange={(v) => { if (!v) setDeleteId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir movimentação?</AlertDialogTitle>
+            <AlertDialogDescription>Esta ação não pode ser desfeita. O saldo do caixa será recalculado.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

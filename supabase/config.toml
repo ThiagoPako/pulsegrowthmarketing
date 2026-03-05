@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.whatsapp-confirmation-cron]
 verify_jwt = false
+
+[functions.billing-automation]
+verify_jwt = false
+
+[functions.generate-monthly-revenues]
+verify_jwt = false

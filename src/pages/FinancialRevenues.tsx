@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { format, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
+import cobrarTodosImg from '@/assets/cobrar_todos.png';
 
 const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'destructive' | 'secondary' }> = {
   prevista: { label: 'Prevista', variant: 'secondary' },
@@ -183,8 +184,12 @@ export default function FinancialRevenues() {
         </Select>
         <Button size="sm" variant="outline" onClick={handleGenerate}><RefreshCw size={14} className="mr-1" /> Gerar Receitas</Button>
         {pendingRevenues.length > 0 && (
-          <Button size="sm" onClick={handleSendAllBilling} disabled={sendingAll}>
-            {sendingAll ? <Loader2 size={14} className="mr-1 animate-spin" /> : <MessageCircle size={14} className="mr-1" />}
+          <Button size="sm" onClick={handleSendAllBilling} disabled={sendingAll} className="gap-1.5">
+            {sendingAll ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <img src={cobrarTodosImg} alt="Cobrar Todos" className="w-6 h-6 rounded-full object-cover" />
+            )}
             Cobrar Todos ({pendingRevenues.length})
           </Button>
         )}

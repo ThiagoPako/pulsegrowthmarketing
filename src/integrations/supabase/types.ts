@@ -726,6 +726,59 @@ export type Database = {
           },
         ]
       }
+      social_media_deliveries: {
+        Row: {
+          client_id: string
+          content_type: string
+          created_at: string
+          created_by: string | null
+          delivered_at: string
+          description: string | null
+          id: string
+          platform: string | null
+          posted_at: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          content_type?: string
+          created_at?: string
+          created_by?: string | null
+          delivered_at?: string
+          description?: string | null
+          id?: string
+          platform?: string | null
+          posted_at?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          content_type?: string
+          created_at?: string
+          created_by?: string | null
+          delivered_at?: string
+          description?: string | null
+          id?: string
+          platform?: string | null
+          posted_at?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_media_deliveries_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string

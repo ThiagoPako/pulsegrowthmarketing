@@ -156,6 +156,13 @@ export default function FinancialDashboard() {
     }
   };
 
+  const handleRevertPaid = async (item: typeof dueThisWeek[0]) => {
+    if (item.revenueId) {
+      const ok = await updateRevenue(item.revenueId, { status: 'prevista', paid_at: null });
+      if (ok) toast.success(`${item.clientName} revertido para pendente`);
+    }
+  };
+
   // Cash forecast
   const previsaoCaixa = useMemo(() => {
     const nextMonth = addMonths(monthStart, 1);
@@ -276,7 +283,9 @@ export default function FinancialDashboard() {
                   </div>
                   <div>
                     {item.isPaid ? (
-                      <Badge variant="default" className="gap-1"><CheckCircle size={12} /> Pago</Badge>
+                      <Button size="sm" variant="secondary" onClick={() => handleRevertPaid(item)} className="gap-1 text-green-600">
+                        <CheckCircle size={12} /> Pago — desfazer
+                      </Button>
                     ) : (
                       <Button size="sm" variant="outline" onClick={() => handleMarkPaid(item)} className="gap-1">
                         <CheckCircle size={14} /> Marcar como Pago

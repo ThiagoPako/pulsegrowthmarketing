@@ -32,7 +32,7 @@ interface DeliveryRecord {
 }
 
 const SCORE_WEIGHTS = { reel: 10, criativo: 5, story: 3, arte: 2, extra: 8 };
-const EDITOR_SCORE_WEIGHTS: Record<string, number> = { reels: 10, criativo: 5, story: 3, arte: 2 };
+const EDITOR_SCORE_WEIGHTS: Record<string, number> = { reels: 10, criativo: 5, story: 3 };
 
 function calcScore(r: DeliveryRecord) {
   return r.reels_produced * SCORE_WEIGHTS.reel +
@@ -184,7 +184,7 @@ export default function InternalReports() {
       const reels = edTasks.filter(t => t.content_type === 'reels').length;
       const criativos = edTasks.filter(t => t.content_type === 'criativo').length;
       const stories = edTasks.filter(t => t.content_type === 'story').length;
-      const artes = edTasks.filter(t => t.content_type === 'arte').length;
+      const artes = 0;
       const total = edTasks.length;
 
       // Average editing time
@@ -205,7 +205,7 @@ export default function InternalReports() {
   const editorContentChartData = useMemo(() => {
     return editorRanking.map(r => ({
       name: r.editor.name.split(' ')[0],
-      Reels: r.reels, Criativos: r.criativos, Stories: r.stories, Artes: r.artes,
+      Reels: r.reels, Criativos: r.criativos, Stories: r.stories,
     }));
   }, [editorRanking]);
 
@@ -578,7 +578,7 @@ export default function InternalReports() {
           <Card>
             <CardContent className="p-4">
               <Badge variant="outline" className="text-xs">
-                Pontuação: Reels={EDITOR_SCORE_WEIGHTS.reels} · Criativos={EDITOR_SCORE_WEIGHTS.criativo} · Story={EDITOR_SCORE_WEIGHTS.story} · Arte={EDITOR_SCORE_WEIGHTS.arte}
+                Pontuação: Reels={EDITOR_SCORE_WEIGHTS.reels} · Criativos={EDITOR_SCORE_WEIGHTS.criativo} · Story={EDITOR_SCORE_WEIGHTS.story}
               </Badge>
             </CardContent>
           </Card>
@@ -608,7 +608,7 @@ export default function InternalReports() {
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold text-sm truncate">{r.editor.name}</p>
                             <p className="text-[10px] text-muted-foreground">
-                              {r.reels}R · {r.criativos}C · {r.stories}S · {r.artes}A · {r.total} total
+                              {r.reels}R · {r.criativos}C · {r.stories}S · {r.total} total
                               {r.avgTime > 0 && ` · ~${hours > 0 ? `${hours}h` : ''}${mins}min`}
                             </p>
                           </div>
@@ -670,7 +670,6 @@ export default function InternalReports() {
                     <Bar dataKey="Reels" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={14} />
                     <Bar dataKey="Criativos" fill="#22c55e" radius={[4, 4, 0, 0]} barSize={14} />
                     <Bar dataKey="Stories" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={14} />
-                    <Bar dataKey="Artes" fill="#8b5cf6" radius={[4, 4, 0, 0]} barSize={14} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -722,7 +721,6 @@ export default function InternalReports() {
                       <TableHead className="text-center">Reels</TableHead>
                       <TableHead className="text-center">Criativos</TableHead>
                       <TableHead className="text-center">Stories</TableHead>
-                      <TableHead className="text-center">Artes</TableHead>
                       <TableHead className="text-center">Total</TableHead>
                       <TableHead className="text-center">Pontos</TableHead>
                       <TableHead className="text-center">Tempo Médio</TableHead>
@@ -743,7 +741,7 @@ export default function InternalReports() {
                           <TableCell className="text-center font-semibold">{r.reels}</TableCell>
                           <TableCell className="text-center">{r.criativos}</TableCell>
                           <TableCell className="text-center">{r.stories}</TableCell>
-                          <TableCell className="text-center">{r.artes}</TableCell>
+                          
                           <TableCell className="text-center font-semibold">{r.total}</TableCell>
                           <TableCell className="text-center font-bold text-primary">{r.score}</TableCell>
                           <TableCell className="text-center text-muted-foreground">

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 const DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
@@ -43,18 +43,24 @@ interface SlotInfo {
   freeSlots: number;
 }
 
+const STEP_LABELS = [
+  { icon: User, label: 'Dados do Cliente' },
+  { icon: Video, label: 'Agenda & Gravação' },
+  { icon: Target, label: 'Metas Semanais' },
+];
+
 export default function Clients() {
   const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient } = useApp();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
   const [form, setForm] = useState<Partial<Client>>(emptyClient());
+  const [step, setStep] = useState(0);
 
   const videomakers = users.filter(u => u.role === 'videomaker');
 
   // Calculate available slots per videomaker per day
   const availableSlots = useMemo(() => {
     if (!form.videomaker && videomakers.length === 0) return [];
-
     const targetVideomakers = form.videomaker ? [form.videomaker] : videomakers.map(v => v.id);
     const slots: SlotInfo[] = [];
     const shiftAStart = timeToMinutes(settings.shiftAStart);
@@ -66,57 +72,40 @@ export default function Clients() {
     for (const vmId of targetVideomakers) {
       const vm = users.find(u => u.id === vmId);
       if (!vm) continue;
-
       for (const day of settings.workDays) {
-        let totalSlots = 0;
         let occupiedSlots = 0;
-
-        // Count slots in both shifts
+        let totalSlots = 0;
         const shiftRanges = [[shiftAStart, shiftAEnd], [shiftBStart, shiftBEnd]];
         for (const [sStart, sEnd] of shiftRanges) {
-        for (let t = sStart; t + duration <= sEnd; t += duration) {
-          totalSlots++;
-          const timeStr = minutesToTime(t);
-
-          // Check if any client has this slot on this day for this videomaker
-          const isOccupied = clients.some(c => {
-            if (editing && c.id === editing.id) return false;
-            return c.videomaker === vmId && c.fixedDay === day && c.fixedTime === timeStr;
-          });
-
-          if (!isOccupied) {
-            slots.push({
-              day,
-              time: timeStr,
-              videomakerId: vmId,
-              videomkerName: vm.name,
-              occupiedSlots,
-              totalSlots,
-              freeSlots: totalSlots - occupiedSlots,
+          for (let t = sStart; t + duration <= sEnd; t += duration) {
+            totalSlots++;
+            const timeStr = minutesToTime(t);
+            const isOccupied = clients.some(c => {
+              if (editing && c.id === editing.id) return false;
+              return c.videomaker === vmId && c.fixedDay === day && c.fixedTime === timeStr;
             });
-          } else {
-            occupiedSlots++;
+            if (!isOccupied) {
+              slots.push({ day, time: timeStr, videomakerId: vmId, videomkerName: vm.name, occupiedSlots, totalSlots, freeSlots: totalSlots - occupiedSlots });
+            } else {
+              occupiedSlots++;
+            }
+          }
         }
-        } // end shiftRanges
-      }
       }
     }
-
     return slots;
   }, [form.videomaker, videomakers, settings, clients, users, editing]);
 
-  // Best slot = day with most free slots for selected videomaker
-  const bestSlot = useMemo(() => {
-    if (availableSlots.length === 0) return null;
+  // Top 2 best slot suggestions for selected videomaker
+  const bestSlots = useMemo(() => {
+    if (!form.videomaker || availableSlots.length === 0) return [];
+    const filtered = availableSlots.filter(s => s.videomakerId === form.videomaker);
+    if (filtered.length === 0) return [];
 
-    const targetVm = form.videomaker;
-    const filtered = targetVm ? availableSlots.filter(s => s.videomakerId === targetVm) : availableSlots;
-    if (filtered.length === 0) return null;
-
-    // Group by day+videomaker, count free per day
+    // Group by day, count free per day, pick first available time
     const dayMap = new Map<string, { count: number; day: DayOfWeek; vmId: string; vmName: string; firstTime: string }>();
     for (const s of filtered) {
-      const key = `${s.videomakerId}-${s.day}`;
+      const key = s.day;
       const existing = dayMap.get(key);
       if (!existing) {
         dayMap.set(key, { count: 1, day: s.day, vmId: s.videomakerId, vmName: s.videomkerName, firstTime: s.time });
@@ -125,11 +114,9 @@ export default function Clients() {
       }
     }
 
-    let best: { count: number; day: DayOfWeek; vmId: string; vmName: string; firstTime: string } | null = null;
-    for (const entry of dayMap.values()) {
-      if (!best || entry.count > best.count) best = entry;
-    }
-    return best;
+    return Array.from(dayMap.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 2);
   }, [availableSlots, form.videomaker]);
 
   // Available times for selected day + videomaker
@@ -138,9 +125,16 @@ export default function Clients() {
     return availableSlots.filter(s => s.videomakerId === form.videomaker && s.day === form.fixedDay);
   }, [availableSlots, form.videomaker, form.fixedDay]);
 
+  // Available backup times for selected backup day + videomaker
+  const availableBackupTimes = useMemo(() => {
+    if (!form.videomaker || !form.backupDay) return [];
+    return availableSlots.filter(s => s.videomakerId === form.videomaker && s.day === form.backupDay);
+  }, [availableSlots, form.videomaker, form.backupDay]);
+
   const handleOpen = (client?: Client) => {
     if (client) { setEditing(client); setForm(client); }
     else { setEditing(null); setForm(emptyClient()); }
+    setStep(0);
     setOpen(true);
   };
 
@@ -155,7 +149,6 @@ export default function Clients() {
       const newClient = { ...form, id: crypto.randomUUID() } as Client;
       const ok = addClient(newClient);
       if (!ok) { toast.error('Empresa já cadastrada'); return; }
-      // Auto-generate schedule
       const count = await generateScheduleForClient(newClient);
       if (count > 0) {
         toast.success(`Cliente cadastrado — ${count} gravação(ões) criada(s) na agenda`);
@@ -176,15 +169,276 @@ export default function Clients() {
     setForm({ ...form, extraContentTypes: types.includes(ct) ? types.filter(t => t !== ct) : [...types, ct] });
   };
 
-  const selectBestSlot = () => {
-    if (!bestSlot) return;
-    setForm(prev => ({
-      ...prev,
-      videomaker: bestSlot.vmId,
-      fixedDay: bestSlot.day,
-      fixedTime: bestSlot.firstTime,
-    }));
+  const selectSuggestion = (slot: { day: DayOfWeek; firstTime: string; vmId: string }) => {
+    setForm(prev => ({ ...prev, videomaker: slot.vmId, fixedDay: slot.day, fixedTime: slot.firstTime }));
   };
+
+  const canProceedStep0 = form.companyName && form.responsiblePerson && form.phone;
+  const canProceedStep1 = form.videomaker && form.fixedDay && form.fixedTime;
+
+  // ========== STEP RENDERERS ==========
+
+  const renderStep0 = () => (
+    <div className="space-y-4">
+      <div className="space-y-1">
+        <Label>Nome da Empresa *</Label>
+        <Input value={form.companyName} onChange={e => setForm({ ...form, companyName: e.target.value })} placeholder="Ex: Padaria do João" />
+      </div>
+      <div className="space-y-1">
+        <Label>Nome do Responsável *</Label>
+        <Input value={form.responsiblePerson} onChange={e => setForm({ ...form, responsiblePerson: e.target.value })} placeholder="Ex: João Silva" />
+      </div>
+      <div className="space-y-1">
+        <Label>Número de WhatsApp *</Label>
+        <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="(11) 99999-9999" />
+      </div>
+      <div className="space-y-2">
+        <Label>Cor de Identificação</Label>
+        <div className="flex gap-2 flex-wrap">
+          {CLIENT_COLORS.map(c => (
+            <button key={c.value} onClick={() => setForm({ ...form, color: c.value })} title={c.name}
+              className={`w-8 h-8 rounded-lg transition-all ${form.color === c.value ? 'ring-2 ring-offset-2 ring-foreground scale-110' : 'hover:scale-105'}`}
+              style={{ backgroundColor: `hsl(${c.value})` }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderStep1 = () => (
+    <div className="space-y-5">
+      {/* Videomaker */}
+      <div className="space-y-1">
+        <Label>Videomaker Responsável *</Label>
+        <Select value={form.videomaker} onValueChange={v => setForm({ ...form, videomaker: v })}>
+          <SelectTrigger><SelectValue placeholder="Selecione o videomaker" /></SelectTrigger>
+          <SelectContent>{videomakers.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+
+      {/* Best slots suggestions (up to 2) */}
+      {form.videomaker && bestSlots.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-primary flex items-center gap-2">
+            <Star size={14} /> Melhores horários disponíveis
+          </p>
+          <div className="grid grid-cols-1 gap-2">
+            {bestSlots.map((slot, i) => (
+              <button key={i} onClick={() => selectSuggestion(slot)}
+                className={`w-full p-3 rounded-xl border-2 transition-colors text-left flex items-center gap-3 ${
+                  form.fixedDay === slot.day && form.fixedTime === slot.firstTime
+                    ? 'border-primary bg-primary/10'
+                    : 'border-dashed border-primary/30 bg-primary/5 hover:bg-primary/10'
+                }`}
+              >
+                <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                  <Star size={16} className="text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">{DAY_LABELS[slot.day]} às {slot.firstTime}</p>
+                  <p className="text-xs text-muted-foreground">{slot.count} vagas livres neste dia</p>
+                </div>
+                <Badge variant="secondary" className="ml-auto shrink-0 bg-primary/15 text-primary border-0 text-[10px]">
+                  {i === 0 ? 'Melhor opção' : '2ª opção'}
+                </Badge>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Manual day/time selection */}
+      {form.videomaker && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">Ou selecione manualmente:</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Dia Fixo</Label>
+              <Select value={form.fixedDay} onValueChange={v => setForm({ ...form, fixedDay: v as DayOfWeek, fixedTime: '' })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {DAYS.filter(d => settings.workDays.includes(d)).map(d => {
+                    const freeCount = availableSlots.filter(s => s.videomakerId === form.videomaker && s.day === d).length;
+                    const isBest = bestSlots[0]?.day === d;
+                    return (
+                      <SelectItem key={d} value={d}>
+                        <span className="flex items-center gap-2">
+                          {DAY_LABELS[d]}
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${freeCount === 0 ? 'bg-destructive/15 text-destructive' : isBest ? 'bg-primary/15 text-primary font-semibold' : 'bg-muted text-muted-foreground'}`}>
+                            {freeCount} {freeCount === 1 ? 'vaga' : 'vagas'}
+                          </span>
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Horário Fixo</Label>
+              {availableTimesForDay.length > 0 ? (
+                <Select value={form.fixedTime} onValueChange={v => setForm({ ...form, fixedTime: v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    {availableTimesForDay.map(s => (
+                      <SelectItem key={s.time} value={s.time}>
+                        <span className="flex items-center gap-2">
+                          <Clock size={12} className="text-muted-foreground" />
+                          {s.time} – {minutesToTime(timeToMinutes(s.time) + settings.recordingDuration)}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="flex h-10 items-center rounded-md border border-input bg-muted/50 px-3">
+                  <span className="text-sm text-muted-foreground">Sem vagas neste dia</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Backup day/time — only with responsible videomaker */}
+      {form.videomaker && (
+        <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
+          <p className="text-sm font-semibold flex items-center gap-2">
+            <CalendarCheck size={14} /> Dia de Backup
+          </p>
+          <p className="text-xs text-muted-foreground">Segunda opção na semana com o videomaker responsável, caso tenha vaga.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Dia Backup</Label>
+              <Select value={form.backupDay} onValueChange={v => setForm({ ...form, backupDay: v as DayOfWeek })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {DAYS.filter(d => settings.workDays.includes(d) && d !== form.fixedDay).map(d => {
+                    const freeCount = availableSlots.filter(s => s.videomakerId === form.videomaker && s.day === d).length;
+                    return (
+                      <SelectItem key={d} value={d}>
+                        <span className="flex items-center gap-2">
+                          {DAY_LABELS[d]}
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${freeCount === 0 ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground'}`}>
+                            {freeCount} {freeCount === 1 ? 'vaga' : 'vagas'}
+                          </span>
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Horário Backup</Label>
+              {availableBackupTimes.length > 0 ? (
+                <Select value={form.backupTime} onValueChange={v => setForm({ ...form, backupTime: v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    {availableBackupTimes.map(s => (
+                      <SelectItem key={s.time} value={s.time}>
+                        <span className="flex items-center gap-2">
+                          <Clock size={12} className="text-muted-foreground" />
+                          {s.time} – {minutesToTime(timeToMinutes(s.time) + settings.recordingDuration)}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="flex h-10 items-center rounded-md border border-input bg-muted/50 px-3">
+                  <span className="text-sm text-muted-foreground">Sem vagas neste dia</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Extra content */}
+      <div className="flex items-center gap-3 p-3 rounded-xl border border-border">
+        <Switch checked={form.acceptsExtra} onCheckedChange={v => setForm({ ...form, acceptsExtra: v })} />
+        <Label className="font-medium">Aceita conteúdo extra?</Label>
+      </div>
+
+      {form.acceptsExtra && (
+        <div className="p-4 rounded-xl bg-accent/50 border border-border space-y-4">
+          <div className="space-y-2">
+            <Label>Tipos de Conteúdo Extra</Label>
+            <div className="flex gap-2">
+              {CONTENT_TYPES.map(ct => (
+                <button key={ct} onClick={() => toggleContentType(ct)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${form.extraContentTypes?.includes(ct) ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>
+                  {CONTENT_TYPE_LABELS[ct]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Switch checked={form.extraClientAppears ?? false} onCheckedChange={v => setForm({ ...form, extraClientAppears: v })} />
+            <Label>Cliente aceita aparecer sem aviso prévio?</Label>
+          </div>
+
+          <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 flex gap-2 items-start">
+            <AlertTriangle size={16} className="text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              O conteúdo extra depende da disponibilidade de agenda e pode ser produzido por <strong>qualquer videomaker disponível</strong> na agência, não necessariamente o responsável pelo cliente.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderStep2 = () => (
+    <div className="space-y-5">
+      <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
+        <p className="text-sm font-semibold flex items-center gap-2">
+          <Target size={16} className="text-primary" /> Metas de Entrega Semanal
+        </p>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="space-y-1">
+            <Label>Qtd. Reels</Label>
+            <Input type="number" min={0} value={form.weeklyReels ?? 0} onChange={e => setForm({ ...form, weeklyReels: Number(e.target.value) })} />
+          </div>
+          <div className="space-y-1">
+            <Label>Qtd. Criativos</Label>
+            <Input type="number" min={0} value={form.weeklyCreatives ?? 0} onChange={e => setForm({ ...form, weeklyCreatives: Number(e.target.value) })} />
+          </div>
+          <div className="space-y-1">
+            <Label>Meta Total (vídeos)</Label>
+            <Input type="number" min={1} value={form.weeklyGoal} onChange={e => setForm({ ...form, weeklyGoal: Number(e.target.value) })} />
+          </div>
+        </div>
+      </div>
+
+      {/* Summary */}
+      <div className="p-4 rounded-xl border border-border space-y-3">
+        <p className="text-sm font-semibold">Resumo do Cadastro</p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+          <span className="text-muted-foreground">Empresa:</span>
+          <span className="font-medium">{form.companyName}</span>
+          <span className="text-muted-foreground">Responsável:</span>
+          <span className="font-medium">{form.responsiblePerson}</span>
+          <span className="text-muted-foreground">WhatsApp:</span>
+          <span className="font-medium">{form.phone}</span>
+          <span className="text-muted-foreground">Videomaker:</span>
+          <span className="font-medium">{users.find(u => u.id === form.videomaker)?.name || '—'}</span>
+          <span className="text-muted-foreground">Dia fixo:</span>
+          <span className="font-medium">{form.fixedDay ? DAY_LABELS[form.fixedDay] : '—'} às {form.fixedTime || '—'}</span>
+          <span className="text-muted-foreground">Backup:</span>
+          <span className="font-medium">{form.backupDay ? DAY_LABELS[form.backupDay] : '—'} às {form.backupTime || '—'}</span>
+          {form.acceptsExtra && (
+            <>
+              <span className="text-muted-foreground">Extra:</span>
+              <span className="font-medium">{form.extraContentTypes?.map(ct => CONTENT_TYPE_LABELS[ct]).join(', ') || '—'}</span>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -195,221 +449,74 @@ export default function Clients() {
             <Button onClick={() => handleOpen()}><Plus size={16} className="mr-2" /> Novo Cliente</Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>{editing ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle></DialogHeader>
-            <div className="space-y-5">
-              {/* Basic info */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2 space-y-1">
-                  <Label>Nome da Empresa *</Label>
-                  <Input value={form.companyName} onChange={e => setForm({ ...form, companyName: e.target.value })} />
-                </div>
+            <DialogHeader>
+              <DialogTitle>{editing ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
+            </DialogHeader>
 
-                <div className="col-span-2 space-y-2">
-                  <Label>Cor de Identificação</Label>
-                  <div className="flex gap-2 flex-wrap">
-                    {CLIENT_COLORS.map(c => (
-                      <button key={c.value} onClick={() => setForm({ ...form, color: c.value })}
-                        title={c.name}
-                        className={`w-8 h-8 rounded-lg transition-all ${form.color === c.value ? 'ring-2 ring-offset-2 ring-foreground scale-110' : 'hover:scale-105'}`}
-                        style={{ backgroundColor: `hsl(${c.value})` }}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <Label>Responsável *</Label>
-                  <Input value={form.responsiblePerson} onChange={e => setForm({ ...form, responsiblePerson: e.target.value })} />
-                </div>
-                <div className="space-y-1">
-                  <Label>Telefone *</Label>
-                  <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
-                </div>
-              </div>
-
-              {/* Videomaker selection */}
-              <div className="space-y-1">
-                <Label>Videomaker Responsável *</Label>
-                <Select value={form.videomaker} onValueChange={v => setForm({ ...form, videomaker: v })}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>{videomakers.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-
-              {/* Best slot suggestion */}
-              {bestSlot && (
-                <button
-                  onClick={selectBestSlot}
-                  className="w-full p-3 rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 hover:bg-primary/10 transition-colors text-left flex items-center gap-3"
-                >
-                  <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-                    <Star size={18} className="text-primary" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-primary">Melhor horário disponível</p>
-                    <p className="text-xs text-muted-foreground">
-                      {bestSlot.vmName} · {DAY_LABELS[bestSlot.day]} às {bestSlot.firstTime} — {bestSlot.count} vagas livres
-                    </p>
-                  </div>
-                  <Badge variant="secondary" className="ml-auto shrink-0 bg-primary/15 text-primary border-0">
-                    Sugerido
-                  </Badge>
-                </button>
-              )}
-
-              {/* Day + Time selection with availability */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>Dia Fixo de Gravação</Label>
-                  <Select value={form.fixedDay} onValueChange={v => setForm({ ...form, fixedDay: v as DayOfWeek, fixedTime: '' })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {DAYS.filter(d => settings.workDays.includes(d)).map(d => {
-                        const freeCount = form.videomaker
-                          ? availableSlots.filter(s => s.videomakerId === form.videomaker && s.day === d).length
-                          : availableSlots.filter(s => s.day === d).length;
-                        const isBest = bestSlot?.day === d && (!form.videomaker || bestSlot?.vmId === form.videomaker);
-                        return (
-                          <SelectItem key={d} value={d}>
-                            <span className="flex items-center gap-2">
-                              {DAY_LABELS[d]}
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${freeCount === 0 ? 'bg-destructive/15 text-destructive' : isBest ? 'bg-primary/15 text-primary font-semibold' : 'bg-muted text-muted-foreground'}`}>
-                                {freeCount} {freeCount === 1 ? 'vaga' : 'vagas'}
-                              </span>
-                              {isBest && <Star size={10} className="text-primary" />}
-                            </span>
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1">
-                  <Label>Horário Fixo</Label>
-                  {form.videomaker && availableTimesForDay.length > 0 ? (
-                    <Select value={form.fixedTime} onValueChange={v => setForm({ ...form, fixedTime: v })}>
-                      <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent>
-                        {availableTimesForDay.map(s => (
-                          <SelectItem key={s.time} value={s.time}>
-                            <span className="flex items-center gap-2">
-                              <Clock size={12} className="text-muted-foreground" />
-                              {s.time} – {minutesToTime(timeToMinutes(s.time) + 120)}
-                              {bestSlot?.firstTime === s.time && bestSlot?.day === form.fixedDay && (
-                                <Star size={10} className="text-primary" />
-                              )}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <div className="flex h-10 items-center rounded-md border border-input bg-muted/50 px-3">
-                      <span className="text-sm text-muted-foreground">
-                        {!form.videomaker ? 'Selecione o videomaker primeiro' :
-                          availableTimesForDay.length === 0 ? 'Sem vagas neste dia' : 'Selecione'}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Metas de Entrega */}
-              <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
-                <p className="text-sm font-semibold flex items-center gap-2">
-                  <CalendarCheck size={16} className="text-primary" /> Metas de Entrega Semanal
-                </p>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <Label>Qtd. Reels</Label>
-                    <Input type="number" min={0} value={form.weeklyReels ?? 0} onChange={e => setForm({ ...form, weeklyReels: Number(e.target.value) })} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Qtd. Criativos</Label>
-                    <Input type="number" min={0} value={form.weeklyCreatives ?? 0} onChange={e => setForm({ ...form, weeklyCreatives: Number(e.target.value) })} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Meta Total (vídeos)</Label>
-                    <Input type="number" min={1} value={form.weeklyGoal} onChange={e => setForm({ ...form, weeklyGoal: Number(e.target.value) })} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Backup */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>Dia Backup</Label>
-                  <Select value={form.backupDay} onValueChange={v => setForm({ ...form, backupDay: v as DayOfWeek })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{DAYS.filter(d => settings.workDays.includes(d)).map(d => <SelectItem key={d} value={d}>{DAY_LABELS[d]}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label>Horário Backup</Label>
-                  <Input type="time" value={form.backupTime} onChange={e => setForm({ ...form, backupTime: e.target.value })} />
-                </div>
-              </div>
-
-              {/* Endomarketing toggle */}
-              <div className="flex items-center gap-3 p-3 rounded-xl border border-border">
-                <Switch checked={form.hasEndomarketing ?? false} onCheckedChange={v => setForm({ ...form, hasEndomarketing: v, weeklyStories: v ? (form.weeklyStories || 5) : 0, presenceDays: v ? (form.presenceDays || 1) : 0 })} />
-                <Label className="font-medium">Tem Endomarketing?</Label>
-              </div>
-
-              {form.hasEndomarketing && (
-                <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-4">
-                  <p className="text-sm font-semibold text-primary">Produção de Endomarketing</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label>Qtd. Stories por Semana</Label>
-                      <Input type="number" min={0} value={form.weeklyStories ?? 0} onChange={e => setForm({ ...form, weeklyStories: Number(e.target.value) })} />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Dias de Presença</Label>
-                      <Input type="number" min={1} max={7} value={form.presenceDays ?? 1} onChange={e => setForm({ ...form, presenceDays: Number(e.target.value) })} />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Extra content toggle */}
-              <div className="flex items-center gap-3 p-3 rounded-xl border border-border">
-                <Switch checked={form.acceptsExtra} onCheckedChange={v => setForm({ ...form, acceptsExtra: v })} />
-                <Label className="font-medium">Aceita conteúdo extra?</Label>
-              </div>
-
-              {form.acceptsExtra && (
-                <div className="p-4 rounded-xl bg-accent/50 border border-border space-y-4">
-                  <p className="text-sm font-semibold">Configuração de Conteúdo Extra</p>
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <Label>Dia Extra</Label>
-                      <Select value={form.extraDay} onValueChange={v => setForm({ ...form, extraDay: v as DayOfWeek })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>{DAYS.filter(d => settings.workDays.includes(d)).map(d => <SelectItem key={d} value={d}>{DAY_LABELS[d]}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Tipos de Conteúdo Extra</Label>
-                      <div className="flex gap-2">
-                        {CONTENT_TYPES.map(ct => (
-                          <button key={ct} onClick={() => toggleContentType(ct)}
-                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${form.extraContentTypes?.includes(ct) ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>
-                            {CONTENT_TYPE_LABELS[ct]}
-                          </button>
-                        ))}
+            {/* Stepper indicator */}
+            {!editing && (
+              <div className="flex items-center gap-1 mb-2">
+                {STEP_LABELS.map((s, i) => {
+                  const Icon = s.icon;
+                  const isActive = i === step;
+                  const isDone = i < step;
+                  return (
+                    <div key={i} className="flex items-center gap-1 flex-1">
+                      <div className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors w-full justify-center ${
+                        isActive ? 'bg-primary text-primary-foreground' : isDone ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
+                      }`}>
+                        <Icon size={13} />
+                        <span className="hidden sm:inline">{s.label}</span>
+                        <span className="sm:hidden">{i + 1}</span>
                       </div>
+                      {i < STEP_LABELS.length - 1 && <ChevronRight size={14} className="text-muted-foreground shrink-0" />}
                     </div>
-                    <div className="flex items-center gap-3">
-                      <Switch checked={form.extraClientAppears ?? false} onCheckedChange={v => setForm({ ...form, extraClientAppears: v })} />
-                      <Label>Cliente aparece no conteúdo extra?</Label>
-                    </div>
-                  </div>
-                </div>
-              )}
+                  );
+                })}
+              </div>
+            )}
 
-              <Button onClick={handleSave} className="w-full">{editing ? 'Salvar Alterações' : 'Cadastrar'}</Button>
+            {/* Step content */}
+            <div className="min-h-[200px]">
+              {editing ? (
+                // Editing: show all fields together
+                <div className="space-y-5">
+                  {renderStep0()}
+                  {renderStep1()}
+                  {renderStep2()}
+                </div>
+              ) : (
+                <>
+                  {step === 0 && renderStep0()}
+                  {step === 1 && renderStep1()}
+                  {step === 2 && renderStep2()}
+                </>
+              )}
+            </div>
+
+            {/* Navigation buttons */}
+            <div className="flex gap-2 pt-2">
+              {editing ? (
+                <Button onClick={handleSave} className="w-full">Salvar Alterações</Button>
+              ) : (
+                <>
+                  {step > 0 && (
+                    <Button variant="outline" onClick={() => setStep(s => s - 1)} className="gap-1">
+                      <ChevronLeft size={14} /> Voltar
+                    </Button>
+                  )}
+                  {step < 2 ? (
+                    <Button onClick={() => setStep(s => s + 1)} className="ml-auto gap-1"
+                      disabled={step === 0 ? !canProceedStep0 : !canProceedStep1}>
+                      Próximo <ChevronRight size={14} />
+                    </Button>
+                  ) : (
+                    <Button onClick={handleSave} className="ml-auto gap-1">
+                      <CalendarCheck size={14} /> Cadastrar Cliente
+                    </Button>
+                  )}
+                </>
+              )}
             </div>
           </DialogContent>
         </Dialog>
@@ -438,7 +545,6 @@ export default function Clients() {
                   <div className="flex gap-1 mt-1 flex-wrap">
                     {(c.weeklyReels ?? 0) > 0 && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{c.weeklyReels} reels</Badge>}
                     {(c.weeklyCreatives ?? 0) > 0 && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{c.weeklyCreatives} criativos</Badge>}
-                    {c.hasEndomarketing && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-primary/30 text-primary">Endo · {c.weeklyStories}st · {c.presenceDays}d</Badge>}
                     {c.acceptsExtra && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">Extra{c.extraClientAppears ? ' · Aparece' : ''}</Badge>}
                   </div>
                 </div>

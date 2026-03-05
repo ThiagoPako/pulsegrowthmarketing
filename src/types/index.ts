@@ -146,6 +146,9 @@ export interface Script {
   priority: ScriptPriority;
   createdAt: string; // ISO date
   updatedAt: string; // ISO date
+  isEndomarketing: boolean;
+  endoClientId?: string;
+  scheduledDate?: string; // YYYY-MM-DD
 }
 
 export interface ActiveRecording {

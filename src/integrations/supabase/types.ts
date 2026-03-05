@@ -513,9 +513,12 @@ export type Database = {
           client_id: string
           content: string
           created_at: string
+          endo_client_id: string | null
           id: string
+          is_endomarketing: boolean
           priority: string
           recorded: boolean
+          scheduled_date: string | null
           title: string
           updated_at: string
           video_type: string
@@ -524,9 +527,12 @@ export type Database = {
           client_id: string
           content?: string
           created_at?: string
+          endo_client_id?: string | null
           id?: string
+          is_endomarketing?: boolean
           priority?: string
           recorded?: boolean
+          scheduled_date?: string | null
           title: string
           updated_at?: string
           video_type?: string
@@ -535,9 +541,12 @@ export type Database = {
           client_id?: string
           content?: string
           created_at?: string
+          endo_client_id?: string | null
           id?: string
+          is_endomarketing?: boolean
           priority?: string
           recorded?: boolean
+          scheduled_date?: string | null
           title?: string
           updated_at?: string
           video_type?: string
@@ -548,6 +557,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scripts_endo_client_id_fkey"
+            columns: ["endo_client_id"]
+            isOneToOne: false
+            referencedRelation: "endomarketing_clientes"
             referencedColumns: ["id"]
           },
         ]

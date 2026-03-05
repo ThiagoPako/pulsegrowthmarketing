@@ -113,6 +113,9 @@ function rowToScript(r: any): Script {
     priority: (r.priority || 'normal') as ScriptPriority,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    isEndomarketing: r.is_endomarketing || false,
+    endoClientId: r.endo_client_id || undefined,
+    scheduledDate: r.scheduled_date || undefined,
   };
 }
 
@@ -127,6 +130,9 @@ function scriptToRow(s: Script) {
     priority: s.priority,
     created_at: s.createdAt,
     updated_at: s.updatedAt,
+    is_endomarketing: s.isEndomarketing,
+    endo_client_id: s.endoClientId || null,
+    scheduled_date: s.scheduledDate || null,
   };
 }
 

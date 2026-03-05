@@ -166,10 +166,11 @@ export default function VideomakerDashboard() {
     });
 
     const reelsCount = completedScriptIds.size;
+    const completedIds = Array.from(completedScriptIds);
     stopActiveRecording(finishRecordingId, {
       reels_produced: reelsCount,
       videos_recorded: Math.max(reelsCount, 1),
-    });
+    }, completedIds);
     updateRecording({ ...rec, status: 'concluida' });
 
     let msg = `Gravação concluída! ${reelsCount} roteiro(s) gravado(s)`;

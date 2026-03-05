@@ -737,6 +737,9 @@ export type Database = {
           id: string
           platform: string | null
           posted_at: string | null
+          recording_id: string | null
+          scheduled_time: string | null
+          script_id: string | null
           status: string
           title: string
           updated_at: string
@@ -751,6 +754,9 @@ export type Database = {
           id?: string
           platform?: string | null
           posted_at?: string | null
+          recording_id?: string | null
+          scheduled_time?: string | null
+          script_id?: string | null
           status?: string
           title?: string
           updated_at?: string
@@ -765,6 +771,9 @@ export type Database = {
           id?: string
           platform?: string | null
           posted_at?: string | null
+          recording_id?: string | null
+          scheduled_time?: string | null
+          script_id?: string | null
           status?: string
           title?: string
           updated_at?: string
@@ -775,6 +784,20 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_media_deliveries_recording_id_fkey"
+            columns: ["recording_id"]
+            isOneToOne: false
+            referencedRelation: "recordings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_media_deliveries_script_id_fkey"
+            columns: ["script_id"]
+            isOneToOne: false
+            referencedRelation: "scripts"
             referencedColumns: ["id"]
           },
         ]

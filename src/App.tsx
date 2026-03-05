@@ -21,6 +21,7 @@ import WhatsAppDashboard from "@/pages/WhatsAppDashboard";
 import Plans from "@/pages/Plans";
 import DeliveryRecords from "@/pages/DeliveryRecords";
 import Reports from "@/pages/Reports";
+import InternalReports from "@/pages/InternalReports";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -60,6 +61,7 @@ function AppRoutes() {
       <Route path="/planos" element={<ProtectedRoute><Plans /></ProtectedRoute>} />
       <Route path="/entregas" element={<ProtectedRoute><DeliveryRecords /></ProtectedRoute>} />
       <Route path="/relatorios" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+      <Route path="/desempenho" element={<ProtectedRoute><InternalReports /></ProtectedRoute>} />
       <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppDashboard /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>

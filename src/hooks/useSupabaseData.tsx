@@ -376,26 +376,24 @@ export function useSupabaseData() {
     setActiveRecordings(prev => [...prev.filter(a => a.recordingId !== rec.recordingId), rec]);
   }, []);
 
-  const stopActiveRecording = useCallback(async (recordingId: string) => {
-    // Find the active recording to get context
+  const stopActiveRecording = useCallback(async (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }) => {
     const active = activeRecordings.find(a => a.recordingId === recordingId);
     
     await supabase.from('active_recordings').delete().eq('recording_id', recordingId);
     setActiveRecordings(prev => prev.filter(a => a.recordingId !== recordingId));
 
-    // Auto-create delivery record
     if (active) {
       const { error } = await supabase.from('delivery_records').insert({
         recording_id: recordingId,
         client_id: active.clientId,
         videomaker_id: active.videomarkerId,
         date: new Date().toISOString().split('T')[0],
-        reels_produced: 0,
-        creatives_produced: 0,
-        stories_produced: 0,
-        arts_produced: 0,
-        extras_produced: 0,
-        videos_recorded: 1,
+        reels_produced: deliveryOverrides?.reels_produced ?? 0,
+        creatives_produced: deliveryOverrides?.creatives_produced ?? 0,
+        stories_produced: deliveryOverrides?.stories_produced ?? 0,
+        arts_produced: deliveryOverrides?.arts_produced ?? 0,
+        extras_produced: deliveryOverrides?.extras_produced ?? 0,
+        videos_recorded: deliveryOverrides?.videos_recorded ?? 1,
         delivery_status: 'realizada',
         observations: 'Registro automático ao finalizar gravação',
       } as any);

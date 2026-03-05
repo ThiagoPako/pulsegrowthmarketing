@@ -15,7 +15,7 @@ import {
   TrendingUp, BarChart3, Undo2, AlertTriangle, Star, Eye, ChevronLeft, Download
 } from 'lucide-react';
 import pulseHeader from '@/assets/pulse_header.png';
-import { format, addDays, startOfWeek, startOfMonth, endOfMonth, endOfWeek, isWithinInterval, parseISO, getDay, isSameDay } from 'date-fns';
+import { format, addDays, startOfWeek, startOfMonth, endOfMonth, endOfWeek, isWithinInterval, parseISO, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function VideomakerDashboard() {
@@ -30,12 +30,17 @@ export default function VideomakerDashboard() {
   const [selectedScriptIds, setSelectedScriptIds] = useState<Set<string>>(new Set());
   const [viewingScript, setViewingScript] = useState<Script | null>(null);
 
+  // Finish dialog state
+  const [finishDialogOpen, setFinishDialogOpen] = useState(false);
+  const [finishRecordingId, setFinishRecordingId] = useState('');
+  const [completedScriptIds, setCompletedScriptIds] = useState<Set<string>>(new Set());
+
   const vmId = currentUser?.id || '';
   const today = new Date();
   const todayStr = format(today, 'yyyy-MM-dd');
   const weekStart = startOfWeek(today, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
-  const weekDays = Array.from({ length: 5 }, (_, i) => addDays(weekStart, i)); // Mon-Fri
+  const weekDays = Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
 
   // ── My recordings ──
   const myRecordings = useMemo(() =>
@@ -64,7 +69,6 @@ export default function VideomakerDashboard() {
   const myActiveRec = activeRecordings.find(a => a.videomarkerId === vmId);
 
   const handleStartRecording = (rec: Recording) => {
-    // Open scripts dialog first so videomaker can review scripts before starting
     setScriptsClientId(rec.clientId);
     setScriptsRecordingId(rec.id);
     setSelectedScriptIds(new Set());
@@ -73,6 +77,7 @@ export default function VideomakerDashboard() {
   };
 
   const confirmStartRecording = (rec: Recording) => {
+    // Mark selected scripts as "planned" for this session
     startActiveRecording({
       recordingId: rec.id,
       videomarkerId: vmId,
@@ -83,10 +88,52 @@ export default function VideomakerDashboard() {
     setScriptsOpen(false);
   };
 
+  // ── Finish recording flow ──
   const handleFinishRecording = (rec: Recording) => {
-    stopActiveRecording(rec.id);
+    // Open finish dialog with pending scripts for this client
+    setFinishRecordingId(rec.id);
+    setCompletedScriptIds(new Set());
+    setFinishDialogOpen(true);
+  };
+
+  // Scripts available for finish dialog (pending scripts for this client)
+  const finishClientScripts = useMemo(() => {
+    if (!finishRecordingId) return [];
+    const rec = recordings.find(r => r.id === finishRecordingId);
+    if (!rec) return [];
+    // Show both pending and recently recorded scripts for this client
+    return scripts.filter(s => s.clientId === rec.clientId && !s.isEndomarketing)
+      .sort((a, b) => {
+        // Show unrecorded first
+        if (a.recorded !== b.recorded) return a.recorded ? 1 : -1;
+        const priorityOrder: Record<string, number> = { urgent: 0, priority: 1, normal: 2 };
+        return (priorityOrder[a.priority] || 2) - (priorityOrder[b.priority] || 2);
+      });
+  }, [finishRecordingId, recordings, scripts]);
+
+  const confirmFinish = () => {
+    const rec = recordings.find(r => r.id === finishRecordingId);
+    if (!rec) return;
+
+    const now = new Date().toISOString();
+
+    // Mark completed scripts as recorded
+    completedScriptIds.forEach(id => {
+      const script = scripts.find(s => s.id === id);
+      if (script && !script.recorded) {
+        updateScript({ ...script, recorded: true, updatedAt: now });
+      }
+    });
+
+    const reelsCount = completedScriptIds.size;
+    stopActiveRecording(finishRecordingId, {
+      reels_produced: reelsCount,
+      videos_recorded: Math.max(reelsCount, 1),
+    });
     updateRecording({ ...rec, status: 'concluida' });
-    toast.success('Gravação concluída!');
+    toast.success(`Gravação concluída! ${reelsCount} roteiro(s) gravado(s)`);
+    setFinishDialogOpen(false);
+    setCompletedScriptIds(new Set());
   };
 
   // ── Scripts ──
@@ -101,8 +148,7 @@ export default function VideomakerDashboard() {
   const clientScripts = useMemo(() => {
     if (!scriptsClientId) return [];
     const pending = scripts.filter(s => s.clientId === scriptsClientId && !s.recorded);
-    // Sort by priority: urgent > priority > normal
-    const priorityOrder = { urgent: 0, priority: 1, normal: 2 };
+    const priorityOrder: Record<string, number> = { urgent: 0, priority: 1, normal: 2 };
     return pending.sort((a, b) => {
       const pA = priorityOrder[a.priority || 'normal'];
       const pB = priorityOrder[b.priority || 'normal'];
@@ -197,15 +243,8 @@ export default function VideomakerDashboard() {
 
     const doneMonth = monthRecs.filter(r => r.status === 'concluida');
     const doneWeek = weekRecs.filter(r => r.status === 'concluida');
-
-    // Unique clients served this month
     const uniqueClients = new Set(doneMonth.map(r => r.clientId)).size;
-
-    // Total reels from tasks (approximate via recordings done)
     const totalRecordings = doneMonth.length;
-
-    // Average reels per recording - count tasks finalized per recording
-    // Using a simple metric: total weekly reels goals of clients recorded
     const reelsProduced = doneMonth.reduce((acc, rec) => {
       const client = clients.find(c => c.id === rec.clientId);
       return acc + (client?.weeklyReels || 0);
@@ -416,6 +455,72 @@ export default function VideomakerDashboard() {
         </div>
       </div>
 
+      {/* ── Finish Recording Dialog ── */}
+      <Dialog open={finishDialogOpen} onOpenChange={setFinishDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Check size={18} className="text-success" />
+              Finalizar Gravação — {(() => {
+                const rec = recordings.find(r => r.id === finishRecordingId);
+                return rec ? getClientName(rec.clientId) : '';
+              })()}
+            </DialogTitle>
+          </DialogHeader>
+
+          <p className="text-sm text-muted-foreground">
+            Selecione os roteiros que foram gravados nesta sessão. Os não selecionados permanecerão no banco de roteiros pendentes.
+          </p>
+
+          {finishClientScripts.filter(s => !s.recorded).length === 0 ? (
+            <div className="text-center py-6 text-muted-foreground">
+              <FileText size={32} className="mx-auto mb-2 opacity-50" />
+              <p className="text-sm">Nenhum roteiro pendente para este cliente</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {finishClientScripts.filter(s => !s.recorded).map(script => (
+                <div key={script.id} className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
+                  completedScriptIds.has(script.id) ? 'border-success/40 bg-success/5' :
+                  script.priority === 'urgent' ? 'border-destructive/40 bg-destructive/5' :
+                  script.priority === 'priority' ? 'border-warning/40 bg-warning/5' : 'border-border hover:bg-muted/30'
+                }`}>
+                  <Checkbox
+                    checked={completedScriptIds.has(script.id)}
+                    onCheckedChange={checked => {
+                      const next = new Set(completedScriptIds);
+                      checked ? next.add(script.id) : next.delete(script.id);
+                      setCompletedScriptIds(next);
+                    }}
+                    className="mt-1"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      {script.priority === 'urgent' && <AlertTriangle size={13} className="text-destructive shrink-0" />}
+                      {script.priority === 'priority' && <Star size={13} className="text-warning shrink-0" />}
+                      <p className="font-medium text-sm">{script.title}</p>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Badge variant="outline" className="text-[10px]">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex gap-2 mt-3">
+            <Button variant="outline" onClick={() => setFinishDialogOpen(false)} className="flex-1">
+              Cancelar
+            </Button>
+            <Button onClick={confirmFinish} className="flex-1 gap-1.5 bg-success hover:bg-success/90 text-success-foreground">
+              <Check size={16} />
+              Finalizar ({completedScriptIds.size} roteiro{completedScriptIds.size !== 1 ? 's' : ''})
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* ── Scripts Dialog ── */}
       <Dialog open={scriptsOpen} onOpenChange={(open) => { setScriptsOpen(open); if (!open) setViewingScript(null); }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
@@ -436,7 +541,6 @@ export default function VideomakerDashboard() {
           </DialogHeader>
 
           {viewingScript ? (
-            /* ── Full script view ── */
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <Badge variant="outline" className="text-[10px]">{SCRIPT_VIDEO_TYPE_LABELS[viewingScript.videoType]}</Badge>
@@ -451,7 +555,6 @@ export default function VideomakerDashboard() {
                 dangerouslySetInnerHTML={{ __html: highlightQuotes(viewingScript.content) || '<em>Sem conteúdo</em>' }} />
             </div>
           ) : (
-            /* ── Scripts list ── */
             <>
               {scriptsRecordingId && (
                 <p className="text-sm text-muted-foreground">
@@ -491,7 +594,6 @@ export default function VideomakerDashboard() {
                           {script.priority === 'urgent' && <Badge className="text-[9px] bg-destructive/20 text-destructive border-destructive/30">Urgente</Badge>}
                           {script.priority === 'priority' && <Badge className="text-[9px] bg-warning/20 text-warning border-warning/30">Prioritário</Badge>}
                         </div>
-                        {/* Preview of content */}
                         <div className="text-xs text-muted-foreground line-clamp-2 mt-1.5"
                           dangerouslySetInnerHTML={{ __html: highlightQuotes(script.content) || '<em>Sem conteúdo</em>' }} />
                       </div>

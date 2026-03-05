@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { format, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
+import { generateDeliveryReport } from '@/lib/billingReport';
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
 
 const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'destructive' | 'secondary' }> = {
@@ -22,7 +23,7 @@ const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'destruct
 
 export default function FinancialRevenues() {
   const navigate = useNavigate();
-  const { revenues, updateRevenue, generateMonthlyRevenues, paymentConfig, loading } = useFinancialData();
+  const { revenues, contracts, updateRevenue, generateMonthlyRevenues, paymentConfig, loading } = useFinancialData();
   const { clients } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
   const [sendingBilling, setSendingBilling] = useState<string | null>(null);
@@ -97,12 +98,18 @@ export default function FinancialRevenues() {
         ? (paymentConfig?.msg_billing_overdue || 'Olá, {nome_cliente}! Lembrete de pendência: {valor}. {dados_pagamento}')
         : (paymentConfig?.msg_billing_due || 'Olá, {nome_cliente}! Mensalidade {valor} vence dia {dia_vencimento}. {dados_pagamento}');
 
+      // Get plan_id from contract
+      const contract = contracts.find(c => c.client_id === revenue.client_id);
+      const report = paymentConfig?.include_delivery_report !== false
+        ? await generateDeliveryReport(revenue.client_id, contract?.plan_id, selectedMonth)
+        : { text: '' };
+
       const message = template
         .replace(/\{nome_cliente\}/g, client.companyName)
         .replace(/\{valor\}/g, value)
         .replace(/\{dia_vencimento\}/g, dueDay)
         .replace(/\{dados_pagamento\}/g, paymentInfo)
-        .replace(/\{relatorio_entregas\}/g, '');
+        .replace(/\{relatorio_entregas\}/g, report.text);
 
       const result = await sendWhatsAppMessage({
         number: client.whatsapp,
@@ -149,12 +156,19 @@ export default function FinancialRevenues() {
         const template = isOverdue
           ? (paymentConfig?.msg_billing_overdue || 'Olá, {nome_cliente}! Lembrete: {valor}. {dados_pagamento}')
           : (paymentConfig?.msg_billing_due || 'Olá, {nome_cliente}! Mensalidade {valor} vence dia {dia_vencimento}. {dados_pagamento}');
+
+        // Get plan_id from contract
+        const contract = contracts.find(c => c.client_id === r.client_id);
+        const report = paymentConfig?.include_delivery_report !== false
+          ? await generateDeliveryReport(r.client_id, contract?.plan_id, selectedMonth)
+          : { text: '' };
+
         const message = template
           .replace(/\{nome_cliente\}/g, client.companyName)
           .replace(/\{valor\}/g, value)
           .replace(/\{dia_vencimento\}/g, dueDay)
           .replace(/\{dados_pagamento\}/g, paymentInfo)
-          .replace(/\{relatorio_entregas\}/g, '');
+          .replace(/\{relatorio_entregas\}/g, report.text);
         const result = await sendWhatsAppMessage({ number: client.whatsapp, message, clientId: client.id, triggerType: 'manual' });
         if (result.success) sent++; else errors++;
       } catch { errors++; }

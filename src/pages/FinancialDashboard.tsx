@@ -14,6 +14,7 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
+import { generateDeliveryReport } from '@/lib/billingReport';
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
 
 const fadeUp = {
@@ -224,6 +225,14 @@ export default function FinancialDashboard() {
           if (paymentConfig.pix_key) paymentInfo += `\nChave PIX: ${paymentConfig.pix_key}`;
           if (paymentConfig.document) paymentInfo += `\nCPF/CNPJ: ${paymentConfig.document}`;
         }
+
+        // Get plan_id from contract
+        const contract = contracts.find(c => c.client_id === r.client_id);
+        const refMonth = selectedMonth;
+        const report = paymentConfig?.include_delivery_report !== false
+          ? await generateDeliveryReport(r.client_id, contract?.plan_id, refMonth)
+          : { text: '' };
+
         const template = paymentConfig?.msg_billing_overdue ||
           'Olá, {nome_cliente}! 😊\n\nIdentificamos uma pendência referente à mensalidade no valor de {valor}.\n\nSe já realizou o pagamento, por favor desconsidere esta mensagem.\n\n{dados_pagamento}';
         const message = template
@@ -231,7 +240,7 @@ export default function FinancialDashboard() {
           .replace(/\{valor\}/g, value)
           .replace(/\{dia_vencimento\}/g, r.due_date?.split('-')[2] || '')
           .replace(/\{dados_pagamento\}/g, paymentInfo)
-          .replace(/\{relatorio_entregas\}/g, '');
+          .replace(/\{relatorio_entregas\}/g, report.text);
         const result = await sendWhatsAppMessage({ number: client.whatsapp, message, clientId: client.id, triggerType: 'manual' });
         if (result.success) sent++; else errors++;
       } catch { errors++; }

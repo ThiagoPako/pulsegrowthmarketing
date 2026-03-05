@@ -9,15 +9,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
+import { sendWhatsAppMessage } from '@/services/whatsappService';
+import { Textarea } from '@/components/ui/textarea';
 
 const DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 const CONTENT_TYPES: ContentType[] = ['reels', 'story', 'produto'];
 
 const emptyClient = (): Partial<Client> => ({
-  companyName: '', responsiblePerson: '', phone: '', color: CLIENT_COLORS[0].value,
+  companyName: '', responsiblePerson: '', phone: '', whatsapp: '', color: CLIENT_COLORS[0].value,
   fixedDay: 'segunda', fixedTime: '09:00',
   videomaker: '', backupTime: '14:00', backupDay: 'terca', extraDay: 'quarta',
   extraContentTypes: [], acceptsExtra: false, extraClientAppears: false,
@@ -60,6 +62,10 @@ export default function Clients() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const [sendWaOpen, setSendWaOpen] = useState(false);
+  const [sendWaClient, setSendWaClient] = useState<Client | null>(null);
+  const [sendWaMsg, setSendWaMsg] = useState('');
+  const [sendWaLoading, setSendWaLoading] = useState(false);
 
   const videomakers = users.filter(u => u.role === 'videomaker');
 
@@ -176,7 +182,7 @@ export default function Clients() {
   };
 
   const handleSave = async () => {
-    if (!form.companyName || !form.responsiblePerson || !form.phone || !form.videomaker) {
+    if (!form.companyName || !form.responsiblePerson || !form.whatsapp || !form.videomaker) {
       toast.error('Preencha todos os campos obrigatórios'); return;
     }
     if (editing) {
@@ -255,7 +261,7 @@ export default function Clients() {
     return { vmName: vm.name, workDays, grid };
   }, [form.videomaker, settings, clients, users, editing]);
 
-  const canProceedStep0 = form.companyName && form.responsiblePerson && form.phone;
+  const canProceedStep0 = form.companyName && form.responsiblePerson && form.whatsapp;
   const canProceedStep1 = form.videomaker && form.fixedDay && form.fixedTime;
 
   // ========== STEP RENDERERS ==========
@@ -300,8 +306,13 @@ export default function Clients() {
         <Input value={form.responsiblePerson} onChange={e => setForm({ ...form, responsiblePerson: e.target.value })} placeholder="Ex: João Silva" />
       </div>
       <div className="space-y-1">
-        <Label>Número de WhatsApp *</Label>
-        <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="(11) 99999-9999" />
+        <Label>Telefone</Label>
+        <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="(62) 99999-9999" />
+      </div>
+      <div className="space-y-1">
+        <Label>WhatsApp do Cliente *</Label>
+        <Input value={form.whatsapp} onChange={e => setForm({ ...form, whatsapp: e.target.value })} placeholder="5562999999999" />
+        <p className="text-[10px] text-muted-foreground">Formato: 55 + DDD + número (ex: 5562999999999)</p>
       </div>
       <div className="space-y-2">
         <Label>Cor de Identificação</Label>
@@ -600,7 +611,7 @@ export default function Clients() {
           <span className="text-muted-foreground">Responsável:</span>
           <span className="font-medium">{form.responsiblePerson}</span>
           <span className="text-muted-foreground">WhatsApp:</span>
-          <span className="font-medium">{form.phone}</span>
+          <span className="font-medium">{form.whatsapp || form.phone}</span>
           <span className="text-muted-foreground">Videomaker:</span>
           <span className="font-medium">{users.find(u => u.id === form.videomaker)?.name || '—'}</span>
           <span className="text-muted-foreground">Dia fixo:</span>
@@ -732,6 +743,12 @@ export default function Clients() {
                 </div>
               </div>
               <div className="flex gap-1 shrink-0">
+                {c.whatsapp && (
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => {
+                    setSendWaClient(c);
+                    setSendWaOpen(true);
+                  }}><MessageSquare size={14} /></Button>
+                )}
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpen(c)}><Pencil size={14} /></Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(c.id)}><Trash2 size={14} /></Button>
               </div>
@@ -739,6 +756,47 @@ export default function Clients() {
           ))}
         </div>
       )}
+
+      {/* WhatsApp Send Dialog */}
+      <Dialog open={sendWaOpen} onOpenChange={setSendWaOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><MessageSquare size={18} className="text-success" /> Enviar WhatsApp</DialogTitle>
+          </DialogHeader>
+          {sendWaClient && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-secondary/50">
+                <p className="font-medium text-sm">{sendWaClient.companyName}</p>
+                <p className="text-xs text-muted-foreground">{sendWaClient.whatsapp}</p>
+              </div>
+              <div className="space-y-1">
+                <Label>Mensagem</Label>
+                <Textarea value={sendWaMsg} onChange={e => setSendWaMsg(e.target.value)} placeholder="Digite a mensagem..." rows={5} />
+              </div>
+              <Button onClick={async () => {
+                if (!sendWaMsg) { toast.error('Digite uma mensagem'); return; }
+                setSendWaLoading(true);
+                const result = await sendWhatsAppMessage({
+                  number: sendWaClient.whatsapp,
+                  message: sendWaMsg,
+                  clientId: sendWaClient.id,
+                  triggerType: 'manual',
+                });
+                setSendWaLoading(false);
+                if (result.success) {
+                  toast.success('Mensagem enviada!');
+                  setSendWaOpen(false);
+                  setSendWaMsg('');
+                } else {
+                  toast.error(result.error || 'Erro ao enviar');
+                }
+              }} disabled={sendWaLoading} className="w-full gap-2">
+                <Send size={16} /> {sendWaLoading ? 'Enviando...' : 'Enviar'}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

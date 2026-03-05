@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { format, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
-import { generateDeliveryReport } from '@/lib/billingReport';
+import { generateDeliveryReport, resolvePaymentInfo } from '@/lib/billingReport';
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
 
 const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'destructive' | 'secondary' }> = {
@@ -84,14 +84,7 @@ export default function FinancialRevenues() {
       const value = fmt(Number(revenue.amount));
       const dueDay = revenue.due_date?.split('-')[2] || '—';
 
-      let paymentInfo = '';
-      if (paymentConfig && (paymentConfig.pix_key || paymentConfig.receiver_name)) {
-        paymentInfo = '\n\n💳 *Dados para pagamento:*';
-        if (paymentConfig.receiver_name) paymentInfo += `\nNome: ${paymentConfig.receiver_name}`;
-        if (paymentConfig.bank) paymentInfo += `\nBanco: ${paymentConfig.bank}`;
-        if (paymentConfig.pix_key) paymentInfo += `\nChave PIX: ${paymentConfig.pix_key}`;
-        if (paymentConfig.document) paymentInfo += `\nCPF/CNPJ: ${paymentConfig.document}`;
-      }
+      const paymentInfo = resolvePaymentInfo(paymentConfig);
 
       const isOverdue = revenue.status === 'em_atraso';
       const template = isOverdue
@@ -149,14 +142,7 @@ export default function FinancialRevenues() {
       try {
         const value = fmt(Number(r.amount));
         const dueDay = r.due_date?.split('-')[2] || '—';
-        let paymentInfo = '';
-        if (paymentConfig && (paymentConfig.pix_key || paymentConfig.receiver_name)) {
-          paymentInfo = '\n\n💳 *Dados para pagamento:*';
-          if (paymentConfig.receiver_name) paymentInfo += `\nNome: ${paymentConfig.receiver_name}`;
-          if (paymentConfig.bank) paymentInfo += `\nBanco: ${paymentConfig.bank}`;
-          if (paymentConfig.pix_key) paymentInfo += `\nChave PIX: ${paymentConfig.pix_key}`;
-          if (paymentConfig.document) paymentInfo += `\nCPF/CNPJ: ${paymentConfig.document}`;
-        }
+        const paymentInfo = resolvePaymentInfo(paymentConfig);
         const isOverdue = r.status === 'em_atraso';
         const template = isOverdue
           ? (paymentConfig?.msg_billing_overdue || 'Olá, {nome_cliente}! Lembrete: {valor}. {dados_pagamento}')

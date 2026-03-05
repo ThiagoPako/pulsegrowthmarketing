@@ -19,8 +19,15 @@ const TEMPLATE_VARS = [
   { var: '{nome_cliente}', desc: 'Nome da empresa' },
   { var: '{valor}', desc: 'Valor da mensalidade' },
   { var: '{dia_vencimento}', desc: 'Dia do vencimento' },
-  { var: '{dados_pagamento}', desc: 'Dados PIX configurados' },
-  { var: '{relatorio_entregas}', desc: 'Relatório personalizado baseado no plano do cliente (horas, vídeos, reels, stories, artes)' },
+  { var: '{dados_pagamento}', desc: 'Dados PIX (usa o template de dados de pagamento)' },
+  { var: '{relatorio_entregas}', desc: 'Relatório personalizado baseado no plano do cliente' },
+];
+
+const PAYMENT_DATA_VARS = [
+  { var: '{nome_recebedor}', desc: 'Nome do recebedor' },
+  { var: '{banco}', desc: 'Nome do banco' },
+  { var: '{chave_pix}', desc: 'Chave PIX' },
+  { var: '{documento}', desc: 'CPF ou CNPJ' },
 ];
 
 export default function FinancialSettings() {
@@ -30,6 +37,7 @@ export default function FinancialSettings() {
   const [form, setForm] = useState({
     pix_key: '', receiver_name: '', bank: '', document: '',
     msg_billing_due: '', msg_billing_overdue: '', include_delivery_report: true,
+    msg_payment_data: '💳 *Dados para pagamento:*\nNome: {nome_recebedor}\nBanco: {banco}\nChave PIX: {chave_pix}\nCPF/CNPJ: {documento}',
   });
   const [newCat, setNewCat] = useState('');
   const [previewClientId, setPreviewClientId] = useState<string>('');
@@ -47,6 +55,7 @@ export default function FinancialSettings() {
         msg_billing_due: paymentConfig.msg_billing_due || '',
         msg_billing_overdue: paymentConfig.msg_billing_overdue || '',
         include_delivery_report: paymentConfig.include_delivery_report ?? true,
+        msg_payment_data: paymentConfig.msg_payment_data || '💳 *Dados para pagamento:*\nNome: {nome_recebedor}\nBanco: {banco}\nChave PIX: {chave_pix}\nCPF/CNPJ: {documento}',
       });
     }
   }, [paymentConfig]);
@@ -99,11 +108,11 @@ export default function FinancialSettings() {
 
     let paymentInfo = '';
     if (form.pix_key || form.receiver_name) {
-      paymentInfo = '\n\n💳 *Dados para pagamento:*';
-      if (form.receiver_name) paymentInfo += `\nNome: ${form.receiver_name}`;
-      if (form.bank) paymentInfo += `\nBanco: ${form.bank}`;
-      if (form.pix_key) paymentInfo += `\nChave PIX: ${form.pix_key}`;
-      if (form.document) paymentInfo += `\nCPF/CNPJ: ${form.document}`;
+      paymentInfo = form.msg_payment_data
+        .replace(/\{nome_recebedor\}/g, form.receiver_name || '')
+        .replace(/\{banco\}/g, form.bank || '')
+        .replace(/\{chave_pix\}/g, form.pix_key || '')
+        .replace(/\{documento\}/g, form.document || '');
     }
 
     const template = previewTab === 'overdue'
@@ -174,6 +183,28 @@ export default function FinancialSettings() {
             <div><Label>Banco</Label><Input value={form.bank} onChange={e => setForm({ ...form, bank: e.target.value })} /></div>
             <div><Label>CPF ou CNPJ</Label><Input value={form.document} onChange={e => setForm({ ...form, document: e.target.value })} /></div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Template de Dados de Pagamento</CardTitle>
+          <CardDescription className="text-xs">Personalize como os dados PIX aparecem na mensagem (variável {'{dados_pagamento}'})</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-1.5 p-3 rounded-md bg-muted/50">
+            <div className="w-full flex items-center gap-1 mb-1 text-xs text-muted-foreground"><Info size={12} /> Variáveis disponíveis:</div>
+            {PAYMENT_DATA_VARS.map(v => (
+              <Badge key={v.var} variant="secondary" className="text-xs font-mono cursor-help" title={v.desc}>{v.var}</Badge>
+            ))}
+          </div>
+          <Textarea
+            value={form.msg_payment_data}
+            onChange={e => setForm({ ...form, msg_payment_data: e.target.value })}
+            rows={5}
+            className="font-mono text-xs"
+            placeholder="Template dos dados de pagamento..."
+          />
         </CardContent>
       </Card>
 

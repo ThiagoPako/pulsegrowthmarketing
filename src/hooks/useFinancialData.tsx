@@ -195,12 +195,24 @@ export function useFinancialData() {
     return !error;
   };
 
+  const updateCashMovement = async (id: string, updates: Partial<CashMovement>) => {
+    const { error } = await supabase.from('cash_reserve_movements').update(updates as any).eq('id', id);
+    if (!error) await fetchAll();
+    return !error;
+  };
+
+  const deleteCashMovement = async (id: string) => {
+    const { error } = await supabase.from('cash_reserve_movements').delete().eq('id', id);
+    if (!error) await fetchAll();
+    return !error;
+  };
+
   return {
     contracts, revenues, expenses, categories, paymentConfig, billingMessages, cashMovements, loading,
     upsertContract, deleteContract,
     addRevenue, updateRevenue, generateMonthlyRevenues,
     addExpense, updateExpense, deleteExpense,
-    addCategory, updatePaymentConfig, addCashMovement,
+    addCategory, updatePaymentConfig, addCashMovement, updateCashMovement, deleteCashMovement,
     refetch: fetchAll,
   };
 }

@@ -61,6 +61,38 @@ export default function EndomarketingDashboard() {
     return { activeClients, clientsWithRecordingThisWeek, hoursToday, availableHoursToday, almostFullDays, freeDays };
   }, [clientes, agendamentos, profissionais, today, weekStart, weekEnd, getDailyOccupation]);
 
+  // Capacity analysis: how many more clients can we serve?
+  const capacityData = useMemo(() => {
+    const activePros = profissionais.filter(p => p.active);
+    const activeClientsArr = clientes.filter(c => c.active);
+
+    // Total weekly capacity in minutes
+    const totalWeeklyCapacity = activePros.reduce((sum, p) => sum + p.max_hours_per_day * 60 * (p.available_days?.length || 5), 0);
+
+    // Total weekly demand in minutes from active clients
+    const totalWeeklyDemand = activeClientsArr.reduce((sum, c) => sum + c.session_duration * c.presence_days_per_week, 0);
+
+    const remainingMinutes = Math.max(0, totalWeeklyCapacity - totalWeeklyDemand);
+    const usagePct = totalWeeklyCapacity > 0 ? Math.min(100, (totalWeeklyDemand / totalWeeklyCapacity) * 100) : 0;
+
+    // Average demand per client (use actual average, or default 60min * 3 days)
+    const avgDemandPerClient = activeClientsArr.length > 0
+      ? totalWeeklyDemand / activeClientsArr.length
+      : 60 * 3; // default assumption
+
+    const canStillServe = Math.floor(remainingMinutes / avgDemandPerClient);
+
+    return {
+      totalWeeklyCapacity,
+      totalWeeklyDemand,
+      remainingMinutes,
+      usagePct,
+      canStillServe,
+      totalPros: activePros.length,
+      totalClients: activeClientsArr.length,
+    };
+  }, [clientes, profissionais]);
+
   const activeClientes = clientes.filter(c => c.active);
 
   const getWeekStatus = (clienteId: string) => {
@@ -117,6 +149,66 @@ export default function EndomarketingDashboard() {
           </motion.div>
         ))}
       </div>
+
+      {/* Capacity visualization */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-semibold font-display flex items-center gap-2">
+                  <BarChart3 size={18} className="text-primary" /> Capacidade de Atendimento
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Baseado na disponibilidade de {capacityData.totalPros} profissional{capacityData.totalPros !== 1 ? 'is' : ''}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-3xl font-bold font-display text-primary">{capacityData.canStillServe}</p>
+                <p className="text-xs text-muted-foreground">empresas disponíveis</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {/* Usage bar */}
+              <div>
+                <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
+                  <span>Ocupação semanal</span>
+                  <span className="font-medium">{capacityData.usagePct.toFixed(0)}%</span>
+                </div>
+                <div className="w-full h-3 rounded-full bg-muted overflow-hidden">
+                  <motion.div
+                    className={`h-full rounded-full ${
+                      capacityData.usagePct >= 90 ? 'bg-destructive' :
+                      capacityData.usagePct >= 70 ? 'bg-amber-500' :
+                      'bg-primary'
+                    }`}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${capacityData.usagePct}%` }}
+                    transition={{ duration: 0.8, ease: 'easeOut' }}
+                  />
+                </div>
+              </div>
+
+              {/* Details grid */}
+              <div className="grid grid-cols-3 gap-3 pt-2 border-t border-border">
+                <div className="text-center p-2 rounded-lg bg-muted/50">
+                  <p className="text-lg font-bold font-display">{(capacityData.totalWeeklyCapacity / 60).toFixed(0)}h</p>
+                  <p className="text-[10px] text-muted-foreground">Capacidade total</p>
+                </div>
+                <div className="text-center p-2 rounded-lg bg-primary/5">
+                  <p className="text-lg font-bold font-display text-primary">{(capacityData.totalWeeklyDemand / 60).toFixed(0)}h</p>
+                  <p className="text-[10px] text-muted-foreground">Em uso</p>
+                </div>
+                <div className="text-center p-2 rounded-lg bg-success/5">
+                  <p className="text-lg font-bold font-display text-success">{(capacityData.remainingMinutes / 60).toFixed(0)}h</p>
+                  <p className="text-[10px] text-muted-foreground">Disponível</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Client cards */}
       <div>

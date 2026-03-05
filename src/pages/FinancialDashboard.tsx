@@ -21,7 +21,7 @@ export default function FinancialDashboard() {
   const { clients, recordings } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
 
-  const monthStart = useMemo(() => startOfMonth(new Date(selectedMonth + '-01')), [selectedMonth]);
+  const monthStart = useMemo(() => startOfMonth(new Date(selectedMonth + '-01T12:00:00')), [selectedMonth]);
   const monthEnd = useMemo(() => endOfMonth(monthStart), [monthStart]);
 
   // Filter data for selected month

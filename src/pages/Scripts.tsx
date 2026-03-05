@@ -1,8 +1,8 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { highlightQuotes, highlightQuotesForPdf, cleanHtml } from '@/lib/highlightQuotes';
 import { useApp } from '@/contexts/AppContext';
-import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS } from '@/types';
-import type { Script, ScriptVideoType, ScriptPriority } from '@/types';
+import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS, SCRIPT_CONTENT_FORMAT_LABELS } from '@/types';
+import type { Script, ScriptVideoType, ScriptPriority, ScriptContentFormat } from '@/types';
 import { useEndoClientes } from '@/hooks/useEndomarketing';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +25,7 @@ import pulseHeader from '@/assets/pulse_header.png';
 import ClientLogo from '@/components/ClientLogo';
 
 const VIDEO_TYPES: ScriptVideoType[] = ['vendas', 'institucional', 'reconhecimento', 'educacional', 'bastidores', 'depoimento', 'lancamento'];
+const CONTENT_FORMATS: ScriptContentFormat[] = ['reels', 'story', 'criativo'];
 
 function RichEditor({ content, onChange }: { content: string; onChange: (html: string) => void }) {
   const editor = useEditor({
@@ -129,6 +130,7 @@ export default function Scripts() {
     clientId: '',
     title: '',
     videoType: 'vendas' as ScriptVideoType,
+    contentFormat: 'reels' as ScriptContentFormat,
     content: '',
     priority: 'normal' as ScriptPriority,
     isEndomarketing: false,
@@ -165,6 +167,7 @@ export default function Scripts() {
       setEditing(script);
       setForm({
         clientId: script.clientId, title: script.title, videoType: script.videoType,
+        contentFormat: script.contentFormat || 'reels',
         content: script.content, priority: script.priority || 'normal',
         isEndomarketing: script.isEndomarketing || false,
         endoClientId: script.endoClientId || '',
@@ -172,7 +175,7 @@ export default function Scripts() {
       });
     } else {
       setEditing(null);
-      setForm({ clientId: '', title: '', videoType: 'vendas', content: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '' });
+      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '' });
     }
     setOpen(true);
   };
@@ -332,7 +335,7 @@ export default function Scripts() {
                     <p className="font-medium text-sm truncate">{script.title}</p>
                   </div>
                   <p className="text-[11px] text-muted-foreground truncate ml-6">
-                    {getClientName(script.clientId)} · {SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}
+                    {getClientName(script.clientId)} · {SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · <span className="font-medium">{SCRIPT_CONTENT_FORMAT_LABELS[script.contentFormat || 'reels']}</span>
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
@@ -392,7 +395,7 @@ export default function Scripts() {
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editing ? 'Editar Roteiro' : 'Novo Roteiro'}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1">
                 <Label>Cliente *</Label>
                 <Select value={form.clientId} onValueChange={v => setForm({ ...form, clientId: v })}>
@@ -415,6 +418,15 @@ export default function Scripts() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {VIDEO_TYPES.map(t => <SelectItem key={t} value={t}>{SCRIPT_VIDEO_TYPE_LABELS[t]}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Formato do Conteúdo</Label>
+                <Select value={form.contentFormat} onValueChange={v => setForm({ ...form, contentFormat: v as ScriptContentFormat })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CONTENT_FORMATS.map(f => <SelectItem key={f} value={f}>{SCRIPT_CONTENT_FORMAT_LABELS[f]}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -491,6 +503,8 @@ export default function Scripts() {
                 <span>{getClientName(viewing.clientId)}</span>
                 <span>·</span>
                 <Badge variant="outline" className="text-[10px]">{SCRIPT_VIDEO_TYPE_LABELS[viewing.videoType]}</Badge>
+                <span>·</span>
+                <Badge variant="outline" className="text-[10px]">{SCRIPT_CONTENT_FORMAT_LABELS[viewing.contentFormat || 'reels']}</Badge>
                 <span>·</span>
                 <Badge variant={viewing.recorded ? 'default' : 'outline'} className={`text-[10px] ${viewing.recorded ? 'bg-success text-success-foreground' : ''}`}>
                   {viewing.recorded ? 'Gravado' : 'Pendente'}

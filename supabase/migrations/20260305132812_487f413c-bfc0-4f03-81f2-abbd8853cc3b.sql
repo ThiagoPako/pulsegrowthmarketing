@@ -1,0 +1,1 @@
+ALTER TABLE public.scripts ADD COLUMN content_format text NOT NULL DEFAULT 'reels';

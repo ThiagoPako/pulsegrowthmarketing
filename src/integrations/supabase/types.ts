@@ -670,6 +670,7 @@ export type Database = {
         Row: {
           client_id: string
           content: string
+          content_format: string
           created_at: string
           endo_client_id: string | null
           id: string
@@ -684,6 +685,7 @@ export type Database = {
         Insert: {
           client_id: string
           content?: string
+          content_format?: string
           created_at?: string
           endo_client_id?: string | null
           id?: string
@@ -698,6 +700,7 @@ export type Database = {
         Update: {
           client_id?: string
           content?: string
+          content_format?: string
           created_at?: string
           endo_client_id?: string | null
           id?: string

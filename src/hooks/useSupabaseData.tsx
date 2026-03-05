@@ -377,9 +377,31 @@ export function useSupabaseData() {
   }, []);
 
   const stopActiveRecording = useCallback(async (recordingId: string) => {
+    // Find the active recording to get context
+    const active = activeRecordings.find(a => a.recordingId === recordingId);
+    
     await supabase.from('active_recordings').delete().eq('recording_id', recordingId);
     setActiveRecordings(prev => prev.filter(a => a.recordingId !== recordingId));
-  }, []);
+
+    // Auto-create delivery record
+    if (active) {
+      const { error } = await supabase.from('delivery_records').insert({
+        recording_id: recordingId,
+        client_id: active.clientId,
+        videomaker_id: active.videomarkerId,
+        date: new Date().toISOString().split('T')[0],
+        reels_produced: 0,
+        creatives_produced: 0,
+        stories_produced: 0,
+        arts_produced: 0,
+        extras_produced: 0,
+        videos_recorded: 1,
+        delivery_status: 'realizada',
+        observations: 'Registro automático ao finalizar gravação',
+      } as any);
+      if (error) console.error('Auto delivery record error:', error);
+    }
+  }, [activeRecordings]);
 
   return {
     clients, recordings, tasks, scripts, settings, activeRecordings, loading,

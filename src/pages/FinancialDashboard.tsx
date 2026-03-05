@@ -235,12 +235,15 @@ export default function FinancialDashboard() {
 
         const template = paymentConfig?.msg_billing_overdue ||
           'Olá, {nome_cliente}! 😊\n\nIdentificamos uma pendência referente à mensalidade no valor de {valor}.\n\nSe já realizou o pagamento, por favor desconsidere esta mensagem.\n\n{dados_pagamento}';
-        const message = template
+        let message = template
           .replace(/\{nome_cliente\}/g, client.companyName)
           .replace(/\{valor\}/g, value)
           .replace(/\{dia_vencimento\}/g, r.due_date?.split('-')[2] || '')
           .replace(/\{dados_pagamento\}/g, paymentInfo)
           .replace(/\{relatorio_entregas\}/g, report.text);
+        if (report.text && !template.includes('{relatorio_entregas}')) {
+          message += report.text;
+        }
         const result = await sendWhatsAppMessage({ number: client.whatsapp, message, clientId: client.id, triggerType: 'manual' });
         if (result.success) sent++; else errors++;
       } catch { errors++; }

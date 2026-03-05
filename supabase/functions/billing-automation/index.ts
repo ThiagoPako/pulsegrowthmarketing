@@ -205,12 +205,19 @@ Deno.serve(async (req) => {
       const value = Number(contract.contract_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
       let message: string;
-      const applyVars = (tpl: string) => tpl
-        .replace(/\{nome_cliente\}/g, clientData.company_name)
-        .replace(/\{valor\}/g, value)
-        .replace(/\{dia_vencimento\}/g, String(contract.due_day))
-        .replace(/\{dados_pagamento\}/g, paymentInfo)
-        .replace(/\{relatorio_entregas\}/g, deliverySummary);
+      const applyVars = (tpl: string) => {
+        let result = tpl
+          .replace(/\{nome_cliente\}/g, clientData.company_name)
+          .replace(/\{valor\}/g, value)
+          .replace(/\{dia_vencimento\}/g, String(contract.due_day))
+          .replace(/\{dados_pagamento\}/g, paymentInfo)
+          .replace(/\{relatorio_entregas\}/g, deliverySummary);
+        // If template doesn't have the variable but report exists, append it
+        if (deliverySummary && !tpl.includes('{relatorio_entregas}')) {
+          result += deliverySummary;
+        }
+        return result;
+      };
 
       if (isReminder) {
         const template = paymentConfig?.msg_billing_overdue ||

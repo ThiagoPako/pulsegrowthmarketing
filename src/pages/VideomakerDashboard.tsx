@@ -226,52 +226,69 @@ export default function VideomakerDashboard() {
     const { default: html2canvas } = await import('html2canvas');
     const { default: jsPDF } = await import('jspdf');
 
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-
-    for (let i = 0; i < selectedScripts.length; i++) {
-      const script = selectedScripts[i];
-      if (i > 0) pdf.addPage();
-
-      const container = document.createElement('div');
-      container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:white;padding:0;';
-      container.innerHTML = `
-        <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a;">
-          <div style="margin-bottom:0;">
-            <img src="${pulseHeader}" style="width:100%; display:block;" crossorigin="anonymous" />
-          </div>
-          <div style="padding: 30px 40px;">
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
-              ${script.priority === 'urgent' ? '<span style="color:#dc2626; font-weight:bold;">🚨 URGENTE</span>' : ''}
-              ${script.priority === 'priority' ? '<span style="color:#d97706; font-weight:bold;">⭐ PRIORITÁRIO</span>' : ''}
-            </div>
-            <h1 style="font-size:22px; margin:0 0 6px;">${script.title}</h1>
-            <p style="font-size:13px; color:#666; margin:0 0 20px;">
-              ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · Roteiro ${i + 1} de ${selectedScripts.length}
-            </p>
-            <div style="font-size:14px; line-height:1.7;">
-              ${highlightQuotesForPdf(script.content)}
-            </div>
-            <div style="margin-top:40px; padding-top:16px; border-top:1px solid #e5e5e5; text-align:center;">
-              <p style="font-size:11px; color:#999;">Roteiro gerado por Pulse · ${new Date().toLocaleDateString('pt-BR')}</p>
-            </div>
-          </div>
+    // Build all scripts into a single continuous document with one header
+    const scriptsHtml = selectedScripts.map((script, i) => `
+      <div style="padding: 24px 40px 16px; ${i > 0 ? 'border-top: 2px solid #e5e5e5; margin-top: 16px;' : ''}">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+          ${script.priority === 'urgent' ? '<span style="color:#dc2626; font-weight:bold;">🚨 URGENTE</span>' : ''}
+          ${script.priority === 'priority' ? '<span style="color:#d97706; font-weight:bold;">⭐ PRIORITÁRIO</span>' : ''}
         </div>
-      `;
-      document.body.appendChild(container);
+        <h2 style="font-size:20px; margin:0 0 4px;">${script.title}</h2>
+        <p style="font-size:12px; color:#666; margin:0 0 14px;">
+          ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · Roteiro ${i + 1} de ${selectedScripts.length}
+        </p>
+        <div style="font-size:13px; line-height:1.7;">
+          ${highlightQuotesForPdf(script.content)}
+        </div>
+      </div>
+    `).join('');
 
-      try {
-        const canvas = await html2canvas(container, { scale: 2, useCORS: true });
-        const imgData = canvas.toDataURL('image/png');
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      } finally {
-        document.body.removeChild(container);
+    const container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:white;padding:0;';
+    container.innerHTML = `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a;">
+        <div style="margin-bottom:0;">
+          <img src="${pulseHeader}" style="width:100%; display:block;" crossorigin="anonymous" />
+        </div>
+        <div style="padding: 8px 40px 0;">
+          <p style="font-size:14px; font-weight:600; color:#333; margin:0;">
+            ${client?.companyName || 'Cliente'} — ${selectedScripts.length} roteiro${selectedScripts.length !== 1 ? 's' : ''}
+          </p>
+          <p style="font-size:11px; color:#999; margin:2px 0 0;">
+            ${new Date().toLocaleDateString('pt-BR')}
+          </p>
+        </div>
+        ${scriptsHtml}
+        <div style="padding: 16px 40px 24px; border-top:1px solid #e5e5e5; text-align:center; margin-top:16px;">
+          <p style="font-size:11px; color:#999; margin:0;">Roteiros gerados por Pulse Growth Marketing</p>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(container);
+
+    try {
+      const canvas = await html2canvas(container, { scale: 2, useCORS: true });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfPageHeight = pdf.internal.pageSize.getHeight();
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+      // Paginate: slice the single tall image across multiple pages
+      let yOffset = 0;
+      let page = 0;
+      while (yOffset < imgHeight) {
+        if (page > 0) pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, -yOffset, pdfWidth, imgHeight);
+        yOffset += pdfPageHeight;
+        page++;
       }
-    }
 
-    pdf.save(`roteiros-${client?.companyName?.replace(/\s+/g, '-').toLowerCase() || 'cliente'}.pdf`);
-    toast.success(`PDF com ${selectedScripts.length} roteiro(s) baixado`);
+      pdf.save(`roteiros-${client?.companyName?.replace(/\s+/g, '-').toLowerCase() || 'cliente'}.pdf`);
+      toast.success(`PDF com ${selectedScripts.length} roteiro(s) baixado`);
+    } finally {
+      document.body.removeChild(container);
+    }
   }, [selectedScriptIds, scripts, scriptsClientId, clients]);
 
 

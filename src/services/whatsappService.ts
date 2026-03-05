@@ -159,6 +159,18 @@ export async function getMessageStats(): Promise<{ total: number; sent: number; 
   };
 }
 
+export async function testWhatsAppConnection(): Promise<{ success: boolean; error?: string }> {
+  const config = await getWhatsAppConfig();
+  if (!config?.apiToken) return { success: false, error: 'Token não configurado' };
+
+  const { data, error } = await supabase.functions.invoke('send-whatsapp', {
+    body: { action: 'test_connection' },
+  });
+
+  if (error) return { success: false, error: error.message };
+  return { success: data?.success || false, error: data?.error };
+}
+
 // ── Build messages from templates ──
 
 function applyTemplate(template: string, vars: Record<string, string>): string {

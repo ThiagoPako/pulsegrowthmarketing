@@ -298,14 +298,9 @@ export default function SocialMediaDeliveries() {
     };
   }, [deliveries]);
 
-  // Clients that have deliveries or plans
+  // All clients
   const clientsWithData = useMemo(() => {
-    const clientIds = new Set<string>();
-    deliveries.forEach(d => clientIds.add(d.client_id));
-    Object.keys(clientPlans).forEach(id => { if (clientPlans[id]) clientIds.add(id); });
-    
     return clients
-      .filter(c => clientIds.has(c.id))
       .map(c => {
         const stats = monthlyStats[c.id] || { reels: 0, criativo: 0, story: 0, arte: 0, total: 0, pendentes: 0, agendados: 0, postados: 0 };
         const plan = getClientPlanGoals(c.id);

@@ -27,6 +27,7 @@ const navItems = [
   { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media'] },
   { path: '/conteudo', label: 'Conteúdo', icon: Kanban, roles: ['admin', 'social_media', 'videomaker'] },
   { path: '/edicao', label: 'Edição', icon: Scissors, roles: ['admin', 'editor'] },
+  { path: '/edicao/kanban', label: 'Kanban Ed.', icon: Kanban, roles: ['admin', 'editor'] },
   { path: '/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin'] },
   { path: '/desempenho', label: 'Desempenho', icon: Target, roles: ['admin'] },
   { path: '/financeiro', label: 'Financeiro', icon: DollarSign, roles: ['admin'] },

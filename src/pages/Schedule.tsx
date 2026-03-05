@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useApp } from '@/contexts/AppContext';
+import { supabase } from '@/integrations/supabase/client';
 import type { Recording, RecordingType, Script, DayOfWeek, Client } from '@/types';
 import { SCRIPT_VIDEO_TYPE_LABELS, DAY_LABELS } from '@/types';
 import { useEndoClientes, useEndoAgendamentos } from '@/hooks/useEndomarketing';
@@ -13,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles, RefreshCw, MessageSquare, Play, Square, Star } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles, RefreshCw, MessageSquare, Play, Square, Star, Link } from 'lucide-react';
 import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
@@ -88,6 +89,8 @@ export default function Schedule() {
   const [finishRecOpen, setFinishRecOpen] = useState(false);
   const [finishRecording, setFinishRecordingState] = useState<Recording | null>(null);
   const [finishCompletedScripts, setFinishCompletedScripts] = useState<Set<string>>(new Set());
+  const [finishStep, setFinishStep] = useState<'scripts' | 'drive'>('scripts');
+  const [finishDriveLink, setFinishDriveLink] = useState('');
 
   const videomakers = users.filter(u => u.role === 'videomaker');
   const currentMonth = addMonths(new Date(), monthOffset);
@@ -399,6 +402,8 @@ export default function Schedule() {
     if (isRecordingActive(rec.id)) {
       setFinishRecordingState(rec);
       setFinishCompletedScripts(new Set());
+      setFinishStep('scripts');
+      setFinishDriveLink('');
       setFinishRecOpen(true);
     } else {
       setStartRecordingState(rec);
@@ -431,13 +436,35 @@ export default function Schedule() {
       clientId: startRecording.clientId,
       startedAt: new Date().toISOString(),
     });
+    
+    // Move content_tasks linked to selected scripts to "captacao"
+    for (const scriptId of startSelectedScripts) {
+      supabase.from('content_tasks').update({ kanban_column: 'captacao', recording_id: startRecording.id } as any)
+        .eq('script_id', scriptId).eq('kanban_column', 'ideias')
+        .then(({ error }) => { if (error) console.error('Move to captacao error:', error); });
+    }
+    
     toast.success(`Gravação iniciada com ${startSelectedScripts.size} roteiro(s) — ${getClientName(startRecording.clientId)}`);
     setStartRecOpen(false);
     setStartRecordingState(null);
   };
 
-  const confirmFinishRec = () => {
+  const handleGoToDriveStepSchedule = () => {
+    if (finishCompletedScripts.size === 0) {
+      toast.error('Selecione pelo menos 1 roteiro gravado');
+      return;
+    }
+    setFinishStep('drive');
+  };
+
+  const confirmFinishRec = async () => {
     if (!finishRecording) return;
+    
+    if (!finishDriveLink.trim()) {
+      toast.error('Adicione o link da pasta do Google Drive com os materiais');
+      return;
+    }
+    
     const now = new Date().toISOString();
     const planned = plannedScriptsMap[finishRecording.id] || [];
 
@@ -468,7 +495,47 @@ export default function Schedule() {
     }, completedIds);
     updateRecording({ ...finishRecording, status: 'concluida' });
 
-    let msg = `Gravação concluída! ${reelsCount} roteiro(s) gravado(s)`;
+    // Move completed scripts' content_tasks to "edicao" with drive link
+    const editingDeadline = new Date();
+    editingDeadline.setDate(editingDeadline.getDate() + 2);
+
+    for (const scriptId of completedIds) {
+      const script = scripts.find(s => s.id === scriptId);
+      if (!script) continue;
+      const { data: existing } = await supabase.from('content_tasks')
+        .select('id').eq('script_id', scriptId).limit(1);
+      
+      if (existing && existing.length > 0) {
+        await supabase.from('content_tasks').update({
+          kanban_column: 'edicao',
+          drive_link: finishDriveLink.trim(),
+          recording_id: finishRecording.id,
+          editing_deadline: editingDeadline.toISOString(),
+          description: `Roteiro gravado pelo videomaker. Link dos materiais: ${finishDriveLink.trim()}`,
+        } as any).eq('id', existing[0].id);
+      } else {
+        await supabase.from('content_tasks').insert({
+          client_id: finishRecording.clientId,
+          title: script.title,
+          content_type: script.contentFormat || 'reels',
+          kanban_column: 'edicao',
+          description: `Roteiro gravado pelo videomaker. Link dos materiais: ${finishDriveLink.trim()}`,
+          script_id: scriptId,
+          recording_id: finishRecording.id,
+          drive_link: finishDriveLink.trim(),
+          editing_deadline: editingDeadline.toISOString(),
+        } as any);
+      }
+    }
+
+    // Move unfinished scripts' content_tasks back to "ideias"
+    const unfinishedIds = planned.filter(id => !finishCompletedScripts.has(id));
+    for (const scriptId of unfinishedIds) {
+      await supabase.from('content_tasks').update({ kanban_column: 'ideias', recording_id: null } as any)
+        .eq('script_id', scriptId).in('kanban_column', ['captacao']);
+    }
+
+    let msg = `Gravação concluída! ${reelsCount} roteiro(s) enviado(s) para edição`;
     if (returnedCount > 0) msg += ` · ${returnedCount} retornado(s) ao banco`;
     toast.success(msg);
 
@@ -476,6 +543,8 @@ export default function Schedule() {
     setFinishRecOpen(false);
     setFinishRecordingState(null);
     setFinishCompletedScripts(new Set());
+    setFinishDriveLink('');
+    setFinishStep('scripts');
   };
 
   const statusTag = (rec: Recording) => {
@@ -1093,8 +1162,8 @@ export default function Schedule() {
         </DialogContent>
       </Dialog>
 
-      {/* Finish Recording — Script Completion Dialog */}
-      <Dialog open={finishRecOpen} onOpenChange={(open) => { if (!open) { setFinishRecOpen(false); setFinishRecordingState(null); } }}>
+      {/* Finish Recording — Script Completion + Drive Link Dialog */}
+      <Dialog open={finishRecOpen} onOpenChange={(open) => { if (!open) { setFinishRecOpen(false); setFinishRecordingState(null); setFinishStep('scripts'); setFinishDriveLink(''); } }}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1102,45 +1171,72 @@ export default function Schedule() {
               Finalizar Gravação — {finishRecording ? getClientName(finishRecording.clientId) : ''}
             </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Selecione os roteiros que foram gravados. Os não selecionados retornarão automaticamente ao banco de roteiros pendentes.
-          </p>
-          {finishRecScripts.length === 0 ? (
-            <div className="text-center py-6 text-muted-foreground">
-              <FileText size={32} className="mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Nenhum roteiro planejado para esta sessão</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {finishRecScripts.map(script => (
-                <div key={script.id} className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
-                  finishCompletedScripts.has(script.id) ? 'border-success/40 bg-success/5' : 'border-border hover:bg-muted/30'
-                }`}>
-                  <Checkbox
-                    checked={finishCompletedScripts.has(script.id)}
-                    onCheckedChange={checked => {
-                      const next = new Set(finishCompletedScripts);
-                      checked ? next.add(script.id) : next.delete(script.id);
-                      setFinishCompletedScripts(next);
-                    }}
-                    className="mt-1"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-sm">{script.title}</p>
-                    <Badge variant="outline" className="text-[10px] mt-1">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
-                  </div>
+          
+          {finishStep === 'scripts' ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Selecione os roteiros que foram gravados. Os não selecionados retornarão automaticamente ao banco de roteiros pendentes.
+              </p>
+              {finishRecScripts.length === 0 ? (
+                <div className="text-center py-6 text-muted-foreground">
+                  <FileText size={32} className="mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Nenhum roteiro planejado para esta sessão</p>
                 </div>
-              ))}
-            </div>
+              ) : (
+                <div className="space-y-2">
+                  {finishRecScripts.map(script => (
+                    <div key={script.id} className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
+                      finishCompletedScripts.has(script.id) ? 'border-success/40 bg-success/5' : 'border-border hover:bg-muted/30'
+                    }`}>
+                      <Checkbox
+                        checked={finishCompletedScripts.has(script.id)}
+                        onCheckedChange={checked => {
+                          const next = new Set(finishCompletedScripts);
+                          checked ? next.add(script.id) : next.delete(script.id);
+                          setFinishCompletedScripts(next);
+                        }}
+                        className="mt-1"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm">{script.title}</p>
+                        <Badge variant="outline" className="text-[10px] mt-1">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2 mt-3">
+                <Button variant="outline" onClick={() => { setFinishRecOpen(false); setFinishRecordingState(null); }} className="flex-1">
+                  Cancelar
+                </Button>
+                <Button onClick={handleGoToDriveStepSchedule} disabled={finishCompletedScripts.size === 0} className="flex-1 gap-1.5">
+                  Próximo ({finishCompletedScripts.size} roteiro{finishCompletedScripts.size !== 1 ? 's' : ''})
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Cole o link da pasta do Google Drive onde subiu os materiais brutos desta gravação.
+              </p>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2"><Link size={14} /> Link do Google Drive</Label>
+                <Input
+                  value={finishDriveLink}
+                  onChange={e => setFinishDriveLink(e.target.value)}
+                  placeholder="https://drive.google.com/drive/folders/..."
+                />
+              </div>
+              <div className="flex gap-2 mt-3">
+                <Button variant="outline" onClick={() => setFinishStep('scripts')} className="flex-1">
+                  Voltar
+                </Button>
+                <Button onClick={confirmFinishRec} disabled={!finishDriveLink.trim()} className="flex-1 gap-1.5 bg-success hover:bg-success/90 text-success-foreground">
+                  <Check size={16} /> Finalizar
+                </Button>
+              </div>
+            </>
           )}
-          <div className="flex gap-2 mt-3">
-            <Button variant="outline" onClick={() => { setFinishRecOpen(false); setFinishRecordingState(null); }} className="flex-1">
-              Cancelar
-            </Button>
-            <Button onClick={confirmFinishRec} className="flex-1 gap-1.5 bg-success hover:bg-success/90 text-success-foreground">
-              <Check size={16} /> Finalizar ({finishCompletedScripts.size} roteiro{finishCompletedScripts.size !== 1 ? 's' : ''})
-            </Button>
-          </div>
         </DialogContent>
       </Dialog>
     </div>

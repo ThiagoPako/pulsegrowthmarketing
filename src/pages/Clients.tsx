@@ -88,7 +88,7 @@ export default function Clients() {
         let totalSlots = 0;
         const shiftRanges = [[shiftAStart, shiftAEnd], [shiftBStart, shiftBEnd]];
         for (const [sStart, sEnd] of shiftRanges) {
-          for (let t = sStart; t + duration <= sEnd; t += duration) {
+          for (let t = sStart; t + duration <= sEnd; t += duration + 30) {
             totalSlots++;
             const timeStr = minutesToTime(t);
             const isOccupied = clients.some(c => {
@@ -233,8 +233,8 @@ export default function Clients() {
 
     // All time slots across both shifts
     const timeSlots: number[] = [];
-    for (let t = shiftAStart; t + duration <= shiftAEnd; t += duration) timeSlots.push(t);
-    for (let t = shiftBStart; t + duration <= shiftBEnd; t += duration) timeSlots.push(t);
+    for (let t = shiftAStart; t + duration <= shiftAEnd; t += duration + 30) timeSlots.push(t);
+    for (let t = shiftBStart; t + duration <= shiftBEnd; t += duration + 30) timeSlots.push(t);
 
     const workDays = settings.workDays;
 

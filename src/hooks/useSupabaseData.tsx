@@ -162,9 +162,9 @@ function rowToActiveRecording(r: any): ActiveRecording {
 }
 
 const defaultSettings: CompanySettings = {
-  shiftAStart: '08:00',
+  shiftAStart: '08:30',
   shiftAEnd: '12:00',
-  shiftBStart: '13:00',
+  shiftBStart: '14:30',
   shiftBEnd: '18:00',
   workDays: ['segunda', 'terca', 'quarta', 'quinta', 'sexta'],
   recordingDuration: 120,

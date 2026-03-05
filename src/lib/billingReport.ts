@@ -16,15 +16,25 @@ interface DeliveryReport {
   text: string;
 }
 
+const DEFAULT_DELIVERY_TEMPLATE = `Esse mês foi incrível e fizemos muita coisa juntos! 💪
+
+Estivemos juntos durante *{horas_gravacao}h de gravação* em {sessoes} sessão(ões) 📹
+Produzimos *{videos} vídeos* para sua marca 🎬
+Publicamos *{reels} reels* no seu perfil 🎥
+Estivemos presentes nos stories com *{stories} publicações* 📱
+Criamos *{artes} artes* para seus canais 🎨
+Desenvolvemos *{criativos} criativos* para suas campanhas ✨
+Ainda entregamos *{extras} conteúdos extras* além do contratado ➕`;
+
 /**
  * Generates a personalized delivery report for a client based on their plan.
- * Fetches delivery_records, social_media_deliveries, and the client's plan
- * to build a warm, human message showing only metrics relevant to the plan.
+ * Uses a customizable template. Lines containing metrics that are zero are removed.
  */
 export async function generateDeliveryReport(
   clientId: string,
   planId: string | null | undefined,
-  referenceMonth?: string // 'YYYY-MM' format, defaults to current month
+  referenceMonth?: string,
+  customTemplate?: string
 ): Promise<DeliveryReport> {
   const now = new Date();
   const year = referenceMonth ? parseInt(referenceMonth.split('-')[0]) : now.getFullYear();
@@ -34,7 +44,6 @@ export async function generateDeliveryReport(
   const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
   const monthEnd = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
-  // Fetch plan, deliveries, and social deliveries in parallel
   const planPromise = planId
     ? supabase.from('plans').select('*').eq('id', planId).single()
     : Promise.resolve({ data: null });
@@ -63,7 +72,6 @@ export async function generateDeliveryReport(
   const deliveries = deliveriesResult.data || [];
   const socialDeliveries = socialResult.data || [];
 
-  // Calculate stats
   let gravacoes = 0, videos = 0, reels = 0, stories = 0, artes = 0, criativos = 0, extras = 0;
 
   deliveries.forEach(d => {
@@ -83,45 +91,54 @@ export async function generateDeliveryReport(
   const totalStories = Math.max(socialStories, stories);
   const recordingHours = gravacoes * (plan?.recording_hours || 2);
 
-  const lines: string[] = [];
-
-  // Always show recording info if recordings happened
-  if (gravacoes > 0) {
-    lines.push(`Estivemos juntos durante *${recordingHours}h de gravação* em ${gravacoes} sessão${gravacoes > 1 ? 'ões' : ''} 📹`);
-  }
-  if (videos > 0) {
-    lines.push(`Produzimos *${videos} vídeos* para sua marca 🎬`);
+  // If no deliveries at all, return empty
+  if (gravacoes === 0 && videos === 0 && totalReels === 0 && totalStories === 0 && artes === 0 && criativos === 0 && extras === 0) {
+    return { text: '' };
   }
 
-  // Show metrics based on plan
+  const template = customTemplate || DEFAULT_DELIVERY_TEMPLATE;
+
+  // Map of variable -> value (used to remove lines with zero metrics)
+  const varMap: Record<string, number> = {
+    '{horas_gravacao}': recordingHours,
+    '{sessoes}': gravacoes,
+    '{videos}': videos,
+    '{reels}': totalReels,
+    '{stories}': totalStories,
+    '{artes}': artes,
+    '{criativos}': criativos,
+    '{extras}': extras,
+  };
+
+  // Filter by plan: hide metrics not in plan (if plan exists)
+  const planFilter: Record<string, boolean> = {};
   if (plan) {
-    if (plan.reels_qty > 0 && totalReels > 0) {
-      lines.push(`Publicamos *${totalReels} reels* no seu perfil 🎥`);
-    }
-    if (plan.stories_qty > 0 && totalStories > 0) {
-      lines.push(`Estivemos presentes nos stories com *${totalStories} publicações* 📱`);
-    }
-    if (plan.arts_qty > 0 && artes > 0) {
-      lines.push(`Criamos *${artes} artes* para seus canais 🎨`);
-    }
-    if (plan.creatives_qty > 0 && criativos > 0) {
-      lines.push(`Desenvolvemos *${criativos} criativos* para suas campanhas ✨`);
-    }
-  } else {
-    // No plan — show all non-zero stats
-    if (totalReels > 0) lines.push(`Publicamos *${totalReels} reels* no seu perfil 🎥`);
-    if (totalStories > 0) lines.push(`Estivemos presentes nos stories com *${totalStories} publicações* 📱`);
-    if (artes > 0) lines.push(`Criamos *${artes} artes* para seus canais 🎨`);
-    if (criativos > 0) lines.push(`Desenvolvemos *${criativos} criativos* para suas campanhas ✨`);
+    planFilter['{reels}'] = plan.reels_qty > 0;
+    planFilter['{stories}'] = plan.stories_qty > 0;
+    planFilter['{artes}'] = plan.arts_qty > 0;
+    planFilter['{criativos}'] = plan.creatives_qty > 0;
   }
 
-  if (extras > 0) {
-    lines.push(`Ainda entregamos *${extras} conteúdos extras* além do contratado ➕`);
+  // Process template: replace vars, remove lines with zero values or filtered by plan
+  const lines = template.split('\n').filter(line => {
+    // Check if line contains any metric variable
+    for (const [varKey, value] of Object.entries(varMap)) {
+      if (line.includes(varKey)) {
+        // Remove if value is 0 or plan doesn't include this metric
+        if (value === 0) return false;
+        if (plan && planFilter[varKey] === false) return false;
+      }
+    }
+    return true;
+  });
+
+  let result = lines.join('\n');
+  for (const [varKey, value] of Object.entries(varMap)) {
+    result = result.replace(new RegExp(varKey.replace(/[{}]/g, '\\$&'), 'g'), String(value));
   }
 
-  if (lines.length > 0) {
-    return { text: `\n\nEsse mês foi incrível e fizemos muita coisa juntos! 💪\n\n${lines.join('\n')}` };
-  }
+  // Clean up: remove consecutive empty lines
+  result = result.replace(/\n{3,}/g, '\n\n').trim();
 
-  return { text: '' };
+  return { text: `\n\n${result}` };
 }

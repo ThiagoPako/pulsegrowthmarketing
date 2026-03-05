@@ -30,6 +30,17 @@ const PAYMENT_DATA_VARS = [
   { var: '{documento}', desc: 'CPF ou CNPJ' },
 ];
 
+const DELIVERY_REPORT_VARS = [
+  { var: '{horas_gravacao}', desc: 'Total de horas gravadas' },
+  { var: '{sessoes}', desc: 'Número de sessões de gravação' },
+  { var: '{videos}', desc: 'Vídeos produzidos' },
+  { var: '{reels}', desc: 'Reels publicados' },
+  { var: '{stories}', desc: 'Stories publicados' },
+  { var: '{artes}', desc: 'Artes criadas' },
+  { var: '{criativos}', desc: 'Criativos desenvolvidos' },
+  { var: '{extras}', desc: 'Conteúdos extras entregues' },
+];
+
 export default function FinancialSettings() {
   const navigate = useNavigate();
   const { paymentConfig, updatePaymentConfig, categories, addCategory, contracts } = useFinancialData();
@@ -37,7 +48,8 @@ export default function FinancialSettings() {
   const [form, setForm] = useState({
     pix_key: '', receiver_name: '', bank: '', document: '',
     msg_billing_due: '', msg_billing_overdue: '', include_delivery_report: true,
-    msg_payment_data: '💳 *Dados para pagamento:*\nNome: {nome_recebedor}\nBanco: {banco}\nChave PIX: {chave_pix}\nCPF/CNPJ: {documento}',
+    msg_payment_data: '',
+    msg_delivery_report: '',
   });
   const [newCat, setNewCat] = useState('');
   const [previewClientId, setPreviewClientId] = useState<string>('');
@@ -55,7 +67,8 @@ export default function FinancialSettings() {
         msg_billing_due: paymentConfig.msg_billing_due || '',
         msg_billing_overdue: paymentConfig.msg_billing_overdue || '',
         include_delivery_report: paymentConfig.include_delivery_report ?? true,
-        msg_payment_data: paymentConfig.msg_payment_data || '💳 *Dados para pagamento:*\nNome: {nome_recebedor}\nBanco: {banco}\nChave PIX: {chave_pix}\nCPF/CNPJ: {documento}',
+        msg_payment_data: paymentConfig.msg_payment_data || '',
+        msg_delivery_report: paymentConfig.msg_delivery_report || '',
       });
     }
   }, [paymentConfig]);
@@ -83,14 +96,14 @@ export default function FinancialSettings() {
       const contract = contracts.find(c => c.client_id === clientId && c.status === 'ativo');
       const client = clients.find(c => c.id === clientId);
       const planId = contract?.plan_id || (client as any)?.plan_id || null;
-      const report = await generateDeliveryReport(clientId, planId);
+      const report = await generateDeliveryReport(clientId, planId, undefined, form.msg_delivery_report || undefined);
       setDeliveryReportText(report.text);
     } catch {
       setDeliveryReportText('');
     } finally {
       setLoadingReport(false);
     }
-  }, [contracts, clients, form.include_delivery_report]);
+  }, [contracts, clients, form.include_delivery_report, form.msg_delivery_report]);
 
   useEffect(() => {
     if (previewClientId) {
@@ -204,6 +217,28 @@ export default function FinancialSettings() {
             rows={5}
             className="font-mono text-xs"
             placeholder="Template dos dados de pagamento..."
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Template de Relatório de Entregas</CardTitle>
+          <CardDescription className="text-xs">Personalize o resumo de entregas incluído na cobrança (variável {'{relatorio_entregas}'}). Linhas com métricas zeradas são removidas automaticamente.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-1.5 p-3 rounded-md bg-muted/50">
+            <div className="w-full flex items-center gap-1 mb-1 text-xs text-muted-foreground"><Info size={12} /> Variáveis disponíveis:</div>
+            {DELIVERY_REPORT_VARS.map(v => (
+              <Badge key={v.var} variant="secondary" className="text-xs font-mono cursor-help" title={v.desc}>{v.var}</Badge>
+            ))}
+          </div>
+          <Textarea
+            value={form.msg_delivery_report}
+            onChange={e => setForm({ ...form, msg_delivery_report: e.target.value })}
+            rows={8}
+            className="font-mono text-xs"
+            placeholder="Template do relatório de entregas..."
           />
         </CardContent>
       </Card>

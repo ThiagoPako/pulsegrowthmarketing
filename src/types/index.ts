@@ -60,6 +60,7 @@ export interface Client {
   hasEndomarketing: boolean;
   weeklyStories: number;
   presenceDays: number;
+  monthlyRecordings: number;
 }
 
 export type RecordingType = 'fixa' | 'extra' | 'secundaria' | 'backup';

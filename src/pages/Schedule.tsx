@@ -3,6 +3,7 @@ import { useApp } from '@/contexts/AppContext';
 import type { Recording, RecordingType, Script, DayOfWeek, Client } from '@/types';
 import { SCRIPT_VIDEO_TYPE_LABELS, DAY_LABELS } from '@/types';
 import { useEndoClientes, useEndoAgendamentos } from '@/hooks/useEndomarketing';
+import AgencyCapacityWidget from '@/components/AgencyCapacityWidget';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -520,6 +521,9 @@ export default function Schedule() {
           ))}
         </div>
       )}
+
+      {/* Capacity widget */}
+      <AgencyCapacityWidget clients={clients} users={users} recordings={recordings} settings={settings} compact />
 
       <Tabs defaultValue="calendar" className="w-full">
         <TabsList>

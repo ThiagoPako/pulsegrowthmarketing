@@ -25,6 +25,7 @@ const emptyClient = (): Partial<Client> => ({
   extraContentTypes: [], acceptsExtra: false, extraClientAppears: false,
   weeklyReels: 0, weeklyCreatives: 0, weeklyGoal: 10,
   hasEndomarketing: false, weeklyStories: 0, presenceDays: 1,
+  monthlyRecordings: 4,
 });
 
 function timeToMinutes(t: string) {
@@ -621,7 +622,7 @@ export default function Clients() {
         <p className="text-sm font-semibold flex items-center gap-2">
           <Target size={16} className="text-primary" /> Metas de Entrega Semanal
         </p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="space-y-1">
             <Label>Qtd. Reels</Label>
             <Input type="number" min={0} value={form.weeklyReels ?? 0} onChange={e => setForm({ ...form, weeklyReels: Number(e.target.value) })} />
@@ -633,6 +634,11 @@ export default function Clients() {
           <div className="space-y-1">
             <Label>Meta Total (vídeos)</Label>
             <Input type="number" min={1} value={form.weeklyGoal} onChange={e => setForm({ ...form, weeklyGoal: Number(e.target.value) })} />
+          </div>
+          <div className="space-y-1">
+            <Label>Gravações/Mês</Label>
+            <Input type="number" min={1} value={form.monthlyRecordings ?? 4} onChange={e => setForm({ ...form, monthlyRecordings: Number(e.target.value) })} />
+            <p className="text-[10px] text-muted-foreground">Sessões de gravação contratadas por mês</p>
           </div>
         </div>
       </div>
@@ -685,11 +691,13 @@ export default function Clients() {
               <span className="text-muted-foreground">Extra:</span>
               <span className="font-medium">{form.extraContentTypes?.map(ct => CONTENT_TYPE_LABELS[ct]).join(', ') || '—'}</span>
             </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+           )}
+           <span className="text-muted-foreground">Gravações/mês:</span>
+           <span className="font-medium">{form.monthlyRecordings ?? 4}</span>
+         </div>
+       </div>
+     </div>
+   );
 
   return (
     <div className="space-y-4">

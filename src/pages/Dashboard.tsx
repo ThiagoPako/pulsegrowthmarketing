@@ -12,6 +12,7 @@ import { ptBR } from 'date-fns/locale';
 import { Progress } from '@/components/ui/progress';
 import { useNavigate } from 'react-router-dom';
 import UserAvatar from '@/components/UserAvatar';
+import AgencyCapacityWidget from '@/components/AgencyCapacityWidget';
 import ClientLogo from '@/components/ClientLogo';
 import { getMessageStats } from '@/services/whatsappService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
@@ -20,7 +21,7 @@ const SCORE_WEIGHTS = { reel: 10, criativo: 5, story: 3, arte: 2, extra: 8 };
 const BAR_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
 
 export default function Dashboard() {
-  const { currentUser, recordings, clients, users, tasks, cancelRecording, updateRecording, getSuggestionsForCancellation, activeRecordings } = useApp();
+  const { currentUser, recordings, clients, users, tasks, cancelRecording, updateRecording, getSuggestionsForCancellation, activeRecordings, settings } = useApp();
   const navigate = useNavigate();
   const today = format(new Date(), 'yyyy-MM-dd');
   const [weekOffset, setWeekOffset] = useState(0);
@@ -285,6 +286,8 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      {/* ── ROW 2.8: Agency Capacity ── */}
+      <AgencyCapacityWidget clients={clients} users={users} recordings={recordings} settings={settings} />
 
       {/* ── ROW 3: Week Agenda ── */}
       <div className="glass-card p-5">

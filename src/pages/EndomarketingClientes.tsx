@@ -262,8 +262,11 @@ export default function EndomarketingClientes() {
   };
 
   const handleDelete = async (id: string) => {
+    // Delete related agendamentos and logs first
+    await supabase.from('endomarketing_agendamentos').delete().eq('cliente_id', id);
+    await supabase.from('endomarketing_logs').delete().eq('cliente_id', id);
     await deleteCliente(id);
-    toast.success('Cliente removido');
+    toast.success('Cliente e agendamentos removidos');
     if (detailId === id) setSearchParams({});
   };
 
@@ -695,6 +698,17 @@ export default function EndomarketingClientes() {
             <Button variant="outline" size="sm" onClick={() => handleRegenerate(detailCliente)} disabled={regenerating}>
               <RefreshCw size={14} className={`mr-1 ${regenerating ? 'animate-spin' : ''}`} />
               {regenerating ? 'Regenerando...' : 'Regerar 4 semanas'}
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                if (window.confirm(`Excluir "${detailCliente.company_name}" e todos os seus agendamentos?`)) {
+                  handleDelete(detailCliente.id);
+                }
+              }}
+            >
+              <Trash2 size={14} className="mr-1" /> Excluir
             </Button>
           </div>
 

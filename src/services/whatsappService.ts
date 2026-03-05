@@ -28,7 +28,7 @@ interface SendMessageParams {
   number: string;
   message: string;
   clientId?: string;
-  triggerType?: 'manual' | 'auto_recording' | 'auto_reminder' | 'auto_approval' | 'auto_approved';
+  triggerType?: 'manual' | 'auto_recording' | 'auto_reminder' | 'auto_confirmation' | 'auto_backup';
 }
 
 export interface WhatsAppMessage {
@@ -280,4 +280,69 @@ export async function getConfirmationStats(): Promise<{
 export function getWebhookUrl(): string {
   const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
   return `https://${projectId}.supabase.co/functions/v1/whatsapp-webhook`;
+}
+
+/**
+ * Send a manual confirmation message for a recording.
+ * Creates a confirmation record so the cron job skips this recording.
+ */
+export async function sendManualConfirmation(
+  recordingId: string,
+  clientId: string,
+  clientPhone: string,
+  clientName: string,
+  date: string,
+  time: string,
+  videomakerName: string,
+): Promise<{ success: boolean; error?: string }> {
+  const config = await getWhatsAppConfig();
+  if (!config?.integrationActive) return { success: false, error: 'Integração desativada' };
+  if (!config.apiToken) return { success: false, error: 'Token não configurado' };
+  if (!clientPhone) return { success: false, error: 'Cliente sem WhatsApp' };
+
+  const phoneNumber = clientPhone.replace(/\D/g, '');
+
+  // Check if confirmation already exists for this recording
+  const { data: existing } = await supabase
+    .from('whatsapp_confirmations')
+    .select('id')
+    .eq('recording_id', recordingId)
+    .eq('type', 'confirmation')
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    return { success: false, error: 'Confirmação já enviada para esta gravação' };
+  }
+
+  const message = applyTemplate(config.msgConfirmation, {
+    nome_cliente: clientName,
+    data_gravacao: date,
+    hora_gravacao: time,
+    videomaker: videomakerName,
+  });
+
+  // Create confirmation record (prevents cron from sending duplicate)
+  await supabase.from('whatsapp_confirmations').insert({
+    recording_id: recordingId,
+    client_id: clientId,
+    phone_number: phoneNumber,
+    type: 'confirmation',
+    status: 'pending',
+    sent_at: new Date().toISOString(),
+  });
+
+  // Update recording confirmation_status
+  await supabase.from('recordings').update({
+    confirmation_status: 'aguardando',
+  }).eq('id', recordingId);
+
+  // Send the message
+  const result = await sendWhatsAppMessage({
+    number: clientPhone,
+    message,
+    clientId,
+    triggerType: 'auto_confirmation',
+  });
+
+  return result;
 }

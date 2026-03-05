@@ -380,6 +380,13 @@ export default function WhatsAppDashboard() {
                         <p className="text-[10px] text-muted-foreground">
                           Variáveis disponíveis: <span className="font-mono text-primary">{tmpl.variables}</span>
                         </p>
+                        <Button size="sm" onClick={async () => {
+                          const ok = await updateWhatsAppConfig(config);
+                          if (ok) { toast.success(`Mensagem "${tmpl.label}" salva`); setEditingTemplate(null); }
+                          else toast.error('Erro ao salvar');
+                        }} className="gap-1">
+                          <Check size={14} /> Salvar
+                        </Button>
                       </div>
                     ) : (
                       <pre className="text-xs text-muted-foreground whitespace-pre-wrap bg-secondary/50 rounded-lg p-3">

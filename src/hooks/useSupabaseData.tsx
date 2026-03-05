@@ -339,7 +339,8 @@ export function useSupabaseData() {
 
   const updateScript = useCallback(async (script: Script) => {
     const { id, ...rest } = scriptToRow(script);
-    await supabase.from('scripts').update(rest as any).eq('id', id);
+    const { error } = await supabase.from('scripts').update(rest as any).eq('id', id);
+    if (error) { console.error('updateScript error:', error); return; }
     setScripts(prev => prev.map(s => s.id === script.id ? script : s));
   }, []);
 

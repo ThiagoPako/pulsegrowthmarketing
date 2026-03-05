@@ -242,9 +242,9 @@ export default function Reports() {
       if (img.complete && img.naturalWidth > 0) {
         const ratio = img.naturalWidth / img.naturalHeight;
         const w = contentW;
-        const h = Math.min(w / ratio, 28);
+        const h = Math.min(w / ratio, 35);
         doc.addImage(img, 'PNG', margin, y, w, h);
-        y += h + 3;
+        y += h + 8;
       }
     } catch { y += 3; }
 

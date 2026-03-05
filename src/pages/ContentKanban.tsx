@@ -19,12 +19,14 @@ import type { Client, Recording, Script } from '@/types';
 
 // ─── COLUMN DEFINITIONS ───────────────────────────────────────
 const KANBAN_COLUMNS = [
-  { id: 'ideias', label: 'Zona de Ideias', color: 'bg-purple-500', emoji: '💡' },
-  { id: 'captacao', label: 'Captação', color: 'bg-amber-500', emoji: '📹' },
-  { id: 'edicao', label: 'Edição de Vídeo', color: 'bg-blue-500', emoji: '🎬' },
-  { id: 'revisao', label: 'Revisão', color: 'bg-cyan-500', emoji: '👁' },
-  { id: 'alteracao', label: 'Alteração', color: 'bg-yellow-500', emoji: '✏️' },
-  { id: 'envio', label: 'Enviar para Cliente', color: 'bg-green-500', emoji: '📤' },
+  { id: 'ideias', label: 'Zona de Ideias', bg: '#9b59b6', icon: '💡' },
+  { id: 'captacao', label: 'Captação', bg: '#e67e22', icon: '📹' },
+  { id: 'edicao', label: 'Edição de Vídeo', bg: '#3498db', icon: '🎬' },
+  { id: 'revisao', label: 'Revisão', bg: '#1abc9c', icon: '👁' },
+  { id: 'alteracao', label: 'Alteração', bg: '#f1c40f', icon: '✏️' },
+  { id: 'envio', label: 'Enviar para Cliente', bg: '#2ecc71', icon: '📤' },
+  { id: 'agendamentos', label: 'Agendamentos', bg: '#e74c3c', icon: '📅' },
+  { id: 'acompanhamento', label: 'Acompanhamento', bg: '#e74c3c', icon: '👀' },
 ] as const;
 
 type KanbanColumnId = typeof KANBAN_COLUMNS[number]['id'];
@@ -362,30 +364,27 @@ export default function ContentKanban() {
             return (
               <div
                 key={col.id}
-                className={`flex flex-col w-72 shrink-0 rounded-xl transition-colors ${
-                  isDragOver ? 'bg-accent/50 ring-2 ring-primary/30' : 'bg-muted/30'
+                className={`flex flex-col w-[260px] shrink-0 rounded-xl transition-colors ${
+                  isDragOver ? 'ring-2 ring-primary/40 bg-accent/30' : 'bg-muted/20'
                 }`}
                 onDragOver={e => handleDragOver(e, col.id)}
                 onDragLeave={handleDragLeave}
                 onDrop={e => handleDrop(e, col.id)}
               >
-                {/* Column header */}
-                <div className="flex items-center gap-2 px-3 py-2.5 rounded-t-xl" style={{ borderBottom: '3px solid' }}>
-                  <div className={`w-2.5 h-2.5 rounded-full ${col.color}`} />
-                  <span className="text-sm font-semibold text-foreground flex-1">{col.label}</span>
-                  <Badge variant="secondary" className="text-xs px-1.5 py-0 h-5">
+                {/* Column header - colored bar */}
+                <div
+                  className="flex items-center gap-2 px-3 py-2 rounded-t-xl"
+                  style={{ backgroundColor: col.bg }}
+                >
+                  <span className="text-sm">{col.icon}</span>
+                  <span className="text-sm font-bold text-white flex-1 truncate">{col.label}</span>
+                  <span className="text-xs font-bold text-white/90 bg-white/20 rounded-full px-2 py-0.5 min-w-[24px] text-center">
                     {colTasks.length}
-                  </Badge>
-                  <button
-                    onClick={() => openNew(col.id)}
-                    className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                  >
-                    <Plus size={14} />
-                  </button>
+                  </span>
                 </div>
 
                 {/* Cards */}
-                <ScrollArea className="flex-1 px-2 py-2">
+                <ScrollArea className="flex-1 px-1.5 py-1.5">
                   <div className="space-y-2">
                     {colTasks.map(task => (
                       <TaskCard
@@ -400,7 +399,7 @@ export default function ContentKanban() {
                       />
                     ))}
                     {colTasks.length === 0 && (
-                      <div className="text-center py-8 text-xs text-muted-foreground">
+                      <div className="text-center py-10 text-xs text-muted-foreground italic">
                         {col.id === 'alteracao' ? 'Etapa para a alteração do conteúdo' :
                          col.id === 'revisao' ? 'Etapa para a revisão do conteúdo criado' :
                          'Arraste cartões para cá'}
@@ -408,6 +407,14 @@ export default function ContentKanban() {
                     )}
                   </div>
                 </ScrollArea>
+
+                {/* Add button at bottom */}
+                <button
+                  onClick={() => openNew(col.id)}
+                  className="mx-1.5 mb-1.5 py-1.5 rounded-lg border border-dashed border-border text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 hover:border-primary/30 transition-colors flex items-center justify-center gap-1"
+                >
+                  <Plus size={12} /> Adicionar
+                </button>
               </div>
             );
           })}
@@ -555,70 +562,84 @@ function TaskCard({ task, client, assignedUser, isDragging, onDragStart, onEdit,
     <div
       draggable
       onDragStart={onDragStart}
-      className={`group relative bg-card rounded-xl overflow-hidden cursor-grab active:cursor-grabbing transition-all hover:shadow-lg hover:-translate-y-0.5 ${
-        isDragging ? 'opacity-40 scale-95 rotate-2' : ''
+      className={`group relative bg-card border border-border rounded-lg cursor-grab active:cursor-grabbing transition-all hover:shadow-md ${
+        isDragging ? 'opacity-40 scale-95' : ''
       }`}
-      style={{ borderLeft: `4px solid hsl(${clientColor})` }}
     >
-      {/* Top color accent */}
-      <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, hsl(${clientColor}), hsl(${clientColor} / 0.3))` }} />
+      {/* Actions on hover */}
+      <div className="absolute top-1.5 right-1.5 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        <button onClick={e => { e.stopPropagation(); onEdit(); }} className="w-5 h-5 rounded flex items-center justify-center bg-card text-muted-foreground hover:text-foreground hover:bg-accent border border-border shadow-sm">
+          <Edit size={10} />
+        </button>
+        <button onClick={e => { e.stopPropagation(); onDelete(); }} className="w-5 h-5 rounded flex items-center justify-center bg-card text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border shadow-sm">
+          <Trash2 size={10} />
+        </button>
+      </div>
 
-      <div className="p-3">
-        {/* Actions on hover */}
-        <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-          <button onClick={e => { e.stopPropagation(); onEdit(); }} className="w-6 h-6 rounded-md flex items-center justify-center bg-card/90 backdrop-blur text-muted-foreground hover:text-foreground hover:bg-accent shadow-sm border border-border">
-            <Edit size={11} />
-          </button>
-          <button onClick={e => { e.stopPropagation(); onDelete(); }} className="w-6 h-6 rounded-md flex items-center justify-center bg-card/90 backdrop-blur text-muted-foreground hover:text-destructive hover:bg-destructive/10 shadow-sm border border-border">
-            <Trash2 size={11} />
-          </button>
-        </div>
-
-        {/* Type badge */}
-        <div className="flex items-center gap-2 mb-2.5">
-          <Badge className={`text-[10px] font-semibold px-2 py-0.5 border-0 gap-1 ${typeConfig.color}`}>
-            <TypeIcon size={10} />
-            {typeConfig.label}
+      <div className="p-2.5">
+        {/* Badge row */}
+        {task.kanban_column === 'envio' && (
+          <Badge className="mb-2 text-[10px] font-semibold px-2 py-0.5 border-0 bg-emerald-500 text-white">
+            Novo {typeConfig.label}
           </Badge>
-          {task.kanban_column === 'envio' && (
-            <Badge className="text-[10px] font-semibold px-2 py-0.5 border-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-              Novo
-            </Badge>
+        )}
+        {task.kanban_column === 'agendamentos' && (
+          <Badge className="mb-2 text-[10px] font-semibold px-2 py-0.5 border-0 bg-emerald-500 text-white">
+            AGENDAR
+          </Badge>
+        )}
+        {task.kanban_column === 'acompanhamento' && task.scheduled_recording_date && (
+          <Badge className="mb-2 text-[10px] font-semibold px-2 py-0.5 border-0 bg-teal-500 text-white">
+            enviado/aguarda
+          </Badge>
+        )}
+
+        {/* Client name - bold title */}
+        <h3 className="text-sm font-bold text-foreground mb-2 pr-8 leading-tight">
+          {client?.companyName || 'Cliente'}
+        </h3>
+
+        {/* Labeled fields */}
+        <div className="space-y-1.5">
+          {/* CLIENTE */}
+          <div className="flex items-start gap-1.5">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 shrink-0 mt-0.5">📋 Cliente</span>
+          </div>
+          <p className="text-[11px] text-foreground/80 pl-4 -mt-1">{client?.companyName}</p>
+
+          {/* TIPO */}
+          <div className="flex items-start gap-1.5">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 shrink-0 mt-0.5">
+              <TypeIcon size={9} className="inline mr-0.5" />
+              Tipo
+            </span>
+          </div>
+          <p className="text-[11px] text-foreground/80 pl-4 -mt-1">{typeConfig.label}</p>
+
+          {/* TÍTULO DO CONTEÚDO */}
+          <div className="flex items-start gap-1.5">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 shrink-0 mt-0.5">📝 Título do Conteúdo</span>
+          </div>
+          <p className="text-[11px] font-semibold text-foreground pl-4 -mt-1 line-clamp-2">{task.title}</p>
+
+          {/* GRAVAÇÃO PROGRAMADA */}
+          {task.scheduled_recording_date && (
+            <>
+              <div className="flex items-start gap-1.5">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 shrink-0 mt-0.5">📅 Gravação Programada</span>
+              </div>
+              <p className="text-[11px] text-foreground/80 pl-4 -mt-1">
+                {format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
+                {task.scheduled_recording_time ? ` ${task.scheduled_recording_time}` : ''}
+              </p>
+            </>
           )}
         </div>
 
-        {/* Client row with logo */}
-        <div className="flex items-center gap-2 mb-2">
-          {client && <ClientLogo client={client} size="sm" />}
-          <span className="text-xs font-semibold text-foreground truncate flex-1">
-            {client?.companyName || 'Cliente'}
-          </span>
-        </div>
-
-        {/* Title */}
-        <p className="text-[13px] font-medium text-foreground leading-snug mb-2 line-clamp-2">
-          {task.title}
-        </p>
-
-        {/* Description preview */}
-        {task.description && (
-          <p className="text-[11px] text-muted-foreground line-clamp-1 mb-2">{task.description}</p>
-        )}
-
-        {/* Footer: date + avatar */}
-        <div className="flex items-center justify-between mt-1">
-          {task.scheduled_recording_date ? (
-            <div className="flex items-center gap-1 text-[11px] text-muted-foreground bg-muted/50 rounded-md px-1.5 py-0.5">
-              <Calendar size={10} />
-              <span>
-                {format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
-                {task.scheduled_recording_time ? ` ${task.scheduled_recording_time}` : ''}
-              </span>
-            </div>
-          ) : <div />}
-
-          {assignedUser && (
-            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-card shrink-0" title={assignedUser.name}>
+        {/* Avatar */}
+        {assignedUser && (
+          <div className="mt-2">
+            <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-card shadow-sm" title={assignedUser.name}>
               {assignedUser.avatarUrl ? (
                 <img src={assignedUser.avatarUrl} alt="" className="w-full h-full object-cover" />
               ) : (
@@ -627,9 +648,15 @@ function TaskCard({ task, client, assignedUser, isDragging, onDragStart, onEdit,
                 </span>
               )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
+
+      {/* Bottom color bar */}
+      <div
+        className="h-1.5 w-full"
+        style={{ backgroundColor: `hsl(${clientColor})` }}
+      />
     </div>
   );
 }

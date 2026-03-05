@@ -87,7 +87,7 @@ export default function VideomakerDashboard() {
     setScriptsOpen(true);
   };
 
-  const confirmStartRecording = (rec: Recording) => {
+  const confirmStartRecording = async (rec: Recording) => {
     // Validate all urgent scripts are selected
     const urgentScripts = scripts.filter(
       s => s.clientId === rec.clientId && !s.recorded && !s.isEndomarketing && s.priority === 'urgent'
@@ -112,9 +112,9 @@ export default function VideomakerDashboard() {
     
     // Move content_tasks linked to selected scripts to "captacao"
     for (const scriptId of selectedScriptIds) {
-      supabase.from('content_tasks').update({ kanban_column: 'captacao', recording_id: rec.id } as any)
-        .eq('script_id', scriptId).eq('kanban_column', 'ideias')
-        .then(({ error }) => { if (error) console.error('Move to captacao error:', error); });
+      const { error } = await supabase.from('content_tasks').update({ kanban_column: 'captacao', recording_id: rec.id } as any)
+        .eq('script_id', scriptId);
+      if (error) console.error('Move to captacao error:', error);
     }
     
     toast.success(`Gravação iniciada com ${selectedScriptIds.size} roteiro(s) — ${getClientName(rec.clientId)}`);

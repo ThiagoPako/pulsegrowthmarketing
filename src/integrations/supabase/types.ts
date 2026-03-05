@@ -751,6 +751,7 @@ export type Database = {
           include_delivery_report: boolean
           msg_billing_due: string
           msg_billing_overdue: string
+          msg_delivery_report: string
           msg_payment_data: string
           pix_key: string
           receiver_name: string
@@ -763,6 +764,7 @@ export type Database = {
           include_delivery_report?: boolean
           msg_billing_due?: string
           msg_billing_overdue?: string
+          msg_delivery_report?: string
           msg_payment_data?: string
           pix_key?: string
           receiver_name?: string
@@ -775,6 +777,7 @@ export type Database = {
           include_delivery_report?: boolean
           msg_billing_due?: string
           msg_billing_overdue?: string
+          msg_delivery_report?: string
           msg_payment_data?: string
           pix_key?: string
           receiver_name?: string

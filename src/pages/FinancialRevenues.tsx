@@ -94,7 +94,7 @@ export default function FinancialRevenues() {
       // Get plan_id from contract
       const contract = contracts.find(c => c.client_id === revenue.client_id);
       const report = paymentConfig?.include_delivery_report !== false
-        ? await generateDeliveryReport(revenue.client_id, contract?.plan_id, selectedMonth)
+        ? await generateDeliveryReport(revenue.client_id, contract?.plan_id, selectedMonth, paymentConfig?.msg_delivery_report || undefined)
         : { text: '' };
 
       let message = template
@@ -151,7 +151,7 @@ export default function FinancialRevenues() {
         // Get plan_id from contract
         const contract = contracts.find(c => c.client_id === r.client_id);
         const report = paymentConfig?.include_delivery_report !== false
-          ? await generateDeliveryReport(r.client_id, contract?.plan_id, selectedMonth)
+          ? await generateDeliveryReport(r.client_id, contract?.plan_id, selectedMonth, paymentConfig?.msg_delivery_report || undefined)
           : { text: '' };
 
         let message = template

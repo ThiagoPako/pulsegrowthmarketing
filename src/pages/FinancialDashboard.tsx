@@ -223,7 +223,7 @@ export default function FinancialDashboard() {
         const contract = contracts.find(c => c.client_id === r.client_id);
         const refMonth = selectedMonth;
         const report = paymentConfig?.include_delivery_report !== false
-          ? await generateDeliveryReport(r.client_id, contract?.plan_id, refMonth)
+          ? await generateDeliveryReport(r.client_id, contract?.plan_id, refMonth, paymentConfig?.msg_delivery_report || undefined)
           : { text: '' };
 
         const template = paymentConfig?.msg_billing_overdue ||

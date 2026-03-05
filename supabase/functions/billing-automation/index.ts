@@ -147,48 +147,49 @@ Deno.serve(async (req) => {
       if (paymentConfig?.include_delivery_report !== false) {
         const totalReels = Math.max(socialReels, stats.reels);
         const totalStories = Math.max(socialStories, stats.stories);
-        const totalArtes = stats.artes;
-        const totalCriativos = stats.criativos;
         const recordingHours = stats.gravacoes * (clientPlan?.recording_hours || 2);
 
-        const lines: string[] = [];
+        const hasAny = stats.gravacoes > 0 || stats.videos > 0 || totalReels > 0 || totalStories > 0 || stats.artes > 0 || stats.criativos > 0 || stats.extras > 0;
 
-        // Always show recording hours if there were recordings
-        if (stats.gravacoes > 0) {
-          lines.push(`Estivemos juntos durante *${recordingHours}h de gravação* em ${stats.gravacoes} sessão${stats.gravacoes > 1 ? 'ões' : ''} 📹`);
-        }
-        if (stats.videos > 0) {
-          lines.push(`Produzimos *${stats.videos} vídeos* para sua marca 🎬`);
-        }
+        if (hasAny) {
+          const defaultTemplate = `Esse mês foi incrível e fizemos muita coisa juntos! 💪\n\nEstivemos juntos durante *{horas_gravacao}h de gravação* em {sessoes} sessão(ões) 📹\nProduzimos *{videos} vídeos* para sua marca 🎬\nPublicamos *{reels} reels* no seu perfil 🎥\nEstivemos presentes nos stories com *{stories} publicações* 📱\nCriamos *{artes} artes* para seus canais 🎨\nDesenvolvemos *{criativos} criativos* para suas campanhas ✨\nAinda entregamos *{extras} conteúdos extras* além do contratado ➕`;
+          const template = paymentConfig?.msg_delivery_report || defaultTemplate;
 
-        // Only show metrics that exist in the client's plan
-        if (clientPlan) {
-          if (clientPlan.reels_qty > 0 && totalReels > 0) {
-            lines.push(`Publicamos *${totalReels} reels* no seu perfil 🎥`);
-          }
-          if (clientPlan.stories_qty > 0 && totalStories > 0) {
-            lines.push(`Estivemos presentes nos stories com *${totalStories} publicações* 📱`);
-          }
-          if (clientPlan.arts_qty > 0 && totalArtes > 0) {
-            lines.push(`Criamos *${totalArtes} artes* para seus canais 🎨`);
-          }
-          if (clientPlan.creatives_qty > 0 && totalCriativos > 0) {
-            lines.push(`Desenvolvemos *${totalCriativos} criativos* para suas campanhas ✨`);
-          }
-        } else {
-          // No plan — show all non-zero stats
-          if (totalReels > 0) lines.push(`Publicamos *${totalReels} reels* no seu perfil 🎥`);
-          if (totalStories > 0) lines.push(`Estivemos presentes nos stories com *${totalStories} publicações* 📱`);
-          if (totalArtes > 0) lines.push(`Criamos *${totalArtes} artes* para seus canais 🎨`);
-          if (totalCriativos > 0) lines.push(`Desenvolvemos *${totalCriativos} criativos* para suas campanhas ✨`);
-        }
+          const varMap: Record<string, number> = {
+            '{horas_gravacao}': recordingHours,
+            '{sessoes}': stats.gravacoes,
+            '{videos}': stats.videos,
+            '{reels}': totalReels,
+            '{stories}': totalStories,
+            '{artes}': stats.artes,
+            '{criativos}': stats.criativos,
+            '{extras}': stats.extras,
+          };
 
-        if (stats.extras > 0) {
-          lines.push(`Ainda entregamos *${stats.extras} conteúdos extras* além do contratado ➕`);
-        }
+          const planFilter: Record<string, boolean> = {};
+          if (clientPlan) {
+            planFilter['{reels}'] = clientPlan.reels_qty > 0;
+            planFilter['{stories}'] = clientPlan.stories_qty > 0;
+            planFilter['{artes}'] = clientPlan.arts_qty > 0;
+            planFilter['{criativos}'] = clientPlan.creatives_qty > 0;
+          }
 
-        if (lines.length > 0) {
-          deliverySummary = `\n\nEsse mês foi incrível e fizemos muita coisa juntos! 💪\n\n${lines.join('\n')}`;
+          const lines = template.split('\n').filter((line: string) => {
+            for (const [varKey, value] of Object.entries(varMap)) {
+              if (line.includes(varKey)) {
+                if (value === 0) return false;
+                if (clientPlan && planFilter[varKey] === false) return false;
+              }
+            }
+            return true;
+          });
+
+          let result = lines.join('\n');
+          for (const [varKey, value] of Object.entries(varMap)) {
+            result = result.replace(new RegExp(varKey.replace(/[{}]/g, '\\$&'), 'g'), String(value));
+          }
+          result = result.replace(/\n{3,}/g, '\n\n').trim();
+          deliverySummary = `\n\n${result}`;
         }
       }
 

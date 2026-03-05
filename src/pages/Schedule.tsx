@@ -17,6 +17,7 @@ import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endO
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import UserAvatar from '@/components/UserAvatar';
+import ClientLogo from '@/components/ClientLogo';
 
 // Endomarketing brand color (magenta/fuchsia)
 const ENDO_COLOR = '292 84% 61%';
@@ -470,7 +471,10 @@ export default function Schedule() {
                         style={{ borderLeft: `3px solid hsl(${evt.color})` }}
                       >
                         <div className="flex items-start justify-between gap-1">
-                          <p className="font-medium text-xs truncate">{evt.clientName}</p>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {(() => { const cl = clients.find(c => c.id === (evt.recording?.clientId || '')); return cl ? <ClientLogo client={cl} size="sm" className="w-5 h-5 text-[8px] rounded" /> : null; })()}
+                            <p className="font-medium text-xs truncate">{evt.clientName}</p>
+                          </div>
                           {evt.type === 'endomarketing' ? endoTag() : evt.recording && statusTag(evt.recording)}
                         </div>
                         {evt.type === 'endomarketing' ? (

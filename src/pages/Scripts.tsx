@@ -22,6 +22,7 @@ import TextAlign from '@tiptap/extension-text-align';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 import pulseHeader from '@/assets/pulse_header.png';
+import ClientLogo from '@/components/ClientLogo';
 
 const VIDEO_TYPES: ScriptVideoType[] = ['vendas', 'institucional', 'reconhecimento', 'educacional', 'bastidores', 'depoimento', 'lancamento'];
 
@@ -325,11 +326,12 @@ export default function Scripts() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
+                    {(() => { const cl = clients.find(c => c.id === script.clientId); return cl ? <ClientLogo client={cl} size="sm" className="w-5 h-5 text-[8px] rounded" /> : null; })()}
                     {(script.priority === 'urgent') && <AlertTriangle size={13} className="text-destructive shrink-0" />}
                     {(script.priority === 'priority') && <Star size={13} className="text-warning shrink-0" />}
                     <p className="font-medium text-sm truncate">{script.title}</p>
                   </div>
-                  <p className="text-[11px] text-muted-foreground truncate">
+                  <p className="text-[11px] text-muted-foreground truncate ml-6">
                     {getClientName(script.clientId)} · {SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}
                   </p>
                 </div>

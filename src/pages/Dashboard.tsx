@@ -11,6 +11,7 @@ import { ptBR } from 'date-fns/locale';
 import { Progress } from '@/components/ui/progress';
 import { useNavigate } from 'react-router-dom';
 import UserAvatar from '@/components/UserAvatar';
+import ClientLogo from '@/components/ClientLogo';
 
 export default function Dashboard() {
   const { currentUser, recordings, clients, users, tasks, cancelRecording, updateRecording, getSuggestionsForCancellation, activeRecordings } = useApp();
@@ -144,7 +145,7 @@ export default function Dashboard() {
                 return (
                   <motion.div key={rec.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
                     className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50 group">
-                    <div className="w-1 h-10 rounded-full shrink-0" style={{ backgroundColor: `hsl(${clientColor})` }} />
+                    {(() => { const cl = getClient(rec.clientId); return cl ? <ClientLogo client={cl} size="sm" /> : <div className="w-1 h-10 rounded-full shrink-0" style={{ backgroundColor: `hsl(${clientColor})` }} />; })()}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-sm truncate">{getClientName(rec.clientId)}</span>
@@ -234,7 +235,8 @@ export default function Dashboard() {
                   {dayRecs.slice(0, 5).map(rec => {
                     const color = getClientColor(rec.clientId);
                     return (
-                      <div key={rec.id} className="rounded px-1.5 py-1 text-[10px] leading-tight group relative cursor-pointer" style={{ backgroundColor: `hsl(${color} / 0.1)`, borderLeft: `2px solid hsl(${color})` }}>
+                      <div key={rec.id} className="rounded px-1.5 py-1 text-[10px] leading-tight group relative cursor-pointer flex items-center gap-1" style={{ backgroundColor: `hsl(${color} / 0.1)`, borderLeft: `2px solid hsl(${color})` }}>
+                        {(() => { const cl = getClient(rec.clientId); return cl?.logoUrl ? <img src={cl.logoUrl} alt="" className="w-3.5 h-3.5 rounded object-cover shrink-0" /> : null; })()}
                         <p className="font-medium truncate" style={{ color: `hsl(${color})` }}>{getClientName(rec.clientId)}</p>
                         <p className="text-muted-foreground">{rec.startTime}</p>
                         <div className="absolute left-0 top-full mt-0.5 hidden group-hover:flex items-center gap-1.5 bg-card rounded-lg p-2 shadow-lg border border-border z-20 min-w-[120px]">
@@ -265,10 +267,7 @@ export default function Dashboard() {
             {clientProgress.map(({ client, tasksDone, goal, recsDone, recsTotal, progress }) => (
               <div key={client.id} className="rounded-xl p-4 border border-border bg-secondary/30" style={{ borderLeftWidth: 3, borderLeftColor: `hsl(${client.color || '220 10% 50%'})` }}>
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
-                    style={{ backgroundColor: `hsl(${client.color || '220 10% 50%'} / 0.15)`, color: `hsl(${client.color || '220 10% 50%'})` }}>
-                    {client.companyName.substring(0, 2).toUpperCase()}
-                  </div>
+                  <ClientLogo client={client} size="sm" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate">{client.companyName}</p>
                     <p className="text-[11px] text-muted-foreground">{DAY_LABELS[client.fixedDay]} · {client.fixedTime}</p>

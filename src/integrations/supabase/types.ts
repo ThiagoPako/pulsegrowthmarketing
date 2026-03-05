@@ -594,6 +594,7 @@ export type Database = {
       }
       whatsapp_config: {
         Row: {
+          api_token: string
           api_token_configured: boolean
           auto_recording_reminder: boolean
           auto_recording_scheduled: boolean
@@ -604,10 +605,15 @@ export type Database = {
           default_user_id: string
           id: string
           integration_active: boolean
+          msg_recording_reminder: string
+          msg_recording_scheduled: string
+          msg_video_approval: string
+          msg_video_approved: string
           send_signature: boolean
           updated_at: string
         }
         Insert: {
+          api_token?: string
           api_token_configured?: boolean
           auto_recording_reminder?: boolean
           auto_recording_scheduled?: boolean
@@ -618,10 +624,15 @@ export type Database = {
           default_user_id?: string
           id?: string
           integration_active?: boolean
+          msg_recording_reminder?: string
+          msg_recording_scheduled?: string
+          msg_video_approval?: string
+          msg_video_approved?: string
           send_signature?: boolean
           updated_at?: string
         }
         Update: {
+          api_token?: string
           api_token_configured?: boolean
           auto_recording_reminder?: boolean
           auto_recording_scheduled?: boolean
@@ -632,6 +643,10 @@ export type Database = {
           default_user_id?: string
           id?: string
           integration_active?: boolean
+          msg_recording_reminder?: string
+          msg_recording_scheduled?: string
+          msg_video_approval?: string
+          msg_video_approved?: string
           send_signature?: boolean
           updated_at?: string
         }

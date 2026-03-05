@@ -173,6 +173,48 @@ export default function Clients() {
     setForm(prev => ({ ...prev, videomaker: slot.vmId, fixedDay: slot.day, fixedTime: slot.firstTime }));
   };
 
+  // Build full schedule grid data for selected videomaker
+  const scheduleGrid = useMemo(() => {
+    if (!form.videomaker) return null;
+    const vm = users.find(u => u.id === form.videomaker);
+    if (!vm) return null;
+
+    const duration = settings.recordingDuration;
+    const shiftAStart = timeToMinutes(settings.shiftAStart);
+    const shiftAEnd = timeToMinutes(settings.shiftAEnd);
+    const shiftBStart = timeToMinutes(settings.shiftBStart);
+    const shiftBEnd = timeToMinutes(settings.shiftBEnd);
+
+    // All time slots across both shifts
+    const timeSlots: number[] = [];
+    for (let t = shiftAStart; t + duration <= shiftAEnd; t += duration) timeSlots.push(t);
+    for (let t = shiftBStart; t + duration <= shiftBEnd; t += duration) timeSlots.push(t);
+
+    const workDays = settings.workDays;
+
+    // Build grid: for each time slot × day, determine status
+    const grid: { time: number; timeStr: string; days: { day: DayOfWeek; status: 'free' | 'occupied'; clientName?: string }[] }[] = [];
+
+    for (const t of timeSlots) {
+      const timeStr = minutesToTime(t);
+      const row: typeof grid[0] = { time: t, timeStr, days: [] };
+      for (const day of workDays) {
+        const occupyingClient = clients.find(c => {
+          if (editing && c.id === editing.id) return false;
+          return c.videomaker === form.videomaker && c.fixedDay === day && c.fixedTime === timeStr;
+        });
+        row.days.push({
+          day,
+          status: occupyingClient ? 'occupied' : 'free',
+          clientName: occupyingClient?.companyName,
+        });
+      }
+      grid.push(row);
+    }
+
+    return { vmName: vm.name, workDays, grid };
+  }, [form.videomaker, settings, clients, users, editing]);
+
   const canProceedStep0 = form.companyName && form.responsiblePerson && form.phone;
   const canProceedStep1 = form.videomaker && form.fixedDay && form.fixedTime;
 
@@ -216,6 +258,73 @@ export default function Clients() {
           <SelectContent>{videomakers.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent>
         </Select>
       </div>
+
+      {/* Visual schedule grid */}
+      {form.videomaker && scheduleGrid && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            Agenda de {scheduleGrid.vmName}
+          </p>
+          <div className="rounded-xl border border-border overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="bg-muted/60">
+                    <th className="px-2 py-1.5 text-left font-medium text-muted-foreground w-16">Horário</th>
+                    {scheduleGrid.workDays.map(d => (
+                      <th key={d} className="px-1 py-1.5 text-center font-medium text-muted-foreground">
+                        {DAY_LABELS[d].substring(0, 3)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {scheduleGrid.grid.map((row, ri) => (
+                    <tr key={ri} className="border-t border-border/50">
+                      <td className="px-2 py-1 text-muted-foreground font-mono text-[10px] whitespace-nowrap">
+                        {row.timeStr}
+                      </td>
+                      {row.days.map((cell, ci) => {
+                        const isSelected = form.fixedDay === cell.day && form.fixedTime === row.timeStr;
+                        const isBackup = form.backupDay === cell.day && form.backupTime === row.timeStr;
+                        return (
+                          <td key={ci} className="px-0.5 py-0.5">
+                            {cell.status === 'occupied' ? (
+                              <div className="rounded-md bg-destructive/12 border border-destructive/20 px-1 py-1 text-center truncate"
+                                title={cell.clientName}>
+                                <span className="text-destructive/80 font-medium text-[9px]">{cell.clientName?.substring(0, 6) || 'Ocupado'}</span>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setForm(prev => ({ ...prev, fixedDay: cell.day, fixedTime: row.timeStr }))}
+                                className={`w-full rounded-md px-1 py-1 text-center transition-all text-[9px] font-medium ${
+                                  isSelected
+                                    ? 'bg-primary text-primary-foreground ring-2 ring-primary/30'
+                                    : isBackup
+                                    ? 'bg-accent border border-accent-foreground/20 text-accent-foreground'
+                                    : 'bg-emerald-500/8 border border-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20'
+                                }`}
+                              >
+                                {isSelected ? '✓ Fixo' : isBackup ? 'Backup' : 'Livre'}
+                              </button>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* Legend */}
+            <div className="flex gap-3 px-3 py-1.5 bg-muted/30 border-t border-border/50 text-[9px] text-muted-foreground">
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-500/20 border border-emerald-500/30" /> Livre</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-destructive/15 border border-destructive/25" /> Ocupado</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-primary" /> Selecionado</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Best slots suggestions (up to 2) */}
       {form.videomaker && bestSlots.length > 0 && (

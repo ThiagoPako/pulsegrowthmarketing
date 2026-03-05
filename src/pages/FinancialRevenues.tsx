@@ -104,12 +104,17 @@ export default function FinancialRevenues() {
         ? await generateDeliveryReport(revenue.client_id, contract?.plan_id, selectedMonth)
         : { text: '' };
 
-      const message = template
+      let message = template
         .replace(/\{nome_cliente\}/g, client.companyName)
         .replace(/\{valor\}/g, value)
         .replace(/\{dia_vencimento\}/g, dueDay)
         .replace(/\{dados_pagamento\}/g, paymentInfo)
         .replace(/\{relatorio_entregas\}/g, report.text);
+
+      // If template doesn't have the variable but report exists, append it
+      if (report.text && !template.includes('{relatorio_entregas}')) {
+        message += report.text;
+      }
 
       const result = await sendWhatsAppMessage({
         number: client.whatsapp,
@@ -163,12 +168,15 @@ export default function FinancialRevenues() {
           ? await generateDeliveryReport(r.client_id, contract?.plan_id, selectedMonth)
           : { text: '' };
 
-        const message = template
+        let message = template
           .replace(/\{nome_cliente\}/g, client.companyName)
           .replace(/\{valor\}/g, value)
           .replace(/\{dia_vencimento\}/g, dueDay)
           .replace(/\{dados_pagamento\}/g, paymentInfo)
           .replace(/\{relatorio_entregas\}/g, report.text);
+        if (report.text && !template.includes('{relatorio_entregas}')) {
+          message += report.text;
+        }
         const result = await sendWhatsAppMessage({ number: client.whatsapp, message, clientId: client.id, triggerType: 'manual' });
         if (result.success) sent++; else errors++;
       } catch { errors++; }

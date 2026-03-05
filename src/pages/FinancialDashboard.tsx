@@ -12,6 +12,16 @@ import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Users, FileText, C
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { motion } from 'framer-motion';
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 20 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: i * 0.08, duration: 0.4, ease: [0.25, 0.1, 0.25, 1] as const },
+  }),
+};
 
 const COLORS = ['hsl(0,72%,51%)', 'hsl(25,95%,53%)', 'hsl(45,93%,47%)', 'hsl(142,71%,45%)', 'hsl(187,85%,43%)', 'hsl(217,91%,60%)', 'hsl(262,83%,58%)', 'hsl(330,81%,60%)', 'hsl(25,50%,38%)'];
 
@@ -208,47 +218,45 @@ export default function FinancialDashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card><CardContent className="pt-4">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground"><DollarSign size={16} /> MRR</div>
-          <p className="text-xl font-bold mt-1">{fmt(mrr)}</p>
-        </CardContent></Card>
-        <Card><CardContent className="pt-4">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground"><TrendingUp size={16} /> Recebida</div>
-          <p className="text-xl font-bold mt-1 text-green-600">{fmt(revenueRecebida)}</p>
-          <p className="text-xs text-muted-foreground">Prevista: {fmt(revenuePrevista)}</p>
-        </CardContent></Card>
-        <Card><CardContent className="pt-4">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground"><TrendingDown size={16} /> Despesas</div>
-          <p className="text-xl font-bold mt-1 text-red-600">{fmt(totalExpenses)}</p>
-        </CardContent></Card>
-        <Card className={lucro < 0 ? 'border-red-500/50' : 'border-green-500/50'}><CardContent className="pt-4">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground"><BarChart3 size={16} /> Lucro Líquido</div>
-          <p className={`text-xl font-bold mt-1 ${lucro >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(lucro)}</p>
-        </CardContent></Card>
-      </div>
+      <motion.div className="grid grid-cols-2 md:grid-cols-4 gap-4" initial="hidden" animate="visible">
+        {[
+          { icon: <DollarSign size={16} />, label: 'MRR', value: fmt(mrr), color: '' },
+          { icon: <TrendingUp size={16} />, label: 'Recebida', value: fmt(revenueRecebida), color: 'text-green-600', sub: `Prevista: ${fmt(revenuePrevista)}` },
+          { icon: <TrendingDown size={16} />, label: 'Despesas', value: fmt(totalExpenses), color: 'text-red-600' },
+          { icon: <BarChart3 size={16} />, label: 'Lucro Líquido', value: fmt(lucro), color: lucro >= 0 ? 'text-green-600' : 'text-red-600', border: lucro < 0 ? 'border-destructive/50' : 'border-green-500/50' },
+        ].map((kpi, i) => (
+          <motion.div key={kpi.label} custom={i} variants={fadeUp}>
+            <Card className={kpi.border || ''}>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">{kpi.icon} {kpi.label}</div>
+                <p className={`text-xl font-bold mt-1 ${kpi.color}`}>{kpi.value}</p>
+                {kpi.sub && <p className="text-xs text-muted-foreground">{kpi.sub}</p>}
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </motion.div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card><CardContent className="pt-4">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground"><AlertTriangle size={16} /> Em Atraso</div>
-          <p className="text-xl font-bold mt-1 text-orange-600">{fmt(revenueAtraso)}</p>
-        </CardContent></Card>
-        <Card><CardContent className="pt-4">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground"><CreditCard size={16} /> Ticket Médio</div>
-          <p className="text-xl font-bold mt-1">{fmt(ticketMedio)}</p>
-        </CardContent></Card>
-        <Card><CardContent className="pt-4">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground"><Users size={16} /> Clientes Ativos</div>
-          <p className="text-xl font-bold mt-1">{activeClients}</p>
-        </CardContent></Card>
-        <Card><CardContent className="pt-4">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground"><TrendingDown size={16} /> Cancelamento</div>
-          <p className="text-xl font-bold mt-1">{taxaCancelamento.toFixed(1)}%</p>
-        </CardContent></Card>
-      </div>
+      <motion.div className="grid grid-cols-2 md:grid-cols-4 gap-4" initial="hidden" animate="visible">
+        {[
+          { icon: <AlertTriangle size={16} />, label: 'Em Atraso', value: fmt(revenueAtraso), color: 'text-orange-600' },
+          { icon: <CreditCard size={16} />, label: 'Ticket Médio', value: fmt(ticketMedio), color: '' },
+          { icon: <Users size={16} />, label: 'Clientes Ativos', value: String(activeClients), color: '' },
+          { icon: <TrendingDown size={16} />, label: 'Cancelamento', value: `${taxaCancelamento.toFixed(1)}%`, color: '' },
+        ].map((kpi, i) => (
+          <motion.div key={kpi.label} custom={i + 4} variants={fadeUp}>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">{kpi.icon} {kpi.label}</div>
+                <p className={`text-xl font-bold mt-1 ${kpi.color}`}>{kpi.value}</p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </motion.div>
 
       {/* Quick Navigation */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+      <motion.div className="grid grid-cols-2 md:grid-cols-6 gap-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5, duration: 0.4 }}>
         {[
           { label: 'Contratos', path: '/financeiro/contratos', icon: FileText },
           { label: 'Receitas', path: '/financeiro/receitas', icon: TrendingUp },
@@ -257,12 +265,12 @@ export default function FinancialDashboard() {
           { label: 'Inadimplência', path: '/financeiro/inadimplencia', icon: AlertTriangle },
           { label: 'Configurações', path: '/financeiro/configuracoes', icon: CreditCard },
         ].map(item => (
-          <Button key={item.path} variant="outline" className="h-auto py-3 flex flex-col gap-1" onClick={() => navigate(item.path)}>
+          <Button key={item.path} variant="outline" className="h-auto py-3 flex flex-col gap-1 hover-scale" onClick={() => navigate(item.path)}>
             <item.icon size={18} />
             <span className="text-xs">{item.label}</span>
           </Button>
         ))}
-      </div>
+      </motion.div>
 
       {/* Due This Week */}
       <Card>
@@ -300,7 +308,7 @@ export default function FinancialDashboard() {
           )}
         </CardContent>
       </Card>
-      <div className="grid md:grid-cols-2 gap-6">
+      <motion.div className="grid md:grid-cols-2 gap-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.5 }}>
         <Card>
           <CardHeader><CardTitle className="text-sm">Despesas por Categoria</CardTitle></CardHeader>
           <CardContent>
@@ -308,7 +316,7 @@ export default function FinancialDashboard() {
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={expenseByCat} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                    <Pie data={expenseByCat} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} isAnimationActive animationDuration={800} animationEasing="ease-out">
                       {expenseByCat.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                     </Pie>
                     <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} />
@@ -329,13 +337,13 @@ export default function FinancialDashboard() {
                 <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <Legend />
-                <Bar dataKey="receita" fill="var(--color-receita)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="despesa" fill="var(--color-despesa)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="receita" fill="var(--color-receita)" radius={[4, 4, 0, 0]} isAnimationActive animationDuration={1000} animationEasing="ease-out" />
+                <Bar dataKey="despesa" fill="var(--color-despesa)" radius={[4, 4, 0, 0]} isAnimationActive animationDuration={1000} animationEasing="ease-out" animationBegin={200} />
               </BarChart>
             </ChartContainer>
           </CardContent>
         </Card>
-      </div>
+      </motion.div>
 
       {/* Cash Forecast */}
       <Card>

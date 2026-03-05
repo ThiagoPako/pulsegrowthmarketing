@@ -270,6 +270,96 @@ export type Database = {
         }
         Relationships: []
       }
+      content_tasks: {
+        Row: {
+          assigned_to: string | null
+          client_id: string
+          content_type: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          kanban_column: string
+          position: number
+          recording_id: string | null
+          scheduled_recording_date: string | null
+          scheduled_recording_time: string | null
+          script_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          client_id: string
+          content_type?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          kanban_column?: string
+          position?: number
+          recording_id?: string | null
+          scheduled_recording_date?: string | null
+          scheduled_recording_time?: string | null
+          script_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          client_id?: string
+          content_type?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          kanban_column?: string
+          position?: number
+          recording_id?: string | null
+          scheduled_recording_date?: string | null
+          scheduled_recording_time?: string | null
+          script_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_tasks_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_tasks_recording_id_fkey"
+            columns: ["recording_id"]
+            isOneToOne: false
+            referencedRelation: "recordings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_tasks_script_id_fkey"
+            columns: ["script_id"]
+            isOneToOne: false
+            referencedRelation: "scripts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       delivery_records: {
         Row: {
           arts_produced: number

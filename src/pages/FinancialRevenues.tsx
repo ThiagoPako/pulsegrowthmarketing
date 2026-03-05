@@ -91,10 +91,16 @@ export default function FinancialRevenues() {
       }
 
       const isOverdue = revenue.status === 'em_atraso';
+      const template = isOverdue
+        ? (paymentConfig?.msg_billing_overdue || 'Olá, {nome_cliente}! Lembrete de pendência: {valor}. {dados_pagamento}')
+        : (paymentConfig?.msg_billing_due || 'Olá, {nome_cliente}! Mensalidade {valor} vence dia {dia_vencimento}. {dados_pagamento}');
 
-      const message = isOverdue
-        ? `Olá, ${client.companyName}! 😊\n\nEsperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de ${value}.\n\nSe já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.${paymentInfo}\n\nQualquer dúvida, estamos à disposição!\n\nEquipe Pulse Growth Marketing 🚀`
-        : `Olá, ${client.companyName}! 😊\n\nPassando para lembrar que a mensalidade no valor de ${value} vence no dia ${dueDay}.\n\nSe já realizou o pagamento, por favor desconsidere esta mensagem.${paymentInfo}\n\nQualquer dúvida, estamos à disposição!\n\nEquipe Pulse Growth Marketing 🚀`;
+      const message = template
+        .replace(/\{nome_cliente\}/g, client.companyName)
+        .replace(/\{valor\}/g, value)
+        .replace(/\{dia_vencimento\}/g, dueDay)
+        .replace(/\{dados_pagamento\}/g, paymentInfo)
+        .replace(/\{relatorio_entregas\}/g, '');
 
       const result = await sendWhatsAppMessage({
         number: client.whatsapp,

@@ -748,6 +748,9 @@ export type Database = {
           bank: string
           document: string
           id: string
+          include_delivery_report: boolean
+          msg_billing_due: string
+          msg_billing_overdue: string
           pix_key: string
           receiver_name: string
           updated_at: string
@@ -756,6 +759,9 @@ export type Database = {
           bank?: string
           document?: string
           id?: string
+          include_delivery_report?: boolean
+          msg_billing_due?: string
+          msg_billing_overdue?: string
           pix_key?: string
           receiver_name?: string
           updated_at?: string
@@ -764,6 +770,9 @@ export type Database = {
           bank?: string
           document?: string
           id?: string
+          include_delivery_report?: boolean
+          msg_billing_due?: string
+          msg_billing_overdue?: string
           pix_key?: string
           receiver_name?: string
           updated_at?: string

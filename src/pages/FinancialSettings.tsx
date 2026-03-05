@@ -1,17 +1,31 @@
 import { useState, useEffect } from 'react';
 import { useFinancialData } from '@/hooks/useFinancialData';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Save } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { ArrowLeft, Save, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+
+const TEMPLATE_VARS = [
+  { var: '{nome_cliente}', desc: 'Nome da empresa' },
+  { var: '{valor}', desc: 'Valor da mensalidade' },
+  { var: '{dia_vencimento}', desc: 'Dia do vencimento' },
+  { var: '{dados_pagamento}', desc: 'Dados PIX configurados' },
+  { var: '{relatorio_entregas}', desc: 'Resumo de entregas do mês' },
+];
 
 export default function FinancialSettings() {
   const navigate = useNavigate();
   const { paymentConfig, updatePaymentConfig, categories, addCategory } = useFinancialData();
-  const [form, setForm] = useState({ pix_key: '', receiver_name: '', bank: '', document: '' });
+  const [form, setForm] = useState({
+    pix_key: '', receiver_name: '', bank: '', document: '',
+    msg_billing_due: '', msg_billing_overdue: '', include_delivery_report: true,
+  });
   const [newCat, setNewCat] = useState('');
 
   useEffect(() => {
@@ -21,13 +35,16 @@ export default function FinancialSettings() {
         receiver_name: paymentConfig.receiver_name,
         bank: paymentConfig.bank,
         document: paymentConfig.document,
+        msg_billing_due: paymentConfig.msg_billing_due || '',
+        msg_billing_overdue: paymentConfig.msg_billing_overdue || '',
+        include_delivery_report: paymentConfig.include_delivery_report ?? true,
       });
     }
   }, [paymentConfig]);
 
   const handleSave = async () => {
     await updatePaymentConfig(form);
-    toast.success('Dados de pagamento atualizados');
+    toast.success('Configurações atualizadas');
   };
 
   const handleAddCat = async () => {
@@ -42,7 +59,7 @@ export default function FinancialSettings() {
     <div className="space-y-5">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro')}><ArrowLeft size={18} /></Button>
-        <h1 className="text-xl font-bold">Configuração de Pagamentos</h1>
+        <h1 className="text-xl font-bold">Configuração Financeira</h1>
       </div>
 
       <Card>
@@ -56,7 +73,54 @@ export default function FinancialSettings() {
             <div><Label>Banco</Label><Input value={form.bank} onChange={e => setForm({ ...form, bank: e.target.value })} /></div>
             <div><Label>CPF ou CNPJ</Label><Input value={form.document} onChange={e => setForm({ ...form, document: e.target.value })} /></div>
           </div>
-          <Button onClick={handleSave}><Save size={14} className="mr-1" /> Salvar</Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Templates de Cobrança</CardTitle>
+          <CardDescription className="text-xs">Personalize as mensagens enviadas via WhatsApp</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-1.5 p-3 rounded-md bg-muted/50">
+            <div className="w-full flex items-center gap-1 mb-1 text-xs text-muted-foreground"><Info size={12} /> Variáveis disponíveis:</div>
+            {TEMPLATE_VARS.map(v => (
+              <Badge key={v.var} variant="secondary" className="text-xs font-mono cursor-help" title={v.desc}>{v.var}</Badge>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between p-3 rounded-md border">
+            <div>
+              <Label className="text-sm font-medium">Incluir relatório de entregas</Label>
+              <p className="text-xs text-muted-foreground">Adiciona resumo de gravações, reels, stories etc. na cobrança</p>
+            </div>
+            <Switch
+              checked={form.include_delivery_report}
+              onCheckedChange={(checked) => setForm({ ...form, include_delivery_report: checked })}
+            />
+          </div>
+
+          <div>
+            <Label>Mensagem de Cobrança (Vencimento)</Label>
+            <Textarea
+              value={form.msg_billing_due}
+              onChange={e => setForm({ ...form, msg_billing_due: e.target.value })}
+              rows={8}
+              className="mt-1 font-mono text-xs"
+              placeholder="Mensagem enviada no dia do vencimento..."
+            />
+          </div>
+
+          <div>
+            <Label>Mensagem de Lembrete (Em Atraso)</Label>
+            <Textarea
+              value={form.msg_billing_overdue}
+              onChange={e => setForm({ ...form, msg_billing_overdue: e.target.value })}
+              rows={8}
+              className="mt-1 font-mono text-xs"
+              placeholder="Mensagem enviada para receitas em atraso..."
+            />
+          </div>
         </CardContent>
       </Card>
 
@@ -74,6 +138,8 @@ export default function FinancialSettings() {
           </div>
         </CardContent>
       </Card>
+
+      <Button onClick={handleSave} className="w-full"><Save size={14} className="mr-1" /> Salvar Configurações</Button>
     </div>
   );
 }

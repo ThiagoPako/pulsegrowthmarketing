@@ -379,7 +379,7 @@ export function useSupabaseData() {
     setActiveRecordings(prev => [...prev.filter(a => a.recordingId !== rec.recordingId), rec]);
   }, []);
 
-  const stopActiveRecording = useCallback(async (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }) => {
+  const stopActiveRecording = useCallback(async (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]) => {
     const active = activeRecordings.find(a => a.recordingId === recordingId);
     
     await supabase.from('active_recordings').delete().eq('recording_id', recordingId);
@@ -401,8 +401,27 @@ export function useSupabaseData() {
         observations: 'Registro automático ao finalizar gravação',
       } as any);
       if (error) console.error('Auto delivery record error:', error);
+
+      // Auto-create social media deliveries for completed scripts
+      if (completedScriptIds && completedScriptIds.length > 0) {
+        const scriptRows = completedScriptIds.map(scriptId => {
+          const script = scripts.find(s => s.id === scriptId);
+          return {
+            client_id: active.clientId,
+            content_type: 'reels',
+            title: script?.title || 'Vídeo gravado',
+            status: 'entregue',
+            delivered_at: new Date().toISOString().split('T')[0],
+            script_id: scriptId,
+            recording_id: recordingId,
+            created_by: active.videomarkerId,
+          };
+        });
+        const { error: socialError } = await supabase.from('social_media_deliveries').insert(scriptRows as any);
+        if (socialError) console.error('Auto social delivery error:', socialError);
+      }
     }
-  }, [activeRecordings]);
+  }, [activeRecordings, scripts]);
 
   return {
     clients, recordings, tasks, scripts, settings, activeRecordings, loading,

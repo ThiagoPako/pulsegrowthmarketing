@@ -461,10 +461,11 @@ export default function Schedule() {
     });
 
     const reelsCount = finishCompletedScripts.size;
+    const completedIds = Array.from(finishCompletedScripts);
     stopActiveRecording(finishRecording.id, {
       reels_produced: reelsCount,
       videos_recorded: Math.max(reelsCount, 1),
-    });
+    }, completedIds);
     updateRecording({ ...finishRecording, status: 'concluida' });
 
     let msg = `Gravação concluída! ${reelsCount} roteiro(s) gravado(s)`;

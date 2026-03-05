@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFinancialData } from '@/hooks/useFinancialData';
 import { useApp } from '@/contexts/AppContext';
@@ -33,6 +33,8 @@ export default function FinancialDashboard() {
   const { clients, recordings, users } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
   const [sendingAllOverdue, setSendingAllOverdue] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationMsg, setCelebrationMsg] = useState('');
 
   const monthStart = useMemo(() => startOfMonth(new Date(selectedMonth + '-01T12:00:00')), [selectedMonth]);
   const monthEnd = useMemo(() => endOfMonth(monthStart), [monthStart]);
@@ -235,8 +237,30 @@ export default function FinancialDashboard() {
       } catch { errors++; }
     }
     setSendingAllOverdue(false);
-    toast.success(`${sent} cobrança(s) enviada(s)${errors > 0 ? `, ${errors} com erro` : ''}`);
+    if (sent > 0) {
+      setCelebrationMsg(`${sent} cobrança${sent > 1 ? 's' : ''} enviada${sent > 1 ? 's' : ''}!`);
+      setShowCelebration(true);
+      setTimeout(() => setShowCelebration(false), 4500);
+    } else {
+      toast.error(`Nenhuma cobrança enviada. ${errors} erro(s).`);
+    }
   };
+
+  // Confetti particles
+  const confettiColors = ['hsl(var(--primary))', '#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
+  const confettiParticles = useMemo(() =>
+    Array.from({ length: 60 }, (_, i) => ({
+      id: i,
+      x: Math.random() * 100,
+      delay: Math.random() * 0.8,
+      duration: 1.5 + Math.random() * 2,
+      color: confettiColors[i % confettiColors.length],
+      size: 6 + Math.random() * 8,
+      rotation: Math.random() * 360,
+    })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [showCelebration]
+  );
 
   if (loading) return <p className="text-muted-foreground p-4">Carregando...</p>;
 
@@ -246,8 +270,92 @@ export default function FinancialDashboard() {
     lucro: { label: 'Lucro', color: 'hsl(217, 91%, 60%)' },
   };
 
+
   return (
     <div className="space-y-6">
+      {/* Celebration Overlay */}
+      {showCelebration && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={() => setShowCelebration(false)}
+        >
+          {/* Confetti */}
+          {confettiParticles.map(p => (
+            <motion.div
+              key={p.id}
+              initial={{ y: -20, x: `${p.x}vw`, opacity: 1, rotate: 0, scale: 0 }}
+              animate={{
+                y: '110vh',
+                rotate: p.rotation + 720,
+                opacity: [1, 1, 0],
+                scale: [0, 1.2, 0.8],
+              }}
+              transition={{ delay: p.delay, duration: p.duration, ease: 'easeOut' }}
+              className="fixed top-0 pointer-events-none"
+              style={{
+                width: p.size,
+                height: p.size * 1.4,
+                backgroundColor: p.color,
+                borderRadius: '2px',
+                left: `${p.x}%`,
+              }}
+            />
+          ))}
+
+          <motion.div
+            initial={{ scale: 0.3, opacity: 0, y: 50 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            transition={{ type: 'spring', damping: 12, stiffness: 150, delay: 0.1 }}
+            className="flex flex-col items-center gap-6 p-8"
+            onClick={e => e.stopPropagation()}
+          >
+            <motion.div
+              animate={{
+                scale: [1, 1.05, 1],
+                rotate: [0, -2, 2, 0],
+              }}
+              transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+              className="relative"
+            >
+              <motion.div
+                className="absolute inset-0 rounded-3xl bg-primary/30 blur-2xl"
+                animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0.8, 0.5] }}
+                transition={{ repeat: Infinity, duration: 1.5 }}
+              />
+              <img
+                src={cobrarTodosImg}
+                alt="Cobranças enviadas"
+                className="w-64 h-64 rounded-3xl object-cover shadow-2xl relative z-10 border-4 border-primary/50"
+              />
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="text-center space-y-2"
+            >
+              <h2 className="text-3xl font-black text-white drop-shadow-lg">
+                💰 {celebrationMsg}
+              </h2>
+              <p className="text-lg text-white/80 font-medium">
+                Agora é só esperar! 🚀
+              </p>
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.5 }}
+                className="text-sm text-white/50 mt-4"
+              >
+                Toque para fechar
+              </motion.p>
+            </motion.div>
+          </motion.div>
+        </motion.div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Financeiro</h1>

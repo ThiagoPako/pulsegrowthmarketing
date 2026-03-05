@@ -241,6 +241,11 @@ export async function sendRecordingScheduledNotification(
 
 // ── Confirmation functions ──
 
+export async function clearConfirmationHistory(): Promise<boolean> {
+  const { error } = await supabase.from('whatsapp_confirmations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  return !error;
+}
+
 export async function getWhatsAppConfirmations(): Promise<WhatsAppConfirmation[]> {
   const { data } = await supabase
     .from('whatsapp_confirmations')

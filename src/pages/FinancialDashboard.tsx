@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from 'recharts';
-import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Users, FileText, CreditCard, ArrowRight, BarChart3, CalendarClock, CheckCircle } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Users, FileText, CreditCard, ArrowRight, BarChart3, CalendarClock, CheckCircle, Wallet } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -241,11 +241,12 @@ export default function FinancialDashboard() {
       </div>
 
       {/* Quick Navigation */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         {[
           { label: 'Contratos', path: '/financeiro/contratos', icon: FileText },
           { label: 'Receitas', path: '/financeiro/receitas', icon: TrendingUp },
           { label: 'Despesas', path: '/financeiro/despesas', icon: TrendingDown },
+          { label: 'Caixa', path: '/financeiro/caixa', icon: Wallet },
           { label: 'Inadimplência', path: '/financeiro/inadimplencia', icon: AlertTriangle },
           { label: 'Configurações', path: '/financeiro/configuracoes', icon: CreditCard },
         ].map(item => (

@@ -59,6 +59,15 @@ export interface BillingMessage {
   status: string;
 }
 
+export interface CashMovement {
+  id: string;
+  amount: number;
+  type: string;
+  description: string;
+  date: string;
+  created_at: string;
+}
+
 export function useFinancialData() {
   const [contracts, setContracts] = useState<FinancialContract[]>([]);
   const [revenues, setRevenues] = useState<Revenue[]>([]);
@@ -66,17 +75,19 @@ export function useFinancialData() {
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [paymentConfig, setPaymentConfigState] = useState<PaymentConfig | null>(null);
   const [billingMessages, setBillingMessages] = useState<BillingMessage[]>([]);
+  const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
-    const [cRes, rRes, eRes, catRes, pRes, bRes] = await Promise.all([
+    const [cRes, rRes, eRes, catRes, pRes, bRes, cashRes] = await Promise.all([
       supabase.from('financial_contracts').select('*').order('created_at', { ascending: false }),
       supabase.from('revenues').select('*').order('due_date', { ascending: false }),
       supabase.from('expenses').select('*').order('date', { ascending: false }),
       supabase.from('expense_categories').select('*').order('name'),
       supabase.from('payment_config').select('*').limit(1),
       supabase.from('billing_messages').select('*').order('sent_at', { ascending: false }),
+      supabase.from('cash_reserve_movements').select('*').order('date', { ascending: false }),
     ]);
     if (cRes.data) setContracts(cRes.data as any);
     if (rRes.data) setRevenues(rRes.data as any);
@@ -84,6 +95,7 @@ export function useFinancialData() {
     if (catRes.data) setCategories(catRes.data as any);
     if (pRes.data?.[0]) setPaymentConfigState(pRes.data[0] as any);
     if (bRes.data) setBillingMessages(bRes.data as any);
+    if (cashRes.data) setCashMovements(cashRes.data as any);
     setLoading(false);
   }, []);
 
@@ -176,12 +188,19 @@ export function useFinancialData() {
     await fetchAll();
   };
 
+  // Cash reserve
+  const addCashMovement = async (m: Partial<CashMovement>) => {
+    const { error } = await supabase.from('cash_reserve_movements').insert(m as any);
+    if (!error) await fetchAll();
+    return !error;
+  };
+
   return {
-    contracts, revenues, expenses, categories, paymentConfig, billingMessages, loading,
+    contracts, revenues, expenses, categories, paymentConfig, billingMessages, cashMovements, loading,
     upsertContract, deleteContract,
     addRevenue, updateRevenue, generateMonthlyRevenues,
     addExpense, updateExpense, deleteExpense,
-    addCategory, updatePaymentConfig,
+    addCategory, updatePaymentConfig, addCashMovement,
     refetch: fetchAll,
   };
 }

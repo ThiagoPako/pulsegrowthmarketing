@@ -102,6 +102,33 @@ export type Database = {
           },
         ]
       }
+      cash_reserve_movements: {
+        Row: {
+          amount: number
+          created_at: string
+          date: string
+          description: string
+          id: string
+          type: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          date?: string
+          description?: string
+          id?: string
+          type?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          date?: string
+          description?: string
+          id?: string
+          type?: string
+        }
+        Relationships: []
+      }
       clients: {
         Row: {
           accepts_extra: boolean

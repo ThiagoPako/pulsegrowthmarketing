@@ -716,7 +716,7 @@ export default function Clients() {
         <p className="text-sm font-semibold flex items-center gap-2">
           <Target size={16} className="text-primary" /> Metas de Entrega Semanal
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="space-y-1">
             <Label>Qtd. Reels</Label>
             <Input type="number" min={0} value={form.weeklyReels ?? 0} onChange={e => setForm({ ...form, weeklyReels: Number(e.target.value) })} />
@@ -724,6 +724,10 @@ export default function Clients() {
           <div className="space-y-1">
             <Label>Qtd. Criativos</Label>
             <Input type="number" min={0} value={form.weeklyCreatives ?? 0} onChange={e => setForm({ ...form, weeklyCreatives: Number(e.target.value) })} />
+          </div>
+          <div className="space-y-1">
+            <Label>Stories/Semana</Label>
+            <Input type="number" min={0} value={form.weeklyStories ?? 0} onChange={e => setForm({ ...form, weeklyStories: Number(e.target.value) })} />
           </div>
           <div className="space-y-1">
             <Label>Meta Total (vídeos)</Label>

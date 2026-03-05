@@ -30,6 +30,9 @@ export default function VideomakerDashboard() {
   const [selectedScriptIds, setSelectedScriptIds] = useState<Set<string>>(new Set());
   const [viewingScript, setViewingScript] = useState<Script | null>(null);
 
+  // Track planned scripts per active recording (recordingId -> script IDs)
+  const [plannedScripts, setPlannedScripts] = useState<Record<string, string[]>>({});
+
   // Finish dialog state
   const [finishDialogOpen, setFinishDialogOpen] = useState(false);
   const [finishRecordingId, setFinishRecordingId] = useState('');
@@ -77,14 +80,19 @@ export default function VideomakerDashboard() {
   };
 
   const confirmStartRecording = (rec: Recording) => {
-    // Mark selected scripts as "planned" for this session
+    if (selectedScriptIds.size === 0) {
+      toast.error('Selecione pelo menos 1 roteiro para iniciar a gravação');
+      return;
+    }
+    // Store planned scripts for this recording session
+    setPlannedScripts(prev => ({ ...prev, [rec.id]: Array.from(selectedScriptIds) }));
     startActiveRecording({
       recordingId: rec.id,
       videomarkerId: vmId,
       clientId: rec.clientId,
       startedAt: new Date().toISOString(),
     });
-    toast.success(`Gravação iniciada — ${getClientName(rec.clientId)}`);
+    toast.success(`Gravação iniciada com ${selectedScriptIds.size} roteiro(s) — ${getClientName(rec.clientId)}`);
     setScriptsOpen(false);
   };
 
@@ -96,26 +104,34 @@ export default function VideomakerDashboard() {
     setFinishDialogOpen(true);
   };
 
-  // Scripts available for finish dialog (pending scripts for this client)
+  // Scripts available for finish dialog — only the ones planned at start
   const finishClientScripts = useMemo(() => {
     if (!finishRecordingId) return [];
-    const rec = recordings.find(r => r.id === finishRecordingId);
-    if (!rec) return [];
-    // Show both pending and recently recorded scripts for this client
-    return scripts.filter(s => s.clientId === rec.clientId && !s.isEndomarketing)
+    const planned = plannedScripts[finishRecordingId];
+    if (!planned || planned.length === 0) {
+      // Fallback: show all pending scripts for this client if no planned scripts tracked
+      const rec = recordings.find(r => r.id === finishRecordingId);
+      if (!rec) return [];
+      return scripts.filter(s => s.clientId === rec.clientId && !s.isEndomarketing && !s.recorded)
+        .sort((a, b) => {
+          const priorityOrder: Record<string, number> = { urgent: 0, priority: 1, normal: 2 };
+          return (priorityOrder[a.priority] || 2) - (priorityOrder[b.priority] || 2);
+        });
+    }
+    // Show only scripts that were planned for this session
+    return scripts.filter(s => planned.includes(s.id))
       .sort((a, b) => {
-        // Show unrecorded first
-        if (a.recorded !== b.recorded) return a.recorded ? 1 : -1;
         const priorityOrder: Record<string, number> = { urgent: 0, priority: 1, normal: 2 };
         return (priorityOrder[a.priority] || 2) - (priorityOrder[b.priority] || 2);
       });
-  }, [finishRecordingId, recordings, scripts]);
+  }, [finishRecordingId, recordings, scripts, plannedScripts]);
 
   const confirmFinish = () => {
     const rec = recordings.find(r => r.id === finishRecordingId);
     if (!rec) return;
 
     const now = new Date().toISOString();
+    const planned = plannedScripts[finishRecordingId] || [];
 
     // Mark completed scripts as recorded
     completedScriptIds.forEach(id => {
@@ -125,13 +141,30 @@ export default function VideomakerDashboard() {
       }
     });
 
+    // Auto-return unrecorded planned scripts back to pending (ensure recorded: false)
+    const returnedCount = planned.filter(id => !completedScriptIds.has(id)).length;
+    planned.forEach(id => {
+      if (!completedScriptIds.has(id)) {
+        const script = scripts.find(s => s.id === id);
+        if (script && script.recorded) {
+          updateScript({ ...script, recorded: false, updatedAt: now });
+        }
+      }
+    });
+
     const reelsCount = completedScriptIds.size;
     stopActiveRecording(finishRecordingId, {
       reels_produced: reelsCount,
       videos_recorded: Math.max(reelsCount, 1),
     });
     updateRecording({ ...rec, status: 'concluida' });
-    toast.success(`Gravação concluída! ${reelsCount} roteiro(s) gravado(s)`);
+
+    let msg = `Gravação concluída! ${reelsCount} roteiro(s) gravado(s)`;
+    if (returnedCount > 0) msg += ` · ${returnedCount} retornado(s) ao banco`;
+    toast.success(msg);
+
+    // Clean up planned scripts for this recording
+    setPlannedScripts(prev => { const next = { ...prev }; delete next[finishRecordingId]; return next; });
     setFinishDialogOpen(false);
     setCompletedScriptIds(new Set());
   };
@@ -472,14 +505,14 @@ export default function VideomakerDashboard() {
             Selecione os roteiros que foram gravados nesta sessão. Os não selecionados permanecerão no banco de roteiros pendentes.
           </p>
 
-          {finishClientScripts.filter(s => !s.recorded).length === 0 ? (
+          {finishClientScripts.length === 0 ? (
             <div className="text-center py-6 text-muted-foreground">
               <FileText size={32} className="mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Nenhum roteiro pendente para este cliente</p>
+              <p className="text-sm">Nenhum roteiro planejado para esta sessão</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {finishClientScripts.filter(s => !s.recorded).map(script => (
+              {finishClientScripts.map(script => (
                 <div key={script.id} className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
                   completedScriptIds.has(script.id) ? 'border-success/40 bg-success/5' :
                   script.priority === 'urgent' ? 'border-destructive/40 bg-destructive/5' :

@@ -77,6 +77,17 @@ export default function Schedule() {
   const [backupOpen, setBackupOpen] = useState(false);
   const [cancellingRec, setCancellingRec] = useState<Recording | null>(null);
 
+  // Start recording dialog state
+  const [startRecOpen, setStartRecOpen] = useState(false);
+  const [startRecording, setStartRecordingState] = useState<Recording | null>(null);
+  const [startSelectedScripts, setStartSelectedScripts] = useState<Set<string>>(new Set());
+  const [plannedScriptsMap, setPlannedScriptsMap] = useState<Record<string, string[]>>({});
+
+  // Finish recording dialog state
+  const [finishRecOpen, setFinishRecOpen] = useState(false);
+  const [finishRecording, setFinishRecordingState] = useState<Recording | null>(null);
+  const [finishCompletedScripts, setFinishCompletedScripts] = useState<Set<string>>(new Set());
+
   const videomakers = users.filter(u => u.role === 'videomaker');
   const currentMonth = addMonths(new Date(), monthOffset);
   const monthStart = startOfMonth(currentMonth);
@@ -363,21 +374,97 @@ export default function Schedule() {
 
   const isRecordingActive = (recId: string) => activeRecordings.some(a => a.recordingId === recId);
 
+  // Start recording scripts for the dialog
+  const startRecScripts = useMemo(() => {
+    if (!startRecording) return [];
+    return scripts.filter(s => s.clientId === startRecording.clientId && !s.recorded && !s.isEndomarketing)
+      .sort((a, b) => {
+        const po: Record<string, number> = { urgent: 0, priority: 1, normal: 2 };
+        return (po[a.priority] || 2) - (po[b.priority] || 2);
+      });
+  }, [startRecording, scripts]);
+
+  // Finish recording scripts (only planned ones)
+  const finishRecScripts = useMemo(() => {
+    if (!finishRecording) return [];
+    const planned = plannedScriptsMap[finishRecording.id];
+    if (!planned || planned.length === 0) {
+      return scripts.filter(s => s.clientId === finishRecording.clientId && !s.recorded && !s.isEndomarketing);
+    }
+    return scripts.filter(s => planned.includes(s.id));
+  }, [finishRecording, scripts, plannedScriptsMap]);
+
   const handleToggleRecording = (rec: Recording) => {
     if (isRecordingActive(rec.id)) {
-      stopActiveRecording(rec.id);
-      updateRecording({ ...rec, status: 'concluida' });
-      toast.success(`Gravação finalizada — ${getClientName(rec.clientId)}`);
+      // Open finish dialog
+      setFinishRecordingState(rec);
+      setFinishCompletedScripts(new Set());
+      setFinishRecOpen(true);
     } else {
-      const vmId = rec.videomakerId;
-      startActiveRecording({
-        recordingId: rec.id,
-        videomarkerId: vmId,
-        clientId: rec.clientId,
-        startedAt: new Date().toISOString(),
-      });
-      toast.success(`Gravação iniciada — ${getClientName(rec.clientId)}`);
+      // Open start dialog with script selection
+      setStartRecordingState(rec);
+      setStartSelectedScripts(new Set());
+      setStartRecOpen(true);
     }
+  };
+
+  const confirmStartRec = () => {
+    if (!startRecording) return;
+    if (startSelectedScripts.size === 0) {
+      toast.error('Selecione pelo menos 1 roteiro para iniciar');
+      return;
+    }
+    setPlannedScriptsMap(prev => ({ ...prev, [startRecording.id]: Array.from(startSelectedScripts) }));
+    startActiveRecording({
+      recordingId: startRecording.id,
+      videomarkerId: startRecording.videomakerId,
+      clientId: startRecording.clientId,
+      startedAt: new Date().toISOString(),
+    });
+    toast.success(`Gravação iniciada com ${startSelectedScripts.size} roteiro(s) — ${getClientName(startRecording.clientId)}`);
+    setStartRecOpen(false);
+    setStartRecordingState(null);
+  };
+
+  const confirmFinishRec = () => {
+    if (!finishRecording) return;
+    const now = new Date().toISOString();
+    const planned = plannedScriptsMap[finishRecording.id] || [];
+
+    // Mark completed scripts as recorded
+    finishCompletedScripts.forEach(id => {
+      const script = scripts.find(s => s.id === id);
+      if (script && !script.recorded) {
+        updateScript({ ...script, recorded: true, updatedAt: now });
+      }
+    });
+
+    // Auto-return unrecorded planned scripts
+    const returnedCount = planned.filter(id => !finishCompletedScripts.has(id)).length;
+    planned.forEach(id => {
+      if (!finishCompletedScripts.has(id)) {
+        const script = scripts.find(s => s.id === id);
+        if (script && script.recorded) {
+          updateScript({ ...script, recorded: false, updatedAt: now });
+        }
+      }
+    });
+
+    const reelsCount = finishCompletedScripts.size;
+    stopActiveRecording(finishRecording.id, {
+      reels_produced: reelsCount,
+      videos_recorded: Math.max(reelsCount, 1),
+    });
+    updateRecording({ ...finishRecording, status: 'concluida' });
+
+    let msg = `Gravação concluída! ${reelsCount} roteiro(s) gravado(s)`;
+    if (returnedCount > 0) msg += ` · ${returnedCount} retornado(s) ao banco`;
+    toast.success(msg);
+
+    setPlannedScriptsMap(prev => { const next = { ...prev }; delete next[finishRecording.id]; return next; });
+    setFinishRecOpen(false);
+    setFinishRecordingState(null);
+    setFinishCompletedScripts(new Set());
   };
 
   const statusTag = (rec: Recording) => {
@@ -924,6 +1011,106 @@ export default function Schedule() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Start Recording — Script Selection Dialog */}
+      <Dialog open={startRecOpen} onOpenChange={(open) => { if (!open) { setStartRecOpen(false); setStartRecordingState(null); } }}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Play size={18} className="text-primary" />
+              Selecionar Roteiros — {startRecording ? getClientName(startRecording.clientId) : ''}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Selecione os roteiros que serão gravados nesta sessão. É obrigatório selecionar pelo menos 1 roteiro.
+          </p>
+          {startRecScripts.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <FileText size={32} className="mx-auto mb-2 opacity-50" />
+              <p className="text-sm">Nenhum roteiro pendente para este cliente</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {startRecScripts.map(script => (
+                <label key={script.id} className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 cursor-pointer transition-colors">
+                  <Checkbox
+                    checked={startSelectedScripts.has(script.id)}
+                    onCheckedChange={checked => {
+                      const next = new Set(startSelectedScripts);
+                      checked ? next.add(script.id) : next.delete(script.id);
+                      setStartSelectedScripts(next);
+                    }}
+                    className="mt-0.5"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm">{script.title}</p>
+                    <Badge variant="outline" className="text-[10px] mt-1">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2 mt-2">
+            <Button variant="outline" onClick={() => { setStartRecOpen(false); setStartRecordingState(null); }} className="flex-1">
+              Cancelar
+            </Button>
+            <Button onClick={confirmStartRec} disabled={startSelectedScripts.size === 0} className="flex-1 gap-1.5">
+              <Play size={16} /> Iniciar Gravação ({startSelectedScripts.size})
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Finish Recording — Script Completion Dialog */}
+      <Dialog open={finishRecOpen} onOpenChange={(open) => { if (!open) { setFinishRecOpen(false); setFinishRecordingState(null); } }}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Check size={18} className="text-success" />
+              Finalizar Gravação — {finishRecording ? getClientName(finishRecording.clientId) : ''}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Selecione os roteiros que foram gravados. Os não selecionados retornarão automaticamente ao banco de roteiros pendentes.
+          </p>
+          {finishRecScripts.length === 0 ? (
+            <div className="text-center py-6 text-muted-foreground">
+              <FileText size={32} className="mx-auto mb-2 opacity-50" />
+              <p className="text-sm">Nenhum roteiro planejado para esta sessão</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {finishRecScripts.map(script => (
+                <div key={script.id} className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
+                  finishCompletedScripts.has(script.id) ? 'border-success/40 bg-success/5' : 'border-border hover:bg-muted/30'
+                }`}>
+                  <Checkbox
+                    checked={finishCompletedScripts.has(script.id)}
+                    onCheckedChange={checked => {
+                      const next = new Set(finishCompletedScripts);
+                      checked ? next.add(script.id) : next.delete(script.id);
+                      setFinishCompletedScripts(next);
+                    }}
+                    className="mt-1"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm">{script.title}</p>
+                    <Badge variant="outline" className="text-[10px] mt-1">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2 mt-3">
+            <Button variant="outline" onClick={() => { setFinishRecOpen(false); setFinishRecordingState(null); }} className="flex-1">
+              Cancelar
+            </Button>
+            <Button onClick={confirmFinishRec} className="flex-1 gap-1.5 bg-success hover:bg-success/90 text-success-foreground">
+              <Check size={16} /> Finalizar ({finishCompletedScripts.size} roteiro{finishCompletedScripts.size !== 1 ? 's' : ''})
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

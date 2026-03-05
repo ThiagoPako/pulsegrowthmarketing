@@ -18,6 +18,8 @@ import { Textarea } from '@/components/ui/textarea';
 const DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 const CONTENT_TYPES: ContentType[] = ['reels', 'story', 'produto'];
 
+type PreferredShift = 'turnoA' | 'turnoB' | 'ambos';
+
 const emptyClient = (): Partial<Client> => ({
   companyName: '', responsiblePerson: '', phone: '', whatsapp: '', color: CLIENT_COLORS[0].value,
   fixedDay: 'segunda', fixedTime: '09:00',
@@ -63,6 +65,7 @@ export default function Clients() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const [preferredShift, setPreferredShift] = useState<PreferredShift>('ambos');
   const [sendWaOpen, setSendWaOpen] = useState(false);
   const [sendWaClient, setSendWaClient] = useState<Client | null>(null);
   const [sendWaMsg, setSendWaMsg] = useState('');
@@ -99,7 +102,9 @@ export default function Clients() {
       for (const day of settings.workDays) {
         let occupiedSlots = 0;
         let totalSlots = 0;
-        const shiftRanges = [[shiftAStart, shiftAEnd], [shiftBStart, shiftBEnd]];
+        const shiftRanges: number[][] = [];
+        if (preferredShift === 'turnoA' || preferredShift === 'ambos') shiftRanges.push([shiftAStart, shiftAEnd]);
+        if (preferredShift === 'turnoB' || preferredShift === 'ambos') shiftRanges.push([shiftBStart, shiftBEnd]);
         for (const [sStart, sEnd] of shiftRanges) {
           for (let t = sStart; t + duration <= sEnd; t += duration + 30) {
             totalSlots++;
@@ -118,7 +123,7 @@ export default function Clients() {
       }
     }
     return slots;
-  }, [form.videomaker, videomakers, settings, clients, users, editing]);
+  }, [form.videomaker, videomakers, settings, clients, users, editing, preferredShift]);
 
   // Top 2 best slot suggestions for selected videomaker
   const bestSlots = useMemo(() => {
@@ -176,6 +181,7 @@ export default function Clients() {
       setPlanId(null);
       setContractStartDate('');
       setAutoRenewal(false);
+      setPreferredShift('ambos');
     }
     setLogoFile(null);
     setStep(0);
@@ -269,8 +275,12 @@ export default function Clients() {
 
     // All time slots across both shifts
     const timeSlots: number[] = [];
-    for (let t = shiftAStart; t + duration <= shiftAEnd; t += duration + 30) timeSlots.push(t);
-    for (let t = shiftBStart; t + duration <= shiftBEnd; t += duration + 30) timeSlots.push(t);
+    if (preferredShift === 'turnoA' || preferredShift === 'ambos') {
+      for (let t = shiftAStart; t + duration <= shiftAEnd; t += duration + 30) timeSlots.push(t);
+    }
+    if (preferredShift === 'turnoB' || preferredShift === 'ambos') {
+      for (let t = shiftBStart; t + duration <= shiftBEnd; t += duration + 30) timeSlots.push(t);
+    }
 
     const workDays = settings.workDays;
 
@@ -295,7 +305,7 @@ export default function Clients() {
     }
 
     return { vmName: vm.name, workDays, grid };
-  }, [form.videomaker, settings, clients, users, editing]);
+  }, [form.videomaker, settings, clients, users, editing, preferredShift]);
 
   const canProceedStep0 = form.companyName && form.responsiblePerson && form.whatsapp;
   const canProceedStep1 = form.videomaker && form.fixedDay && form.fixedTime;
@@ -364,8 +374,91 @@ export default function Clients() {
     </div>
   );
 
-  const renderStep1 = () => (
+  const renderStep1 = () => {
+    const shiftALabel = `${settings.shiftAStart} – ${settings.shiftAEnd}`;
+    const shiftBLabel = `${settings.shiftBStart} – ${settings.shiftBEnd}`;
+    
+    return (
     <div className="space-y-5">
+      {/* Recording preferences - before scheduling */}
+      <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-4">
+        <p className="text-sm font-semibold flex items-center gap-2">
+          <Video size={16} className="text-primary" /> Preferências de Gravação
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Defina com o cliente quantas gravações por mês ele deseja e em qual período prefere gravar. 
+          Cada sessão de gravação leva até <strong className="text-foreground">90 minutos</strong>.
+        </p>
+        
+        {/* Monthly recordings quantity */}
+        <div className="space-y-2">
+          <Label>Gravações por mês *</Label>
+          <div className="grid grid-cols-4 gap-2">
+            {[1, 2, 3, 4].map(n => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setForm(prev => ({ ...prev, monthlyRecordings: n }))}
+                className={`p-3 rounded-xl border-2 text-center transition-all ${
+                  form.monthlyRecordings === n
+                    ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                    : 'border-border hover:border-primary/40 hover:bg-primary/5'
+                }`}
+              >
+                <span className="text-lg font-bold block">{n}x</span>
+                <span className="text-[10px] text-muted-foreground block">{n === 1 ? 'por mês' : 'por mês'}</span>
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+            <Clock size={10} /> {form.monthlyRecordings ?? 4} gravação(ões) × ~90 min = ~{(form.monthlyRecordings ?? 4) * 90} min/mês
+          </p>
+        </div>
+
+        {/* Preferred shift */}
+        <div className="space-y-2">
+          <Label>Período preferido para gravação *</Label>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => setPreferredShift('turnoA')}
+              className={`p-3 rounded-xl border-2 text-center transition-all ${
+                preferredShift === 'turnoA'
+                  ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                  : 'border-border hover:border-primary/40 hover:bg-primary/5'
+              }`}
+            >
+              <span className="text-xs font-bold block">☀️ Manhã</span>
+              <span className="text-[10px] text-muted-foreground block">{shiftALabel}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPreferredShift('turnoB')}
+              className={`p-3 rounded-xl border-2 text-center transition-all ${
+                preferredShift === 'turnoB'
+                  ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                  : 'border-border hover:border-primary/40 hover:bg-primary/5'
+              }`}
+            >
+              <span className="text-xs font-bold block">🌙 Tarde</span>
+              <span className="text-[10px] text-muted-foreground block">{shiftBLabel}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPreferredShift('ambos')}
+              className={`p-3 rounded-xl border-2 text-center transition-all ${
+                preferredShift === 'ambos'
+                  ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                  : 'border-border hover:border-primary/40 hover:bg-primary/5'
+              }`}
+            >
+              <span className="text-xs font-bold block">🔄 Ambos</span>
+              <span className="text-[10px] text-muted-foreground block">Qualquer horário</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Videomaker */}
       <div className="space-y-1">
         <Label>Videomaker Responsável *</Label>
@@ -615,6 +708,7 @@ export default function Clients() {
       )}
     </div>
   );
+  };
 
   const renderStep2 = () => (
     <div className="space-y-5">
@@ -622,7 +716,7 @@ export default function Clients() {
         <p className="text-sm font-semibold flex items-center gap-2">
           <Target size={16} className="text-primary" /> Metas de Entrega Semanal
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div className="space-y-1">
             <Label>Qtd. Reels</Label>
             <Input type="number" min={0} value={form.weeklyReels ?? 0} onChange={e => setForm({ ...form, weeklyReels: Number(e.target.value) })} />
@@ -634,11 +728,6 @@ export default function Clients() {
           <div className="space-y-1">
             <Label>Meta Total (vídeos)</Label>
             <Input type="number" min={1} value={form.weeklyGoal} onChange={e => setForm({ ...form, weeklyGoal: Number(e.target.value) })} />
-          </div>
-          <div className="space-y-1">
-            <Label>Gravações/Mês</Label>
-            <Input type="number" min={1} value={form.monthlyRecordings ?? 4} onChange={e => setForm({ ...form, monthlyRecordings: Number(e.target.value) })} />
-            <p className="text-[10px] text-muted-foreground">Sessões de gravação contratadas por mês</p>
           </div>
         </div>
       </div>
@@ -693,7 +782,9 @@ export default function Clients() {
             </>
            )}
            <span className="text-muted-foreground">Gravações/mês:</span>
-           <span className="font-medium">{form.monthlyRecordings ?? 4}</span>
+           <span className="font-medium">{form.monthlyRecordings ?? 4}x (~{(form.monthlyRecordings ?? 4) * 90} min)</span>
+           <span className="text-muted-foreground">Período preferido:</span>
+           <span className="font-medium">{preferredShift === 'turnoA' ? 'Manhã' : preferredShift === 'turnoB' ? 'Tarde' : 'Ambos'}</span>
          </div>
        </div>
      </div>

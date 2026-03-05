@@ -19,21 +19,26 @@ Deno.serve(async (req) => {
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    
+    // Validate user auth
+    const supabaseUser = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
       global: { headers: { Authorization: authHeader } }
     })
-
     const token = authHeader.replace('Bearer ', '')
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token)
+    const { data: claimsData, error: claimsError } = await supabaseUser.auth.getClaims(token)
     if (claimsError || !claimsData?.claims) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
     const userId = claimsData.claims.sub
 
-    const WHATSAPP_TOKEN = Deno.env.get('WHATSAPP_API_TOKEN')
+    // Use service role to read config (bypasses RLS)
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
+    const { data: configData } = await supabaseAdmin.from('whatsapp_config').select('api_token').limit(1).single()
+    
+    const WHATSAPP_TOKEN = configData?.api_token
     if (!WHATSAPP_TOKEN) {
-      return new Response(JSON.stringify({ error: 'WhatsApp API token not configured' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify({ error: 'Token da API WhatsApp não configurado' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     const body = await req.json()
@@ -43,7 +48,6 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'number and message are required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // Send to WhatsApp API
     const apiBody = {
       number: number.replace(/\D/g, ''),
       body: message,
@@ -65,8 +69,8 @@ Deno.serve(async (req) => {
     const apiResult = await apiResponse.json()
     const status = apiResponse.ok ? 'sent' : 'failed'
 
-    // Log message in database
-    await supabase.from('whatsapp_messages').insert({
+    // Log message using user's client (respects RLS INSERT policy)
+    await supabaseUser.from('whatsapp_messages').insert({
       phone_number: number.replace(/\D/g, ''),
       message,
       status,

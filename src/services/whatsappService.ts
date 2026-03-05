@@ -1,9 +1,9 @@
 import { supabase } from '@/integrations/supabase/client';
 
-interface WhatsAppConfig {
+export interface WhatsAppConfig {
   id: string;
   integrationActive: boolean;
-  apiTokenConfigured: boolean;
+  apiToken: string;
   defaultUserId: string;
   defaultQueueId: string;
   sendSignature: boolean;
@@ -12,6 +12,10 @@ interface WhatsAppConfig {
   autoRecordingReminder: boolean;
   autoVideoApproval: boolean;
   autoVideoApproved: boolean;
+  msgRecordingScheduled: string;
+  msgRecordingReminder: string;
+  msgVideoApproval: string;
+  msgVideoApproved: string;
 }
 
 interface SendMessageParams {
@@ -37,7 +41,7 @@ function rowToConfig(r: any): WhatsAppConfig {
   return {
     id: r.id,
     integrationActive: r.integration_active,
-    apiTokenConfigured: r.api_token_configured,
+    apiToken: r.api_token || '',
     defaultUserId: r.default_user_id,
     defaultQueueId: r.default_queue_id,
     sendSignature: r.send_signature,
@@ -46,6 +50,10 @@ function rowToConfig(r: any): WhatsAppConfig {
     autoRecordingReminder: r.auto_recording_reminder,
     autoVideoApproval: r.auto_video_approval,
     autoVideoApproved: r.auto_video_approved,
+    msgRecordingScheduled: r.msg_recording_scheduled || '',
+    msgRecordingReminder: r.msg_recording_reminder || '',
+    msgVideoApproval: r.msg_video_approval || '',
+    msgVideoApproved: r.msg_video_approved || '',
   };
 }
 
@@ -74,7 +82,7 @@ export async function updateWhatsAppConfig(config: Partial<WhatsAppConfig>): Pro
   
   const updateData: any = {};
   if (config.integrationActive !== undefined) updateData.integration_active = config.integrationActive;
-  if (config.apiTokenConfigured !== undefined) updateData.api_token_configured = config.apiTokenConfigured;
+  if (config.apiToken !== undefined) updateData.api_token = config.apiToken;
   if (config.defaultUserId !== undefined) updateData.default_user_id = config.defaultUserId;
   if (config.defaultQueueId !== undefined) updateData.default_queue_id = config.defaultQueueId;
   if (config.sendSignature !== undefined) updateData.send_signature = config.sendSignature;
@@ -83,6 +91,10 @@ export async function updateWhatsAppConfig(config: Partial<WhatsAppConfig>): Pro
   if (config.autoRecordingReminder !== undefined) updateData.auto_recording_reminder = config.autoRecordingReminder;
   if (config.autoVideoApproval !== undefined) updateData.auto_video_approval = config.autoVideoApproval;
   if (config.autoVideoApproved !== undefined) updateData.auto_video_approved = config.autoVideoApproved;
+  if (config.msgRecordingScheduled !== undefined) updateData.msg_recording_scheduled = config.msgRecordingScheduled;
+  if (config.msgRecordingReminder !== undefined) updateData.msg_recording_reminder = config.msgRecordingReminder;
+  if (config.msgVideoApproval !== undefined) updateData.msg_video_approval = config.msgVideoApproval;
+  if (config.msgVideoApproved !== undefined) updateData.msg_video_approved = config.msgVideoApproved;
   updateData.updated_at = new Date().toISOString();
 
   const { error } = await supabase.from('whatsapp_config').update(updateData).eq('id', current.id);
@@ -93,6 +105,9 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<{ 
   const config = await getWhatsAppConfig();
   if (!config?.integrationActive) {
     return { success: false, error: 'Integração WhatsApp desativada' };
+  }
+  if (!config.apiToken) {
+    return { success: false, error: 'Token da API não configurado' };
   }
 
   const { data, error } = await supabase.functions.invoke('send-whatsapp', {
@@ -144,22 +159,14 @@ export async function getMessageStats(): Promise<{ total: number; sent: number; 
   };
 }
 
-// ── Automation message templates ──
+// ── Build messages from templates ──
 
-export function buildRecordingScheduledMessage(clientName: string, date: string, time: string, videomakerName: string): string {
-  return `Olá! Sua gravação foi agendada.\n\nCliente: ${clientName}\nData: ${date}\nHorário: ${time}\nVideomaker: ${videomakerName}\n\nEquipe Pulse Growth Marketing`;
-}
-
-export function buildRecordingReminderMessage(clientName: string, time: string): string {
-  return `Lembrete da sua gravação amanhã.\n\nCliente: ${clientName}\nHorário: ${time}\n\nEquipe Pulse Growth Marketing`;
-}
-
-export function buildVideoApprovalMessage(link?: string): string {
-  return `Seu vídeo está pronto para aprovação.\n\nAcesse o link abaixo para assistir:\n${link || '[link do vídeo]'}\n\nSe precisar de ajustes nos avise.\n\nEquipe Pulse Growth Marketing`;
-}
-
-export function buildVideoApprovedMessage(): string {
-  return `Seu vídeo foi aprovado e será publicado em breve.\n\nObrigado pela confiança na Pulse Growth Marketing.`;
+function applyTemplate(template: string, vars: Record<string, string>): string {
+  let result = template;
+  for (const [key, value] of Object.entries(vars)) {
+    result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+  }
+  return result;
 }
 
 export async function sendRecordingScheduledNotification(
@@ -172,11 +179,18 @@ export async function sendRecordingScheduledNotification(
 ): Promise<void> {
   const config = await getWhatsAppConfig();
   if (!config?.integrationActive || !config.autoRecordingScheduled) return;
-  if (!clientPhone) return;
+  if (!clientPhone || !config.apiToken) return;
+
+  const message = applyTemplate(config.msgRecordingScheduled, {
+    nome_cliente: clientName,
+    data_gravacao: date,
+    hora_gravacao: time,
+    videomaker: videomakerName,
+  });
 
   await sendWhatsAppMessage({
     number: clientPhone,
-    message: buildRecordingScheduledMessage(clientName, date, time, videomakerName),
+    message,
     clientId,
     triggerType: 'auto_recording',
   });

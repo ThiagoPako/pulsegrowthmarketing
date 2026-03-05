@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,45 +10,33 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { MessageSquare, Send, Settings, History, Check, X, Phone, Zap, Filter } from 'lucide-react';
+import { MessageSquare, Settings, History, Check, Key, Zap, Eye, EyeOff, Pencil } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   getWhatsAppConfig,
   updateWhatsAppConfig,
-  sendWhatsAppMessage,
   getWhatsAppMessages,
   getMessageStats,
+  type WhatsAppConfig,
   type WhatsAppMessage,
 } from '@/services/whatsappService';
-import ClientLogo from '@/components/ClientLogo';
 
 export default function WhatsAppDashboard() {
   const { clients, currentUser } = useApp();
   const isAdmin = currentUser?.role === 'admin';
 
-  // ── Stats ──
   const [stats, setStats] = useState({ total: 0, sent: 0, failed: 0 });
-  
-  // ── Config ──
-  const [config, setConfig] = useState<any>(null);
+  const [config, setConfig] = useState<WhatsAppConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
-
-  // ── Messages ──
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(true);
   const [filterClient, setFilterClient] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [showToken, setShowToken] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<string | null>(null);
 
-  // ── Manual send ──
-  const [sendClientId, setSendClientId] = useState('');
-  const [sendPhone, setSendPhone] = useState('');
-  const [sendMessage, setSendMessage] = useState('');
-  const [sending, setSending] = useState(false);
-
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     const [cfg, msgs, st] = await Promise.all([
@@ -61,37 +49,6 @@ export default function WhatsAppDashboard() {
     setStats(st);
     setConfigLoading(false);
     setMessagesLoading(false);
-  };
-
-  // When selecting a client for manual send, auto-fill phone
-  const handleSelectClient = (clientId: string) => {
-    setSendClientId(clientId);
-    const client = clients.find(c => c.id === clientId);
-    if (client) {
-      setSendPhone((client as any).whatsapp || client.phone || '');
-    }
-  };
-
-  const handleSend = async () => {
-    if (!sendPhone || !sendMessage) {
-      toast.error('Preencha telefone e mensagem');
-      return;
-    }
-    setSending(true);
-    const result = await sendWhatsAppMessage({
-      number: sendPhone,
-      message: sendMessage,
-      clientId: sendClientId || undefined,
-      triggerType: 'manual',
-    });
-    setSending(false);
-    if (result.success) {
-      toast.success('Mensagem enviada com sucesso!');
-      setSendMessage('');
-      loadData();
-    } else {
-      toast.error(result.error || 'Erro ao enviar mensagem');
-    }
   };
 
   const handleConfigSave = async () => {
@@ -120,6 +77,33 @@ export default function WhatsAppDashboard() {
     auto_approval: 'Aprovação',
     auto_approved: 'Aprovado',
   };
+
+  const templateFields: { key: keyof WhatsAppConfig; label: string; description: string; variables: string }[] = [
+    {
+      key: 'msgRecordingScheduled',
+      label: 'Novo Agendamento de Gravação',
+      description: 'Enviada quando uma gravação é agendada',
+      variables: '{nome_cliente}, {data_gravacao}, {hora_gravacao}, {videomaker}',
+    },
+    {
+      key: 'msgRecordingReminder',
+      label: 'Lembrete de Gravação (24h)',
+      description: 'Enviada 24h antes da gravação',
+      variables: '{nome_cliente}, {hora_gravacao}',
+    },
+    {
+      key: 'msgVideoApproval',
+      label: 'Vídeo para Aprovação',
+      description: 'Enviada quando o vídeo é enviado para aprovação',
+      variables: '{link_video}',
+    },
+    {
+      key: 'msgVideoApproved',
+      label: 'Vídeo Aprovado',
+      description: 'Enviada quando o vídeo é aprovado',
+      variables: '(sem variáveis)',
+    },
+  ];
 
   return (
     <div className="space-y-5 max-w-[1400px]">
@@ -154,46 +138,12 @@ export default function WhatsAppDashboard() {
         </Card>
       </div>
 
-      <Tabs defaultValue="send">
+      <Tabs defaultValue="history">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="send" className="gap-1"><Send size={14} /> Enviar</TabsTrigger>
           <TabsTrigger value="history" className="gap-1"><History size={14} /> Histórico</TabsTrigger>
+          <TabsTrigger value="templates" className="gap-1"><Pencil size={14} /> Mensagens</TabsTrigger>
           {isAdmin && <TabsTrigger value="config" className="gap-1"><Settings size={14} /> Configurações</TabsTrigger>}
         </TabsList>
-
-        {/* ── TAB: Enviar ── */}
-        <TabsContent value="send" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2"><Send size={16} /> Envio Manual de Mensagem</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-1">
-                <Label>Selecionar Cliente</Label>
-                <Select value={sendClientId} onValueChange={handleSelectClient}>
-                  <SelectTrigger><SelectValue placeholder="Selecione um cliente" /></SelectTrigger>
-                  <SelectContent>
-                    {clients.map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>Telefone (WhatsApp)</Label>
-                <Input value={sendPhone} onChange={e => setSendPhone(e.target.value)} placeholder="5562999999999" />
-                <p className="text-[10px] text-muted-foreground">Formato: 55 + DDD + número (ex: 5562999999999)</p>
-              </div>
-              <div className="space-y-1">
-                <Label>Mensagem</Label>
-                <Textarea value={sendMessage} onChange={e => setSendMessage(e.target.value)} placeholder="Digite a mensagem..." rows={5} />
-              </div>
-              <Button onClick={handleSend} disabled={sending || !sendPhone || !sendMessage} className="w-full gap-2">
-                <Send size={16} /> {sending ? 'Enviando...' : 'Enviar Mensagem'}
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         {/* ── TAB: Histórico ── */}
         <TabsContent value="history" className="space-y-4">
@@ -226,7 +176,7 @@ export default function WhatsAppDashboard() {
                   <CardContent className="p-3 flex items-start gap-3">
                     <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${msg.status === 'sent' ? 'bg-success' : 'bg-destructive'}`} />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="text-sm font-medium">{msg.phoneNumber}</span>
                         <Badge variant={msg.status === 'sent' ? 'default' : 'destructive'} className="text-[10px]">
                           {msg.status === 'sent' ? 'Enviada' : 'Falha'}
@@ -250,6 +200,60 @@ export default function WhatsAppDashboard() {
           )}
         </TabsContent>
 
+        {/* ── TAB: Templates de Mensagens ── */}
+        <TabsContent value="templates" className="space-y-4">
+          {configLoading ? (
+            <p className="text-center text-muted-foreground py-8">Carregando...</p>
+          ) : config ? (
+            <div className="space-y-4">
+              {templateFields.map(tmpl => (
+                <Card key={tmpl.key}>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-sm">{tmpl.label}</CardTitle>
+                        <CardDescription className="text-[11px]">{tmpl.description}</CardDescription>
+                      </div>
+                      <Button
+                        variant={editingTemplate === tmpl.key ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setEditingTemplate(editingTemplate === tmpl.key ? null : tmpl.key)}
+                        className="gap-1"
+                      >
+                        <Pencil size={12} /> {editingTemplate === tmpl.key ? 'Fechar' : 'Editar'}
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {editingTemplate === tmpl.key ? (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={config[tmpl.key] as string}
+                          onChange={e => setConfig({ ...config, [tmpl.key]: e.target.value })}
+                          rows={6}
+                          className="font-mono text-xs"
+                        />
+                        <p className="text-[10px] text-muted-foreground">
+                          Variáveis disponíveis: <span className="font-mono text-primary">{tmpl.variables}</span>
+                        </p>
+                      </div>
+                    ) : (
+                      <pre className="text-xs text-muted-foreground whitespace-pre-wrap bg-secondary/50 rounded-lg p-3">
+                        {config[tmpl.key] as string}
+                      </pre>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+              <Button onClick={handleConfigSave} className="w-full gap-2">
+                <Check size={16} /> Salvar Mensagens
+              </Button>
+            </div>
+          ) : (
+            <p className="text-center text-muted-foreground">Erro ao carregar</p>
+          )}
+        </TabsContent>
+
         {/* ── TAB: Configurações ── */}
         {isAdmin && (
           <TabsContent value="config" className="space-y-4">
@@ -258,11 +262,27 @@ export default function WhatsAppDashboard() {
             ) : config ? (
               <div className="grid gap-4 md:grid-cols-2">
                 <Card>
-                  <CardHeader><CardTitle className="text-base">API & Conexão</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="text-base flex items-center gap-2"><Key size={16} /> API & Conexão</CardTitle></CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex items-center justify-between">
                       <Label>Integração Ativa</Label>
                       <Switch checked={config.integrationActive} onCheckedChange={v => setConfig({ ...config, integrationActive: v })} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Token da API</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          type={showToken ? 'text' : 'password'}
+                          value={config.apiToken}
+                          onChange={e => setConfig({ ...config, apiToken: e.target.value })}
+                          placeholder="Cole o token da API aqui"
+                          className="font-mono text-xs"
+                        />
+                        <Button variant="outline" size="icon" onClick={() => setShowToken(!showToken)}>
+                          {showToken ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </Button>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">Token de autenticação para a API AtendaClique</p>
                     </div>
                     <div className="space-y-1">
                       <Label>ID Usuário Padrão</Label>
@@ -284,7 +304,7 @@ export default function WhatsAppDashboard() {
                 </Card>
 
                 <Card>
-                  <CardHeader><CardTitle className="text-base">Automações</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="text-base flex items-center gap-2"><Zap size={16} /> Automações</CardTitle></CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div>

@@ -53,6 +53,7 @@ export interface Client {
   extraContentTypes: ContentType[];
   acceptsExtra: boolean;
   extraClientAppears: boolean;
+  whatsapp: string; // 55+DDD+number format
   weeklyReels: number;
   weeklyCreatives: number;
   weeklyGoal: number;

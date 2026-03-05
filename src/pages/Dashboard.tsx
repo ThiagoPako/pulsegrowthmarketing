@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { DAY_LABELS } from '@/types';
 import { motion } from 'framer-motion';
 import {
   Video, Plus, XCircle, RefreshCw, TrendingUp, Calendar, Check,
-  ChevronLeft, ChevronRight, Clock, Users as UsersIcon
+  ChevronLeft, ChevronRight, Clock, Users as UsersIcon, MessageSquare
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -12,12 +12,18 @@ import { Progress } from '@/components/ui/progress';
 import { useNavigate } from 'react-router-dom';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
+import { getMessageStats } from '@/services/whatsappService';
 
 export default function Dashboard() {
   const { currentUser, recordings, clients, users, tasks, cancelRecording, updateRecording, getSuggestionsForCancellation, activeRecordings } = useApp();
   const navigate = useNavigate();
   const today = format(new Date(), 'yyyy-MM-dd');
   const [weekOffset, setWeekOffset] = useState(0);
+  const [waStats, setWaStats] = useState({ total: 0, sent: 0, failed: 0 });
+
+  useEffect(() => {
+    getMessageStats().then(setWaStats);
+  }, []);
 
   const weekStart = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
   const weekEnd = endOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
@@ -109,7 +115,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── ROW 1: Quick Stats ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         {[
           { label: 'Gravados Hoje', value: stats.todayDone, icon: Video, color: 'bg-success/15 text-success' },
           { label: 'Agendados Hoje', value: stats.todayScheduled, icon: Clock, color: 'bg-info/15 text-info' },
@@ -117,6 +123,7 @@ export default function Dashboard() {
           { label: 'Cancelados', value: stats.todayCancelled, icon: XCircle, color: 'bg-destructive/15 text-destructive' },
           { label: 'Semana', value: stats.weekDone, icon: TrendingUp, color: 'bg-primary/15 text-primary' },
           { label: 'Clientes', value: stats.totalClients, icon: UsersIcon, color: 'bg-info/15 text-info' },
+          { label: 'WhatsApp', value: waStats.sent, icon: MessageSquare, color: 'bg-success/15 text-success' },
         ].map((s, i) => (
           <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }} className="stat-card">
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${s.color}`}>

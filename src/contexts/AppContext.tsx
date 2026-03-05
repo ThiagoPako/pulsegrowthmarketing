@@ -3,6 +3,7 @@ import { useAuth, type Profile } from '@/hooks/useAuth';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { supabase } from '@/integrations/supabase/client';
 import { generateFixedRecordings, generateExtraRecordings, findRescheduleSlot } from '@/lib/schedulingUtils';
+import { sendRecordingScheduledNotification } from '@/services/whatsappService';
 import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek, Script, ActiveRecording, UserRole } from '@/types';
 
 interface AppContextType {
@@ -118,8 +119,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const addRecording = useCallback((recording: Recording): boolean => {
     if (hasConflict(recording.videomakerId, recording.date, recording.startTime)) return false;
     data.addRecording(recording);
+    // Send WhatsApp notification
+    const client = data.clients.find(c => c.id === recording.clientId);
+    const vm = users.find(u => u.id === recording.videomakerId);
+    if (client?.whatsapp && vm) {
+      sendRecordingScheduledNotification(
+        client.whatsapp, client.companyName, client.id,
+        recording.date, recording.startTime, vm.name
+      );
+    }
     return true;
-  }, [hasConflict, data]);
+  }, [hasConflict, data, users]);
 
   /** Generate fixed + extra recordings for a client until end of month */
   const generateScheduleForClient = useCallback(async (client: Client): Promise<number> => {

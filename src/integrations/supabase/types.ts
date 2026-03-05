@@ -85,6 +85,7 @@ export type Database = {
           weekly_goal: number
           weekly_reels: number
           weekly_stories: number
+          whatsapp: string
         }
         Insert: {
           accepts_extra?: boolean
@@ -110,6 +111,7 @@ export type Database = {
           weekly_goal?: number
           weekly_reels?: number
           weekly_stories?: number
+          whatsapp?: string
         }
         Update: {
           accepts_extra?: boolean
@@ -135,6 +137,7 @@ export type Database = {
           weekly_goal?: number
           weekly_reels?: number
           weekly_stories?: number
+          whatsapp?: string
         }
         Relationships: [
           {
@@ -588,6 +591,98 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      whatsapp_config: {
+        Row: {
+          api_token_configured: boolean
+          auto_recording_reminder: boolean
+          auto_recording_scheduled: boolean
+          auto_video_approval: boolean
+          auto_video_approved: boolean
+          close_ticket: boolean
+          default_queue_id: string
+          default_user_id: string
+          id: string
+          integration_active: boolean
+          send_signature: boolean
+          updated_at: string
+        }
+        Insert: {
+          api_token_configured?: boolean
+          auto_recording_reminder?: boolean
+          auto_recording_scheduled?: boolean
+          auto_video_approval?: boolean
+          auto_video_approved?: boolean
+          close_ticket?: boolean
+          default_queue_id?: string
+          default_user_id?: string
+          id?: string
+          integration_active?: boolean
+          send_signature?: boolean
+          updated_at?: string
+        }
+        Update: {
+          api_token_configured?: boolean
+          auto_recording_reminder?: boolean
+          auto_recording_scheduled?: boolean
+          auto_video_approval?: boolean
+          auto_video_approved?: boolean
+          close_ticket?: boolean
+          default_queue_id?: string
+          default_user_id?: string
+          id?: string
+          integration_active?: boolean
+          send_signature?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      whatsapp_messages: {
+        Row: {
+          api_response: Json | null
+          client_id: string | null
+          created_at: string
+          id: string
+          message: string
+          phone_number: string
+          sent_at: string
+          sent_by: string | null
+          status: string
+          trigger_type: string
+        }
+        Insert: {
+          api_response?: Json | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          message: string
+          phone_number: string
+          sent_at?: string
+          sent_by?: string | null
+          status?: string
+          trigger_type?: string
+        }
+        Update: {
+          api_response?: Json | null
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          message?: string
+          phone_number?: string
+          sent_at?: string
+          sent_by?: string | null
+          status?: string
+          trigger_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_messages_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

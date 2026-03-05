@@ -12,10 +12,16 @@ export interface WhatsAppConfig {
   autoRecordingReminder: boolean;
   autoVideoApproval: boolean;
   autoVideoApproved: boolean;
+  autoConfirmation: boolean;
   msgRecordingScheduled: string;
   msgRecordingReminder: string;
   msgVideoApproval: string;
   msgVideoApproved: string;
+  msgConfirmation: string;
+  msgConfirmationConfirmed: string;
+  msgConfirmationCancelled: string;
+  msgBackupInvite: string;
+  msgBackupConfirmed: string;
 }
 
 interface SendMessageParams {
@@ -37,6 +43,19 @@ export interface WhatsAppMessage {
   triggerType: string;
 }
 
+export interface WhatsAppConfirmation {
+  id: string;
+  recordingId: string;
+  clientId: string;
+  phoneNumber: string;
+  type: 'confirmation' | 'backup_invite';
+  status: 'pending' | 'confirmed' | 'cancelled' | 'expired';
+  sentAt: string | null;
+  respondedAt: string | null;
+  responseMessage: string | null;
+  createdAt: string;
+}
+
 function rowToConfig(r: any): WhatsAppConfig {
   return {
     id: r.id,
@@ -50,10 +69,16 @@ function rowToConfig(r: any): WhatsAppConfig {
     autoRecordingReminder: r.auto_recording_reminder,
     autoVideoApproval: r.auto_video_approval,
     autoVideoApproved: r.auto_video_approved,
+    autoConfirmation: r.auto_confirmation,
     msgRecordingScheduled: r.msg_recording_scheduled || '',
     msgRecordingReminder: r.msg_recording_reminder || '',
     msgVideoApproval: r.msg_video_approval || '',
     msgVideoApproved: r.msg_video_approved || '',
+    msgConfirmation: r.msg_confirmation || '',
+    msgConfirmationConfirmed: r.msg_confirmation_confirmed || '',
+    msgConfirmationCancelled: r.msg_confirmation_cancelled || '',
+    msgBackupInvite: r.msg_backup_invite || '',
+    msgBackupConfirmed: r.msg_backup_confirmed || '',
   };
 }
 
@@ -91,10 +116,16 @@ export async function updateWhatsAppConfig(config: Partial<WhatsAppConfig>): Pro
   if (config.autoRecordingReminder !== undefined) updateData.auto_recording_reminder = config.autoRecordingReminder;
   if (config.autoVideoApproval !== undefined) updateData.auto_video_approval = config.autoVideoApproval;
   if (config.autoVideoApproved !== undefined) updateData.auto_video_approved = config.autoVideoApproved;
+  if (config.autoConfirmation !== undefined) updateData.auto_confirmation = config.autoConfirmation;
   if (config.msgRecordingScheduled !== undefined) updateData.msg_recording_scheduled = config.msgRecordingScheduled;
   if (config.msgRecordingReminder !== undefined) updateData.msg_recording_reminder = config.msgRecordingReminder;
   if (config.msgVideoApproval !== undefined) updateData.msg_video_approval = config.msgVideoApproval;
   if (config.msgVideoApproved !== undefined) updateData.msg_video_approved = config.msgVideoApproved;
+  if (config.msgConfirmation !== undefined) updateData.msg_confirmation = config.msgConfirmation;
+  if (config.msgConfirmationConfirmed !== undefined) updateData.msg_confirmation_confirmed = config.msgConfirmationConfirmed;
+  if (config.msgConfirmationCancelled !== undefined) updateData.msg_confirmation_cancelled = config.msgConfirmationCancelled;
+  if (config.msgBackupInvite !== undefined) updateData.msg_backup_invite = config.msgBackupInvite;
+  if (config.msgBackupConfirmed !== undefined) updateData.msg_backup_confirmed = config.msgBackupConfirmed;
   updateData.updated_at = new Date().toISOString();
 
   const { error } = await supabase.from('whatsapp_config').update(updateData).eq('id', current.id);
@@ -206,4 +237,47 @@ export async function sendRecordingScheduledNotification(
     clientId,
     triggerType: 'auto_recording',
   });
+}
+
+// ── Confirmation functions ──
+
+export async function getWhatsAppConfirmations(): Promise<WhatsAppConfirmation[]> {
+  const { data } = await supabase
+    .from('whatsapp_confirmations')
+    .select('*')
+    .order('created_at', { ascending: false });
+  
+  return (data || []).map((r: any) => ({
+    id: r.id,
+    recordingId: r.recording_id,
+    clientId: r.client_id,
+    phoneNumber: r.phone_number,
+    type: r.type,
+    status: r.status,
+    sentAt: r.sent_at,
+    respondedAt: r.responded_at,
+    responseMessage: r.response_message,
+    createdAt: r.created_at,
+  }));
+}
+
+export async function getConfirmationStats(): Promise<{
+  pending: number;
+  confirmed: number;
+  cancelled: number;
+  backupInvites: number;
+}> {
+  const { data } = await supabase.from('whatsapp_confirmations').select('type, status');
+  const items = data || [];
+  return {
+    pending: items.filter((i: any) => i.type === 'confirmation' && i.status === 'pending').length,
+    confirmed: items.filter((i: any) => i.status === 'confirmed').length,
+    cancelled: items.filter((i: any) => i.type === 'confirmation' && i.status === 'cancelled').length,
+    backupInvites: items.filter((i: any) => i.type === 'backup_invite').length,
+  };
+}
+
+export function getWebhookUrl(): string {
+  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+  return `https://${projectId}.supabase.co/functions/v1/whatsapp-webhook`;
 }

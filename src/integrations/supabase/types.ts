@@ -469,6 +469,7 @@ export type Database = {
       recordings: {
         Row: {
           client_id: string
+          confirmation_status: string
           created_at: string
           date: string
           id: string
@@ -479,6 +480,7 @@ export type Database = {
         }
         Insert: {
           client_id: string
+          confirmation_status?: string
           created_at?: string
           date: string
           id?: string
@@ -489,6 +491,7 @@ export type Database = {
         }
         Update: {
           client_id?: string
+          confirmation_status?: string
           created_at?: string
           date?: string
           id?: string
@@ -596,6 +599,7 @@ export type Database = {
         Row: {
           api_token: string
           api_token_configured: boolean
+          auto_confirmation: boolean
           auto_recording_reminder: boolean
           auto_recording_scheduled: boolean
           auto_video_approval: boolean
@@ -605,6 +609,11 @@ export type Database = {
           default_user_id: string
           id: string
           integration_active: boolean
+          msg_backup_confirmed: string
+          msg_backup_invite: string
+          msg_confirmation: string
+          msg_confirmation_cancelled: string
+          msg_confirmation_confirmed: string
           msg_recording_reminder: string
           msg_recording_scheduled: string
           msg_video_approval: string
@@ -615,6 +624,7 @@ export type Database = {
         Insert: {
           api_token?: string
           api_token_configured?: boolean
+          auto_confirmation?: boolean
           auto_recording_reminder?: boolean
           auto_recording_scheduled?: boolean
           auto_video_approval?: boolean
@@ -624,6 +634,11 @@ export type Database = {
           default_user_id?: string
           id?: string
           integration_active?: boolean
+          msg_backup_confirmed?: string
+          msg_backup_invite?: string
+          msg_confirmation?: string
+          msg_confirmation_cancelled?: string
+          msg_confirmation_confirmed?: string
           msg_recording_reminder?: string
           msg_recording_scheduled?: string
           msg_video_approval?: string
@@ -634,6 +649,7 @@ export type Database = {
         Update: {
           api_token?: string
           api_token_configured?: boolean
+          auto_confirmation?: boolean
           auto_recording_reminder?: boolean
           auto_recording_scheduled?: boolean
           auto_video_approval?: boolean
@@ -643,6 +659,11 @@ export type Database = {
           default_user_id?: string
           id?: string
           integration_active?: boolean
+          msg_backup_confirmed?: string
+          msg_backup_invite?: string
+          msg_confirmation?: string
+          msg_confirmation_cancelled?: string
+          msg_confirmation_confirmed?: string
           msg_recording_reminder?: string
           msg_recording_scheduled?: string
           msg_video_approval?: string
@@ -651,6 +672,69 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      whatsapp_confirmations: {
+        Row: {
+          backup_client_ids: string[]
+          backup_index: number
+          client_id: string
+          created_at: string
+          id: string
+          phone_number: string
+          recording_id: string
+          responded_at: string | null
+          response_message: string | null
+          sent_at: string | null
+          status: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          backup_client_ids?: string[]
+          backup_index?: number
+          client_id: string
+          created_at?: string
+          id?: string
+          phone_number: string
+          recording_id: string
+          responded_at?: string | null
+          response_message?: string | null
+          sent_at?: string | null
+          status?: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          backup_client_ids?: string[]
+          backup_index?: number
+          client_id?: string
+          created_at?: string
+          id?: string
+          phone_number?: string
+          recording_id?: string
+          responded_at?: string | null
+          response_message?: string | null
+          sent_at?: string | null
+          status?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_confirmations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_confirmations_recording_id_fkey"
+            columns: ["recording_id"]
+            isOneToOne: false
+            referencedRelation: "recordings"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_messages: {
         Row: {

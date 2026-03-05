@@ -9,8 +9,13 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
-import { MessageSquare, Settings, History, Check, Key, Zap, Eye, EyeOff, Pencil, Loader2, CheckCircle2, XCircle, Wifi } from 'lucide-react';
+import {
+  MessageSquare, Settings, History, Check, Key, Zap, Eye, EyeOff, Pencil,
+  Loader2, CheckCircle2, XCircle, Wifi, ClipboardCheck, Copy, Users, Clock,
+  CheckCheck, Ban,
+} from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -19,18 +24,24 @@ import {
   getWhatsAppMessages,
   getMessageStats,
   testWhatsAppConnection,
+  getWhatsAppConfirmations,
+  getConfirmationStats,
+  getWebhookUrl,
   type WhatsAppConfig,
   type WhatsAppMessage,
+  type WhatsAppConfirmation,
 } from '@/services/whatsappService';
 
 export default function WhatsAppDashboard() {
-  const { clients, currentUser } = useApp();
+  const { clients, recordings, users, currentUser } = useApp();
   const isAdmin = currentUser?.role === 'admin';
 
   const [stats, setStats] = useState({ total: 0, sent: 0, failed: 0 });
+  const [confirmationStats, setConfirmationStats] = useState({ pending: 0, confirmed: 0, cancelled: 0, backupInvites: 0 });
   const [config, setConfig] = useState<WhatsAppConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
+  const [confirmations, setConfirmations] = useState<WhatsAppConfirmation[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(true);
   const [filterClient, setFilterClient] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -42,14 +53,18 @@ export default function WhatsAppDashboard() {
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
-    const [cfg, msgs, st] = await Promise.all([
+    const [cfg, msgs, st, confs, cStats] = await Promise.all([
       getWhatsAppConfig(),
       getWhatsAppMessages(),
       getMessageStats(),
+      getWhatsAppConfirmations(),
+      getConfirmationStats(),
     ]);
     setConfig(cfg);
     setMessages(msgs);
     setStats(st);
+    setConfirmations(confs);
+    setConfirmationStats(cStats);
     setConfigLoading(false);
     setMessagesLoading(false);
   };
@@ -94,6 +109,15 @@ export default function WhatsAppDashboard() {
     auto_reminder: 'Lembrete',
     auto_approval: 'Aprovação',
     auto_approved: 'Aprovado',
+    auto_confirmation: 'Confirmação',
+    auto_backup: 'Backup',
+  };
+
+  const confirmationStatusLabels: Record<string, { label: string; variant: 'default' | 'destructive' | 'outline' | 'secondary' }> = {
+    pending: { label: 'Aguardando', variant: 'outline' },
+    confirmed: { label: 'Confirmado', variant: 'default' },
+    cancelled: { label: 'Cancelado', variant: 'destructive' },
+    expired: { label: 'Expirado', variant: 'secondary' },
   };
 
   const templateFields: { key: keyof WhatsAppConfig; label: string; description: string; variables: string }[] = [
@@ -104,10 +128,34 @@ export default function WhatsAppDashboard() {
       variables: '{nome_cliente}, {data_gravacao}, {hora_gravacao}, {videomaker}',
     },
     {
-      key: 'msgRecordingReminder',
-      label: 'Lembrete de Gravação (24h)',
-      description: 'Enviada 24h antes da gravação',
-      variables: '{nome_cliente}, {hora_gravacao}',
+      key: 'msgConfirmation',
+      label: '📋 Confirmação de Gravação (24h)',
+      description: 'Enviada 24h antes pedindo confirmação — substitui o lembrete antigo',
+      variables: '{nome_cliente}, {data_gravacao}, {hora_gravacao}, {videomaker}',
+    },
+    {
+      key: 'msgConfirmationConfirmed',
+      label: '✅ Resposta: Gravação Confirmada',
+      description: 'Enviada quando o cliente confirma a gravação',
+      variables: '{nome_cliente}, {data_gravacao}, {hora_gravacao}',
+    },
+    {
+      key: 'msgConfirmationCancelled',
+      label: '❌ Resposta: Gravação Cancelada',
+      description: 'Enviada quando o cliente cancela a gravação',
+      variables: '{nome_cliente}',
+    },
+    {
+      key: 'msgBackupInvite',
+      label: '🔄 Convite para Cliente Backup',
+      description: 'Enviada para clientes backup quando uma vaga é liberada',
+      variables: '{nome_cliente}, {data_gravacao}, {hora_gravacao}',
+    },
+    {
+      key: 'msgBackupConfirmed',
+      label: '🎯 Backup Confirmado',
+      description: 'Enviada quando um cliente backup aceita a vaga',
+      variables: '{nome_cliente}',
     },
     {
       key: 'msgVideoApproval',
@@ -123,6 +171,8 @@ export default function WhatsAppDashboard() {
     },
   ];
 
+  const webhookUrl = getWebhookUrl();
+
   return (
     <div className="space-y-5 max-w-[1400px]">
       <div className="flex items-center justify-between">
@@ -130,38 +180,105 @@ export default function WhatsAppDashboard() {
           <h1 className="text-2xl font-display font-bold flex items-center gap-2">
             <MessageSquare className="text-success" size={24} /> Central de WhatsApp
           </h1>
-          <p className="text-muted-foreground text-sm">Gerenciamento de mensagens e automações</p>
+          <p className="text-muted-foreground text-sm">Gerenciamento de mensagens, confirmações e automações</p>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Card className="bg-success/5 border-success/20">
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-display font-bold text-success">{stats.sent}</p>
-            <p className="text-xs text-muted-foreground">Enviadas hoje</p>
+          <CardContent className="p-3 text-center">
+            <p className="text-xl font-display font-bold text-success">{stats.sent}</p>
+            <p className="text-[10px] text-muted-foreground">Enviadas hoje</p>
           </CardContent>
         </Card>
         <Card className="bg-destructive/5 border-destructive/20">
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-display font-bold text-destructive">{stats.failed}</p>
-            <p className="text-xs text-muted-foreground">Falhas hoje</p>
+          <CardContent className="p-3 text-center">
+            <p className="text-xl font-display font-bold text-destructive">{stats.failed}</p>
+            <p className="text-[10px] text-muted-foreground">Falhas hoje</p>
           </CardContent>
         </Card>
         <Card className="bg-primary/5 border-primary/20">
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-display font-bold text-primary">{stats.total}</p>
-            <p className="text-xs text-muted-foreground">Total hoje</p>
+          <CardContent className="p-3 text-center">
+            <p className="text-xl font-display font-bold text-primary">{confirmationStats.pending}</p>
+            <p className="text-[10px] text-muted-foreground">Aguardando Resposta</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-success/5 border-success/20">
+          <CardContent className="p-3 text-center">
+            <p className="text-xl font-display font-bold text-success">{confirmationStats.confirmed}</p>
+            <p className="text-[10px] text-muted-foreground">Confirmados</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-accent/50 border-accent">
+          <CardContent className="p-3 text-center">
+            <p className="text-xl font-display font-bold text-accent-foreground">{confirmationStats.backupInvites}</p>
+            <p className="text-[10px] text-muted-foreground">Convites Backup</p>
           </CardContent>
         </Card>
       </div>
 
-      <Tabs defaultValue="history">
-        <TabsList className="grid w-full grid-cols-3">
+      <Tabs defaultValue="confirmations">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="confirmations" className="gap-1"><ClipboardCheck size={14} /> Confirmações</TabsTrigger>
           <TabsTrigger value="history" className="gap-1"><History size={14} /> Histórico</TabsTrigger>
           <TabsTrigger value="templates" className="gap-1"><Pencil size={14} /> Mensagens</TabsTrigger>
-          {isAdmin && <TabsTrigger value="config" className="gap-1"><Settings size={14} /> Configurações</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="config" className="gap-1"><Settings size={14} /> Config</TabsTrigger>}
         </TabsList>
+
+        {/* ── TAB: Confirmações ── */}
+        <TabsContent value="confirmations" className="space-y-4">
+          {confirmations.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">Nenhuma confirmação registrada ainda</p>
+          ) : (
+            <div className="space-y-2">
+              {confirmations.map(conf => {
+                const recording = recordings.find(r => r.id === conf.recordingId);
+                const statusInfo = confirmationStatusLabels[conf.status] || { label: conf.status, variant: 'outline' as const };
+                return (
+                  <Card key={conf.id} className="overflow-hidden">
+                    <CardContent className="p-3 flex items-start gap-3">
+                      <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${
+                        conf.status === 'confirmed' ? 'bg-success' :
+                        conf.status === 'cancelled' ? 'bg-destructive' :
+                        conf.status === 'pending' ? 'bg-warning' : 'bg-muted-foreground'
+                      }`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="text-sm font-medium">{getClientName(conf.clientId)}</span>
+                          <Badge variant={statusInfo.variant} className="text-[10px]">
+                            {statusInfo.label}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px]">
+                            {conf.type === 'confirmation' ? '📋 Confirmação' : '🔄 Backup'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                          {recording && (
+                            <>
+                              <span className="flex items-center gap-1">
+                                <Clock size={10} /> {recording.date} às {recording.startTime}
+                              </span>
+                            </>
+                          )}
+                          <span>{conf.phoneNumber}</span>
+                        </div>
+                        {conf.responseMessage && (
+                          <p className="text-xs text-muted-foreground mt-1 italic">
+                            Resposta: "{conf.responseMessage}"
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-muted-foreground shrink-0">
+                        {conf.sentAt ? format(parseISO(conf.sentAt), "dd/MM HH:mm", { locale: ptBR }) : '—'}
+                      </span>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
 
         {/* ── TAB: Histórico ── */}
         <TabsContent value="history" className="space-y-4">
@@ -358,10 +475,10 @@ export default function WhatsAppDashboard() {
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <Label>Lembrete 24h</Label>
-                        <p className="text-[10px] text-muted-foreground">Enviar lembrete 24h antes da gravação</p>
+                        <Label className="flex items-center gap-1">Confirmação 24h <ClipboardCheck size={12} className="text-primary" /></Label>
+                        <p className="text-[10px] text-muted-foreground">Enviar confirmação com opções 24h antes da gravação</p>
                       </div>
-                      <Switch checked={config.autoRecordingReminder} onCheckedChange={v => setConfig({ ...config, autoRecordingReminder: v })} />
+                      <Switch checked={config.autoConfirmation} onCheckedChange={v => setConfig({ ...config, autoConfirmation: v })} />
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
@@ -377,6 +494,40 @@ export default function WhatsAppDashboard() {
                       </div>
                       <Switch checked={config.autoVideoApproved} onCheckedChange={v => setConfig({ ...config, autoVideoApproved: v })} />
                     </div>
+                  </CardContent>
+                </Card>
+
+                {/* Webhook URL card */}
+                <Card className="md:col-span-2">
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Users size={16} /> Webhook de Respostas
+                    </CardTitle>
+                    <CardDescription className="text-[11px]">
+                      Configure esta URL como webhook no Atende Clique para receber respostas dos clientes
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        readOnly
+                        value={webhookUrl}
+                        className="font-mono text-xs bg-secondary/50"
+                      />
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => {
+                          navigator.clipboard.writeText(webhookUrl);
+                          toast.success('URL copiada!');
+                        }}
+                      >
+                        <Copy size={14} />
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-2">
+                      Cole esta URL nas configurações de webhook da API Atende Clique para que as respostas dos clientes sejam processadas automaticamente.
+                    </p>
                   </CardContent>
                 </Card>
 

@@ -64,6 +64,7 @@ export interface Client {
 
 export type RecordingType = 'fixa' | 'extra' | 'secundaria' | 'backup';
 export type RecordingStatus = 'agendada' | 'concluida' | 'cancelada';
+export type ConfirmationStatus = 'pendente' | 'aguardando' | 'confirmada' | 'cancelada';
 
 export interface Recording {
   id: string;
@@ -73,6 +74,7 @@ export interface Recording {
   startTime: string; // HH:mm
   type: RecordingType;
   status: RecordingStatus;
+  confirmationStatus?: ConfirmationStatus;
 }
 
 export type KanbanColumn = 'backlog' | 'em_producao' | 'gravado' | 'finalizado';

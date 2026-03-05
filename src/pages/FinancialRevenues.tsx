@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, RefreshCw, CheckCircle } from 'lucide-react';
+import { ArrowLeft, RefreshCw, CheckCircle, MessageCircle, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { format, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { sendWhatsAppMessage } from '@/services/whatsappService';
 
 const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'destructive' | 'secondary' }> = {
   prevista: { label: 'Prevista', variant: 'secondary' },
@@ -20,9 +21,10 @@ const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'destruct
 
 export default function FinancialRevenues() {
   const navigate = useNavigate();
-  const { revenues, updateRevenue, generateMonthlyRevenues, loading } = useFinancialData();
+  const { revenues, updateRevenue, generateMonthlyRevenues, paymentConfig, loading } = useFinancialData();
   const { clients } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
+  const [sendingBilling, setSendingBilling] = useState<string | null>(null);
 
   const monthOptions = useMemo(() => {
     const options = [];
@@ -65,6 +67,54 @@ export default function FinancialRevenues() {
     if (ok) toast.success('Marcada como em atraso');
   };
 
+  const handleSendBilling = async (revenueId: string) => {
+    const revenue = filtered.find(r => r.id === revenueId);
+    if (!revenue) return;
+
+    const client = clients.find(c => c.id === revenue.client_id);
+    if (!client) { toast.error('Cliente não encontrado'); return; }
+    if (!client.whatsapp) { toast.error('Cliente sem WhatsApp cadastrado'); return; }
+
+    setSendingBilling(revenueId);
+
+    try {
+      const value = fmt(Number(revenue.amount));
+      const dueDay = revenue.due_date?.split('-')[2] || '—';
+
+      let paymentInfo = '';
+      if (paymentConfig && (paymentConfig.pix_key || paymentConfig.receiver_name)) {
+        paymentInfo = '\n\n💳 *Dados para pagamento:*';
+        if (paymentConfig.receiver_name) paymentInfo += `\nNome: ${paymentConfig.receiver_name}`;
+        if (paymentConfig.bank) paymentInfo += `\nBanco: ${paymentConfig.bank}`;
+        if (paymentConfig.pix_key) paymentInfo += `\nChave PIX: ${paymentConfig.pix_key}`;
+        if (paymentConfig.document) paymentInfo += `\nCPF/CNPJ: ${paymentConfig.document}`;
+      }
+
+      const isOverdue = revenue.status === 'em_atraso';
+
+      const message = isOverdue
+        ? `Olá, ${client.companyName}! 😊\n\nEsperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de ${value}.\n\nSe já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.${paymentInfo}\n\nQualquer dúvida, estamos à disposição!\n\nEquipe Pulse Growth Marketing 🚀`
+        : `Olá, ${client.companyName}! 😊\n\nPassando para lembrar que a mensalidade no valor de ${value} vence no dia ${dueDay}.\n\nSe já realizou o pagamento, por favor desconsidere esta mensagem.${paymentInfo}\n\nQualquer dúvida, estamos à disposição!\n\nEquipe Pulse Growth Marketing 🚀`;
+
+      const result = await sendWhatsAppMessage({
+        number: client.whatsapp,
+        message,
+        clientId: client.id,
+        triggerType: 'manual',
+      });
+
+      if (result.success) {
+        toast.success(`Cobrança enviada para ${client.companyName}`);
+      } else {
+        toast.error(result.error || 'Erro ao enviar cobrança');
+      }
+    } catch {
+      toast.error('Erro ao enviar cobrança');
+    } finally {
+      setSendingBilling(null);
+    }
+  };
+
   const total = filtered.reduce((s, r) => s + Number(r.amount), 0);
   const recebida = filtered.filter(r => r.status === 'recebida').reduce((s, r) => s + Number(r.amount), 0);
   const atraso = filtered.filter(r => r.status === 'em_atraso').reduce((s, r) => s + Number(r.amount), 0);
@@ -96,7 +146,7 @@ export default function FinancialRevenues() {
                 <TableHead>Vencimento</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Pago em</TableHead>
-                <TableHead className="w-32"></TableHead>
+                <TableHead className="w-48"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -113,9 +163,26 @@ export default function FinancialRevenues() {
                     <TableCell>
                       <div className="flex gap-1">
                         {r.status !== 'recebida' && (
-                          <Button variant="ghost" size="sm" onClick={() => handleMarkPaid(r.id)} title="Marcar como recebida">
-                            <CheckCircle size={14} className="mr-1" /> Recebida
-                          </Button>
+                          <>
+                            <Button variant="ghost" size="sm" onClick={() => handleMarkPaid(r.id)} title="Marcar como recebida">
+                              <CheckCircle size={14} className="mr-1" /> Recebida
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-primary"
+                              onClick={() => handleSendBilling(r.id)}
+                              disabled={sendingBilling === r.id}
+                              title="Enviar cobrança via WhatsApp"
+                            >
+                              {sendingBilling === r.id ? (
+                                <Loader2 size={14} className="mr-1 animate-spin" />
+                              ) : (
+                                <MessageCircle size={14} className="mr-1" />
+                              )}
+                              Cobrar
+                            </Button>
+                          </>
                         )}
                         {r.status === 'prevista' && (
                           <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleMarkOverdue(r.id)}>

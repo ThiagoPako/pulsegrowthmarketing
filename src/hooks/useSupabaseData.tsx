@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import type { Client, Recording, KanbanTask, Script, CompanySettings, DayOfWeek, ActiveRecording, ContentType, RecordingType, RecordingStatus, KanbanColumn, ScriptVideoType, ScriptPriority } from '@/types';
+import type { Client, Recording, KanbanTask, Script, CompanySettings, DayOfWeek, ActiveRecording, ContentType, RecordingType, RecordingStatus, ConfirmationStatus, KanbanColumn, ScriptVideoType, ScriptPriority } from '@/types';
 
 // ── Mappers: DB row ↔ App type ──
 
@@ -67,6 +67,7 @@ function rowToRecording(r: any): Recording {
     startTime: r.start_time,
     type: r.type as RecordingType,
     status: r.status as RecordingStatus,
+    confirmationStatus: (r.confirmation_status || 'pendente') as ConfirmationStatus,
   };
 }
 

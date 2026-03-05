@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { DAY_LABELS, CONTENT_TYPE_LABELS, CLIENT_COLORS } from '@/types';
 import type { Client, DayOfWeek, ContentType } from '@/types';
@@ -9,8 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { supabase } from '@/integrations/supabase/client';
 
 const DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 const CONTENT_TYPES: ContentType[] = ['reels', 'story', 'produto'];
@@ -55,6 +56,10 @@ export default function Clients() {
   const [editing, setEditing] = useState<Client | null>(null);
   const [form, setForm] = useState<Partial<Client>>(emptyClient());
   const [step, setStep] = useState(0);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const videomakers = users.filter(u => u.role === 'videomaker');
 
@@ -132,10 +137,42 @@ export default function Clients() {
   }, [availableSlots, form.videomaker, form.backupDay]);
 
   const handleOpen = (client?: Client) => {
-    if (client) { setEditing(client); setForm(client); }
-    else { setEditing(null); setForm(emptyClient()); }
+    if (client) { setEditing(client); setForm(client); setLogoPreview(client.logoUrl || null); }
+    else { setEditing(null); setForm(emptyClient()); setLogoPreview(null); }
+    setLogoFile(null);
     setStep(0);
     setOpen(true);
+  };
+
+  const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { toast.error('Logo deve ter no máximo 2MB'); return; }
+    setLogoFile(file);
+    setLogoPreview(URL.createObjectURL(file));
+  };
+
+  const removeLogo = () => {
+    setLogoFile(null);
+    setLogoPreview(null);
+    setForm(prev => ({ ...prev, logoUrl: undefined }));
+  };
+
+  const uploadLogo = async (clientId: string): Promise<string | null> => {
+    if (!logoFile) return form.logoUrl || null;
+    setUploadingLogo(true);
+    try {
+      const ext = logoFile.name.split('.').pop();
+      const path = `${clientId}.${ext}`;
+      // Remove old logo if exists
+      await supabase.storage.from('client-logos').remove([path]);
+      const { error } = await supabase.storage.from('client-logos').upload(path, logoFile, { upsert: true });
+      if (error) { console.error('Logo upload error:', error); return null; }
+      const { data: urlData } = supabase.storage.from('client-logos').getPublicUrl(path);
+      return urlData.publicUrl + '?t=' + Date.now();
+    } finally {
+      setUploadingLogo(false);
+    }
   };
 
   const handleSave = async () => {
@@ -143,10 +180,13 @@ export default function Clients() {
       toast.error('Preencha todos os campos obrigatórios'); return;
     }
     if (editing) {
-      updateClient({ ...editing, ...form } as Client);
+      const logoUrl = await uploadLogo(editing.id);
+      updateClient({ ...editing, ...form, logoUrl: logoUrl || undefined } as Client);
       toast.success('Cliente atualizado');
     } else {
-      const newClient = { ...form, id: crypto.randomUUID() } as Client;
+      const clientId = crypto.randomUUID();
+      const logoUrl = await uploadLogo(clientId);
+      const newClient = { ...form, id: clientId, logoUrl: logoUrl || undefined } as Client;
       const ok = addClient(newClient);
       if (!ok) { toast.error('Empresa já cadastrada'); return; }
       const count = await generateScheduleForClient(newClient);
@@ -222,6 +262,35 @@ export default function Clients() {
 
   const renderStep0 = () => (
     <div className="space-y-4">
+      {/* Logo upload */}
+      <div className="space-y-2">
+        <Label>Logo da Empresa</Label>
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            {logoPreview ? (
+              <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-border">
+                <img src={logoPreview} alt="Logo" className="w-full h-full object-cover" />
+                <button onClick={removeLogo}
+                  className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center">
+                  <X size={10} />
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => logoInputRef.current?.click()}
+                className="w-16 h-16 rounded-xl border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center gap-1 hover:border-primary/50 hover:bg-primary/5 transition-colors">
+                <Upload size={16} className="text-muted-foreground" />
+                <span className="text-[9px] text-muted-foreground">Logo</span>
+              </button>
+            )}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            <p>Clique para adicionar o logo do cliente.</p>
+            <p>PNG, JPG ou SVG (máx. 2MB)</p>
+          </div>
+          <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoSelect} />
+        </div>
+      </div>
+
       <div className="space-y-1">
         <Label>Nome da Empresa *</Label>
         <Input value={form.companyName} onChange={e => setForm({ ...form, companyName: e.target.value })} placeholder="Ex: Padaria do João" />
@@ -642,10 +711,14 @@ export default function Clients() {
             <div key={c.id} className="glass-card p-4 flex items-center justify-between"
               style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${c.color || '220 10% 50%'})` }}>
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm shrink-0"
-                  style={{ backgroundColor: `hsl(${c.color || '220 10% 50%'} / 0.15)`, color: `hsl(${c.color || '220 10% 50%'})` }}>
-                  {c.companyName.substring(0, 2).toUpperCase()}
-                </div>
+                {c.logoUrl ? (
+                  <img src={c.logoUrl} alt={c.companyName} className="w-10 h-10 rounded-lg object-cover shrink-0 border border-border" />
+                ) : (
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm shrink-0"
+                    style={{ backgroundColor: `hsl(${c.color || '220 10% 50%'} / 0.15)`, color: `hsl(${c.color || '220 10% 50%'})` }}>
+                    {c.companyName.substring(0, 2).toUpperCase()}
+                  </div>
+                )}
                 <div className="min-w-0">
                   <p className="font-medium text-sm truncate">{c.companyName}</p>
                   <p className="text-[11px] text-muted-foreground truncate">

@@ -75,6 +75,7 @@ export type Database = {
           fixed_time: string
           has_endomarketing: boolean
           id: string
+          logo_url: string | null
           phone: string
           presence_days: number
           responsible_person: string
@@ -99,6 +100,7 @@ export type Database = {
           fixed_time?: string
           has_endomarketing?: boolean
           id?: string
+          logo_url?: string | null
           phone?: string
           presence_days?: number
           responsible_person?: string
@@ -123,6 +125,7 @@ export type Database = {
           fixed_time?: string
           has_endomarketing?: boolean
           id?: string
+          logo_url?: string | null
           phone?: string
           presence_days?: number
           responsible_person?: string

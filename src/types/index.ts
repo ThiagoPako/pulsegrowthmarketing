@@ -43,6 +43,7 @@ export interface Client {
   responsiblePerson: string;
   phone: string;
   color: string; // HSL value e.g. "0 72% 51%"
+  logoUrl?: string; // public URL from storage
   fixedDay: DayOfWeek;
   fixedTime: string; // HH:mm
   videomaker: string; // user id

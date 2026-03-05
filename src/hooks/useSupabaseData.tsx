@@ -244,12 +244,34 @@ export function useSupabaseData() {
   }, []);
 
   const deleteClient = useCallback(async (id: string): Promise<boolean> => {
-    const hasFuture = recordings.some(r => r.clientId === id && r.status === 'agendada' && r.date >= new Date().toISOString().split('T')[0]);
-    if (hasFuture) return false;
+    // Delete all recordings for this client
+    await supabase.from('active_recordings').delete().eq('client_id', id);
+    await supabase.from('recordings').delete().eq('client_id', id);
+    setRecordings(prev => prev.filter(r => r.clientId !== id));
+    setActiveRecordings(prev => prev.filter(a => a.clientId !== id));
+
+    // Delete endomarketing data linked to this client
+    const { data: endoClients } = await supabase.from('endomarketing_clientes').select('id').eq('client_id', id);
+    if (endoClients && endoClients.length > 0) {
+      const endoIds = endoClients.map(e => e.id);
+      await supabase.from('endomarketing_agendamentos').delete().in('cliente_id', endoIds);
+      await supabase.from('endomarketing_logs').delete().in('cliente_id', endoIds);
+      await supabase.from('endomarketing_clientes').delete().eq('client_id', id);
+    }
+
+    // Delete kanban tasks for this client
+    await supabase.from('kanban_tasks').delete().eq('client_id', id);
+    setTasks(prev => prev.filter(t => t.clientId !== id));
+
+    // Delete scripts for this client
+    await supabase.from('scripts').delete().eq('client_id', id);
+    setScripts(prev => prev.filter(s => s.clientId !== id));
+
+    // Finally delete the client
     await supabase.from('clients').delete().eq('id', id);
     setClients(prev => prev.filter(c => c.id !== id));
     return true;
-  }, [recordings]);
+  }, []);
 
   // ── Recording CRUD ──
   const addRecording = useCallback(async (recording: Recording): Promise<boolean> => {

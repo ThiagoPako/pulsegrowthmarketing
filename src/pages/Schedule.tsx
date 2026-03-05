@@ -415,7 +415,7 @@ export default function Schedule() {
     }
   };
 
-  const confirmStartRec = () => {
+  const confirmStartRec = async () => {
     if (!startRecording) return;
     const urgentScripts = scripts.filter(
       s => s.clientId === startRecording.clientId && !s.recorded && !s.isEndomarketing && s.priority === 'urgent'
@@ -439,9 +439,9 @@ export default function Schedule() {
     
     // Move content_tasks linked to selected scripts to "captacao"
     for (const scriptId of startSelectedScripts) {
-      supabase.from('content_tasks').update({ kanban_column: 'captacao', recording_id: startRecording.id } as any)
-        .eq('script_id', scriptId).eq('kanban_column', 'ideias')
-        .then(({ error }) => { if (error) console.error('Move to captacao error:', error); });
+      const { error } = await supabase.from('content_tasks').update({ kanban_column: 'captacao', recording_id: startRecording.id } as any)
+        .eq('script_id', scriptId);
+      if (error) console.error('Move to captacao error:', error);
     }
     
     toast.success(`Gravação iniciada com ${startSelectedScripts.size} roteiro(s) — ${getClientName(startRecording.clientId)}`);

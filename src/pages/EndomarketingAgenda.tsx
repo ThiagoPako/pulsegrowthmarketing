@@ -1,6 +1,9 @@
 import { useState, useMemo } from 'react';
 import { useEndoClientes, useEndoAgendamentos, useEndoProfissionais, type EndoAgendamento } from '@/hooks/useEndomarketing';
+import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
+import { highlightQuotes } from '@/lib/highlightQuotes';
+import { SCRIPT_VIDEO_TYPE_LABELS } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
-import { Plus, Calendar, Clock, ChevronLeft, ChevronRight, AlertTriangle, Lightbulb, Check, X } from 'lucide-react';
+import { Plus, Calendar, Clock, ChevronLeft, ChevronRight, AlertTriangle, Lightbulb, Check, X, FileText, Sparkles } from 'lucide-react';
 import { format, addDays, startOfWeek, endOfWeek, addWeeks, parseISO, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -21,12 +24,15 @@ export default function EndomarketingAgenda() {
   const { clientes } = useEndoClientes();
   const { agendamentos, addAgendamento, updateAgendamento, cancelAgendamento, hasConflict, hasVideomakerConflict, getDailyOccupation, suggestBestDays } = useEndoAgendamentos();
   const { profissionais } = useEndoProfissionais();
+  const { scripts, updateScript } = useApp();
   const { profile } = useAuth();
 
   const [weekOffset, setWeekOffset] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [suggestDialogOpen, setSuggestDialogOpen] = useState(false);
   const [selectedSuggestionClient, setSelectedSuggestionClient] = useState('');
+  const [scriptsDialogOpen, setScriptsDialogOpen] = useState(false);
+  const [selectedAgendamento, setSelectedAgendamento] = useState<EndoAgendamento | null>(null);
 
   const weekStart = startOfWeek(addWeeks(new Date(), weekOffset), { weekStartsOn: 1 });
   const weekEnd = endOfWeek(addWeeks(new Date(), weekOffset), { weekStartsOn: 1 });
@@ -136,6 +142,23 @@ export default function EndomarketingAgenda() {
     return suggestBestDays(prof.id, prof.max_hours_per_day * 60, cliente.session_duration);
   }, [selectedSuggestionClient, clientes, profissionais, suggestBestDays]);
 
+  // Scripts for selected agendamento
+  const agendamentoScripts = useMemo(() => {
+    if (!selectedAgendamento) return [];
+    return scripts.filter(s => {
+      if (!s.isEndomarketing) return false;
+      if (s.endoClientId !== selectedAgendamento.cliente_id) return false;
+      // Show if no scheduled date, or scheduled for this day
+      if (!s.scheduledDate) return true;
+      return s.scheduledDate === selectedAgendamento.date;
+    });
+  }, [selectedAgendamento, scripts]);
+
+  const openAgendamentoScripts = (ag: EndoAgendamento) => {
+    setSelectedAgendamento(ag);
+    setScriptsDialogOpen(true);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -194,17 +217,22 @@ export default function EndomarketingAgenda() {
                 ) : (
                   dayAgendamentos.map(ag => {
                     const color = getClienteColor(ag.cliente_id);
+                    const hasScripts = scripts.some(s => s.isEndomarketing && s.endoClientId === ag.cliente_id && (!s.scheduledDate || s.scheduledDate === dateStr));
                     return (
                       <motion.div key={ag.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                        className="rounded px-1.5 py-1 text-[10px] leading-tight group relative"
-                        style={{ backgroundColor: `hsl(${color} / 0.1)`, borderLeft: `2px solid hsl(${color})` }}>
+                        className="rounded px-1.5 py-1 text-[10px] leading-tight group relative cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all"
+                        style={{ backgroundColor: `hsl(${color} / 0.1)`, borderLeft: `2px solid hsl(${color})` }}
+                        onClick={() => openAgendamentoScripts(ag)}>
                         <p className="font-medium truncate" style={{ color: `hsl(${color})` }}>{getClienteName(ag.cliente_id)}</p>
-                        <p className="text-muted-foreground">{ag.start_time} · {ag.duration}min</p>
+                        <div className="flex items-center gap-1">
+                          <p className="text-muted-foreground">{ag.start_time} · {ag.duration}min</p>
+                          {hasScripts && <FileText size={8} className="text-primary" />}
+                        </div>
                         <div className="absolute right-0 top-0 hidden group-hover:flex gap-0.5 p-0.5">
-                          <button onClick={() => handleComplete(ag.id)} className="p-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30">
+                          <button onClick={(e) => { e.stopPropagation(); handleComplete(ag.id); }} className="p-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30">
                             <Check size={10} className="text-emerald-700" />
                           </button>
-                          <button onClick={() => handleCancel(ag.id)} className="p-0.5 rounded bg-destructive/20 hover:bg-destructive/30">
+                          <button onClick={(e) => { e.stopPropagation(); handleCancel(ag.id); }} className="p-0.5 rounded bg-destructive/20 hover:bg-destructive/30">
                             <X size={10} className="text-destructive" />
                           </button>
                         </div>
@@ -324,6 +352,59 @@ export default function EndomarketingAgenda() {
               <p className="text-sm text-muted-foreground">Nenhum horário disponível nos próximos 30 dias.</p>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Scripts for agendamento dialog */}
+      <Dialog open={scriptsDialogOpen} onOpenChange={setScriptsDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          {selectedAgendamento && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Sparkles size={18} style={{ color: 'hsl(292 84% 61%)' }} />
+                  Roteiros — {getClienteName(selectedAgendamento.cliente_id)}
+                </DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground">
+                {format(parseISO(selectedAgendamento.date), "EEEE, dd 'de' MMMM", { locale: ptBR })} às {selectedAgendamento.start_time}
+              </p>
+
+              {agendamentoScripts.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground">
+                  <FileText size={32} className="mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">Nenhum roteiro de endomarketing para este cliente</p>
+                  <p className="text-xs mt-1">Crie roteiros em Roteiros → Novo Roteiro → Endomarketing</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {agendamentoScripts.map(script => (
+                    <div key={script.id} className="rounded-xl border border-border p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-medium text-sm">{script.title}</h4>
+                          <Badge variant="outline" className="text-[9px]">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                        </div>
+                        <Badge variant={script.recorded ? 'default' : 'outline'} className={`text-[10px] ${script.recorded ? 'bg-success text-success-foreground' : ''}`}>
+                          {script.recorded ? 'Feito' : 'Pendente'}
+                        </Badge>
+                      </div>
+                      <div className="prose prose-sm max-w-none text-xs p-3 rounded-lg bg-muted/30 border border-border"
+                        dangerouslySetInnerHTML={{ __html: highlightQuotes(script.content) || '<em>Sem conteúdo</em>' }} />
+                      {!script.recorded && (
+                        <Button size="sm" variant="outline" className="w-full" onClick={() => {
+                          updateScript({ ...script, recorded: true, updatedAt: new Date().toISOString() });
+                          toast.success('Roteiro marcado como feito');
+                        }}>
+                          <Check size={14} className="mr-1.5" /> Marcar como Feito
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

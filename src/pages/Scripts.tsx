@@ -3,6 +3,7 @@ import { highlightQuotes, highlightQuotesForPdf, cleanHtml } from '@/lib/highlig
 import { useApp } from '@/contexts/AppContext';
 import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS } from '@/types';
 import type { Script, ScriptVideoType, ScriptPriority } from '@/types';
+import { useEndoClientes } from '@/hooks/useEndomarketing';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,8 +12,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
-  Plus, Pencil, Trash2, FileText, Download, Check, Eye, Search, Filter, AlertTriangle, Star, Eraser
+  Plus, Pencil, Trash2, FileText, Download, Check, Eye, Search, Filter, AlertTriangle, Star, Eraser, Sparkles
 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
@@ -112,6 +114,7 @@ function RichEditor({ content, onChange }: { content: string; onChange: (html: s
 
 export default function Scripts() {
   const { clients, scripts, addScript, updateScript, deleteScript } = useApp();
+  const { clientes: endoClientes } = useEndoClientes();
   const [open, setOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [editing, setEditing] = useState<Script | null>(null);
@@ -119,6 +122,7 @@ export default function Scripts() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterClient, setFilterClient] = useState('all');
   const [filterType, setFilterType] = useState('all');
+  const [filterEndo, setFilterEndo] = useState<'all' | 'video' | 'endo'>('all');
 
   const [form, setForm] = useState({
     clientId: '',
@@ -126,12 +130,17 @@ export default function Scripts() {
     videoType: 'vendas' as ScriptVideoType,
     content: '',
     priority: 'normal' as ScriptPriority,
+    isEndomarketing: false,
+    endoClientId: '' as string,
+    scheduledDate: '' as string,
   });
 
   const printRef = useRef<HTMLDivElement>(null);
 
   const filteredScripts = useMemo(() => {
     let result = scripts;
+    if (filterEndo === 'endo') result = result.filter(s => s.isEndomarketing);
+    else if (filterEndo === 'video') result = result.filter(s => !s.isEndomarketing);
     if (filterClient !== 'all') result = result.filter(s => s.clientId === filterClient);
     if (filterType !== 'all') result = result.filter(s => s.videoType === filterType);
     if (searchTerm) {
@@ -142,22 +151,27 @@ export default function Scripts() {
       );
     }
     return result.sort((a, b) => {
-      // Priority order: urgent > priority > normal
       const priorityOrder = { urgent: 0, priority: 1, normal: 2 };
       const pA = priorityOrder[a.priority || 'normal'];
       const pB = priorityOrder[b.priority || 'normal'];
       if (pA !== pB) return pA - pB;
       return b.updatedAt.localeCompare(a.updatedAt);
     });
-  }, [scripts, filterClient, filterType, searchTerm, clients]);
+  }, [scripts, filterClient, filterType, filterEndo, searchTerm, clients]);
 
   const handleOpen = (script?: Script) => {
     if (script) {
       setEditing(script);
-      setForm({ clientId: script.clientId, title: script.title, videoType: script.videoType, content: script.content, priority: script.priority || 'normal' });
+      setForm({
+        clientId: script.clientId, title: script.title, videoType: script.videoType,
+        content: script.content, priority: script.priority || 'normal',
+        isEndomarketing: script.isEndomarketing || false,
+        endoClientId: script.endoClientId || '',
+        scheduledDate: script.scheduledDate || '',
+      });
     } else {
       setEditing(null);
-      setForm({ clientId: '', title: '', videoType: 'vendas', content: '', priority: 'normal' });
+      setForm({ clientId: '', title: '', videoType: 'vendas', content: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '' });
     }
     setOpen(true);
   };
@@ -166,12 +180,20 @@ export default function Scripts() {
     if (!form.clientId || !form.title) {
       toast.error('Preencha o cliente e o título'); return;
     }
+    if (form.isEndomarketing && !form.endoClientId) {
+      toast.error('Selecione o cliente de endomarketing'); return;
+    }
     const now = new Date().toISOString();
+    const scriptData = {
+      ...form,
+      endoClientId: form.endoClientId || undefined,
+      scheduledDate: form.scheduledDate || undefined,
+    };
     if (editing) {
-      updateScript({ ...editing, ...form, updatedAt: now });
+      updateScript({ ...editing, ...scriptData, updatedAt: now });
       toast.success('Roteiro atualizado');
     } else {
-      addScript({ ...form, id: crypto.randomUUID(), recorded: false, priority: form.priority, createdAt: now, updatedAt: now });
+      addScript({ ...scriptData, id: crypto.randomUUID(), recorded: false, createdAt: now, updatedAt: now });
       toast.success('Roteiro criado');
     }
     setOpen(false);
@@ -260,10 +282,18 @@ export default function Scripts() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-[200px]">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Buscar roteiros..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-9" />
+        </div>
+        <div className="flex rounded-lg border border-border overflow-hidden">
+          {([['all', 'Todos'], ['video', '🎬 Vídeo'], ['endo', '✨ Endomarketing']] as const).map(([key, label]) => (
+            <button key={key} onClick={() => setFilterEndo(key)}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${filterEndo === key ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
+              {label}
+            </button>
+          ))}
         </div>
         <Select value={filterClient} onValueChange={setFilterClient}>
           <SelectTrigger className="w-44"><SelectValue placeholder="Cliente" /></SelectTrigger>
@@ -307,11 +337,19 @@ export default function Scripts() {
                   <Badge variant={script.recorded ? 'default' : 'outline'} className={`text-[10px] ${script.recorded ? 'bg-success text-success-foreground' : ''}`}>
                     {script.recorded ? 'Gravado' : 'Pendente'}
                   </Badge>
+                  {script.isEndomarketing && (
+                    <Badge className="text-[9px] border-0" style={{ backgroundColor: 'hsl(292 84% 61% / 0.2)', color: 'hsl(292 84% 61%)' }}>
+                      <Sparkles size={8} className="mr-0.5" /> Endo
+                    </Badge>
+                  )}
                   {script.priority === 'urgent' && (
                     <Badge className="text-[9px] bg-destructive/20 text-destructive border-destructive/30">Urgente</Badge>
                   )}
                   {script.priority === 'priority' && (
                     <Badge className="text-[9px] bg-warning/20 text-warning border-warning/30">Prioritário</Badge>
+                  )}
+                  {script.scheduledDate && (
+                    <span className="text-[9px] text-muted-foreground">{new Date(script.scheduledDate + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
                   )}
                 </div>
               </div>
@@ -391,6 +429,35 @@ export default function Scripts() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Endomarketing toggle */}
+            <div className="flex items-center gap-3 p-3 rounded-xl border border-border">
+              <Switch checked={form.isEndomarketing} onCheckedChange={v => setForm({ ...form, isEndomarketing: v, endoClientId: v ? form.endoClientId : '' })} />
+              <Label className="font-medium flex items-center gap-1.5">
+                <Sparkles size={14} style={{ color: 'hsl(292 84% 61%)' }} /> Roteiro de Endomarketing
+              </Label>
+            </div>
+
+            {form.isEndomarketing && (
+              <div className="p-4 rounded-xl border border-border space-y-3" style={{ backgroundColor: 'hsl(292 84% 61% / 0.05)', borderColor: 'hsl(292 84% 61% / 0.2)' }}>
+                <div className="space-y-1">
+                  <Label>Cliente de Endomarketing *</Label>
+                  <Select value={form.endoClientId} onValueChange={v => setForm({ ...form, endoClientId: v })}>
+                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      {endoClientes.filter(c => c.active).map(c => (
+                        <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Data programada (opcional)</Label>
+                  <Input type="date" value={form.scheduledDate} onChange={e => setForm({ ...form, scheduledDate: e.target.value })} />
+                  <p className="text-[11px] text-muted-foreground">Se definida, o roteiro aparecerá na agenda do dia selecionado</p>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-1">
               <Label>Título do Roteiro *</Label>

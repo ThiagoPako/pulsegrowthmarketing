@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { MessageSquare, Settings, History, Check, Key, Zap, Eye, EyeOff, Pencil } from 'lucide-react';
+import { MessageSquare, Settings, History, Check, Key, Zap, Eye, EyeOff, Pencil, Loader2, CheckCircle2, XCircle, Wifi } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -18,6 +18,7 @@ import {
   updateWhatsAppConfig,
   getWhatsAppMessages,
   getMessageStats,
+  testWhatsAppConnection,
   type WhatsAppConfig,
   type WhatsAppMessage,
 } from '@/services/whatsappService';
@@ -35,6 +36,8 @@ export default function WhatsAppDashboard() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [showToken, setShowToken] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [connectionError, setConnectionError] = useState<string>('');
 
   useEffect(() => { loadData(); }, []);
 
@@ -56,6 +59,21 @@ export default function WhatsAppDashboard() {
     const ok = await updateWhatsAppConfig(config);
     if (ok) toast.success('Configurações salvas');
     else toast.error('Erro ao salvar');
+  };
+
+  const handleTestConnection = async () => {
+    setConnectionStatus('testing');
+    setConnectionError('');
+    const result = await testWhatsAppConnection();
+    if (result.success) {
+      setConnectionStatus('success');
+      toast.success('Conexão com a API validada com sucesso!');
+    } else {
+      setConnectionStatus('error');
+      setConnectionError(result.error || 'Token inválido ou API inacessível');
+      toast.error(result.error || 'Falha na validação do token');
+    }
+    setTimeout(() => setConnectionStatus('idle'), 8000);
   };
 
   const filteredMessages = useMemo(() => {
@@ -282,7 +300,32 @@ export default function WhatsAppDashboard() {
                           {showToken ? <EyeOff size={14} /> : <Eye size={14} />}
                         </Button>
                       </div>
-                      <p className="text-[10px] text-muted-foreground">Token de autenticação para a API AtendaClique</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-[10px] text-muted-foreground flex-1">Token de autenticação para a API AtendaClique</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleTestConnection}
+                          disabled={connectionStatus === 'testing' || !config.apiToken}
+                          className={`gap-1.5 text-xs transition-colors ${
+                            connectionStatus === 'success' ? 'border-success text-success' :
+                            connectionStatus === 'error' ? 'border-destructive text-destructive' : ''
+                          }`}
+                        >
+                          {connectionStatus === 'testing' ? (
+                            <><Loader2 size={12} className="animate-spin" /> Testando...</>
+                          ) : connectionStatus === 'success' ? (
+                            <><CheckCircle2 size={12} /> Conectado</>
+                          ) : connectionStatus === 'error' ? (
+                            <><XCircle size={12} /> Falhou</>
+                          ) : (
+                            <><Wifi size={12} /> Testar Conexão</>
+                          )}
+                        </Button>
+                      </div>
+                      {connectionStatus === 'error' && connectionError && (
+                        <p className="text-[10px] text-destructive">{connectionError}</p>
+                      )}
                     </div>
                     <div className="space-y-1">
                       <Label>ID Usuário Padrão</Label>

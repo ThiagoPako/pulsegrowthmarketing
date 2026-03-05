@@ -42,7 +42,31 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json()
-    const { number, message, userId: apiUserId, queueId, sendSignature, closeTicket, clientId, triggerType } = body
+    const { action, number, message, userId: apiUserId, queueId, sendSignature, closeTicket, clientId, triggerType } = body
+
+    // Test connection mode
+    if (action === 'test_connection') {
+      try {
+        const testResponse = await fetch(WHATSAPP_API_URL, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ number: '0', body: '', userId: '', queueId: '', sendSignature: false, closeTicket: false }),
+        })
+        // A 401/403 means bad token; anything else means token is valid (even 400/422 for bad payload)
+        const isTokenValid = testResponse.status !== 401 && testResponse.status !== 403
+        return new Response(JSON.stringify({ success: isTokenValid, status: testResponse.status }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      } catch (e) {
+        return new Response(JSON.stringify({ success: false, error: 'Não foi possível conectar à API' }), {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    }
 
     if (!number || !message) {
       return new Response(JSON.stringify({ error: 'number and message are required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })

@@ -109,6 +109,14 @@ export default function VideomakerDashboard() {
       clientId: rec.clientId,
       startedAt: new Date().toISOString(),
     });
+    
+    // Move content_tasks linked to selected scripts to "captacao"
+    for (const scriptId of selectedScriptIds) {
+      supabase.from('content_tasks').update({ kanban_column: 'captacao', recording_id: rec.id } as any)
+        .eq('script_id', scriptId).eq('kanban_column', 'ideias')
+        .then(({ error }) => { if (error) console.error('Move to captacao error:', error); });
+    }
+    
     toast.success(`Gravação iniciada com ${selectedScriptIds.size} roteiro(s) — ${getClientName(rec.clientId)}`);
     setScriptsOpen(false);
   };
@@ -198,20 +206,40 @@ export default function VideomakerDashboard() {
     for (const scriptId of completedIds) {
       const script = scripts.find(s => s.id === scriptId);
       if (!script) continue;
-      await supabase.from('content_tasks').insert({
-        client_id: rec.clientId,
-        title: script.title,
-        content_type: script.contentFormat || 'reels',
-        kanban_column: 'edicao',
-        description: `Roteiro gravado pelo videomaker. Link dos materiais: ${driveLink.trim()}`,
-        script_id: scriptId,
-        recording_id: rec.id,
-        assigned_to: null,
-        created_by: vmId,
-        drive_link: driveLink.trim(),
-        editing_deadline: editingDeadline.toISOString(),
-        editing_started_at: new Date().toISOString(),
-      } as any);
+      // Try to update existing content_task first (created from script)
+      const { data: existing } = await supabase.from('content_tasks')
+        .select('id').eq('script_id', scriptId).limit(1);
+      
+      if (existing && existing.length > 0) {
+        await supabase.from('content_tasks').update({
+          kanban_column: 'edicao',
+          drive_link: driveLink.trim(),
+          recording_id: rec.id,
+          editing_deadline: editingDeadline.toISOString(),
+          description: `Roteiro gravado pelo videomaker. Link dos materiais: ${driveLink.trim()}`,
+        } as any).eq('id', existing[0].id);
+      } else {
+        await supabase.from('content_tasks').insert({
+          client_id: rec.clientId,
+          title: script.title,
+          content_type: script.contentFormat || 'reels',
+          kanban_column: 'edicao',
+          description: `Roteiro gravado pelo videomaker. Link dos materiais: ${driveLink.trim()}`,
+          script_id: scriptId,
+          recording_id: rec.id,
+          assigned_to: null,
+          created_by: vmId,
+          drive_link: driveLink.trim(),
+          editing_deadline: editingDeadline.toISOString(),
+        } as any);
+      }
+    }
+
+    // Move unfinished scripts' content_tasks back to "ideias"
+    const unfinishedIds = planned.filter(id => !completedScriptIds.has(id));
+    for (const scriptId of unfinishedIds) {
+      await supabase.from('content_tasks').update({ kanban_column: 'ideias', recording_id: null } as any)
+        .eq('script_id', scriptId).in('kanban_column', ['captacao']);
     }
 
     let msg = `Gravação concluída! ${reelsCount} roteiro(s) enviado(s) para edição`;

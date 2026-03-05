@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { highlightQuotes, highlightQuotesForPdf, cleanHtml } from '@/lib/highlightQuotes';
+import { supabase } from '@/integrations/supabase/client';
 import { useApp } from '@/contexts/AppContext';
 import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS, SCRIPT_CONTENT_FORMAT_LABELS } from '@/types';
 import type { Script, ScriptVideoType, ScriptPriority, ScriptContentFormat } from '@/types';
@@ -197,7 +198,21 @@ export default function Scripts() {
       updateScript({ ...editing, ...scriptData, updatedAt: now });
       toast.success('Roteiro atualizado');
     } else {
-      addScript({ ...scriptData, id: crypto.randomUUID(), recorded: false, createdAt: now, updatedAt: now });
+      const scriptId = crypto.randomUUID();
+      addScript({ ...scriptData, id: scriptId, recorded: false, createdAt: now, updatedAt: now });
+      
+      // Auto-create content_task in "ideias" column linked to this script
+      supabase.from('content_tasks').insert({
+        client_id: form.clientId,
+        title: form.title,
+        content_type: form.contentFormat || 'reels',
+        kanban_column: 'ideias',
+        script_id: scriptId,
+        description: null,
+      } as any).then(({ error }) => {
+        if (error) console.error('Auto content_task creation error:', error);
+      });
+      
       toast.success('Roteiro criado');
     }
     setOpen(false);

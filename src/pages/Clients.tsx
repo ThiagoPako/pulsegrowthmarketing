@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { DAY_LABELS, CONTENT_TYPE_LABELS, CLIENT_COLORS } from '@/types';
 import type { Client, DayOfWeek, ContentType } from '@/types';
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
@@ -66,6 +66,18 @@ export default function Clients() {
   const [sendWaClient, setSendWaClient] = useState<Client | null>(null);
   const [sendWaMsg, setSendWaMsg] = useState('');
   const [sendWaLoading, setSendWaLoading] = useState(false);
+  
+  // Plan-related state
+  const [plans, setPlans] = useState<{ id: string; name: string; status: string }[]>([]);
+  const [planId, setPlanId] = useState<string | null>(null);
+  const [contractStartDate, setContractStartDate] = useState('');
+  const [autoRenewal, setAutoRenewal] = useState(false);
+
+  useEffect(() => {
+    supabase.from('plans').select('id, name, status').eq('status', 'ativo').then(({ data }) => {
+      if (data) setPlans(data as any[]);
+    });
+  }, []);
 
   const videomakers = users.filter(u => u.role === 'videomaker');
 
@@ -143,8 +155,27 @@ export default function Clients() {
   }, [availableSlots, form.videomaker, form.backupDay]);
 
   const handleOpen = (client?: Client) => {
-    if (client) { setEditing(client); setForm(client); setLogoPreview(client.logoUrl || null); }
-    else { setEditing(null); setForm(emptyClient()); setLogoPreview(null); }
+    if (client) {
+      setEditing(client);
+      setForm(client);
+      setLogoPreview(client.logoUrl || null);
+      // Load plan data for editing
+      supabase.from('clients').select('plan_id, contract_start_date, auto_renewal').eq('id', client.id).single().then(({ data }) => {
+        if (data) {
+          setPlanId((data as any).plan_id || null);
+          setContractStartDate((data as any).contract_start_date || '');
+          setAutoRenewal((data as any).auto_renewal || false);
+        }
+      });
+    }
+    else {
+      setEditing(null);
+      setForm(emptyClient());
+      setLogoPreview(null);
+      setPlanId(null);
+      setContractStartDate('');
+      setAutoRenewal(false);
+    }
     setLogoFile(null);
     setStep(0);
     setOpen(true);
@@ -188,6 +219,8 @@ export default function Clients() {
     if (editing) {
       const logoUrl = await uploadLogo(editing.id);
       updateClient({ ...editing, ...form, logoUrl: logoUrl || undefined } as Client);
+      // Update plan fields
+      await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal } as any).eq('id', editing.id);
       toast.success('Cliente atualizado');
     } else {
       const clientId = crypto.randomUUID();
@@ -195,6 +228,8 @@ export default function Clients() {
       const newClient = { ...form, id: clientId, logoUrl: logoUrl || undefined } as Client;
       const ok = addClient(newClient);
       if (!ok) { toast.error('Empresa já cadastrada'); return; }
+      // Update plan fields after insert
+      await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal } as any).eq('id', clientId);
       const count = await generateScheduleForClient(newClient);
       if (count > 0) {
         toast.success(`Cliente cadastrado — ${count} gravação(ões) criada(s) na agenda`);
@@ -599,6 +634,33 @@ export default function Clients() {
             <Label>Meta Total (vídeos)</Label>
             <Input type="number" min={1} value={form.weeklyGoal} onChange={e => setForm({ ...form, weeklyGoal: Number(e.target.value) })} />
           </div>
+        </div>
+      </div>
+
+      {/* Plan selection */}
+      <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
+        <p className="text-sm font-semibold flex items-center gap-2">
+          <Package size={16} className="text-primary" /> Plano Contratado
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label>Plano</Label>
+            <Select value={planId || 'none'} onValueChange={v => setPlanId(v === 'none' ? null : v)}>
+              <SelectTrigger><SelectValue placeholder="Selecione um plano" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sem plano</SelectItem>
+                {plans.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>Início do contrato</Label>
+            <Input type="date" value={contractStartDate} onChange={e => setContractStartDate(e.target.value)} />
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <Switch checked={autoRenewal} onCheckedChange={setAutoRenewal} />
+          <Label>Renovação automática</Label>
         </div>
       </div>
 

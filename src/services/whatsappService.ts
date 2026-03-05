@@ -212,6 +212,62 @@ function applyTemplate(template: string, vars: Record<string, string>): string {
   return result;
 }
 
+export async function sendRecordingCancelledNotification(
+  clientPhone: string,
+  clientName: string,
+  clientId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const config = await getWhatsAppConfig();
+  if (!config?.integrationActive) return { success: false, error: 'Integração desativada' };
+  if (!clientPhone || !config.apiToken) return { success: false, error: 'Token ou WhatsApp não configurado' };
+
+  const message = applyTemplate(config.msgConfirmationCancelled, {
+    nome_cliente: clientName,
+  });
+
+  return sendWhatsAppMessage({ number: clientPhone, message, clientId, triggerType: 'auto_confirmation' });
+}
+
+export async function sendRecordingConfirmedNotification(
+  clientPhone: string,
+  clientName: string,
+  clientId: string,
+  date: string,
+  time: string,
+): Promise<{ success: boolean; error?: string }> {
+  const config = await getWhatsAppConfig();
+  if (!config?.integrationActive) return { success: false, error: 'Integração desativada' };
+  if (!clientPhone || !config.apiToken) return { success: false, error: 'Token ou WhatsApp não configurado' };
+
+  const message = applyTemplate(config.msgConfirmationConfirmed, {
+    nome_cliente: clientName,
+    data_gravacao: date,
+    hora_gravacao: time,
+  });
+
+  return sendWhatsAppMessage({ number: clientPhone, message, clientId, triggerType: 'auto_confirmation' });
+}
+
+export async function sendBackupInviteNotification(
+  clientPhone: string,
+  clientName: string,
+  clientId: string,
+  date: string,
+  time: string,
+): Promise<{ success: boolean; error?: string }> {
+  const config = await getWhatsAppConfig();
+  if (!config?.integrationActive) return { success: false, error: 'Integração desativada' };
+  if (!clientPhone || !config.apiToken) return { success: false, error: 'Token ou WhatsApp não configurado' };
+
+  const message = applyTemplate(config.msgBackupInvite, {
+    nome_cliente: clientName,
+    data_gravacao: date,
+    hora_gravacao: time,
+  });
+
+  return sendWhatsAppMessage({ number: clientPhone, message, clientId, triggerType: 'auto_backup' });
+}
+
 export async function sendRecordingScheduledNotification(
   clientPhone: string,
   clientName: string,

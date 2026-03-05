@@ -18,7 +18,12 @@ import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
-import { sendManualConfirmation } from '@/services/whatsappService';
+import {
+  sendManualConfirmation,
+  sendRecordingCancelledNotification,
+  sendRecordingConfirmedNotification,
+  sendBackupInviteNotification,
+} from '@/services/whatsappService';
 
 // Endomarketing brand color (magenta/fuchsia)
 const ENDO_COLOR = '292 84% 61%';
@@ -210,18 +215,31 @@ export default function Schedule() {
     setBackupOpen(true);
   };
 
-  const handleCancelWithoutBackup = () => {
+  const handleCancelWithoutBackup = async () => {
     if (!cancellingRec) return;
     cancelRecording(cancellingRec.id);
+    // Send cancellation message
+    const client = clients.find(c => c.id === cancellingRec.clientId);
+    if (client?.whatsapp) {
+      await sendRecordingCancelledNotification(client.whatsapp, client.companyName, client.id);
+      toast.info('Mensagem de cancelamento enviada ao cliente');
+    }
     toast.warning('Gravação cancelada sem substituição');
     setBackupOpen(false);
     setCancellingRec(null);
   };
 
-  const handleSelectBackup = (backupClient: Client) => {
+  const handleSelectBackup = async (backupClient: Client) => {
     if (!cancellingRec) return;
     // Cancel original
     cancelRecording(cancellingRec.id);
+
+    // Send cancellation message to original client
+    const originalClient = clients.find(c => c.id === cancellingRec.clientId);
+    if (originalClient?.whatsapp) {
+      await sendRecordingCancelledNotification(originalClient.whatsapp, originalClient.companyName, originalClient.id);
+    }
+
     // Create backup recording in same slot
     const newRec: Recording = {
       id: crypto.randomUUID(),
@@ -233,6 +251,16 @@ export default function Schedule() {
       status: 'agendada',
     };
     addRecording(newRec);
+
+    // Send backup invite to the backup client
+    if (backupClient.whatsapp) {
+      await sendBackupInviteNotification(
+        backupClient.whatsapp, backupClient.companyName, backupClient.id,
+        cancellingRec.date, cancellingRec.startTime
+      );
+      toast.success(`Convite de backup enviado para ${backupClient.companyName}`);
+    }
+
     toast.success(`${backupClient.companyName} encaixado como Backup no lugar de ${getClientName(cancellingRec.clientId)}`);
     setBackupOpen(false);
     setCancellingRec(null);
@@ -243,9 +271,17 @@ export default function Schedule() {
     toast.warning(`${getClientName(rec.clientId)} — não gravou`);
   };
 
-  const handleComplete = (rec: Recording) => {
+  const handleComplete = async (rec: Recording) => {
     updateRecording({ ...rec, status: 'concluida' });
     toast.success('Gravação concluída');
+    // Send confirmed message via WhatsApp
+    const client = clients.find(c => c.id === rec.clientId);
+    if (client?.whatsapp) {
+      const result = await sendRecordingConfirmedNotification(
+        client.whatsapp, client.companyName, client.id, rec.date, rec.startTime
+      );
+      if (result.success) toast.success('Mensagem de confirmação enviada ao cliente');
+    }
   };
 
   const openEditRecording = (rec: Recording) => {

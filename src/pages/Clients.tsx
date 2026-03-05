@@ -73,7 +73,7 @@ export default function Clients() {
   const [sendWaLoading, setSendWaLoading] = useState(false);
   
   // Plan-related state
-  const [plans, setPlans] = useState<{ id: string; name: string; status: string }[]>([]);
+  const [plans, setPlans] = useState<{ id: string; name: string; status: string; reels_qty: number; creatives_qty: number; stories_qty: number }[]>([]);
   const [planId, setPlanId] = useState<string | null>(null);
   const [contractStartDate, setContractStartDate] = useState('');
   const [autoRenewal, setAutoRenewal] = useState(false);
@@ -84,7 +84,7 @@ export default function Clients() {
   const [paymentMethod, setPaymentMethod] = useState('pix');
 
   useEffect(() => {
-    supabase.from('plans').select('id, name, status').eq('status', 'ativo').then(({ data }) => {
+    supabase.from('plans').select('id, name, status, reels_qty, creatives_qty, stories_qty').eq('status', 'ativo').then(({ data }) => {
       if (data) setPlans(data as any[]);
     });
   }, []);
@@ -755,22 +755,35 @@ export default function Clients() {
         <p className="text-sm font-semibold flex items-center gap-2">
           <Target size={16} className="text-primary" /> Metas de Entrega Semanal
         </p>
+        {planId && (() => {
+          const sp = plans.find(p => p.id === planId);
+          if (!sp) return null;
+          return (
+            <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 text-xs text-primary space-y-1">
+              <p className="font-semibold">Metas calculadas automaticamente pelo plano</p>
+              <p className="text-muted-foreground">
+                Entrega mínima do plano: {Math.ceil(sp.reels_qty / 4)} reels, {Math.ceil(sp.creatives_qty / 4)} criativos, {Math.ceil(sp.stories_qty / 4)} stories/semana.
+                A meta semanal é sempre <strong>+1 a mais</strong> que o mínimo para adiantar conteúdos.
+              </p>
+            </div>
+          );
+        })()}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="space-y-1">
-            <Label>Qtd. Reels</Label>
-            <Input type="number" min={0} value={form.weeklyReels ?? 0} onChange={e => setForm({ ...form, weeklyReels: Number(e.target.value) })} />
+            <Label>Meta Reels/Sem.</Label>
+            <Input type="number" min={0} value={form.weeklyReels ?? 0} onChange={e => setForm({ ...form, weeklyReels: Number(e.target.value) })} disabled={!!planId} className={planId ? 'opacity-70' : ''} />
           </div>
           <div className="space-y-1">
-            <Label>Qtd. Criativos</Label>
-            <Input type="number" min={0} value={form.weeklyCreatives ?? 0} onChange={e => setForm({ ...form, weeklyCreatives: Number(e.target.value) })} />
+            <Label>Meta Criativos/Sem.</Label>
+            <Input type="number" min={0} value={form.weeklyCreatives ?? 0} onChange={e => setForm({ ...form, weeklyCreatives: Number(e.target.value) })} disabled={!!planId} className={planId ? 'opacity-70' : ''} />
           </div>
           <div className="space-y-1">
-            <Label>Stories/Semana</Label>
-            <Input type="number" min={0} value={form.weeklyStories ?? 0} onChange={e => setForm({ ...form, weeklyStories: Number(e.target.value) })} />
+            <Label>Meta Stories/Sem.</Label>
+            <Input type="number" min={0} value={form.weeklyStories ?? 0} onChange={e => setForm({ ...form, weeklyStories: Number(e.target.value) })} disabled={!!planId} className={planId ? 'opacity-70' : ''} />
           </div>
           <div className="space-y-1">
-            <Label>Meta Total (vídeos)</Label>
-            <Input type="number" min={1} value={form.weeklyGoal} onChange={e => setForm({ ...form, weeklyGoal: Number(e.target.value) })} />
+            <Label>Meta Total/Sem.</Label>
+            <Input type="number" min={1} value={form.weeklyGoal} onChange={e => setForm({ ...form, weeklyGoal: Number(e.target.value) })} disabled={!!planId} className={planId ? 'opacity-70' : ''} />
           </div>
         </div>
       </div>
@@ -783,7 +796,20 @@ export default function Clients() {
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label>Plano</Label>
-            <Select value={planId || 'none'} onValueChange={v => setPlanId(v === 'none' ? null : v)}>
+            <Select value={planId || 'none'} onValueChange={v => {
+                const newPlanId = v === 'none' ? null : v;
+                setPlanId(newPlanId);
+                if (newPlanId) {
+                  const selectedPlan = plans.find(p => p.id === newPlanId);
+                  if (selectedPlan) {
+                    const weeklyReels = Math.ceil(selectedPlan.reels_qty / 4);
+                    const weeklyCreatives = Math.ceil(selectedPlan.creatives_qty / 4);
+                    const weeklyStories = Math.ceil(selectedPlan.stories_qty / 4);
+                    const weeklyGoal = weeklyReels + weeklyCreatives + weeklyStories + 1;
+                    setForm(prev => ({ ...prev, weeklyReels: weeklyReels + 1, weeklyCreatives: weeklyCreatives + 1, weeklyStories: weeklyStories + 1, weeklyGoal }));
+                  }
+                }
+              }}>
               <SelectTrigger><SelectValue placeholder="Selecione um plano" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Sem plano</SelectItem>

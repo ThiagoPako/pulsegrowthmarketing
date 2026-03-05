@@ -74,12 +74,25 @@ export default function VideomakerDashboard() {
   const handleStartRecording = (rec: Recording) => {
     setScriptsClientId(rec.clientId);
     setScriptsRecordingId(rec.id);
-    setSelectedScriptIds(new Set());
+    // Auto-select all urgent scripts (mandatory)
+    const urgentIds = scripts
+      .filter(s => s.clientId === rec.clientId && !s.recorded && !s.isEndomarketing && s.priority === 'urgent')
+      .map(s => s.id);
+    setSelectedScriptIds(new Set(urgentIds));
     setViewingScript(null);
     setScriptsOpen(true);
   };
 
   const confirmStartRecording = (rec: Recording) => {
+    // Validate all urgent scripts are selected
+    const urgentScripts = scripts.filter(
+      s => s.clientId === rec.clientId && !s.recorded && !s.isEndomarketing && s.priority === 'urgent'
+    );
+    const allUrgentSelected = urgentScripts.every(s => selectedScriptIds.has(s.id));
+    if (urgentScripts.length > 0 && !allUrgentSelected) {
+      toast.error('Todos os roteiros urgentes devem ser selecionados para iniciar a gravação');
+      return;
+    }
     if (selectedScriptIds.size === 0) {
       toast.error('Selecione pelo menos 1 roteiro para iniciar a gravação');
       return;
@@ -602,14 +615,19 @@ export default function VideomakerDashboard() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {clientScripts.map(script => (
+                  {clientScripts.map(script => {
+                    const isUrgent = script.priority === 'urgent';
+                    const isLocked = isUrgent && !!scriptsRecordingId;
+                    return (
                     <div key={script.id} className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
                       script.priority === 'urgent' ? 'border-destructive/40 bg-destructive/5' :
                       script.priority === 'priority' ? 'border-warning/40 bg-warning/5' : 'border-border hover:bg-muted/30'
                     }`}>
                       <Checkbox
                         checked={selectedScriptIds.has(script.id)}
+                        disabled={isLocked}
                         onCheckedChange={checked => {
+                          if (isLocked) return;
                           const next = new Set(selectedScriptIds);
                           checked ? next.add(script.id) : next.delete(script.id);
                           setSelectedScriptIds(next);
@@ -621,10 +639,13 @@ export default function VideomakerDashboard() {
                           {script.priority === 'urgent' && <AlertTriangle size={13} className="text-destructive shrink-0" />}
                           {script.priority === 'priority' && <Star size={13} className="text-warning shrink-0" />}
                           <p className="font-medium text-sm">{script.title}</p>
+                          {isLocked && (
+                            <Badge className="text-[9px] bg-destructive/20 text-destructive border-destructive/30">Obrigatório</Badge>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 mt-1">
                           <Badge variant="outline" className="text-[10px]">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
-                          {script.priority === 'urgent' && <Badge className="text-[9px] bg-destructive/20 text-destructive border-destructive/30">Urgente</Badge>}
+                          {script.priority === 'urgent' && !isLocked && <Badge className="text-[9px] bg-destructive/20 text-destructive border-destructive/30">Urgente</Badge>}
                           {script.priority === 'priority' && <Badge className="text-[9px] bg-warning/20 text-warning border-warning/30">Prioritário</Badge>}
                         </div>
                         <div className="text-xs text-muted-foreground line-clamp-2 mt-1.5"
@@ -635,7 +656,8 @@ export default function VideomakerDashboard() {
                         <Eye size={14} />
                       </Button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 

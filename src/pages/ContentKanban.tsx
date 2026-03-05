@@ -185,9 +185,9 @@ export default function ContentKanban() {
       content_type: formType,
       kanban_column: formColumn,
       description: formDescription || null,
-      assigned_to: formAssignedTo || null,
-      recording_id: formRecordingId || null,
-      script_id: formScriptId || null,
+      assigned_to: (formAssignedTo && formAssignedTo !== 'none') ? formAssignedTo : null,
+      recording_id: (formRecordingId && formRecordingId !== 'none') ? formRecordingId : null,
+      script_id: (formScriptId && formScriptId !== 'none') ? formScriptId : null,
       scheduled_recording_date: formSchedDate || null,
       scheduled_recording_time: formSchedTime || null,
       updated_at: new Date().toISOString(),
@@ -473,7 +473,7 @@ export default function ContentKanban() {
                 <Select value={formAssignedTo} onValueChange={setFormAssignedTo}>
                   <SelectTrigger className="h-9"><SelectValue placeholder="Nenhum" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
+                    <SelectItem value="none">Nenhum</SelectItem>
                     {users.map(u => (
                       <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
                     ))}
@@ -490,7 +490,7 @@ export default function ContentKanban() {
                   <Select value={formRecordingId} onValueChange={setFormRecordingId}>
                     <SelectTrigger className="h-9"><SelectValue placeholder="Nenhuma" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Nenhuma</SelectItem>
+                      <SelectItem value="none">Nenhuma</SelectItem>
                       {clientRecordings.map(r => (
                         <SelectItem key={r.id} value={r.id}>
                           {format(new Date(r.date + 'T12:00:00'), 'dd/MM', { locale: ptBR })} {r.startTime}
@@ -504,7 +504,7 @@ export default function ContentKanban() {
                   <Select value={formScriptId} onValueChange={setFormScriptId}>
                     <SelectTrigger className="h-9"><SelectValue placeholder="Nenhum" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Nenhum</SelectItem>
+                      <SelectItem value="none">Nenhum</SelectItem>
                       {clientScripts.map(s => (
                         <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
                       ))}

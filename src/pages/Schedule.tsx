@@ -12,12 +12,13 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles, RefreshCw } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles, RefreshCw, MessageSquare } from 'lucide-react';
 import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
+import { sendManualConfirmation } from '@/services/whatsappService';
 
 // Endomarketing brand color (magenta/fuchsia)
 const ENDO_COLOR = '292 84% 61%';
@@ -295,7 +296,26 @@ export default function Schedule() {
     toast.success('Roteiro retornado ao banco de dados');
   };
 
-  // ====== KANBAN: grouped by day of current week ======
+  const handleSendConfirmation = async (rec: Recording) => {
+    const client = clients.find(c => c.id === rec.clientId);
+    const vm = users.find(u => u.id === rec.videomakerId);
+    if (!client?.whatsapp) {
+      toast.error('Cliente sem WhatsApp cadastrado');
+      return;
+    }
+    toast.loading('Enviando confirmação...', { id: 'confirmation' });
+    const result = await sendManualConfirmation(
+      rec.id, client.id, client.whatsapp, client.companyName,
+      rec.date, rec.startTime, vm?.name || 'Equipe'
+    );
+    if (result.success) {
+      toast.success('Confirmação enviada via WhatsApp!', { id: 'confirmation' });
+    } else {
+      toast.error(result.error || 'Erro ao enviar confirmação', { id: 'confirmation' });
+    }
+  };
+
+
   const kanbanWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const kanbanAllDays = Array.from({ length: 7 }, (_, i) => addDays(kanbanWeekStart, i));
   const kanbanDays = kanbanAllDays.filter(day => {
@@ -446,6 +466,7 @@ export default function Schedule() {
                                 {evt.recording!.status === 'agendada' && (
                                   <>
                                     <button onClick={() => openScriptsForClient(evt.recording!.clientId)} className="p-0.5 rounded hover:bg-primary/20 text-primary" title="Roteiros"><FileText size={10} /></button>
+                                    <button onClick={() => handleSendConfirmation(evt.recording!)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Enviar Confirmação"><MessageSquare size={10} /></button>
                                     <button onClick={() => handleComplete(evt.recording!)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Gravado"><Check size={10} /></button>
                                     <button onClick={() => handleCancel(evt.recording!)} className="p-0.5 rounded hover:bg-destructive/20 text-destructive" title="Cancelar"><XCircle size={10} /></button>
                                   </>
@@ -534,6 +555,9 @@ export default function Schedule() {
                               <>
                                 <button onClick={() => openScriptsForClient(evt.recording!.clientId)} className="text-[10px] py-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/15 transition-colors flex items-center justify-center gap-1">
                                   <FileText size={10} /> Roteiros
+                                </button>
+                                <button onClick={() => handleSendConfirmation(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-success/10 text-success hover:bg-success/20 transition-colors flex items-center justify-center gap-1">
+                                  <MessageSquare size={10} /> Confirmar
                                 </button>
                                 <button onClick={() => handleComplete(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-success/10 text-success hover:bg-success/20 transition-colors flex items-center justify-center gap-1">
                                   <Check size={10} /> Gravado

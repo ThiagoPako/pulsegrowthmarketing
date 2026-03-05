@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter } from 'lucide-react';
+import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -392,6 +392,7 @@ export default function ContentKanban() {
                         task={task}
                         client={getClient(task.client_id)}
                         assignedUser={getUser(task.assigned_to)}
+                        linkedScript={task.script_id ? scripts.find(s => s.id === task.script_id) : undefined}
                         isDragging={draggedTask?.id === task.id}
                         onDragStart={e => handleDragStart(e, task)}
                         onEdit={() => openEdit(task)}
@@ -547,116 +548,170 @@ interface TaskCardProps {
   task: ContentTask;
   client?: Client;
   assignedUser?: { name: string; avatarUrl?: string } | null;
+  linkedScript?: Script;
   isDragging: boolean;
   onDragStart: (e: React.DragEvent) => void;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-function TaskCard({ task, client, assignedUser, isDragging, onDragStart, onEdit, onDelete }: TaskCardProps) {
+function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDragStart, onEdit, onDelete }: TaskCardProps) {
+  const [scriptPreviewOpen, setScriptPreviewOpen] = useState(false);
   const typeConfig = CONTENT_TYPES.find(t => t.value === task.content_type) || CONTENT_TYPES[0];
   const TypeIcon = typeConfig.icon;
   const clientColor = client?.color || '217 91% 60%';
 
   return (
-    <div
-      draggable
-      onDragStart={onDragStart}
-      className={`group relative bg-card border border-border rounded-lg cursor-grab active:cursor-grabbing transition-all hover:shadow-md ${
-        isDragging ? 'opacity-40 scale-95' : ''
-      }`}
-    >
-      {/* Actions on hover */}
-      <div className="absolute top-1.5 right-1.5 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-        <button onClick={e => { e.stopPropagation(); onEdit(); }} className="w-5 h-5 rounded flex items-center justify-center bg-card text-muted-foreground hover:text-foreground hover:bg-accent border border-border shadow-sm">
-          <Edit size={10} />
-        </button>
-        <button onClick={e => { e.stopPropagation(); onDelete(); }} className="w-5 h-5 rounded flex items-center justify-center bg-card text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border shadow-sm">
-          <Trash2 size={10} />
-        </button>
-      </div>
+    <>
+      <div
+        draggable
+        onDragStart={onDragStart}
+        className={`group relative bg-card border border-border rounded-lg cursor-grab active:cursor-grabbing transition-all hover:shadow-md ${
+          isDragging ? 'opacity-40 scale-95' : ''
+        }`}
+      >
+        {/* Actions on hover */}
+        <div className="absolute top-1.5 right-1.5 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+          <button onClick={e => { e.stopPropagation(); onEdit(); }} className="w-5 h-5 rounded flex items-center justify-center bg-card text-muted-foreground hover:text-foreground hover:bg-accent border border-border shadow-sm">
+            <Edit size={10} />
+          </button>
+          <button onClick={e => { e.stopPropagation(); onDelete(); }} className="w-5 h-5 rounded flex items-center justify-center bg-card text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border shadow-sm">
+            <Trash2 size={10} />
+          </button>
+        </div>
 
-      <div className="p-2.5">
-        {/* Badge row */}
-        {task.kanban_column === 'envio' && (
-          <Badge className="mb-2 text-[10px] font-semibold px-2 py-0.5 border-0 bg-emerald-500 text-white">
-            Novo {typeConfig.label}
-          </Badge>
-        )}
-        {task.kanban_column === 'agendamentos' && (
-          <Badge className="mb-2 text-[10px] font-semibold px-2 py-0.5 border-0 bg-emerald-500 text-white">
-            AGENDAR
-          </Badge>
-        )}
-        {task.kanban_column === 'acompanhamento' && task.scheduled_recording_date && (
-          <Badge className="mb-2 text-[10px] font-semibold px-2 py-0.5 border-0 bg-teal-500 text-white">
-            enviado/aguarda
-          </Badge>
-        )}
+        <div className="p-2.5">
+          {/* Badge row */}
+          {task.kanban_column === 'envio' && (
+            <Badge className="mb-2 text-[10px] font-semibold px-2 py-0.5 border-0 bg-emerald-500 text-white">
+              Novo {typeConfig.label}
+            </Badge>
+          )}
+          {task.kanban_column === 'agendamentos' && (
+            <Badge className="mb-2 text-[10px] font-semibold px-2 py-0.5 border-0 bg-emerald-500 text-white">
+              AGENDAR
+            </Badge>
+          )}
+          {task.kanban_column === 'acompanhamento' && task.scheduled_recording_date && (
+            <Badge className="mb-2 text-[10px] font-semibold px-2 py-0.5 border-0 bg-teal-500 text-white">
+              enviado/aguarda
+            </Badge>
+          )}
 
-        {/* Client name - bold title */}
-        <h3 className="text-sm font-bold text-foreground mb-2 pr-8 leading-tight">
-          {client?.companyName || 'Cliente'}
-        </h3>
+          {/* Client name - bold title */}
+          <h3 className="text-sm font-bold text-foreground mb-2 pr-8 leading-tight">
+            {client?.companyName || 'Cliente'}
+          </h3>
 
-        {/* Labeled fields */}
-        <div className="space-y-1.5">
-          {/* CLIENTE */}
-          <div className="flex items-start gap-1.5">
-            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 shrink-0 mt-0.5">📋 Cliente</span>
+          {/* Labeled fields */}
+          <div className="space-y-1.5">
+            {/* CLIENTE */}
+            <div className="flex items-start gap-1.5">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 shrink-0 mt-0.5">📋 Cliente</span>
+            </div>
+            <p className="text-[11px] text-foreground/80 pl-4 -mt-1">{client?.companyName}</p>
+
+            {/* TIPO */}
+            <div className="flex items-start gap-1.5">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 shrink-0 mt-0.5">
+                <TypeIcon size={9} className="inline mr-0.5" />
+                Tipo
+              </span>
+            </div>
+            <p className="text-[11px] text-foreground/80 pl-4 -mt-1">{typeConfig.label}</p>
+
+            {/* TÍTULO DO CONTEÚDO */}
+            <div className="flex items-start gap-1.5">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 shrink-0 mt-0.5">📝 Título do Conteúdo</span>
+            </div>
+            <p className="text-[11px] font-semibold text-foreground pl-4 -mt-1 line-clamp-2">{task.title}</p>
+
+            {/* GRAVAÇÃO PROGRAMADA */}
+            {task.scheduled_recording_date && (
+              <>
+                <div className="flex items-start gap-1.5">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 shrink-0 mt-0.5">📅 Gravação Programada</span>
+                </div>
+                <p className="text-[11px] text-foreground/80 pl-4 -mt-1">
+                  {format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
+                  {task.scheduled_recording_time ? ` ${task.scheduled_recording_time}` : ''}
+                </p>
+              </>
+            )}
+
+            {/* ROTEIRO VINCULADO - clickable indicator */}
+            {linkedScript && (
+              <button
+                onClick={e => { e.stopPropagation(); setScriptPreviewOpen(true); }}
+                className="flex items-center gap-1.5 mt-1 px-2 py-1 rounded-md bg-primary/10 hover:bg-primary/20 border border-primary/20 transition-colors w-full text-left"
+              >
+                <FileText size={11} className="text-primary shrink-0" />
+                <span className="text-[10px] font-semibold text-primary truncate">
+                  📄 Roteiro: {linkedScript.title}
+                </span>
+              </button>
+            )}
           </div>
-          <p className="text-[11px] text-foreground/80 pl-4 -mt-1">{client?.companyName}</p>
 
-          {/* TIPO */}
-          <div className="flex items-start gap-1.5">
-            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 shrink-0 mt-0.5">
-              <TypeIcon size={9} className="inline mr-0.5" />
-              Tipo
-            </span>
-          </div>
-          <p className="text-[11px] text-foreground/80 pl-4 -mt-1">{typeConfig.label}</p>
-
-          {/* TÍTULO DO CONTEÚDO */}
-          <div className="flex items-start gap-1.5">
-            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 shrink-0 mt-0.5">📝 Título do Conteúdo</span>
-          </div>
-          <p className="text-[11px] font-semibold text-foreground pl-4 -mt-1 line-clamp-2">{task.title}</p>
-
-          {/* GRAVAÇÃO PROGRAMADA */}
-          {task.scheduled_recording_date && (
-            <>
-              <div className="flex items-start gap-1.5">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 shrink-0 mt-0.5">📅 Gravação Programada</span>
+          {/* Avatar */}
+          {assignedUser && (
+            <div className="mt-2">
+              <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-card shadow-sm" title={assignedUser.name}>
+                {assignedUser.avatarUrl ? (
+                  <img src={assignedUser.avatarUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-[9px] font-bold text-muted-foreground">
+                    {assignedUser.name.substring(0, 2).toUpperCase()}
+                  </span>
+                )}
               </div>
-              <p className="text-[11px] text-foreground/80 pl-4 -mt-1">
-                {format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
-                {task.scheduled_recording_time ? ` ${task.scheduled_recording_time}` : ''}
-              </p>
-            </>
+            </div>
           )}
         </div>
 
-        {/* Avatar */}
-        {assignedUser && (
-          <div className="mt-2">
-            <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-card shadow-sm" title={assignedUser.name}>
-              {assignedUser.avatarUrl ? (
-                <img src={assignedUser.avatarUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-[9px] font-bold text-muted-foreground">
-                  {assignedUser.name.substring(0, 2).toUpperCase()}
-                </span>
-              )}
-            </div>
-          </div>
-        )}
+        {/* Bottom color bar */}
+        <div
+          className="h-1.5 w-full"
+          style={{ backgroundColor: `hsl(${clientColor})` }}
+        />
       </div>
 
-      {/* Bottom color bar */}
-      <div
-        className="h-1.5 w-full"
-        style={{ backgroundColor: `hsl(${clientColor})` }}
-      />
-    </div>
+      {/* Script Preview Dialog */}
+      {linkedScript && (
+        <Dialog open={scriptPreviewOpen} onOpenChange={setScriptPreviewOpen}>
+          <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText size={18} className="text-primary" />
+                {linkedScript.title}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline" className="text-xs">{typeConfig.label}</Badge>
+                <Badge variant={linkedScript.recorded ? 'default' : 'secondary'} className="text-xs">
+                  {linkedScript.recorded ? '✅ Gravado' : '⏳ Pendente'}
+                </Badge>
+                {linkedScript.priority !== 'normal' && (
+                  <Badge variant="destructive" className="text-xs">
+                    {linkedScript.priority === 'priority' ? '🔴 Alta' : linkedScript.priority === 'urgent' ? '🚨 Urgente' : linkedScript.priority}
+                  </Badge>
+                )}
+              </div>
+              <div className="border rounded-lg p-4 bg-muted/30">
+                {linkedScript.content ? (
+                  <div
+                    className="prose prose-sm max-w-none text-foreground text-sm leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: linkedScript.content }}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">Sem conteúdo no roteiro.</p>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
   );
 }

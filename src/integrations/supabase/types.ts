@@ -272,6 +272,9 @@ export type Database = {
       }
       content_tasks: {
         Row: {
+          adjustment_notes: string | null
+          approval_sent_at: string | null
+          approved_at: string | null
           assigned_to: string | null
           client_id: string
           content_type: string
@@ -279,6 +282,8 @@ export type Database = {
           created_by: string | null
           description: string | null
           drive_link: string | null
+          edited_video_link: string | null
+          edited_video_type: string | null
           editing_deadline: string | null
           editing_started_at: string | null
           id: string
@@ -292,6 +297,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          adjustment_notes?: string | null
+          approval_sent_at?: string | null
+          approved_at?: string | null
           assigned_to?: string | null
           client_id: string
           content_type?: string
@@ -299,6 +307,8 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           drive_link?: string | null
+          edited_video_link?: string | null
+          edited_video_type?: string | null
           editing_deadline?: string | null
           editing_started_at?: string | null
           id?: string
@@ -312,6 +322,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          adjustment_notes?: string | null
+          approval_sent_at?: string | null
+          approved_at?: string | null
           assigned_to?: string | null
           client_id?: string
           content_type?: string
@@ -319,6 +332,8 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           drive_link?: string | null
+          edited_video_link?: string | null
+          edited_video_type?: string | null
           editing_deadline?: string | null
           editing_started_at?: string | null
           id?: string
@@ -1214,6 +1229,73 @@ export type Database = {
             columns: ["script_id"]
             isOneToOne: false
             referencedRelation: "scripts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_comments: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          task_id: string
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          id?: string
+          task_id: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          task_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "content_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_history: {
+        Row: {
+          action: string
+          created_at: string
+          details: string | null
+          id: string
+          task_id: string
+          user_id: string | null
+        }
+        Insert: {
+          action?: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          task_id: string
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          task_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_history_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "content_tasks"
             referencedColumns: ["id"]
           },
         ]

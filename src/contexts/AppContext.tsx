@@ -36,7 +36,7 @@ interface AppContextType {
   deleteScript: (id: string) => void;
   updateSettings: (settings: CompanySettings) => void;
   startActiveRecording: (rec: ActiveRecording) => void;
-  stopActiveRecording: (recordingId: string) => void;
+  stopActiveRecording: (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }) => void;
   hasConflict: (videomakerId: string, date: string, startTime: string, excludeId?: string) => boolean;
   isWithinWorkHours: (day: DayOfWeek, startTime: string) => boolean;
   getSuggestionsForCancellation: (recording: Recording) => Client[];
@@ -203,7 +203,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const deleteScript = useCallback((id: string) => { data.deleteScript(id); }, [data]);
   const updateSettings = useCallback((s: CompanySettings) => { data.updateSettings(s); }, [data]);
   const startActiveRecording = useCallback((rec: ActiveRecording) => { data.startActiveRecording(rec); }, [data]);
-  const stopActiveRecording = useCallback((recordingId: string) => { data.stopActiveRecording(recordingId); }, [data]);
+  const stopActiveRecording = useCallback((recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }) => { data.stopActiveRecording(recordingId, deliveryOverrides); }, [data]);
 
   const getSuggestionsForCancellation = useCallback((recording: Recording) => {
     return data.clients.filter(c => {

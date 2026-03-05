@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
+import { supabase } from '@/integrations/supabase/client';
 import { DAY_LABELS } from '@/types';
 import { motion } from 'framer-motion';
 import {
   Video, Plus, XCircle, RefreshCw, TrendingUp, Calendar, Check,
-  ChevronLeft, ChevronRight, Clock, Users as UsersIcon, MessageSquare
+  ChevronLeft, ChevronRight, Clock, Users as UsersIcon, MessageSquare, Trophy, BarChart3
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -13,6 +14,10 @@ import { useNavigate } from 'react-router-dom';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import { getMessageStats } from '@/services/whatsappService';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
+
+const SCORE_WEIGHTS = { reel: 10, criativo: 5, story: 3, arte: 2, extra: 8 };
+const BAR_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
 
 export default function Dashboard() {
   const { currentUser, recordings, clients, users, tasks, cancelRecording, updateRecording, getSuggestionsForCancellation, activeRecordings } = useApp();
@@ -20,9 +25,11 @@ export default function Dashboard() {
   const today = format(new Date(), 'yyyy-MM-dd');
   const [weekOffset, setWeekOffset] = useState(0);
   const [waStats, setWaStats] = useState({ total: 0, sent: 0, failed: 0 });
+  const [deliveryRecords, setDeliveryRecords] = useState<any[]>([]);
 
+  useEffect(() => { getMessageStats().then(setWaStats); }, []);
   useEffect(() => {
-    getMessageStats().then(setWaStats);
+    supabase.from('delivery_records').select('*').then(({ data }) => { if (data) setDeliveryRecords(data); });
   }, []);
 
   const weekStart = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
@@ -71,6 +78,24 @@ export default function Dashboard() {
       return { vm, weekDone: done, weekTotal: total, todayDone, todayTotal };
     });
   }, [videomakers, recordings, weekStart, weekEnd, today]);
+
+  // ── Videomaker scoring ──
+  const vmScoring = useMemo(() => {
+    const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+    const monthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
+    return videomakers.map(vm => {
+      const vmRecs = deliveryRecords.filter((r: any) =>
+        r.videomaker_id === vm.id && r.date >= monthStart && r.date <= monthEnd &&
+        (r.delivery_status === 'realizada' || r.delivery_status === 'encaixe' || r.delivery_status === 'extra')
+      );
+      const score = vmRecs.reduce((a: number, r: any) =>
+        a + r.reels_produced * SCORE_WEIGHTS.reel + r.creatives_produced * SCORE_WEIGHTS.criativo +
+        r.stories_produced * SCORE_WEIGHTS.story + r.arts_produced * SCORE_WEIGHTS.arte +
+        r.extras_produced * SCORE_WEIGHTS.extra, 0);
+      const reels = vmRecs.reduce((a: number, r: any) => a + r.reels_produced, 0);
+      return { name: vm.name.split(' ')[0], score, reels, vm };
+    }).sort((a, b) => b.score - a.score);
+  }, [videomakers, deliveryRecords]);
 
   // ── Client progress ──
   const clientProgress = useMemo(() => {
@@ -213,6 +238,53 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* ── ROW 2.5: Scoring Chart ── */}
+      {vmScoring.length > 0 && (
+        <div className="glass-card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display font-semibold text-sm flex items-center gap-2">
+              <Trophy size={16} className="text-primary" /> Pontuação do Mês
+            </h3>
+            <button onClick={() => navigate('/desempenho')} className="text-[11px] text-primary font-semibold hover:underline">
+              VER DETALHES
+            </button>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Bar chart */}
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={vmScoring} barSize={28}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip
+                  contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
+                  formatter={(value: number) => [`${value} pts`, 'Pontuação']}
+                />
+                <Bar dataKey="score" name="Pontos" radius={[6, 6, 0, 0]}>
+                  {vmScoring.map((_, i) => <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            {/* Mini ranking */}
+            <div className="space-y-2">
+              {vmScoring.slice(0, 5).map((s, i) => (
+                <div key={s.vm.id} className={`flex items-center gap-3 p-2.5 rounded-lg ${i < 3 ? 'bg-primary/5' : 'bg-secondary/40'}`}>
+                  <span className="text-sm font-bold w-6 text-center">
+                    {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}º`}
+                  </span>
+                  <UserAvatar user={s.vm} size="sm" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{s.vm.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{s.reels} reels</p>
+                  </div>
+                  <p className="text-lg font-display font-bold text-primary">{s.score}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── ROW 3: Week Agenda ── */}
       <div className="glass-card p-5">

@@ -25,6 +25,7 @@ const navItems = [
   { path: '/planos', label: 'Planos', icon: Package, roles: ['admin'] },
   { path: '/entregas', label: 'Entregas', icon: ClipboardList, roles: ['admin'] },
   { path: '/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin'] },
+  { path: '/desempenho', label: 'Desempenho', icon: Target, roles: ['admin'] },
   { path: '/whatsapp', label: 'WhatsApp', icon: MessageSquare, roles: ['admin'] },
   { path: '/configuracoes', label: 'Config', icon: Settings, roles: ['admin'] },
 ];

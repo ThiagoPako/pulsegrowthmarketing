@@ -270,6 +270,17 @@ export function useSupabaseData() {
     setRecordings(prev => prev.map(r => r.id === id ? { ...r, status: 'cancelada' as const } : r));
   }, []);
 
+  /** Delete multiple future 'agendada' recordings for a client */
+  const deleteFutureRecordingsForClient = useCallback(async (clientId: string): Promise<number> => {
+    const today = new Date().toISOString().split('T')[0];
+    const toDelete = recordings.filter(r => r.clientId === clientId && r.status === 'agendada' && r.date >= today);
+    if (toDelete.length === 0) return 0;
+    const ids = toDelete.map(r => r.id);
+    await supabase.from('recordings').delete().in('id', ids);
+    setRecordings(prev => prev.filter(r => !ids.includes(r.id)));
+    return ids.length;
+  }, [recordings]);
+
   // ── Task CRUD ──
   const addTask = useCallback(async (task: KanbanTask) => {
     await supabase.from('kanban_tasks').insert(taskToRow(task) as any);
@@ -340,7 +351,7 @@ export function useSupabaseData() {
   return {
     clients, recordings, tasks, scripts, settings, activeRecordings, loading,
     addClient, updateClient, deleteClient,
-    addRecording, addRecordingsBulk, updateRecording, cancelRecording,
+    addRecording, addRecordingsBulk, updateRecording, cancelRecording, deleteFutureRecordingsForClient,
     addTask, updateTask, deleteTask,
     addScript, updateScript, deleteScript,
     updateSettings, startActiveRecording, stopActiveRecording,

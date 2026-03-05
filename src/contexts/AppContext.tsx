@@ -26,6 +26,7 @@ interface AppContextType {
   cancelRecording: (id: string) => void;
   cancelAndReschedule: (recording: Recording) => { success: boolean; rescheduled?: { date: string; startTime: string; videomakerId: string; type: string } };
   generateScheduleForClient: (client: Client) => Promise<number>;
+  regenerateScheduleForClient: (client: Client) => Promise<{ deleted: number; created: number }>;
   addTask: (task: KanbanTask) => void;
   updateTask: (task: KanbanTask) => void;
   deleteTask: (id: string) => void;
@@ -125,19 +126,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   /** Generate fixed + extra recordings for a client until end of month */
   const generateScheduleForClient = useCallback(async (client: Client): Promise<number> => {
     const videomakerIds = users.filter(u => u.role === 'videomaker').map(u => u.id);
-    
-    // Generate fixed recordings
     const fixedRecs = generateFixedRecordings(client, data.recordings, data.settings);
-    
-    // Generate extra recordings (with any available videomaker)
     const allRecsAfterFixed = [...data.recordings, ...fixedRecs];
     const extraRecs = generateExtraRecordings(client, allRecsAfterFixed, data.settings, videomakerIds);
-    
     const allNew = [...fixedRecs, ...extraRecs];
     if (allNew.length > 0) {
       await data.addRecordingsBulk(allNew);
     }
     return allNew.length;
+  }, [data, users]);
+
+  /** Delete future agendada recordings for a client and regenerate */
+  const regenerateScheduleForClient = useCallback(async (client: Client): Promise<{ deleted: number; created: number }> => {
+    const deleted = await data.deleteFutureRecordingsForClient(client.id);
+    // After deletion, re-fetch current recordings state (minus deleted ones)
+    const today = new Date().toISOString().split('T')[0];
+    const remainingRecs = data.recordings.filter(r => !(r.clientId === client.id && r.status === 'agendada' && r.date >= today));
+    
+    const videomakerIds = users.filter(u => u.role === 'videomaker').map(u => u.id);
+    const fixedRecs = generateFixedRecordings(client, remainingRecs, data.settings);
+    const allRecsAfterFixed = [...remainingRecs, ...fixedRecs];
+    const extraRecs = generateExtraRecordings(client, allRecsAfterFixed, data.settings, videomakerIds);
+    const allNew = [...fixedRecs, ...extraRecs];
+    if (allNew.length > 0) {
+      await data.addRecordingsBulk(allNew);
+    }
+    return { deleted, created: allNew.length };
   }, [data, users]);
 
   /** Cancel a recording and try to reschedule automatically */
@@ -199,7 +213,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       logout, addUser, updateUser, deleteUser,
       addClient, updateClient, deleteClient,
       addRecording, updateRecording, cancelRecording,
-      cancelAndReschedule, generateScheduleForClient,
+      cancelAndReschedule, generateScheduleForClient, regenerateScheduleForClient,
       addTask, updateTask, deleteTask,
       addScript, updateScript, deleteScript,
       updateSettings, startActiveRecording, stopActiveRecording,

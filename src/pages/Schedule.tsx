@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles, RefreshCw, MessageSquare, Play, Square } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles, RefreshCw, MessageSquare, Play, Square, Star } from 'lucide-react';
 import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
@@ -396,20 +396,29 @@ export default function Schedule() {
 
   const handleToggleRecording = (rec: Recording) => {
     if (isRecordingActive(rec.id)) {
-      // Open finish dialog
       setFinishRecordingState(rec);
       setFinishCompletedScripts(new Set());
       setFinishRecOpen(true);
     } else {
-      // Open start dialog with script selection
       setStartRecordingState(rec);
-      setStartSelectedScripts(new Set());
+      const urgentIds = scripts
+        .filter(s => s.clientId === rec.clientId && !s.recorded && !s.isEndomarketing && s.priority === 'urgent')
+        .map(s => s.id);
+      setStartSelectedScripts(new Set(urgentIds));
       setStartRecOpen(true);
     }
   };
 
   const confirmStartRec = () => {
     if (!startRecording) return;
+    const urgentScripts = scripts.filter(
+      s => s.clientId === startRecording.clientId && !s.recorded && !s.isEndomarketing && s.priority === 'urgent'
+    );
+    const allUrgentSelected = urgentScripts.every(s => startSelectedScripts.has(s.id));
+    if (urgentScripts.length > 0 && !allUrgentSelected) {
+      toast.error('Todos os roteiros urgentes devem ser selecionados para iniciar');
+      return;
+    }
     if (startSelectedScripts.size === 0) {
       toast.error('Selecione pelo menos 1 roteiro para iniciar');
       return;
@@ -1033,11 +1042,18 @@ export default function Schedule() {
             </div>
           ) : (
             <div className="space-y-2">
-              {startRecScripts.map(script => (
-                <label key={script.id} className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 cursor-pointer transition-colors">
+              {startRecScripts.map(script => {
+                const isUrgent = script.priority === 'urgent';
+                return (
+                <label key={script.id} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                  isUrgent ? 'border-destructive/40 bg-destructive/5' :
+                  script.priority === 'priority' ? 'border-warning/40 bg-warning/5' : 'border-border hover:bg-muted/30'
+                }`}>
                   <Checkbox
                     checked={startSelectedScripts.has(script.id)}
+                    disabled={isUrgent}
                     onCheckedChange={checked => {
+                      if (isUrgent) return;
                       const next = new Set(startSelectedScripts);
                       checked ? next.add(script.id) : next.delete(script.id);
                       setStartSelectedScripts(next);
@@ -1045,11 +1061,20 @@ export default function Schedule() {
                     className="mt-0.5"
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-sm">{script.title}</p>
-                    <Badge variant="outline" className="text-[10px] mt-1">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                    <div className="flex items-center gap-1.5">
+                      {isUrgent && <AlertTriangle size={13} className="text-destructive shrink-0" />}
+                      {script.priority === 'priority' && <Star size={13} className="text-warning shrink-0" />}
+                      <p className="font-medium text-sm">{script.title}</p>
+                      {isUrgent && <Badge className="text-[9px] bg-destructive/20 text-destructive border-destructive/30">Obrigatório</Badge>}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Badge variant="outline" className="text-[10px]">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                      {script.priority === 'priority' && <Badge className="text-[9px] bg-warning/20 text-warning border-warning/30">Prioritário</Badge>}
+                    </div>
                   </div>
                 </label>
-              ))}
+                );
+              })}
             </div>
           )}
           <div className="flex gap-2 mt-2">

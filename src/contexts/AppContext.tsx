@@ -84,8 +84,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateClient = useCallback((client: Client) => { data.updateClient(client); }, [data]);
 
   const deleteClient = useCallback((id: string): boolean => {
-    const hasFuture = data.recordings.some(r => r.clientId === id && r.status === 'agendada' && r.date >= new Date().toISOString().split('T')[0]);
-    if (hasFuture) return false;
     data.deleteClient(id);
     return true;
   }, [data]);

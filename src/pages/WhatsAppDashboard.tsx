@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import {
   MessageSquare, Settings, History, Check, Key, Zap, Eye, EyeOff, Pencil,
   Loader2, CheckCircle2, XCircle, Wifi, ClipboardCheck, Copy, Users, Clock,
-  CheckCheck, Ban,
+  CheckCheck, Ban, Trash2,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -27,6 +27,7 @@ import {
   getWhatsAppConfirmations,
   getConfirmationStats,
   getWebhookUrl,
+  clearConfirmationHistory,
   type WhatsAppConfig,
   type WhatsAppMessage,
   type WhatsAppConfirmation,
@@ -214,6 +215,28 @@ export default function WhatsAppDashboard() {
 
         {/* ── TAB: Confirmações ── */}
         <TabsContent value="confirmations" className="space-y-4">
+          {confirmations.length > 0 && isAdmin && (
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1 text-destructive hover:text-destructive"
+                onClick={async () => {
+                  if (!confirm('Tem certeza que deseja apagar todo o histórico de confirmações?')) return;
+                  const ok = await clearConfirmationHistory();
+                  if (ok) {
+                    setConfirmations([]);
+                    setConfirmationStats({ pending: 0, confirmed: 0, cancelled: 0, backupInvites: 0 });
+                    toast.success('Histórico de confirmações apagado');
+                  } else {
+                    toast.error('Erro ao apagar histórico');
+                  }
+                }}
+              >
+                <Trash2 size={14} /> Apagar histórico
+              </Button>
+            </div>
+          )}
           {confirmations.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">Nenhuma confirmação registrada ainda</p>
           ) : (

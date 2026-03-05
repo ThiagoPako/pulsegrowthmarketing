@@ -60,6 +60,48 @@ export type Database = {
           },
         ]
       }
+      billing_messages: {
+        Row: {
+          client_id: string
+          id: string
+          message_type: string
+          revenue_id: string | null
+          sent_at: string
+          status: string
+        }
+        Insert: {
+          client_id: string
+          id?: string
+          message_type?: string
+          revenue_id?: string | null
+          sent_at?: string
+          status?: string
+        }
+        Update: {
+          client_id?: string
+          id?: string
+          message_type?: string
+          revenue_id?: string | null
+          sent_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_messages_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_messages_revenue_id_fkey"
+            columns: ["revenue_id"]
+            isOneToOne: false
+            referencedRelation: "revenues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           accepts_extra: boolean
@@ -481,6 +523,122 @@ export type Database = {
         }
         Relationships: []
       }
+      expense_categories: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      expenses: {
+        Row: {
+          amount: number
+          category_id: string
+          created_at: string
+          date: string
+          description: string
+          expense_type: string
+          id: string
+          responsible: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          category_id: string
+          created_at?: string
+          date?: string
+          description?: string
+          expense_type?: string
+          id?: string
+          responsible?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          category_id?: string
+          created_at?: string
+          date?: string
+          description?: string
+          expense_type?: string
+          id?: string
+          responsible?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "expense_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financial_contracts: {
+        Row: {
+          client_id: string
+          contract_start_date: string
+          contract_value: number
+          created_at: string
+          due_day: number
+          id: string
+          payment_method: string
+          plan_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          contract_start_date?: string
+          contract_value?: number
+          created_at?: string
+          due_day?: number
+          id?: string
+          payment_method?: string
+          plan_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          contract_start_date?: string
+          contract_value?: number
+          created_at?: string
+          due_day?: number
+          id?: string
+          payment_method?: string
+          plan_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_contracts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_contracts_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kanban_tasks: {
         Row: {
           checklist: Json
@@ -524,6 +682,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      payment_config: {
+        Row: {
+          bank: string
+          document: string
+          id: string
+          pix_key: string
+          receiver_name: string
+          updated_at: string
+        }
+        Insert: {
+          bank?: string
+          document?: string
+          id?: string
+          pix_key?: string
+          receiver_name?: string
+          updated_at?: string
+        }
+        Update: {
+          bank?: string
+          document?: string
+          id?: string
+          pix_key?: string
+          receiver_name?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       plans: {
         Row: {
@@ -662,6 +847,60 @@ export type Database = {
             columns: ["videomaker_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      revenues: {
+        Row: {
+          amount: number
+          client_id: string
+          contract_id: string
+          created_at: string
+          due_date: string
+          id: string
+          paid_at: string | null
+          reference_month: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          client_id: string
+          contract_id: string
+          created_at?: string
+          due_date: string
+          id?: string
+          paid_at?: string | null
+          reference_month: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          client_id?: string
+          contract_id?: string
+          created_at?: string
+          due_date?: string
+          id?: string
+          paid_at?: string | null
+          reference_month?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revenues_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revenues_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "financial_contracts"
             referencedColumns: ["id"]
           },
         ]

@@ -23,6 +23,13 @@ import DeliveryRecords from "@/pages/DeliveryRecords";
 import Reports from "@/pages/Reports";
 import InternalReports from "@/pages/InternalReports";
 import SocialMediaDeliveries from "@/pages/SocialMediaDeliveries";
+import FinancialDashboard from "@/pages/FinancialDashboard";
+import FinancialContracts from "@/pages/FinancialContracts";
+import FinancialRevenues from "@/pages/FinancialRevenues";
+import FinancialExpenses from "@/pages/FinancialExpenses";
+import FinancialDelinquency from "@/pages/FinancialDelinquency";
+import FinancialReports from "@/pages/FinancialReports";
+import FinancialSettings from "@/pages/FinancialSettings";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -65,6 +72,13 @@ function AppRoutes() {
       <Route path="/desempenho" element={<ProtectedRoute><InternalReports /></ProtectedRoute>} />
       <Route path="/entregas-social" element={<ProtectedRoute><SocialMediaDeliveries /></ProtectedRoute>} />
       <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppDashboard /></ProtectedRoute>} />
+      <Route path="/financeiro" element={<ProtectedRoute><FinancialDashboard /></ProtectedRoute>} />
+      <Route path="/financeiro/contratos" element={<ProtectedRoute><FinancialContracts /></ProtectedRoute>} />
+      <Route path="/financeiro/receitas" element={<ProtectedRoute><FinancialRevenues /></ProtectedRoute>} />
+      <Route path="/financeiro/despesas" element={<ProtectedRoute><FinancialExpenses /></ProtectedRoute>} />
+      <Route path="/financeiro/inadimplencia" element={<ProtectedRoute><FinancialDelinquency /></ProtectedRoute>} />
+      <Route path="/financeiro/relatorios" element={<ProtectedRoute><FinancialReports /></ProtectedRoute>} />
+      <Route path="/financeiro/configuracoes" element={<ProtectedRoute><FinancialSettings /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

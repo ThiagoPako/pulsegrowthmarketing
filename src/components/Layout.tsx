@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import UserAvatar from '@/components/UserAvatar';
 import ProfileDialog from '@/components/ProfileDialog';
 import {
-  LayoutDashboard, Users, Building2, Calendar, Settings, LogOut, Target, Search, Plus, Bell, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2
+  LayoutDashboard, Users, Building2, Calendar, Settings, LogOut, Target, Search, Plus, Bell, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign
 } from 'lucide-react';
 
 const navItems = [
@@ -27,6 +27,7 @@ const navItems = [
   { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media'] },
   { path: '/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin'] },
   { path: '/desempenho', label: 'Desempenho', icon: Target, roles: ['admin'] },
+  { path: '/financeiro', label: 'Financeiro', icon: DollarSign, roles: ['admin'] },
   { path: '/whatsapp', label: 'WhatsApp', icon: MessageSquare, roles: ['admin'] },
   { path: '/configuracoes', label: 'Config', icon: Settings, roles: ['admin'] },
 ];

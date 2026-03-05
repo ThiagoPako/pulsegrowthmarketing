@@ -63,10 +63,12 @@ export type Database = {
       clients: {
         Row: {
           accepts_extra: boolean
+          auto_renewal: boolean
           backup_day: string
           backup_time: string
           color: string
           company_name: string
+          contract_start_date: string | null
           created_at: string
           extra_client_appears: boolean
           extra_content_types: string[]
@@ -77,6 +79,7 @@ export type Database = {
           id: string
           logo_url: string | null
           phone: string
+          plan_id: string | null
           presence_days: number
           responsible_person: string
           updated_at: string
@@ -89,10 +92,12 @@ export type Database = {
         }
         Insert: {
           accepts_extra?: boolean
+          auto_renewal?: boolean
           backup_day?: string
           backup_time?: string
           color?: string
           company_name: string
+          contract_start_date?: string | null
           created_at?: string
           extra_client_appears?: boolean
           extra_content_types?: string[]
@@ -103,6 +108,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           phone?: string
+          plan_id?: string | null
           presence_days?: number
           responsible_person?: string
           updated_at?: string
@@ -115,10 +121,12 @@ export type Database = {
         }
         Update: {
           accepts_extra?: boolean
+          auto_renewal?: boolean
           backup_day?: string
           backup_time?: string
           color?: string
           company_name?: string
+          contract_start_date?: string | null
           created_at?: string
           extra_client_appears?: boolean
           extra_content_types?: string[]
@@ -129,6 +137,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           phone?: string
+          plan_id?: string | null
           presence_days?: number
           responsible_person?: string
           updated_at?: string
@@ -140,6 +149,13 @@ export type Database = {
           whatsapp?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "clients_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "clients_videomaker_id_fkey"
             columns: ["videomaker_id"]
@@ -181,6 +197,82 @@ export type Database = {
           work_days?: string[]
         }
         Relationships: []
+      }
+      delivery_records: {
+        Row: {
+          arts_produced: number
+          client_id: string
+          created_at: string
+          creatives_produced: number
+          date: string
+          delivery_status: string
+          extras_produced: number
+          id: string
+          observations: string | null
+          recording_id: string | null
+          reels_produced: number
+          stories_produced: number
+          updated_at: string
+          videomaker_id: string
+          videos_recorded: number
+        }
+        Insert: {
+          arts_produced?: number
+          client_id: string
+          created_at?: string
+          creatives_produced?: number
+          date: string
+          delivery_status?: string
+          extras_produced?: number
+          id?: string
+          observations?: string | null
+          recording_id?: string | null
+          reels_produced?: number
+          stories_produced?: number
+          updated_at?: string
+          videomaker_id: string
+          videos_recorded?: number
+        }
+        Update: {
+          arts_produced?: number
+          client_id?: string
+          created_at?: string
+          creatives_produced?: number
+          date?: string
+          delivery_status?: string
+          extras_produced?: number
+          id?: string
+          observations?: string | null
+          recording_id?: string | null
+          reels_produced?: number
+          stories_produced?: number
+          updated_at?: string
+          videomaker_id?: string
+          videos_recorded?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_records_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_records_recording_id_fkey"
+            columns: ["recording_id"]
+            isOneToOne: false
+            referencedRelation: "recordings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_records_videomaker_id_fkey"
+            columns: ["videomaker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       endomarketing_agendamentos: {
         Row: {
@@ -429,6 +521,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      plans: {
+        Row: {
+          arts_qty: number
+          created_at: string
+          creatives_qty: number
+          description: string
+          extra_content_allowed: number
+          id: string
+          name: string
+          periodicity: string
+          price: number
+          recording_hours: number
+          recording_sessions: number
+          reels_qty: number
+          status: string
+          stories_qty: number
+          updated_at: string
+        }
+        Insert: {
+          arts_qty?: number
+          created_at?: string
+          creatives_qty?: number
+          description?: string
+          extra_content_allowed?: number
+          id?: string
+          name: string
+          periodicity?: string
+          price?: number
+          recording_hours?: number
+          recording_sessions?: number
+          reels_qty?: number
+          status?: string
+          stories_qty?: number
+          updated_at?: string
+        }
+        Update: {
+          arts_qty?: number
+          created_at?: string
+          creatives_qty?: number
+          description?: string
+          extra_content_allowed?: number
+          id?: string
+          name?: string
+          periodicity?: string
+          price?: number
+          recording_hours?: number
+          recording_sessions?: number
+          reels_qty?: number
+          status?: string
+          stories_qty?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {

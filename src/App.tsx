@@ -18,6 +18,9 @@ import Goals from "@/pages/Goals";
 import CompanySettings from "@/pages/CompanySettings";
 import Scripts from "@/pages/Scripts";
 import WhatsAppDashboard from "@/pages/WhatsAppDashboard";
+import Plans from "@/pages/Plans";
+import DeliveryRecords from "@/pages/DeliveryRecords";
+import Reports from "@/pages/Reports";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -54,6 +57,9 @@ function AppRoutes() {
       <Route path="/endomarketing" element={<ProtectedRoute><EndomarketingDashboard /></ProtectedRoute>} />
       <Route path="/endomarketing/clientes" element={<ProtectedRoute><EndomarketingClientes /></ProtectedRoute>} />
       <Route path="/endomarketing/agenda" element={<ProtectedRoute><EndomarketingAgenda /></ProtectedRoute>} />
+      <Route path="/planos" element={<ProtectedRoute><Plans /></ProtectedRoute>} />
+      <Route path="/entregas" element={<ProtectedRoute><DeliveryRecords /></ProtectedRoute>} />
+      <Route path="/relatorios" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
       <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppDashboard /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>

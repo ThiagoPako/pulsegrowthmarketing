@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles, RefreshCw } from 'lucide-react';
 import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
@@ -45,6 +45,7 @@ export default function Schedule() {
   const {
     clients, users, recordings, scripts, settings,
     updateScript, addRecording, updateRecording, cancelRecording, cancelAndReschedule,
+    regenerateScheduleForClient,
     hasConflict, isWithinWorkHours,
   } = useApp();
 
@@ -63,6 +64,9 @@ export default function Schedule() {
   const [editForm, setEditForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '', type: 'fixa' as RecordingType, status: 'agendada' as Recording['status'] });
   const [filterVideomaker, setFilterVideomaker] = useState('all');
   const [showEndo, setShowEndo] = useState(true);
+  const [regenOpen, setRegenOpen] = useState(false);
+  const [regenClientId, setRegenClientId] = useState('');
+  const [regenLoading, setRegenLoading] = useState(false);
 
   const videomakers = users.filter(u => u.role === 'videomaker');
   const currentMonth = addMonths(new Date(), monthOffset);
@@ -151,7 +155,20 @@ export default function Schedule() {
 
   const typeLabels: Record<RecordingType, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.' };
 
-  // Legacy findNextDateForDay kept for reference but auto-reschedule moved to AppContext
+  const handleRegenerate = async () => {
+    if (!regenClientId) { toast.error('Selecione um cliente'); return; }
+    const client = clients.find(c => c.id === regenClientId);
+    if (!client) return;
+    setRegenLoading(true);
+    try {
+      const { deleted, created } = await regenerateScheduleForClient(client);
+      toast.success(`Agenda regenerada: ${deleted} removida(s), ${created} criada(s)`);
+      setRegenOpen(false);
+    } catch (e) {
+      toast.error('Erro ao regenerar agenda');
+    }
+    setRegenLoading(false);
+  };
 
   const handleAdd = () => {
     if (!form.clientId || !form.videomakerId || !form.date || !form.startTime) {
@@ -267,9 +284,14 @@ export default function Schedule() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-display font-bold">Agenda</h1>
-        <Button onClick={() => { setForm({ clientId: '', videomakerId: '', date: format(new Date(), 'yyyy-MM-dd'), startTime: '09:00', type: 'fixa' }); setNewOpen(true); }}>
-          <Plus size={16} className="mr-2" /> Nova Gravação
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => { setRegenClientId(''); setRegenOpen(true); }}>
+            <RefreshCw size={16} className="mr-2" /> Regenerar Agenda
+          </Button>
+          <Button onClick={() => { setForm({ clientId: '', videomakerId: '', date: format(new Date(), 'yyyy-MM-dd'), startTime: '09:00', type: 'fixa' }); setNewOpen(true); }}>
+            <Plus size={16} className="mr-2" /> Nova Gravação
+          </Button>
+        </div>
       </div>
 
       {/* Low script warnings */}
@@ -650,6 +672,49 @@ export default function Schedule() {
               </div>
             );
           })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Regenerate Schedule Dialog */}
+      <Dialog open={regenOpen} onOpenChange={setRegenOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Regenerar Agenda</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Remove todas as gravações futuras com status "agendada" do cliente selecionado e gera novas com base nas configurações atuais.
+          </p>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Cliente</Label>
+              <Select value={regenClientId} onValueChange={setRegenClientId}>
+                <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
+                <SelectContent>
+                  {clients.map(c => {
+                    const futureCount = recordings.filter(r => r.clientId === c.id && r.status === 'agendada' && r.date >= format(new Date(), 'yyyy-MM-dd')).length;
+                    return (
+                      <SelectItem key={c.id} value={c.id}>
+                        <span className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: `hsl(${c.color})` }} />
+                          {c.companyName}
+                          {futureCount > 0 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                              {futureCount} agendada{futureCount !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setRegenOpen(false)}>Cancelar</Button>
+              <Button onClick={handleRegenerate} disabled={!regenClientId || regenLoading}>
+                {regenLoading ? <RefreshCw size={16} className="mr-2 animate-spin" /> : <RefreshCw size={16} className="mr-2" />}
+                Regenerar
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
@@ -53,6 +53,7 @@ const STEP_LABELS = [
   { icon: User, label: 'Dados do Cliente' },
   { icon: Video, label: 'Agenda & Gravação' },
   { icon: Target, label: 'Metas Semanais' },
+  { icon: DollarSign, label: 'Financeiro' },
 ];
 
 export default function Clients() {
@@ -76,6 +77,11 @@ export default function Clients() {
   const [planId, setPlanId] = useState<string | null>(null);
   const [contractStartDate, setContractStartDate] = useState('');
   const [autoRenewal, setAutoRenewal] = useState(false);
+  
+  // Financial contract state
+  const [contractValue, setContractValue] = useState(0);
+  const [dueDay, setDueDay] = useState(10);
+  const [paymentMethod, setPaymentMethod] = useState('pix');
 
   useEffect(() => {
     supabase.from('plans').select('id, name, status').eq('status', 'ativo').then(({ data }) => {
@@ -173,6 +179,16 @@ export default function Clients() {
           setAutoRenewal((data as any).auto_renewal || false);
         }
       });
+      // Load financial contract for editing
+      supabase.from('financial_contracts').select('*').eq('client_id', client.id).maybeSingle().then(({ data }) => {
+        if (data) {
+          setContractValue(Number((data as any).contract_value) || 0);
+          setDueDay((data as any).due_day || 10);
+          setPaymentMethod((data as any).payment_method || 'pix');
+        } else {
+          setContractValue(0); setDueDay(10); setPaymentMethod('pix');
+        }
+      });
     }
     else {
       setEditing(null);
@@ -182,6 +198,9 @@ export default function Clients() {
       setContractStartDate('');
       setAutoRenewal(false);
       setPreferredShift('ambos');
+      setContractValue(0);
+      setDueDay(10);
+      setPaymentMethod('pix');
     }
     setLogoFile(null);
     setStep(0);
@@ -228,6 +247,16 @@ export default function Clients() {
       updateClient({ ...editing, ...form, logoUrl: logoUrl || undefined } as Client);
       // Update plan fields
       await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal } as any).eq('id', editing.id);
+      // Upsert financial contract
+      await supabase.from('financial_contracts').upsert({
+        client_id: editing.id,
+        plan_id: planId || null,
+        contract_value: contractValue,
+        contract_start_date: contractStartDate || new Date().toISOString().split('T')[0],
+        due_day: dueDay,
+        payment_method: paymentMethod,
+        status: 'ativo',
+      } as any, { onConflict: 'client_id' });
       toast.success('Cliente atualizado');
     } else {
       const clientId = crypto.randomUUID();
@@ -237,6 +266,16 @@ export default function Clients() {
       if (!ok) { toast.error('Empresa já cadastrada'); return; }
       // Update plan fields after insert
       await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal } as any).eq('id', clientId);
+      // Create financial contract
+      await supabase.from('financial_contracts').insert({
+        client_id: clientId,
+        plan_id: planId || null,
+        contract_value: contractValue,
+        contract_start_date: contractStartDate || new Date().toISOString().split('T')[0],
+        due_day: dueDay,
+        payment_method: paymentMethod,
+        status: 'ativo',
+      } as any);
       const count = await generateScheduleForClient(newClient);
       if (count > 0) {
         toast.success(`Cliente cadastrado — ${count} gravação(ões) criada(s) na agenda`);
@@ -763,36 +802,59 @@ export default function Clients() {
         </div>
       </div>
 
-      {/* Summary */}
+     </div>
+   );
+
+  const renderStep3 = () => (
+    <div className="space-y-5">
+      <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
+        <p className="text-sm font-semibold flex items-center gap-2">
+          <DollarSign size={16} className="text-primary" /> Contrato Financeiro
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label>Valor do Contrato (R$)</Label>
+            <Input type="number" min={0} step={0.01} value={contractValue} onChange={e => setContractValue(Number(e.target.value))} placeholder="0,00" />
+          </div>
+          <div className="space-y-1">
+            <Label>Dia de Vencimento</Label>
+            <Input type="number" min={1} max={28} value={dueDay} onChange={e => setDueDay(Number(e.target.value))} />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <Label>Forma de Pagamento</Label>
+          <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pix">PIX</SelectItem>
+              <SelectItem value="boleto">Boleto</SelectItem>
+              <SelectItem value="cartao">Cartão</SelectItem>
+              <SelectItem value="transferencia">Transferência</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Final Summary */}
       <div className="p-4 rounded-xl border border-border space-y-3">
         <p className="text-sm font-semibold">Resumo do Cadastro</p>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
           <span className="text-muted-foreground">Empresa:</span>
           <span className="font-medium">{form.companyName}</span>
-          <span className="text-muted-foreground">Responsável:</span>
-          <span className="font-medium">{form.responsiblePerson}</span>
-          <span className="text-muted-foreground">WhatsApp:</span>
-          <span className="font-medium">{form.whatsapp || form.phone}</span>
           <span className="text-muted-foreground">Videomaker:</span>
           <span className="font-medium">{users.find(u => u.id === form.videomaker)?.name || '—'}</span>
           <span className="text-muted-foreground">Dia fixo:</span>
           <span className="font-medium">{form.fixedDay ? DAY_LABELS[form.fixedDay] : '—'} às {form.fixedTime || '—'}</span>
-          <span className="text-muted-foreground">Backup:</span>
-          <span className="font-medium">{form.backupDay ? DAY_LABELS[form.backupDay] : '—'} às {form.backupTime || '—'}</span>
-          {form.acceptsExtra && (
-            <>
-              <span className="text-muted-foreground">Extra:</span>
-              <span className="font-medium">{form.extraContentTypes?.map(ct => CONTENT_TYPE_LABELS[ct]).join(', ') || '—'}</span>
-            </>
-           )}
-           <span className="text-muted-foreground">Gravações/mês:</span>
-           <span className="font-medium">{form.monthlyRecordings ?? 4}x (~{(form.monthlyRecordings ?? 4) * 90} min)</span>
-           <span className="text-muted-foreground">Período preferido:</span>
-           <span className="font-medium">{preferredShift === 'turnoA' ? 'Manhã' : preferredShift === 'turnoB' ? 'Tarde' : 'Ambos'}</span>
-         </div>
-       </div>
-     </div>
-   );
+          <span className="text-muted-foreground">Valor:</span>
+          <span className="font-medium">{contractValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+          <span className="text-muted-foreground">Vencimento:</span>
+          <span className="font-medium">Dia {dueDay}</span>
+          <span className="text-muted-foreground">Pagamento:</span>
+          <span className="font-medium capitalize">{paymentMethod}</span>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -838,12 +900,14 @@ export default function Clients() {
                   {renderStep0()}
                   {renderStep1()}
                   {renderStep2()}
+                  {renderStep3()}
                 </div>
               ) : (
                 <>
                   {step === 0 && renderStep0()}
                   {step === 1 && renderStep1()}
                   {step === 2 && renderStep2()}
+                  {step === 3 && renderStep3()}
                 </>
               )}
             </div>
@@ -859,9 +923,9 @@ export default function Clients() {
                       <ChevronLeft size={14} /> Voltar
                     </Button>
                   )}
-                  {step < 2 ? (
+                  {step < 3 ? (
                     <Button onClick={() => setStep(s => s + 1)} className="ml-auto gap-1"
-                      disabled={step === 0 ? !canProceedStep0 : !canProceedStep1}>
+                      disabled={step === 0 ? !canProceedStep0 : step === 1 ? !canProceedStep1 : false}>
                       Próximo <ChevronRight size={14} />
                     </Button>
                   ) : (

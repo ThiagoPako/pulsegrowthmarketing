@@ -278,6 +278,9 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          drive_link: string | null
+          editing_deadline: string | null
+          editing_started_at: string | null
           id: string
           kanban_column: string
           position: number
@@ -295,6 +298,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          drive_link?: string | null
+          editing_deadline?: string | null
+          editing_started_at?: string | null
           id?: string
           kanban_column?: string
           position?: number
@@ -312,6 +318,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          drive_link?: string | null
+          editing_deadline?: string | null
+          editing_started_at?: string | null
           id?: string
           kanban_column?: string
           position?: number

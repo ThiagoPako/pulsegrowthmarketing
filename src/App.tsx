@@ -24,6 +24,7 @@ import Reports from "@/pages/Reports";
 import InternalReports from "@/pages/InternalReports";
 import SocialMediaDeliveries from "@/pages/SocialMediaDeliveries";
 import ContentKanban from "@/pages/ContentKanban";
+import EditorDashboard from "@/pages/EditorDashboard";
 import FinancialDashboard from "@/pages/FinancialDashboard";
 import FinancialContracts from "@/pages/FinancialContracts";
 import FinancialRevenues from "@/pages/FinancialRevenues";
@@ -74,6 +75,7 @@ function AppRoutes() {
       <Route path="/desempenho" element={<ProtectedRoute><InternalReports /></ProtectedRoute>} />
       <Route path="/entregas-social" element={<ProtectedRoute><SocialMediaDeliveries /></ProtectedRoute>} />
       <Route path="/conteudo" element={<ProtectedRoute><ContentKanban /></ProtectedRoute>} />
+      <Route path="/edicao" element={<ProtectedRoute><EditorDashboard /></ProtectedRoute>} />
       <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppDashboard /></ProtectedRoute>} />
       <Route path="/financeiro" element={<ProtectedRoute><FinancialDashboard /></ProtectedRoute>} />
       <Route path="/financeiro/contratos" element={<ProtectedRoute><FinancialContracts /></ProtectedRoute>} />

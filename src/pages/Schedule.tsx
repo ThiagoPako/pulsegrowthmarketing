@@ -50,7 +50,7 @@ const DATE_TO_DAY: Record<number, DayOfWeek> = {
 
 export default function Schedule() {
   const {
-    clients, users, recordings, scripts, settings,
+    clients, users, recordings, scripts, settings, activeRecordings,
     updateScript, addRecording, updateRecording, cancelRecording, cancelAndReschedule,
     regenerateScheduleForClient,
     hasConflict, isWithinWorkHours,
@@ -361,7 +361,10 @@ export default function Schedule() {
     return events.length > 0;
   });
 
+  const isRecordingActive = (recId: string) => activeRecordings.some(a => a.recordingId === recId);
+
   const statusTag = (rec: Recording) => {
+    if (isRecordingActive(rec.id)) return <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px] animate-pulse">● Gravando</Badge>;
     if (rec.status === 'concluida') return <Badge className="bg-success/20 text-success border-success/30 text-[10px]">Gravado</Badge>;
     if (rec.status === 'cancelada') return <Badge className="bg-destructive/20 text-destructive border-destructive/30 text-[10px]">Não Gravou</Badge>;
     if (rec.type === 'backup') return <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[10px]">Backup</Badge>;
@@ -469,15 +472,18 @@ export default function Schedule() {
                     {format(day, 'd')}
                   </p>
                   <div className="space-y-0.5">
-                    {dayEvents.slice(0, 4).map(evt => (
+                    {dayEvents.slice(0, 4).map(evt => {
+                      const active = evt.type === 'recording' && evt.recording && isRecordingActive(evt.recording.id);
+                      return (
                       <div
                         key={evt.id}
-                        className="rounded px-1 py-0.5 text-[10px] truncate cursor-pointer group relative"
+                        className={`rounded px-1 py-0.5 text-[10px] truncate cursor-pointer group relative ${active ? 'ring-1 ring-primary animate-pulse' : ''}`}
                         style={{ backgroundColor: `hsl(${evt.color} / 0.15)`, borderLeft: `2px solid hsl(${evt.color})` }}
                       >
                         {evt.type === 'endomarketing' && <Sparkles size={7} className="inline mr-0.5" style={{ color: `hsl(${ENDO_COLOR})` }} />}
                         <span className="font-medium">{evt.clientName}</span>
                         <span className="text-muted-foreground ml-1">{evt.startTime}</span>
+                        {active && <span className="inline ml-0.5 text-primary font-bold">●</span>}
                         {evt.type === 'recording' && evt.recording?.status === 'concluida' && <Check size={8} className="inline ml-0.5 text-success" />}
                         {evt.type === 'recording' && evt.recording?.status === 'cancelada' && <XCircle size={8} className="inline ml-0.5 text-destructive" />}
 
@@ -512,7 +518,8 @@ export default function Schedule() {
                           )}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                     {dayEvents.length > 4 && (
                       <p className="text-[9px] text-muted-foreground text-center">+{dayEvents.length - 4} mais</p>
                     )}
@@ -558,11 +565,15 @@ export default function Schedule() {
                     {dayEvents.length === 0 && (
                       <p className="text-[10px] text-muted-foreground text-center py-4">Sem gravações</p>
                     )}
-                    {dayEvents.map(evt => (
+                    {dayEvents.map(evt => {
+                      const active = evt.type === 'recording' && evt.recording && isRecordingActive(evt.recording.id);
+                      return (
                       <motion.div
                         key={evt.id}
                         layout
-                        className="rounded-lg border border-border p-2.5 space-y-1.5 bg-card hover:shadow-md transition-shadow group relative"
+                        className={`rounded-lg border p-2.5 space-y-1.5 bg-card hover:shadow-md transition-shadow group relative ${
+                          active ? 'border-primary ring-2 ring-primary/30 bg-primary/5' : 'border-border'
+                        }`}
                         style={{ borderLeft: `3px solid hsl(${evt.color})` }}
                       >
                         <div className="flex items-start justify-between gap-1">
@@ -606,7 +617,8 @@ export default function Schedule() {
                           </div>
                         )}
                       </motion.div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );

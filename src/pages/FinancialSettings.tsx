@@ -16,7 +16,7 @@ const TEMPLATE_VARS = [
   { var: '{valor}', desc: 'Valor da mensalidade' },
   { var: '{dia_vencimento}', desc: 'Dia do vencimento' },
   { var: '{dados_pagamento}', desc: 'Dados PIX configurados' },
-  { var: '{relatorio_entregas}', desc: 'Resumo de entregas do mês' },
+  { var: '{relatorio_entregas}', desc: 'Relatório personalizado baseado no plano do cliente (horas, vídeos, reels, stories, artes)' },
 ];
 
 export default function FinancialSettings() {

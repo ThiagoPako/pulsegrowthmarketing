@@ -84,9 +84,31 @@ Deno.serve(async (req) => {
 
       if (existingMessages?.length) continue;
 
+      // Get client's plan for personalized report
+      let clientPlan = null;
+      if (contract.plan_id) {
+        const { data: planData } = await supabase
+          .from('plans')
+          .select('*')
+          .eq('id', contract.plan_id)
+          .single();
+        clientPlan = planData;
+      }
+
+      // Also check client's plan_id if contract doesn't have one
+      if (!clientPlan && clientData.plan_id) {
+        const { data: planData } = await supabase
+          .from('plans')
+          .select('*')
+          .eq('id', clientData.plan_id)
+          .single();
+        clientPlan = planData;
+      }
+
       // Get delivery summary for the month
       const monthStart = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
-      const monthEnd = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-28`;
+      const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
+      const monthEnd = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
       
       const { data: deliveries } = await supabase
         .from('delivery_records')
@@ -120,21 +142,55 @@ Deno.serve(async (req) => {
       const socialReels = socialDeliveries?.filter(d => d.content_type === 'reels' && d.status === 'postado').length || 0;
       const socialStories = socialDeliveries?.filter(d => d.content_type === 'story' && d.status === 'postado').length || 0;
 
-      const summaryLines = [];
+      // Build personalized delivery report based on client's plan
+      let deliverySummary = '';
       if (paymentConfig?.include_delivery_report !== false) {
-        if (stats.gravacoes > 0) summaryLines.push(`📹 ${stats.gravacoes} gravações realizadas`);
-        if (stats.videos > 0) summaryLines.push(`🎬 ${stats.videos} vídeos gravados`);
-        if (stats.videos > 0 && stats.gravacoes > 0) summaryLines.push(`📊 Média de ${(stats.videos / stats.gravacoes).toFixed(1)} vídeos por gravação`);
-        if (socialReels > 0 || stats.reels > 0) summaryLines.push(`🎥 ${Math.max(socialReels, stats.reels)} reels publicados`);
-        if (socialStories > 0 || stats.stories > 0) summaryLines.push(`📱 ${Math.max(socialStories, stats.stories)} stories entregues`);
-        if (stats.artes > 0) summaryLines.push(`🎨 ${stats.artes} artes entregues`);
-        if (stats.criativos > 0) summaryLines.push(`✨ ${stats.criativos} criativos produzidos`);
-        if (stats.extras > 0) summaryLines.push(`➕ ${stats.extras} conteúdos extras produzidos`);
-      }
+        const totalReels = Math.max(socialReels, stats.reels);
+        const totalStories = Math.max(socialStories, stats.stories);
+        const totalArtes = stats.artes;
+        const totalCriativos = stats.criativos;
+        const recordingHours = stats.gravacoes * (clientPlan?.recording_hours || 2);
 
-      const deliverySummary = summaryLines.length > 0
-        ? `\n\n📋 *Resumo de entregas do mês:*\n${summaryLines.join('\n')}`
-        : '';
+        const lines: string[] = [];
+
+        // Always show recording hours if there were recordings
+        if (stats.gravacoes > 0) {
+          lines.push(`Estivemos juntos durante *${recordingHours}h de gravação* em ${stats.gravacoes} sessão${stats.gravacoes > 1 ? 'ões' : ''} 📹`);
+        }
+        if (stats.videos > 0) {
+          lines.push(`Produzimos *${stats.videos} vídeos* para sua marca 🎬`);
+        }
+
+        // Only show metrics that exist in the client's plan
+        if (clientPlan) {
+          if (clientPlan.reels_qty > 0 && totalReels > 0) {
+            lines.push(`Publicamos *${totalReels} reels* no seu perfil 🎥`);
+          }
+          if (clientPlan.stories_qty > 0 && totalStories > 0) {
+            lines.push(`Estivemos presentes nos stories com *${totalStories} publicações* 📱`);
+          }
+          if (clientPlan.arts_qty > 0 && totalArtes > 0) {
+            lines.push(`Criamos *${totalArtes} artes* para seus canais 🎨`);
+          }
+          if (clientPlan.creatives_qty > 0 && totalCriativos > 0) {
+            lines.push(`Desenvolvemos *${totalCriativos} criativos* para suas campanhas ✨`);
+          }
+        } else {
+          // No plan — show all non-zero stats
+          if (totalReels > 0) lines.push(`Publicamos *${totalReels} reels* no seu perfil 🎥`);
+          if (totalStories > 0) lines.push(`Estivemos presentes nos stories com *${totalStories} publicações* 📱`);
+          if (totalArtes > 0) lines.push(`Criamos *${totalArtes} artes* para seus canais 🎨`);
+          if (totalCriativos > 0) lines.push(`Desenvolvemos *${totalCriativos} criativos* para suas campanhas ✨`);
+        }
+
+        if (stats.extras > 0) {
+          lines.push(`Ainda entregamos *${stats.extras} conteúdos extras* além do contratado ➕`);
+        }
+
+        if (lines.length > 0) {
+          deliverySummary = `\n\nEsse mês foi incrível e fizemos muita coisa juntos! 💪\n\n${lines.join('\n')}`;
+        }
+      }
 
       // Payment info
       let paymentInfo = '';

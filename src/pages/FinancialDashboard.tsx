@@ -8,11 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Users, FileText, CreditCard, ArrowRight, BarChart3, CalendarClock, CheckCircle, Wallet, ArrowUpCircle, ArrowDownCircle, History, ClipboardList } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Users, FileText, CreditCard, ArrowRight, BarChart3, CalendarClock, CheckCircle, Wallet, ArrowUpCircle, ArrowDownCircle, History, ClipboardList, Loader2 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
+import { sendWhatsAppMessage } from '@/services/whatsappService';
+import cobrarTodosImg from '@/assets/cobrar_todos.png';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -27,9 +29,10 @@ const COLORS = ['hsl(0,72%,51%)', 'hsl(25,95%,53%)', 'hsl(45,93%,47%)', 'hsl(142
 
 export default function FinancialDashboard() {
   const navigate = useNavigate();
-  const { contracts, revenues, expenses, categories, cashMovements, activityLog, loading, updateRevenue } = useFinancialData();
+  const { contracts, revenues, expenses, categories, cashMovements, activityLog, paymentConfig, loading, updateRevenue } = useFinancialData();
   const { clients, recordings, users } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
+  const [sendingAllOverdue, setSendingAllOverdue] = useState(false);
 
   const monthStart = useMemo(() => startOfMonth(new Date(selectedMonth + '-01T12:00:00')), [selectedMonth]);
   const monthEnd = useMemo(() => endOfMonth(monthStart), [monthStart]);
@@ -194,6 +197,47 @@ export default function FinancialDashboard() {
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+  // Inadimplentes (em_atraso only)
+  const inadimplentes = useMemo(() =>
+    monthRevenues.filter(r => r.status === 'em_atraso'),
+    [monthRevenues]
+  );
+
+  const totalInadimplente = inadimplentes.reduce((s, r) => s + Number(r.amount), 0);
+
+  const handleCobrarInadimplentes = async () => {
+    if (inadimplentes.length === 0) { toast.info('Nenhum inadimplente no mês'); return; }
+    setSendingAllOverdue(true);
+    let sent = 0, errors = 0;
+    for (const r of inadimplentes) {
+      const client = clients.find(c => c.id === r.client_id);
+      if (!client?.whatsapp) { errors++; continue; }
+      try {
+        const value = fmt(Number(r.amount));
+        let paymentInfo = '';
+        if (paymentConfig && (paymentConfig.pix_key || paymentConfig.receiver_name)) {
+          paymentInfo = '\n\n💳 *Dados para pagamento:*';
+          if (paymentConfig.receiver_name) paymentInfo += `\nNome: ${paymentConfig.receiver_name}`;
+          if (paymentConfig.bank) paymentInfo += `\nBanco: ${paymentConfig.bank}`;
+          if (paymentConfig.pix_key) paymentInfo += `\nChave PIX: ${paymentConfig.pix_key}`;
+          if (paymentConfig.document) paymentInfo += `\nCPF/CNPJ: ${paymentConfig.document}`;
+        }
+        const template = paymentConfig?.msg_billing_overdue ||
+          'Olá, {nome_cliente}! 😊\n\nIdentificamos uma pendência referente à mensalidade no valor de {valor}.\n\nSe já realizou o pagamento, por favor desconsidere esta mensagem.\n\n{dados_pagamento}';
+        const message = template
+          .replace(/\{nome_cliente\}/g, client.companyName)
+          .replace(/\{valor\}/g, value)
+          .replace(/\{dia_vencimento\}/g, r.due_date?.split('-')[2] || '')
+          .replace(/\{dados_pagamento\}/g, paymentInfo)
+          .replace(/\{relatorio_entregas\}/g, '');
+        const result = await sendWhatsAppMessage({ number: client.whatsapp, message, clientId: client.id, triggerType: 'manual' });
+        if (result.success) sent++; else errors++;
+      } catch { errors++; }
+    }
+    setSendingAllOverdue(false);
+    toast.success(`${sent} cobrança(s) enviada(s)${errors > 0 ? `, ${errors} com erro` : ''}`);
+  };
+
   if (loading) return <p className="text-muted-foreground p-4">Carregando...</p>;
 
   const chartConfig = {
@@ -254,6 +298,38 @@ export default function FinancialDashboard() {
           </motion.div>
         ))}
       </motion.div>
+
+      {/* Cobrar Inadimplentes Banner */}
+      {inadimplentes.length > 0 && (
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.4, duration: 0.4 }}>
+          <Card className="border-destructive/30 bg-destructive/5 overflow-hidden">
+            <CardContent className="p-0">
+              <button
+                onClick={handleCobrarInadimplentes}
+                disabled={sendingAllOverdue}
+                className="w-full flex items-center gap-4 p-4 hover:bg-destructive/10 transition-colors disabled:opacity-60 cursor-pointer"
+              >
+                <img src={cobrarTodosImg} alt="Cobrar Todos" className="w-16 h-16 rounded-full object-cover border-2 border-destructive/30 flex-shrink-0" />
+                <div className="flex-1 text-left">
+                  <h3 className="font-bold text-foreground flex items-center gap-2">
+                    <AlertTriangle size={16} className="text-destructive" />
+                    {inadimplentes.length} cliente{inadimplentes.length > 1 ? 's' : ''} inadimplente{inadimplentes.length > 1 ? 's' : ''}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">Total em atraso: <span className="font-semibold text-destructive">{fmt(totalInadimplente)}</span></p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Clique aqui para cobrar todos os inadimplentes via WhatsApp</p>
+                </div>
+                <div className="flex-shrink-0">
+                  {sendingAllOverdue ? (
+                    <Loader2 size={20} className="animate-spin text-destructive" />
+                  ) : (
+                    <ArrowRight size={20} className="text-destructive" />
+                  )}
+                </div>
+              </button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Quick Navigation */}
       <motion.div className="grid grid-cols-2 md:grid-cols-6 gap-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5, duration: 0.4 }}>

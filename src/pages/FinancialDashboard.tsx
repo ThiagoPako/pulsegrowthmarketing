@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from 'recharts';
-import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Users, FileText, CreditCard, ArrowRight, BarChart3, CalendarClock, CheckCircle, Wallet, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Users, FileText, CreditCard, ArrowRight, BarChart3, CalendarClock, CheckCircle, Wallet, ArrowUpCircle, ArrowDownCircle, History, ClipboardList } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -17,8 +17,8 @@ const COLORS = ['hsl(0,72%,51%)', 'hsl(25,95%,53%)', 'hsl(45,93%,47%)', 'hsl(142
 
 export default function FinancialDashboard() {
   const navigate = useNavigate();
-  const { contracts, revenues, expenses, categories, cashMovements, loading, updateRevenue } = useFinancialData();
-  const { clients, recordings } = useApp();
+  const { contracts, revenues, expenses, categories, cashMovements, activityLog, loading, updateRevenue } = useFinancialData();
+  const { clients, recordings, users } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
 
   const monthStart = useMemo(() => startOfMonth(new Date(selectedMonth + '-01T12:00:00')), [selectedMonth]);
@@ -426,6 +426,43 @@ export default function FinancialDashboard() {
             </div>
           ) : (
             <p className="text-muted-foreground text-sm text-center py-4">Nenhuma movimentação registrada</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Financial Activity Log */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2"><History size={16} /> Histórico de Ações Financeiras</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {activityLog.length > 0 ? (
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {activityLog.map(log => {
+                const userName = users.find(u => u.id === log.user_id)?.name || 'Sistema';
+                const actionIcon = log.action_type === 'criação' ? '➕' : log.action_type === 'edição' ? '✏️' : log.action_type === 'exclusão' ? '🗑️' : log.action_type === 'geração' ? '🔄' : '📋';
+                const entityColor = log.entity_type === 'receita' ? 'text-green-600' : log.entity_type === 'despesa' ? 'text-red-600' : log.entity_type === 'caixa' ? 'text-blue-600' : 'text-foreground';
+                return (
+                  <div key={log.id} className="flex items-start justify-between p-2 rounded-lg bg-secondary/50 gap-4">
+                    <div className="flex items-start gap-2 min-w-0 flex-1">
+                      <span className="text-sm mt-0.5">{actionIcon}</span>
+                      <div className="min-w-0">
+                        <p className="text-sm">{log.description}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <Badge variant="outline" className={`text-xs ${entityColor}`}>{log.entity_type}</Badge>
+                          <span className="text-xs text-muted-foreground">por <strong>{userName}</strong></span>
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {format(new Date(log.created_at), 'dd/MM HH:mm')}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-sm text-center py-4">Nenhuma ação registrada ainda</p>
           )}
         </CardContent>
       </Card>

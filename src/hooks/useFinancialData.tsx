@@ -68,6 +68,17 @@ export interface CashMovement {
   created_at: string;
 }
 
+export interface FinancialActivity {
+  id: string;
+  user_id: string | null;
+  action_type: string;
+  entity_type: string;
+  entity_id: string | null;
+  description: string;
+  details: any;
+  created_at: string;
+}
+
 export function useFinancialData() {
   const [contracts, setContracts] = useState<FinancialContract[]>([]);
   const [revenues, setRevenues] = useState<Revenue[]>([]);
@@ -76,11 +87,12 @@ export function useFinancialData() {
   const [paymentConfig, setPaymentConfigState] = useState<PaymentConfig | null>(null);
   const [billingMessages, setBillingMessages] = useState<BillingMessage[]>([]);
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
+  const [activityLog, setActivityLog] = useState<FinancialActivity[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
-    const [cRes, rRes, eRes, catRes, pRes, bRes, cashRes] = await Promise.all([
+    const [cRes, rRes, eRes, catRes, pRes, bRes, cashRes, logRes] = await Promise.all([
       supabase.from('financial_contracts').select('*').order('created_at', { ascending: false }),
       supabase.from('revenues').select('*').order('due_date', { ascending: false }),
       supabase.from('expenses').select('*').order('date', { ascending: false }),
@@ -88,6 +100,7 @@ export function useFinancialData() {
       supabase.from('payment_config').select('*').limit(1),
       supabase.from('billing_messages').select('*').order('sent_at', { ascending: false }),
       supabase.from('cash_reserve_movements').select('*').order('date', { ascending: false }),
+      supabase.from('financial_activity_log').select('*').order('created_at', { ascending: false }).limit(50),
     ]);
     if (cRes.data) setContracts(cRes.data as any);
     if (rRes.data) setRevenues(rRes.data as any);
@@ -96,38 +109,64 @@ export function useFinancialData() {
     if (pRes.data?.[0]) setPaymentConfigState(pRes.data[0] as any);
     if (bRes.data) setBillingMessages(bRes.data as any);
     if (cashRes.data) setCashMovements(cashRes.data as any);
+    if (logRes.data) setActivityLog(logRes.data as any);
     setLoading(false);
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  // Activity logger
+  const logActivity = async (actionType: string, entityType: string, description: string, entityId?: string, details?: any) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from('financial_activity_log').insert({
+      user_id: user?.id || null,
+      action_type: actionType,
+      entity_type: entityType,
+      entity_id: entityId || null,
+      description,
+      details: details || null,
+    } as any);
+  };
+
   // Contract CRUD
   const upsertContract = async (c: Partial<FinancialContract> & { client_id: string }) => {
+    const isNew = !c.id;
     const { error } = await supabase.from('financial_contracts').upsert(c as any, { onConflict: 'client_id' });
-    if (!error) await fetchAll();
+    if (!error) {
+      await logActivity(isNew ? 'criação' : 'edição', 'contrato', `${isNew ? 'Criou' : 'Editou'} contrato - R$ ${Number(c.contract_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, c.id, c);
+      await fetchAll();
+    }
     return !error;
   };
 
   const deleteContract = async (id: string) => {
+    const contract = contracts.find(c => c.id === id);
     await supabase.from('financial_contracts').delete().eq('id', id);
+    await logActivity('exclusão', 'contrato', `Excluiu contrato - R$ ${Number(contract?.contract_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id);
     await fetchAll();
   };
 
   // Revenue CRUD
   const addRevenue = async (r: Partial<Revenue>) => {
     const { error } = await supabase.from('revenues').insert(r as any);
-    if (!error) await fetchAll();
+    if (!error) {
+      await logActivity('criação', 'receita', `Registrou receita - R$ ${Number(r.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, undefined, r);
+      await fetchAll();
+    }
     return !error;
   };
 
   const updateRevenue = async (id: string, updates: Partial<Revenue>) => {
     const { error } = await supabase.from('revenues').update(updates as any).eq('id', id);
-    if (!error) await fetchAll();
+    if (!error) {
+      const action = updates.status === 'recebida' ? 'Marcou receita como paga' : updates.status === 'prevista' ? 'Reverteu receita para pendente' : 'Atualizou receita';
+      await logActivity('edição', 'receita', `${action} - R$ ${Number(updates.amount || revenues.find(r => r.id === id)?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, updates);
+      await fetchAll();
+    }
     return !error;
   };
 
   const generateMonthlyRevenues = async (monthStr: string) => {
-    // monthStr format: "YYYY-MM"
     const [yearStr, monthNumStr] = monthStr.split('-');
     const year = parseInt(yearStr);
     const monthNum = parseInt(monthNumStr);
@@ -150,6 +189,7 @@ export function useFinancialData() {
 
     if (newRevenues.length > 0) {
       await supabase.from('revenues').insert(newRevenues as any);
+      await logActivity('geração', 'receita', `Gerou ${newRevenues.length} receita(s) recorrente(s) para ${monthStr}`, undefined, { month: monthStr, count: newRevenues.length });
       await fetchAll();
     }
     return newRevenues.length;
@@ -158,25 +198,36 @@ export function useFinancialData() {
   // Expense CRUD
   const addExpense = async (e: Partial<Expense>) => {
     const { error } = await supabase.from('expenses').insert(e as any);
-    if (!error) await fetchAll();
+    if (!error) {
+      await logActivity('criação', 'despesa', `Registrou despesa - R$ ${Number(e.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${e.description}`, undefined, e);
+      await fetchAll();
+    }
     return !error;
   };
 
   const updateExpense = async (id: string, updates: Partial<Expense>) => {
     const { error } = await supabase.from('expenses').update(updates as any).eq('id', id);
-    if (!error) await fetchAll();
+    if (!error) {
+      await logActivity('edição', 'despesa', `Editou despesa - R$ ${Number(updates.amount || expenses.find(ex => ex.id === id)?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, updates);
+      await fetchAll();
+    }
     return !error;
   };
 
   const deleteExpense = async (id: string) => {
+    const expense = expenses.find(e => e.id === id);
     await supabase.from('expenses').delete().eq('id', id);
+    await logActivity('exclusão', 'despesa', `Excluiu despesa - R$ ${Number(expense?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${expense?.description}`, id);
     await fetchAll();
   };
 
   // Categories
   const addCategory = async (name: string) => {
     const { error } = await supabase.from('expense_categories').insert({ name } as any);
-    if (!error) await fetchAll();
+    if (!error) {
+      await logActivity('criação', 'categoria', `Criou categoria: ${name}`);
+      await fetchAll();
+    }
     return !error;
   };
 
@@ -184,6 +235,7 @@ export function useFinancialData() {
   const updatePaymentConfig = async (config: Partial<PaymentConfig>) => {
     if (paymentConfig) {
       await supabase.from('payment_config').update(config as any).eq('id', paymentConfig.id);
+      await logActivity('edição', 'configuração', 'Atualizou configurações de pagamento');
     }
     await fetchAll();
   };
@@ -191,24 +243,34 @@ export function useFinancialData() {
   // Cash reserve
   const addCashMovement = async (m: Partial<CashMovement>) => {
     const { error } = await supabase.from('cash_reserve_movements').insert(m as any);
-    if (!error) await fetchAll();
+    if (!error) {
+      await logActivity('criação', 'caixa', `${m.type === 'entrada' ? 'Depósito' : 'Retirada'} no caixa - R$ ${Number(m.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${m.description}`, undefined, m);
+      await fetchAll();
+    }
     return !error;
   };
 
   const updateCashMovement = async (id: string, updates: Partial<CashMovement>) => {
     const { error } = await supabase.from('cash_reserve_movements').update(updates as any).eq('id', id);
-    if (!error) await fetchAll();
+    if (!error) {
+      await logActivity('edição', 'caixa', `Editou movimentação do caixa - R$ ${Number(updates.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, updates);
+      await fetchAll();
+    }
     return !error;
   };
 
   const deleteCashMovement = async (id: string) => {
+    const mov = cashMovements.find(m => m.id === id);
     const { error } = await supabase.from('cash_reserve_movements').delete().eq('id', id);
-    if (!error) await fetchAll();
+    if (!error) {
+      await logActivity('exclusão', 'caixa', `Excluiu movimentação do caixa - R$ ${Number(mov?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${mov?.description}`, id);
+      await fetchAll();
+    }
     return !error;
   };
 
   return {
-    contracts, revenues, expenses, categories, paymentConfig, billingMessages, cashMovements, loading,
+    contracts, revenues, expenses, categories, paymentConfig, billingMessages, cashMovements, activityLog, loading,
     upsertContract, deleteContract,
     addRevenue, updateRevenue, generateMonthlyRevenues,
     addExpense, updateExpense, deleteExpense,

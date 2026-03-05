@@ -181,7 +181,7 @@ export default function Scripts() {
     setOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.clientId || !form.title) {
       toast.error('Preencha o cliente e o título'); return;
     }
@@ -199,19 +199,20 @@ export default function Scripts() {
       toast.success('Roteiro atualizado');
     } else {
       const scriptId = crypto.randomUUID();
-      addScript({ ...scriptData, id: scriptId, recorded: false, createdAt: now, updatedAt: now });
+      const scriptObj = { ...scriptData, id: scriptId, recorded: false, createdAt: now, updatedAt: now };
       
-      // Auto-create content_task in "ideias" column linked to this script
-      supabase.from('content_tasks').insert({
+      // Await script insert to ensure FK is satisfied before creating content_task
+      await addScript(scriptObj);
+      
+      const { error } = await supabase.from('content_tasks').insert({
         client_id: form.clientId,
         title: form.title,
         content_type: form.contentFormat || 'reels',
         kanban_column: 'ideias',
         script_id: scriptId,
         description: null,
-      } as any).then(({ error }) => {
-        if (error) console.error('Auto content_task creation error:', error);
-      });
+      } as any);
+      if (error) console.error('Auto content_task creation error:', error);
       
       toast.success('Roteiro criado');
     }

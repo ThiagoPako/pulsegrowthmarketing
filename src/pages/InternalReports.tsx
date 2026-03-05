@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Download, Trophy, TrendingUp, Film, Users, BarChart3, Award, Target } from 'lucide-react';
+import { Download, Trophy, TrendingUp, Film, Users, BarChart3, Award, Target, Scissors } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import UserAvatar from '@/components/UserAvatar';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subMonths, subWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -31,6 +32,7 @@ interface DeliveryRecord {
 }
 
 const SCORE_WEIGHTS = { reel: 10, criativo: 5, story: 3, arte: 2, extra: 8 };
+const EDITOR_SCORE_WEIGHTS: Record<string, number> = { reels: 10, criativo: 5, story: 3, arte: 2 };
 
 function calcScore(r: DeliveryRecord) {
   return r.reels_produced * SCORE_WEIGHTS.reel +
@@ -38,6 +40,16 @@ function calcScore(r: DeliveryRecord) {
     r.stories_produced * SCORE_WEIGHTS.story +
     r.arts_produced * SCORE_WEIGHTS.arte +
     r.extras_produced * SCORE_WEIGHTS.extra;
+}
+
+interface EditorTask {
+  id: string;
+  content_type: string;
+  kanban_column: string;
+  assigned_to: string | null;
+  editing_started_at: string | null;
+  updated_at: string;
+  client_id: string;
 }
 
 const CHART_COLORS = [
@@ -53,10 +65,18 @@ export default function InternalReports() {
   const [selectedVm, setSelectedVm] = useState('all');
 
   const videomakers = useMemo(() => users.filter(u => u.role === 'videomaker'), [users]);
+  const editors = useMemo(() => users.filter(u => u.role === 'editor'), [users]);
+
+  const [editorTasks, setEditorTasks] = useState<EditorTask[]>([]);
 
   const fetchData = useCallback(async () => {
-    const { data } = await supabase.from('delivery_records').select('*').order('date', { ascending: false });
-    if (data) setRecords(data as DeliveryRecord[]);
+    const [deliveries, tasks] = await Promise.all([
+      supabase.from('delivery_records').select('*').order('date', { ascending: false }),
+      supabase.from('content_tasks').select('id, content_type, kanban_column, assigned_to, editing_started_at, updated_at, client_id')
+        .eq('kanban_column', 'envio'),
+    ]);
+    if (deliveries.data) setRecords(deliveries.data as DeliveryRecord[]);
+    if (tasks.data) setEditorTasks(tasks.data as EditorTask[]);
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -147,6 +167,67 @@ export default function InternalReports() {
       ...data,
     })).filter(d => d.client).sort((a, b) => b.sessions - a.sessions);
   }, [filtered, selectedVm, videomakers, clients]);
+
+  // ── Editor data ──
+  const editorFiltered = useMemo(() => {
+    return editorTasks.filter(t => {
+      if (!t.updated_at) return false;
+      const d = format(new Date(t.updated_at), 'yyyy-MM-dd');
+      return d >= dateRange.start && d <= dateRange.end;
+    });
+  }, [editorTasks, dateRange]);
+
+  const editorRanking = useMemo(() => {
+    return editors.map(ed => {
+      const edTasks = editorFiltered.filter(t => t.assigned_to === ed.id);
+      const score = edTasks.reduce((sum, t) => sum + (EDITOR_SCORE_WEIGHTS[t.content_type] || 2), 0);
+      const reels = edTasks.filter(t => t.content_type === 'reels').length;
+      const criativos = edTasks.filter(t => t.content_type === 'criativo').length;
+      const stories = edTasks.filter(t => t.content_type === 'story').length;
+      const artes = edTasks.filter(t => t.content_type === 'arte').length;
+      const total = edTasks.length;
+
+      // Average editing time
+      const times = edTasks.filter(t => t.editing_started_at).map(t => {
+        const h = (new Date(t.updated_at).getTime() - new Date(t.editing_started_at!).getTime()) / (1000 * 60 * 60);
+        return h > 0 && h < 200 ? h : null;
+      }).filter(Boolean) as number[];
+      const avgTime = times.length > 0 ? times.reduce((a, b) => a + b, 0) / times.length : 0;
+
+      return { editor: ed, score, reels, criativos, stories, artes, total, avgTime };
+    }).sort((a, b) => b.score - a.score);
+  }, [editors, editorFiltered]);
+
+  const editorScoreChartData = useMemo(() => {
+    return editorRanking.map(r => ({ name: r.editor.name.split(' ')[0], pontuação: r.score }));
+  }, [editorRanking]);
+
+  const editorContentChartData = useMemo(() => {
+    return editorRanking.map(r => ({
+      name: r.editor.name.split(' ')[0],
+      Reels: r.reels, Criativos: r.criativos, Stories: r.stories, Artes: r.artes,
+    }));
+  }, [editorRanking]);
+
+  const editorWeeklyTrend = useMemo(() => {
+    const weeks: { label: string; start: string; end: string }[] = [];
+    for (let i = 3; i >= 0; i--) {
+      const ws = startOfWeek(subWeeks(new Date(), i), { weekStartsOn: 1 });
+      const we = endOfWeek(subWeeks(new Date(), i), { weekStartsOn: 1 });
+      weeks.push({ label: `Sem ${format(ws, 'dd/MM')}`, start: format(ws, 'yyyy-MM-dd'), end: format(we, 'yyyy-MM-dd') });
+    }
+    return weeks.map(w => {
+      const entry: any = { semana: w.label };
+      editors.forEach(ed => {
+        const edTasks = editorTasks.filter(t => t.assigned_to === ed.id && t.kanban_column === 'envio' && (() => {
+          const d = format(new Date(t.updated_at), 'yyyy-MM-dd');
+          return d >= w.start && d <= w.end;
+        })());
+        entry[ed.name.split(' ')[0]] = edTasks.reduce((sum, t) => sum + (EDITOR_SCORE_WEIGHTS[t.content_type] || 2), 0);
+      });
+      return entry;
+    });
+  }, [editorTasks, editors]);
 
   const periodLabel = useMemo(() => {
     if (periodType === 'week') return 'Semana atual';
@@ -286,6 +367,8 @@ export default function InternalReports() {
     toast.success('PDF gerado!');
   };
 
+  const tooltipStyle = { background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -294,24 +377,14 @@ export default function InternalReports() {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Trophy size={24} className="text-primary" /> Desempenho da Equipe
           </h1>
-          <p className="text-sm text-muted-foreground">Relatórios internos, pontuação e ranking de videomakers</p>
+          <p className="text-sm text-muted-foreground">Ranking e produtividade de videomakers e editores</p>
         </div>
         <Button onClick={generatePDF} className="gap-2"><Download size={16} /> Exportar PDF</Button>
       </div>
 
-      {/* Filters */}
+      {/* Period filter */}
       <Card>
         <CardContent className="p-4 flex flex-wrap gap-4 items-end">
-          <div className="space-y-1 min-w-[180px]">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Videomaker</Label>
-            <Select value={selectedVm} onValueChange={setSelectedVm}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {videomakers.map(vm => <SelectItem key={vm.id} value={vm.id}>{vm.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
           <div className="space-y-1">
             <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Período</Label>
             <div className="flex gap-1.5">
@@ -322,164 +395,370 @@ export default function InternalReports() {
               ))}
             </div>
           </div>
-          <div className="ml-auto">
-            <Badge variant="outline" className="text-xs">
-              Pontuação: Reel={SCORE_WEIGHTS.reel} · Criativo={SCORE_WEIGHTS.criativo} · Story={SCORE_WEIGHTS.story} · Arte={SCORE_WEIGHTS.arte} · Extra={SCORE_WEIGHTS.extra}
-            </Badge>
-          </div>
         </CardContent>
       </Card>
 
-      {/* Ranking */}
-      <div className="grid lg:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Award size={16} className="text-primary" /> Ranking de Pontuação
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {ranking.length === 0 ? (
-              <p className="text-muted-foreground text-sm text-center py-6">Nenhum dado disponível</p>
-            ) : (
-              <div className="space-y-3">
-                {ranking.map((r, i) => (
-                  <div key={r.vm.id} className={`flex items-center gap-3 p-3 rounded-lg ${i < 3 ? 'bg-primary/5 border border-primary/20' : 'bg-secondary/50'}`}>
-                    <span className="text-lg font-bold w-8 text-center">
-                      {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}º`}
-                    </span>
-                    <UserAvatar user={r.vm} size="sm" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm truncate">{r.vm.name}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {r.reels}R · {r.creatives}C · {r.stories}S · {r.arts}A · {r.extras}E · {r.sessions} sessões
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xl font-bold text-primary">{r.score}</p>
-                      <p className="text-[10px] text-muted-foreground">pontos</p>
-                    </div>
-                  </div>
-                ))}
+      <Tabs defaultValue="videomakers" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="videomakers" className="gap-1.5"><Film size={14} /> Videomakers</TabsTrigger>
+          <TabsTrigger value="editors" className="gap-1.5"><Scissors size={14} /> Editores</TabsTrigger>
+        </TabsList>
+
+        {/* ════════ VIDEOMAKERS TAB ════════ */}
+        <TabsContent value="videomakers" className="space-y-4">
+          <Card>
+            <CardContent className="p-4 flex flex-wrap gap-4 items-end">
+              <div className="space-y-1 min-w-[180px]">
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Videomaker</Label>
+                <Select value={selectedVm} onValueChange={setSelectedVm}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {videomakers.map(vm => <SelectItem key={vm.id} value={vm.id}>{vm.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
-          </CardContent>
-        </Card>
+              <div className="ml-auto">
+                <Badge variant="outline" className="text-xs">
+                  Pontuação: Reel={SCORE_WEIGHTS.reel} · Criativo={SCORE_WEIGHTS.criativo} · Story={SCORE_WEIGHTS.story} · Arte={SCORE_WEIGHTS.arte} · Extra={SCORE_WEIGHTS.extra}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
 
-        {/* Score bar chart */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <BarChart3 size={16} className="text-primary" /> Pontuação Comparativa
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={scoreChartData} barSize={32}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
-                <Bar dataKey="pontuação" name="Pontos" radius={[6, 6, 0, 0]}>
-                  {scoreChartData.map((_, i) => <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Content breakdown */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Film size={16} className="text-primary" /> Conteúdos Produzidos por Videomaker
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={contentChartData} barGap={2}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="Reels" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={14} />
-              <Bar dataKey="Criativos" fill="#22c55e" radius={[4, 4, 0, 0]} barSize={14} />
-              <Bar dataKey="Stories" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={14} />
-              <Bar dataKey="Artes" fill="#8b5cf6" radius={[4, 4, 0, 0]} barSize={14} />
-              <Bar dataKey="Extras" fill="#06b6d4" radius={[4, 4, 0, 0]} barSize={14} />
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      {/* Weekly trend */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <TrendingUp size={16} className="text-primary" /> Evolução Semanal de Pontuação
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={weeklyTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="semana" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              {videomakers.map((vm, i) => (
-                <Line key={vm.id} type="monotone" dataKey={vm.name.split(' ')[0]} stroke={BAR_COLORS[i % BAR_COLORS.length]} strokeWidth={2} dot={{ r: 4 }} />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      {/* Client detail table */}
-      {clientDetail.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Users size={16} className="text-primary" /> Detalhamento por Cliente
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead className="text-center">Reels</TableHead>
-                  <TableHead className="text-center">Criativos</TableHead>
-                  <TableHead className="text-center">Stories</TableHead>
-                  <TableHead className="text-center">Artes</TableHead>
-                  <TableHead className="text-center">Extras</TableHead>
-                  <TableHead className="text-center">Sessões</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {clientDetail.map(d => (
-                  <TableRow key={d.client!.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: `hsl(${d.client!.color})` }} />
-                        <span className="font-medium text-sm">{d.client!.companyName}</span>
+          <div className="grid lg:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Award size={16} className="text-primary" /> Ranking de Pontuação
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {ranking.length === 0 ? (
+                  <p className="text-muted-foreground text-sm text-center py-6">Nenhum dado disponível</p>
+                ) : (
+                  <div className="space-y-3">
+                    {ranking.map((r, i) => (
+                      <div key={r.vm.id} className={`flex items-center gap-3 p-3 rounded-lg ${i < 3 ? 'bg-primary/5 border border-primary/20' : 'bg-secondary/50'}`}>
+                        <span className="text-lg font-bold w-8 text-center">
+                          {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}º`}
+                        </span>
+                        <UserAvatar user={r.vm} size="sm" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm truncate">{r.vm.name}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {r.reels}R · {r.creatives}C · {r.stories}S · {r.arts}A · {r.extras}E · {r.sessions} sessões
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xl font-bold text-primary">{r.score}</p>
+                          <p className="text-[10px] text-muted-foreground">pontos</p>
+                        </div>
                       </div>
-                    </TableCell>
-                    <TableCell className="text-center font-semibold">{d.reels}</TableCell>
-                    <TableCell className="text-center">{d.creatives}</TableCell>
-                    <TableCell className="text-center">{d.stories}</TableCell>
-                    <TableCell className="text-center">{d.arts}</TableCell>
-                    <TableCell className="text-center">{d.extras}</TableCell>
-                    <TableCell className="text-center">{d.sessions}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <BarChart3 size={16} className="text-primary" /> Pontuação Comparativa
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={scoreChartData} barSize={32}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip contentStyle={tooltipStyle} />
+                    <Bar dataKey="pontuação" name="Pontos" radius={[6, 6, 0, 0]}>
+                      {scoreChartData.map((_, i) => <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Film size={16} className="text-primary" /> Conteúdos Produzidos por Videomaker
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={contentChartData} barGap={2}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="Reels" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={14} />
+                  <Bar dataKey="Criativos" fill="#22c55e" radius={[4, 4, 0, 0]} barSize={14} />
+                  <Bar dataKey="Stories" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={14} />
+                  <Bar dataKey="Artes" fill="#8b5cf6" radius={[4, 4, 0, 0]} barSize={14} />
+                  <Bar dataKey="Extras" fill="#06b6d4" radius={[4, 4, 0, 0]} barSize={14} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <TrendingUp size={16} className="text-primary" /> Evolução Semanal
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={weeklyTrend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="semana" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {videomakers.map((vm, i) => (
+                    <Line key={vm.id} type="monotone" dataKey={vm.name.split(' ')[0]} stroke={BAR_COLORS[i % BAR_COLORS.length]} strokeWidth={2} dot={{ r: 4 }} />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {clientDetail.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Users size={16} className="text-primary" /> Detalhamento por Cliente
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead className="text-center">Reels</TableHead>
+                      <TableHead className="text-center">Criativos</TableHead>
+                      <TableHead className="text-center">Stories</TableHead>
+                      <TableHead className="text-center">Artes</TableHead>
+                      <TableHead className="text-center">Extras</TableHead>
+                      <TableHead className="text-center">Sessões</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {clientDetail.map(d => (
+                      <TableRow key={d.client!.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: `hsl(${d.client!.color})` }} />
+                            <span className="font-medium text-sm">{d.client!.companyName}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center font-semibold">{d.reels}</TableCell>
+                        <TableCell className="text-center">{d.creatives}</TableCell>
+                        <TableCell className="text-center">{d.stories}</TableCell>
+                        <TableCell className="text-center">{d.arts}</TableCell>
+                        <TableCell className="text-center">{d.extras}</TableCell>
+                        <TableCell className="text-center">{d.sessions}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* ════════ EDITORS TAB ════════ */}
+        <TabsContent value="editors" className="space-y-4">
+          <Card>
+            <CardContent className="p-4">
+              <Badge variant="outline" className="text-xs">
+                Pontuação: Reels={EDITOR_SCORE_WEIGHTS.reels} · Criativos={EDITOR_SCORE_WEIGHTS.criativo} · Story={EDITOR_SCORE_WEIGHTS.story} · Arte={EDITOR_SCORE_WEIGHTS.arte}
+              </Badge>
+            </CardContent>
+          </Card>
+
+          <div className="grid lg:grid-cols-2 gap-4">
+            {/* Editor Ranking */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Award size={16} className="text-primary" /> Ranking de Editores
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {editorRanking.length === 0 ? (
+                  <p className="text-muted-foreground text-sm text-center py-6">Nenhum editor cadastrado</p>
+                ) : (
+                  <div className="space-y-3">
+                    {editorRanking.map((r, i) => {
+                      const hours = Math.floor(r.avgTime);
+                      const mins = Math.round((r.avgTime - hours) * 60);
+                      return (
+                        <div key={r.editor.id} className={`flex items-center gap-3 p-3 rounded-lg ${i < 3 ? 'bg-primary/5 border border-primary/20' : 'bg-secondary/50'}`}>
+                          <span className="text-lg font-bold w-8 text-center">
+                            {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}º`}
+                          </span>
+                          <UserAvatar user={r.editor} size="sm" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-sm truncate">{r.editor.name}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {r.reels}R · {r.criativos}C · {r.stories}S · {r.artes}A · {r.total} total
+                              {r.avgTime > 0 && ` · ~${hours > 0 ? `${hours}h` : ''}${mins}min`}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xl font-bold text-primary">{r.score}</p>
+                            <p className="text-[10px] text-muted-foreground">pontos</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Editor Score Chart */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <BarChart3 size={16} className="text-primary" /> Pontuação Comparativa
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {editorScoreChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={editorScoreChartData} barSize={32}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip contentStyle={tooltipStyle} />
+                      <Bar dataKey="pontuação" name="Pontos" radius={[6, 6, 0, 0]}>
+                        {editorScoreChartData.map((_, i) => <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-muted-foreground text-sm text-center py-6">Sem dados para exibir</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Editor content breakdown */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Scissors size={16} className="text-primary" /> Conteúdos Editados por Editor
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {editorContentChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={editorContentChartData} barGap={2}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip contentStyle={tooltipStyle} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Bar dataKey="Reels" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={14} />
+                    <Bar dataKey="Criativos" fill="#22c55e" radius={[4, 4, 0, 0]} barSize={14} />
+                    <Bar dataKey="Stories" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={14} />
+                    <Bar dataKey="Artes" fill="#8b5cf6" radius={[4, 4, 0, 0]} barSize={14} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-muted-foreground text-sm text-center py-6">Sem dados para exibir</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Editor weekly trend */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <TrendingUp size={16} className="text-primary" /> Evolução Semanal dos Editores
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {editors.length > 0 ? (
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={editorWeeklyTrend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="semana" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip contentStyle={tooltipStyle} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    {editors.map((ed, i) => (
+                      <Line key={ed.id} type="monotone" dataKey={ed.name.split(' ')[0]} stroke={BAR_COLORS[i % BAR_COLORS.length]} strokeWidth={2} dot={{ r: 4 }} />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-muted-foreground text-sm text-center py-6">Nenhum editor cadastrado</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Editor detail table */}
+          {editorRanking.some(r => r.total > 0) && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Users size={16} className="text-primary" /> Detalhamento por Editor
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Editor</TableHead>
+                      <TableHead className="text-center">Reels</TableHead>
+                      <TableHead className="text-center">Criativos</TableHead>
+                      <TableHead className="text-center">Stories</TableHead>
+                      <TableHead className="text-center">Artes</TableHead>
+                      <TableHead className="text-center">Total</TableHead>
+                      <TableHead className="text-center">Pontos</TableHead>
+                      <TableHead className="text-center">Tempo Médio</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {editorRanking.filter(r => r.total > 0).map(r => {
+                      const hours = Math.floor(r.avgTime);
+                      const mins = Math.round((r.avgTime - hours) * 60);
+                      return (
+                        <TableRow key={r.editor.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <UserAvatar user={r.editor} size="sm" />
+                              <span className="font-medium text-sm">{r.editor.name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center font-semibold">{r.reels}</TableCell>
+                          <TableCell className="text-center">{r.criativos}</TableCell>
+                          <TableCell className="text-center">{r.stories}</TableCell>
+                          <TableCell className="text-center">{r.artes}</TableCell>
+                          <TableCell className="text-center font-semibold">{r.total}</TableCell>
+                          <TableCell className="text-center font-bold text-primary">{r.score}</TableCell>
+                          <TableCell className="text-center text-muted-foreground">
+                            {r.avgTime > 0 ? `${hours > 0 ? `${hours}h ` : ''}${mins}min` : '—'}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

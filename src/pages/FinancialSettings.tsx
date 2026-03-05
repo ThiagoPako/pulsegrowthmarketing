@@ -218,6 +218,7 @@ export default function FinancialSettings() {
             className="font-mono text-xs"
             placeholder="Template dos dados de pagamento..."
           />
+          <Button variant="outline" size="sm" onClick={handleSave} className="w-full"><Save size={14} className="mr-1" /> Salvar</Button>
         </CardContent>
       </Card>
 
@@ -240,6 +241,7 @@ export default function FinancialSettings() {
             className="font-mono text-xs"
             placeholder="Template do relatório de entregas..."
           />
+          <Button variant="outline" size="sm" onClick={handleSave} className="w-full"><Save size={14} className="mr-1" /> Salvar</Button>
         </CardContent>
       </Card>
 
@@ -295,6 +297,8 @@ export default function FinancialSettings() {
               />
             </TabsContent>
           </Tabs>
+
+          <Button variant="outline" size="sm" onClick={handleSave} className="w-full"><Save size={14} className="mr-1" /> Salvar Templates</Button>
 
           {/* Live Preview */}
           <div className="space-y-3 pt-2">

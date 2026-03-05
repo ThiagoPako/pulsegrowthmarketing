@@ -1,6 +1,9 @@
 import { format, endOfMonth, addDays, getDay } from 'date-fns';
 import type { Client, Recording, DayOfWeek, CompanySettings } from '@/types';
 
+/** Buffer time (in minutes) between recordings for the videomaker to upload materials */
+const BUFFER_BETWEEN_RECORDINGS = 30;
+
 const DAY_TO_NUM: Record<DayOfWeek, number> = {
   domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6,
 };
@@ -55,8 +58,12 @@ export function hasConflictCheck(
     if (r.id === excludeId || r.status === 'cancelada') return false;
     if (r.videomakerId !== videomakerId || r.date !== date) return false;
     const existStart = timeToMinutes(r.startTime);
-    const existEnd = existStart + duration;
-    return newStart < existEnd && newEnd > existStart;
+    // Existing recording occupies: its duration + 30min buffer for upload
+    const existEnd = existStart + duration + BUFFER_BETWEEN_RECORDINGS;
+    // New recording also needs buffer after it
+    const newEndWithBuffer = newEnd + BUFFER_BETWEEN_RECORDINGS;
+    // Check overlap: new recording's full block vs existing recording's full block
+    return newStart < existEnd && newEndWithBuffer > existStart;
   });
 }
 
@@ -134,7 +141,7 @@ export function generateExtraRecordings(
       ];
       
       for (const [sStart, sEnd] of shifts) {
-        for (let t = sStart; t + duration <= sEnd; t += duration) {
+        for (let t = sStart; t + duration <= sEnd; t += duration + BUFFER_BETWEEN_RECORDINGS) {
           const timeStr = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
           if (!hasConflictCheck(vmId, date, timeStr, allRecs, duration)) {
             const rec: Recording = {
@@ -212,7 +219,7 @@ export function findRescheduleSlot(
       ];
       
       for (const [sStart, sEnd] of shifts) {
-        for (let t = sStart; t + duration <= sEnd; t += duration) {
+        for (let t = sStart; t + duration <= sEnd; t += duration + BUFFER_BETWEEN_RECORDINGS) {
           const timeStr = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
           if (isWithinWorkHoursCheck(extraDay, timeStr, settings) && !hasConflictCheck(vmId, extraDate, timeStr, existingRecordings, duration)) {
             return { date: extraDate, startTime: timeStr, videomakerId: vmId, type: 'extra' };

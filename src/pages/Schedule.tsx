@@ -539,8 +539,11 @@ export default function Schedule() {
                                 <button onClick={() => handleComplete(evt.recording!)} className="text-[10px] px-1.5 py-0.5 rounded bg-success/10 text-success hover:bg-success/20 flex items-center gap-0.5">
                                   <Check size={10} /> Gravado
                                 </button>
-                                <button onClick={() => handleNoShow(evt.recording!)} className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive hover:bg-destructive/20 flex items-center gap-0.5">
+                                <button onClick={() => handleNoShow(evt.recording!)} className="text-[10px] px-1.5 py-0.5 rounded bg-warning/10 text-warning hover:bg-warning/20 flex items-center gap-0.5">
                                   <XCircle size={10} /> Não Gravou
+                                </button>
+                                <button onClick={() => handleCancel(evt.recording!)} className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive hover:bg-destructive/20 flex items-center gap-0.5">
+                                  <XCircle size={10} /> Cancelar
                                 </button>
                               </>
                             )}

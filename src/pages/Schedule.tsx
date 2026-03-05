@@ -526,7 +526,7 @@ export default function Schedule() {
 
                         {/* Actions — only for recordings */}
                         {evt.type === 'recording' && evt.recording && (
-                          <div className="grid grid-cols-2 gap-1 pt-1.5 border-t border-border/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="grid grid-cols-2 gap-1 pt-1.5 border-t border-border/50 hidden group-hover:grid transition-all">
                             <button onClick={() => openEditRecording(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-muted/60 text-muted-foreground hover:bg-muted transition-colors flex items-center justify-center gap-1">
                               <Pencil size={10} /> Editar
                             </button>

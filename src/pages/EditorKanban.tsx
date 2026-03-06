@@ -117,6 +117,25 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
         </div>
         <p className="text-sm font-semibold text-foreground leading-tight">{task.title}</p>
         
+        {/* Script alteration badges */}
+        {(task as any).script_alteration_type === 'altered' && (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-md p-2">
+            <p className="text-[10px] font-bold text-amber-600 mb-0.5">⚠️ ROTEIRO ALTERADO</p>
+            <p className="text-[10px] text-foreground/80">Não seguir o roteiro original.</p>
+            {(task as any).script_alteration_notes && (
+              <p className="text-[10px] text-foreground/70 mt-1 whitespace-pre-wrap">📝 {(task as any).script_alteration_notes}</p>
+            )}
+          </div>
+        )}
+        {(task as any).script_alteration_type === 'verbal' && (
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-md p-2">
+            <p className="text-[10px] font-bold text-blue-600">🗣️ ALTERAÇÃO VERBAL</p>
+            {(task as any).script_alteration_notes && (
+              <p className="text-[10px] text-foreground/70 mt-1 whitespace-pre-wrap">📝 {(task as any).script_alteration_notes}</p>
+            )}
+          </div>
+        )}
+
         {/* Alteration notes */}
         {task.kanban_column === 'alteracao' && task.description && (
           <div className="bg-warning/10 border border-warning/20 rounded-md p-2">

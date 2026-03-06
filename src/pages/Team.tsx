@@ -358,18 +358,17 @@ export default function Team() {
             <Users size={40} className="mx-auto mb-3 opacity-50" /><p>Nenhum usuário cadastrado</p>
           </div>
         ) : (
-          <div className="grid gap-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {teamMembers.map(u => (
-              <div key={u.id} className="glass-card p-4 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <UserAvatar user={u} size="lg" />
-                  <div>
-                    <p className="font-medium">{u.displayName || u.name}</p>
-                    <p className="text-xs text-muted-foreground">{u.email}{u.jobTitle ? ` · ${u.jobTitle}` : ''}</p>
-                  </div>
+              <div key={u.id} className="glass-card p-5 flex flex-col items-center text-center gap-3 hover:shadow-md transition-shadow">
+                <UserAvatar user={u} size="lg" className="ring-2 ring-border shadow-sm" />
+                <div>
+                  <p className="font-semibold text-base">{u.displayName || u.name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{u.email}</p>
+                  {u.jobTitle && <p className="text-xs text-muted-foreground">{u.jobTitle}</p>}
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${roleColors[u.role]}`}>{ROLE_LABELS[u.role]}</span>
+                <span className={`text-xs px-3 py-1.5 rounded-full font-semibold ${roleColors[u.role]}`}>{ROLE_LABELS[u.role]}</span>
+                <div className="flex items-center gap-2 mt-1">
                   {currentUser?.role === 'admin' && (
                     <>
                       <Button variant="ghost" size="icon" className="h-8 w-8" title="Redefinir senha" onClick={() => { setResetTarget(u); setResetOpen(true); }}>

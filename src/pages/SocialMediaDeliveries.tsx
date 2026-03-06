@@ -671,6 +671,12 @@ export default function SocialMediaDeliveries() {
             <TabsTrigger value="pipeline" className="gap-1.5">
               <TrendingUp size={14} /> Pipeline ({clientDeliveries.review.length + clientDeliveries.alteration.length + clientDeliveries.approval.length + clientDeliveries.pending.length + clientDeliveries.scheduled.length})
             </TabsTrigger>
+            <TabsTrigger value="edicao" className="gap-1.5">
+              <Scissors size={14} /> Fila de Edição
+              {editingQueueTasks.length > 0 && (
+                <Badge variant="outline" className="text-[9px] px-1.5 py-0 ml-1 bg-blue-500/10 text-blue-600 border-blue-500/30">{editingQueueTasks.length}</Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="revisao" className="gap-1.5">
               <Eye size={14} /> Revisão ({clientDeliveries.review.length})
             </TabsTrigger>

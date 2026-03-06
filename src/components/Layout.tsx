@@ -9,8 +9,9 @@ import { Button } from '@/components/ui/button';
 import UserAvatar from '@/components/UserAvatar';
 import ProfileDialog from '@/components/ProfileDialog';
 import {
-  LayoutDashboard, Users, Building2, Calendar, Settings, LogOut, Target, Search, Plus, Bell, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors
+  LayoutDashboard, Users, Building2, Calendar, Settings, LogOut, Target, Search, Plus, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors
 } from 'lucide-react';
+import NotificationBell from '@/components/NotificationBell';
 
 const navItems = [
   { path: '/dashboard', label: 'Início', icon: LayoutDashboard, roles: ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing'] },
@@ -119,9 +120,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 ml-auto">
-            <button className="w-9 h-9 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary transition-colors">
-              <Bell size={18} />
-            </button>
+            <NotificationBell />
             {/* Mobile avatar */}
             <div className="md:hidden">
               <ProfileDialog>

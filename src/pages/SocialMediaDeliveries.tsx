@@ -14,8 +14,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, Film, Palette, Image, Megaphone, Trash2, Edit, CheckCircle2, Clock, TrendingUp, CalendarClock, CalendarCheck, Send, Zap, ArrowLeft, Eye } from 'lucide-react';
+import { Plus, Film, Palette, Image, Megaphone, Trash2, Edit, CheckCircle2, Clock, TrendingUp, CalendarClock, CalendarCheck, Send, Zap, ArrowLeft, Eye, MessageSquare, AlertTriangle, ExternalLink } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
+import { sendWhatsAppMessage, getWhatsAppConfig } from '@/services/whatsappService';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isToday, isPast, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -34,6 +35,7 @@ interface SocialDelivery {
   recording_id: string | null;
   created_by: string | null;
   created_at: string;
+  content_task_id: string | null;
 }
 
 interface Plan {
@@ -53,10 +55,11 @@ const CONTENT_TYPES = [
 ];
 
 const STATUS_OPTIONS = [
+  { value: 'revisao', label: 'Em revisão', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
+  { value: 'aprovacao_cliente', label: 'Aprovação Cliente', color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400' },
   { value: 'entregue', label: 'Entregue', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
   { value: 'agendado', label: 'Agendado', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
   { value: 'postado', label: 'Postado', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
-  { value: 'revisao', label: 'Em revisão', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
 ];
 
 const PLATFORMS = ['Instagram', 'TikTok', 'YouTube', 'Facebook', 'LinkedIn'];
@@ -97,6 +100,12 @@ export default function SocialMediaDeliveries() {
   const [storiesDialogOpen, setStoriesDialogOpen] = useState(false);
   const [storiesCount, setStoriesCount] = useState(5);
   const [storiesDate, setStoriesDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+
+  // Alteration dialog
+  const [alterationDialogOpen, setAlterationDialogOpen] = useState(false);
+  const [alterationNotes, setAlterationNotes] = useState('');
+  const [alterationDelivery, setAlterationDelivery] = useState<SocialDelivery | null>(null);
+  const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
 
   const fetchData = useCallback(async () => {
     const [dRes, pRes, cRes] = await Promise.all([
@@ -284,6 +293,104 @@ export default function SocialMediaDeliveries() {
     return plans.find(p => p.id === planId) || null;
   };
 
+  // ─── REVIEW/APPROVAL HANDLERS ─────────────────────────────
+  const handleApproveReview = async (d: SocialDelivery) => {
+    await supabase.from('social_media_deliveries').update({ status: 'aprovacao_cliente' } as any).eq('id', d.id);
+    if (d.content_task_id) {
+      await supabase.from('content_tasks').update({ kanban_column: 'envio', updated_at: new Date().toISOString() } as any).eq('id', d.content_task_id);
+    }
+    toast.success('Revisão aprovada! Pronto para enviar ao cliente.');
+    fetchData();
+  };
+
+  const openAlterationDialog = (d: SocialDelivery) => {
+    setAlterationDelivery(d);
+    setAlterationNotes('');
+    setAlterationDialogOpen(true);
+  };
+
+  const handleSendToAlteration = async () => {
+    if (!alterationDelivery || !alterationNotes.trim()) {
+      toast.error('Descreva o que precisa ser alterado');
+      return;
+    }
+    const taskId = alterationDelivery.content_task_id;
+    if (taskId) {
+      const { data: taskData } = await supabase.from('content_tasks').select('assigned_to').eq('id', taskId).single();
+      const editorId = taskData?.assigned_to;
+
+      await supabase.from('content_tasks').update({
+        kanban_column: 'alteracao',
+        adjustment_notes: alterationNotes.trim(),
+        description: alterationNotes.trim(),
+        updated_at: new Date().toISOString(),
+      } as any).eq('id', taskId);
+
+      await supabase.from('social_media_deliveries').update({ status: 'revisao' } as any).eq('id', alterationDelivery.id);
+
+      if (editorId) {
+        const clientName = clients.find(c => c.id === alterationDelivery.client_id)?.companyName || '';
+        await supabase.rpc('notify_user', {
+          _user_id: editorId,
+          _title: 'Alteração de Vídeo',
+          _message: `${alterationDelivery.title} (${clientName}) precisa de alteração: ${alterationNotes.trim().substring(0, 100)}`,
+          _type: 'alteration',
+          _link: '/edicao/kanban',
+        });
+      }
+    }
+    toast.success('Enviado para alteração');
+    setAlterationDialogOpen(false);
+    setAlterationDelivery(null);
+    fetchData();
+  };
+
+  const handleSendWhatsAppApproval = async (d: SocialDelivery) => {
+    setSendingWhatsApp(true);
+    try {
+      const client = clients.find(c => c.id === d.client_id);
+      if (!client?.whatsapp) { toast.error('Cliente sem WhatsApp cadastrado'); return; }
+
+      let videoLink = '';
+      if (d.content_task_id) {
+        const { data: taskData } = await supabase.from('content_tasks').select('edited_video_link, drive_link').eq('id', d.content_task_id).single();
+        videoLink = taskData?.edited_video_link || taskData?.drive_link || '';
+      }
+
+      const message = `Olá, ${client.responsiblePerson || client.companyName}! 😊\n\nSeu conteúdo "${d.title}" ficou pronto! 🎬\n\n${videoLink ? `📎 Acesse aqui: ${videoLink}\n\n` : ''}Por favor, avalie e nos diga se está aprovado ou se precisa de algum ajuste.\n\nEquipe Pulse Growth Marketing 🚀`;
+
+      const result = await sendWhatsAppMessage({
+        number: client.whatsapp,
+        message,
+        clientId: d.client_id,
+        triggerType: 'manual',
+      });
+
+      if (result.success) {
+        await supabase.from('social_media_deliveries').update({ status: 'aprovacao_cliente' } as any).eq('id', d.id);
+        toast.success('Mensagem enviada ao cliente!');
+        fetchData();
+      } else {
+        toast.error(result.error || 'Erro ao enviar mensagem');
+      }
+    } finally {
+      setSendingWhatsApp(false);
+    }
+  };
+
+  const handleClientApproved = async (d: SocialDelivery) => {
+    await supabase.from('social_media_deliveries').update({ status: 'entregue' } as any).eq('id', d.id);
+    if (d.content_task_id) {
+      await supabase.from('content_tasks').update({
+        kanban_column: 'agendamentos',
+        approved_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      } as any).eq('id', d.content_task_id);
+    }
+    toast.success('Aprovado pelo cliente! Pronto para agendamento.');
+    fetchData();
+  };
+
   // Global summary
   const totalThisMonth = useMemo(() => {
     const now = new Date();
@@ -292,7 +399,7 @@ export default function SocialMediaDeliveries() {
     const thisMonth = deliveries.filter(d => d.delivered_at >= start && d.delivered_at <= end);
     return {
       total: thisMonth.length,
-      pendentes: thisMonth.filter(d => d.status === 'entregue' || d.status === 'revisao').length,
+      pendentes: thisMonth.filter(d => d.status === 'entregue' || d.status === 'revisao' || d.status === 'aprovacao_cliente').length,
       agendados: thisMonth.filter(d => d.status === 'agendado').length,
       postados: thisMonth.filter(d => d.status === 'postado').length,
     };
@@ -314,10 +421,12 @@ export default function SocialMediaDeliveries() {
 
   // Deliveries for the selected client
   const clientDeliveries = useMemo(() => {
-    if (!selectedClientId) return { pending: [], scheduled: [], posted: [] };
+    if (!selectedClientId) return { review: [], approval: [], pending: [], scheduled: [], posted: [] };
     const cd = deliveries.filter(d => d.client_id === selectedClientId);
     return {
-      pending: cd.filter(d => d.status === 'entregue' || d.status === 'revisao'),
+      review: cd.filter(d => d.status === 'revisao'),
+      approval: cd.filter(d => d.status === 'aprovacao_cliente'),
+      pending: cd.filter(d => d.status === 'entregue'),
       scheduled: cd.filter(d => d.status === 'agendado'),
       posted: cd.filter(d => d.status === 'postado'),
     };
@@ -332,7 +441,9 @@ export default function SocialMediaDeliveries() {
     const weekStories = weeklyStoriesMap[selectedClientId] || 0;
     const storyGoal = selectedClient.weeklyStories || 0;
 
-    const currentFiltered = activeTab === 'pendentes' ? clientDeliveries.pending
+    const currentFiltered = activeTab === 'revisao' ? clientDeliveries.review
+      : activeTab === 'aprovacao' ? clientDeliveries.approval
+      : activeTab === 'pendentes' ? clientDeliveries.pending
       : activeTab === 'agendados' ? clientDeliveries.scheduled
       : clientDeliveries.posted;
 
@@ -440,9 +551,19 @@ export default function SocialMediaDeliveries() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
+          <TabsList className="flex-wrap">
+            {clientDeliveries.review.length > 0 && (
+              <TabsTrigger value="revisao" className="gap-1.5">
+                <Eye size={14} /> Revisão ({clientDeliveries.review.length})
+              </TabsTrigger>
+            )}
+            {clientDeliveries.approval.length > 0 && (
+              <TabsTrigger value="aprovacao" className="gap-1.5">
+                <MessageSquare size={14} /> Aprovação ({clientDeliveries.approval.length})
+              </TabsTrigger>
+            )}
             <TabsTrigger value="pendentes" className="gap-1.5">
-              <Clock size={14} /> Pendentes ({clientDeliveries.pending.length})
+              <Clock size={14} /> Prontos ({clientDeliveries.pending.length})
             </TabsTrigger>
             <TabsTrigger value="agendados" className="gap-1.5">
               <CalendarClock size={14} /> Agendados ({clientDeliveries.scheduled.length})
@@ -451,6 +572,93 @@ export default function SocialMediaDeliveries() {
               <CheckCircle2 size={14} /> Postados ({clientDeliveries.posted.length})
             </TabsTrigger>
           </TabsList>
+
+          {/* Revisão */}
+          <TabsContent value="revisao" className="mt-4">
+            {clientDeliveries.review.length === 0 ? (
+              <Card className="border-border"><CardContent className="py-12 text-center text-muted-foreground">
+                Nenhum vídeo para revisão.
+              </CardContent></Card>
+            ) : (
+              <div className="grid gap-3">
+                {clientDeliveries.review.map(d => {
+                  const typeConf = getTypeConfig(d.content_type);
+                  return (
+                    <Card key={d.id} className="border-border border-l-4 border-l-orange-500">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-sm text-foreground truncate">{d.title}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <Badge className={`${typeConf.color} border-0 gap-1 text-[10px] px-1.5 py-0`}>
+                                <typeConf.icon size={10} /> {typeConf.label}
+                              </Badge>
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-400 dark:border-orange-800">
+                                👁 Em Revisão
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button size="sm" variant="default" className="gap-1.5 h-8" onClick={() => handleApproveReview(d)}>
+                              <CheckCircle2 size={14} /> Aprovar
+                            </Button>
+                            <Button size="sm" variant="outline" className="gap-1.5 h-8 text-orange-600 border-orange-300 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-700 dark:hover:bg-orange-900/20" onClick={() => openAlterationDialog(d)}>
+                              <AlertTriangle size={14} /> Alteração
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Aprovação Cliente */}
+          <TabsContent value="aprovacao" className="mt-4">
+            {clientDeliveries.approval.length === 0 ? (
+              <Card className="border-border"><CardContent className="py-12 text-center text-muted-foreground">
+                Nenhum conteúdo aguardando aprovação do cliente.
+              </CardContent></Card>
+            ) : (
+              <div className="grid gap-3">
+                {clientDeliveries.approval.map(d => {
+                  const typeConf = getTypeConfig(d.content_type);
+                  return (
+                    <Card key={d.id} className="border-border border-l-4 border-l-cyan-500">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-sm text-foreground truncate">{d.title}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <Badge className={`${typeConf.color} border-0 gap-1 text-[10px] px-1.5 py-0`}>
+                                <typeConf.icon size={10} /> {typeConf.label}
+                              </Badge>
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-900/20 dark:text-cyan-400 dark:border-cyan-800">
+                                ⏳ Aguardando Cliente
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button size="sm" variant="default" className="gap-1.5 h-8 bg-green-600 hover:bg-green-700" onClick={() => handleClientApproved(d)}>
+                              <CheckCircle2 size={14} /> Aprovado pelo Cliente
+                            </Button>
+                            <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => handleSendWhatsAppApproval(d)} disabled={sendingWhatsApp}>
+                              <MessageSquare size={14} /> {sendingWhatsApp ? 'Enviando...' : 'Enviar WhatsApp'}
+                            </Button>
+                            <Button size="sm" variant="outline" className="gap-1.5 h-8 text-orange-600 border-orange-300 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-700 dark:hover:bg-orange-900/20" onClick={() => openAlterationDialog(d)}>
+                              <AlertTriangle size={14} /> Alteração
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
 
           {/* Pendentes */}
           <TabsContent value="pendentes" className="mt-4">
@@ -590,6 +798,7 @@ export default function SocialMediaDeliveries() {
         {renderScheduleDialog()}
         {renderEditDialog()}
         {renderStoriesDialog(selectedClientId)}
+        {renderAlterationDialog()}
       </div>
     );
   }
@@ -704,6 +913,7 @@ export default function SocialMediaDeliveries() {
       {renderScheduleDialog()}
       {renderEditDialog()}
       {renderStoriesDialog('')}
+      {renderAlterationDialog()}
     </div>
   );
 
@@ -813,6 +1023,53 @@ export default function SocialMediaDeliveries() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setStoriesDialogOpen(false)}>Cancelar</Button>
             <Button onClick={() => handleStoriesBatch(selectedClientId || fallbackClientId)} className="gap-1.5"><Zap size={14} /> Registrar {storiesCount} Stories</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  function renderAlterationDialog() {
+    return (
+      <Dialog open={alterationDialogOpen} onOpenChange={setAlterationDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle size={18} className="text-orange-600" /> Enviar para Alteração
+            </DialogTitle>
+          </DialogHeader>
+          {alterationDelivery && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                <p className="font-medium text-sm">{alterationDelivery.title}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {clients.find(c => c.id === alterationDelivery.client_id)?.companyName}
+                </p>
+              </div>
+              <div>
+                <Label>O que precisa ser alterado? *</Label>
+                <Textarea
+                  value={alterationNotes}
+                  onChange={e => setAlterationNotes(e.target.value)}
+                  placeholder="Descreva detalhadamente o que precisa ser corrigido ou ajustado no vídeo..."
+                  rows={4}
+                  className="mt-1"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                O editor responsável receberá uma notificação com essas instruções.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAlterationDialogOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={handleSendToAlteration}
+              disabled={!alterationNotes.trim()}
+              className="gap-1.5 bg-orange-600 hover:bg-orange-700"
+            >
+              <Send size={14} /> Enviar para Alteração
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

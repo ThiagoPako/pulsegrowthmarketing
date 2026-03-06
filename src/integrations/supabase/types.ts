@@ -938,6 +938,45 @@ export type Database = {
         }
         Relationships: []
       }
+      partners: {
+        Row: {
+          active: boolean
+          company_name: string | null
+          created_at: string
+          fixed_rate: number
+          id: string
+          notes: string | null
+          phone: string | null
+          service_function: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          company_name?: string | null
+          created_at?: string
+          fixed_rate?: number
+          id?: string
+          notes?: string | null
+          phone?: string | null
+          service_function?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          company_name?: string | null
+          created_at?: string
+          fixed_rate?: number
+          id?: string
+          notes?: string | null
+          phone?: string | null
+          service_function?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       payment_config: {
         Row: {
           bank: string
@@ -988,7 +1027,10 @@ export type Database = {
           description: string
           extra_content_allowed: number
           id: string
+          is_partner_plan: boolean
           name: string
+          partner_cost: number
+          partner_id: string | null
           periodicity: string
           price: number
           recording_hours: number
@@ -1005,7 +1047,10 @@ export type Database = {
           description?: string
           extra_content_allowed?: number
           id?: string
+          is_partner_plan?: boolean
           name: string
+          partner_cost?: number
+          partner_id?: string | null
           periodicity?: string
           price?: number
           recording_hours?: number
@@ -1022,7 +1067,10 @@ export type Database = {
           description?: string
           extra_content_allowed?: number
           id?: string
+          is_partner_plan?: boolean
           name?: string
+          partner_cost?: number
+          partner_id?: string | null
           periodicity?: string
           price?: number
           recording_hours?: number
@@ -1032,7 +1080,15 @@ export type Database = {
           stories_qty?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "plans_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -1641,6 +1697,7 @@ export type Database = {
         | "social_media"
         | "editor"
         | "endomarketing"
+        | "parceiro"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1774,6 +1831,7 @@ export const Constants = {
         "social_media",
         "editor",
         "endomarketing",
+        "parceiro",
       ],
     },
   },

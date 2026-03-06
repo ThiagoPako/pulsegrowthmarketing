@@ -10,7 +10,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Package, DollarSign, Film, Image, BookImage, Palette } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Film, Image, BookImage, Palette, Handshake } from 'lucide-react';
+
+interface Partner {
+  id: string;
+  user_id: string;
+  company_name: string | null;
+  service_function: string;
+  fixed_rate: number;
+}
 
 interface Plan {
   id: string;
@@ -26,6 +34,9 @@ interface Plan {
   price: number;
   periodicity: string;
   status: string;
+  is_partner_plan: boolean;
+  partner_id: string | null;
+  partner_cost: number;
 }
 
 const PERIODICITY_LABELS: Record<string, string> = {
@@ -38,11 +49,13 @@ const PERIODICITY_LABELS: Record<string, string> = {
 const emptyPlan = (): Partial<Plan> => ({
   name: '', description: '', reels_qty: 0, creatives_qty: 0, stories_qty: 0, arts_qty: 0,
   recording_sessions: 0, recording_hours: 0, extra_content_allowed: 0, price: 0,
-  periodicity: 'mensal', status: 'ativo',
+  periodicity: 'mensal', status: 'ativo', is_partner_plan: false, partner_id: null, partner_cost: 0,
 });
 
 export default function Plans() {
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const [partnerProfiles, setPartnerProfiles] = useState<Record<string, string>>({});
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Plan | null>(null);
   const [form, setForm] = useState<Partial<Plan>>(emptyPlan());
@@ -54,7 +67,29 @@ export default function Plans() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchPlans(); }, [fetchPlans]);
+  const fetchPartners = useCallback(async () => {
+    const { data } = await supabase.from('partners').select('id, user_id, company_name, service_function, fixed_rate');
+    if (data) {
+      setPartners(data as Partner[]);
+      // Fetch profile names
+      const userIds = data.map((p: any) => p.user_id);
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('id, name, display_name').in('id', userIds);
+        if (profiles) {
+          const map: Record<string, string> = {};
+          profiles.forEach((p: any) => { map[p.id] = p.display_name || p.name; });
+          // Map partner_id -> name
+          const partnerNameMap: Record<string, string> = {};
+          data.forEach((partner: any) => {
+            partnerNameMap[partner.id] = partner.company_name || map[partner.user_id] || 'Parceiro';
+          });
+          setPartnerProfiles(partnerNameMap);
+        }
+      }
+    }
+  }, []);
+
+  useEffect(() => { fetchPlans(); fetchPartners(); }, [fetchPlans, fetchPartners]);
 
   const handleOpen = (plan?: Plan) => {
     if (plan) { setEditing(plan); setForm(plan); }
@@ -64,24 +99,22 @@ export default function Plans() {
 
   const handleSave = async () => {
     if (!form.name) { toast.error('Nome do plano é obrigatório'); return; }
+    const payload = {
+      name: form.name, description: form.description, reels_qty: form.reels_qty,
+      creatives_qty: form.creatives_qty, stories_qty: form.stories_qty, arts_qty: form.arts_qty,
+      recording_sessions: form.recording_sessions, recording_hours: form.recording_hours,
+      extra_content_allowed: form.extra_content_allowed, price: form.price,
+      periodicity: form.periodicity, status: form.status,
+      is_partner_plan: form.is_partner_plan || false,
+      partner_id: form.is_partner_plan ? form.partner_id : null,
+      partner_cost: form.is_partner_plan ? (form.partner_cost || 0) : 0,
+    };
     if (editing) {
-      const { error } = await supabase.from('plans').update({
-        name: form.name, description: form.description, reels_qty: form.reels_qty,
-        creatives_qty: form.creatives_qty, stories_qty: form.stories_qty, arts_qty: form.arts_qty,
-        recording_sessions: form.recording_sessions, recording_hours: form.recording_hours,
-        extra_content_allowed: form.extra_content_allowed, price: form.price,
-        periodicity: form.periodicity, status: form.status, updated_at: new Date().toISOString(),
-      } as any).eq('id', editing.id);
+      const { error } = await supabase.from('plans').update({ ...payload, updated_at: new Date().toISOString() } as any).eq('id', editing.id);
       if (error) { toast.error('Erro ao atualizar plano'); return; }
       toast.success('Plano atualizado');
     } else {
-      const { error } = await supabase.from('plans').insert({
-        name: form.name, description: form.description, reels_qty: form.reels_qty,
-        creatives_qty: form.creatives_qty, stories_qty: form.stories_qty, arts_qty: form.arts_qty,
-        recording_sessions: form.recording_sessions, recording_hours: form.recording_hours,
-        extra_content_allowed: form.extra_content_allowed, price: form.price,
-        periodicity: form.periodicity, status: form.status,
-      } as any);
+      const { error } = await supabase.from('plans').insert(payload as any);
       if (error) { toast.error('Erro ao criar plano'); return; }
       toast.success('Plano criado');
     }
@@ -103,6 +136,8 @@ export default function Plans() {
   };
 
   const setField = (key: string, value: any) => setForm(prev => ({ ...prev, [key]: value }));
+
+  const profit = (form.price || 0) - (form.partner_cost || 0);
 
   return (
     <div className="space-y-6">
@@ -131,7 +166,14 @@ export default function Plans() {
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
-                    <CardTitle className="text-lg truncate">{plan.name}</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-lg truncate">{plan.name}</CardTitle>
+                      {plan.is_partner_plan && (
+                        <Badge variant="outline" className="gap-1 shrink-0 text-purple-700 border-purple-300 bg-purple-50">
+                          <Handshake size={10} /> Parceiro
+                        </Badge>
+                      )}
+                    </div>
                     <CardDescription className="line-clamp-2 mt-1">{plan.description || 'Sem descrição'}</CardDescription>
                   </div>
                   <div className="flex gap-1 ml-2 shrink-0">
@@ -147,6 +189,24 @@ export default function Plans() {
                     {plan.status === 'ativo' ? 'Ativo' : 'Inativo'}
                   </Badge>
                 </div>
+
+                {plan.is_partner_plan && plan.partner_id && (
+                  <div className="p-2 rounded-lg bg-purple-50 border border-purple-200 text-xs space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Parceiro:</span>
+                      <span className="font-medium">{partnerProfiles[plan.partner_id] || '—'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Custo parceiro:</span>
+                      <span className="font-medium text-destructive">R$ {Number(plan.partner_cost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-purple-200 pt-1">
+                      <span className="text-muted-foreground">Lucro:</span>
+                      <span className="font-bold text-success">R$ {(Number(plan.price) - Number(plan.partner_cost)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                )}
+
                 <Badge variant="outline">{PERIODICITY_LABELS[plan.periodicity] || plan.periodicity}</Badge>
 
                 <div className="grid grid-cols-2 gap-2 text-xs">
@@ -209,9 +269,47 @@ export default function Plans() {
                 <Input type="number" min={0} value={form.extra_content_allowed} onChange={e => setField('extra_content_allowed', parseInt(e.target.value) || 0)} />
               </div>
               <div className="space-y-1">
-                <Label>Valor (R$)</Label>
+                <Label>Valor do Plano (R$)</Label>
                 <Input type="number" min={0} step={0.01} value={form.price} onChange={e => setField('price', parseFloat(e.target.value) || 0)} />
               </div>
+            </div>
+
+            {/* Partner section */}
+            <div className="p-3 rounded-lg border border-border space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-2"><Handshake size={16} /> Plano com Parceiro</Label>
+                <Switch checked={form.is_partner_plan || false} onCheckedChange={v => setField('is_partner_plan', v)} />
+              </div>
+
+              {form.is_partner_plan && (
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label>Parceiro</Label>
+                    <Select value={form.partner_id || ''} onValueChange={v => setField('partner_id', v)}>
+                      <SelectTrigger><SelectValue placeholder="Selecione o parceiro" /></SelectTrigger>
+                      <SelectContent>
+                        {partners.map(p => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.company_name || partnerProfiles[p.id] || 'Parceiro'} — {p.service_function}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Custo do Parceiro (R$)</Label>
+                    <Input type="number" min={0} step={0.01} value={form.partner_cost} onChange={e => setField('partner_cost', parseFloat(e.target.value) || 0)} />
+                  </div>
+                  {(form.price || 0) > 0 && (
+                    <div className="p-2 rounded bg-muted text-xs flex justify-between">
+                      <span>Lucro estimado:</span>
+                      <span className={`font-bold ${profit >= 0 ? 'text-success' : 'text-destructive'}`}>
+                        R$ {profit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">

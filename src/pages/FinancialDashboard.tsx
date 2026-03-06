@@ -453,6 +453,7 @@ export default function FinancialDashboard() {
           { label: 'Movimentações', path: '/financeiro/movimentacoes', icon: ClipboardList },
           { label: 'Caixa', path: '/financeiro/caixa', icon: Wallet },
           { label: 'Inadimplência', path: '/financeiro/inadimplencia', icon: AlertTriangle },
+          { label: 'Parceiros', path: '/financeiro/parceiros', icon: Users },
           { label: 'Configurações', path: '/financeiro/configuracoes', icon: CreditCard },
         ].map(item => (
           <Button key={item.path} variant="outline" className="h-auto py-3 flex flex-col gap-1 hover-scale" onClick={() => navigate(item.path)}>

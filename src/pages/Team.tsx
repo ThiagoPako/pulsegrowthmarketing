@@ -7,13 +7,14 @@ import type { UserRole } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Users, KeyRound } from 'lucide-react';
+import { Plus, KeyRound, Users, Handshake } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 
-const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing'];
+const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro'];
 
 interface TeamMember {
   id: string;
@@ -25,19 +26,33 @@ interface TeamMember {
   jobTitle?: string;
 }
 
+interface PartnerInfo {
+  id: string;
+  user_id: string;
+  company_name: string | null;
+  service_function: string;
+  fixed_rate: number;
+  phone: string;
+  notes: string;
+  active: boolean;
+}
+
 export default function Team() {
   const { currentUser } = useApp();
   const { signUp, session } = useAuth();
   const [open, setOpen] = useState(false);
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [partners, setPartners] = useState<PartnerInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'videomaker' as UserRole });
+  const [partnerForm, setPartnerForm] = useState({ companyName: '', serviceFunction: '', fixedRate: 0, phone: '', notes: '' });
 
-  // Reset password state
   const [resetOpen, setResetOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState<TeamMember | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [resetting, setResetting] = useState(false);
+
+  const [tab, setTab] = useState<'equipe' | 'parceiros'>('equipe');
 
   const fetchMembers = async () => {
     const { data } = await supabase.from('profiles').select('*');
@@ -55,7 +70,12 @@ export default function Team() {
     setLoading(false);
   };
 
-  useEffect(() => { fetchMembers(); }, []);
+  const fetchPartners = async () => {
+    const { data } = await supabase.from('partners').select('*');
+    if (data) setPartners(data as PartnerInfo[]);
+  };
+
+  useEffect(() => { fetchMembers(); fetchPartners(); }, []);
 
   const handleSave = async () => {
     if (!form.name || !form.email || !form.password) { toast.error('Preencha todos os campos'); return; }
@@ -64,12 +84,33 @@ export default function Team() {
     const { error } = await signUp(form.email, form.password, form.name, form.role as AppRole);
     if (error) {
       toast.error(error);
-    } else {
-      toast.success('Usuário cadastrado com sucesso!');
-      setOpen(false);
-      setForm({ name: '', email: '', password: '', role: 'videomaker' });
-      setTimeout(fetchMembers, 1000);
+      return;
     }
+
+    // If creating a partner, we need to create the partner record after user is created
+    if (form.role === 'parceiro') {
+      // Wait a moment for profile to be created by trigger
+      setTimeout(async () => {
+        const { data: profile } = await supabase.from('profiles').select('id').eq('email', form.email).single();
+        if (profile) {
+          await supabase.from('partners').insert({
+            user_id: profile.id,
+            company_name: partnerForm.companyName || null,
+            service_function: partnerForm.serviceFunction,
+            fixed_rate: partnerForm.fixedRate,
+            phone: partnerForm.phone,
+            notes: partnerForm.notes,
+          } as any);
+        }
+        fetchPartners();
+      }, 1500);
+    }
+
+    toast.success('Usuário cadastrado com sucesso!');
+    setOpen(false);
+    setForm({ name: '', email: '', password: '', role: 'videomaker' });
+    setPartnerForm({ companyName: '', serviceFunction: '', fixedRate: 0, phone: '', notes: '' });
+    setTimeout(fetchMembers, 1000);
   };
 
   const handleResetPassword = async () => {
@@ -100,7 +141,13 @@ export default function Team() {
     social_media: 'bg-warning/20 text-warning',
     editor: 'bg-success/20 text-success',
     endomarketing: 'bg-accent text-accent-foreground',
+    parceiro: 'bg-purple-100 text-purple-700',
   };
+
+  const teamMembers = members.filter(m => m.role !== 'parceiro');
+  const partnerMembers = members.filter(m => m.role === 'parceiro');
+
+  const getPartnerInfo = (userId: string) => partners.find(p => p.user_id === userId);
 
   return (
     <div className="space-y-4">
@@ -109,9 +156,11 @@ export default function Team() {
         {currentUser?.role === 'admin' && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button onClick={() => setForm({ name: '', email: '', password: '', role: 'videomaker' })}><Plus size={16} className="mr-2" /> Novo Usuário</Button>
+              <Button onClick={() => { setForm({ name: '', email: '', password: '', role: 'videomaker' }); setPartnerForm({ companyName: '', serviceFunction: '', fixedRate: 0, phone: '', notes: '' }); }}>
+                <Plus size={16} className="mr-2" /> Novo Usuário
+              </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader><DialogTitle>Novo Usuário</DialogTitle></DialogHeader>
               <div className="space-y-4">
                 <div className="space-y-1"><Label>Nome</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
@@ -124,11 +173,50 @@ export default function Team() {
                     <SelectContent>{ROLES.map(r => <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
+
+                {form.role === 'parceiro' && (
+                  <div className="space-y-3 p-3 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-sm font-semibold flex items-center gap-2"><Handshake size={16} /> Dados do Parceiro</p>
+                    <div className="space-y-1">
+                      <Label>Empresa (opcional)</Label>
+                      <Input value={partnerForm.companyName} onChange={e => setPartnerForm({ ...partnerForm, companyName: e.target.value })} placeholder="Nome da empresa" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Função/Serviço *</Label>
+                      <Input value={partnerForm.serviceFunction} onChange={e => setPartnerForm({ ...partnerForm, serviceFunction: e.target.value })} placeholder="Ex: Fotógrafo, Designer, Tráfego..." />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label>Valor por serviço (R$)</Label>
+                        <Input type="number" min={0} step={0.01} value={partnerForm.fixedRate} onChange={e => setPartnerForm({ ...partnerForm, fixedRate: parseFloat(e.target.value) || 0 })} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Telefone</Label>
+                        <Input value={partnerForm.phone} onChange={e => setPartnerForm({ ...partnerForm, phone: e.target.value })} placeholder="(00) 00000-0000" />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Observações</Label>
+                      <Textarea value={partnerForm.notes} onChange={e => setPartnerForm({ ...partnerForm, notes: e.target.value })} rows={2} />
+                    </div>
+                  </div>
+                )}
+
                 <Button onClick={handleSave} className="w-full">Cadastrar</Button>
               </div>
             </DialogContent>
           </Dialog>
         )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2">
+        <Button variant={tab === 'equipe' ? 'default' : 'outline'} size="sm" onClick={() => setTab('equipe')} className="gap-2">
+          <Users size={14} /> Equipe ({teamMembers.length})
+        </Button>
+        <Button variant={tab === 'parceiros' ? 'default' : 'outline'} size="sm" onClick={() => setTab('parceiros')} className="gap-2">
+          <Handshake size={14} /> Parceiros ({partnerMembers.length})
+        </Button>
       </div>
 
       {/* Reset Password Dialog */}
@@ -156,38 +244,78 @@ export default function Team() {
         <div className="glass-card p-12 text-center text-muted-foreground">
           <p>Carregando equipe...</p>
         </div>
-      ) : members.length === 0 ? (
-        <div className="glass-card p-12 text-center text-muted-foreground">
-          <Users size={40} className="mx-auto mb-3 opacity-50" /><p>Nenhum usuário cadastrado</p>
-        </div>
-      ) : (
-        <div className="grid gap-3">
-          {members.map(u => (
-            <div key={u.id} className="glass-card p-4 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <UserAvatar user={u} size="lg" />
-                <div>
-                  <p className="font-medium">{u.displayName || u.name}</p>
-                  <p className="text-xs text-muted-foreground">{u.email}{u.jobTitle ? ` · ${u.jobTitle}` : ''}</p>
+      ) : tab === 'equipe' ? (
+        teamMembers.length === 0 ? (
+          <div className="glass-card p-12 text-center text-muted-foreground">
+            <Users size={40} className="mx-auto mb-3 opacity-50" /><p>Nenhum usuário cadastrado</p>
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            {teamMembers.map(u => (
+              <div key={u.id} className="glass-card p-4 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <UserAvatar user={u} size="lg" />
+                  <div>
+                    <p className="font-medium">{u.displayName || u.name}</p>
+                    <p className="text-xs text-muted-foreground">{u.email}{u.jobTitle ? ` · ${u.jobTitle}` : ''}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${roleColors[u.role]}`}>{ROLE_LABELS[u.role]}</span>
+                  {currentUser?.role === 'admin' && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Redefinir senha" onClick={() => { setResetTarget(u); setResetOpen(true); }}>
+                      <KeyRound size={16} />
+                    </Button>
+                  )}
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <span className={`text-xs px-2 py-1 rounded-full font-medium ${roleColors[u.role]}`}>{ROLE_LABELS[u.role]}</span>
-                {currentUser?.role === 'admin' && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    title="Redefinir senha"
-                    onClick={() => { setResetTarget(u); setResetOpen(true); }}
-                  >
-                    <KeyRound size={16} />
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )
+      ) : (
+        partnerMembers.length === 0 ? (
+          <div className="glass-card p-12 text-center text-muted-foreground">
+            <Handshake size={40} className="mx-auto mb-3 opacity-50" /><p>Nenhum parceiro cadastrado</p>
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            {partnerMembers.map(u => {
+              const info = getPartnerInfo(u.id);
+              return (
+                <div key={u.id} className="glass-card p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <UserAvatar user={u} size="lg" />
+                      <div>
+                        <p className="font-medium">{u.displayName || u.name}</p>
+                        <p className="text-xs text-muted-foreground">{u.email}</p>
+                        {info && (
+                          <div className="flex items-center gap-2 mt-1">
+                            {info.company_name && <span className="text-xs bg-muted px-2 py-0.5 rounded">{info.company_name}</span>}
+                            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">{info.service_function}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 text-right">
+                      {info && (
+                        <div>
+                          <p className="text-sm font-bold">R$ {Number(info.fixed_rate).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                          <p className="text-[10px] text-muted-foreground">por serviço</p>
+                        </div>
+                      )}
+                      {currentUser?.role === 'admin' && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Redefinir senha" onClick={() => { setResetTarget(u); setResetOpen(true); }}>
+                          <KeyRound size={16} />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
       )}
     </div>
   );

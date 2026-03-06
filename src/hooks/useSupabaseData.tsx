@@ -52,6 +52,8 @@ function clientToRow(c: Client) {
     accepts_extra: c.acceptsExtra,
     extra_client_appears: c.extraClientAppears,
     whatsapp: c.whatsapp || '',
+    email: c.email || '',
+    city: c.city || '',
     weekly_reels: c.weeklyReels,
     weekly_creatives: c.weeklyCreatives,
     weekly_goal: c.weeklyGoal,

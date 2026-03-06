@@ -94,6 +94,10 @@ export default function Clients() {
   const [dueDay, setDueDay] = useState(10);
   const [paymentMethod, setPaymentMethod] = useState('pix');
 
+  // Social accounts state
+  const [socialAccounts, setSocialAccounts] = useState<SocialAccountState>(emptySocialAccounts());
+  const [existingSocialAccounts, setExistingSocialAccounts] = useState<any[]>([]);
+
   useEffect(() => {
     supabase.from('plans').select('id, name, status, reels_qty, creatives_qty, stories_qty').eq('status', 'ativo').then(({ data }) => {
       if (data) setPlans(data as any[]);

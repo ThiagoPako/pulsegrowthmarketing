@@ -26,7 +26,7 @@ const navItems = [
   { path: '/planos', label: 'Planos', icon: Package, roles: ['admin'] },
   { path: '/entregas', label: 'Entregas', icon: ClipboardList, roles: ['admin'] },
   { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media'] },
-  { path: '/conteudo', label: 'Conteúdo', icon: Kanban, roles: ['admin', 'social_media', 'videomaker', 'editor', 'endomarketing'] },
+  { path: '/conteudo', label: 'Conteúdo', icon: Kanban, roles: ['admin', 'social_media', 'videomaker', 'editor'] },
   { path: '/edicao', label: 'Edição', icon: Scissors, roles: ['admin', 'editor'] },
   { path: '/edicao/kanban', label: 'Kanban Ed.', icon: Kanban, roles: ['admin', 'editor'] },
   { path: '/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin'] },

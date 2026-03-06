@@ -90,7 +90,7 @@ export default function Schedule() {
   const [finishRecording, setFinishRecordingState] = useState<Recording | null>(null);
   const [finishCompletedScripts, setFinishCompletedScripts] = useState<Set<string>>(new Set());
   const [finishStep, setFinishStep] = useState<'scripts' | 'drive'>('scripts');
-  const [finishDriveLink, setFinishDriveLink] = useState('');
+  const [finishDriveLinks, setFinishDriveLinks] = useState<Record<string, string>>({});
 
   const videomakers = users.filter(u => u.role === 'videomaker');
   const currentMonth = addMonths(new Date(), monthOffset);
@@ -403,7 +403,7 @@ export default function Schedule() {
       setFinishRecordingState(rec);
       setFinishCompletedScripts(new Set());
       setFinishStep('scripts');
-      setFinishDriveLink('');
+      setFinishDriveLinks({});
       setFinishRecOpen(true);
     } else {
       setStartRecordingState(rec);
@@ -460,8 +460,9 @@ export default function Schedule() {
   const confirmFinishRec = async () => {
     if (!finishRecording) return;
     
-    if (!finishDriveLink.trim()) {
-      toast.error('Adicione o link da pasta do Google Drive com os materiais');
+    const missingLinks = Array.from(finishCompletedScripts).filter(id => !finishDriveLinks[id]?.trim());
+    if (missingLinks.length > 0) {
+      toast.error('Adicione o link do Drive para todos os roteiros');
       return;
     }
     
@@ -505,13 +506,14 @@ export default function Schedule() {
       const { data: existing } = await supabase.from('content_tasks')
         .select('id').eq('script_id', scriptId).limit(1);
       
+      const scriptDriveLink = finishDriveLinks[scriptId]?.trim() || '';
       if (existing && existing.length > 0) {
         await supabase.from('content_tasks').update({
           kanban_column: 'edicao',
-          drive_link: finishDriveLink.trim(),
+          drive_link: scriptDriveLink,
           recording_id: finishRecording.id,
           editing_deadline: editingDeadline.toISOString(),
-          description: `Roteiro gravado pelo videomaker. Link dos materiais: ${finishDriveLink.trim()}`,
+          description: `Roteiro gravado pelo videomaker. Link dos materiais: ${scriptDriveLink}`,
         } as any).eq('id', existing[0].id);
       } else {
         await supabase.from('content_tasks').insert({
@@ -519,10 +521,10 @@ export default function Schedule() {
           title: script.title,
           content_type: script.contentFormat || 'reels',
           kanban_column: 'edicao',
-          description: `Roteiro gravado pelo videomaker. Link dos materiais: ${finishDriveLink.trim()}`,
+          description: `Roteiro gravado pelo videomaker. Link dos materiais: ${scriptDriveLink}`,
           script_id: scriptId,
           recording_id: finishRecording.id,
-          drive_link: finishDriveLink.trim(),
+          drive_link: scriptDriveLink,
           editing_deadline: editingDeadline.toISOString(),
         } as any);
       }
@@ -543,7 +545,7 @@ export default function Schedule() {
     setFinishRecOpen(false);
     setFinishRecordingState(null);
     setFinishCompletedScripts(new Set());
-    setFinishDriveLink('');
+    setFinishDriveLinks({});
     setFinishStep('scripts');
   };
 
@@ -1163,7 +1165,7 @@ export default function Schedule() {
       </Dialog>
 
       {/* Finish Recording — Script Completion + Drive Link Dialog */}
-      <Dialog open={finishRecOpen} onOpenChange={(open) => { if (!open) { setFinishRecOpen(false); setFinishRecordingState(null); setFinishStep('scripts'); setFinishDriveLink(''); } }}>
+      <Dialog open={finishRecOpen} onOpenChange={(open) => { if (!open) { setFinishRecOpen(false); setFinishRecordingState(null); setFinishStep('scripts'); setFinishDriveLinks({}); } }}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1217,22 +1219,40 @@ export default function Schedule() {
           ) : (
             <>
               <p className="text-sm text-muted-foreground">
-                Cole o link da pasta do Google Drive onde subiu os materiais brutos desta gravação.
+                Adicione o link da pasta do Google Drive para cada roteiro gravado. O editor terá <strong>2 dias úteis</strong> para editar.
               </p>
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2"><Link size={14} /> Link do Google Drive</Label>
-                <Input
-                  value={finishDriveLink}
-                  onChange={e => setFinishDriveLink(e.target.value)}
-                  placeholder="https://drive.google.com/drive/folders/..."
-                />
+              <div className="space-y-3">
+                {Array.from(finishCompletedScripts).map(id => {
+                  const s = scripts.find(s => s.id === id);
+                  if (!s) return null;
+                  return (
+                    <div key={id} className="p-4 rounded-xl bg-muted/30 border border-border">
+                      <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
+                        📁 {s.title}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Link size={16} className="text-muted-foreground shrink-0" />
+                        <Input
+                          value={finishDriveLinks[id] || ''}
+                          onChange={e => setFinishDriveLinks(prev => ({ ...prev, [id]: e.target.value }))}
+                          placeholder="https://drive.google.com/drive/folders/..."
+                          className="h-9"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
               <div className="flex gap-2 mt-3">
                 <Button variant="outline" onClick={() => setFinishStep('scripts')} className="flex-1">
                   Voltar
                 </Button>
-                <Button onClick={confirmFinishRec} disabled={!finishDriveLink.trim()} className="flex-1 gap-1.5 bg-success hover:bg-success/90 text-success-foreground">
-                  <Check size={16} /> Finalizar
+                <Button 
+                  onClick={confirmFinishRec} 
+                  disabled={Array.from(finishCompletedScripts).some(id => !finishDriveLinks[id]?.trim())}
+                  className="flex-1 gap-1.5 bg-success hover:bg-success/90 text-success-foreground"
+                >
+                  <Check size={16} /> Finalizar e Enviar para Edição
                 </Button>
               </div>
             </>

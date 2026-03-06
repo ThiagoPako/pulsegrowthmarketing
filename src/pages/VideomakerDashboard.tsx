@@ -181,7 +181,14 @@ export default function VideomakerDashboard() {
     if (!rec) return;
 
     const now = new Date().toISOString();
-    const planned = plannedScripts[finishRecordingId] || [];
+    let planned = plannedScripts[finishRecordingId] || [];
+    // Fallback: use DB-persisted planned scripts
+    if (planned.length === 0) {
+      const activeRec = activeRecordings.find(a => a.recordingId === finishRecordingId);
+      if (activeRec?.plannedScriptIds && activeRec.plannedScriptIds.length > 0) {
+        planned = activeRec.plannedScriptIds;
+      }
+    }
 
     // Mark completed scripts as recorded
     completedScriptIds.forEach(id => {

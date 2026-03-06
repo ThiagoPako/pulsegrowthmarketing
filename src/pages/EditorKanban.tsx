@@ -18,6 +18,7 @@ import ClientLogo from '@/components/ClientLogo';
 import { highlightQuotes } from '@/lib/highlightQuotes';
 import { format, differenceInHours, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 
 const CONTENT_TYPES = [
   { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400', points: 10 },

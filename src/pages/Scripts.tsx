@@ -142,7 +142,7 @@ export default function Scripts() {
   const printRef = useRef<HTMLDivElement>(null);
 
   const filteredScripts = useMemo(() => {
-    let result = scripts;
+    let result = scripts.filter(s => !s.recorded);
     if (filterEndo === 'endo') result = result.filter(s => s.isEndomarketing);
     else if (filterEndo === 'video') result = result.filter(s => !s.isEndomarketing);
     if (filterClient !== 'all') result = result.filter(s => s.clientId === filterClient);

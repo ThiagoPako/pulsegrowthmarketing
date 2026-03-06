@@ -1025,11 +1025,38 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
         </div>
 
         <div className="p-3 space-y-2.5">
+          {/* Client logo + name row */}
+          <div className="flex items-center gap-2.5 pr-8">
+            {client && (
+              <div className="shrink-0">
+                {client.logoUrl ? (
+                  <img src={client.logoUrl} alt={client.companyName} className="w-10 h-10 rounded-xl object-cover border border-border shadow-sm" />
+                ) : (
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 shadow-sm"
+                    style={{
+                      backgroundColor: `hsl(${client.color || '220 10% 50%'} / 0.15)`,
+                      color: `hsl(${client.color || '220 10% 50%'})`,
+                    }}
+                  >
+                    {client.companyName.substring(0, 2).toUpperCase()}
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <h3 className="text-[13px] font-bold text-foreground leading-snug tracking-tight truncate" style={{ fontFamily: 'var(--font-display)' }}>
+                {client?.companyName || 'Cliente'}
+              </h3>
+              <p className="text-[11px] text-foreground/60 leading-snug line-clamp-1 mt-0.5">{task.title}</p>
+            </div>
+          </div>
+
           {/* Tags row */}
           <div className="flex flex-wrap gap-1.5">
             {/* Content type badge */}
-            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md ${typeConfig.color}`}>
-              <TypeIcon size={10} /> {typeConfig.label}
+            <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg ${typeConfig.color}`}>
+              <TypeIcon size={12} /> {typeConfig.label}
             </span>
             {/* Priority editing badge */}
             {task.editing_priority && (

@@ -276,6 +276,8 @@ export type Database = {
       content_tasks: {
         Row: {
           adjustment_notes: string | null
+          alteration_deadline: string | null
+          approval_deadline: string | null
           approval_sent_at: string | null
           approved_at: string | null
           assigned_to: string | null
@@ -288,11 +290,14 @@ export type Database = {
           edited_video_link: string | null
           edited_video_type: string | null
           editing_deadline: string | null
+          editing_priority: boolean
           editing_started_at: string | null
           id: string
+          immediate_alteration: boolean
           kanban_column: string
           position: number
           recording_id: string | null
+          review_deadline: string | null
           scheduled_recording_date: string | null
           scheduled_recording_time: string | null
           script_alteration_notes: string | null
@@ -303,6 +308,8 @@ export type Database = {
         }
         Insert: {
           adjustment_notes?: string | null
+          alteration_deadline?: string | null
+          approval_deadline?: string | null
           approval_sent_at?: string | null
           approved_at?: string | null
           assigned_to?: string | null
@@ -315,11 +322,14 @@ export type Database = {
           edited_video_link?: string | null
           edited_video_type?: string | null
           editing_deadline?: string | null
+          editing_priority?: boolean
           editing_started_at?: string | null
           id?: string
+          immediate_alteration?: boolean
           kanban_column?: string
           position?: number
           recording_id?: string | null
+          review_deadline?: string | null
           scheduled_recording_date?: string | null
           scheduled_recording_time?: string | null
           script_alteration_notes?: string | null
@@ -330,6 +340,8 @@ export type Database = {
         }
         Update: {
           adjustment_notes?: string | null
+          alteration_deadline?: string | null
+          approval_deadline?: string | null
           approval_sent_at?: string | null
           approved_at?: string | null
           assigned_to?: string | null
@@ -342,11 +354,14 @@ export type Database = {
           edited_video_link?: string | null
           edited_video_type?: string | null
           editing_deadline?: string | null
+          editing_priority?: boolean
           editing_started_at?: string | null
           id?: string
+          immediate_alteration?: boolean
           kanban_column?: string
           position?: number
           recording_id?: string | null
+          review_deadline?: string | null
           scheduled_recording_date?: string | null
           scheduled_recording_time?: string | null
           script_alteration_notes?: string | null
@@ -1485,6 +1500,7 @@ export type Database = {
           default_user_id: string
           id: string
           integration_active: boolean
+          msg_approval_expired: string
           msg_backup_confirmed: string
           msg_backup_invite: string
           msg_confirmation: string
@@ -1510,6 +1526,7 @@ export type Database = {
           default_user_id?: string
           id?: string
           integration_active?: boolean
+          msg_approval_expired?: string
           msg_backup_confirmed?: string
           msg_backup_invite?: string
           msg_confirmation?: string
@@ -1535,6 +1552,7 @@ export type Database = {
           default_user_id?: string
           id?: string
           integration_active?: boolean
+          msg_approval_expired?: string
           msg_backup_confirmed?: string
           msg_backup_invite?: string
           msg_confirmation?: string

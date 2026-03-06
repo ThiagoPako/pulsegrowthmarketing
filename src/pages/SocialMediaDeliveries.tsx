@@ -144,6 +144,7 @@ export default function SocialMediaDeliveries() {
   const [alterationDialogOpen, setAlterationDialogOpen] = useState(false);
   const [alterationNotes, setAlterationNotes] = useState('');
   const [alterationDelivery, setAlterationDelivery] = useState<SocialDelivery | null>(null);
+  const [alterationImmediate, setAlterationImmediate] = useState(false);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -353,6 +354,7 @@ export default function SocialMediaDeliveries() {
   const openAlterationDialog = (d: SocialDelivery) => {
     setAlterationDelivery(d);
     setAlterationNotes('');
+    setAlterationImmediate(false);
     setAlterationDialogOpen(true);
   };
 
@@ -366,10 +368,14 @@ export default function SocialMediaDeliveries() {
       const { data: taskData } = await supabase.from('content_tasks').select('assigned_to').eq('id', taskId).single();
       const editorId = taskData?.assigned_to;
 
+      const alterationDeadline = alterationImmediate ? null : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
       await supabase.from('content_tasks').update({
         kanban_column: 'alteracao',
         adjustment_notes: alterationNotes.trim(),
         description: alterationNotes.trim(),
+        immediate_alteration: alterationImmediate,
+        alteration_deadline: alterationDeadline,
         updated_at: new Date().toISOString(),
       } as any).eq('id', taskId);
 
@@ -377,18 +383,44 @@ export default function SocialMediaDeliveries() {
 
       if (editorId) {
         const clientName = clients.find(c => c.id === alterationDelivery.client_id)?.companyName || '';
+        const urgencyPrefix = alterationImmediate ? '🚨 IMEDIATO: ' : '';
         await supabase.rpc('notify_user', {
           _user_id: editorId,
-          _title: 'Alteração de Vídeo',
-          _message: `${alterationDelivery.title} (${clientName}) precisa de alteração: ${alterationNotes.trim().substring(0, 100)}`,
+          _title: `${urgencyPrefix}Alteração de Vídeo`,
+          _message: `${alterationDelivery.title} (${clientName}) precisa de alteração${alterationImmediate ? ' IMEDIATA' : ''}: ${alterationNotes.trim().substring(0, 100)}`,
           _type: 'alteration',
           _link: '/edicao/kanban',
         });
       }
     }
-    toast.success('Enviado para alteração');
+    toast.success(alterationImmediate ? '🚨 Enviado para alteração IMEDIATA!' : 'Enviado para alteração');
     setAlterationDialogOpen(false);
     setAlterationDelivery(null);
+    fetchData();
+  };
+
+  // ─── MARK AS PRIORITY EDITING ──────────────────────────────
+  const handleMarkPriorityEditing = async (d: SocialDelivery) => {
+    if (!d.content_task_id) {
+      toast.error('Conteúdo sem tarefa vinculada');
+      return;
+    }
+    await supabase.from('content_tasks').update({
+      editing_priority: true,
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', d.content_task_id);
+
+    // Notify editors
+    const clientName = clients.find(c => c.id === d.client_id)?.companyName || '';
+    await supabase.rpc('notify_role', {
+      _role: 'editor',
+      _title: '⚡ Vídeo Prioritário',
+      _message: `"${d.title}" (${clientName}) foi marcado como prioridade na fila de edição`,
+      _type: 'priority',
+      _link: '/edicao/kanban',
+    });
+
+    toast.success('⚡ Marcado como prioridade na fila de edição!');
     fetchData();
   };
 
@@ -680,6 +712,11 @@ export default function SocialMediaDeliveries() {
                                   <Button size="sm" variant="outline" className="gap-1.5 h-8 text-orange-600 border-orange-300 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-700 dark:hover:bg-orange-900/20" onClick={() => openAlterationDialog(d)}>
                                     <AlertTriangle size={14} /> Alteração
                                   </Button>
+                                  {d.content_task_id && (
+                                    <Button size="sm" variant="outline" className="gap-1.5 h-8 text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/20" onClick={() => handleMarkPriorityEditing(d)}>
+                                      <Zap size={14} /> Prioridade
+                                    </Button>
+                                  )}
                                 </>
                               )}
                               {d.status === 'ajuste' && (
@@ -753,6 +790,11 @@ export default function SocialMediaDeliveries() {
                             <Button size="sm" variant="outline" className="gap-1.5 h-8 text-orange-600 border-orange-300 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-700 dark:hover:bg-orange-900/20" onClick={() => openAlterationDialog(d)}>
                               <AlertTriangle size={14} /> Alteração
                             </Button>
+                            {d.content_task_id && (
+                              <Button size="sm" variant="outline" className="gap-1.5 h-8 text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/20" onClick={() => handleMarkPriorityEditing(d)}>
+                                <Zap size={14} /> Prioridade
+                              </Button>
+                            )}
                           </div>
                         </div>
                         {/* Video link for review */}
@@ -1224,8 +1266,23 @@ export default function SocialMediaDeliveries() {
                   className="mt-1"
                 />
               </div>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
+                <input
+                  type="checkbox"
+                  checked={alterationImmediate}
+                  onChange={e => setAlterationImmediate(e.target.checked)}
+                  className="h-4 w-4 rounded border-destructive/40 text-destructive focus:ring-destructive"
+                  id="sm-immediate-check"
+                />
+                <label htmlFor="sm-immediate-check" className="text-sm cursor-pointer">
+                  <span className="font-semibold text-destructive">🚨 Alteração Imediata</span>
+                  <span className="text-xs text-muted-foreground block">O editor será notificado para corrigir com prioridade máxima</span>
+                </label>
+              </div>
               <p className="text-xs text-muted-foreground">
-                O editor responsável receberá uma notificação com essas instruções.
+                {alterationImmediate 
+                  ? 'O editor receberá um alerta urgente para fazer a correção imediatamente.'
+                  : 'O editor terá 1 dia útil para realizar a alteração.'}
               </p>
             </div>
           )}

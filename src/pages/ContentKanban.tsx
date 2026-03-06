@@ -58,6 +58,11 @@ interface ContentTask {
   adjustment_notes: string | null;
   approved_at: string | null;
   approval_sent_at: string | null;
+  editing_priority: boolean;
+  immediate_alteration: boolean;
+  review_deadline: string | null;
+  alteration_deadline: string | null;
+  approval_deadline: string | null;
   position: number;
   created_at: string;
   updated_at: string;
@@ -346,6 +351,36 @@ export default function ContentKanban() {
       await supabase.from('scripts').update({ recorded: true } as any).eq('id', task.script_id);
     }
 
+    // Set deadlines based on column transitions
+    const deadlineUpdates: Record<string, any> = {};
+    if (newColumn === 'revisao') {
+      // Revisão deadline: 1 day
+      const deadline = new Date();
+      deadline.setHours(deadline.getHours() + 24);
+      deadlineUpdates.review_deadline = deadline.toISOString();
+    }
+    if (newColumn === 'alteracao') {
+      // Alteração deadline: 1 day (unless immediate)
+      if (!task.immediate_alteration) {
+        const deadline = new Date();
+        deadline.setHours(deadline.getHours() + 24);
+        deadlineUpdates.alteration_deadline = deadline.toISOString();
+      }
+    }
+    if (newColumn === 'envio') {
+      // Client approval deadline: 6 hours
+      const deadline = new Date();
+      deadline.setHours(deadline.getHours() + 6);
+      deadlineUpdates.approval_deadline = deadline.toISOString();
+    }
+
+    if (Object.keys(deadlineUpdates).length > 0) {
+      await supabase.from('content_tasks').update({
+        ...deadlineUpdates,
+        updated_at: new Date().toISOString(),
+      } as any).eq('id', task.id);
+    }
+
     // Map kanban columns to social media delivery statuses
     const columnToSocialStatus: Record<string, string> = {
       revisao: 'revisao',
@@ -393,7 +428,7 @@ export default function ContentKanban() {
         approval_sent_at: new Date().toISOString(),
       } as any).eq('id', task.id);
 
-      // Auto-send WhatsApp approval message
+      // Auto-send WhatsApp approval message with 6h warning
       try {
         const whatsConfig = await getWhatsAppConfig();
         if (whatsConfig?.integrationActive && whatsConfig?.autoVideoApproval) {
@@ -404,6 +439,9 @@ export default function ContentKanban() {
               .replace('{link_video}', task.edited_video_link || 'Link não disponível')
               .replace('{titulo}', task.title);
             
+            // Append 6h approval warning
+            msg += '\n\n⏰ Você tem até *6 horas* para avaliar e aprovar o vídeo. Após esse prazo, ele será encaminhado para agendamento automaticamente.';
+            
             const result = await sendWhatsAppMessage({
               number: client.whatsapp,
               message: msg,
@@ -412,7 +450,7 @@ export default function ContentKanban() {
             });
 
             if (result.success) {
-              toast.success('📱 Link de aprovação enviado por WhatsApp!');
+              toast.success('📱 Link de aprovação enviado por WhatsApp com prazo de 6h!');
             } else {
               console.error('WhatsApp send error:', result.error);
               toast.warning('Card enviado, mas não foi possível enviar WhatsApp');
@@ -454,10 +492,12 @@ export default function ContentKanban() {
   const [adjustmentDialogOpen, setAdjustmentDialogOpen] = useState(false);
   const [adjustmentNotes, setAdjustmentNotes] = useState('');
   const [adjustmentTask, setAdjustmentTask] = useState<ContentTask | null>(null);
+  const [adjustmentImmediate, setAdjustmentImmediate] = useState(false);
 
   const openAdjustmentDialog = (task: ContentTask) => {
     setAdjustmentTask(task);
     setAdjustmentNotes('');
+    setAdjustmentImmediate(false);
     setAdjustmentDialogOpen(true);
   };
 
@@ -466,9 +506,15 @@ export default function ContentKanban() {
       toast.error('Descreva os ajustes necessários');
       return;
     }
+    
+    // Set alteration deadline: immediate = no deadline (ASAP), otherwise 1 day
+    const alterationDeadline = adjustmentImmediate ? null : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    
     const { error } = await supabase.from('content_tasks').update({
       kanban_column: 'alteracao',
       adjustment_notes: adjustmentNotes.trim(),
+      immediate_alteration: adjustmentImmediate,
+      alteration_deadline: alterationDeadline,
       updated_at: new Date().toISOString(),
     } as any).eq('id', adjustmentTask.id);
     if (error) { toast.error('Erro ao solicitar ajustes'); return; }
@@ -480,16 +526,17 @@ export default function ContentKanban() {
 
     // Notify editor
     if (adjustmentTask.assigned_to) {
+      const urgencyPrefix = adjustmentImmediate ? '🚨 IMEDIATO: ' : '';
       await supabase.rpc('notify_user', {
         _user_id: adjustmentTask.assigned_to,
-        _title: 'Ajuste solicitado',
-        _message: `"${adjustmentTask.title}" precisa de ajustes: ${adjustmentNotes.trim()}`,
+        _title: `${urgencyPrefix}Ajuste solicitado`,
+        _message: `"${adjustmentTask.title}" precisa de ajustes${adjustmentImmediate ? ' IMEDIATOS' : ''}: ${adjustmentNotes.trim()}`,
         _type: 'adjustment',
         _link: '/conteudo',
       });
     }
 
-    toast.success('📝 Ajustes solicitados! Movido para Alteração');
+    toast.success(adjustmentImmediate ? '🚨 Ajustes IMEDIATOS solicitados!' : '📝 Ajustes solicitados! Movido para Alteração');
     setAdjustmentDialogOpen(false);
     setAdjustmentTask(null);
     fetchTasks();
@@ -888,6 +935,19 @@ export default function ContentKanban() {
                 autoFocus
               />
             </div>
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
+              <input
+                type="checkbox"
+                checked={adjustmentImmediate}
+                onChange={e => setAdjustmentImmediate(e.target.checked)}
+                className="h-4 w-4 rounded border-destructive/40 text-destructive focus:ring-destructive"
+                id="immediate-check"
+              />
+              <label htmlFor="immediate-check" className="text-sm cursor-pointer">
+                <span className="font-semibold text-destructive">🚨 Alteração Imediata</span>
+                <span className="text-xs text-muted-foreground block">O editor será notificado para fazer a correção com prioridade máxima</span>
+              </label>
+            </div>
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => { setAdjustmentDialogOpen(false); setAdjustmentTask(null); }}>Cancelar</Button>
@@ -967,6 +1027,32 @@ export default function ContentKanban() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ─── DEADLINE BADGE COMPONENT ────────────────────────────────
+function DeadlineBadge({ deadline, label }: { deadline: string; label: string }) {
+  const now = new Date();
+  const dl = new Date(deadline);
+  const diffMs = dl.getTime() - now.getTime();
+  const isExpired = diffMs <= 0;
+  const hours = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60));
+  const mins = Math.floor((Math.abs(diffMs) % (1000 * 60 * 60)) / (1000 * 60));
+  
+  const timeStr = isExpired 
+    ? `Expirado há ${hours}h${mins}m`
+    : hours > 0 ? `${hours}h${mins}m restantes` : `${mins}m restantes`;
+
+  return (
+    <span className={`inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-md ${
+      isExpired 
+        ? 'bg-red-100 text-red-800 border border-red-300 dark:bg-red-900/40 dark:text-red-300 animate-pulse' 
+        : diffMs < 2 * 60 * 60 * 1000 
+          ? 'bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400'
+          : 'bg-muted text-muted-foreground border border-border'
+    }`}>
+      <Clock size={9} /> {timeStr}
+    </span>
   );
 }
 
@@ -1051,11 +1137,33 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
             <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md ${typeConfig.color}`}>
               <TypeIcon size={10} /> {typeConfig.label}
             </span>
+            {/* Priority editing badge */}
+            {task.editing_priority && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-200/60 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800">
+                ⚡ Prioridade
+              </span>
+            )}
+            {/* Immediate alteration badge */}
+            {task.immediate_alteration && task.kanban_column === 'alteracao' && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-red-100 text-red-800 border border-red-300/60 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700 animate-pulse">
+                🚨 Imediato
+              </span>
+            )}
             {/* Altered tag */}
-            {task.adjustment_notes && (
+            {task.adjustment_notes && !task.immediate_alteration && (
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/60 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800">
                 🔄 Alterado
               </span>
+            )}
+            {/* Deadline badges */}
+            {task.kanban_column === 'revisao' && task.review_deadline && (
+              <DeadlineBadge deadline={task.review_deadline} label="Revisão" />
+            )}
+            {task.kanban_column === 'alteracao' && task.alteration_deadline && !task.immediate_alteration && (
+              <DeadlineBadge deadline={task.alteration_deadline} label="Alteração" />
+            )}
+            {task.kanban_column === 'envio' && task.approval_deadline && (
+              <DeadlineBadge deadline={task.approval_deadline} label="Aprovação" />
             )}
             {/* Status tags */}
             {task.kanban_column === 'envio' && (

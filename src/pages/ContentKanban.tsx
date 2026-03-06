@@ -935,6 +935,19 @@ export default function ContentKanban() {
                 autoFocus
               />
             </div>
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
+              <input
+                type="checkbox"
+                checked={adjustmentImmediate}
+                onChange={e => setAdjustmentImmediate(e.target.checked)}
+                className="h-4 w-4 rounded border-destructive/40 text-destructive focus:ring-destructive"
+                id="immediate-check"
+              />
+              <label htmlFor="immediate-check" className="text-sm cursor-pointer">
+                <span className="font-semibold text-destructive">🚨 Alteração Imediata</span>
+                <span className="text-xs text-muted-foreground block">O editor será notificado para fazer a correção com prioridade máxima</span>
+              </label>
+            </div>
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => { setAdjustmentDialogOpen(false); setAdjustmentTask(null); }}>Cancelar</Button>

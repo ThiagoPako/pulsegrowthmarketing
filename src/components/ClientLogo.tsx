@@ -8,9 +8,9 @@ interface ClientLogoProps {
 }
 
 const SIZES = {
-  sm: 'w-7 h-7 text-[10px] rounded-md',
-  md: 'w-10 h-10 text-sm rounded-lg',
-  lg: 'w-14 h-14 text-base rounded-xl',
+  sm: 'w-9 h-9 text-xs rounded-lg',
+  md: 'w-12 h-12 text-sm rounded-xl',
+  lg: 'w-16 h-16 text-lg rounded-2xl',
 };
 
 const ClientLogo = forwardRef<HTMLDivElement, ClientLogoProps>(

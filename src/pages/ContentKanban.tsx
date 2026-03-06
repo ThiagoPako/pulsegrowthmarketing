@@ -1108,19 +1108,19 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
 
           {/* Responsible - real-time mini banner */}
           {assignedUser && (
-            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/15 dark:from-primary/10 dark:to-primary/15 dark:border-primary/20">
+            <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/15 dark:from-primary/10 dark:to-primary/15 dark:border-primary/20">
               <div className="relative shrink-0">
                 <UserAvatar user={{ name: assignedUser.name, avatarUrl: assignedUser.avatarUrl }} size="sm" />
-                <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5">
+                <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500 border border-card"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500 border-2 border-card"></span>
                 </span>
               </div>
               <div className="min-w-0 flex-1">
                 <span className="text-[9px] font-semibold uppercase tracking-widest text-primary/60 block leading-none mb-0.5" style={{ fontFamily: 'var(--font-display)' }}>Executando</span>
-                <span className="text-[11px] font-bold text-foreground truncate block">{assignedUser.name}</span>
+                <span className="text-[12px] font-bold text-foreground truncate block">{assignedUser.name}</span>
               </div>
-              <User size={11} className="text-primary/40 shrink-0" />
+              <User size={13} className="text-primary/40 shrink-0" />
             </div>
           )}
 

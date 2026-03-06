@@ -144,6 +144,7 @@ export default function SocialMediaDeliveries() {
   const [alterationDialogOpen, setAlterationDialogOpen] = useState(false);
   const [alterationNotes, setAlterationNotes] = useState('');
   const [alterationDelivery, setAlterationDelivery] = useState<SocialDelivery | null>(null);
+  const [alterationImmediate, setAlterationImmediate] = useState(false);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
 
   const fetchData = useCallback(async () => {

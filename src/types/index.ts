@@ -20,6 +20,10 @@ export interface CompanySettings {
   shiftBEnd: string;
   workDays: DayOfWeek[];
   recordingDuration: number; // in minutes
+  editingDeadlineHours: number;
+  reviewDeadlineHours: number;
+  alterationDeadlineHours: number;
+  approvalDeadlineHours: number;
 }
 
 export type ContentType = 'reels' | 'story' | 'produto';

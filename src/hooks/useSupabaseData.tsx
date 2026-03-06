@@ -374,6 +374,10 @@ export function useSupabaseData() {
         shift_b_end: s.shiftBEnd,
         work_days: s.workDays,
         recording_duration: s.recordingDuration,
+        editing_deadline_hours: s.editingDeadlineHours,
+        review_deadline_hours: s.reviewDeadlineHours,
+        alteration_deadline_hours: s.alterationDeadlineHours,
+        approval_deadline_hours: s.approvalDeadlineHours,
       } as any).eq('id', settingsId);
     }
     setSettings(s);

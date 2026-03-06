@@ -20,23 +20,23 @@ import type { Client, Recording, Script } from '@/types';
 
 // ─── COLUMN DEFINITIONS ───────────────────────────────────────
 const KANBAN_COLUMNS = [
-  { id: 'ideias', label: 'Zona de Ideias', bg: '#9b59b6', icon: '💡' },
-  { id: 'captacao', label: 'Captação', bg: '#e67e22', icon: '📹' },
-  { id: 'edicao', label: 'Edição de Vídeo', bg: '#3498db', icon: '🎬' },
-  { id: 'revisao', label: 'Revisão', bg: '#1abc9c', icon: '👁' },
-  { id: 'alteracao', label: 'Alteração', bg: '#f1c40f', icon: '✏️' },
-  { id: 'envio', label: 'Enviar para Cliente', bg: '#2ecc71', icon: '📤' },
-  { id: 'agendamentos', label: 'Agendamentos', bg: '#e74c3c', icon: '📅' },
-  { id: 'acompanhamento', label: 'Acompanhamento', bg: '#e74c3c', icon: '👀' },
+  { id: 'ideias', label: 'Zona de Ideias', icon: '💡', gradient: 'from-violet-500 to-purple-600' },
+  { id: 'captacao', label: 'Captação', icon: '📹', gradient: 'from-orange-400 to-orange-600' },
+  { id: 'edicao', label: 'Edição de Vídeo', icon: '🎬', gradient: 'from-blue-400 to-blue-600' },
+  { id: 'revisao', label: 'Revisão', icon: '👁', gradient: 'from-teal-400 to-emerald-600' },
+  { id: 'alteracao', label: 'Alteração', icon: '✏️', gradient: 'from-amber-400 to-yellow-500' },
+  { id: 'envio', label: 'Enviar para Cliente', icon: '📤', gradient: 'from-emerald-400 to-green-600' },
+  { id: 'agendamentos', label: 'Agendamentos', icon: '📅', gradient: 'from-rose-400 to-red-500' },
+  { id: 'acompanhamento', label: 'Acompanhamento', icon: '👀', gradient: 'from-rose-500 to-red-600' },
 ] as const;
 
 type KanbanColumnId = typeof KANBAN_COLUMNS[number]['id'];
 
 const CONTENT_TYPES = [
-  { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400' },
-  { value: 'criativo', label: 'Criativos', icon: Megaphone, color: 'text-purple-600 bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400' },
-  { value: 'story', label: 'Story', icon: Image, color: 'text-pink-600 bg-pink-100 dark:bg-pink-900/30 dark:text-pink-400' },
-  { value: 'arte', label: 'Arte', icon: Palette, color: 'text-amber-600 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400' },
+  { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-700 bg-blue-50 border border-blue-200/60 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800' },
+  { value: 'criativo', label: 'Criativos', icon: Megaphone, color: 'text-purple-700 bg-purple-50 border border-purple-200/60 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800' },
+  { value: 'story', label: 'Story', icon: Image, color: 'text-pink-700 bg-pink-50 border border-pink-200/60 dark:bg-pink-900/30 dark:text-pink-400 dark:border-pink-800' },
+  { value: 'arte', label: 'Arte', icon: Palette, color: 'text-amber-700 bg-amber-50 border border-amber-200/60 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800' },
 ];
 
 interface ContentTask {
@@ -387,8 +387,8 @@ export default function ContentKanban() {
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold text-foreground">Criação de Conteúdo</h1>
-          <p className="text-sm text-muted-foreground">{tasks.length} cartões no pipeline</p>
+          <h1 className="text-xl font-bold text-foreground tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>Criação de Conteúdo</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{tasks.length} cartões no pipeline</p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -398,11 +398,11 @@ export default function ContentKanban() {
               placeholder="Pesquisar..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="pl-8 h-8 w-40 text-sm"
+              className="pl-8 h-9 w-44 text-sm rounded-xl bg-secondary/50 border-border/50 focus:bg-card"
             />
           </div>
           <Select value={filterClient} onValueChange={setFilterClient}>
-            <SelectTrigger className="h-8 w-36 text-sm">
+            <SelectTrigger className="h-9 w-40 text-sm rounded-xl bg-secondary/50 border-border/50">
               <SelectValue placeholder="Cliente" />
             </SelectTrigger>
             <SelectContent>
@@ -413,7 +413,7 @@ export default function ContentKanban() {
             </SelectContent>
           </Select>
           <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="h-8 w-32 text-sm">
+            <SelectTrigger className="h-9 w-36 text-sm rounded-xl bg-secondary/50 border-border/50">
               <SelectValue placeholder="Tipo" />
             </SelectTrigger>
             <SelectContent>
@@ -423,7 +423,7 @@ export default function ContentKanban() {
               ))}
             </SelectContent>
           </Select>
-          <Button size="sm" onClick={() => openNew()} className="gap-1.5">
+          <Button size="sm" onClick={() => openNew()} className="gap-1.5 rounded-xl h-9 px-4 font-semibold shadow-sm">
             <Plus size={14} /> Novo Conteúdo
           </Button>
         </div>
@@ -439,28 +439,25 @@ export default function ContentKanban() {
             return (
               <div
                 key={col.id}
-                className={`flex flex-col w-[260px] shrink-0 rounded-xl transition-colors ${
-                  isDragOver ? 'ring-2 ring-primary/40 bg-accent/30' : 'bg-muted/20'
+                className={`flex flex-col w-[270px] shrink-0 rounded-2xl transition-all duration-200 ${
+                  isDragOver ? 'ring-2 ring-primary/40 bg-accent/20 scale-[1.01]' : 'bg-muted/10'
                 }`}
                 onDragOver={e => handleDragOver(e, col.id)}
                 onDragLeave={handleDragLeave}
                 onDrop={e => handleDrop(e, col.id)}
               >
-                {/* Column header - colored bar */}
-                <div
-                  className="flex items-center gap-2 px-3 py-2 rounded-t-xl"
-                  style={{ backgroundColor: col.bg }}
-                >
-                  <span className="text-sm">{col.icon}</span>
-                  <span className="text-sm font-bold text-white flex-1 truncate">{col.label}</span>
-                  <span className="text-xs font-bold text-white/90 bg-white/20 rounded-full px-2 py-0.5 min-w-[24px] text-center">
+                {/* Column header - gradient bar */}
+                <div className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-t-2xl bg-gradient-to-r ${col.gradient}`}>
+                  <span className="text-base leading-none">{col.icon}</span>
+                  <span className="text-[13px] font-bold text-white flex-1 truncate font-[var(--font-display)]" style={{ fontFamily: 'var(--font-display)' }}>{col.label}</span>
+                  <span className="text-[11px] font-bold text-white/90 bg-white/25 backdrop-blur-sm rounded-full px-2.5 py-0.5 min-w-[26px] text-center shadow-sm">
                     {colTasks.length}
                   </span>
                 </div>
 
                 {/* Cards */}
-                <ScrollArea className="flex-1 px-1.5 py-1.5">
-                  <div className="space-y-2">
+                <ScrollArea className="flex-1 px-2 py-2">
+                  <div className="space-y-2.5">
                     {colTasks.map(task => (
                       <TaskCard
                         key={task.id}
@@ -476,7 +473,7 @@ export default function ContentKanban() {
                       />
                     ))}
                     {colTasks.length === 0 && (
-                      <div className="text-center py-10 text-xs text-muted-foreground italic">
+                      <div className="text-center py-12 text-xs text-muted-foreground/50 italic">
                         {col.id === 'alteracao' ? 'Etapa para a alteração do conteúdo' :
                          col.id === 'revisao' ? 'Etapa para a revisão do conteúdo criado' :
                          'Arraste cartões para cá'}
@@ -488,7 +485,7 @@ export default function ContentKanban() {
                 {/* Add button at bottom */}
                 <button
                   onClick={() => openNew(col.id)}
-                  className="mx-1.5 mb-1.5 py-1.5 rounded-lg border border-dashed border-border text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 hover:border-primary/30 transition-colors flex items-center justify-center gap-1"
+                  className="mx-2 mb-2 py-2 rounded-xl border border-dashed border-border/60 text-xs text-muted-foreground/70 hover:text-foreground hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 flex items-center justify-center gap-1.5 font-medium"
                 >
                   <Plus size={12} /> Adicionar
                 </button>
@@ -638,7 +635,6 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
   const TypeIcon = typeConfig.icon;
   const clientColor = client?.color || '217 91% 60%';
 
-  // Check column states
   const isCaptacao = task.kanban_column === 'captacao';
   const isAcompanhamento = task.kanban_column === 'acompanhamento';
   const isOverdue = isAcompanhamento && task.scheduled_recording_date && 
@@ -649,170 +645,148 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
       <div
         draggable
         onDragStart={onDragStart}
-        className={`group relative bg-card border rounded-lg cursor-grab active:cursor-grabbing transition-all hover:shadow-md ${
-          isDragging ? 'opacity-40 scale-95' : ''
-        } ${isOverdue ? 'border-destructive/60 ring-1 ring-destructive/30 bg-destructive/5' : ''} ${
-          isCaptacao ? 'border-orange-400/50 ring-1 ring-orange-400/20' : !isOverdue ? 'border-border' : ''
+        className={`group relative bg-card rounded-xl cursor-grab active:cursor-grabbing transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 overflow-hidden ${
+          isDragging ? 'opacity-40 scale-95 shadow-none' : 'shadow-sm'
+        } ${isOverdue ? 'ring-1 ring-destructive/40' : ''} ${
+          isCaptacao ? 'ring-1 ring-orange-400/30' : ''
         }`}
+        style={{ borderLeft: `3px solid ${isOverdue ? 'hsl(var(--destructive))' : `hsl(${clientColor})`}` }}
       >
         {/* Recording indicator */}
         {isCaptacao && (
-          <div className="flex items-center gap-2 px-2.5 py-1.5 bg-orange-500/10 rounded-t-lg border-b border-orange-400/20">
-            <span className="relative flex h-2.5 w-2.5 shrink-0">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-orange-50 to-orange-100/50 dark:from-orange-900/20 dark:to-orange-900/10 border-b border-orange-200/40">
+            <span className="relative flex h-2 w-2 shrink-0">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
             </span>
-            <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider">Gravando</span>
+            <span className="text-[10px] font-semibold text-orange-600 dark:text-orange-400 uppercase tracking-widest" style={{ fontFamily: 'var(--font-display)' }}>Gravando</span>
           </div>
         )}
 
         {/* Overdue alert banner */}
         {isOverdue && (
-          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-destructive/10 rounded-t-lg border-b border-destructive/20">
-            <AlertTriangle size={12} className="text-destructive shrink-0" />
-            <span className="text-[10px] font-bold text-destructive">VERIFICAR POSTAGEM</span>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-red-50 to-red-100/50 dark:from-red-900/20 dark:to-red-900/10 border-b border-destructive/20">
+            <AlertTriangle size={11} className="text-destructive shrink-0" />
+            <span className="text-[10px] font-semibold text-destructive uppercase tracking-widest" style={{ fontFamily: 'var(--font-display)' }}>Verificar Postagem</span>
           </div>
         )}
 
         {/* Actions on hover */}
-        <div className="absolute top-1.5 right-1.5 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-          <button onClick={e => { e.stopPropagation(); onEdit(); }} className="w-5 h-5 rounded flex items-center justify-center bg-card text-muted-foreground hover:text-foreground hover:bg-accent border border-border shadow-sm">
-            <Edit size={10} />
+        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
+          <button onClick={e => { e.stopPropagation(); onEdit(); }} className="w-6 h-6 rounded-lg flex items-center justify-center bg-card/90 backdrop-blur text-muted-foreground hover:text-foreground hover:bg-accent border border-border/60 shadow-sm transition-colors">
+            <Edit size={11} />
           </button>
-          <button onClick={e => { e.stopPropagation(); onDelete(); }} className="w-5 h-5 rounded flex items-center justify-center bg-card text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border shadow-sm">
-            <Trash2 size={10} />
+          <button onClick={e => { e.stopPropagation(); onDelete(); }} className="w-6 h-6 rounded-lg flex items-center justify-center bg-card/90 backdrop-blur text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border/60 shadow-sm transition-colors">
+            <Trash2 size={11} />
           </button>
         </div>
 
-        <div className="p-2.5">
-          {/* Badge row */}
-          {task.adjustment_notes && (
-            <Badge className="mb-2 text-[10px] font-semibold px-2 py-0.5 border-0 bg-amber-500 text-white gap-1">
-              🔄 Alterado
-            </Badge>
-          )}
-          {task.kanban_column === 'envio' && (
-            <Badge className="mb-2 text-[10px] font-semibold px-2 py-0.5 border-0 bg-emerald-500 text-white">
-              Novo {typeConfig.label}
-            </Badge>
-          )}
-          {task.kanban_column === 'agendamentos' && (
-            <Badge className="mb-2 text-[10px] font-semibold px-2 py-0.5 border-0 bg-emerald-500 text-white">
-              AGENDAR
-            </Badge>
-          )}
-          {isAcompanhamento && !isOverdue && task.scheduled_recording_date && (
-            <Badge className="mb-2 text-[10px] font-semibold px-2 py-0.5 border-0 bg-teal-500 text-white">
-              📅 Agendado
-            </Badge>
-          )}
+        <div className="p-3 space-y-2.5">
+          {/* Tags row */}
+          <div className="flex flex-wrap gap-1.5">
+            {/* Content type badge */}
+            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md ${typeConfig.color}`}>
+              <TypeIcon size={10} /> {typeConfig.label}
+            </span>
+            {/* Altered tag */}
+            {task.adjustment_notes && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/60 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800">
+                🔄 Alterado
+              </span>
+            )}
+            {/* Status tags */}
+            {task.kanban_column === 'envio' && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/60 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800">
+                ✨ Novo
+              </span>
+            )}
+            {task.kanban_column === 'agendamentos' && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200/60 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800">
+                📅 Agendar
+              </span>
+            )}
+            {isAcompanhamento && !isOverdue && task.scheduled_recording_date && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 border border-teal-200/60 dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-800">
+                📅 Agendado
+              </span>
+            )}
+          </div>
 
-          {/* Header row: client name + assigned avatar */}
-          <div className="flex items-start justify-between gap-2 mb-2 pr-8">
-            <h3 className="text-sm font-bold text-foreground leading-tight">
+          {/* Client name */}
+          <div className="flex items-center justify-between gap-2 pr-8">
+            <h3 className="text-[13px] font-bold text-foreground leading-snug tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
               {client?.companyName || 'Cliente'}
             </h3>
-            {assignedUser && (
-              <UserAvatar user={{ name: assignedUser.name, avatarUrl: assignedUser.avatarUrl }} size="sm" className="shrink-0" />
-            )}
           </div>
 
-          {/* Labeled fields */}
-          <div className="space-y-1.5">
-            {/* CLIENTE */}
-            <div className="flex items-start gap-1.5">
-              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 shrink-0 mt-0.5">📋 Cliente</span>
-            </div>
-            <p className="text-[11px] text-foreground/80 pl-4 -mt-1">{client?.companyName}</p>
+          {/* Title */}
+          <p className="text-[12px] text-foreground/70 leading-relaxed line-clamp-2">{task.title}</p>
 
-            {/* TIPO */}
-            <div className="flex items-start gap-1.5">
-              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 shrink-0 mt-0.5">
-                <TypeIcon size={9} className="inline mr-0.5" />
-                Tipo
+          {/* Responsible */}
+          {assignedUser && (
+            <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-secondary/50 border border-border/40">
+              <UserAvatar user={{ name: assignedUser.name, avatarUrl: assignedUser.avatarUrl }} size="sm" className="shrink-0" />
+              <div className="min-w-0">
+                <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground/70 block leading-none mb-0.5">Responsável</span>
+                <span className="text-[11px] font-semibold text-foreground truncate block">{assignedUser.name}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Scheduled date (acompanhamento - prominent) */}
+          {isAcompanhamento && task.scheduled_recording_date && (
+            <div className={`flex items-center gap-2 px-2.5 py-2 rounded-lg ${
+              isOverdue 
+                ? 'bg-destructive/5 border border-destructive/20' 
+                : 'bg-secondary/50 border border-border/40'
+            }`}>
+              <Calendar size={13} className={isOverdue ? 'text-destructive' : 'text-muted-foreground'} />
+              <div>
+                <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground/70 block leading-none mb-0.5">Agendado para</span>
+                <span className={`text-[12px] font-bold ${isOverdue ? 'text-destructive' : 'text-foreground'}`} style={{ fontFamily: 'var(--font-display)' }}>
+                  {format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
+                  {task.scheduled_recording_time ? ` às ${task.scheduled_recording_time}` : ''}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Recording date (other columns) */}
+          {!isAcompanhamento && task.scheduled_recording_date && (
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <Calendar size={11} className="shrink-0" />
+              <span>
+                {format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
+                {task.scheduled_recording_time ? ` ${task.scheduled_recording_time}` : ''}
               </span>
             </div>
-            <p className="text-[11px] text-foreground/80 pl-4 -mt-1">{typeConfig.label}</p>
+          )}
 
-            {/* TÍTULO DO CONTEÚDO */}
-            <div className="flex items-start gap-1.5">
-              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 shrink-0 mt-0.5">📝 Título do Conteúdo</span>
-            </div>
-            <p className="text-[11px] font-semibold text-foreground pl-4 -mt-1 line-clamp-2">{task.title}</p>
+          {/* Script link */}
+          {linkedScript && (
+            <button
+              onClick={e => { e.stopPropagation(); setScriptPreviewOpen(true); }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/5 hover:bg-primary/10 border border-primary/15 transition-colors w-full text-left"
+            >
+              <FileText size={11} className="text-primary shrink-0" />
+              <span className="text-[10px] font-medium text-primary truncate">
+                Roteiro: {linkedScript.title}
+              </span>
+            </button>
+          )}
 
-            {/* RESPONSÁVEL com avatar */}
-            {assignedUser && (
-              <div className="flex items-center gap-2 mt-1.5 px-2 py-1.5 rounded-md bg-accent/40 border border-border/50">
-                <UserAvatar user={{ name: assignedUser.name, avatarUrl: assignedUser.avatarUrl }} size="sm" className="shrink-0" />
-                <div className="min-w-0">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 block leading-none">Responsável</span>
-                  <span className="text-[11px] font-semibold text-foreground truncate block">{assignedUser.name}</span>
-                </div>
-              </div>
-            )}
-
-            {/* DATA DO POST (prominent in acompanhamento) */}
-            {isAcompanhamento && task.scheduled_recording_date && (
-              <div className={`flex items-center gap-1.5 mt-1 px-2 py-1.5 rounded-md ${
-                isOverdue 
-                  ? 'bg-destructive/10 border border-destructive/30' 
-                  : 'bg-accent/50 border border-border'
-              }`}>
-                <Calendar size={12} className={isOverdue ? 'text-destructive' : 'text-muted-foreground'} />
-                <div>
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 block">Agendado para</span>
-                  <span className={`text-xs font-bold ${isOverdue ? 'text-destructive' : 'text-foreground'}`}>
-                    {format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
-                    {task.scheduled_recording_time ? ` às ${task.scheduled_recording_time}` : ''}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* GRAVAÇÃO PROGRAMADA (other columns) */}
-            {!isAcompanhamento && task.scheduled_recording_date && (
-              <>
-                <div className="flex items-start gap-1.5">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 shrink-0 mt-0.5">📅 Gravação Programada</span>
-                </div>
-                <p className="text-[11px] text-foreground/80 pl-4 -mt-1">
-                  {format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
-                  {task.scheduled_recording_time ? ` ${task.scheduled_recording_time}` : ''}
-                </p>
-              </>
-            )}
-
-            {/* ROTEIRO VINCULADO */}
-            {linkedScript && (
-              <button
-                onClick={e => { e.stopPropagation(); setScriptPreviewOpen(true); }}
-                className="flex items-center gap-1.5 mt-1 px-2 py-1 rounded-md bg-primary/10 hover:bg-primary/20 border border-primary/20 transition-colors w-full text-left"
-              >
-                <FileText size={11} className="text-primary shrink-0" />
-                <span className="text-[10px] font-semibold text-primary truncate">
-                  📄 Roteiro: {linkedScript.title}
-                </span>
-              </button>
-            )}
-
-            {/* CONFIRM POSTED button (overdue in acompanhamento) */}
-            {isOverdue && onConfirmPosted && (
-              <button
-                onClick={e => { e.stopPropagation(); onConfirmPosted(); }}
-                className="flex items-center justify-center gap-1.5 mt-1.5 w-full px-2 py-2 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground transition-colors text-xs font-bold"
-              >
-                <CheckCircle2 size={14} />
-                Confirmar Postagem
-              </button>
-            )}
-          </div>
+          {/* Confirm posted button */}
+          {isOverdue && onConfirmPosted && (
+            <button
+              onClick={e => { e.stopPropagation(); onConfirmPosted(); }}
+              className="flex items-center justify-center gap-1.5 w-full px-3 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-200 text-xs font-bold shadow-sm hover:shadow"
+              style={{ fontFamily: 'var(--font-display)' }}
+            >
+              <CheckCircle2 size={13} />
+              Confirmar Postagem
+            </button>
+          )}
         </div>
-
-        {/* Bottom color bar */}
-        <div
-          className="h-1.5 w-full rounded-b-lg"
-          style={{ backgroundColor: isOverdue ? 'hsl(var(--destructive))' : `hsl(${clientColor})` }}
-        />
       </div>
 
       {/* Script Preview Dialog */}

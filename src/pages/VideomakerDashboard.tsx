@@ -24,7 +24,7 @@ import { ptBR } from 'date-fns/locale';
 
 export default function VideomakerDashboard() {
   const {
-    currentUser, recordings, clients, scripts, users, activeRecordings,
+    currentUser, recordings, clients, scripts, users, activeRecordings, settings,
     updateRecording, updateScript, startActiveRecording, stopActiveRecording,
   } = useApp();
 

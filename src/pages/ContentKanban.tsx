@@ -389,34 +389,22 @@ export default function ContentKanban() {
       return;
     }
     
-    // Set alteration deadline: immediate = no deadline (ASAP), otherwise 1 day
-    const alterationDeadline = adjustmentImmediate ? null : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    
     const { error } = await supabase.from('content_tasks').update({
       kanban_column: 'alteracao',
       adjustment_notes: adjustmentNotes.trim(),
       immediate_alteration: adjustmentImmediate,
-      alteration_deadline: alterationDeadline,
       updated_at: new Date().toISOString(),
     } as any).eq('id', adjustmentTask.id);
     if (error) { toast.error('Erro ao solicitar ajustes'); return; }
 
-    // Update social delivery status
-    await supabase.from('social_media_deliveries').update({
-      status: 'ajuste',
-    } as any).eq('content_task_id', adjustmentTask.id);
-
-    // Notify editor
-    if (adjustmentTask.assigned_to) {
-      const urgencyPrefix = adjustmentImmediate ? '🚨 IMEDIATO: ' : '';
-      await supabase.rpc('notify_user', {
-        _user_id: adjustmentTask.assigned_to,
-        _title: `${urgencyPrefix}Ajuste solicitado`,
-        _message: `"${adjustmentTask.title}" precisa de ajustes${adjustmentImmediate ? ' IMEDIATOS' : ''}: ${adjustmentNotes.trim()}`,
-        _type: 'adjustment',
-        _link: '/conteudo',
-      });
-    }
+    // Use shared sync for full cross-module synchronization
+    const client = clients.find(c => c.id === adjustmentTask.client_id);
+    const ctx = buildSyncContext({ ...adjustmentTask, immediate_alteration: adjustmentImmediate } as any, {
+      userId: user?.id,
+      clientName: client?.companyName,
+      clientWhatsapp: client?.whatsapp,
+    });
+    await syncContentTaskColumnChange('alteracao', ctx);
 
     toast.success(adjustmentImmediate ? '🚨 Ajustes IMEDIATOS solicitados!' : '📝 Ajustes solicitados! Movido para Alteração');
     setAdjustmentDialogOpen(false);

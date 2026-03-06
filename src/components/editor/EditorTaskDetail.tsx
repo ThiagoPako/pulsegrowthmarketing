@@ -141,6 +141,39 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
       approval_sent_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq('id', task.id);
+
+    // Create or update social_media_deliveries record so Social Media can see it
+    const existing = await supabase.from('social_media_deliveries')
+      .select('id').eq('content_task_id', task.id).limit(1);
+    if (!existing.data?.length) {
+      await supabase.from('social_media_deliveries').insert({
+        client_id: task.client_id,
+        content_type: task.content_type,
+        title: task.title,
+        description: task.description || null,
+        status: 'revisao',
+        delivered_at: format(new Date(), 'yyyy-MM-dd'),
+        recording_id: task.recording_id || null,
+        script_id: task.script_id || null,
+        created_by: user?.id || null,
+        content_task_id: task.id,
+      } as any);
+    } else {
+      await supabase.from('social_media_deliveries')
+        .update({ status: 'revisao' } as any)
+        .eq('content_task_id', task.id);
+    }
+
+    // Notify social media team
+    const client = clients.find(c => c.id === task.client_id);
+    await supabase.rpc('notify_role', {
+      _role: 'social_media',
+      _title: 'Vídeo para Revisão',
+      _message: `${task.title} (${client?.companyName || ''}) está pronto para revisão`,
+      _type: 'review',
+      _link: '/entregas-social',
+    });
+
     await logAction('Enviado para aprovação');
     toast.success('Enviado para aprovação!');
     onRefresh();

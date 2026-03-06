@@ -209,11 +209,18 @@ export default function ContentKanban() {
       if (payload.kanban_column === 'agendamentos' && payload.scheduled_recording_date && payload.scheduled_recording_time) {
         payload.kanban_column = 'acompanhamento';
       }
+      const columnChanged = editingTask.kanban_column !== payload.kanban_column;
       const { error } = await supabase.from('content_tasks').update(payload).eq('id', editingTask.id);
       if (error) { toast.error('Erro ao atualizar'); return; }
       toast.success(payload.kanban_column === 'acompanhamento' && editingTask.kanban_column === 'agendamentos'
         ? 'Agendado! Movido para Acompanhamento'
         : 'Cartão atualizado');
+
+      // If column changed, sync with social media and other modules
+      if (columnChanged) {
+        const updatedTask = { ...editingTask, ...payload };
+        await syncOnColumnChange(updatedTask, payload.kanban_column);
+      }
 
       // Sync: if moved to captacao and has recording, mark recording accordingly
       if (payload.kanban_column === 'captacao' && formRecordingId) {

@@ -11,7 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText } from 'lucide-react';
+import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
+import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -127,6 +128,8 @@ export default function ContentKanban() {
   // ─── FILTERED TASKS ────────────────────────────────────────
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
+      // Hide archived cards
+      if (t.kanban_column === 'arquivado') return false;
       if (filterClient !== 'all' && t.client_id !== filterClient) return false;
       if (filterType !== 'all' && t.content_type !== filterType) return false;
       if (searchQuery) {
@@ -309,11 +312,9 @@ export default function ContentKanban() {
 
   // ─── SYNC WITH OTHER MODULES ──────────────────────────────
   const syncOnColumnChange = async (task: ContentTask, newColumn: string) => {
-    // When moving to "edicao" (editing), mark linked script as recorded
     if (newColumn === 'edicao' && task.script_id) {
       await supabase.from('scripts').update({ recorded: true } as any).eq('id', task.script_id);
     }
-    // When moving to "revisao", create/update social_media_delivery + notify
     if (newColumn === 'revisao') {
       const existing = await supabase.from('social_media_deliveries')
         .select('id').eq('content_task_id', task.id).limit(1);
@@ -337,7 +338,6 @@ export default function ContentKanban() {
         _link: '/entregas-social',
       });
     }
-    // When moving to "envio" (send to client), create a social_media_delivery
     if (newColumn === 'envio') {
       const existing = await supabase.from('social_media_deliveries')
         .select('id').eq('content_task_id', task.id).limit(1);
@@ -353,6 +353,27 @@ export default function ContentKanban() {
         await supabase.from('social_media_deliveries').update({ status: 'entregue' } as any).eq('content_task_id', task.id);
       }
     }
+  };
+
+  // ─── CONFIRM POSTED (archive card) ────────────────────────
+  const handleConfirmPosted = async (task: ContentTask) => {
+    // Move to archived column, update social_media_delivery as posted
+    const { error } = await supabase.from('content_tasks').update({
+      kanban_column: 'arquivado',
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', task.id);
+
+    if (error) { toast.error('Erro ao arquivar'); return; }
+
+    // Mark delivery as posted
+    await supabase.from('social_media_deliveries').update({
+      status: 'postado',
+      posted_at: format(new Date(), 'yyyy-MM-dd'),
+    } as any).eq('content_task_id', task.id);
+
+    const client = clients.find(c => c.id === task.client_id);
+    toast.success(`✅ ${task.title} confirmado como postado e arquivado!`);
+    fetchTasks();
   };
 
   // ─── RENDER ────────────────────────────────────────────────
@@ -450,6 +471,7 @@ export default function ContentKanban() {
                         onDragStart={e => handleDragStart(e, task)}
                         onEdit={() => openEdit(task)}
                         onDelete={() => handleDelete(task.id)}
+                        onConfirmPosted={task.kanban_column === 'acompanhamento' ? () => handleConfirmPosted(task) : undefined}
                       />
                     ))}
                     {colTasks.length === 0 && (
@@ -600,29 +622,43 @@ export default function ContentKanban() {
 interface TaskCardProps {
   task: ContentTask;
   client?: Client;
-  assignedUser?: { name: string; avatarUrl?: string } | null;
+  assignedUser?: { id?: string; name: string; avatarUrl?: string } | null;
   linkedScript?: Script;
   isDragging: boolean;
   onDragStart: (e: React.DragEvent) => void;
   onEdit: () => void;
   onDelete: () => void;
+  onConfirmPosted?: () => void;
 }
 
-function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDragStart, onEdit, onDelete }: TaskCardProps) {
+function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDragStart, onEdit, onDelete, onConfirmPosted }: TaskCardProps) {
   const [scriptPreviewOpen, setScriptPreviewOpen] = useState(false);
   const typeConfig = CONTENT_TYPES.find(t => t.value === task.content_type) || CONTENT_TYPES[0];
   const TypeIcon = typeConfig.icon;
   const clientColor = client?.color || '217 91% 60%';
+
+  // Check if overdue in acompanhamento
+  const isAcompanhamento = task.kanban_column === 'acompanhamento';
+  const isOverdue = isAcompanhamento && task.scheduled_recording_date && 
+    new Date(task.scheduled_recording_date + 'T23:59:59') < new Date();
 
   return (
     <>
       <div
         draggable
         onDragStart={onDragStart}
-        className={`group relative bg-card border border-border rounded-lg cursor-grab active:cursor-grabbing transition-all hover:shadow-md ${
+        className={`group relative bg-card border rounded-lg cursor-grab active:cursor-grabbing transition-all hover:shadow-md ${
           isDragging ? 'opacity-40 scale-95' : ''
-        }`}
+        } ${isOverdue ? 'border-destructive/60 ring-1 ring-destructive/30 bg-destructive/5' : 'border-border'}`}
       >
+        {/* Overdue alert banner */}
+        {isOverdue && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-destructive/10 rounded-t-lg border-b border-destructive/20">
+            <AlertTriangle size={12} className="text-destructive shrink-0" />
+            <span className="text-[10px] font-bold text-destructive">VERIFICAR POSTAGEM</span>
+          </div>
+        )}
+
         {/* Actions on hover */}
         <div className="absolute top-1.5 right-1.5 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
           <button onClick={e => { e.stopPropagation(); onEdit(); }} className="w-5 h-5 rounded flex items-center justify-center bg-card text-muted-foreground hover:text-foreground hover:bg-accent border border-border shadow-sm">
@@ -645,16 +681,21 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
               AGENDAR
             </Badge>
           )}
-          {task.kanban_column === 'acompanhamento' && task.scheduled_recording_date && (
+          {isAcompanhamento && !isOverdue && task.scheduled_recording_date && (
             <Badge className="mb-2 text-[10px] font-semibold px-2 py-0.5 border-0 bg-teal-500 text-white">
-              enviado/aguarda
+              📅 Agendado
             </Badge>
           )}
 
-          {/* Client name - bold title */}
-          <h3 className="text-sm font-bold text-foreground mb-2 pr-8 leading-tight">
-            {client?.companyName || 'Cliente'}
-          </h3>
+          {/* Header row: client name + assigned avatar */}
+          <div className="flex items-start justify-between gap-2 mb-2 pr-8">
+            <h3 className="text-sm font-bold text-foreground leading-tight">
+              {client?.companyName || 'Cliente'}
+            </h3>
+            {assignedUser && (
+              <UserAvatar user={{ name: assignedUser.name, avatarUrl: assignedUser.avatarUrl }} size="sm" className="shrink-0" />
+            )}
+          </div>
 
           {/* Labeled fields */}
           <div className="space-y-1.5">
@@ -679,8 +720,36 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
             </div>
             <p className="text-[11px] font-semibold text-foreground pl-4 -mt-1 line-clamp-2">{task.title}</p>
 
-            {/* GRAVAÇÃO PROGRAMADA */}
-            {task.scheduled_recording_date && (
+            {/* RESPONSÁVEL */}
+            {assignedUser && (
+              <>
+                <div className="flex items-start gap-1.5">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 shrink-0 mt-0.5">👤 Responsável</span>
+                </div>
+                <p className="text-[11px] text-foreground/80 pl-4 -mt-1">{assignedUser.name}</p>
+              </>
+            )}
+
+            {/* DATA DO POST (prominent in acompanhamento) */}
+            {isAcompanhamento && task.scheduled_recording_date && (
+              <div className={`flex items-center gap-1.5 mt-1 px-2 py-1.5 rounded-md ${
+                isOverdue 
+                  ? 'bg-destructive/10 border border-destructive/30' 
+                  : 'bg-accent/50 border border-border'
+              }`}>
+                <Calendar size={12} className={isOverdue ? 'text-destructive' : 'text-muted-foreground'} />
+                <div>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 block">Agendado para</span>
+                  <span className={`text-xs font-bold ${isOverdue ? 'text-destructive' : 'text-foreground'}`}>
+                    {format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
+                    {task.scheduled_recording_time ? ` às ${task.scheduled_recording_time}` : ''}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* GRAVAÇÃO PROGRAMADA (other columns) */}
+            {!isAcompanhamento && task.scheduled_recording_date && (
               <>
                 <div className="flex items-start gap-1.5">
                   <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 shrink-0 mt-0.5">📅 Gravação Programada</span>
@@ -692,7 +761,7 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
               </>
             )}
 
-            {/* ROTEIRO VINCULADO - clickable indicator */}
+            {/* ROTEIRO VINCULADO */}
             {linkedScript && (
               <button
                 onClick={e => { e.stopPropagation(); setScriptPreviewOpen(true); }}
@@ -704,28 +773,24 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
                 </span>
               </button>
             )}
-          </div>
 
-          {/* Avatar */}
-          {assignedUser && (
-            <div className="mt-2">
-              <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-card shadow-sm" title={assignedUser.name}>
-                {assignedUser.avatarUrl ? (
-                  <img src={assignedUser.avatarUrl} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-[9px] font-bold text-muted-foreground">
-                    {assignedUser.name.substring(0, 2).toUpperCase()}
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
+            {/* CONFIRM POSTED button (overdue in acompanhamento) */}
+            {isOverdue && onConfirmPosted && (
+              <button
+                onClick={e => { e.stopPropagation(); onConfirmPosted(); }}
+                className="flex items-center justify-center gap-1.5 mt-1.5 w-full px-2 py-2 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground transition-colors text-xs font-bold"
+              >
+                <CheckCircle2 size={14} />
+                Confirmar Postagem
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Bottom color bar */}
         <div
-          className="h-1.5 w-full"
-          style={{ backgroundColor: `hsl(${clientColor})` }}
+          className="h-1.5 w-full rounded-b-lg"
+          style={{ backgroundColor: isOverdue ? 'hsl(var(--destructive))' : `hsl(${clientColor})` }}
         />
       </div>
 

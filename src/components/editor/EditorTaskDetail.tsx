@@ -130,11 +130,16 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   };
 
   const sendForApproval = async () => {
+    const currentLink = videoLink.trim() || task.edited_video_link;
+    if (!currentLink) {
+      toast.error('Adicione o link do vídeo editado antes de enviar para aprovação');
+      return;
+    }
     setSaving(true);
     await supabase.from('content_tasks').update({
       kanban_column: 'revisao',
       approval_sent_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     }).eq('id', task.id);
     await logAction('Enviado para aprovação');
     toast.success('Enviado para aprovação!');
@@ -371,9 +376,14 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
                 </Button>
               )}
               {(task.kanban_column === 'edicao' || task.kanban_column === 'alteracao') && (
-                <Button onClick={sendForApproval} disabled={saving} variant="default" className="gap-1.5 bg-teal-600 hover:bg-teal-700">
-                  <Send size={14} /> Enviar para Aprovação
-                </Button>
+                <>
+                  <Button onClick={sendForApproval} disabled={saving || (!videoLink.trim() && !task.edited_video_link)} variant="default" className="gap-1.5 bg-teal-600 hover:bg-teal-700">
+                    <Send size={14} /> Enviar para Aprovação
+                  </Button>
+                  {!videoLink.trim() && !task.edited_video_link && (
+                    <p className="text-[10px] text-destructive">Adicione o link do vídeo editado primeiro</p>
+                  )}
+                </>
               )}
               {task.kanban_column === 'revisao' && (
                 <Button onClick={markAsFinished} disabled={saving} variant="default" className="gap-1.5 bg-green-600 hover:bg-green-700">

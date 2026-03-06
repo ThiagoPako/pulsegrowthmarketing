@@ -18,6 +18,7 @@ import ClientLogo from '@/components/ClientLogo';
 import { highlightQuotes } from '@/lib/highlightQuotes';
 import { format, differenceInHours, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 
 const CONTENT_TYPES = [
   { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400', points: 10 },
@@ -294,7 +295,6 @@ export default function EditorKanban() {
     const validationError = validateTransition(draggedTask, targetColumn);
     if (validationError) {
       toast.error(validationError);
-      // If trying to move to revisao without link, open the link dialog
       if (targetColumn === 'revisao' && !draggedTask.edited_video_link) {
         setVideoLinkTask(draggedTask);
         setVideoLinkValue('');
@@ -313,26 +313,21 @@ export default function EditorKanban() {
     if (error) {
       toast.error('Erro ao mover cartão');
     } else {
-      if (targetColumn === 'revisao') {
-        await createOrUpdateDelivery(draggedTask, 'revisao');
-        const clientName = clients.find(c => c.id === draggedTask.client_id)?.companyName || '';
-        await supabase.rpc('notify_role', {
-          _role: 'social_media',
-          _title: 'Vídeo para Revisão',
-          _message: `${draggedTask.title} (${clientName}) está pronto para revisão`,
-          _type: 'review',
-          _link: '/entregas-social',
-        });
-      }
-      if (targetColumn === 'envio') {
-        await createOrUpdateDelivery(draggedTask, 'entregue');
-      }
+      // Use shared sync for ALL column changes
+      const client = clients.find(c => c.id === draggedTask.client_id);
+      const ctx = buildSyncContext(draggedTask as any, {
+        userId: user?.id,
+        clientName: client?.companyName,
+        clientWhatsapp: (client as any)?.whatsapp,
+      });
+      await syncContentTaskColumnChange(targetColumn, ctx);
       toast.success(`Movido para ${EDITOR_COLUMNS.find(c => c.id === targetColumn)?.label}`);
       fetchTasks();
     }
     setDraggedTask(null);
   };
 
+  // Keep createOrUpdateDelivery as fallback for video link save flow
   const createOrUpdateDelivery = async (task: EditorTask, status: string) => {
     const existing = await supabase.from('social_media_deliveries')
       .select('id').eq('content_task_id', task.id).limit(1);
@@ -362,15 +357,15 @@ export default function EditorKanban() {
       kanban_column: 'revisao', updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
     if (error) { toast.error('Erro ao enviar para revisão'); return; }
-    await supabase.from('social_media_deliveries').update({ status: 'revisao' } as any).eq('content_task_id', task.id);
-    const clientName = clients.find(c => c.id === task.client_id)?.companyName || '';
-    await supabase.rpc('notify_role', {
-      _role: 'social_media',
-      _title: 'Alteração Concluída',
-      _message: `${task.title} (${clientName}) foi corrigido e está pronto para nova revisão`,
-      _type: 'review',
-      _link: '/entregas-social',
+    
+    // Use shared sync
+    const client = clients.find(c => c.id === task.client_id);
+    const ctx = buildSyncContext(task as any, {
+      userId: user?.id,
+      clientName: client?.companyName,
+      clientWhatsapp: (client as any)?.whatsapp,
     });
+    await syncContentTaskColumnChange('revisao', ctx);
     toast.success('Enviado para revisão');
     fetchTasks();
   };

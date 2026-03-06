@@ -816,6 +816,51 @@ export type Database = {
           },
         ]
       }
+      goals: {
+        Row: {
+          created_at: string
+          current_value: number
+          end_date: string
+          id: string
+          notes: string | null
+          period: string
+          start_date: string
+          status: string
+          target_value: number
+          title: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          current_value?: number
+          end_date?: string
+          id?: string
+          notes?: string | null
+          period?: string
+          start_date?: string
+          status?: string
+          target_value?: number
+          title?: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          current_value?: number
+          end_date?: string
+          id?: string
+          notes?: string | null
+          period?: string
+          start_date?: string
+          status?: string
+          target_value?: number
+          title?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       kanban_tasks: {
         Row: {
           checklist: Json

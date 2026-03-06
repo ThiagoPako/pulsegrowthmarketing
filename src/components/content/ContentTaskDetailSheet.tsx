@@ -89,6 +89,146 @@ interface Props {
   onRefresh: () => void;
 }
 
+// ─── JOURNEY TIMELINE STAGES ─────────────────────────────
+const JOURNEY_STAGES = [
+  { id: 'ideias', label: 'Criado', icon: Lightbulb, emoji: '💡' },
+  { id: 'captacao', label: 'Captação', icon: Video, emoji: '📹' },
+  { id: 'edicao', label: 'Edição', icon: Scissors, emoji: '🎬' },
+  { id: 'revisao', label: 'Revisão', icon: ScanEye, emoji: '👁' },
+  { id: 'envio', label: 'Enviado', icon: MailCheck, emoji: '📤' },
+  { id: 'agendamentos', label: 'Agendado', icon: CalendarCheck, emoji: '📅' },
+  { id: 'acompanhamento', label: 'Publicado', icon: MonitorCheck, emoji: '✅' },
+];
+
+function getStageIndex(column: string) {
+  if (column === 'alteracao') return 3;
+  if (column === 'arquivado') return 7;
+  const idx = JOURNEY_STAGES.findIndex(s => s.id === column);
+  return idx >= 0 ? idx : 0;
+}
+
+function JourneyTimeline({ currentColumn, task }: { currentColumn: string; task: ContentTask }) {
+  const activeIdx = getStageIndex(currentColumn);
+  const isAlteracao = currentColumn === 'alteracao';
+
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-center gap-2">
+        <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
+          <ArrowRight size={13} className="text-primary" />
+        </div>
+        <span className="text-xs font-bold uppercase tracking-wider text-foreground" style={{ fontFamily: 'var(--font-display)' }}>
+          Jornada do Conteúdo
+        </span>
+      </div>
+
+      <div className="relative px-1 py-3">
+        {/* Progress bar background */}
+        <div className="absolute top-1/2 left-4 right-4 h-1 -translate-y-1/2 rounded-full bg-muted" />
+        {/* Progress bar fill */}
+        <motion.div
+          className="absolute top-1/2 left-4 h-1 -translate-y-1/2 rounded-full bg-gradient-to-r from-primary/80 to-primary"
+          initial={{ width: '0%' }}
+          animate={{ width: `${Math.min((activeIdx / (JOURNEY_STAGES.length - 1)) * 100, 100)}%` }}
+          transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
+          style={{ maxWidth: 'calc(100% - 2rem)' }}
+        />
+
+        <div className="relative flex justify-between">
+          {JOURNEY_STAGES.map((stage, idx) => {
+            const isCompleted = idx < activeIdx;
+            const isCurrent = idx === activeIdx;
+            const StageIcon = stage.icon;
+
+            return (
+              <motion.div
+                key={stage.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 + idx * 0.08, duration: 0.4 }}
+                className="flex flex-col items-center gap-1.5 z-10"
+              >
+                <motion.div
+                  className={`relative w-7 h-7 rounded-full flex items-center justify-center transition-all duration-300 ${
+                    isCurrent
+                      ? 'bg-primary text-primary-foreground shadow-md ring-4 ring-primary/20'
+                      : isCompleted
+                        ? 'bg-primary/80 text-primary-foreground'
+                        : 'bg-muted border-2 border-border text-muted-foreground/40'
+                  }`}
+                  animate={isCurrent ? { scale: [1, 1.1, 1] } : {}}
+                  transition={isCurrent ? { repeat: Infinity, duration: 2.5, ease: 'easeInOut' } : {}}
+                >
+                  {isCompleted ? <CheckCircle2 size={14} /> : <StageIcon size={12} />}
+                  {isCurrent && (
+                    <motion.div
+                      className="absolute inset-0 rounded-full border-2 border-primary/40"
+                      animate={{ scale: [1, 1.6], opacity: [0.6, 0] }}
+                      transition={{ repeat: Infinity, duration: 2, ease: 'easeOut' }}
+                    />
+                  )}
+                </motion.div>
+                <span className={`text-[9px] font-semibold leading-tight text-center max-w-[3.5rem] ${
+                  isCurrent ? 'text-primary' : isCompleted ? 'text-foreground/70' : 'text-muted-foreground/40'
+                }`}>
+                  {stage.label}
+                </span>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+
+      {isAlteracao && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20"
+        >
+          <Pencil size={13} className="text-amber-600" />
+          <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
+            Em alteração — aguardando correções do editor
+          </span>
+        </motion.div>
+      )}
+
+      {task.description && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          className="px-3 py-2 rounded-lg bg-muted/50 border border-border/50"
+        >
+          <p className="text-xs text-foreground/70 leading-relaxed">{task.description}</p>
+        </motion.div>
+      )}
+    </div>
+  );
+}
+
+// ─── HISTORY HELPERS ─────────────────────────────────────
+function getHistoryIcon(action: string): string {
+  if (action.includes('Criado') || action.includes('criado')) return '✨';
+  if (action.includes('Captação') || action.includes('captação')) return '📹';
+  if (action.includes('Edição') || action.includes('edição') || action.includes('editor')) return '🎬';
+  if (action.includes('Revisão') || action.includes('revisão')) return '👁';
+  if (action.includes('Alteração') || action.includes('alteração') || action.includes('ajuste')) return '✏️';
+  if (action.includes('Aprovado') || action.includes('aprovado') || action.includes('aprovou')) return '✅';
+  if (action.includes('Enviado') || action.includes('enviado') || action.includes('cliente')) return '📤';
+  if (action.includes('Agendado') || action.includes('agendado')) return '📅';
+  if (action.includes('WhatsApp') || action.includes('whatsapp')) return '💬';
+  if (action.includes('Prioridade') || action.includes('prioridade')) return '⚡';
+  if (action.includes('Postado') || action.includes('postado')) return '🎯';
+  return '📝';
+}
+
+function getHistoryColor(action: string): string {
+  if (action.includes('Aprovado') || action.includes('aprovado')) return 'bg-green-500';
+  if (action.includes('Alteração') || action.includes('ajuste')) return 'bg-amber-500';
+  if (action.includes('Prioridade')) return 'bg-red-500';
+  return 'bg-primary';
+}
+
 export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRefresh }: Props) {
   const { clients, users, scripts } = useApp();
   const { user } = useAuth();

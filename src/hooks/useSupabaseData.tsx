@@ -179,6 +179,10 @@ const defaultSettings: CompanySettings = {
   shiftBEnd: '18:00',
   workDays: ['segunda', 'terca', 'quarta', 'quinta', 'sexta'],
   recordingDuration: 120,
+  editingDeadlineHours: 48,
+  reviewDeadlineHours: 24,
+  alterationDeadlineHours: 24,
+  approvalDeadlineHours: 6,
 };
 
 export function useSupabaseData() {

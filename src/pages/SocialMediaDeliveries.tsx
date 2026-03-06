@@ -66,26 +66,39 @@ const PLATFORMS = ['Instagram', 'TikTok', 'YouTube', 'Facebook', 'LinkedIn'];
 
 function ReviewVideoLink({ contentTaskId }: { contentTaskId: string | null }) {
   const [link, setLink] = useState<string | null>(null);
+  const [isAltered, setIsAltered] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!contentTaskId) { setLoading(false); return; }
-    supabase.from('content_tasks').select('edited_video_link, drive_link').eq('id', contentTaskId).single()
+    supabase.from('content_tasks').select('edited_video_link, drive_link, adjustment_notes').eq('id', contentTaskId).single()
       .then(({ data }) => {
         setLink(data?.edited_video_link || data?.drive_link || null);
+        setIsAltered(!!data?.adjustment_notes);
         setLoading(false);
       });
   }, [contentTaskId]);
 
-  if (loading || !link) return null;
+  if (loading) return null;
 
   return (
-    <a href={link} target="_blank" rel="noopener noreferrer"
-      className="flex items-center gap-2 text-sm font-medium text-primary hover:underline bg-primary/5 border border-primary/20 rounded-lg px-3 py-2.5 transition-colors hover:bg-primary/10">
-      <Link2 size={16} className="shrink-0" />
-      <span className="truncate">🎬 Assistir vídeo para revisão</span>
-      <ExternalLink size={14} className="shrink-0 ml-auto" />
-    </a>
+    <div className="space-y-1.5">
+      {isAltered && (
+        <div className="flex items-center gap-1.5">
+          <Badge className="text-[10px] font-semibold px-2 py-0.5 border-0 bg-amber-500 text-white gap-1">
+            🔄 Alterado
+          </Badge>
+        </div>
+      )}
+      {link && (
+        <a href={link} target="_blank" rel="noopener noreferrer"
+          className="flex items-center gap-2 text-sm font-medium text-primary hover:underline bg-primary/5 border border-primary/20 rounded-lg px-3 py-2.5 transition-colors hover:bg-primary/10">
+          <Link2 size={16} className="shrink-0" />
+          <span className="truncate">🎬 Assistir vídeo para revisão</span>
+          <ExternalLink size={14} className="shrink-0 ml-auto" />
+        </a>
+      )}
+    </div>
   );
 }
 

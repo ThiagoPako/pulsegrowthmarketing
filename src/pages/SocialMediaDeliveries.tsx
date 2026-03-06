@@ -368,10 +368,14 @@ export default function SocialMediaDeliveries() {
       const { data: taskData } = await supabase.from('content_tasks').select('assigned_to').eq('id', taskId).single();
       const editorId = taskData?.assigned_to;
 
+      const alterationDeadline = alterationImmediate ? null : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
       await supabase.from('content_tasks').update({
         kanban_column: 'alteracao',
         adjustment_notes: alterationNotes.trim(),
         description: alterationNotes.trim(),
+        immediate_alteration: alterationImmediate,
+        alteration_deadline: alterationDeadline,
         updated_at: new Date().toISOString(),
       } as any).eq('id', taskId);
 
@@ -379,18 +383,44 @@ export default function SocialMediaDeliveries() {
 
       if (editorId) {
         const clientName = clients.find(c => c.id === alterationDelivery.client_id)?.companyName || '';
+        const urgencyPrefix = alterationImmediate ? '🚨 IMEDIATO: ' : '';
         await supabase.rpc('notify_user', {
           _user_id: editorId,
-          _title: 'Alteração de Vídeo',
-          _message: `${alterationDelivery.title} (${clientName}) precisa de alteração: ${alterationNotes.trim().substring(0, 100)}`,
+          _title: `${urgencyPrefix}Alteração de Vídeo`,
+          _message: `${alterationDelivery.title} (${clientName}) precisa de alteração${alterationImmediate ? ' IMEDIATA' : ''}: ${alterationNotes.trim().substring(0, 100)}`,
           _type: 'alteration',
           _link: '/edicao/kanban',
         });
       }
     }
-    toast.success('Enviado para alteração');
+    toast.success(alterationImmediate ? '🚨 Enviado para alteração IMEDIATA!' : 'Enviado para alteração');
     setAlterationDialogOpen(false);
     setAlterationDelivery(null);
+    fetchData();
+  };
+
+  // ─── MARK AS PRIORITY EDITING ──────────────────────────────
+  const handleMarkPriorityEditing = async (d: SocialDelivery) => {
+    if (!d.content_task_id) {
+      toast.error('Conteúdo sem tarefa vinculada');
+      return;
+    }
+    await supabase.from('content_tasks').update({
+      editing_priority: true,
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', d.content_task_id);
+
+    // Notify editors
+    const clientName = clients.find(c => c.id === d.client_id)?.companyName || '';
+    await supabase.rpc('notify_role', {
+      _role: 'editor',
+      _title: '⚡ Vídeo Prioritário',
+      _message: `"${d.title}" (${clientName}) foi marcado como prioridade na fila de edição`,
+      _type: 'priority',
+      _link: '/edicao/kanban',
+    });
+
+    toast.success('⚡ Marcado como prioridade na fila de edição!');
     fetchData();
   };
 

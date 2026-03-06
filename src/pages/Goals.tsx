@@ -49,7 +49,7 @@ const STATUS_LABELS: Record<GoalStatus, string> = {
 const TYPE_CONFIG: Record<GoalType, { label: string; icon: React.ReactNode; unit: string }> = {
   clients: { label: 'Clientes', icon: <Users size={18} />, unit: 'clientes' },
   faturamento: { label: 'Faturamento', icon: <DollarSign size={18} />, unit: 'R$' },
-  lucro: { label: 'Lucro', icon: <TrendingUp size={18} />, unit: 'R$' },
+  lucro: { label: 'Lucro', icon: <TrendingUp size={18} />, unit: '%' },
 };
 
 const emptyForm = {
@@ -116,15 +116,46 @@ export default function Goals() {
     return updated;
   }, []);
 
+  const syncProfitGoals = useCallback(async (allGoals: Goal[]) => {
+    const profitGoals = allGoals.filter(g => g.type === 'lucro' && g.status === 'em_andamento');
+    if (profitGoals.length === 0) return allGoals;
+
+    const [{ data: revenues }, { data: expenses }] = await Promise.all([
+      supabase.from('revenues').select('amount, paid_at').eq('status', 'paga').not('paid_at', 'is', null),
+      supabase.from('expenses').select('amount, date'),
+    ]);
+
+    if (!revenues || !expenses) return allGoals;
+
+    const updated = [...allGoals];
+    for (const goal of profitGoals) {
+      const totalRev = revenues
+        .filter(r => r.paid_at && r.paid_at >= goal.start_date && r.paid_at <= goal.end_date)
+        .reduce((s, r) => s + Number(r.amount), 0);
+      const totalExp = expenses
+        .filter(e => e.date >= goal.start_date && e.date <= goal.end_date)
+        .reduce((s, e) => s + Number(e.amount), 0);
+      const margin = totalRev > 0 ? Math.round(((totalRev - totalExp) / totalRev) * 1000) / 10 : 0;
+
+      if (margin !== goal.current_value) {
+        await supabase.from('goals').update({ current_value: margin, updated_at: new Date().toISOString() }).eq('id', goal.id);
+        const idx = updated.findIndex(g => g.id === goal.id);
+        if (idx >= 0) updated[idx] = { ...updated[idx], current_value: margin };
+      }
+    }
+    return updated;
+  }, []);
+
   const fetchGoals = useCallback(async () => {
     const { data, error } = await supabase.from('goals').select('*').order('created_at', { ascending: false });
     if (error) { toast.error('Erro ao carregar metas'); return; }
     const allGoals = (data as Goal[]) || [];
     let synced = await syncRevenueGoals(allGoals);
     synced = await syncClientGoals(synced);
+    synced = await syncProfitGoals(synced);
     setGoals(synced);
     setLoading(false);
-  }, [syncRevenueGoals, syncClientGoals]);
+  }, [syncRevenueGoals, syncClientGoals, syncProfitGoals]);
 
   useEffect(() => { fetchGoals(); }, [fetchGoals]);
 
@@ -188,7 +219,7 @@ export default function Goals() {
   const filtered = goals.filter(g => g.type === activeTab);
 
   const formatValue = (val: number, type: GoalType) =>
-    type === 'clients' ? String(val) : `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+    type === 'clients' ? String(val) : type === 'lucro' ? `${val.toFixed(1)}%` : `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 
   const GoalCard = ({ goal }: { goal: Goal }) => {
     const progress = goal.target_value > 0 ? Math.min(100, Math.round((goal.current_value / goal.target_value) * 100)) : 0;
@@ -313,12 +344,12 @@ export default function Goals() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Valor Alvo {activeTab !== 'clients' && '(R$)'}</Label>
-                <Input type="number" value={form.target_value} onChange={e => setForm(f => ({ ...f, target_value: e.target.value }))} />
+                <Label>Valor Alvo {activeTab === 'faturamento' ? '(R$)' : activeTab === 'lucro' ? '(%)' : ''}</Label>
+                <Input type="number" value={form.target_value} onChange={e => setForm(f => ({ ...f, target_value: e.target.value }))} placeholder={activeTab === 'lucro' ? 'Ex: 25' : ''} />
               </div>
               <div>
-                <Label>Valor Atual {activeTab !== 'clients' && '(R$)'}</Label>
-                <Input type="number" value={form.current_value} onChange={e => setForm(f => ({ ...f, current_value: e.target.value }))} />
+                <Label>Valor Atual {activeTab === 'faturamento' ? '(R$)' : activeTab === 'lucro' ? '(%) auto' : ''}</Label>
+                <Input type="number" value={form.current_value} onChange={e => setForm(f => ({ ...f, current_value: e.target.value }))} disabled={activeTab === 'lucro'} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">

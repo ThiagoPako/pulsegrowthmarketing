@@ -611,7 +611,7 @@ export default function SocialMediaDeliveries() {
               <AlertTriangle size={14} /> Alteração ({clientDeliveries.alteration.length})
             </TabsTrigger>
             <TabsTrigger value="envio" className="gap-1.5">
-              <Send size={14} /> Enviado p/ Cliente ({clientDeliveries.approval.length})
+              <Send size={14} /> Enviado ({clientDeliveries.approval.length})
             </TabsTrigger>
             <TabsTrigger value="agendados" className="gap-1.5">
               <CalendarClock size={14} /> Agendar ({clientDeliveries.pending.length + clientDeliveries.scheduled.length})

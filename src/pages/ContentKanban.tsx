@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning } from 'lucide-react';
+import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, Send, Eye } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import { format } from 'date-fns';
@@ -89,6 +89,20 @@ export default function ContentKanban() {
   const [formScriptId, setFormScriptId] = useState('');
   const [formSchedDate, setFormSchedDate] = useState('');
   const [formSchedTime, setFormSchedTime] = useState('');
+  const [formDriveLink, setFormDriveLink] = useState('');
+  const [formVideoLink, setFormVideoLink] = useState('');
+
+  // Quick link dialog
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkDialogTask, setLinkDialogTask] = useState<ContentTask | null>(null);
+  const [linkDialogType, setLinkDialogType] = useState<'drive' | 'video'>('drive');
+  const [linkDialogValue, setLinkDialogValue] = useState('');
+
+  // Quick schedule dialog
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [scheduleDialogTask, setScheduleDialogTask] = useState<ContentTask | null>(null);
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleTime, setScheduleTime] = useState('');
 
   // ─── FETCH ─────────────────────────────────────────────────
   const fetchTasks = useCallback(async () => {
@@ -161,6 +175,7 @@ export default function ContentKanban() {
     setFormDescription(''); setFormColumn('ideias'); setFormAssignedTo('');
     setFormRecordingId(''); setFormScriptId('');
     setFormSchedDate(''); setFormSchedTime('');
+    setFormDriveLink(''); setFormVideoLink('');
     setEditingTask(null);
   };
 
@@ -182,6 +197,8 @@ export default function ContentKanban() {
     setFormScriptId(task.script_id || '');
     setFormSchedDate(task.scheduled_recording_date || '');
     setFormSchedTime(task.scheduled_recording_time || '');
+    setFormDriveLink(task.drive_link || '');
+    setFormVideoLink(task.edited_video_link || '');
     setDialogOpen(true);
   };
 
@@ -201,6 +218,8 @@ export default function ContentKanban() {
       script_id: (formScriptId && formScriptId !== 'none') ? formScriptId : null,
       scheduled_recording_date: formSchedDate || null,
       scheduled_recording_time: formSchedTime || null,
+      drive_link: formDriveLink || null,
+      edited_video_link: formVideoLink || null,
       updated_at: new Date().toISOString(),
     };
 
@@ -494,6 +513,92 @@ export default function ContentKanban() {
     fetchTasks();
   };
 
+  // ─── QUICK LINK DIALOG ────────────────────────────────────
+  const openLinkDialog = (task: ContentTask, type: 'drive' | 'video') => {
+    setLinkDialogTask(task);
+    setLinkDialogType(type);
+    setLinkDialogValue(type === 'drive' ? (task.drive_link || '') : (task.edited_video_link || ''));
+    setLinkDialogOpen(true);
+  };
+
+  const handleSaveLink = async () => {
+    if (!linkDialogTask || !linkDialogValue.trim()) {
+      toast.error('Insira um link válido');
+      return;
+    }
+    const field = linkDialogType === 'drive' ? 'drive_link' : 'edited_video_link';
+    const { error } = await supabase.from('content_tasks').update({
+      [field]: linkDialogValue.trim(),
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', linkDialogTask.id);
+    if (error) { toast.error('Erro ao salvar link'); return; }
+    toast.success(linkDialogType === 'drive' ? '📁 Link do Drive salvo!' : '🎬 Link do vídeo salvo!');
+    setLinkDialogOpen(false);
+    setLinkDialogTask(null);
+    fetchTasks();
+  };
+
+  // ─── QUICK MOVE TO NEXT COLUMN ────────────────────────────
+  const handleMoveToNext = async (task: ContentTask, targetColumn: string) => {
+    const validationError = validateKanbanTransition(task, targetColumn);
+    if (validationError) { toast.error(validationError); return; }
+
+    const { error } = await supabase.from('content_tasks').update({
+      kanban_column: targetColumn,
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', task.id);
+    if (error) { toast.error('Erro ao mover'); return; }
+
+    await syncOnColumnChange(task, targetColumn);
+    toast.success(`Movido para ${KANBAN_COLUMNS.find(c => c.id === targetColumn)?.label}`);
+    fetchTasks();
+  };
+
+  // ─── QUICK SCHEDULE (agendamentos) ────────────────────────
+  const openScheduleDialog = (task: ContentTask) => {
+    setScheduleDialogTask(task);
+    setScheduleDate(task.scheduled_recording_date || '');
+    setScheduleTime(task.scheduled_recording_time || '');
+    setScheduleDialogOpen(true);
+  };
+
+  const handleSaveSchedule = async () => {
+    if (!scheduleDialogTask || !scheduleDate || !scheduleTime) {
+      toast.error('Preencha data e horário');
+      return;
+    }
+    const { error } = await supabase.from('content_tasks').update({
+      scheduled_recording_date: scheduleDate,
+      scheduled_recording_time: scheduleTime,
+      kanban_column: 'acompanhamento',
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', scheduleDialogTask.id);
+    if (error) { toast.error('Erro ao agendar'); return; }
+
+    await syncOnColumnChange(scheduleDialogTask, 'acompanhamento');
+    toast.success('📅 Agendado! Movido para Acompanhamento');
+    setScheduleDialogOpen(false);
+    setScheduleDialogTask(null);
+    fetchTasks();
+  };
+
+  // ─── RESUBMIT FROM ALTERAÇÃO ──────────────────────────────
+  const handleResubmitFromAlteracao = async (task: ContentTask) => {
+    if (!task.edited_video_link) {
+      toast.error('Adicione o link do vídeo editado antes de reenviar');
+      return;
+    }
+    const { error } = await supabase.from('content_tasks').update({
+      kanban_column: 'revisao',
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', task.id);
+    if (error) { toast.error('Erro ao reenviar'); return; }
+
+    await syncOnColumnChange(task, 'revisao');
+    toast.success('🔄 Reenviado para Revisão!');
+    fetchTasks();
+  };
+
   // ─── RENDER ────────────────────────────────────────────────
   if (loading) {
     return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Carregando...</p></div>;
@@ -589,6 +694,20 @@ export default function ContentKanban() {
                         onConfirmPosted={task.kanban_column === 'acompanhamento' ? () => handleConfirmPosted(task) : undefined}
                         onApprove={task.kanban_column === 'revisao' ? () => handleApproveTask(task) : undefined}
                         onRequestAdjustments={task.kanban_column === 'revisao' ? () => openAdjustmentDialog(task) : undefined}
+                        onAddDriveLink={task.kanban_column === 'captacao' || task.kanban_column === 'edicao' ? () => openLinkDialog(task, 'drive') : undefined}
+                        onAddVideoLink={task.kanban_column === 'edicao' || task.kanban_column === 'alteracao' ? () => openLinkDialog(task, 'video') : undefined}
+                        onMoveToNext={
+                          task.kanban_column === 'captacao' && task.drive_link ? () => handleMoveToNext(task, 'edicao') :
+                          task.kanban_column === 'envio' ? () => handleMoveToNext(task, 'agendamentos') :
+                          undefined
+                        }
+                        nextColumnLabel={
+                          task.kanban_column === 'captacao' ? 'Edição' :
+                          task.kanban_column === 'envio' ? 'Agendamentos' :
+                          undefined
+                        }
+                        onSchedule={task.kanban_column === 'agendamentos' ? () => openScheduleDialog(task) : undefined}
+                        onResubmit={task.kanban_column === 'alteracao' ? () => handleResubmitFromAlteracao(task) : undefined}
                       />
                     ))}
                     {colTasks.length === 0 && (
@@ -724,6 +843,18 @@ export default function ContentKanban() {
                 <Input type="time" value={formSchedTime} onChange={e => setFormSchedTime(e.target.value)} className="h-9" />
               </div>
             </div>
+
+            {/* Links section */}
+            <div className="grid grid-cols-1 gap-3 border-t pt-3">
+              <div>
+                <Label className="text-xs flex items-center gap-1"><Link2 size={11} /> Link dos Materiais (Drive)</Label>
+                <Input value={formDriveLink} onChange={e => setFormDriveLink(e.target.value)} placeholder="https://drive.google.com/..." className="h-9" />
+              </div>
+              <div>
+                <Label className="text-xs flex items-center gap-1"><Film size={11} /> Link do Vídeo Editado</Label>
+                <Input value={formVideoLink} onChange={e => setFormVideoLink(e.target.value)} placeholder="https://drive.google.com/..." className="h-9" />
+              </div>
+            </div>
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm(); }}>Cancelar</Button>
@@ -766,6 +897,75 @@ export default function ContentKanban() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Quick Link Dialog */}
+      <Dialog open={linkDialogOpen} onOpenChange={v => { if (!v) { setLinkDialogOpen(false); setLinkDialogTask(null); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link2 size={18} className="text-primary" />
+              {linkDialogType === 'drive' ? 'Link dos Materiais (Drive)' : 'Link do Vídeo Editado'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {linkDialogTask && (
+              <p className="text-sm text-muted-foreground">
+                Conteúdo: <span className="font-medium text-foreground">{linkDialogTask.title}</span>
+              </p>
+            )}
+            <div>
+              <Label className="text-xs">{linkDialogType === 'drive' ? 'URL do Google Drive' : 'URL do vídeo editado'} *</Label>
+              <Input
+                value={linkDialogValue}
+                onChange={e => setLinkDialogValue(e.target.value)}
+                placeholder="https://drive.google.com/..."
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setLinkDialogOpen(false); setLinkDialogTask(null); }}>Cancelar</Button>
+            <Button onClick={handleSaveLink}>
+              <Link2 size={14} /> Salvar Link
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Schedule Dialog */}
+      <Dialog open={scheduleDialogOpen} onOpenChange={v => { if (!v) { setScheduleDialogOpen(false); setScheduleDialogTask(null); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar size={18} className="text-primary" />
+              Agendar Postagem
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {scheduleDialogTask && (
+              <p className="text-sm text-muted-foreground">
+                Conteúdo: <span className="font-medium text-foreground">{scheduleDialogTask.title}</span>
+              </p>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Data *</Label>
+                <Input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs">Horário *</Label>
+                <Input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setScheduleDialogOpen(false); setScheduleDialogTask(null); }}>Cancelar</Button>
+            <Button onClick={handleSaveSchedule}>
+              <Calendar size={14} /> Agendar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -783,9 +983,15 @@ interface TaskCardProps {
   onConfirmPosted?: () => void;
   onApprove?: () => void;
   onRequestAdjustments?: () => void;
+  onAddDriveLink?: () => void;
+  onAddVideoLink?: () => void;
+  onMoveToNext?: () => void;
+  nextColumnLabel?: string;
+  onSchedule?: () => void;
+  onResubmit?: () => void;
 }
 
-function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDragStart, onEdit, onDelete, onConfirmPosted, onApprove, onRequestAdjustments }: TaskCardProps) {
+function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDragStart, onEdit, onDelete, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit }: TaskCardProps) {
   const [scriptPreviewOpen, setScriptPreviewOpen] = useState(false);
   const typeConfig = CONTENT_TYPES.find(t => t.value === task.content_type) || CONTENT_TYPES[0];
   const TypeIcon = typeConfig.icon;
@@ -977,6 +1183,69 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
               )}
             </div>
           )}
+
+          {/* Quick action buttons per column */}
+          <div className="space-y-1.5">
+            {/* Captação: Add Drive link */}
+            {onAddDriveLink && !task.drive_link && (
+              <button onClick={e => { e.stopPropagation(); onAddDriveLink(); }}
+                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-600 transition-colors text-[10px] font-semibold">
+                <Link2 size={11} /> Adicionar Link Drive
+              </button>
+            )}
+            {/* Drive link exists indicator */}
+            {task.drive_link && (task.kanban_column === 'captacao' || task.kanban_column === 'edicao') && (
+              <a href={task.drive_link} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-colors w-full text-left group/drive">
+                <Link2 size={11} className="text-blue-600 shrink-0" />
+                <span className="text-[10px] font-medium text-blue-700 truncate flex-1">Materiais (Drive)</span>
+                <ExternalLink size={10} className="text-blue-500/60 shrink-0" />
+              </a>
+            )}
+            {/* Edição/Alteração: Add video link */}
+            {onAddVideoLink && !task.edited_video_link && (
+              <button onClick={e => { e.stopPropagation(); onAddVideoLink(); }}
+                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 text-teal-600 transition-colors text-[10px] font-semibold">
+                <Film size={11} /> Adicionar Link Vídeo
+              </button>
+            )}
+            {/* Move to next column */}
+            {onMoveToNext && (
+              <button onClick={e => { e.stopPropagation(); onMoveToNext(); }}
+                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary transition-colors text-[10px] font-semibold">
+                <ArrowRight size={11} /> Mover para {nextColumnLabel}
+              </button>
+            )}
+            {/* Agendamentos: Schedule */}
+            {onSchedule && (
+              <button onClick={e => { e.stopPropagation(); onSchedule(); }}
+                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary transition-colors text-[10px] font-semibold">
+                <Calendar size={11} /> Agendar Postagem
+              </button>
+            )}
+            {/* Alteração: Resubmit */}
+            {onResubmit && (
+              <button onClick={e => { e.stopPropagation(); onResubmit(); }}
+                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 text-teal-600 transition-colors text-[10px] font-semibold">
+                <Send size={11} /> Reenviar para Revisão
+              </button>
+            )}
+            {/* Adjustment notes viewer */}
+            {task.adjustment_notes && task.kanban_column === 'alteracao' && (
+              <div className="px-2.5 py-1.5 rounded-lg bg-amber-500/5 border border-amber-500/15 text-[10px] text-amber-700 dark:text-amber-400">
+                <span className="font-semibold">Ajustes:</span> {task.adjustment_notes}
+              </div>
+            )}
+            {/* Acompanhamento: Confirm posted (always, not just overdue) */}
+            {onConfirmPosted && !isOverdue && (
+              <button onClick={e => { e.stopPropagation(); onConfirmPosted(); }}
+                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-success/10 hover:bg-success/20 border border-success/20 text-success transition-colors text-[10px] font-semibold">
+                <CheckCircle2 size={11} /> Confirmar Postagem
+              </button>
+            )}
+          </div>
+
+          {/* Overdue confirm posted (prominent) */}
           {isOverdue && onConfirmPosted && (
             <button
               onClick={e => { e.stopPropagation(); onConfirmPosted(); }}

@@ -351,6 +351,36 @@ export default function ContentKanban() {
       await supabase.from('scripts').update({ recorded: true } as any).eq('id', task.script_id);
     }
 
+    // Set deadlines based on column transitions
+    const deadlineUpdates: Record<string, any> = {};
+    if (newColumn === 'revisao') {
+      // Revisão deadline: 1 day
+      const deadline = new Date();
+      deadline.setHours(deadline.getHours() + 24);
+      deadlineUpdates.review_deadline = deadline.toISOString();
+    }
+    if (newColumn === 'alteracao') {
+      // Alteração deadline: 1 day (unless immediate)
+      if (!task.immediate_alteration) {
+        const deadline = new Date();
+        deadline.setHours(deadline.getHours() + 24);
+        deadlineUpdates.alteration_deadline = deadline.toISOString();
+      }
+    }
+    if (newColumn === 'envio') {
+      // Client approval deadline: 6 hours
+      const deadline = new Date();
+      deadline.setHours(deadline.getHours() + 6);
+      deadlineUpdates.approval_deadline = deadline.toISOString();
+    }
+
+    if (Object.keys(deadlineUpdates).length > 0) {
+      await supabase.from('content_tasks').update({
+        ...deadlineUpdates,
+        updated_at: new Date().toISOString(),
+      } as any).eq('id', task.id);
+    }
+
     // Map kanban columns to social media delivery statuses
     const columnToSocialStatus: Record<string, string> = {
       revisao: 'revisao',
@@ -398,7 +428,7 @@ export default function ContentKanban() {
         approval_sent_at: new Date().toISOString(),
       } as any).eq('id', task.id);
 
-      // Auto-send WhatsApp approval message
+      // Auto-send WhatsApp approval message with 6h warning
       try {
         const whatsConfig = await getWhatsAppConfig();
         if (whatsConfig?.integrationActive && whatsConfig?.autoVideoApproval) {
@@ -409,6 +439,9 @@ export default function ContentKanban() {
               .replace('{link_video}', task.edited_video_link || 'Link não disponível')
               .replace('{titulo}', task.title);
             
+            // Append 6h approval warning
+            msg += '\n\n⏰ Você tem até *6 horas* para avaliar e aprovar o vídeo. Após esse prazo, ele será encaminhado para agendamento automaticamente.';
+            
             const result = await sendWhatsAppMessage({
               number: client.whatsapp,
               message: msg,
@@ -417,7 +450,7 @@ export default function ContentKanban() {
             });
 
             if (result.success) {
-              toast.success('📱 Link de aprovação enviado por WhatsApp!');
+              toast.success('📱 Link de aprovação enviado por WhatsApp com prazo de 6h!');
             } else {
               console.error('WhatsApp send error:', result.error);
               toast.warning('Card enviado, mas não foi possível enviar WhatsApp');

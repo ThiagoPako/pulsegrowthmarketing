@@ -446,6 +446,25 @@ export default function EditorDashboard() {
             </div>
           )}
         </TabsContent>
+
+        {/* REVIEW TAB */}
+        <TabsContent value="review" className="space-y-4">
+          <p className="text-xs text-muted-foreground">{filteredReviewTasks.length} conteúdo{filteredReviewTasks.length !== 1 ? 's' : ''} em revisão ou finalizados</p>
+
+          {filteredReviewTasks.length === 0 ? (
+            <div className="bg-card border border-border rounded-xl p-8 text-center">
+              <Eye size={32} className="mx-auto mb-2 text-muted-foreground/40" />
+              <p className="text-muted-foreground">Nenhum conteúdo em revisão</p>
+              <p className="text-xs text-muted-foreground mt-1">Conteúdos enviados para aprovação aparecerão aqui</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filteredReviewTasks.map((task, i) => (
+                <TaskCard key={task.id} task={task} clients={clients} index={i} onClick={() => openTaskDetail(task)} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
       </Tabs>
 
       {/* Task Detail Dialog */}

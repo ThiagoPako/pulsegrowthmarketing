@@ -98,14 +98,33 @@ export default function Goals() {
     return updated;
   }, []);
 
+  const syncClientGoals = useCallback(async (allGoals: Goal[]) => {
+    const clientGoals = allGoals.filter(g => g.type === 'clients' && g.status === 'em_andamento');
+    if (clientGoals.length === 0) return allGoals;
+
+    const { count } = await supabase.from('clients').select('id', { count: 'exact', head: true });
+    if (count === null) return allGoals;
+
+    const updated = [...allGoals];
+    for (const goal of clientGoals) {
+      if (count !== goal.current_value) {
+        await supabase.from('goals').update({ current_value: count, updated_at: new Date().toISOString() }).eq('id', goal.id);
+        const idx = updated.findIndex(g => g.id === goal.id);
+        if (idx >= 0) updated[idx] = { ...updated[idx], current_value: count };
+      }
+    }
+    return updated;
+  }, []);
+
   const fetchGoals = useCallback(async () => {
     const { data, error } = await supabase.from('goals').select('*').order('created_at', { ascending: false });
     if (error) { toast.error('Erro ao carregar metas'); return; }
     const allGoals = (data as Goal[]) || [];
-    const synced = await syncRevenueGoals(allGoals);
+    let synced = await syncRevenueGoals(allGoals);
+    synced = await syncClientGoals(synced);
     setGoals(synced);
     setLoading(false);
-  }, [syncRevenueGoals]);
+  }, [syncRevenueGoals, syncClientGoals]);
 
   useEffect(() => { fetchGoals(); }, [fetchGoals]);
 

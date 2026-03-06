@@ -637,7 +637,8 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
   const TypeIcon = typeConfig.icon;
   const clientColor = client?.color || '217 91% 60%';
 
-  // Check if overdue in acompanhamento
+  // Check column states
+  const isCaptacao = task.kanban_column === 'captacao';
   const isAcompanhamento = task.kanban_column === 'acompanhamento';
   const isOverdue = isAcompanhamento && task.scheduled_recording_date && 
     new Date(task.scheduled_recording_date + 'T23:59:59') < new Date();
@@ -649,8 +650,21 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
         onDragStart={onDragStart}
         className={`group relative bg-card border rounded-lg cursor-grab active:cursor-grabbing transition-all hover:shadow-md ${
           isDragging ? 'opacity-40 scale-95' : ''
-        } ${isOverdue ? 'border-destructive/60 ring-1 ring-destructive/30 bg-destructive/5' : 'border-border'}`}
+        } ${isOverdue ? 'border-destructive/60 ring-1 ring-destructive/30 bg-destructive/5' : ''} ${
+          isCaptacao ? 'border-orange-400/50 ring-1 ring-orange-400/20' : !isOverdue ? 'border-border' : ''
+        }`}
       >
+        {/* Recording indicator */}
+        {isCaptacao && (
+          <div className="flex items-center gap-2 px-2.5 py-1.5 bg-orange-500/10 rounded-t-lg border-b border-orange-400/20">
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+            </span>
+            <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider">Gravando</span>
+          </div>
+        )}
+
         {/* Overdue alert banner */}
         {isOverdue && (
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-destructive/10 rounded-t-lg border-b border-destructive/20">

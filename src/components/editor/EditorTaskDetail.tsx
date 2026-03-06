@@ -291,7 +291,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader className="space-y-3">
           <DialogTitle className="flex items-center gap-2 text-lg">
             <cfg.icon size={18} className={cfg.color.split(' ')[0]} />
@@ -319,7 +319,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
           )}
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 pr-2">
+        <div className="pr-2">
           <div className="space-y-4 pb-4">
             {/* Client + Meta */}
             <div className="flex flex-wrap items-center gap-3">
@@ -583,7 +583,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
               )}
             </div>
           </div>
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );

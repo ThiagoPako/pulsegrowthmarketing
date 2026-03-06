@@ -392,25 +392,24 @@ export default function Team() {
             <Handshake size={40} className="mx-auto mb-3 opacity-50" /><p>Nenhum parceiro cadastrado</p>
           </div>
         ) : (
-          <div className="grid gap-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {partnerMembers.map(u => {
               const info = getPartnerInfo(u.id);
               return (
-                <div key={u.id} className="glass-card p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <UserAvatar user={u} size="lg" />
-                      <div>
-                        <p className="font-medium">{u.displayName || u.name}</p>
-                        <p className="text-xs text-muted-foreground">{u.email}</p>
-                        {info && (
-                          <div className="flex items-center gap-2 mt-1">
-                            {info.company_name && <span className="text-xs bg-muted px-2 py-0.5 rounded">{info.company_name}</span>}
-                            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">{info.service_function}</span>
-                          </div>
-                        )}
-                      </div>
+                <div key={u.id} className="glass-card p-5 hover:shadow-md transition-shadow">
+                  <div className="flex flex-col items-center text-center gap-3">
+                    <UserAvatar user={u} size="lg" className="ring-2 ring-border shadow-sm" />
+                    <div>
+                      <p className="font-semibold text-base">{u.displayName || u.name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{u.email}</p>
+                      {info && (
+                        <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
+                          {info.company_name && <span className="text-xs bg-muted px-2.5 py-1 rounded-full border border-border font-medium">{info.company_name}</span>}
+                          <span className="text-xs bg-accent text-accent-foreground px-2.5 py-1 rounded-full border border-accent-foreground/15 font-medium">{info.service_function}</span>
+                        </div>
+                      )}
                     </div>
+                  </div>
                     <div className="flex items-center gap-3 text-right">
                       {info && (
                         <div>

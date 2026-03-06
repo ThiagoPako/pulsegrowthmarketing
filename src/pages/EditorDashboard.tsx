@@ -178,8 +178,7 @@ export default function EditorDashboard() {
     });
   }, [reviewTasks, filterClient, filterType, searchQuery, clients]);
 
-  const sortedFiltered = [...filteredTasks].sort((a, b) => {
-    // Priority: overdue first, then by deadline
+  const sortedFiltered = [...filteredQueueTasks].sort((a, b) => {
     const aStatus = getDeadlineStatus(a.editing_deadline);
     const bStatus = getDeadlineStatus(b.editing_deadline);
     if (aStatus.variant === 'destructive' && bStatus.variant !== 'destructive') return -1;

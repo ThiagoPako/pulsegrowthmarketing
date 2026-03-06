@@ -19,6 +19,7 @@ import { ptBR } from 'date-fns/locale';
 import type { Client, Recording, Script } from '@/types';
 import { getWhatsAppConfig, sendWhatsAppMessage } from '@/services/whatsappService';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
+import ContentTaskDetailSheet from '@/components/content/ContentTaskDetailSheet';
 
 // ─── COLUMN DEFINITIONS ───────────────────────────────────────
 const KANBAN_COLUMNS = [
@@ -110,6 +111,9 @@ export default function ContentKanban() {
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
 
+  // Detail sheet
+  const [detailTask, setDetailTask] = useState<ContentTask | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   // ─── FETCH ─────────────────────────────────────────────────
   const fetchTasks = useCallback(async () => {
     const { data, error } = await supabase
@@ -608,6 +612,7 @@ export default function ContentKanban() {
                         onDragStart={e => handleDragStart(e, task)}
                         onEdit={() => openEdit(task)}
                         onDelete={() => handleDelete(task.id)}
+                        onCardClick={() => { setDetailTask(task); setDetailOpen(true); }}
                         onConfirmPosted={task.kanban_column === 'acompanhamento' ? () => handleConfirmPosted(task) : undefined}
                         onApprove={task.kanban_column === 'revisao' ? () => handleApproveTask(task) : undefined}
                         onRequestAdjustments={task.kanban_column === 'revisao' ? () => openAdjustmentDialog(task) : undefined}
@@ -896,6 +901,14 @@ export default function ContentKanban() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Task Detail Sheet */}
+      <ContentTaskDetailSheet
+        task={detailTask}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        onRefresh={fetchTasks}
+      />
     </div>
   );
 }
@@ -936,6 +949,7 @@ interface TaskCardProps {
   onDragStart: (e: React.DragEvent) => void;
   onEdit: () => void;
   onDelete: () => void;
+  onCardClick?: () => void;
   onConfirmPosted?: () => void;
   onApprove?: () => void;
   onRequestAdjustments?: () => void;
@@ -947,7 +961,7 @@ interface TaskCardProps {
   onResubmit?: () => void;
 }
 
-function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDragStart, onEdit, onDelete, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit }: TaskCardProps) {
+function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit }: TaskCardProps) {
   const [scriptPreviewOpen, setScriptPreviewOpen] = useState(false);
   const typeConfig = CONTENT_TYPES.find(t => t.value === task.content_type) || CONTENT_TYPES[0];
   const TypeIcon = typeConfig.icon;
@@ -964,6 +978,7 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
       <div
         draggable
         onDragStart={onDragStart}
+        onClick={onCardClick}
         className={`group relative bg-card rounded-xl cursor-grab active:cursor-grabbing transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 overflow-hidden ${
           isDragging ? 'opacity-40 scale-95 shadow-none' : 'shadow-sm'
         } ${isOverdue ? 'ring-1 ring-destructive/40' : ''} ${

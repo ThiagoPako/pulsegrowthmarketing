@@ -118,6 +118,7 @@ function RichEditor({ content, onChange }: { content: string; onChange: (html: s
 
 export default function Scripts() {
   const { clients, scripts, addScript, updateScript, deleteScript } = useApp();
+  const { user } = useAuth();
   const { clientes: endoClientes } = useEndoClientes();
   const [open, setOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);

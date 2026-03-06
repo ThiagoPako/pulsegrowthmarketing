@@ -46,6 +46,8 @@ export interface Client {
   companyName: string;
   responsiblePerson: string;
   phone: string;
+  email: string;
+  city: string;
   color: string; // HSL value e.g. "0 72% 51%"
   logoUrl?: string; // public URL from storage
   fixedDay: DayOfWeek;
@@ -65,6 +67,18 @@ export interface Client {
   weeklyStories: number;
   presenceDays: number;
   monthlyRecordings: number;
+}
+
+export interface SocialAccount {
+  id: string;
+  clientId: string;
+  platform: 'instagram' | 'facebook';
+  facebookPageId?: string;
+  instagramBusinessId?: string;
+  accountName: string;
+  status: 'connected' | 'disconnected' | 'expired';
+  tokenExpiration?: string;
+  createdAt: string;
 }
 
 export type RecordingType = 'fixa' | 'extra' | 'secundaria' | 'backup';

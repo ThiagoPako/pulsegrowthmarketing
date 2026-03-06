@@ -138,10 +138,12 @@ export type Database = {
           auto_renewal: boolean
           backup_day: string
           backup_time: string
+          city: string
           color: string
           company_name: string
           contract_start_date: string | null
           created_at: string
+          email: string
           extra_client_appears: boolean
           extra_content_types: string[]
           extra_day: string
@@ -168,10 +170,12 @@ export type Database = {
           auto_renewal?: boolean
           backup_day?: string
           backup_time?: string
+          city?: string
           color?: string
           company_name: string
           contract_start_date?: string | null
           created_at?: string
+          email?: string
           extra_client_appears?: boolean
           extra_content_types?: string[]
           extra_day?: string
@@ -198,10 +202,12 @@ export type Database = {
           auto_renewal?: boolean
           backup_day?: string
           backup_time?: string
+          city?: string
           color?: string
           company_name?: string
           contract_start_date?: string | null
           created_at?: string
+          email?: string
           extra_client_appears?: boolean
           extra_content_types?: string[]
           extra_day?: string
@@ -894,6 +900,44 @@ export type Database = {
         }
         Relationships: []
       }
+      integration_logs: {
+        Row: {
+          action: string
+          client_id: string
+          created_at: string
+          id: string
+          message: string
+          platform: string
+          status: string
+        }
+        Insert: {
+          action?: string
+          client_id: string
+          created_at?: string
+          id?: string
+          message?: string
+          platform?: string
+          status?: string
+        }
+        Update: {
+          action?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+          message?: string
+          platform?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_logs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kanban_tasks: {
         Row: {
           checklist: Json
@@ -1326,6 +1370,53 @@ export type Database = {
             columns: ["endo_client_id"]
             isOneToOne: false
             referencedRelation: "endomarketing_clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_accounts: {
+        Row: {
+          access_token: string
+          account_name: string
+          client_id: string
+          created_at: string
+          facebook_page_id: string | null
+          id: string
+          instagram_business_id: string | null
+          platform: string
+          status: string
+          token_expiration: string | null
+        }
+        Insert: {
+          access_token?: string
+          account_name?: string
+          client_id: string
+          created_at?: string
+          facebook_page_id?: string | null
+          id?: string
+          instagram_business_id?: string | null
+          platform?: string
+          status?: string
+          token_expiration?: string | null
+        }
+        Update: {
+          access_token?: string
+          account_name?: string
+          client_id?: string
+          created_at?: string
+          facebook_page_id?: string | null
+          id?: string
+          instagram_business_id?: string | null
+          platform?: string
+          status?: string
+          token_expiration?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_accounts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
         ]

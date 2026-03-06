@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
@@ -21,7 +21,7 @@ const CONTENT_TYPES: ContentType[] = ['reels', 'story', 'produto'];
 type PreferredShift = 'turnoA' | 'turnoB' | 'ambos';
 
 const emptyClient = (): Partial<Client> => ({
-  companyName: '', responsiblePerson: '', phone: '', whatsapp: '', color: CLIENT_COLORS[0].value,
+  companyName: '', responsiblePerson: '', phone: '', whatsapp: '', email: '', city: '', color: CLIENT_COLORS[0].value,
   fixedDay: 'segunda', fixedTime: '09:00',
   videomaker: '', backupTime: '14:00', backupDay: 'terca', extraDay: 'quarta',
   extraContentTypes: [], acceptsExtra: false, extraClientAppears: false,
@@ -49,8 +49,19 @@ interface SlotInfo {
   freeSlots: number;
 }
 
+interface SocialAccountState {
+  instagram: { connected: boolean; accountName: string; username: string; pageId: string; businessId: string };
+  facebook: { connected: boolean; accountName: string; pageId: string };
+}
+
+const emptySocialAccounts = (): SocialAccountState => ({
+  instagram: { connected: false, accountName: '', username: '', pageId: '', businessId: '' },
+  facebook: { connected: false, accountName: '', pageId: '' },
+});
+
 const STEP_LABELS = [
-  { icon: User, label: 'Dados do Cliente' },
+  { icon: User, label: 'Dados da Empresa' },
+  { icon: Globe, label: 'Redes Sociais' },
   { icon: Video, label: 'Agenda & Gravação' },
   { icon: Target, label: 'Metas Semanais' },
   { icon: DollarSign, label: 'Financeiro' },
@@ -82,6 +93,10 @@ export default function Clients() {
   const [contractValue, setContractValue] = useState(0);
   const [dueDay, setDueDay] = useState(10);
   const [paymentMethod, setPaymentMethod] = useState('pix');
+
+  // Social accounts state
+  const [socialAccounts, setSocialAccounts] = useState<SocialAccountState>(emptySocialAccounts());
+  const [existingSocialAccounts, setExistingSocialAccounts] = useState<any[]>([]);
 
   useEffect(() => {
     supabase.from('plans').select('id, name, status, reels_qty, creatives_qty, stories_qty').eq('status', 'ativo').then(({ data }) => {
@@ -189,6 +204,16 @@ export default function Clients() {
           setContractValue(0); setDueDay(10); setPaymentMethod('pix');
         }
       });
+      // Load social accounts for editing
+      supabase.from('social_accounts').select('*').eq('client_id', client.id).then(({ data }) => {
+        setExistingSocialAccounts(data || []);
+        const ig = (data || []).find((a: any) => a.platform === 'instagram');
+        const fb = (data || []).find((a: any) => a.platform === 'facebook');
+        setSocialAccounts({
+          instagram: ig ? { connected: true, accountName: ig.account_name, username: ig.account_name, pageId: ig.facebook_page_id || '', businessId: ig.instagram_business_id || '' } : emptySocialAccounts().instagram,
+          facebook: fb ? { connected: true, accountName: fb.account_name, pageId: fb.facebook_page_id || '' } : emptySocialAccounts().facebook,
+        });
+      });
     }
     else {
       setEditing(null);
@@ -201,6 +226,8 @@ export default function Clients() {
       setContractValue(0);
       setDueDay(10);
       setPaymentMethod('pix');
+      setSocialAccounts(emptySocialAccounts());
+      setExistingSocialAccounts([]);
     }
     setLogoFile(null);
     setStep(0);
@@ -257,6 +284,8 @@ export default function Clients() {
         payment_method: paymentMethod,
         status: 'ativo',
       } as any, { onConflict: 'client_id' });
+      // Save social accounts
+      await saveSocialAccounts(editing.id);
       toast.success('Cliente atualizado');
     } else {
       const clientId = crypto.randomUUID();
@@ -276,6 +305,8 @@ export default function Clients() {
         payment_method: paymentMethod,
         status: 'ativo',
       } as any);
+      // Save social accounts
+      await saveSocialAccounts(clientId);
       const count = await generateScheduleForClient(newClient);
       if (count > 0) {
         toast.success(`Cliente cadastrado — ${count} gravação(ões) criada(s) na agenda`);
@@ -284,6 +315,45 @@ export default function Clients() {
       }
     }
     setOpen(false);
+  };
+
+  const saveSocialAccounts = async (clientId: string) => {
+    // Delete existing social accounts for this client
+    await supabase.from('social_accounts').delete().eq('client_id', clientId);
+    
+    const accounts = [];
+    if (socialAccounts.instagram.connected) {
+      accounts.push({
+        client_id: clientId,
+        platform: 'instagram',
+        facebook_page_id: socialAccounts.instagram.pageId || null,
+        instagram_business_id: socialAccounts.instagram.businessId || null,
+        account_name: socialAccounts.instagram.username || socialAccounts.instagram.accountName,
+        status: 'connected',
+      });
+    }
+    if (socialAccounts.facebook.connected) {
+      accounts.push({
+        client_id: clientId,
+        platform: 'facebook',
+        facebook_page_id: socialAccounts.facebook.pageId || null,
+        account_name: socialAccounts.facebook.accountName,
+        status: 'connected',
+      });
+    }
+    if (accounts.length > 0) {
+      await supabase.from('social_accounts').insert(accounts as any);
+      // Log the connection
+      for (const acc of accounts) {
+        await supabase.from('integration_logs').insert({
+          client_id: clientId,
+          platform: acc.platform,
+          action: 'connect',
+          status: 'success',
+          message: `Conta ${acc.platform} conectada: ${acc.account_name}`,
+        } as any);
+      }
+    }
   };
 
   const handleDelete = (id: string) => {
@@ -347,7 +417,7 @@ export default function Clients() {
   }, [form.videomaker, settings, clients, users, editing, preferredShift]);
 
   const canProceedStep0 = form.companyName && form.responsiblePerson && form.whatsapp;
-  const canProceedStep1 = form.videomaker && form.fixedDay && form.fixedTime;
+  const canProceedStep2 = form.videomaker && form.fixedDay && form.fixedTime;
 
   // ========== STEP RENDERERS ==========
 
@@ -394,6 +464,16 @@ export default function Clients() {
         <Label>Telefone</Label>
         <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="(62) 99999-9999" />
       </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label>Email</Label>
+          <Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="contato@empresa.com" />
+        </div>
+        <div className="space-y-1">
+          <Label>Cidade</Label>
+          <Input value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} placeholder="Goiânia - GO" />
+        </div>
+      </div>
       <div className="space-y-1">
         <Label>WhatsApp do Cliente *</Label>
         <Input value={form.whatsapp} onChange={e => setForm({ ...form, whatsapp: e.target.value })} placeholder="5562999999999" />
@@ -413,7 +493,143 @@ export default function Clients() {
     </div>
   );
 
-  const renderStep1 = () => {
+  const simulateConnect = (platform: 'instagram' | 'facebook') => {
+    if (platform === 'instagram') {
+      setSocialAccounts(prev => ({
+        ...prev,
+        instagram: {
+          connected: true,
+          accountName: form.companyName || 'Conta Instagram',
+          username: `@${(form.companyName || 'empresa').toLowerCase().replace(/\s/g, '')}`,
+          pageId: 'mock_page_' + Date.now(),
+          businessId: 'mock_biz_' + Date.now(),
+        }
+      }));
+      toast.success('Instagram conectado com sucesso!');
+    } else {
+      setSocialAccounts(prev => ({
+        ...prev,
+        facebook: {
+          connected: true,
+          accountName: form.companyName || 'Página Facebook',
+          pageId: 'mock_page_' + Date.now(),
+        }
+      }));
+      toast.success('Facebook conectado com sucesso!');
+    }
+  };
+
+  const disconnectAccount = (platform: 'instagram' | 'facebook') => {
+    if (platform === 'instagram') {
+      setSocialAccounts(prev => ({ ...prev, instagram: emptySocialAccounts().instagram }));
+    } else {
+      setSocialAccounts(prev => ({ ...prev, facebook: emptySocialAccounts().facebook }));
+    }
+    toast.success(`${platform === 'instagram' ? 'Instagram' : 'Facebook'} desconectado`);
+  };
+
+  const renderStep1 = () => (
+    <div className="space-y-5">
+      <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-3">
+        <p className="text-sm font-semibold flex items-center gap-2">
+          <Globe size={16} className="text-primary" /> Conectar Redes Sociais
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Para permitir publicação automática de conteúdo, conecte as contas da empresa.
+        </p>
+      </div>
+
+      {/* Instagram Card */}
+      <div className={`p-4 rounded-xl border-2 transition-all space-y-3 ${
+        socialAccounts.instagram.connected 
+          ? 'border-primary/40 bg-primary/5' 
+          : 'border-border bg-muted/30'
+      }`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              socialAccounts.instagram.connected ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
+            }`}>
+              <Instagram size={20} />
+            </div>
+            <div>
+              <p className="font-semibold text-sm">Instagram</p>
+              {socialAccounts.instagram.connected ? (
+                <p className="text-xs text-primary flex items-center gap-1">🟢 Conectado · {socialAccounts.instagram.username}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">🔴 Não conectado</p>
+              )}
+            </div>
+          </div>
+          {socialAccounts.instagram.connected ? (
+            <div className="flex gap-1">
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => simulateConnect('instagram')}>
+                <RefreshCw size={12} /> Reconectar
+              </Button>
+              <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive gap-1" onClick={() => disconnectAccount('instagram')}>
+                <Unlink size={12} /> Remover
+              </Button>
+            </div>
+          ) : (
+            <Button size="sm" className="h-8 text-xs gap-1" onClick={() => simulateConnect('instagram')}>
+              <Link2 size={12} /> Conectar Instagram
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Facebook Card */}
+      <div className={`p-4 rounded-xl border-2 transition-all space-y-3 ${
+        socialAccounts.facebook.connected 
+          ? 'border-primary/40 bg-primary/5' 
+          : 'border-border bg-muted/30'
+      }`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              socialAccounts.facebook.connected ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
+            }`}>
+              <Facebook size={20} />
+            </div>
+            <div>
+              <p className="font-semibold text-sm">Facebook</p>
+              {socialAccounts.facebook.connected ? (
+                <p className="text-xs text-primary flex items-center gap-1">🟢 Conectado · {socialAccounts.facebook.accountName}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">🔴 Não conectado</p>
+              )}
+            </div>
+          </div>
+          {socialAccounts.facebook.connected ? (
+            <div className="flex gap-1">
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => simulateConnect('facebook')}>
+                <RefreshCw size={12} /> Reconectar
+              </Button>
+              <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive gap-1" onClick={() => disconnectAccount('facebook')}>
+                <Unlink size={12} /> Remover
+              </Button>
+            </div>
+          ) : (
+            <Button size="sm" className="h-8 text-xs gap-1" onClick={() => simulateConnect('facebook')}>
+              <Link2 size={12} /> Conectar Facebook
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Info notice */}
+      {!socialAccounts.instagram.connected && !socialAccounts.facebook.connected && (
+        <div className="p-3 rounded-lg bg-accent/50 border border-accent flex gap-2 items-start">
+          <Info size={16} className="text-muted-foreground shrink-0 mt-0.5" />
+          <p className="text-xs text-muted-foreground">
+            Você poderá conectar as redes sociais depois no perfil do cliente. A conexão não é obrigatória para concluir o cadastro.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderStep2 = () => {
     const shiftALabel = `${settings.shiftAStart} – ${settings.shiftAEnd}`;
     const shiftBLabel = `${settings.shiftBStart} – ${settings.shiftBEnd}`;
     
@@ -749,7 +965,7 @@ export default function Clients() {
   );
   };
 
-  const renderStep2 = () => (
+  const renderStep3 = () => (
     <div className="space-y-5">
       <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
         <p className="text-sm font-semibold flex items-center gap-2">
@@ -831,7 +1047,7 @@ export default function Clients() {
      </div>
    );
 
-  const renderStep3 = () => (
+  const renderStep4 = () => (
     <div className="space-y-5">
       <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
         <p className="text-sm font-semibold flex items-center gap-2">
@@ -927,6 +1143,7 @@ export default function Clients() {
                   {renderStep1()}
                   {renderStep2()}
                   {renderStep3()}
+                  {renderStep4()}
                 </div>
               ) : (
                 <>
@@ -934,6 +1151,7 @@ export default function Clients() {
                   {step === 1 && renderStep1()}
                   {step === 2 && renderStep2()}
                   {step === 3 && renderStep3()}
+                  {step === 4 && renderStep4()}
                 </>
               )}
             </div>
@@ -949,9 +1167,9 @@ export default function Clients() {
                       <ChevronLeft size={14} /> Voltar
                     </Button>
                   )}
-                  {step < 3 ? (
+                  {step < 4 ? (
                     <Button onClick={() => setStep(s => s + 1)} className="ml-auto gap-1"
-                      disabled={step === 0 ? !canProceedStep0 : step === 1 ? !canProceedStep1 : false}>
+                      disabled={step === 0 ? !canProceedStep0 : step === 2 ? !canProceedStep2 : false}>
                       Próximo <ChevronRight size={14} />
                     </Button>
                   ) : (

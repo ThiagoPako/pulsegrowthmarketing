@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, KeyRound, Users, Handshake } from 'lucide-react';
+import { Plus, KeyRound, Users, Handshake, Trash2 } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 
 const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'fotografo'];
@@ -132,6 +132,21 @@ export default function Team() {
       toast.error(err.message || 'Erro ao redefinir senha');
     } finally {
       setResetting(false);
+    }
+  };
+
+  const handleDeleteMember = async (member: TeamMember) => {
+    if (member.id === currentUser?.id) { toast.error('Você não pode excluir a si mesmo'); return; }
+    if (!confirm(`Tem certeza que deseja excluir ${member.displayName || member.name}? Esta ação é irreversível.`)) return;
+    try {
+      const { data, error } = await supabase.functions.invoke('delete-user', { body: { userId: member.id } });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`${member.displayName || member.name} removido com sucesso`);
+      fetchMembers();
+      fetchPartners();
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao excluir membro');
     }
   };
 
@@ -264,9 +279,16 @@ export default function Team() {
                 <div className="flex items-center gap-3">
                   <span className={`text-xs px-2 py-1 rounded-full font-medium ${roleColors[u.role]}`}>{ROLE_LABELS[u.role]}</span>
                   {currentUser?.role === 'admin' && (
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Redefinir senha" onClick={() => { setResetTarget(u); setResetOpen(true); }}>
-                      <KeyRound size={16} />
-                    </Button>
+                    <>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Redefinir senha" onClick={() => { setResetTarget(u); setResetOpen(true); }}>
+                        <KeyRound size={16} />
+                      </Button>
+                      {u.id !== currentUser?.id && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Excluir membro" onClick={() => handleDeleteMember(u)}>
+                          <Trash2 size={16} />
+                        </Button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -306,9 +328,14 @@ export default function Team() {
                         </div>
                       )}
                       {currentUser?.role === 'admin' && (
-                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Redefinir senha" onClick={() => { setResetTarget(u); setResetOpen(true); }}>
-                          <KeyRound size={16} />
-                        </Button>
+                        <>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Redefinir senha" onClick={() => { setResetTarget(u); setResetOpen(true); }}>
+                            <KeyRound size={16} />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Excluir parceiro" onClick={() => handleDeleteMember(u)}>
+                            <Trash2 size={16} />
+                          </Button>
+                        </>
                       )}
                     </div>
                   </div>

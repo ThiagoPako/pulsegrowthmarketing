@@ -103,7 +103,7 @@ export default function SocialMediaDeliveries() {
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [schedulingItem, setSchedulingItem] = useState<SocialDelivery | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('revisao');
+  const [activeTab, setActiveTab] = useState('pipeline');
 
   // Form state
   const [formClientId, setFormClientId] = useState('');
@@ -478,7 +478,7 @@ export default function SocialMediaDeliveries() {
       <div className="space-y-5">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => { setSelectedClientId(null); setActiveTab('revisao'); }}>
+          <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => { setSelectedClientId(null); setActiveTab('pipeline'); }}>
             <ArrowLeft size={18} />
           </Button>
           <ClientLogo client={selectedClient} size="lg" />
@@ -579,6 +579,9 @@ export default function SocialMediaDeliveries() {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="flex-wrap">
+            <TabsTrigger value="pipeline" className="gap-1.5">
+              <TrendingUp size={14} /> Pipeline ({clientDeliveries.review.length + clientDeliveries.approval.length + clientDeliveries.pending.length + clientDeliveries.scheduled.length})
+            </TabsTrigger>
             <TabsTrigger value="revisao" className="gap-1.5">
               <Eye size={14} /> Revisão ({clientDeliveries.review.length})
             </TabsTrigger>
@@ -595,6 +598,100 @@ export default function SocialMediaDeliveries() {
               <CheckCircle2 size={14} /> Postados ({clientDeliveries.posted.length})
             </TabsTrigger>
           </TabsList>
+
+          {/* Pipeline - All items */}
+          <TabsContent value="pipeline" className="mt-4">
+            {(() => {
+              const allItems = [...clientDeliveries.review, ...clientDeliveries.approval, ...clientDeliveries.pending, ...clientDeliveries.scheduled];
+              if (allItems.length === 0) return (
+                <Card className="border-border"><CardContent className="py-12 text-center text-muted-foreground">
+                  Nenhum conteúdo em andamento. Todos os itens já foram postados! 🎉
+                </CardContent></Card>
+              );
+
+              const statusOrder = { revisao: 0, aprovacao_cliente: 1, entregue: 2, agendado: 3 };
+              const sorted = allItems.sort((a, b) => (statusOrder[a.status as keyof typeof statusOrder] ?? 99) - (statusOrder[b.status as keyof typeof statusOrder] ?? 99));
+
+              const getStatusInfo = (status: string) => {
+                switch (status) {
+                  case 'revisao': return { label: '👁 Em Revisão', color: 'border-l-orange-500', badge: 'bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400', step: 1 };
+                  case 'aprovacao_cliente': return { label: '⏳ Aprovação Cliente', color: 'border-l-cyan-500', badge: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/20 dark:text-cyan-400', step: 2 };
+                  case 'entregue': return { label: '✅ Pronto p/ Agendar', color: 'border-l-yellow-500', badge: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400', step: 3 };
+                  case 'agendado': return { label: '📅 Agendado', color: 'border-l-blue-500', badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400', step: 4 };
+                  default: return { label: status, color: 'border-l-muted', badge: 'bg-muted text-muted-foreground', step: 0 };
+                }
+              };
+
+              return (
+                <div className="grid gap-3">
+                  {sorted.map(d => {
+                    const typeConf = getTypeConfig(d.content_type);
+                    const statusInfo = getStatusInfo(d.status);
+                    return (
+                      <Card key={d.id} className={`border-border border-l-4 ${statusInfo.color}`}>
+                        <CardContent className="p-4 space-y-2">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-sm text-foreground truncate">{d.title}</p>
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                <Badge className={`${typeConf.color} border-0 gap-1 text-[10px] px-1.5 py-0`}>
+                                  <typeConf.icon size={10} /> {typeConf.label}
+                                </Badge>
+                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 border-0 ${statusInfo.badge}`}>
+                                  {statusInfo.label}
+                                </Badge>
+                                {/* Step indicator */}
+                                <div className="flex items-center gap-0.5 ml-1">
+                                  {[1, 2, 3, 4, 5].map(step => (
+                                    <div key={step} className={`h-1.5 w-4 rounded-full transition-colors ${step <= statusInfo.step ? 'bg-primary' : 'bg-muted'}`} />
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {d.status === 'revisao' && (
+                                <>
+                                  <Button size="sm" variant="default" className="gap-1.5 h-8" onClick={() => handleApproveReview(d)}>
+                                    <CheckCircle2 size={14} /> Aprovar
+                                  </Button>
+                                  <Button size="sm" variant="outline" className="gap-1.5 h-8 text-orange-600 border-orange-300 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-700 dark:hover:bg-orange-900/20" onClick={() => openAlterationDialog(d)}>
+                                    <AlertTriangle size={14} /> Alteração
+                                  </Button>
+                                </>
+                              )}
+                              {d.status === 'aprovacao_cliente' && (
+                                <>
+                                  <Button size="sm" variant="default" className="gap-1.5 h-8 bg-green-600 hover:bg-green-700" onClick={() => handleClientApproved(d)}>
+                                    <CheckCircle2 size={14} /> Aprovado
+                                  </Button>
+                                  <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => handleSendWhatsAppApproval(d)} disabled={sendingWhatsApp}>
+                                    <MessageSquare size={14} /> WhatsApp
+                                  </Button>
+                                </>
+                              )}
+                              {d.status === 'entregue' && (
+                                <Button size="sm" variant="default" className="gap-1.5 h-8" onClick={() => openSchedule(d)}>
+                                  <CalendarClock size={14} /> Agendar
+                                </Button>
+                              )}
+                              {d.status === 'agendado' && (
+                                <Button size="sm" variant="default" className="gap-1 h-8" onClick={() => handleMarkPosted(d.id)}>
+                                  <Send size={14} /> Postado
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                          {(d.status === 'revisao' || d.status === 'aprovacao_cliente') && (
+                            <ReviewVideoLink contentTaskId={d.content_task_id} />
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </TabsContent>
 
           {/* Revisão */}
           <TabsContent value="revisao" className="mt-4">
@@ -880,7 +977,7 @@ export default function SocialMediaDeliveries() {
               <Card
                 key={client.id}
                 className="border-border hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group"
-                onClick={() => { setSelectedClientId(client.id); setActiveTab('revisao'); }}
+                onClick={() => { setSelectedClientId(client.id); setActiveTab('pipeline'); }}
               >
                 <CardContent className="p-5">
                   <div className="flex items-start gap-3 mb-4">

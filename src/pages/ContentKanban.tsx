@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, Send, Eye } from 'lucide-react';
+import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, Send, Eye, Maximize2 } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import { format } from 'date-fns';
@@ -1004,6 +1004,14 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
             <span className="text-[10px] font-semibold text-destructive uppercase tracking-widest" style={{ fontFamily: 'var(--font-display)' }}>Verificar Postagem</span>
           </div>
         )}
+
+        {/* Expand hint on hover */}
+        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10 pointer-events-none">
+          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-foreground/5 backdrop-blur-sm">
+            <Maximize2 size={10} className="text-muted-foreground" />
+            <span className="text-[9px] font-medium text-muted-foreground">Abrir</span>
+          </div>
+        </div>
 
         {/* Actions on hover */}
         <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">

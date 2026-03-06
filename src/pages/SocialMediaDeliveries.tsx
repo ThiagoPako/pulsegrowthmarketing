@@ -513,6 +513,41 @@ export default function SocialMediaDeliveries() {
     };
   }, [selectedClientId, deliveries]);
 
+  // Editing queue tasks for the selected client
+  const [editingQueueTasks, setEditingQueueTasks] = useState<any[]>([]);
+  useEffect(() => {
+    if (!selectedClientId) { setEditingQueueTasks([]); return; }
+    supabase.from('content_tasks').select('*')
+      .eq('client_id', selectedClientId)
+      .eq('kanban_column', 'edicao')
+      .order('editing_priority', { ascending: false })
+      .order('position', { ascending: true })
+      .then(({ data }) => { if (data) setEditingQueueTasks(data); });
+  }, [selectedClientId, deliveries]); // re-fetch when deliveries change (after priority update)
+
+  const handleTogglePriorityFromQueue = async (taskId: string, currentPriority: boolean) => {
+    const newPriority = !currentPriority;
+    await supabase.from('content_tasks').update({
+      editing_priority: newPriority,
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', taskId);
+    if (newPriority) {
+      const task = editingQueueTasks.find(t => t.id === taskId);
+      const clientName = clients.find(c => c.id === task?.client_id)?.companyName || '';
+      await supabase.rpc('notify_role', {
+        _role: 'editor',
+        _title: '⚡ Vídeo Prioritário',
+        _message: `"${task?.title}" (${clientName}) foi marcado como prioridade na fila de edição`,
+        _type: 'priority',
+        _link: '/edicao/kanban',
+      });
+      toast.success('⚡ Marcado como prioridade!');
+    } else {
+      toast.success('Prioridade removida');
+    }
+    setEditingQueueTasks(prev => prev.map(t => t.id === taskId ? { ...t, editing_priority: newPriority } : t));
+  };
+
   if (loading) return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Carregando...</p></div>;
 
   // ─── CLIENT DETAIL VIEW ────────────────────────────────────

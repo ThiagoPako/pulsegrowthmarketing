@@ -438,6 +438,10 @@ export default function Schedule() {
     if (isRecordingActive(rec.id)) {
       setFinishRecordingState(rec);
       setFinishCompletedScripts(new Set());
+      setFinishRejectedScripts(new Set());
+      setFinishAlteredScripts(new Set());
+      setFinishVerbalScripts(new Set());
+      setFinishAlterationNotes({});
       setFinishStep('scripts');
       setFinishDriveLinks({});
       setFinishRecOpen(true);

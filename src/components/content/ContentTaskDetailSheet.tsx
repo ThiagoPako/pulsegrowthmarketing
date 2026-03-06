@@ -163,7 +163,7 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
     },
     {
       ...JOURNEY_STAGES[1],
-      person: captacaoEntry ? getUserFromHistory(captacaoEntry) : null,
+      person: recordingVideomaker ? { name: recordingVideomaker.name, avatarUrl: recordingVideomaker.avatarUrl } : (captacaoEntry ? getUserFromHistory(captacaoEntry) : null),
       detail: task.scheduled_recording_date ? `Gravação: ${format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}${task.scheduled_recording_time ? ` às ${task.scheduled_recording_time}` : ''}` : null,
       date: captacaoEntry?.created_at || null,
     },

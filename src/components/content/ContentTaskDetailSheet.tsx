@@ -159,7 +159,7 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
   const stages = [
     {
       ...JOURNEY_STAGES[0],
-      person: createdBy ? { name: createdBy.name, avatarUrl: createdBy.avatarUrl } : null,
+      person: createdBy ? { name: createdBy.name, avatarUrl: createdBy.avatarUrl } : (scriptCreator ? { name: scriptCreator.name, avatarUrl: scriptCreator.avatarUrl } : null),
       detail: linkedScript ? `Roteiro: ${linkedScript.title}` : null,
       date: task.created_at,
     },

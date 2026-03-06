@@ -36,10 +36,10 @@ const KANBAN_COLUMNS = [
 type KanbanColumnId = typeof KANBAN_COLUMNS[number]['id'];
 
 const CONTENT_TYPES = [
-  { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-700 bg-blue-50 border border-blue-200/60 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800' },
-  { value: 'criativo', label: 'Criativos', icon: Megaphone, color: 'text-purple-700 bg-purple-50 border border-purple-200/60 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800' },
-  { value: 'story', label: 'Story', icon: Image, color: 'text-pink-700 bg-pink-50 border border-pink-200/60 dark:bg-pink-900/30 dark:text-pink-400 dark:border-pink-800' },
-  { value: 'arte', label: 'Arte', icon: Palette, color: 'text-amber-700 bg-amber-50 border border-amber-200/60 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800' },
+  { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-700 bg-blue-100/80 border border-blue-300/50 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800 shadow-sm' },
+  { value: 'criativo', label: 'Criativos', icon: Megaphone, color: 'text-purple-700 bg-purple-100/80 border border-purple-300/50 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800 shadow-sm' },
+  { value: 'story', label: 'Story', icon: Image, color: 'text-pink-700 bg-pink-100/80 border border-pink-300/50 dark:bg-pink-900/30 dark:text-pink-400 dark:border-pink-800 shadow-sm' },
+  { value: 'arte', label: 'Arte', icon: Palette, color: 'text-amber-700 bg-amber-100/80 border border-amber-300/50 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800 shadow-sm' },
 ];
 
 interface ContentTask {

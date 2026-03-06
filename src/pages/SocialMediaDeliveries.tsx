@@ -57,7 +57,7 @@ const CONTENT_TYPES = [
 const STATUS_OPTIONS = [
   { value: 'revisao', label: 'Revisão', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
   { value: 'ajuste', label: 'Alteração', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
-  { value: 'aprovacao_cliente', label: 'Enviar p/ Cliente', color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400' },
+  { value: 'aprovacao_cliente', label: 'Enviado p/ Cliente', color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400' },
   { value: 'entregue', label: 'Pronto p/ Agendar', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
   { value: 'agendado', label: 'Agendado', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
   { value: 'postado', label: 'Acompanhamento', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
@@ -611,7 +611,7 @@ export default function SocialMediaDeliveries() {
               <AlertTriangle size={14} /> Alteração ({clientDeliveries.alteration.length})
             </TabsTrigger>
             <TabsTrigger value="envio" className="gap-1.5">
-              <Send size={14} /> Enviar p/ Cliente ({clientDeliveries.approval.length})
+              <Send size={14} /> Enviado p/ Cliente ({clientDeliveries.approval.length})
             </TabsTrigger>
             <TabsTrigger value="agendados" className="gap-1.5">
               <CalendarClock size={14} /> Agendados ({clientDeliveries.pending.length + clientDeliveries.scheduled.length})
@@ -638,7 +638,7 @@ export default function SocialMediaDeliveries() {
                 switch (status) {
                   case 'revisao': return { label: '👁 Revisão', color: 'border-l-orange-500', badge: 'bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400', step: 1 };
                   case 'ajuste': return { label: '🔄 Alteração', color: 'border-l-amber-500', badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400', step: 1 };
-                  case 'aprovacao_cliente': return { label: '📩 Enviar p/ Cliente', color: 'border-l-cyan-500', badge: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/20 dark:text-cyan-400', step: 2 };
+                  case 'aprovacao_cliente': return { label: '📩 Enviado p/ Cliente', color: 'border-l-cyan-500', badge: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/20 dark:text-cyan-400', step: 2 };
                   case 'entregue': return { label: '✅ Pronto p/ Agendar', color: 'border-l-yellow-500', badge: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400', step: 3 };
                   case 'agendado': return { label: '📅 Agendado', color: 'border-l-blue-500', badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400', step: 4 };
                   default: return { label: status, color: 'border-l-muted', badge: 'bg-muted text-muted-foreground', step: 0 };
@@ -800,11 +800,11 @@ export default function SocialMediaDeliveries() {
             )}
           </TabsContent>
 
-          {/* Enviar p/ Cliente */}
+          {/* Enviado p/ Cliente */}
           <TabsContent value="envio" className="mt-4">
             {clientDeliveries.approval.length === 0 ? (
               <Card className="border-border"><CardContent className="py-12 text-center text-muted-foreground">
-                Nenhum conteúdo para enviar ao cliente.
+                Nenhum conteúdo enviado ao cliente.
               </CardContent></Card>
             ) : (
               <div className="grid gap-3">

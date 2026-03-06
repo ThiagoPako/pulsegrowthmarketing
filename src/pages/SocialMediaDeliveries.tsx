@@ -471,6 +471,17 @@ export default function SocialMediaDeliveries() {
         approved_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       } as any).eq('id', d.content_task_id);
+      // Use shared sync
+      const { data: taskData } = await supabase.from('content_tasks').select('*').eq('id', d.content_task_id).single();
+      if (taskData) {
+        const client = clients.find(c => c.id === d.client_id);
+        const ctx = buildSyncContext(taskData as any, {
+          userId: user?.id,
+          clientName: client?.companyName,
+          clientWhatsapp: client?.whatsapp,
+        });
+        await syncContentTaskColumnChange('agendamentos', ctx);
+      }
     }
     toast.success('Aprovado pelo cliente! Pronto para agendamento.');
     fetchData();

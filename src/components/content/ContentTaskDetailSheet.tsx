@@ -639,27 +639,71 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
 
             <Separator />
 
-            {/* History */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-1.5">
-                <History size={13} className="text-muted-foreground" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Histórico</span>
+            {/* History Timeline */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <History size={13} className="text-primary" />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-wider text-foreground" style={{ fontFamily: 'var(--font-display)' }}>
+                  Histórico
+                </span>
+                {history.length > 0 && (
+                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4">{history.length}</Badge>
+                )}
               </div>
               {history.length === 0 ? (
-                <p className="text-xs text-muted-foreground/60 italic">Nenhum registro</p>
+                <div className="flex flex-col items-center py-6 text-center">
+                  <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mb-2">
+                    <Clock size={16} className="text-muted-foreground/40" />
+                  </div>
+                  <p className="text-xs text-muted-foreground/60 italic">Nenhum registro ainda</p>
+                </div>
               ) : (
-                <div className="space-y-1.5">
-                  {history.map(h => (
-                    <div key={h.id} className="flex items-start gap-2 text-xs">
-                      <div className="w-1.5 h-1.5 rounded-full bg-primary/40 mt-1.5 shrink-0" />
-                      <div className="min-w-0">
-                        <span className="text-foreground/80">{h.action}</span>
-                        <span className="text-muted-foreground/60 block text-[10px]">
-                          {getUserName(h.user_id)} · {format(new Date(h.created_at), "dd/MM HH:mm", { locale: ptBR })}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                <div className="relative ml-3">
+                  {/* Vertical line */}
+                  <div className="absolute left-0 top-2 bottom-2 w-px bg-gradient-to-b from-primary/30 via-border to-transparent" />
+                  
+                  <AnimatePresence>
+                    {history.map((h, idx) => {
+                      const actionIcon = getHistoryIcon(h.action);
+                      const actionColor = getHistoryColor(h.action);
+                      return (
+                        <motion.div
+                          key={h.id}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: idx * 0.05, duration: 0.3 }}
+                          className="relative pl-6 pb-4 last:pb-0 group"
+                        >
+                          {/* Dot */}
+                          <div className={`absolute left-0 top-1 w-2 h-2 rounded-full -translate-x-[3.5px] ring-2 ring-card transition-all duration-200 group-hover:scale-125 ${
+                            idx === 0 ? `${actionColor} shadow-sm` : 'bg-border'
+                          }`} />
+                          
+                          <div className={`rounded-lg px-3 py-2 transition-all duration-200 ${
+                            idx === 0 ? 'bg-primary/5 border border-primary/10' : 'hover:bg-muted/50'
+                          }`}>
+                            <div className="flex items-start gap-2">
+                              <span className="text-sm leading-none mt-0.5">{actionIcon}</span>
+                              <div className="min-w-0 flex-1">
+                                <span className={`text-xs leading-snug block ${idx === 0 ? 'text-foreground font-medium' : 'text-foreground/70'}`}>
+                                  {h.action}
+                                </span>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <span className="text-[10px] font-medium text-primary/70">{getUserName(h.user_id)}</span>
+                                  <span className="text-[10px] text-muted-foreground/40">·</span>
+                                  <span className="text-[10px] text-muted-foreground/50">
+                                    {formatDistanceToNow(new Date(h.created_at), { addSuffix: true, locale: ptBR })}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
                 </div>
               )}
             </div>

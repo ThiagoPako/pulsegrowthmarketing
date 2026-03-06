@@ -491,8 +491,12 @@ export default function Schedule() {
   };
 
   const handleGoToDriveStepSchedule = () => {
-    if (finishCompletedScripts.size === 0) {
-      toast.error('Selecione pelo menos 1 roteiro gravado');
+    if (finishCompletedScripts.size === 0 && finishRejectedScripts.size === 0 && finishAlteredScripts.size === 0 && finishVerbalScripts.size === 0) {
+      toast.error('Marque o status de pelo menos 1 roteiro');
+      return;
+    }
+    if (finishCompletedScripts.size === 0 && finishAlteredScripts.size === 0 && finishVerbalScripts.size === 0) {
+      confirmFinishRec();
       return;
     }
     setFinishStep('drive');
@@ -501,15 +505,15 @@ export default function Schedule() {
   const confirmFinishRec = async () => {
     if (!finishRecording) return;
     
-    const missingLinks = Array.from(finishCompletedScripts).filter(id => !finishDriveLinks[id]?.trim());
-    if (missingLinks.length > 0) {
-      toast.error('Adicione o link do Drive para todos os roteiros');
+    const scriptsNeedingLinks = new Set([...finishCompletedScripts, ...finishAlteredScripts, ...finishVerbalScripts]);
+    const missingLinks = Array.from(scriptsNeedingLinks).filter(id => !finishDriveLinks[id]?.trim());
+    if (missingLinks.length > 0 && scriptsNeedingLinks.size > 0) {
+      toast.error('Adicione o link do Drive para todos os roteiros gravados');
       return;
     }
     
     const now = new Date().toISOString();
     let planned = plannedScriptsMap[finishRecording.id] || [];
-    // Fallback: use DB-persisted planned scripts
     if (planned.length === 0) {
       const activeRec = activeRecordings.find(a => a.recordingId === finishRecording.id);
       if (activeRec?.plannedScriptIds && activeRec.plannedScriptIds.length > 0) {
@@ -517,51 +521,69 @@ export default function Schedule() {
       }
     }
 
-    // Mark completed scripts as recorded
-    finishCompletedScripts.forEach(id => {
+    const allRecordedIds = new Set([...finishCompletedScripts, ...finishAlteredScripts, ...finishVerbalScripts]);
+
+    allRecordedIds.forEach(id => {
       const script = scripts.find(s => s.id === id);
       if (script && !script.recorded) {
         updateScript({ ...script, recorded: true, updatedAt: now });
       }
     });
 
-    // Auto-return unrecorded planned scripts
-    const returnedCount = planned.filter(id => !finishCompletedScripts.has(id)).length;
-    planned.forEach(id => {
-      if (!finishCompletedScripts.has(id)) {
-        const script = scripts.find(s => s.id === id);
-        if (script && script.recorded) {
-          updateScript({ ...script, recorded: false, updatedAt: now });
-        }
+    // Handle REJECTED scripts: delete script + content_task
+    for (const scriptId of finishRejectedScripts) {
+      await supabase.from('content_tasks').delete().eq('script_id', scriptId);
+      await supabase.from('scripts').delete().eq('id', scriptId);
+    }
+
+    const returnedIds = planned.filter(id => !allRecordedIds.has(id) && !finishRejectedScripts.has(id));
+    const returnedCount = returnedIds.length;
+    returnedIds.forEach(id => {
+      const script = scripts.find(s => s.id === id);
+      if (script && script.recorded) {
+        updateScript({ ...script, recorded: false, updatedAt: now });
       }
     });
 
-    const reelsCount = finishCompletedScripts.size;
-    const completedIds = Array.from(finishCompletedScripts);
+    const reelsCount = allRecordedIds.size;
+    const allRecordedArray = Array.from(allRecordedIds);
     stopActiveRecording(finishRecording.id, {
       reels_produced: reelsCount,
       videos_recorded: Math.max(reelsCount, 1),
-    }, completedIds);
+    }, allRecordedArray);
     updateRecording({ ...finishRecording, status: 'concluida' });
 
-    // Move completed scripts' content_tasks to "edicao" with drive link
     const editingDeadline = new Date();
     editingDeadline.setDate(editingDeadline.getDate() + 2);
 
-    for (const scriptId of completedIds) {
+    for (const scriptId of allRecordedArray) {
       const script = scripts.find(s => s.id === scriptId);
       if (!script) continue;
       const { data: existing } = await supabase.from('content_tasks')
         .select('id').eq('script_id', scriptId).limit(1);
       
       const scriptDriveLink = finishDriveLinks[scriptId]?.trim() || '';
+      const isAltered = finishAlteredScripts.has(scriptId);
+      const isVerbal = finishVerbalScripts.has(scriptId);
+      const altType = isAltered ? 'altered' : isVerbal ? 'verbal' : null;
+      const altNotes = finishAlterationNotes[scriptId]?.trim() || null;
+
+      let description = `Roteiro gravado pelo videomaker. Link dos materiais: ${scriptDriveLink}`;
+      if (isAltered) {
+        description = `⚠️ ROTEIRO ALTERADO — O roteiro original foi modificado durante a gravação. ${altNotes ? `\n\n📝 Notas do videomaker: ${altNotes}` : 'Não seguir o roteiro original para editar.'}\n\nLink dos materiais: ${scriptDriveLink}`;
+      } else if (isVerbal) {
+        description = `🗣️ ALTERAÇÃO VERBAL — A alteração do roteiro foi passada presencialmente/verbalmente ao editor. ${altNotes ? `\n\n📝 Notas adicionais: ${altNotes}` : ''}\n\nLink dos materiais: ${scriptDriveLink}`;
+      }
+
       if (existing && existing.length > 0) {
         await supabase.from('content_tasks').update({
           kanban_column: 'edicao',
           drive_link: scriptDriveLink,
           recording_id: finishRecording.id,
           editing_deadline: editingDeadline.toISOString(),
-          description: `Roteiro gravado pelo videomaker. Link dos materiais: ${scriptDriveLink}`,
+          description,
+          script_alteration_type: altType,
+          script_alteration_notes: altNotes,
         } as any).eq('id', existing[0].id);
       } else {
         await supabase.from('content_tasks').insert({
@@ -569,23 +591,24 @@ export default function Schedule() {
           title: script.title,
           content_type: script.contentFormat || 'reels',
           kanban_column: 'edicao',
-          description: `Roteiro gravado pelo videomaker. Link dos materiais: ${scriptDriveLink}`,
+          description,
           script_id: scriptId,
           recording_id: finishRecording.id,
           drive_link: scriptDriveLink,
           editing_deadline: editingDeadline.toISOString(),
+          script_alteration_type: altType,
+          script_alteration_notes: altNotes,
         } as any);
       }
     }
 
-    // Move unfinished scripts' content_tasks back to "ideias"
-    const unfinishedIds = planned.filter(id => !finishCompletedScripts.has(id));
-    for (const scriptId of unfinishedIds) {
+    for (const scriptId of returnedIds) {
       await supabase.from('content_tasks').update({ kanban_column: 'ideias', recording_id: null } as any)
         .eq('script_id', scriptId).in('kanban_column', ['captacao']);
     }
 
     let msg = `Gravação concluída! ${reelsCount} roteiro(s) enviado(s) para edição`;
+    if (finishRejectedScripts.size > 0) msg += ` · ${finishRejectedScripts.size} rejeitado(s) e apagado(s)`;
     if (returnedCount > 0) msg += ` · ${returnedCount} retornado(s) ao banco`;
     toast.success(msg);
 
@@ -593,6 +616,10 @@ export default function Schedule() {
     setFinishRecOpen(false);
     setFinishRecordingState(null);
     setFinishCompletedScripts(new Set());
+    setFinishRejectedScripts(new Set());
+    setFinishAlteredScripts(new Set());
+    setFinishVerbalScripts(new Set());
+    setFinishAlterationNotes({});
     setFinishDriveLinks({});
     setFinishStep('scripts');
   };

@@ -1047,7 +1047,7 @@ export default function Clients() {
      </div>
    );
 
-  const renderStep3 = () => (
+  const renderStep4 = () => (
     <div className="space-y-5">
       <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
         <p className="text-sm font-semibold flex items-center gap-2">

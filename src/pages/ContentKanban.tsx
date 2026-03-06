@@ -492,6 +492,7 @@ export default function ContentKanban() {
   const [adjustmentDialogOpen, setAdjustmentDialogOpen] = useState(false);
   const [adjustmentNotes, setAdjustmentNotes] = useState('');
   const [adjustmentTask, setAdjustmentTask] = useState<ContentTask | null>(null);
+  const [adjustmentImmediate, setAdjustmentImmediate] = useState(false);
 
   const openAdjustmentDialog = (task: ContentTask) => {
     setAdjustmentTask(task);

@@ -712,6 +712,11 @@ export default function SocialMediaDeliveries() {
                                   <Button size="sm" variant="outline" className="gap-1.5 h-8 text-orange-600 border-orange-300 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-700 dark:hover:bg-orange-900/20" onClick={() => openAlterationDialog(d)}>
                                     <AlertTriangle size={14} /> Alteração
                                   </Button>
+                                  {d.content_task_id && (
+                                    <Button size="sm" variant="outline" className="gap-1.5 h-8 text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/20" onClick={() => handleMarkPriorityEditing(d)}>
+                                      <Zap size={14} /> Prioridade
+                                    </Button>
+                                  )}
                                 </>
                               )}
                               {d.status === 'ajuste' && (

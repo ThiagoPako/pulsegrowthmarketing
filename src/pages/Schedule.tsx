@@ -475,7 +475,14 @@ export default function Schedule() {
     }
     
     const now = new Date().toISOString();
-    const planned = plannedScriptsMap[finishRecording.id] || [];
+    let planned = plannedScriptsMap[finishRecording.id] || [];
+    // Fallback: use DB-persisted planned scripts
+    if (planned.length === 0) {
+      const activeRec = activeRecordings.find(a => a.recordingId === finishRecording.id);
+      if (activeRec?.plannedScriptIds && activeRec.plannedScriptIds.length > 0) {
+        planned = activeRec.plannedScriptIds;
+      }
+    }
 
     // Mark completed scripts as recorded
     finishCompletedScripts.forEach(id => {

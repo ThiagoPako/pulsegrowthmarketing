@@ -17,6 +17,7 @@ import ClientLogo from '@/components/ClientLogo';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Client, Recording, Script } from '@/types';
+import { getWhatsAppConfig, sendWhatsAppMessage } from '@/services/whatsappService';
 
 // ─── COLUMN DEFINITIONS ───────────────────────────────────────
 const KANBAN_COLUMNS = [
@@ -352,6 +353,43 @@ export default function ContentKanban() {
         } as any);
       } else {
         await supabase.from('social_media_deliveries').update({ status: 'entregue' } as any).eq('content_task_id', task.id);
+      }
+
+      // Mark approval sent
+      await supabase.from('content_tasks').update({
+        approval_sent_at: new Date().toISOString(),
+      } as any).eq('id', task.id);
+
+      // Auto-send WhatsApp approval message
+      try {
+        const whatsConfig = await getWhatsAppConfig();
+        if (whatsConfig?.integrationActive && whatsConfig?.autoVideoApproval) {
+          const client = clients.find(c => c.id === task.client_id);
+          if (client?.whatsapp) {
+            let msg = whatsConfig.msgVideoApproval
+              .replace('{nome_cliente}', client.companyName)
+              .replace('{link_video}', task.edited_video_link || 'Link não disponível')
+              .replace('{titulo}', task.title);
+            
+            const result = await sendWhatsAppMessage({
+              number: client.whatsapp,
+              message: msg,
+              clientId: client.id,
+              triggerType: 'auto_confirmation',
+            });
+
+            if (result.success) {
+              toast.success('📱 Link de aprovação enviado por WhatsApp!');
+            } else {
+              console.error('WhatsApp send error:', result.error);
+              toast.warning('Card enviado, mas não foi possível enviar WhatsApp');
+            }
+          } else {
+            toast.warning('Cliente sem WhatsApp cadastrado');
+          }
+        }
+      } catch (err) {
+        console.error('WhatsApp auto-send error:', err);
       }
     }
   };

@@ -139,9 +139,19 @@ export default function EditorDashboard() {
     }));
   }, [completedTasks]);
 
-  // Filtered tasks for queue
-  const filteredTasks = useMemo(() => {
-    return tasks.filter(t => {
+  // Filtered tasks for editing queue (only edicao + alteracao)
+  const editingQueueTasks = useMemo(() => {
+    return tasks.filter(t => t.kanban_column === 'edicao' || t.kanban_column === 'alteracao');
+  }, [tasks]);
+
+  // Filtered tasks for review tab (revisao + envio)
+  const reviewTasks = useMemo(() => {
+    return tasks.filter(t => t.kanban_column === 'revisao' || t.kanban_column === 'envio');
+  }, [tasks]);
+
+  // Apply filters to editing queue
+  const filteredQueueTasks = useMemo(() => {
+    return editingQueueTasks.filter(t => {
       if (filterStatus !== 'all' && t.kanban_column !== filterStatus) return false;
       if (filterClient !== 'all' && t.client_id !== filterClient) return false;
       if (filterType !== 'all' && t.content_type !== filterType) return false;
@@ -152,7 +162,21 @@ export default function EditorDashboard() {
       }
       return true;
     });
-  }, [tasks, filterStatus, filterClient, filterType, searchQuery, clients]);
+  }, [editingQueueTasks, filterStatus, filterClient, filterType, searchQuery, clients]);
+
+  // Apply filters to review tasks
+  const filteredReviewTasks = useMemo(() => {
+    return reviewTasks.filter(t => {
+      if (filterClient !== 'all' && t.client_id !== filterClient) return false;
+      if (filterType !== 'all' && t.content_type !== filterType) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const client = clients.find((c: any) => c.id === t.client_id);
+        if (!t.title.toLowerCase().includes(q) && !(client?.companyName || '').toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  }, [reviewTasks, filterClient, filterType, searchQuery, clients]);
 
   const sortedFiltered = [...filteredTasks].sort((a, b) => {
     // Priority: overdue first, then by deadline

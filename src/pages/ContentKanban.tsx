@@ -54,6 +54,7 @@ interface ContentTask {
   scheduled_recording_time: string | null;
   drive_link: string | null;
   edited_video_link: string | null;
+  adjustment_notes: string | null;
   position: number;
   created_at: string;
   updated_at: string;
@@ -685,6 +686,11 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
 
         <div className="p-2.5">
           {/* Badge row */}
+          {task.adjustment_notes && (
+            <Badge className="mb-2 text-[10px] font-semibold px-2 py-0.5 border-0 bg-amber-500 text-white gap-1">
+              🔄 Alterado
+            </Badge>
+          )}
           {task.kanban_column === 'envio' && (
             <Badge className="mb-2 text-[10px] font-semibold px-2 py-0.5 border-0 bg-emerald-500 text-white">
               Novo {typeConfig.label}

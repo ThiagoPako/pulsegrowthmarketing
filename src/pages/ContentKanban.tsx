@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink } from 'lucide-react';
+import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import { format } from 'date-fns';
@@ -356,9 +356,66 @@ export default function ContentKanban() {
     }
   };
 
+  // ─── APPROVE FROM REVISÃO ─────────────────────────────────
+  const handleApproveTask = async (task: ContentTask) => {
+    const { error } = await supabase.from('content_tasks').update({
+      kanban_column: 'envio',
+      approved_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', task.id);
+    if (error) { toast.error('Erro ao aprovar'); return; }
+    await syncOnColumnChange(task, 'envio');
+    toast.success('✅ Conteúdo aprovado! Movido para Enviar ao Cliente');
+    fetchTasks();
+  };
+
+  // ─── REQUEST ADJUSTMENTS ──────────────────────────────────
+  const [adjustmentDialogOpen, setAdjustmentDialogOpen] = useState(false);
+  const [adjustmentNotes, setAdjustmentNotes] = useState('');
+  const [adjustmentTask, setAdjustmentTask] = useState<ContentTask | null>(null);
+
+  const openAdjustmentDialog = (task: ContentTask) => {
+    setAdjustmentTask(task);
+    setAdjustmentNotes('');
+    setAdjustmentDialogOpen(true);
+  };
+
+  const handleRequestAdjustments = async () => {
+    if (!adjustmentTask || !adjustmentNotes.trim()) {
+      toast.error('Descreva os ajustes necessários');
+      return;
+    }
+    const { error } = await supabase.from('content_tasks').update({
+      kanban_column: 'alteracao',
+      adjustment_notes: adjustmentNotes.trim(),
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', adjustmentTask.id);
+    if (error) { toast.error('Erro ao solicitar ajustes'); return; }
+
+    // Update social delivery status
+    await supabase.from('social_media_deliveries').update({
+      status: 'ajuste',
+    } as any).eq('content_task_id', adjustmentTask.id);
+
+    // Notify editor
+    if (adjustmentTask.assigned_to) {
+      await supabase.rpc('notify_user', {
+        _user_id: adjustmentTask.assigned_to,
+        _title: 'Ajuste solicitado',
+        _message: `"${adjustmentTask.title}" precisa de ajustes: ${adjustmentNotes.trim()}`,
+        _type: 'adjustment',
+        _link: '/conteudo',
+      });
+    }
+
+    toast.success('📝 Ajustes solicitados! Movido para Alteração');
+    setAdjustmentDialogOpen(false);
+    setAdjustmentTask(null);
+    fetchTasks();
+  };
+
   // ─── CONFIRM POSTED (archive card) ────────────────────────
   const handleConfirmPosted = async (task: ContentTask) => {
-    // Move to archived column, update social_media_delivery as posted
     const { error } = await supabase.from('content_tasks').update({
       kanban_column: 'arquivado',
       updated_at: new Date().toISOString(),
@@ -366,13 +423,11 @@ export default function ContentKanban() {
 
     if (error) { toast.error('Erro ao arquivar'); return; }
 
-    // Mark delivery as posted
     await supabase.from('social_media_deliveries').update({
       status: 'postado',
       posted_at: format(new Date(), 'yyyy-MM-dd'),
     } as any).eq('content_task_id', task.id);
 
-    const client = clients.find(c => c.id === task.client_id);
     toast.success(`✅ ${task.title} confirmado como postado e arquivado!`);
     fetchTasks();
   };
@@ -470,6 +525,8 @@ export default function ContentKanban() {
                         onEdit={() => openEdit(task)}
                         onDelete={() => handleDelete(task.id)}
                         onConfirmPosted={task.kanban_column === 'acompanhamento' ? () => handleConfirmPosted(task) : undefined}
+                        onApprove={task.kanban_column === 'revisao' ? () => handleApproveTask(task) : undefined}
+                        onRequestAdjustments={task.kanban_column === 'revisao' ? () => openAdjustmentDialog(task) : undefined}
                       />
                     ))}
                     {colTasks.length === 0 && (
@@ -612,6 +669,41 @@ export default function ContentKanban() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Adjustment Notes Dialog */}
+      <Dialog open={adjustmentDialogOpen} onOpenChange={v => { if (!v) { setAdjustmentDialogOpen(false); setAdjustmentTask(null); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquareWarning size={18} className="text-amber-500" />
+              Solicitar Ajustes
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {adjustmentTask && (
+              <p className="text-sm text-muted-foreground">
+                Conteúdo: <span className="font-medium text-foreground">{adjustmentTask.title}</span>
+              </p>
+            )}
+            <div>
+              <Label className="text-xs">Descreva os ajustes necessários *</Label>
+              <Textarea
+                value={adjustmentNotes}
+                onChange={e => setAdjustmentNotes(e.target.value)}
+                rows={4}
+                placeholder="Ex: Ajustar corte no segundo 15, trocar música de fundo..."
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setAdjustmentDialogOpen(false); setAdjustmentTask(null); }}>Cancelar</Button>
+            <Button onClick={handleRequestAdjustments} className="bg-amber-500 hover:bg-amber-600 text-white">
+              <MessageSquareWarning size={14} /> Enviar Ajustes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -627,9 +719,11 @@ interface TaskCardProps {
   onEdit: () => void;
   onDelete: () => void;
   onConfirmPosted?: () => void;
+  onApprove?: () => void;
+  onRequestAdjustments?: () => void;
 }
 
-function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDragStart, onEdit, onDelete, onConfirmPosted }: TaskCardProps) {
+function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDragStart, onEdit, onDelete, onConfirmPosted, onApprove, onRequestAdjustments }: TaskCardProps) {
   const [scriptPreviewOpen, setScriptPreviewOpen] = useState(false);
   const typeConfig = CONTENT_TYPES.find(t => t.value === task.content_type) || CONTENT_TYPES[0];
   const TypeIcon = typeConfig.icon;
@@ -798,6 +892,29 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
             </a>
           )}
 
+          {/* Approve / Request adjustments (revisão only) */}
+          {task.kanban_column === 'revisao' && (onApprove || onRequestAdjustments) && (
+            <div className="grid grid-cols-2 gap-1.5">
+              {onApprove && (
+                <button
+                  onClick={e => { e.stopPropagation(); onApprove(); }}
+                  className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-success/10 hover:bg-success/20 border border-success/20 text-success transition-colors text-[10px] font-semibold"
+                  style={{ fontFamily: 'var(--font-display)' }}
+                >
+                  <ThumbsUp size={11} /> Aprovar
+                </button>
+              )}
+              {onRequestAdjustments && (
+                <button
+                  onClick={e => { e.stopPropagation(); onRequestAdjustments(); }}
+                  className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-600 transition-colors text-[10px] font-semibold"
+                  style={{ fontFamily: 'var(--font-display)' }}
+                >
+                  <MessageSquareWarning size={11} /> Ajustes
+                </button>
+              )}
+            </div>
+          )}
           {isOverdue && onConfirmPosted && (
             <button
               onClick={e => { e.stopPropagation(); onConfirmPosted(); }}

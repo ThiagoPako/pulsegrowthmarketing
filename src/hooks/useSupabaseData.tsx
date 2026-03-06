@@ -124,6 +124,7 @@ function rowToScript(r: any): Script {
     isEndomarketing: r.is_endomarketing || false,
     endoClientId: r.endo_client_id || undefined,
     scheduledDate: r.scheduled_date || undefined,
+    createdBy: r.created_by || undefined,
   };
 }
 
@@ -142,6 +143,7 @@ function scriptToRow(s: Script) {
     is_endomarketing: s.isEndomarketing,
     endo_client_id: s.endoClientId || null,
     scheduled_date: s.scheduledDate || null,
+    created_by: s.createdBy || null,
   };
 }
 

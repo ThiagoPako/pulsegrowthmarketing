@@ -202,7 +202,7 @@ export default function Scripts() {
       toast.success('Roteiro atualizado');
     } else {
       const scriptId = crypto.randomUUID();
-      const scriptObj = { ...scriptData, id: scriptId, recorded: false, createdAt: now, updatedAt: now };
+      const scriptObj = { ...scriptData, id: scriptId, recorded: false, createdAt: now, updatedAt: now, createdBy: user?.id || undefined };
       
       // Await script insert to ensure FK is satisfied before creating content_task
       await addScript(scriptObj);

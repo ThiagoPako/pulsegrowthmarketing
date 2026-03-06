@@ -129,6 +129,8 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
   // Derive people and dates from task + history
   const createdBy = task.created_by ? users.find(u => u.id === task.created_by) : null;
   const linkedScript = task.script_id ? scripts.find(s => s.id === task.script_id) : null;
+  // Fallback: if task has no created_by, check if the linked script has a creator
+  const scriptCreator = (!createdBy && linkedScript?.createdBy) ? users.find(u => u.id === linkedScript.createdBy) : null;
   const assignedEditor = task.assigned_to ? users.find(u => u.id === task.assigned_to) : null;
 
   // Find user who moved task to specific columns from history
@@ -157,7 +159,7 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
   const stages = [
     {
       ...JOURNEY_STAGES[0],
-      person: createdBy ? { name: createdBy.name, avatarUrl: createdBy.avatarUrl } : null,
+      person: createdBy ? { name: createdBy.name, avatarUrl: createdBy.avatarUrl } : (scriptCreator ? { name: scriptCreator.name, avatarUrl: scriptCreator.avatarUrl } : null),
       detail: linkedScript ? `Roteiro: ${linkedScript.title}` : null,
       date: task.created_at,
     },

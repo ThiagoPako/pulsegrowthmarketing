@@ -342,6 +342,19 @@ export default function Schedule() {
     setScriptsOpen(true);
   };
 
+  const handleResetRecording = async (rec: Recording) => {
+    const active = activeRecordings.find(a => a.recordingId === rec.id);
+    await supabase.from('active_recordings').delete().eq('recording_id', rec.id);
+    if (active?.plannedScriptIds?.length) {
+      for (const scriptId of active.plannedScriptIds) {
+        await supabase.from('content_tasks').update({ kanban_column: 'ideias', recording_id: null } as any)
+          .eq('script_id', scriptId).in('kanban_column', ['captacao']);
+      }
+    }
+    updateRecording({ ...rec, status: 'agendada' });
+    toast.success('Gravação resetada para Agendada');
+  };
+
   const handleMarkScriptsRecorded = () => {
     const now = new Date().toISOString();
     selectedScriptIds.forEach(id => {
@@ -722,7 +735,10 @@ export default function Schedule() {
                                 {evt.recording!.status === 'agendada' && (
                                   <>
                                     {isRecordingActive(evt.recording!.id) ? (
-                                      <button onClick={() => handleToggleRecording(evt.recording!)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Finalizar"><Square size={10} /></button>
+                                      <>
+                                        <button onClick={() => handleToggleRecording(evt.recording!)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Finalizar"><Square size={10} /></button>
+                                        <button onClick={() => handleResetRecording(evt.recording!)} className="p-0.5 rounded hover:bg-amber-500/20 text-amber-600" title="Resetar Gravação"><Undo2 size={10} /></button>
+                                      </>
                                     ) : (
                                       <button onClick={() => handleToggleRecording(evt.recording!)} className="p-0.5 rounded hover:bg-primary/20 text-primary" title="Iniciar Gravação"><Play size={10} /></button>
                                     )}
@@ -819,9 +835,14 @@ export default function Schedule() {
                             {evt.recording.status === 'agendada' && (
                               <>
                                 {isRecordingActive(evt.recording.id) ? (
-                                  <button onClick={() => handleToggleRecording(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-success/10 text-success hover:bg-success/20 transition-colors flex items-center justify-center gap-1 col-span-2">
-                                    <Square size={10} /> Finalizar Gravação
-                                  </button>
+                                  <>
+                                    <button onClick={() => handleToggleRecording(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-success/10 text-success hover:bg-success/20 transition-colors flex items-center justify-center gap-1">
+                                      <Square size={10} /> Finalizar
+                                    </button>
+                                    <button onClick={() => handleResetRecording(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors flex items-center justify-center gap-1">
+                                      <Undo2 size={10} /> Resetar
+                                    </button>
+                                  </>
                                 ) : (
                                   <button onClick={() => handleToggleRecording(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/15 transition-colors flex items-center justify-center gap-1">
                                     <Play size={10} /> Iniciar

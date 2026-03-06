@@ -173,8 +173,14 @@ export default function VideomakerDashboard() {
   }, [finishRecordingId, recordings, scripts, plannedScripts, activeRecordings]);
 
   const handleGoToDriveStep = () => {
-    if (completedScriptIds.size === 0) {
-      toast.error('Selecione pelo menos 1 roteiro gravado');
+    if (completedScriptIds.size === 0 && rejectedScripts.size === 0 && alteredScripts.size === 0 && verbalScripts.size === 0) {
+      toast.error('Marque o status de pelo menos 1 roteiro');
+      return;
+    }
+    // Only need drive links for completed + altered + verbal scripts
+    if (completedScriptIds.size === 0 && alteredScripts.size === 0 && verbalScripts.size === 0) {
+      // Only rejected scripts, skip drive step and finalize directly
+      confirmFinish();
       return;
     }
     setFinishStep('drive');

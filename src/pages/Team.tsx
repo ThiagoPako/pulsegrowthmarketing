@@ -191,13 +191,13 @@ export default function Team() {
   };
 
   const roleColors: Record<UserRole, string> = {
-    admin: 'bg-primary/15 text-primary border border-primary/20',
-    videomaker: 'bg-info/15 text-info border border-info/20',
-    social_media: 'bg-warning/15 text-warning border border-warning/20',
-    editor: 'bg-success/15 text-success border border-success/20',
-    endomarketing: 'bg-accent text-accent-foreground border border-accent-foreground/20',
-    parceiro: 'bg-muted text-muted-foreground border border-border',
-    fotografo: 'bg-primary/10 text-primary border border-primary/15',
+    admin: 'bg-primary/20 text-primary',
+    videomaker: 'bg-info/20 text-info',
+    social_media: 'bg-warning/20 text-warning',
+    editor: 'bg-success/20 text-success',
+    endomarketing: 'bg-accent text-accent-foreground',
+    parceiro: 'bg-purple-100 text-purple-700',
+    fotografo: 'bg-pink-100 text-pink-700',
   };
 
   const partnerUserIds = partners.map(p => p.user_id);
@@ -358,17 +358,18 @@ export default function Team() {
             <Users size={40} className="mx-auto mb-3 opacity-50" /><p>Nenhum usuário cadastrado</p>
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3">
             {teamMembers.map(u => (
-              <div key={u.id} className="glass-card p-5 flex flex-col items-center text-center gap-3 hover:shadow-md transition-shadow">
-                <UserAvatar user={u} size="lg" className="ring-2 ring-border shadow-sm" />
-                <div>
-                  <p className="font-semibold text-base">{u.displayName || u.name}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{u.email}</p>
-                  {u.jobTitle && <p className="text-xs text-muted-foreground">{u.jobTitle}</p>}
+              <div key={u.id} className="glass-card p-4 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <UserAvatar user={u} size="lg" />
+                  <div>
+                    <p className="font-medium">{u.displayName || u.name}</p>
+                    <p className="text-xs text-muted-foreground">{u.email}{u.jobTitle ? ` · ${u.jobTitle}` : ''}</p>
+                  </div>
                 </div>
-                <span className={`text-xs px-3 py-1.5 rounded-full font-semibold ${roleColors[u.role]}`}>{ROLE_LABELS[u.role]}</span>
-                <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${roleColors[u.role]}`}>{ROLE_LABELS[u.role]}</span>
                   {currentUser?.role === 'admin' && (
                     <>
                       <Button variant="ghost" size="icon" className="h-8 w-8" title="Redefinir senha" onClick={() => { setResetTarget(u); setResetOpen(true); }}>
@@ -392,40 +393,44 @@ export default function Team() {
             <Handshake size={40} className="mx-auto mb-3 opacity-50" /><p>Nenhum parceiro cadastrado</p>
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3">
             {partnerMembers.map(u => {
               const info = getPartnerInfo(u.id);
               return (
-                <div key={u.id} className="glass-card p-5 hover:shadow-md transition-shadow">
-                  <div className="flex flex-col items-center text-center gap-3">
-                    <UserAvatar user={u} size="lg" className="ring-2 ring-border shadow-sm" />
-                    <div>
-                      <p className="font-semibold text-base">{u.displayName || u.name}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{u.email}</p>
+                <div key={u.id} className="glass-card p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <UserAvatar user={u} size="lg" />
+                      <div>
+                        <p className="font-medium">{u.displayName || u.name}</p>
+                        <p className="text-xs text-muted-foreground">{u.email}</p>
+                        {info && (
+                          <div className="flex items-center gap-2 mt-1">
+                            {info.company_name && <span className="text-xs bg-muted px-2 py-0.5 rounded">{info.company_name}</span>}
+                            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">{info.service_function}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 text-right">
                       {info && (
-                        <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
-                          {info.company_name && <span className="text-xs bg-muted px-2.5 py-1 rounded-full border border-border font-medium">{info.company_name}</span>}
-                          <span className="text-xs bg-accent text-accent-foreground px-2.5 py-1 rounded-full border border-accent-foreground/15 font-medium">{info.service_function}</span>
+                        <div>
+                          <p className="text-sm font-bold">R$ {Number(info.fixed_rate).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                          <p className="text-[10px] text-muted-foreground">por serviço</p>
                         </div>
+                      )}
+                      {currentUser?.role === 'admin' && (
+                        <>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Redefinir senha" onClick={() => { setResetTarget(u); setResetOpen(true); }}>
+                            <KeyRound size={16} />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Excluir parceiro" onClick={() => handleDeleteMember(u)}>
+                            <Trash2 size={16} />
+                          </Button>
+                        </>
                       )}
                     </div>
                   </div>
-                  {info && (
-                    <div className="mt-3 text-center">
-                      <p className="text-lg font-bold text-foreground">R$ {Number(info.fixed_rate).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                      <p className="text-[11px] text-muted-foreground">por serviço</p>
-                    </div>
-                  )}
-                  {currentUser?.role === 'admin' && (
-                    <div className="flex items-center justify-center gap-2 mt-3">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Redefinir senha" onClick={() => { setResetTarget(u); setResetOpen(true); }}>
-                        <KeyRound size={16} />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Excluir parceiro" onClick={() => handleDeleteMember(u)}>
-                        <Trash2 size={16} />
-                      </Button>
-                    </div>
-                  )}
                 </div>
               );
             })}

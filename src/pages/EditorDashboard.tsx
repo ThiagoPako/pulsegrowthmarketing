@@ -264,8 +264,8 @@ export default function EditorDashboard() {
           </TabsTrigger>
         </TabsList>
 
-        {/* DASHBOARD TAB */}
-        <TabsContent value="dashboard" className="space-y-4">
+        {/* QUEUE TAB */}
+        <TabsContent value="queue" className="space-y-4">
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {stats.map((s, i) => (

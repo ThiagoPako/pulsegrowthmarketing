@@ -497,6 +497,7 @@ export default function ContentKanban() {
   const openAdjustmentDialog = (task: ContentTask) => {
     setAdjustmentTask(task);
     setAdjustmentNotes('');
+    setAdjustmentImmediate(false);
     setAdjustmentDialogOpen(true);
   };
 

@@ -71,6 +71,7 @@ interface ContentTask {
   alteration_deadline: string | null;
   approval_deadline: string | null;
   position: number;
+  editing_started_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -91,13 +92,13 @@ interface Props {
 
 // ─── JOURNEY TIMELINE STAGES ─────────────────────────────
 const JOURNEY_STAGES = [
-  { id: 'ideias', label: 'Criado', icon: Lightbulb, emoji: '💡' },
-  { id: 'captacao', label: 'Captação', icon: Video, emoji: '📹' },
-  { id: 'edicao', label: 'Edição', icon: Scissors, emoji: '🎬' },
-  { id: 'revisao', label: 'Revisão', icon: ScanEye, emoji: '👁' },
-  { id: 'envio', label: 'Enviado', icon: MailCheck, emoji: '📤' },
-  { id: 'agendamentos', label: 'Agendado', icon: CalendarCheck, emoji: '📅' },
-  { id: 'acompanhamento', label: 'Publicado', icon: MonitorCheck, emoji: '✅' },
+  { id: 'ideias', label: 'Criado', icon: Lightbulb },
+  { id: 'captacao', label: 'Captação', icon: Video },
+  { id: 'edicao', label: 'Edição', icon: Scissors },
+  { id: 'revisao', label: 'Revisão', icon: ScanEye },
+  { id: 'envio', label: 'Enviado', icon: MailCheck },
+  { id: 'agendamentos', label: 'Agendado', icon: CalendarCheck },
+  { id: 'acompanhamento', label: 'Publicado', icon: MonitorCheck },
 ];
 
 function getStageIndex(column: string) {
@@ -107,12 +108,95 @@ function getStageIndex(column: string) {
   return idx >= 0 ? idx : 0;
 }
 
-function JourneyTimeline({ currentColumn, task }: { currentColumn: string; task: ContentTask }) {
+interface TimelineUser {
+  name: string;
+  avatarUrl?: string | null;
+}
+
+interface JourneyTimelineProps {
+  currentColumn: string;
+  task: ContentTask;
+  users: Array<{ id: string; name: string; avatarUrl?: string | null }>;
+  scripts: Script[];
+  history: TaskHistory[];
+}
+
+function JourneyTimeline({ currentColumn, task, users, scripts, history }: JourneyTimelineProps) {
   const activeIdx = getStageIndex(currentColumn);
   const isAlteracao = currentColumn === 'alteracao';
 
+  // Derive people and dates from task + history
+  const createdBy = task.created_by ? users.find(u => u.id === task.created_by) : null;
+  const linkedScript = task.script_id ? scripts.find(s => s.id === task.script_id) : null;
+  const assignedEditor = task.assigned_to ? users.find(u => u.id === task.assigned_to) : null;
+
+  // Find user who moved task to specific columns from history
+  const findHistoryEntry = (keywords: string[]) => {
+    return history.find(h => keywords.some(k => h.action.toLowerCase().includes(k.toLowerCase())));
+  };
+
+  const captacaoEntry = findHistoryEntry(['captação', 'Captação', 'gravação', 'gravado']);
+  const edicaoEntry = findHistoryEntry(['edição', 'Edição', 'editor']);
+  const revisaoEntry = findHistoryEntry(['revisão', 'Revisão']);
+  const envioEntry = findHistoryEntry(['enviado', 'Enviado', 'cliente']);
+  const agendamentoEntry = findHistoryEntry(['agendado', 'Agendado', 'agendar']);
+  const publicadoEntry = findHistoryEntry(['postado', 'Postado', 'publicado']);
+
+  const getUserFromHistory = (entry: TaskHistory | undefined): TimelineUser | null => {
+    if (!entry?.user_id) return null;
+    const u = users.find(usr => usr.id === entry.user_id);
+    return u ? { name: u.name, avatarUrl: u.avatarUrl } : null;
+  };
+
+  // Build enriched stages
+  const stages = [
+    {
+      ...JOURNEY_STAGES[0],
+      person: createdBy ? { name: createdBy.name, avatarUrl: createdBy.avatarUrl } : null,
+      detail: linkedScript ? `Roteiro: ${linkedScript.title}` : null,
+      date: task.created_at,
+    },
+    {
+      ...JOURNEY_STAGES[1],
+      person: captacaoEntry ? getUserFromHistory(captacaoEntry) : null,
+      detail: task.scheduled_recording_date ? `Gravação: ${format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}${task.scheduled_recording_time ? ` às ${task.scheduled_recording_time}` : ''}` : null,
+      date: captacaoEntry?.created_at || null,
+    },
+    {
+      ...JOURNEY_STAGES[2],
+      person: assignedEditor ? { name: assignedEditor.name, avatarUrl: assignedEditor.avatarUrl } : (edicaoEntry ? getUserFromHistory(edicaoEntry) : null),
+      detail: task.editing_priority ? '⚡ Prioridade de edição' : null,
+      date: task.editing_started_at || edicaoEntry?.created_at || null,
+    },
+    {
+      ...JOURNEY_STAGES[3],
+      person: revisaoEntry ? getUserFromHistory(revisaoEntry) : null,
+      detail: task.approved_at ? `Aprovado em ${format(new Date(task.approved_at), "dd/MM HH:mm", { locale: ptBR })}` : null,
+      date: revisaoEntry?.created_at || null,
+    },
+    {
+      ...JOURNEY_STAGES[4],
+      person: envioEntry ? getUserFromHistory(envioEntry) : null,
+      detail: task.approval_sent_at ? `Enviado ao cliente` : null,
+      date: envioEntry?.created_at || task.approval_sent_at || null,
+    },
+    {
+      ...JOURNEY_STAGES[5],
+      person: agendamentoEntry ? getUserFromHistory(agendamentoEntry) : null,
+      detail: task.scheduled_recording_date && currentColumn === 'acompanhamento' ? `Agendado para ${format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}` : null,
+      date: agendamentoEntry?.created_at || null,
+    },
+    {
+      ...JOURNEY_STAGES[6],
+      person: publicadoEntry ? getUserFromHistory(publicadoEntry) : null,
+      detail: null,
+      date: publicadoEntry?.created_at || null,
+    },
+  ];
+
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-3">
+      {/* Header */}
       <div className="flex items-center gap-2">
         <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
           <ArrowRight size={13} className="text-primary" />
@@ -122,53 +206,50 @@ function JourneyTimeline({ currentColumn, task }: { currentColumn: string; task:
         </span>
       </div>
 
-      <div className="relative px-1 py-3">
-        {/* Progress bar background */}
-        <div className="absolute top-1/2 left-4 right-4 h-1 -translate-y-1/2 rounded-full bg-muted" />
-        {/* Progress bar fill */}
+      {/* Horizontal progress bar */}
+      <div className="relative px-1 pt-2 pb-1">
+        <div className="absolute top-[22px] left-4 right-4 h-1 rounded-full bg-muted" />
         <motion.div
-          className="absolute top-1/2 left-4 h-1 -translate-y-1/2 rounded-full bg-gradient-to-r from-primary/80 to-primary"
+          className="absolute top-[22px] left-4 h-1 rounded-full bg-gradient-to-r from-primary/80 to-primary"
           initial={{ width: '0%' }}
           animate={{ width: `${Math.min((activeIdx / (JOURNEY_STAGES.length - 1)) * 100, 100)}%` }}
           transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
           style={{ maxWidth: 'calc(100% - 2rem)' }}
         />
-
         <div className="relative flex justify-between">
           {JOURNEY_STAGES.map((stage, idx) => {
             const isCompleted = idx < activeIdx;
             const isCurrent = idx === activeIdx;
             const StageIcon = stage.icon;
-
             return (
               <motion.div
                 key={stage.id}
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 + idx * 0.08, duration: 0.4 }}
-                className="flex flex-col items-center gap-1.5 z-10"
+                transition={{ delay: 0.1 + idx * 0.06, duration: 0.35 }}
+                className="flex flex-col items-center gap-1 z-10"
               >
                 <motion.div
-                  className={`relative w-7 h-7 rounded-full flex items-center justify-center transition-all duration-300 ${
+                  className={`relative w-6 h-6 rounded-full flex items-center justify-center transition-all duration-300 ${
                     isCurrent
-                      ? 'bg-primary text-primary-foreground shadow-md ring-4 ring-primary/20'
+                      ? 'bg-primary text-primary-foreground shadow-md ring-3 ring-primary/20'
                       : isCompleted
                         ? 'bg-primary/80 text-primary-foreground'
                         : 'bg-muted border-2 border-border text-muted-foreground/40'
                   }`}
-                  animate={isCurrent ? { scale: [1, 1.1, 1] } : {}}
+                  animate={isCurrent ? { scale: [1, 1.08, 1] } : {}}
                   transition={isCurrent ? { repeat: Infinity, duration: 2.5, ease: 'easeInOut' } : {}}
                 >
-                  {isCompleted ? <CheckCircle2 size={14} /> : <StageIcon size={12} />}
+                  {isCompleted ? <CheckCircle2 size={12} /> : <StageIcon size={10} />}
                   {isCurrent && (
                     <motion.div
                       className="absolute inset-0 rounded-full border-2 border-primary/40"
-                      animate={{ scale: [1, 1.6], opacity: [0.6, 0] }}
+                      animate={{ scale: [1, 1.5], opacity: [0.5, 0] }}
                       transition={{ repeat: Infinity, duration: 2, ease: 'easeOut' }}
                     />
                   )}
                 </motion.div>
-                <span className={`text-[9px] font-semibold leading-tight text-center max-w-[3.5rem] ${
+                <span className={`text-[8px] font-semibold leading-tight text-center max-w-[3rem] ${
                   isCurrent ? 'text-primary' : isCompleted ? 'text-foreground/70' : 'text-muted-foreground/40'
                 }`}>
                   {stage.label}
@@ -179,6 +260,7 @@ function JourneyTimeline({ currentColumn, task }: { currentColumn: string; task:
         </div>
       </div>
 
+      {/* Alteração badge */}
       {isAlteracao && (
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
@@ -192,16 +274,68 @@ function JourneyTimeline({ currentColumn, task }: { currentColumn: string; task:
         </motion.div>
       )}
 
-      {task.description && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="px-3 py-2 rounded-lg bg-muted/50 border border-border/50"
-        >
-          <p className="text-xs text-foreground/70 leading-relaxed">{task.description}</p>
-        </motion.div>
-      )}
+      {/* Vertical detail cards — who did what & when */}
+      <div className="relative ml-3 mt-1">
+        <div className="absolute left-0 top-2 bottom-2 w-px bg-gradient-to-b from-primary/40 via-border to-transparent" />
+
+        {stages.map((stage, idx) => {
+          const isCompleted = idx < activeIdx;
+          const isCurrent = idx === activeIdx;
+          const isFuture = idx > activeIdx;
+          const StageIcon = stage.icon;
+
+          if (isFuture) return null;
+
+          return (
+            <motion.div
+              key={stage.id}
+              initial={{ opacity: 0, x: -12 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.15 + idx * 0.08, duration: 0.35 }}
+              className="relative pl-6 pb-3 last:pb-0"
+            >
+              {/* Dot */}
+              <div className={`absolute left-0 top-2.5 w-2.5 h-2.5 rounded-full -translate-x-[5px] ring-2 ring-card ${
+                isCurrent ? 'bg-primary shadow-sm shadow-primary/30' : 'bg-primary/60'
+              }`} />
+
+              <div className={`rounded-xl px-3 py-2.5 transition-all duration-200 ${
+                isCurrent
+                  ? 'bg-primary/5 border border-primary/15 shadow-sm'
+                  : 'bg-muted/30 border border-border/40'
+              }`}>
+                {/* Stage header */}
+                <div className="flex items-center gap-2 mb-1">
+                  <StageIcon size={12} className={isCurrent ? 'text-primary' : 'text-muted-foreground'} />
+                  <span className={`text-[11px] font-bold uppercase tracking-wide ${
+                    isCurrent ? 'text-primary' : 'text-foreground/70'
+                  }`}>
+                    {stage.label}
+                  </span>
+                  {stage.date && (
+                    <span className="text-[9px] text-muted-foreground/60 ml-auto font-medium">
+                      {format(new Date(stage.date), "dd/MM/yy 'às' HH:mm", { locale: ptBR })}
+                    </span>
+                  )}
+                </div>
+
+                {/* Person */}
+                {stage.person && (
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <UserAvatar user={{ name: stage.person.name, avatarUrl: stage.person.avatarUrl || undefined }} size="sm" />
+                    <span className="text-xs font-medium text-foreground/80">{stage.person.name}</span>
+                  </div>
+                )}
+
+                {/* Detail */}
+                {stage.detail && (
+                  <p className="text-[10px] text-muted-foreground mt-1 leading-snug">{stage.detail}</p>
+                )}
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -538,7 +672,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
         <ScrollArea className="flex-1">
           <div className="px-5 py-4 space-y-4">
             {/* ─── JOURNEY TIMELINE ──────────────────────── */}
-            <JourneyTimeline currentColumn={task.kanban_column} task={task} />
+            <JourneyTimeline currentColumn={task.kanban_column} task={task} users={users} scripts={scripts} history={history} />
 
             {/* Deadlines */}
             {task.kanban_column === 'revisao' && renderDeadline(task.review_deadline, 'Prazo de Revisão')}

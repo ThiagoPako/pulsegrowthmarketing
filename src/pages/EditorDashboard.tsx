@@ -48,6 +48,8 @@ export interface EditorTask {
   approval_sent_at: string | null;
   approved_at: string | null;
   adjustment_notes: string | null;
+  editing_priority: boolean;
+  immediate_alteration: boolean;
   position: number;
   created_at: string;
   updated_at: string;

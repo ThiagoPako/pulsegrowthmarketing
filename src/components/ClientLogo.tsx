@@ -22,7 +22,7 @@ const ClientLogo = forwardRef<HTMLDivElement, ClientLogoProps>(
         <img
           src={client.logoUrl}
           alt={client.companyName}
-          className={`${sizeClass} object-cover shrink-0 border border-border ${className}`}
+          className={`${sizeClass} object-cover shrink-0 border border-border shadow-sm ring-1 ring-border/50 ${className}`}
         />
       );
     }

@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { Plus, Film, Palette, Image, Megaphone, Trash2, Edit, CheckCircle2, Clock, TrendingUp, CalendarClock, CalendarCheck, Send, Zap, ArrowLeft, Eye, MessageSquare, AlertTriangle, ExternalLink, Link2, Scissors, Flame } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import { sendWhatsAppMessage, getWhatsAppConfig } from '@/services/whatsappService';
+import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isToday, isPast, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 

@@ -357,15 +357,15 @@ export default function EditorKanban() {
       kanban_column: 'revisao', updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
     if (error) { toast.error('Erro ao enviar para revisão'); return; }
-    await supabase.from('social_media_deliveries').update({ status: 'revisao' } as any).eq('content_task_id', task.id);
-    const clientName = clients.find(c => c.id === task.client_id)?.companyName || '';
-    await supabase.rpc('notify_role', {
-      _role: 'social_media',
-      _title: 'Alteração Concluída',
-      _message: `${task.title} (${clientName}) foi corrigido e está pronto para nova revisão`,
-      _type: 'review',
-      _link: '/entregas-social',
+    
+    // Use shared sync
+    const client = clients.find(c => c.id === task.client_id);
+    const ctx = buildSyncContext(task as any, {
+      userId: user?.id,
+      clientName: client?.companyName,
+      clientWhatsapp: (client as any)?.whatsapp,
     });
+    await syncContentTaskColumnChange('revisao', ctx);
     toast.success('Enviado para revisão');
     fetchTasks();
   };

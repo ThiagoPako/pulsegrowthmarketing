@@ -198,16 +198,22 @@ export default function ContentKanban() {
     };
 
     if (editingTask) {
+      // Auto-move to acompanhamento if in agendamentos and date+time are set
+      if (payload.kanban_column === 'agendamentos' && payload.scheduled_recording_date && payload.scheduled_recording_time) {
+        payload.kanban_column = 'acompanhamento';
+      }
       const { error } = await supabase.from('content_tasks').update(payload).eq('id', editingTask.id);
       if (error) { toast.error('Erro ao atualizar'); return; }
-      toast.success('Cartão atualizado');
+      toast.success(payload.kanban_column === 'acompanhamento' && editingTask.kanban_column === 'agendamentos'
+        ? 'Agendado! Movido para Acompanhamento'
+        : 'Cartão atualizado');
 
       // Sync: if moved to captacao and has recording, mark recording accordingly
-      if (formColumn === 'captacao' && formRecordingId) {
+      if (payload.kanban_column === 'captacao' && formRecordingId) {
         // Link exists, no extra action needed
       }
       // If moved to edicao and has script, mark script as recorded
-      if (formColumn === 'edicao' && formScriptId) {
+      if (payload.kanban_column === 'edicao' && formScriptId) {
         await supabase.from('scripts').update({ recorded: true } as any).eq('id', formScriptId);
       }
     } else {

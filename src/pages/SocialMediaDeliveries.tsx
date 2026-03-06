@@ -244,6 +244,13 @@ export default function SocialMediaDeliveries() {
       platform: schedPlatform || null, status: 'agendado',
     } as any).eq('id', schedulingItem.id);
     if (error) { toast.error('Erro ao agendar'); return; }
+    // Move content_task to acompanhamento
+    if (schedulingItem.content_task_id) {
+      await supabase.from('content_tasks').update({
+        kanban_column: 'acompanhamento',
+        updated_at: new Date().toISOString(),
+      } as any).eq('id', schedulingItem.content_task_id);
+    }
     toast.success('Conteúdo agendado para postagem');
     setScheduleDialogOpen(false); setSchedulingItem(null); fetchData();
   };

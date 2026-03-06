@@ -14,7 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Film, Megaphone, Image, Palette, ExternalLink, Clock, AlertTriangle,
   Eye, Star, TrendingUp, BarChart3, Timer, Scissors, Kanban, ArrowRight, Check,
-  Search, Filter, Users, Calendar, MessageSquare, Upload, Send, History
+  Search, Filter, Users, Calendar, MessageSquare, Upload, Send, History, Zap, Flame
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import { highlightQuotes } from '@/lib/highlightQuotes';
@@ -48,6 +48,8 @@ export interface EditorTask {
   approval_sent_at: string | null;
   approved_at: string | null;
   adjustment_notes: string | null;
+  editing_priority: boolean;
+  immediate_alteration: boolean;
   position: number;
   created_at: string;
   updated_at: string;
@@ -179,6 +181,13 @@ export default function EditorDashboard() {
   }, [reviewTasks, filterClient, filterType, searchQuery, clients]);
 
   const sortedFiltered = [...filteredQueueTasks].sort((a, b) => {
+    // Immediate alterations first
+    if (a.immediate_alteration && !b.immediate_alteration) return -1;
+    if (b.immediate_alteration && !a.immediate_alteration) return 1;
+    // Then priority tasks
+    if (a.editing_priority && !b.editing_priority) return -1;
+    if (b.editing_priority && !a.editing_priority) return 1;
+    // Then by deadline urgency
     const aStatus = getDeadlineStatus(a.editing_deadline);
     const bStatus = getDeadlineStatus(b.editing_deadline);
     if (aStatus.variant === 'destructive' && bStatus.variant !== 'destructive') return -1;
@@ -693,9 +702,23 @@ function TaskCard({ task, clients, index, onClick }: {
       transition={{ delay: index * 0.02 }}
       className={`bg-card border border-border rounded-xl overflow-hidden cursor-pointer hover:shadow-lg transition-all ${
         deadline.variant === 'destructive' && task.kanban_column === 'edicao' ? 'ring-1 ring-destructive/40' : ''
-      }`}
+      } ${task.immediate_alteration ? 'ring-1 ring-red-500/60' : ''} ${task.editing_priority && !task.immediate_alteration ? 'ring-1 ring-amber-500/40' : ''}`}
       onClick={onClick}
     >
+      {/* Priority/Immediate banner */}
+      {(task.immediate_alteration || task.editing_priority) && (
+        <div className={`px-3 py-1 flex items-center gap-1.5 text-[10px] font-bold ${
+          task.immediate_alteration
+            ? 'bg-red-500/15 text-red-600 dark:text-red-400'
+            : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+        }`}>
+          {task.immediate_alteration ? (
+            <><Zap size={10} className="animate-pulse" /> ALTERAÇÃO IMEDIATA</>
+          ) : (
+            <><Flame size={10} /> PRIORIDADE</>
+          )}
+        </div>
+      )}
       <div className="h-1.5 w-full" style={{ backgroundColor: `hsl(${clientColor})` }} />
       <div className="p-4 space-y-3">
         <div className="flex items-start justify-between gap-2">

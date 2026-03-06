@@ -614,7 +614,7 @@ export default function SocialMediaDeliveries() {
               <Send size={14} /> Enviado p/ Cliente ({clientDeliveries.approval.length})
             </TabsTrigger>
             <TabsTrigger value="agendados" className="gap-1.5">
-              <CalendarClock size={14} /> Agendados ({clientDeliveries.pending.length + clientDeliveries.scheduled.length})
+              <CalendarClock size={14} /> Agendar ({clientDeliveries.pending.length + clientDeliveries.scheduled.length})
             </TabsTrigger>
             <TabsTrigger value="acompanhamento" className="gap-1.5">
               <CheckCircle2 size={14} /> Acompanhamento ({clientDeliveries.posted.length})

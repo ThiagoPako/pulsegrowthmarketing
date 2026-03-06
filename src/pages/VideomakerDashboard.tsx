@@ -13,9 +13,11 @@ import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import {
   Play, Square, FileText, Check, Clock, Video, Users as UsersIcon,
-  TrendingUp, BarChart3, Undo2, AlertTriangle, Star, Eye, ChevronLeft, Download, Link, ArrowRight
+  TrendingUp, BarChart3, Undo2, AlertTriangle, Star, Eye, ChevronLeft, Download, Link, ArrowRight,
+  ThumbsDown, Pencil, MessageCircle
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import pulseHeader from '@/assets/pulse_header.png';
 import { format, addDays, startOfWeek, startOfMonth, endOfMonth, endOfWeek, isWithinInterval, parseISO, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -41,6 +43,11 @@ export default function VideomakerDashboard() {
   const [completedScriptIds, setCompletedScriptIds] = useState<Set<string>>(new Set());
   const [finishStep, setFinishStep] = useState<'scripts' | 'drive'>('scripts');
   const [driveLinks, setDriveLinks] = useState<Record<string, string>>({});
+  // Script status tracking
+  const [rejectedScripts, setRejectedScripts] = useState<Set<string>>(new Set());
+  const [alteredScripts, setAlteredScripts] = useState<Set<string>>(new Set());
+  const [verbalScripts, setVerbalScripts] = useState<Set<string>>(new Set());
+  const [alterationNotes, setAlterationNotes] = useState<Record<string, string>>({});
 
   const vmId = currentUser?.id || '';
   const today = new Date();
@@ -126,6 +133,10 @@ export default function VideomakerDashboard() {
   const handleFinishRecording = (rec: Recording) => {
     setFinishRecordingId(rec.id);
     setCompletedScriptIds(new Set());
+    setRejectedScripts(new Set());
+    setAlteredScripts(new Set());
+    setVerbalScripts(new Set());
+    setAlterationNotes({});
     setFinishStep('scripts');
     setDriveLinks({});
     setFinishDialogOpen(true);
@@ -162,18 +173,25 @@ export default function VideomakerDashboard() {
   }, [finishRecordingId, recordings, scripts, plannedScripts, activeRecordings]);
 
   const handleGoToDriveStep = () => {
-    if (completedScriptIds.size === 0) {
-      toast.error('Selecione pelo menos 1 roteiro gravado');
+    if (completedScriptIds.size === 0 && rejectedScripts.size === 0 && alteredScripts.size === 0 && verbalScripts.size === 0) {
+      toast.error('Marque o status de pelo menos 1 roteiro');
+      return;
+    }
+    // Only need drive links for completed + altered + verbal scripts
+    if (completedScriptIds.size === 0 && alteredScripts.size === 0 && verbalScripts.size === 0) {
+      // Only rejected scripts, skip drive step and finalize directly
+      confirmFinish();
       return;
     }
     setFinishStep('drive');
   };
 
   const confirmFinish = async () => {
-    // Validate all completed scripts have a drive link
-    const missingLinks = Array.from(completedScriptIds).filter(id => !driveLinks[id]?.trim());
-    if (missingLinks.length > 0) {
-      toast.error('Adicione o link do Drive para todos os roteiros');
+    // All scripts that need drive links: completed + altered + verbal
+    const scriptsNeedingLinks = new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts]);
+    const missingLinks = Array.from(scriptsNeedingLinks).filter(id => !driveLinks[id]?.trim());
+    if (missingLinks.length > 0 && scriptsNeedingLinks.size > 0) {
+      toast.error('Adicione o link do Drive para todos os roteiros gravados');
       return;
     }
 
@@ -182,7 +200,6 @@ export default function VideomakerDashboard() {
 
     const now = new Date().toISOString();
     let planned = plannedScripts[finishRecordingId] || [];
-    // Fallback: use DB-persisted planned scripts
     if (planned.length === 0) {
       const activeRec = activeRecordings.find(a => a.recordingId === finishRecordingId);
       if (activeRec?.plannedScriptIds && activeRec.plannedScriptIds.length > 0) {
@@ -190,52 +207,75 @@ export default function VideomakerDashboard() {
       }
     }
 
-    // Mark completed scripts as recorded
-    completedScriptIds.forEach(id => {
+    // All scripts that were actually recorded (completed + altered + verbal)
+    const allRecordedIds = new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts]);
+
+    // Mark recorded scripts
+    allRecordedIds.forEach(id => {
       const script = scripts.find(s => s.id === id);
       if (script && !script.recorded) {
         updateScript({ ...script, recorded: true, updatedAt: now });
       }
     });
 
-    // Auto-return unrecorded planned scripts back to pending
-    const returnedCount = planned.filter(id => !completedScriptIds.has(id)).length;
-    planned.forEach(id => {
-      if (!completedScriptIds.has(id)) {
-        const script = scripts.find(s => s.id === id);
-        if (script && script.recorded) {
-          updateScript({ ...script, recorded: false, updatedAt: now });
-        }
+    // Handle REJECTED scripts: delete script + content_task
+    for (const scriptId of rejectedScripts) {
+      // Delete content_task
+      await supabase.from('content_tasks').delete().eq('script_id', scriptId);
+      // Delete script
+      await supabase.from('scripts').delete().eq('id', scriptId);
+    }
+
+    // Auto-return unrecorded/unrejected planned scripts back to pending
+    const returnedIds = planned.filter(id => !allRecordedIds.has(id) && !rejectedScripts.has(id));
+    const returnedCount = returnedIds.length;
+    returnedIds.forEach(id => {
+      const script = scripts.find(s => s.id === id);
+      if (script && script.recorded) {
+        updateScript({ ...script, recorded: false, updatedAt: now });
       }
     });
 
-    const reelsCount = completedScriptIds.size;
-    const completedIds = Array.from(completedScriptIds);
+    const reelsCount = allRecordedIds.size;
+    const allRecordedArray = Array.from(allRecordedIds);
     stopActiveRecording(finishRecordingId, {
       reels_produced: reelsCount,
       videos_recorded: Math.max(reelsCount, 1),
-    }, completedIds);
+    }, allRecordedArray);
     updateRecording({ ...rec, status: 'concluida' });
 
-    // Create content_tasks in "edicao" column for each completed script with drive link and 2-day deadline
+    // Create/update content_tasks for recorded scripts
     const editingDeadline = new Date();
     editingDeadline.setDate(editingDeadline.getDate() + 2);
 
-    for (const scriptId of completedIds) {
+    for (const scriptId of allRecordedArray) {
       const script = scripts.find(s => s.id === scriptId);
       if (!script) continue;
-      // Try to update existing content_task first (created from script)
       const { data: existing } = await supabase.from('content_tasks')
         .select('id').eq('script_id', scriptId).limit(1);
       
       const scriptDriveLink = driveLinks[scriptId]?.trim() || '';
+      const isAltered = alteredScripts.has(scriptId);
+      const isVerbal = verbalScripts.has(scriptId);
+      const altType = isAltered ? 'altered' : isVerbal ? 'verbal' : null;
+      const altNotes = alterationNotes[scriptId]?.trim() || null;
+
+      let description = `Roteiro gravado pelo videomaker. Link dos materiais: ${scriptDriveLink}`;
+      if (isAltered) {
+        description = `⚠️ ROTEIRO ALTERADO — O roteiro original foi modificado durante a gravação. ${altNotes ? `\n\n📝 Notas do videomaker: ${altNotes}` : 'Não seguir o roteiro original para editar.'}\n\nLink dos materiais: ${scriptDriveLink}`;
+      } else if (isVerbal) {
+        description = `🗣️ ALTERAÇÃO VERBAL — A alteração do roteiro foi passada presencialmente/verbalmente ao editor. ${altNotes ? `\n\n📝 Notas adicionais: ${altNotes}` : ''}\n\nLink dos materiais: ${scriptDriveLink}`;
+      }
+
       if (existing && existing.length > 0) {
         await supabase.from('content_tasks').update({
           kanban_column: 'edicao',
           drive_link: scriptDriveLink,
           recording_id: rec.id,
           editing_deadline: editingDeadline.toISOString(),
-          description: `Roteiro gravado pelo videomaker. Link dos materiais: ${scriptDriveLink}`,
+          description,
+          script_alteration_type: altType,
+          script_alteration_notes: altNotes,
         } as any).eq('id', existing[0].id);
       } else {
         await supabase.from('content_tasks').insert({
@@ -243,25 +283,27 @@ export default function VideomakerDashboard() {
           title: script.title,
           content_type: script.contentFormat || 'reels',
           kanban_column: 'edicao',
-          description: `Roteiro gravado pelo videomaker. Link dos materiais: ${scriptDriveLink}`,
+          description,
           script_id: scriptId,
           recording_id: rec.id,
           assigned_to: null,
           created_by: vmId,
           drive_link: scriptDriveLink,
           editing_deadline: editingDeadline.toISOString(),
+          script_alteration_type: altType,
+          script_alteration_notes: altNotes,
         } as any);
       }
     }
 
-    // Move unfinished scripts' content_tasks back to "ideias"
-    const unfinishedIds = planned.filter(id => !completedScriptIds.has(id));
-    for (const scriptId of unfinishedIds) {
+    // Move unfinished scripts' content_tasks back to "ideias" (not rejected ones)
+    for (const scriptId of returnedIds) {
       await supabase.from('content_tasks').update({ kanban_column: 'ideias', recording_id: null } as any)
         .eq('script_id', scriptId).in('kanban_column', ['captacao']);
     }
 
     let msg = `Gravação concluída! ${reelsCount} roteiro(s) enviado(s) para edição`;
+    if (rejectedScripts.size > 0) msg += ` · ${rejectedScripts.size} rejeitado(s) e apagado(s)`;
     if (returnedCount > 0) msg += ` · ${returnedCount} retornado(s) ao banco`;
     toast.success(msg);
 
@@ -269,6 +311,10 @@ export default function VideomakerDashboard() {
     setPlannedScripts(prev => { const next = { ...prev }; delete next[finishRecordingId]; return next; });
     setFinishDialogOpen(false);
     setCompletedScriptIds(new Set());
+    setRejectedScripts(new Set());
+    setAlteredScripts(new Set());
+    setVerbalScripts(new Set());
+    setAlterationNotes({});
     setDriveLinks({});
     setFinishStep('scripts');
   };
@@ -640,7 +686,7 @@ export default function VideomakerDashboard() {
           {finishStep === 'scripts' ? (
             <>
               <p className="text-sm text-muted-foreground">
-                Selecione os roteiros que foram gravados nesta sessão. Os não selecionados permanecerão no banco de roteiros pendentes.
+                Defina o status de cada roteiro. Os não marcados permanecerão no banco de roteiros pendentes.
               </p>
 
               {finishClientScripts.length === 0 ? (
@@ -649,34 +695,105 @@ export default function VideomakerDashboard() {
                   <p className="text-sm">Nenhum roteiro planejado para esta sessão</p>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {finishClientScripts.map(script => (
-                    <div key={script.id} className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
-                      completedScriptIds.has(script.id) ? 'border-success/40 bg-success/5' :
-                      script.priority === 'urgent' ? 'border-destructive/40 bg-destructive/5' :
-                      script.priority === 'priority' ? 'border-warning/40 bg-warning/5' : 'border-border hover:bg-muted/30'
-                    }`}>
-                      <Checkbox
-                        checked={completedScriptIds.has(script.id)}
-                        onCheckedChange={checked => {
-                          const next = new Set(completedScriptIds);
-                          checked ? next.add(script.id) : next.delete(script.id);
-                          setCompletedScriptIds(next);
-                        }}
-                        className="mt-1"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
+                <div className="space-y-3">
+                  {finishClientScripts.map(script => {
+                    const isCompleted = completedScriptIds.has(script.id);
+                    const isRejected = rejectedScripts.has(script.id);
+                    const isAltered = alteredScripts.has(script.id);
+                    const isVerbal = verbalScripts.has(script.id);
+                    const hasStatus = isCompleted || isRejected || isAltered || isVerbal;
+
+                    const setScriptStatus = (status: 'completed' | 'rejected' | 'altered' | 'verbal' | null) => {
+                      // Remove from all sets first
+                      setCompletedScriptIds(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                      setRejectedScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                      setAlteredScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                      setVerbalScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                      // Add to the right set
+                      if (status === 'completed') setCompletedScriptIds(prev => new Set(prev).add(script.id));
+                      if (status === 'rejected') setRejectedScripts(prev => new Set(prev).add(script.id));
+                      if (status === 'altered') setAlteredScripts(prev => new Set(prev).add(script.id));
+                      if (status === 'verbal') setVerbalScripts(prev => new Set(prev).add(script.id));
+                    };
+
+                    return (
+                      <div key={script.id} className={`p-3 rounded-lg border transition-colors ${
+                        isCompleted ? 'border-success/40 bg-success/5' :
+                        isRejected ? 'border-destructive/40 bg-destructive/5' :
+                        isAltered ? 'border-amber-500/40 bg-amber-500/5' :
+                        isVerbal ? 'border-blue-500/40 bg-blue-500/5' :
+                        'border-border hover:bg-muted/30'
+                      }`}>
+                        <div className="flex items-center gap-1.5 mb-2">
                           {script.priority === 'urgent' && <AlertTriangle size={13} className="text-destructive shrink-0" />}
                           {script.priority === 'priority' && <Star size={13} className="text-warning shrink-0" />}
                           <p className="font-medium text-sm">{script.title}</p>
+                          <Badge variant="outline" className="text-[10px] ml-auto">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
                         </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="outline" className="text-[10px]">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button
+                            onClick={() => setScriptStatus(isCompleted ? null : 'completed')}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                              isCompleted ? 'bg-success/20 text-success border-success/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                            }`}
+                          >
+                            <Check size={12} /> Gravado
+                          </button>
+                          <button
+                            onClick={() => setScriptStatus(isRejected ? null : 'rejected')}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                              isRejected ? 'bg-destructive/20 text-destructive border-destructive/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                            }`}
+                          >
+                            <ThumbsDown size={12} /> Não gostou
+                          </button>
+                          <button
+                            onClick={() => setScriptStatus(isAltered ? null : 'altered')}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                              isAltered ? 'bg-amber-500/20 text-amber-600 border-amber-500/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                            }`}
+                          >
+                            <Pencil size={12} /> Alterado
+                          </button>
+                          <button
+                            onClick={() => setScriptStatus(isVerbal ? null : 'verbal')}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                              isVerbal ? 'bg-blue-500/20 text-blue-600 border-blue-500/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                            }`}
+                          >
+                            <MessageCircle size={12} /> Verbal
+                          </button>
                         </div>
+                        {/* Notes box for altered scripts */}
+                        {isAltered && (
+                          <div className="mt-2">
+                            <label className="text-[11px] text-amber-600 font-medium mb-1 block">
+                              📝 O que mudou? (opcional — ajuda o editor a entender)
+                            </label>
+                            <Textarea
+                              value={alterationNotes[script.id] || ''}
+                              onChange={e => setAlterationNotes(prev => ({ ...prev, [script.id]: e.target.value }))}
+                              placeholder="Descreva a ideia do vídeo e como o editor deve editar..."
+                              className="min-h-[60px] text-xs"
+                            />
+                          </div>
+                        )}
+                        {isVerbal && (
+                          <div className="mt-2">
+                            <label className="text-[11px] text-blue-600 font-medium mb-1 block">
+                              📝 Notas adicionais (opcional)
+                            </label>
+                            <Textarea
+                              value={alterationNotes[script.id] || ''}
+                              onChange={e => setAlterationNotes(prev => ({ ...prev, [script.id]: e.target.value }))}
+                              placeholder="Alguma observação extra para o editor..."
+                              className="min-h-[60px] text-xs"
+                            />
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
@@ -686,7 +803,7 @@ export default function VideomakerDashboard() {
                 </Button>
                 <Button onClick={handleGoToDriveStep} className="flex-1 gap-1.5">
                   <ArrowRight size={16} />
-                  Próximo ({completedScriptIds.size} selecionado{completedScriptIds.size !== 1 ? 's' : ''})
+                  Próximo ({completedScriptIds.size + alteredScripts.size + verbalScripts.size} gravado{(completedScriptIds.size + alteredScripts.size + verbalScripts.size) !== 1 ? 's' : ''}{rejectedScripts.size > 0 ? ` · ${rejectedScripts.size} rejeitado${rejectedScripts.size !== 1 ? 's' : ''}` : ''})
                 </Button>
               </div>
             </>
@@ -697,14 +814,23 @@ export default function VideomakerDashboard() {
               </p>
 
               <div className="space-y-3">
-                {Array.from(completedScriptIds).map(id => {
+                {Array.from(new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts])).map(id => {
                   const s = scripts.find(s => s.id === id);
                   if (!s) return null;
+                  const isAlt = alteredScripts.has(id);
+                  const isVerb = verbalScripts.has(id);
                   return (
-                    <div key={id} className="p-4 rounded-xl bg-muted/30 border border-border">
-                      <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
-                        📁 {s.title}
-                      </p>
+                    <div key={id} className={`p-4 rounded-xl border ${
+                      isAlt ? 'bg-amber-500/5 border-amber-500/30' :
+                      isVerb ? 'bg-blue-500/5 border-blue-500/30' : 'bg-muted/30 border-border'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          📁 {s.title}
+                        </p>
+                        {isAlt && <Badge className="text-[9px] bg-amber-500/20 text-amber-600 border-amber-500/40">✏️ Alterado</Badge>}
+                        {isVerb && <Badge className="text-[9px] bg-blue-500/20 text-blue-600 border-blue-500/40">🗣️ Verbal</Badge>}
+                      </div>
                       <div className="flex items-center gap-2">
                         <Link size={16} className="text-muted-foreground shrink-0" />
                         <Input
@@ -725,7 +851,7 @@ export default function VideomakerDashboard() {
                 </Button>
                 <Button 
                   onClick={confirmFinish} 
-                  disabled={Array.from(completedScriptIds).some(id => !driveLinks[id]?.trim())}
+                  disabled={Array.from(new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts])).some(id => !driveLinks[id]?.trim())}
                   className="flex-1 gap-1.5 bg-success hover:bg-success/90 text-success-foreground"
                 >
                   <Check size={16} />

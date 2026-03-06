@@ -295,6 +295,8 @@ export type Database = {
           recording_id: string | null
           scheduled_recording_date: string | null
           scheduled_recording_time: string | null
+          script_alteration_notes: string | null
+          script_alteration_type: string | null
           script_id: string | null
           title: string
           updated_at: string
@@ -320,6 +322,8 @@ export type Database = {
           recording_id?: string | null
           scheduled_recording_date?: string | null
           scheduled_recording_time?: string | null
+          script_alteration_notes?: string | null
+          script_alteration_type?: string | null
           script_id?: string | null
           title?: string
           updated_at?: string
@@ -345,6 +349,8 @@ export type Database = {
           recording_id?: string | null
           scheduled_recording_date?: string | null
           scheduled_recording_time?: string | null
+          script_alteration_notes?: string | null
+          script_alteration_type?: string | null
           script_id?: string | null
           title?: string
           updated_at?: string

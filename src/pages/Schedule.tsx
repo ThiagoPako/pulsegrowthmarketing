@@ -7,6 +7,7 @@ import { useEndoClientes, useEndoAgendamentos } from '@/hooks/useEndomarketing';
 import AgencyCapacityWidget from '@/components/AgencyCapacityWidget';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -14,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles, RefreshCw, MessageSquare, Play, Square, Star, Link } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles, RefreshCw, MessageSquare, Play, Square, Star, Link, ThumbsDown, MessageCircle } from 'lucide-react';
 import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
@@ -91,6 +92,11 @@ export default function Schedule() {
   const [finishCompletedScripts, setFinishCompletedScripts] = useState<Set<string>>(new Set());
   const [finishStep, setFinishStep] = useState<'scripts' | 'drive'>('scripts');
   const [finishDriveLinks, setFinishDriveLinks] = useState<Record<string, string>>({});
+  // Script status tracking
+  const [finishRejectedScripts, setFinishRejectedScripts] = useState<Set<string>>(new Set());
+  const [finishAlteredScripts, setFinishAlteredScripts] = useState<Set<string>>(new Set());
+  const [finishVerbalScripts, setFinishVerbalScripts] = useState<Set<string>>(new Set());
+  const [finishAlterationNotes, setFinishAlterationNotes] = useState<Record<string, string>>({});
 
   const videomakers = users.filter(u => u.role === 'videomaker');
   const currentMonth = addMonths(new Date(), monthOffset);
@@ -432,6 +438,10 @@ export default function Schedule() {
     if (isRecordingActive(rec.id)) {
       setFinishRecordingState(rec);
       setFinishCompletedScripts(new Set());
+      setFinishRejectedScripts(new Set());
+      setFinishAlteredScripts(new Set());
+      setFinishVerbalScripts(new Set());
+      setFinishAlterationNotes({});
       setFinishStep('scripts');
       setFinishDriveLinks({});
       setFinishRecOpen(true);
@@ -481,8 +491,12 @@ export default function Schedule() {
   };
 
   const handleGoToDriveStepSchedule = () => {
-    if (finishCompletedScripts.size === 0) {
-      toast.error('Selecione pelo menos 1 roteiro gravado');
+    if (finishCompletedScripts.size === 0 && finishRejectedScripts.size === 0 && finishAlteredScripts.size === 0 && finishVerbalScripts.size === 0) {
+      toast.error('Marque o status de pelo menos 1 roteiro');
+      return;
+    }
+    if (finishCompletedScripts.size === 0 && finishAlteredScripts.size === 0 && finishVerbalScripts.size === 0) {
+      confirmFinishRec();
       return;
     }
     setFinishStep('drive');
@@ -491,15 +505,15 @@ export default function Schedule() {
   const confirmFinishRec = async () => {
     if (!finishRecording) return;
     
-    const missingLinks = Array.from(finishCompletedScripts).filter(id => !finishDriveLinks[id]?.trim());
-    if (missingLinks.length > 0) {
-      toast.error('Adicione o link do Drive para todos os roteiros');
+    const scriptsNeedingLinks = new Set([...finishCompletedScripts, ...finishAlteredScripts, ...finishVerbalScripts]);
+    const missingLinks = Array.from(scriptsNeedingLinks).filter(id => !finishDriveLinks[id]?.trim());
+    if (missingLinks.length > 0 && scriptsNeedingLinks.size > 0) {
+      toast.error('Adicione o link do Drive para todos os roteiros gravados');
       return;
     }
     
     const now = new Date().toISOString();
     let planned = plannedScriptsMap[finishRecording.id] || [];
-    // Fallback: use DB-persisted planned scripts
     if (planned.length === 0) {
       const activeRec = activeRecordings.find(a => a.recordingId === finishRecording.id);
       if (activeRec?.plannedScriptIds && activeRec.plannedScriptIds.length > 0) {
@@ -507,51 +521,69 @@ export default function Schedule() {
       }
     }
 
-    // Mark completed scripts as recorded
-    finishCompletedScripts.forEach(id => {
+    const allRecordedIds = new Set([...finishCompletedScripts, ...finishAlteredScripts, ...finishVerbalScripts]);
+
+    allRecordedIds.forEach(id => {
       const script = scripts.find(s => s.id === id);
       if (script && !script.recorded) {
         updateScript({ ...script, recorded: true, updatedAt: now });
       }
     });
 
-    // Auto-return unrecorded planned scripts
-    const returnedCount = planned.filter(id => !finishCompletedScripts.has(id)).length;
-    planned.forEach(id => {
-      if (!finishCompletedScripts.has(id)) {
-        const script = scripts.find(s => s.id === id);
-        if (script && script.recorded) {
-          updateScript({ ...script, recorded: false, updatedAt: now });
-        }
+    // Handle REJECTED scripts: delete script + content_task
+    for (const scriptId of finishRejectedScripts) {
+      await supabase.from('content_tasks').delete().eq('script_id', scriptId);
+      await supabase.from('scripts').delete().eq('id', scriptId);
+    }
+
+    const returnedIds = planned.filter(id => !allRecordedIds.has(id) && !finishRejectedScripts.has(id));
+    const returnedCount = returnedIds.length;
+    returnedIds.forEach(id => {
+      const script = scripts.find(s => s.id === id);
+      if (script && script.recorded) {
+        updateScript({ ...script, recorded: false, updatedAt: now });
       }
     });
 
-    const reelsCount = finishCompletedScripts.size;
-    const completedIds = Array.from(finishCompletedScripts);
+    const reelsCount = allRecordedIds.size;
+    const allRecordedArray = Array.from(allRecordedIds);
     stopActiveRecording(finishRecording.id, {
       reels_produced: reelsCount,
       videos_recorded: Math.max(reelsCount, 1),
-    }, completedIds);
+    }, allRecordedArray);
     updateRecording({ ...finishRecording, status: 'concluida' });
 
-    // Move completed scripts' content_tasks to "edicao" with drive link
     const editingDeadline = new Date();
     editingDeadline.setDate(editingDeadline.getDate() + 2);
 
-    for (const scriptId of completedIds) {
+    for (const scriptId of allRecordedArray) {
       const script = scripts.find(s => s.id === scriptId);
       if (!script) continue;
       const { data: existing } = await supabase.from('content_tasks')
         .select('id').eq('script_id', scriptId).limit(1);
       
       const scriptDriveLink = finishDriveLinks[scriptId]?.trim() || '';
+      const isAltered = finishAlteredScripts.has(scriptId);
+      const isVerbal = finishVerbalScripts.has(scriptId);
+      const altType = isAltered ? 'altered' : isVerbal ? 'verbal' : null;
+      const altNotes = finishAlterationNotes[scriptId]?.trim() || null;
+
+      let description = `Roteiro gravado pelo videomaker. Link dos materiais: ${scriptDriveLink}`;
+      if (isAltered) {
+        description = `⚠️ ROTEIRO ALTERADO — O roteiro original foi modificado durante a gravação. ${altNotes ? `\n\n📝 Notas do videomaker: ${altNotes}` : 'Não seguir o roteiro original para editar.'}\n\nLink dos materiais: ${scriptDriveLink}`;
+      } else if (isVerbal) {
+        description = `🗣️ ALTERAÇÃO VERBAL — A alteração do roteiro foi passada presencialmente/verbalmente ao editor. ${altNotes ? `\n\n📝 Notas adicionais: ${altNotes}` : ''}\n\nLink dos materiais: ${scriptDriveLink}`;
+      }
+
       if (existing && existing.length > 0) {
         await supabase.from('content_tasks').update({
           kanban_column: 'edicao',
           drive_link: scriptDriveLink,
           recording_id: finishRecording.id,
           editing_deadline: editingDeadline.toISOString(),
-          description: `Roteiro gravado pelo videomaker. Link dos materiais: ${scriptDriveLink}`,
+          description,
+          script_alteration_type: altType,
+          script_alteration_notes: altNotes,
         } as any).eq('id', existing[0].id);
       } else {
         await supabase.from('content_tasks').insert({
@@ -559,23 +591,24 @@ export default function Schedule() {
           title: script.title,
           content_type: script.contentFormat || 'reels',
           kanban_column: 'edicao',
-          description: `Roteiro gravado pelo videomaker. Link dos materiais: ${scriptDriveLink}`,
+          description,
           script_id: scriptId,
           recording_id: finishRecording.id,
           drive_link: scriptDriveLink,
           editing_deadline: editingDeadline.toISOString(),
+          script_alteration_type: altType,
+          script_alteration_notes: altNotes,
         } as any);
       }
     }
 
-    // Move unfinished scripts' content_tasks back to "ideias"
-    const unfinishedIds = planned.filter(id => !finishCompletedScripts.has(id));
-    for (const scriptId of unfinishedIds) {
+    for (const scriptId of returnedIds) {
       await supabase.from('content_tasks').update({ kanban_column: 'ideias', recording_id: null } as any)
         .eq('script_id', scriptId).in('kanban_column', ['captacao']);
     }
 
     let msg = `Gravação concluída! ${reelsCount} roteiro(s) enviado(s) para edição`;
+    if (finishRejectedScripts.size > 0) msg += ` · ${finishRejectedScripts.size} rejeitado(s) e apagado(s)`;
     if (returnedCount > 0) msg += ` · ${returnedCount} retornado(s) ao banco`;
     toast.success(msg);
 
@@ -583,6 +616,10 @@ export default function Schedule() {
     setFinishRecOpen(false);
     setFinishRecordingState(null);
     setFinishCompletedScripts(new Set());
+    setFinishRejectedScripts(new Set());
+    setFinishAlteredScripts(new Set());
+    setFinishVerbalScripts(new Set());
+    setFinishAlterationNotes({});
     setFinishDriveLinks({});
     setFinishStep('scripts');
   };
@@ -1223,7 +1260,7 @@ export default function Schedule() {
           {finishStep === 'scripts' ? (
             <>
               <p className="text-sm text-muted-foreground">
-                Selecione os roteiros que foram gravados. Os não selecionados retornarão automaticamente ao banco de roteiros pendentes.
+                Defina o status de cada roteiro. Os não marcados retornarão automaticamente ao banco de roteiros pendentes.
               </p>
               {finishRecScripts.length === 0 ? (
                 <div className="text-center py-6 text-muted-foreground">
@@ -1231,34 +1268,99 @@ export default function Schedule() {
                   <p className="text-sm">Nenhum roteiro planejado para esta sessão</p>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {finishRecScripts.map(script => (
-                    <div key={script.id} className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
-                      finishCompletedScripts.has(script.id) ? 'border-success/40 bg-success/5' : 'border-border hover:bg-muted/30'
-                    }`}>
-                      <Checkbox
-                        checked={finishCompletedScripts.has(script.id)}
-                        onCheckedChange={checked => {
-                          const next = new Set(finishCompletedScripts);
-                          checked ? next.add(script.id) : next.delete(script.id);
-                          setFinishCompletedScripts(next);
-                        }}
-                        className="mt-1"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-sm">{script.title}</p>
-                        <Badge variant="outline" className="text-[10px] mt-1">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                <div className="space-y-3">
+                  {finishRecScripts.map(script => {
+                    const isCompleted = finishCompletedScripts.has(script.id);
+                    const isRejected = finishRejectedScripts.has(script.id);
+                    const isAltered = finishAlteredScripts.has(script.id);
+                    const isVerbal = finishVerbalScripts.has(script.id);
+
+                    const setStatus = (status: 'completed' | 'rejected' | 'altered' | 'verbal' | null) => {
+                      setFinishCompletedScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                      setFinishRejectedScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                      setFinishAlteredScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                      setFinishVerbalScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                      if (status === 'completed') setFinishCompletedScripts(prev => new Set(prev).add(script.id));
+                      if (status === 'rejected') setFinishRejectedScripts(prev => new Set(prev).add(script.id));
+                      if (status === 'altered') setFinishAlteredScripts(prev => new Set(prev).add(script.id));
+                      if (status === 'verbal') setFinishVerbalScripts(prev => new Set(prev).add(script.id));
+                    };
+
+                    return (
+                      <div key={script.id} className={`p-3 rounded-lg border transition-colors ${
+                        isCompleted ? 'border-success/40 bg-success/5' :
+                        isRejected ? 'border-destructive/40 bg-destructive/5' :
+                        isAltered ? 'border-amber-500/40 bg-amber-500/5' :
+                        isVerbal ? 'border-blue-500/40 bg-blue-500/5' :
+                        'border-border hover:bg-muted/30'
+                      }`}>
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <p className="font-medium text-sm">{script.title}</p>
+                          <Badge variant="outline" className="text-[10px] ml-auto">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button onClick={() => setStatus(isCompleted ? null : 'completed')}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                              isCompleted ? 'bg-success/20 text-success border-success/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                            }`}>
+                            <Check size={12} /> Gravado
+                          </button>
+                          <button onClick={() => setStatus(isRejected ? null : 'rejected')}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                              isRejected ? 'bg-destructive/20 text-destructive border-destructive/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                            }`}>
+                            <ThumbsDown size={12} /> Não gostou
+                          </button>
+                          <button onClick={() => setStatus(isAltered ? null : 'altered')}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                              isAltered ? 'bg-amber-500/20 text-amber-600 border-amber-500/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                            }`}>
+                            <Pencil size={12} /> Alterado
+                          </button>
+                          <button onClick={() => setStatus(isVerbal ? null : 'verbal')}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                              isVerbal ? 'bg-blue-500/20 text-blue-600 border-blue-500/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                            }`}>
+                            <MessageCircle size={12} /> Verbal
+                          </button>
+                        </div>
+                        {isAltered && (
+                          <div className="mt-2">
+                            <label className="text-[11px] text-amber-600 font-medium mb-1 block">
+                              📝 O que mudou? (opcional)
+                            </label>
+                            <Textarea
+                              value={finishAlterationNotes[script.id] || ''}
+                              onChange={e => setFinishAlterationNotes(prev => ({ ...prev, [script.id]: e.target.value }))}
+                              placeholder="Descreva a ideia do vídeo e como o editor deve editar..."
+                              className="min-h-[60px] text-xs"
+                            />
+                          </div>
+                        )}
+                        {isVerbal && (
+                          <div className="mt-2">
+                            <label className="text-[11px] text-blue-600 font-medium mb-1 block">
+                              📝 Notas adicionais (opcional)
+                            </label>
+                            <Textarea
+                              value={finishAlterationNotes[script.id] || ''}
+                              onChange={e => setFinishAlterationNotes(prev => ({ ...prev, [script.id]: e.target.value }))}
+                              placeholder="Alguma observação extra para o editor..."
+                              className="min-h-[60px] text-xs"
+                            />
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               <div className="flex gap-2 mt-3">
                 <Button variant="outline" onClick={() => { setFinishRecOpen(false); setFinishRecordingState(null); }} className="flex-1">
                   Cancelar
                 </Button>
-                <Button onClick={handleGoToDriveStepSchedule} disabled={finishCompletedScripts.size === 0} className="flex-1 gap-1.5">
-                  Próximo ({finishCompletedScripts.size} roteiro{finishCompletedScripts.size !== 1 ? 's' : ''})
+                <Button onClick={handleGoToDriveStepSchedule} className="flex-1 gap-1.5">
+                  Próximo ({finishCompletedScripts.size + finishAlteredScripts.size + finishVerbalScripts.size} gravado{(finishCompletedScripts.size + finishAlteredScripts.size + finishVerbalScripts.size) !== 1 ? 's' : ''}{finishRejectedScripts.size > 0 ? ` · ${finishRejectedScripts.size} rejeitado${finishRejectedScripts.size !== 1 ? 's' : ''}` : ''})
                 </Button>
               </div>
             </>
@@ -1268,14 +1370,21 @@ export default function Schedule() {
                 Adicione o link da pasta do Google Drive para cada roteiro gravado. O editor terá <strong>2 dias úteis</strong> para editar.
               </p>
               <div className="space-y-3">
-                {Array.from(finishCompletedScripts).map(id => {
+                {Array.from(new Set([...finishCompletedScripts, ...finishAlteredScripts, ...finishVerbalScripts])).map(id => {
                   const s = scripts.find(s => s.id === id);
                   if (!s) return null;
+                  const isAlt = finishAlteredScripts.has(id);
+                  const isVerb = finishVerbalScripts.has(id);
                   return (
-                    <div key={id} className="p-4 rounded-xl bg-muted/30 border border-border">
-                      <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
-                        📁 {s.title}
-                      </p>
+                    <div key={id} className={`p-4 rounded-xl border ${
+                      isAlt ? 'bg-amber-500/5 border-amber-500/30' :
+                      isVerb ? 'bg-blue-500/5 border-blue-500/30' : 'bg-muted/30 border-border'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">📁 {s.title}</p>
+                        {isAlt && <Badge className="text-[9px] bg-amber-500/20 text-amber-600 border-amber-500/40">✏️ Alterado</Badge>}
+                        {isVerb && <Badge className="text-[9px] bg-blue-500/20 text-blue-600 border-blue-500/40">🗣️ Verbal</Badge>}
+                      </div>
                       <div className="flex items-center gap-2">
                         <Link size={16} className="text-muted-foreground shrink-0" />
                         <Input
@@ -1295,7 +1404,7 @@ export default function Schedule() {
                 </Button>
                 <Button 
                   onClick={confirmFinishRec} 
-                  disabled={Array.from(finishCompletedScripts).some(id => !finishDriveLinks[id]?.trim())}
+                  disabled={Array.from(new Set([...finishCompletedScripts, ...finishAlteredScripts, ...finishVerbalScripts])).some(id => !finishDriveLinks[id]?.trim())}
                   className="flex-1 gap-1.5 bg-success hover:bg-success/90 text-success-foreground"
                 >
                   <Check size={16} /> Finalizar e Enviar para Edição

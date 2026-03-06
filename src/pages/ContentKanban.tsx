@@ -506,9 +506,15 @@ export default function ContentKanban() {
       toast.error('Descreva os ajustes necessários');
       return;
     }
+    
+    // Set alteration deadline: immediate = no deadline (ASAP), otherwise 1 day
+    const alterationDeadline = adjustmentImmediate ? null : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    
     const { error } = await supabase.from('content_tasks').update({
       kanban_column: 'alteracao',
       adjustment_notes: adjustmentNotes.trim(),
+      immediate_alteration: adjustmentImmediate,
+      alteration_deadline: alterationDeadline,
       updated_at: new Date().toISOString(),
     } as any).eq('id', adjustmentTask.id);
     if (error) { toast.error('Erro ao solicitar ajustes'); return; }
@@ -520,16 +526,17 @@ export default function ContentKanban() {
 
     // Notify editor
     if (adjustmentTask.assigned_to) {
+      const urgencyPrefix = adjustmentImmediate ? '🚨 IMEDIATO: ' : '';
       await supabase.rpc('notify_user', {
         _user_id: adjustmentTask.assigned_to,
-        _title: 'Ajuste solicitado',
-        _message: `"${adjustmentTask.title}" precisa de ajustes: ${adjustmentNotes.trim()}`,
+        _title: `${urgencyPrefix}Ajuste solicitado`,
+        _message: `"${adjustmentTask.title}" precisa de ajustes${adjustmentImmediate ? ' IMEDIATOS' : ''}: ${adjustmentNotes.trim()}`,
         _type: 'adjustment',
         _link: '/conteudo',
       });
     }
 
-    toast.success('📝 Ajustes solicitados! Movido para Alteração');
+    toast.success(adjustmentImmediate ? '🚨 Ajustes IMEDIATOS solicitados!' : '📝 Ajustes solicitados! Movido para Alteração');
     setAdjustmentDialogOpen(false);
     setAdjustmentTask(null);
     fetchTasks();

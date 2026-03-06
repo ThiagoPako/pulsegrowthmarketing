@@ -40,7 +40,7 @@ export default function VideomakerDashboard() {
   const [finishRecordingId, setFinishRecordingId] = useState('');
   const [completedScriptIds, setCompletedScriptIds] = useState<Set<string>>(new Set());
   const [finishStep, setFinishStep] = useState<'scripts' | 'drive'>('scripts');
-  const [driveLink, setDriveLink] = useState('');
+  const [driveLinks, setDriveLinks] = useState<Record<string, string>>({});
 
   const vmId = currentUser?.id || '';
   const today = new Date();
@@ -126,7 +126,7 @@ export default function VideomakerDashboard() {
     setFinishRecordingId(rec.id);
     setCompletedScriptIds(new Set());
     setFinishStep('scripts');
-    setDriveLink('');
+    setDriveLinks({});
     setFinishDialogOpen(true);
   };
 
@@ -161,8 +161,10 @@ export default function VideomakerDashboard() {
   };
 
   const confirmFinish = async () => {
-    if (!driveLink.trim()) {
-      toast.error('Adicione o link da pasta do Google Drive com os materiais');
+    // Validate all completed scripts have a drive link
+    const missingLinks = Array.from(completedScriptIds).filter(id => !driveLinks[id]?.trim());
+    if (missingLinks.length > 0) {
+      toast.error('Adicione o link do Drive para todos os roteiros');
       return;
     }
 
@@ -210,13 +212,14 @@ export default function VideomakerDashboard() {
       const { data: existing } = await supabase.from('content_tasks')
         .select('id').eq('script_id', scriptId).limit(1);
       
+      const scriptDriveLink = driveLinks[scriptId]?.trim() || '';
       if (existing && existing.length > 0) {
         await supabase.from('content_tasks').update({
           kanban_column: 'edicao',
-          drive_link: driveLink.trim(),
+          drive_link: scriptDriveLink,
           recording_id: rec.id,
           editing_deadline: editingDeadline.toISOString(),
-          description: `Roteiro gravado pelo videomaker. Link dos materiais: ${driveLink.trim()}`,
+          description: `Roteiro gravado pelo videomaker. Link dos materiais: ${scriptDriveLink}`,
         } as any).eq('id', existing[0].id);
       } else {
         await supabase.from('content_tasks').insert({
@@ -224,12 +227,12 @@ export default function VideomakerDashboard() {
           title: script.title,
           content_type: script.contentFormat || 'reels',
           kanban_column: 'edicao',
-          description: `Roteiro gravado pelo videomaker. Link dos materiais: ${driveLink.trim()}`,
+          description: `Roteiro gravado pelo videomaker. Link dos materiais: ${scriptDriveLink}`,
           script_id: scriptId,
           recording_id: rec.id,
           assigned_to: null,
           created_by: vmId,
-          drive_link: driveLink.trim(),
+          drive_link: scriptDriveLink,
           editing_deadline: editingDeadline.toISOString(),
         } as any);
       }
@@ -250,7 +253,7 @@ export default function VideomakerDashboard() {
     setPlannedScripts(prev => { const next = { ...prev }; delete next[finishRecordingId]; return next; });
     setFinishDialogOpen(false);
     setCompletedScriptIds(new Set());
-    setDriveLink('');
+    setDriveLinks({});
     setFinishStep('scripts');
   };
 
@@ -591,7 +594,7 @@ export default function VideomakerDashboard() {
       </div>
 
       {/* ── Finish Recording Dialog (Multi-step) ── */}
-      <Dialog open={finishDialogOpen} onOpenChange={v => { if (!v) { setFinishDialogOpen(false); setFinishStep('scripts'); setDriveLink(''); } }}>
+      <Dialog open={finishDialogOpen} onOpenChange={v => { if (!v) { setFinishDialogOpen(false); setFinishStep('scripts'); setDriveLinks({}); } }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -674,41 +677,41 @@ export default function VideomakerDashboard() {
           ) : (
             <>
               <p className="text-sm text-muted-foreground">
-                Adicione o link da pasta do Google Drive com os materiais da gravação. O editor terá <strong>2 dias úteis</strong> para editar os vídeos.
+                Adicione o link da pasta do Google Drive para cada roteiro gravado. O editor terá <strong>2 dias úteis</strong> para editar os vídeos.
               </p>
 
               <div className="space-y-3">
-                <div className="p-4 rounded-xl bg-muted/30 border border-border">
-                  <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">📁 Link do Google Drive</p>
-                  <div className="flex items-center gap-2">
-                    <Link size={16} className="text-muted-foreground shrink-0" />
-                    <Input
-                      value={driveLink}
-                      onChange={e => setDriveLink(e.target.value)}
-                      placeholder="https://drive.google.com/drive/folders/..."
-                      className="h-9"
-                    />
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-lg bg-accent/30 border border-border">
-                  <p className="text-xs font-semibold mb-1">📝 Roteiros selecionados ({completedScriptIds.size}):</p>
-                  <div className="space-y-1">
-                    {Array.from(completedScriptIds).map(id => {
-                      const s = scripts.find(s => s.id === id);
-                      return s ? (
-                        <p key={id} className="text-xs text-muted-foreground">• {s.title}</p>
-                      ) : null;
-                    })}
-                  </div>
-                </div>
+                {Array.from(completedScriptIds).map(id => {
+                  const s = scripts.find(s => s.id === id);
+                  if (!s) return null;
+                  return (
+                    <div key={id} className="p-4 rounded-xl bg-muted/30 border border-border">
+                      <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
+                        📁 {s.title}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Link size={16} className="text-muted-foreground shrink-0" />
+                        <Input
+                          value={driveLinks[id] || ''}
+                          onChange={e => setDriveLinks(prev => ({ ...prev, [id]: e.target.value }))}
+                          placeholder="https://drive.google.com/drive/folders/..."
+                          className="h-9"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="flex gap-2 mt-3">
                 <Button variant="outline" onClick={() => setFinishStep('scripts')} className="flex-1 gap-1.5">
                   <ChevronLeft size={16} /> Voltar
                 </Button>
-                <Button onClick={confirmFinish} className="flex-1 gap-1.5 bg-success hover:bg-success/90 text-success-foreground">
+                <Button 
+                  onClick={confirmFinish} 
+                  disabled={Array.from(completedScriptIds).some(id => !driveLinks[id]?.trim())}
+                  className="flex-1 gap-1.5 bg-success hover:bg-success/90 text-success-foreground"
+                >
                   <Check size={16} />
                   Finalizar e Enviar para Edição
                 </Button>

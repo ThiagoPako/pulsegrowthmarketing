@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import { Plus, KeyRound, Users, Handshake } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 
-const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro'];
+const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'fotografo'];
 
 interface TeamMember {
   id: string;
@@ -142,6 +142,7 @@ export default function Team() {
     editor: 'bg-success/20 text-success',
     endomarketing: 'bg-accent text-accent-foreground',
     parceiro: 'bg-purple-100 text-purple-700',
+    fotografo: 'bg-pink-100 text-pink-700',
   };
 
   const teamMembers = members.filter(m => m.role !== 'parceiro');

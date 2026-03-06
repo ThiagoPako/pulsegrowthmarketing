@@ -450,6 +450,7 @@ export default function FinancialDashboard() {
           { label: 'Contratos', path: '/financeiro/contratos', icon: FileText },
           { label: 'Receitas', path: '/financeiro/receitas', icon: TrendingUp },
           { label: 'Despesas', path: '/financeiro/despesas', icon: TrendingDown },
+          { label: 'Movimentações', path: '/financeiro/movimentacoes', icon: ClipboardList },
           { label: 'Caixa', path: '/financeiro/caixa', icon: Wallet },
           { label: 'Inadimplência', path: '/financeiro/inadimplencia', icon: AlertTriangle },
           { label: 'Configurações', path: '/financeiro/configuracoes', icon: CreditCard },

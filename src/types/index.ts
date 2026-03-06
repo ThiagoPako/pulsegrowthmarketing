@@ -170,4 +170,5 @@ export interface ActiveRecording {
   videomarkerId: string;
   clientId: string;
   startedAt: string; // ISO datetime
+  plannedScriptIds?: string[];
 }

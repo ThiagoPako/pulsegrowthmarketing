@@ -391,12 +391,19 @@ export default function Schedule() {
   // Finish recording scripts (only planned ones)
   const finishRecScripts = useMemo(() => {
     if (!finishRecording) return [];
-    const planned = plannedScriptsMap[finishRecording.id];
+    let planned = plannedScriptsMap[finishRecording.id];
+    // Fallback: check DB-persisted planned scripts from activeRecordings
+    if (!planned || planned.length === 0) {
+      const activeRec = activeRecordings.find(a => a.recordingId === finishRecording.id);
+      if (activeRec?.plannedScriptIds && activeRec.plannedScriptIds.length > 0) {
+        planned = activeRec.plannedScriptIds;
+      }
+    }
     if (!planned || planned.length === 0) {
       return scripts.filter(s => s.clientId === finishRecording.clientId && !s.recorded && !s.isEndomarketing);
     }
-    return scripts.filter(s => planned.includes(s.id));
-  }, [finishRecording, scripts, plannedScriptsMap]);
+    return scripts.filter(s => planned!.includes(s.id));
+  }, [finishRecording, scripts, plannedScriptsMap, activeRecordings]);
 
   const handleToggleRecording = (rec: Recording) => {
     if (isRecordingActive(rec.id)) {
@@ -435,6 +442,7 @@ export default function Schedule() {
       videomarkerId: startRecording.videomakerId,
       clientId: startRecording.clientId,
       startedAt: new Date().toISOString(),
+      plannedScriptIds: Array.from(startSelectedScripts),
     });
     
     // Move content_tasks linked to selected scripts to "captacao"

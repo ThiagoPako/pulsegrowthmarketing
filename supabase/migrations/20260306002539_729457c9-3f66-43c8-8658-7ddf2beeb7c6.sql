@@ -1,0 +1,1 @@
+ALTER TABLE public.active_recordings ADD COLUMN planned_script_ids text[] NOT NULL DEFAULT '{}'::text[];

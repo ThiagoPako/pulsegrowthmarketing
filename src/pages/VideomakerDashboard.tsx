@@ -108,6 +108,7 @@ export default function VideomakerDashboard() {
       videomarkerId: vmId,
       clientId: rec.clientId,
       startedAt: new Date().toISOString(),
+      plannedScriptIds: Array.from(selectedScriptIds),
     });
     
     // Move content_tasks linked to selected scripts to "captacao"
@@ -133,9 +134,17 @@ export default function VideomakerDashboard() {
   // Scripts available for finish dialog — only the ones planned at start
   const finishClientScripts = useMemo(() => {
     if (!finishRecordingId) return [];
-    const planned = plannedScripts[finishRecordingId];
+    // First check in-memory planned scripts
+    let planned = plannedScripts[finishRecordingId];
+    // Fallback: check DB-persisted planned scripts from activeRecordings
     if (!planned || planned.length === 0) {
-      // Fallback: show all pending scripts for this client if no planned scripts tracked
+      const activeRec = activeRecordings.find(a => a.recordingId === finishRecordingId);
+      if (activeRec?.plannedScriptIds && activeRec.plannedScriptIds.length > 0) {
+        planned = activeRec.plannedScriptIds;
+      }
+    }
+    if (!planned || planned.length === 0) {
+      // Last fallback: show all pending scripts for this client
       const rec = recordings.find(r => r.id === finishRecordingId);
       if (!rec) return [];
       return scripts.filter(s => s.clientId === rec.clientId && !s.isEndomarketing && !s.recorded)
@@ -145,12 +154,12 @@ export default function VideomakerDashboard() {
         });
     }
     // Show only scripts that were planned for this session
-    return scripts.filter(s => planned.includes(s.id))
+    return scripts.filter(s => planned!.includes(s.id))
       .sort((a, b) => {
         const priorityOrder: Record<string, number> = { urgent: 0, priority: 1, normal: 2 };
         return (priorityOrder[a.priority] || 2) - (priorityOrder[b.priority] || 2);
       });
-  }, [finishRecordingId, recordings, scripts, plannedScripts]);
+  }, [finishRecordingId, recordings, scripts, plannedScripts, activeRecordings]);
 
   const handleGoToDriveStep = () => {
     if (completedScriptIds.size === 0) {

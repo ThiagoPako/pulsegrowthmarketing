@@ -348,132 +348,13 @@ export default function ContentKanban() {
 
   // ─── SYNC WITH OTHER MODULES ──────────────────────────────
   const syncOnColumnChange = async (task: ContentTask, newColumn: string) => {
-    if (newColumn === 'edicao' && task.script_id) {
-      await supabase.from('scripts').update({ recorded: true } as any).eq('id', task.script_id);
-    }
-
-    // Set deadlines based on column transitions
-    const deadlineUpdates: Record<string, any> = {};
-    if (newColumn === 'revisao') {
-      // Revisão deadline: 1 day
-      const deadline = new Date();
-      deadline.setHours(deadline.getHours() + 24);
-      deadlineUpdates.review_deadline = deadline.toISOString();
-    }
-    if (newColumn === 'alteracao') {
-      // Alteração deadline: 1 day (unless immediate)
-      if (!task.immediate_alteration) {
-        const deadline = new Date();
-        deadline.setHours(deadline.getHours() + 24);
-        deadlineUpdates.alteration_deadline = deadline.toISOString();
-      }
-    }
-    if (newColumn === 'envio') {
-      // Client approval deadline: 6 hours
-      const deadline = new Date();
-      deadline.setHours(deadline.getHours() + 6);
-      deadlineUpdates.approval_deadline = deadline.toISOString();
-    }
-
-    if (Object.keys(deadlineUpdates).length > 0) {
-      await supabase.from('content_tasks').update({
-        ...deadlineUpdates,
-        updated_at: new Date().toISOString(),
-      } as any).eq('id', task.id);
-    }
-
-    // Map kanban columns to social media delivery statuses
-    const columnToSocialStatus: Record<string, string> = {
-      revisao: 'revisao',
-      alteracao: 'ajuste',
-      envio: 'aprovacao_cliente',
-      agendamentos: 'entregue',
-      acompanhamento: 'agendado',
-    };
-
-    const socialStatus = columnToSocialStatus[newColumn];
-
-    // For columns that have a social media counterpart, ensure a delivery record exists and is updated
-    if (socialStatus) {
-      const existing = await supabase.from('social_media_deliveries')
-        .select('id').eq('content_task_id', task.id).limit(1);
-
-      if (!existing.data?.length) {
-        await supabase.from('social_media_deliveries').insert({
-          client_id: task.client_id, content_type: task.content_type,
-          title: task.title, description: task.description || null,
-          status: socialStatus, delivered_at: format(new Date(), 'yyyy-MM-dd'),
-          recording_id: task.recording_id || null, script_id: task.script_id || null,
-          created_by: user?.id || null, content_task_id: task.id,
-        } as any);
-      } else {
-        await supabase.from('social_media_deliveries').update({ status: socialStatus } as any).eq('content_task_id', task.id);
-      }
-    }
-
-    // Column-specific actions
-    if (newColumn === 'revisao') {
-      const client = clients.find(c => c.id === task.client_id);
-      await supabase.rpc('notify_role', {
-        _role: 'social_media',
-        _title: 'Vídeo para Revisão',
-        _message: `${task.title} (${client?.companyName || ''}) está pronto para revisão`,
-        _type: 'review',
-        _link: '/entregas-social',
-      });
-    }
-
-    if (newColumn === 'envio') {
-      // Mark approval sent
-      await supabase.from('content_tasks').update({
-        approval_sent_at: new Date().toISOString(),
-      } as any).eq('id', task.id);
-
-      // Auto-send WhatsApp approval message with 6h warning
-      try {
-        const whatsConfig = await getWhatsAppConfig();
-        if (whatsConfig?.integrationActive && whatsConfig?.autoVideoApproval) {
-          const client = clients.find(c => c.id === task.client_id);
-          if (client?.whatsapp) {
-            let msg = whatsConfig.msgVideoApproval
-              .replace('{nome_cliente}', client.companyName)
-              .replace('{link_video}', task.edited_video_link || 'Link não disponível')
-              .replace('{titulo}', task.title);
-            
-            // Append 6h approval warning
-            msg += '\n\n⏰ Você tem até *6 horas* para avaliar e aprovar o vídeo. Após esse prazo, ele será encaminhado para agendamento automaticamente.';
-            
-            const result = await sendWhatsAppMessage({
-              number: client.whatsapp,
-              message: msg,
-              clientId: client.id,
-              triggerType: 'auto_confirmation',
-            });
-
-            if (result.success) {
-              toast.success('📱 Link de aprovação enviado por WhatsApp com prazo de 6h!');
-            } else {
-              console.error('WhatsApp send error:', result.error);
-              toast.warning('Card enviado, mas não foi possível enviar WhatsApp');
-            }
-          } else {
-            toast.warning('Cliente sem WhatsApp cadastrado');
-          }
-        }
-      } catch (err) {
-        console.error('WhatsApp auto-send error:', err);
-      }
-    }
-
-    if (newColumn === 'agendamentos') {
-      // Mark as approved if not already
-      if (!task.approved_at) {
-        await supabase.from('content_tasks').update({
-          approved_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        } as any).eq('id', task.id);
-      }
-    }
+    const client = clients.find(c => c.id === task.client_id);
+    const ctx = buildSyncContext(task as any, {
+      userId: user?.id,
+      clientName: client?.companyName,
+      clientWhatsapp: client?.whatsapp,
+    });
+    await syncContentTaskColumnChange(newColumn, ctx);
   };
 
   // ─── APPROVE FROM REVISÃO ─────────────────────────────────

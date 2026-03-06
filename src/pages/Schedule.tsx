@@ -1260,7 +1260,7 @@ export default function Schedule() {
           {finishStep === 'scripts' ? (
             <>
               <p className="text-sm text-muted-foreground">
-                Selecione os roteiros que foram gravados. Os não selecionados retornarão automaticamente ao banco de roteiros pendentes.
+                Defina o status de cada roteiro. Os não marcados retornarão automaticamente ao banco de roteiros pendentes.
               </p>
               {finishRecScripts.length === 0 ? (
                 <div className="text-center py-6 text-muted-foreground">
@@ -1268,34 +1268,99 @@ export default function Schedule() {
                   <p className="text-sm">Nenhum roteiro planejado para esta sessão</p>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {finishRecScripts.map(script => (
-                    <div key={script.id} className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
-                      finishCompletedScripts.has(script.id) ? 'border-success/40 bg-success/5' : 'border-border hover:bg-muted/30'
-                    }`}>
-                      <Checkbox
-                        checked={finishCompletedScripts.has(script.id)}
-                        onCheckedChange={checked => {
-                          const next = new Set(finishCompletedScripts);
-                          checked ? next.add(script.id) : next.delete(script.id);
-                          setFinishCompletedScripts(next);
-                        }}
-                        className="mt-1"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-sm">{script.title}</p>
-                        <Badge variant="outline" className="text-[10px] mt-1">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                <div className="space-y-3">
+                  {finishRecScripts.map(script => {
+                    const isCompleted = finishCompletedScripts.has(script.id);
+                    const isRejected = finishRejectedScripts.has(script.id);
+                    const isAltered = finishAlteredScripts.has(script.id);
+                    const isVerbal = finishVerbalScripts.has(script.id);
+
+                    const setStatus = (status: 'completed' | 'rejected' | 'altered' | 'verbal' | null) => {
+                      setFinishCompletedScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                      setFinishRejectedScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                      setFinishAlteredScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                      setFinishVerbalScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                      if (status === 'completed') setFinishCompletedScripts(prev => new Set(prev).add(script.id));
+                      if (status === 'rejected') setFinishRejectedScripts(prev => new Set(prev).add(script.id));
+                      if (status === 'altered') setFinishAlteredScripts(prev => new Set(prev).add(script.id));
+                      if (status === 'verbal') setFinishVerbalScripts(prev => new Set(prev).add(script.id));
+                    };
+
+                    return (
+                      <div key={script.id} className={`p-3 rounded-lg border transition-colors ${
+                        isCompleted ? 'border-success/40 bg-success/5' :
+                        isRejected ? 'border-destructive/40 bg-destructive/5' :
+                        isAltered ? 'border-amber-500/40 bg-amber-500/5' :
+                        isVerbal ? 'border-blue-500/40 bg-blue-500/5' :
+                        'border-border hover:bg-muted/30'
+                      }`}>
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <p className="font-medium text-sm">{script.title}</p>
+                          <Badge variant="outline" className="text-[10px] ml-auto">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button onClick={() => setStatus(isCompleted ? null : 'completed')}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                              isCompleted ? 'bg-success/20 text-success border-success/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                            }`}>
+                            <Check size={12} /> Gravado
+                          </button>
+                          <button onClick={() => setStatus(isRejected ? null : 'rejected')}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                              isRejected ? 'bg-destructive/20 text-destructive border-destructive/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                            }`}>
+                            <ThumbsDown size={12} /> Não gostou
+                          </button>
+                          <button onClick={() => setStatus(isAltered ? null : 'altered')}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                              isAltered ? 'bg-amber-500/20 text-amber-600 border-amber-500/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                            }`}>
+                            <Pencil size={12} /> Alterado
+                          </button>
+                          <button onClick={() => setStatus(isVerbal ? null : 'verbal')}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                              isVerbal ? 'bg-blue-500/20 text-blue-600 border-blue-500/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                            }`}>
+                            <MessageCircle size={12} /> Verbal
+                          </button>
+                        </div>
+                        {isAltered && (
+                          <div className="mt-2">
+                            <label className="text-[11px] text-amber-600 font-medium mb-1 block">
+                              📝 O que mudou? (opcional)
+                            </label>
+                            <Textarea
+                              value={finishAlterationNotes[script.id] || ''}
+                              onChange={e => setFinishAlterationNotes(prev => ({ ...prev, [script.id]: e.target.value }))}
+                              placeholder="Descreva a ideia do vídeo e como o editor deve editar..."
+                              className="min-h-[60px] text-xs"
+                            />
+                          </div>
+                        )}
+                        {isVerbal && (
+                          <div className="mt-2">
+                            <label className="text-[11px] text-blue-600 font-medium mb-1 block">
+                              📝 Notas adicionais (opcional)
+                            </label>
+                            <Textarea
+                              value={finishAlterationNotes[script.id] || ''}
+                              onChange={e => setFinishAlterationNotes(prev => ({ ...prev, [script.id]: e.target.value }))}
+                              placeholder="Alguma observação extra para o editor..."
+                              className="min-h-[60px] text-xs"
+                            />
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               <div className="flex gap-2 mt-3">
                 <Button variant="outline" onClick={() => { setFinishRecOpen(false); setFinishRecordingState(null); }} className="flex-1">
                   Cancelar
                 </Button>
-                <Button onClick={handleGoToDriveStepSchedule} disabled={finishCompletedScripts.size === 0} className="flex-1 gap-1.5">
-                  Próximo ({finishCompletedScripts.size} roteiro{finishCompletedScripts.size !== 1 ? 's' : ''})
+                <Button onClick={handleGoToDriveStepSchedule} className="flex-1 gap-1.5">
+                  Próximo ({finishCompletedScripts.size + finishAlteredScripts.size + finishVerbalScripts.size} gravado{(finishCompletedScripts.size + finishAlteredScripts.size + finishVerbalScripts.size) !== 1 ? 's' : ''}{finishRejectedScripts.size > 0 ? ` · ${finishRejectedScripts.size} rejeitado${finishRejectedScripts.size !== 1 ? 's' : ''}` : ''})
                 </Button>
               </div>
             </>
@@ -1305,14 +1370,21 @@ export default function Schedule() {
                 Adicione o link da pasta do Google Drive para cada roteiro gravado. O editor terá <strong>2 dias úteis</strong> para editar.
               </p>
               <div className="space-y-3">
-                {Array.from(finishCompletedScripts).map(id => {
+                {Array.from(new Set([...finishCompletedScripts, ...finishAlteredScripts, ...finishVerbalScripts])).map(id => {
                   const s = scripts.find(s => s.id === id);
                   if (!s) return null;
+                  const isAlt = finishAlteredScripts.has(id);
+                  const isVerb = finishVerbalScripts.has(id);
                   return (
-                    <div key={id} className="p-4 rounded-xl bg-muted/30 border border-border">
-                      <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
-                        📁 {s.title}
-                      </p>
+                    <div key={id} className={`p-4 rounded-xl border ${
+                      isAlt ? 'bg-amber-500/5 border-amber-500/30' :
+                      isVerb ? 'bg-blue-500/5 border-blue-500/30' : 'bg-muted/30 border-border'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">📁 {s.title}</p>
+                        {isAlt && <Badge className="text-[9px] bg-amber-500/20 text-amber-600 border-amber-500/40">✏️ Alterado</Badge>}
+                        {isVerb && <Badge className="text-[9px] bg-blue-500/20 text-blue-600 border-blue-500/40">🗣️ Verbal</Badge>}
+                      </div>
                       <div className="flex items-center gap-2">
                         <Link size={16} className="text-muted-foreground shrink-0" />
                         <Input
@@ -1332,7 +1404,7 @@ export default function Schedule() {
                 </Button>
                 <Button 
                   onClick={confirmFinishRec} 
-                  disabled={Array.from(finishCompletedScripts).some(id => !finishDriveLinks[id]?.trim())}
+                  disabled={Array.from(new Set([...finishCompletedScripts, ...finishAlteredScripts, ...finishVerbalScripts])).some(id => !finishDriveLinks[id]?.trim())}
                   className="flex-1 gap-1.5 bg-success hover:bg-success/90 text-success-foreground"
                 >
                   <Check size={16} /> Finalizar e Enviar para Edição

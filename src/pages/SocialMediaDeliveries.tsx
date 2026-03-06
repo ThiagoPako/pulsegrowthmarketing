@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, Film, Palette, Image, Megaphone, Trash2, Edit, CheckCircle2, Clock, TrendingUp, CalendarClock, CalendarCheck, Send, Zap, ArrowLeft, Eye, MessageSquare, AlertTriangle, ExternalLink, Link2 } from 'lucide-react';
+import { Plus, Film, Palette, Image, Megaphone, Trash2, Edit, CheckCircle2, Clock, TrendingUp, CalendarClock, CalendarCheck, Send, Zap, ArrowLeft, Eye, MessageSquare, AlertTriangle, ExternalLink, Link2, Scissors, Flame } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import { sendWhatsAppMessage, getWhatsAppConfig } from '@/services/whatsappService';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isToday, isPast, parseISO } from 'date-fns';
@@ -513,6 +513,41 @@ export default function SocialMediaDeliveries() {
     };
   }, [selectedClientId, deliveries]);
 
+  // Editing queue tasks for the selected client
+  const [editingQueueTasks, setEditingQueueTasks] = useState<any[]>([]);
+  useEffect(() => {
+    if (!selectedClientId) { setEditingQueueTasks([]); return; }
+    supabase.from('content_tasks').select('*')
+      .eq('client_id', selectedClientId)
+      .eq('kanban_column', 'edicao')
+      .order('editing_priority', { ascending: false })
+      .order('position', { ascending: true })
+      .then(({ data }) => { if (data) setEditingQueueTasks(data); });
+  }, [selectedClientId, deliveries]);
+
+  const handleTogglePriorityFromQueue = async (taskId: string, currentPriority: boolean) => {
+    const newPriority = !currentPriority;
+    await supabase.from('content_tasks').update({
+      editing_priority: newPriority,
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', taskId);
+    if (newPriority) {
+      const task = editingQueueTasks.find(t => t.id === taskId);
+      const clientName = clients.find(c => c.id === task?.client_id)?.companyName || '';
+      await supabase.rpc('notify_role', {
+        _role: 'editor',
+        _title: '⚡ Vídeo Prioritário',
+        _message: `"${task?.title}" (${clientName}) foi marcado como prioridade na fila de edição`,
+        _type: 'priority',
+        _link: '/edicao/kanban',
+      });
+      toast.success('⚡ Marcado como prioridade!');
+    } else {
+      toast.success('Prioridade removida');
+    }
+    setEditingQueueTasks(prev => prev.map(t => t.id === taskId ? { ...t, editing_priority: newPriority } : t));
+  };
+
   if (loading) return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Carregando...</p></div>;
 
   // ─── CLIENT DETAIL VIEW ────────────────────────────────────
@@ -636,6 +671,12 @@ export default function SocialMediaDeliveries() {
             <TabsTrigger value="pipeline" className="gap-1.5">
               <TrendingUp size={14} /> Pipeline ({clientDeliveries.review.length + clientDeliveries.alteration.length + clientDeliveries.approval.length + clientDeliveries.pending.length + clientDeliveries.scheduled.length})
             </TabsTrigger>
+            <TabsTrigger value="edicao" className="gap-1.5">
+              <Scissors size={14} /> Fila de Edição
+              {editingQueueTasks.length > 0 && (
+                <Badge variant="outline" className="text-[9px] px-1.5 py-0 ml-1 bg-blue-500/10 text-blue-600 border-blue-500/30">{editingQueueTasks.length}</Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="revisao" className="gap-1.5">
               <Eye size={14} /> Revisão ({clientDeliveries.review.length})
             </TabsTrigger>
@@ -756,6 +797,57 @@ export default function SocialMediaDeliveries() {
                 </div>
               );
             })()}
+          </TabsContent>
+
+          {/* Fila de Edição */}
+          <TabsContent value="edicao" className="mt-4">
+            {editingQueueTasks.length === 0 ? (
+              <Card className="border-border"><CardContent className="py-12 text-center text-muted-foreground">
+                <Scissors size={32} className="mx-auto mb-2 opacity-40" />
+                Nenhum vídeo na fila de edição para este cliente.
+              </CardContent></Card>
+            ) : (
+              <div className="grid gap-3">
+                {editingQueueTasks.map(t => {
+                  const typeConf = getTypeConfig(t.content_type);
+                  return (
+                    <Card key={t.id} className={`border-border border-l-4 border-l-blue-500 ${t.editing_priority ? 'ring-1 ring-amber-500/40' : ''}`}>
+                      <CardContent className="p-4">
+                        {t.editing_priority && (
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-amber-600 dark:text-amber-400 mb-2">
+                            <Flame size={10} /> PRIORIDADE
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-sm text-foreground truncate">{t.title}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge className={`${typeConf.color} border-0 gap-1 text-[10px] px-1.5 py-0`}>
+                                <typeConf.icon size={10} /> {typeConf.label}
+                              </Badge>
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
+                                <Scissors size={9} className="mr-0.5" /> Aguardando edição
+                              </Badge>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant={t.editing_priority ? 'default' : 'outline'}
+                            className={`gap-1.5 h-8 ${t.editing_priority
+                              ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                              : 'text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700 dark:hover:bg-amber-900/20'
+                            }`}
+                            onClick={() => handleTogglePriorityFromQueue(t.id, t.editing_priority)}
+                          >
+                            <Zap size={14} /> {t.editing_priority ? 'Prioritário' : 'Prioridade'}
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
           </TabsContent>
 
           {/* Revisão */}

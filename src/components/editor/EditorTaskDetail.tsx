@@ -303,7 +303,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
             {/* Client + Meta */}
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
-                <ClientLogo client={client as any} size="sm" />
+                {client && <ClientLogo client={client as any} size="sm" />}
                 <span className="text-sm font-bold text-foreground">{client?.companyName || 'Cliente'}</span>
               </div>
               <Badge className={`${cfg.color} border-0 text-xs`}>

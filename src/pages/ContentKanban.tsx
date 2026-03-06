@@ -901,6 +901,14 @@ export default function ContentKanban() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Task Detail Sheet */}
+      <ContentTaskDetailSheet
+        task={detailTask}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        onRefresh={fetchTasks}
+      />
     </div>
   );
 }

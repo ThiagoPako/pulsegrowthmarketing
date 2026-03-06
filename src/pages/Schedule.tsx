@@ -92,6 +92,11 @@ export default function Schedule() {
   const [finishCompletedScripts, setFinishCompletedScripts] = useState<Set<string>>(new Set());
   const [finishStep, setFinishStep] = useState<'scripts' | 'drive'>('scripts');
   const [finishDriveLinks, setFinishDriveLinks] = useState<Record<string, string>>({});
+  // Script status tracking
+  const [finishRejectedScripts, setFinishRejectedScripts] = useState<Set<string>>(new Set());
+  const [finishAlteredScripts, setFinishAlteredScripts] = useState<Set<string>>(new Set());
+  const [finishVerbalScripts, setFinishVerbalScripts] = useState<Set<string>>(new Set());
+  const [finishAlterationNotes, setFinishAlterationNotes] = useState<Record<string, string>>({});
 
   const videomakers = users.filter(u => u.role === 'videomaker');
   const currentMonth = addMonths(new Date(), monthOffset);

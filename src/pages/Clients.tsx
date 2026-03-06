@@ -21,7 +21,7 @@ const CONTENT_TYPES: ContentType[] = ['reels', 'story', 'produto'];
 type PreferredShift = 'turnoA' | 'turnoB' | 'ambos';
 
 const emptyClient = (): Partial<Client> => ({
-  companyName: '', responsiblePerson: '', phone: '', whatsapp: '', color: CLIENT_COLORS[0].value,
+  companyName: '', responsiblePerson: '', phone: '', whatsapp: '', email: '', city: '', color: CLIENT_COLORS[0].value,
   fixedDay: 'segunda', fixedTime: '09:00',
   videomaker: '', backupTime: '14:00', backupDay: 'terca', extraDay: 'quarta',
   extraContentTypes: [], acceptsExtra: false, extraClientAppears: false,

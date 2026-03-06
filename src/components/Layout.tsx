@@ -70,6 +70,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
   const filteredCategories = navCategories
     .map(cat => ({
@@ -87,32 +88,47 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      {/* Icon sidebar */}
-      <aside className="hidden md:flex flex-col w-[72px] bg-sidebar border-r border-sidebar-border shrink-0">
-        <div className="p-3 flex justify-center border-b border-sidebar-border">
-          <img src={pulseLogo} alt="Pulse" className="w-10 h-10 rounded-lg object-cover" />
+      {/* Collapsible sidebar */}
+      <aside
+        className={`hidden md:flex flex-col bg-sidebar border-r border-sidebar-border shrink-0 transition-all duration-300 ease-in-out ${sidebarExpanded ? 'w-[210px]' : 'w-[60px]'}`}
+        onMouseEnter={() => setSidebarExpanded(true)}
+        onMouseLeave={() => setSidebarExpanded(false)}
+      >
+        <div className={`p-3 flex items-center border-b border-sidebar-border gap-2 ${sidebarExpanded ? 'px-4' : 'justify-center'}`}>
+          <img src={pulseLogo} alt="Pulse" className="w-8 h-8 rounded-lg object-cover shrink-0" />
+          {sidebarExpanded && (
+            <span className="font-display font-bold text-sm text-foreground whitespace-nowrap overflow-hidden">Pulse</span>
+          )}
         </div>
 
-        <nav className="flex-1 flex flex-col items-center gap-0.5 py-2 px-1.5 overflow-y-auto">
+        <nav className="flex-1 flex flex-col gap-0.5 py-2 px-1.5 overflow-y-auto">
           {filteredCategories.map((cat, catIdx) => (
             <div key={cat.label} className="w-full">
               {catIdx > 0 && (
                 <div className="my-1.5 mx-2 h-px bg-sidebar-border" />
               )}
-              <span className="text-[8px] uppercase tracking-wider text-muted-foreground/60 font-semibold px-2 mb-0.5 block">
-                {cat.label}
-              </span>
+              {sidebarExpanded && (
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold px-3 mb-1 block whitespace-nowrap overflow-hidden">
+                  {cat.label}
+                </span>
+              )}
               {cat.items.map(item => {
                 const active = location.pathname === item.path;
                 return (
                   <button
                     key={item.path}
                     onClick={() => navigate(item.path)}
-                    className={`nav-icon-btn w-full group ${active ? 'active' : ''}`}
-                    title={item.label}
+                    className={`w-full group flex items-center gap-2.5 rounded-xl transition-all duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-sm ${
+                      sidebarExpanded ? 'px-3 py-2' : 'flex-col px-2 py-2'
+                    } ${active ? 'bg-sidebar-accent text-primary shadow-sm' : 'text-sidebar-foreground'}`}
+                    title={!sidebarExpanded ? item.label : undefined}
                   >
-                    <item.icon size={18} strokeWidth={active ? 2.2 : 1.5} className="transition-transform duration-200 group-hover:scale-110" />
-                    <span className="text-[9px] font-medium leading-none">{item.label}</span>
+                    <item.icon size={18} strokeWidth={active ? 2.2 : 1.5} className="shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                    {sidebarExpanded ? (
+                      <span className="text-[13px] font-medium whitespace-nowrap overflow-hidden">{item.label}</span>
+                    ) : (
+                      <span className="text-[8px] font-medium leading-none">{item.label}</span>
+                    )}
                   </button>
                 );
               })}
@@ -120,21 +136,27 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
 
-        <div className="p-2 border-t border-sidebar-border flex flex-col items-center gap-2">
+        <div className={`p-2 border-t border-sidebar-border flex flex-col gap-2 ${sidebarExpanded ? 'items-stretch' : 'items-center'}`}>
           <ProfileDialog>
             <button
-              className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center transition-transform duration-200 hover:scale-110"
+              className={`flex items-center gap-2.5 rounded-xl transition-all duration-200 hover:bg-sidebar-accent ${sidebarExpanded ? 'px-3 py-2 w-full' : 'w-9 h-9 justify-center'} overflow-hidden`}
               title={currentUser?.displayName || currentUser?.name}
             >
-              {currentUser && <UserAvatar user={currentUser} />}
+              {currentUser && <UserAvatar user={currentUser} size="sm" />}
+              {sidebarExpanded && currentUser && (
+                <span className="text-xs font-medium text-foreground whitespace-nowrap overflow-hidden text-ellipsis">
+                  {currentUser.displayName || currentUser.name}
+                </span>
+              )}
             </button>
           </ProfileDialog>
           <button
             onClick={handleLogout}
-            className="nav-icon-btn w-full group"
+            className={`flex items-center gap-2.5 rounded-xl text-sidebar-foreground transition-all duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group ${sidebarExpanded ? 'px-3 py-2 w-full' : 'justify-center px-2 py-2'}`}
             title="Sair"
           >
-            <LogOut size={16} className="transition-transform duration-200 group-hover:scale-110" />
+            <LogOut size={16} className="shrink-0 transition-transform duration-200 group-hover:scale-110" />
+            {sidebarExpanded && <span className="text-[13px] font-medium whitespace-nowrap">Sair</span>}
           </button>
         </div>
       </aside>

@@ -1104,15 +1104,7 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
             )}
           </div>
 
-          {/* Client name */}
-          <div className="flex items-center justify-between gap-2 pr-8">
-            <h3 className="text-[13px] font-bold text-foreground leading-snug tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
-              {client?.companyName || 'Cliente'}
-            </h3>
-          </div>
-
-          {/* Title */}
-          <p className="text-[12px] text-foreground/70 leading-relaxed line-clamp-2">{task.title}</p>
+          {/* (client name + title moved to top of card) */}
 
           {/* Responsible - real-time mini banner */}
           {assignedUser && (

@@ -315,7 +315,17 @@ export default function Schedule() {
     if (changed && editForm.status !== 'cancelada' && hasConflict(editForm.videomakerId, editForm.date, editForm.startTime, editingRec.id)) {
       toast.error('Conflito de horário!'); return;
     }
-    updateRecording({ ...editingRec, ...editForm });
+    const updated = { ...editingRec, ...editForm };
+    updateRecording(updated);
+    
+    // If status changed to 'agendada', remove active recording entry
+    if (editForm.status === 'agendada' && editingRec.status !== 'agendada') {
+      const active = activeRecordings.find(a => a.recordingId === editingRec.id);
+      if (active) {
+        supabase.from('active_recordings').delete().eq('recording_id', editingRec.id).then(() => {});
+      }
+    }
+    
     toast.success('Gravação atualizada');
     setEditOpen(false);
     setEditingRec(null);

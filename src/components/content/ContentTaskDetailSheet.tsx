@@ -136,6 +136,10 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
     return history.find(h => keywords.some(k => h.action.toLowerCase().includes(k.toLowerCase())));
   };
 
+  // Get videomaker from linked recording
+  const linkedRecording = task.recording_id ? recordings.find(r => r.id === task.recording_id) : null;
+  const recordingVideomaker = linkedRecording ? users.find(u => u.id === linkedRecording.videomaker_id) : null;
+
   const captacaoEntry = findHistoryEntry(['captação', 'Captação', 'gravação', 'gravado']);
   const edicaoEntry = findHistoryEntry(['edição', 'Edição', 'editor']);
   const revisaoEntry = findHistoryEntry(['revisão', 'Revisão']);

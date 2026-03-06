@@ -1060,19 +1060,19 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
             </span>
             {/* Priority editing badge */}
             {task.editing_priority && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-200/60 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-red-100/80 text-red-700 border border-red-300/50 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800 shadow-sm">
                 ⚡ Prioridade
               </span>
             )}
             {/* Immediate alteration badge */}
             {task.immediate_alteration && task.kanban_column === 'alteracao' && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-red-100 text-red-800 border border-red-300/60 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700 animate-pulse">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-red-100 text-red-800 border border-red-300/50 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700 animate-pulse shadow-sm">
                 🚨 Imediato
               </span>
             )}
             {/* Altered tag */}
             {task.adjustment_notes && !task.immediate_alteration && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/60 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-amber-100/80 text-amber-700 border border-amber-300/50 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800 shadow-sm">
                 🔄 Alterado
               </span>
             )}

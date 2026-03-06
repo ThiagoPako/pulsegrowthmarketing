@@ -139,9 +139,19 @@ export default function EditorDashboard() {
     }));
   }, [completedTasks]);
 
-  // Filtered tasks for queue
-  const filteredTasks = useMemo(() => {
-    return tasks.filter(t => {
+  // Filtered tasks for editing queue (only edicao + alteracao)
+  const editingQueueTasks = useMemo(() => {
+    return tasks.filter(t => t.kanban_column === 'edicao' || t.kanban_column === 'alteracao');
+  }, [tasks]);
+
+  // Filtered tasks for review tab (revisao + envio)
+  const reviewTasks = useMemo(() => {
+    return tasks.filter(t => t.kanban_column === 'revisao' || t.kanban_column === 'envio');
+  }, [tasks]);
+
+  // Apply filters to editing queue
+  const filteredQueueTasks = useMemo(() => {
+    return editingQueueTasks.filter(t => {
       if (filterStatus !== 'all' && t.kanban_column !== filterStatus) return false;
       if (filterClient !== 'all' && t.client_id !== filterClient) return false;
       if (filterType !== 'all' && t.content_type !== filterType) return false;
@@ -152,10 +162,23 @@ export default function EditorDashboard() {
       }
       return true;
     });
-  }, [tasks, filterStatus, filterClient, filterType, searchQuery, clients]);
+  }, [editingQueueTasks, filterStatus, filterClient, filterType, searchQuery, clients]);
 
-  const sortedFiltered = [...filteredTasks].sort((a, b) => {
-    // Priority: overdue first, then by deadline
+  // Apply filters to review tasks
+  const filteredReviewTasks = useMemo(() => {
+    return reviewTasks.filter(t => {
+      if (filterClient !== 'all' && t.client_id !== filterClient) return false;
+      if (filterType !== 'all' && t.content_type !== filterType) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const client = clients.find((c: any) => c.id === t.client_id);
+        if (!t.title.toLowerCase().includes(q) && !(client?.companyName || '').toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  }, [reviewTasks, filterClient, filterType, searchQuery, clients]);
+
+  const sortedFiltered = [...filteredQueueTasks].sort((a, b) => {
     const aStatus = getDeadlineStatus(a.editing_deadline);
     const bStatus = getDeadlineStatus(b.editing_deadline);
     if (aStatus.variant === 'destructive' && bStatus.variant !== 'destructive') return -1;
@@ -222,14 +245,27 @@ export default function EditorDashboard() {
         </Button>
       </div>
 
-      <Tabs defaultValue="dashboard" className="space-y-4">
+      <Tabs defaultValue="queue" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="dashboard">📊 Desempenho</TabsTrigger>
-          <TabsTrigger value="queue">📋 Fila de Edição</TabsTrigger>
+          <TabsTrigger value="queue" className="gap-1.5">
+            <Scissors size={13} /> Fila de Edição
+            {editingQueueTasks.length > 0 && (
+              <Badge variant="destructive" className="text-[9px] px-1.5 py-0 ml-1">{editingQueueTasks.length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="review" className="gap-1.5">
+            <Eye size={13} /> Em Revisão
+            {reviewTasks.length > 0 && (
+              <Badge variant="outline" className="text-[9px] px-1.5 py-0 ml-1 bg-teal-500/10 text-teal-600 border-teal-500/30">{reviewTasks.length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="performance" className="gap-1.5">
+            <BarChart3 size={13} /> Desempenho
+          </TabsTrigger>
         </TabsList>
 
-        {/* DASHBOARD TAB */}
-        <TabsContent value="dashboard" className="space-y-4">
+        {/* PERFORMANCE TAB */}
+        <TabsContent value="performance" className="space-y-4">
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {stats.map((s, i) => (
@@ -365,9 +401,7 @@ export default function EditorDashboard() {
               <SelectContent>
                 <SelectItem value="all">Todos Status</SelectItem>
                 <SelectItem value="edicao">Aguardando edição</SelectItem>
-                <SelectItem value="revisao">Aguardando aprovação</SelectItem>
                 <SelectItem value="alteracao">Solicitado ajuste</SelectItem>
-                <SelectItem value="envio">Finalizado</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterType} onValueChange={setFilterType}>
@@ -407,6 +441,25 @@ export default function EditorDashboard() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {sortedFiltered.map((task, i) => (
+                <TaskCard key={task.id} task={task} clients={clients} index={i} onClick={() => openTaskDetail(task)} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* REVIEW TAB */}
+        <TabsContent value="review" className="space-y-4">
+          <p className="text-xs text-muted-foreground">{filteredReviewTasks.length} conteúdo{filteredReviewTasks.length !== 1 ? 's' : ''} em revisão ou finalizados</p>
+
+          {filteredReviewTasks.length === 0 ? (
+            <div className="bg-card border border-border rounded-xl p-8 text-center">
+              <Eye size={32} className="mx-auto mb-2 text-muted-foreground/40" />
+              <p className="text-muted-foreground">Nenhum conteúdo em revisão</p>
+              <p className="text-xs text-muted-foreground mt-1">Conteúdos enviados para aprovação aparecerão aqui</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filteredReviewTasks.map((task, i) => (
                 <TaskCard key={task.id} task={task} clients={clients} index={i} onClick={() => openTaskDetail(task)} />
               ))}
             </div>

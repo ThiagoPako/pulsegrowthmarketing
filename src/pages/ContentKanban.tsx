@@ -26,7 +26,7 @@ const KANBAN_COLUMNS = [
   { id: 'edicao', label: 'Edição de Vídeo', icon: '🎬', gradient: 'from-blue-400 to-blue-600' },
   { id: 'revisao', label: 'Revisão', icon: '👁', gradient: 'from-teal-400 to-emerald-600' },
   { id: 'alteracao', label: 'Alteração', icon: '✏️', gradient: 'from-amber-400 to-yellow-500' },
-  { id: 'envio', label: 'Enviar para Cliente', icon: '📤', gradient: 'from-emerald-400 to-green-600' },
+  { id: 'envio', label: 'Enviado p/ Cliente', icon: '📤', gradient: 'from-emerald-400 to-green-600' },
   { id: 'agendamentos', label: 'Agendamentos', icon: '📅', gradient: 'from-rose-400 to-red-500' },
   { id: 'acompanhamento', label: 'Acompanhamento', icon: '👀', gradient: 'from-rose-500 to-red-600' },
 ] as const;
@@ -56,6 +56,8 @@ interface ContentTask {
   drive_link: string | null;
   edited_video_link: string | null;
   adjustment_notes: string | null;
+  approved_at: string | null;
+  approval_sent_at: string | null;
   position: number;
   created_at: string;
   updated_at: string;
@@ -317,20 +319,38 @@ export default function ContentKanban() {
     if (newColumn === 'edicao' && task.script_id) {
       await supabase.from('scripts').update({ recorded: true } as any).eq('id', task.script_id);
     }
-    if (newColumn === 'revisao') {
+
+    // Map kanban columns to social media delivery statuses
+    const columnToSocialStatus: Record<string, string> = {
+      revisao: 'revisao',
+      alteracao: 'ajuste',
+      envio: 'aprovacao_cliente',
+      agendamentos: 'entregue',
+      acompanhamento: 'agendado',
+    };
+
+    const socialStatus = columnToSocialStatus[newColumn];
+
+    // For columns that have a social media counterpart, ensure a delivery record exists and is updated
+    if (socialStatus) {
       const existing = await supabase.from('social_media_deliveries')
         .select('id').eq('content_task_id', task.id).limit(1);
+
       if (!existing.data?.length) {
         await supabase.from('social_media_deliveries').insert({
           client_id: task.client_id, content_type: task.content_type,
           title: task.title, description: task.description || null,
-          status: 'revisao', delivered_at: format(new Date(), 'yyyy-MM-dd'),
+          status: socialStatus, delivered_at: format(new Date(), 'yyyy-MM-dd'),
           recording_id: task.recording_id || null, script_id: task.script_id || null,
           created_by: user?.id || null, content_task_id: task.id,
         } as any);
       } else {
-        await supabase.from('social_media_deliveries').update({ status: 'revisao' } as any).eq('content_task_id', task.id);
+        await supabase.from('social_media_deliveries').update({ status: socialStatus } as any).eq('content_task_id', task.id);
       }
+    }
+
+    // Column-specific actions
+    if (newColumn === 'revisao') {
       const client = clients.find(c => c.id === task.client_id);
       await supabase.rpc('notify_role', {
         _role: 'social_media',
@@ -340,21 +360,8 @@ export default function ContentKanban() {
         _link: '/entregas-social',
       });
     }
-    if (newColumn === 'envio') {
-      const existing = await supabase.from('social_media_deliveries')
-        .select('id').eq('content_task_id', task.id).limit(1);
-      if (!existing.data?.length) {
-        await supabase.from('social_media_deliveries').insert({
-          client_id: task.client_id, content_type: task.content_type,
-          title: task.title, description: task.description || null,
-          status: 'entregue', delivered_at: format(new Date(), 'yyyy-MM-dd'),
-          recording_id: task.recording_id || null, script_id: task.script_id || null,
-          created_by: user?.id || null, content_task_id: task.id,
-        } as any);
-      } else {
-        await supabase.from('social_media_deliveries').update({ status: 'entregue' } as any).eq('content_task_id', task.id);
-      }
 
+    if (newColumn === 'envio') {
       // Mark approval sent
       await supabase.from('content_tasks').update({
         approval_sent_at: new Date().toISOString(),
@@ -392,6 +399,16 @@ export default function ContentKanban() {
         console.error('WhatsApp auto-send error:', err);
       }
     }
+
+    if (newColumn === 'agendamentos') {
+      // Mark as approved if not already
+      if (!task.approved_at) {
+        await supabase.from('content_tasks').update({
+          approved_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        } as any).eq('id', task.id);
+      }
+    }
   };
 
   // ─── APPROVE FROM REVISÃO ─────────────────────────────────
@@ -403,7 +420,7 @@ export default function ContentKanban() {
     } as any).eq('id', task.id);
     if (error) { toast.error('Erro ao aprovar'); return; }
     await syncOnColumnChange(task, 'envio');
-    toast.success('✅ Conteúdo aprovado! Movido para Enviar ao Cliente');
+    toast.success('✅ Conteúdo aprovado! Movido para Enviado p/ Cliente');
     fetchTasks();
   };
 

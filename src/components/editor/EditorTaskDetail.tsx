@@ -583,7 +583,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
               )}
             </div>
           </div>
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );

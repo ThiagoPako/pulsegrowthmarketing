@@ -1005,6 +1005,14 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
           </div>
         )}
 
+        {/* Expand hint on hover */}
+        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10 pointer-events-none">
+          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-foreground/5 backdrop-blur-sm">
+            <Maximize2 size={10} className="text-muted-foreground" />
+            <span className="text-[9px] font-medium text-muted-foreground">Abrir</span>
+          </div>
+        </div>
+
         {/* Actions on hover */}
         <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
           <button onClick={e => { e.stopPropagation(); onEdit(); }} className="w-6 h-6 rounded-lg flex items-center justify-center bg-card/90 backdrop-blur text-muted-foreground hover:text-foreground hover:bg-accent border border-border/60 shadow-sm transition-colors">

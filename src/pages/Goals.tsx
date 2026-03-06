@@ -71,12 +71,41 @@ export default function Goals() {
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   const [form, setForm] = useState(emptyForm);
 
+  const syncRevenueGoals = useCallback(async (allGoals: Goal[]) => {
+    const revenueGoals = allGoals.filter(g => g.type === 'faturamento' && g.status === 'em_andamento');
+    if (revenueGoals.length === 0) return allGoals;
+
+    const { data: revenues } = await supabase
+      .from('revenues')
+      .select('amount, paid_at')
+      .eq('status', 'paga')
+      .not('paid_at', 'is', null);
+
+    if (!revenues) return allGoals;
+
+    const updated = [...allGoals];
+    for (const goal of revenueGoals) {
+      const total = revenues
+        .filter(r => r.paid_at && r.paid_at >= goal.start_date && r.paid_at <= goal.end_date)
+        .reduce((sum, r) => sum + Number(r.amount), 0);
+
+      if (total !== goal.current_value) {
+        await supabase.from('goals').update({ current_value: total, updated_at: new Date().toISOString() }).eq('id', goal.id);
+        const idx = updated.findIndex(g => g.id === goal.id);
+        if (idx >= 0) updated[idx] = { ...updated[idx], current_value: total };
+      }
+    }
+    return updated;
+  }, []);
+
   const fetchGoals = useCallback(async () => {
     const { data, error } = await supabase.from('goals').select('*').order('created_at', { ascending: false });
     if (error) { toast.error('Erro ao carregar metas'); return; }
-    setGoals((data as Goal[]) || []);
+    const allGoals = (data as Goal[]) || [];
+    const synced = await syncRevenueGoals(allGoals);
+    setGoals(synced);
     setLoading(false);
-  }, []);
+  }, [syncRevenueGoals]);
 
   useEffect(() => { fetchGoals(); }, [fetchGoals]);
 

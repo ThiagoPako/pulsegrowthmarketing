@@ -119,9 +119,10 @@ interface JourneyTimelineProps {
   users: Array<{ id: string; name: string; avatarUrl?: string | null }>;
   scripts: Script[];
   history: TaskHistory[];
+  recordings: Array<{ id: string; videomaker_id: string }>;
 }
 
-function JourneyTimeline({ currentColumn, task, users, scripts, history }: JourneyTimelineProps) {
+function JourneyTimeline({ currentColumn, task, users, scripts, history, recordings }: JourneyTimelineProps) {
   const activeIdx = getStageIndex(currentColumn);
   const isAlteracao = currentColumn === 'alteracao';
 
@@ -134,6 +135,10 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history }: Journ
   const findHistoryEntry = (keywords: string[]) => {
     return history.find(h => keywords.some(k => h.action.toLowerCase().includes(k.toLowerCase())));
   };
+
+  // Get videomaker from linked recording
+  const linkedRecording = task.recording_id ? recordings.find(r => r.id === task.recording_id) : null;
+  const recordingVideomaker = linkedRecording ? users.find(u => u.id === linkedRecording.videomaker_id) : null;
 
   const captacaoEntry = findHistoryEntry(['captação', 'Captação', 'gravação', 'gravado']);
   const edicaoEntry = findHistoryEntry(['edição', 'Edição', 'editor']);
@@ -158,7 +163,7 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history }: Journ
     },
     {
       ...JOURNEY_STAGES[1],
-      person: captacaoEntry ? getUserFromHistory(captacaoEntry) : null,
+      person: recordingVideomaker ? { name: recordingVideomaker.name, avatarUrl: recordingVideomaker.avatarUrl } : (captacaoEntry ? getUserFromHistory(captacaoEntry) : null),
       detail: task.scheduled_recording_date ? `Gravação: ${format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}${task.scheduled_recording_time ? ` às ${task.scheduled_recording_time}` : ''}` : null,
       date: captacaoEntry?.created_at || null,
     },
@@ -364,7 +369,7 @@ function getHistoryColor(action: string): string {
 }
 
 export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRefresh }: Props) {
-  const { clients, users, scripts } = useApp();
+  const { clients, users, scripts, recordings } = useApp();
   const { user } = useAuth();
   const [history, setHistory] = useState<TaskHistory[]>([]);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
@@ -672,7 +677,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
         <ScrollArea className="flex-1">
           <div className="px-5 py-4 space-y-4">
             {/* ─── JOURNEY TIMELINE ──────────────────────── */}
-            <JourneyTimeline currentColumn={task.kanban_column} task={task} users={users} scripts={scripts} history={history} />
+            <JourneyTimeline currentColumn={task.kanban_column} task={task} users={users} scripts={scripts} history={history} recordings={recordings.map(r => ({ id: r.id, videomaker_id: r.videomakerId }))} />
 
             {/* Deadlines */}
             {task.kanban_column === 'revisao' && renderDeadline(task.review_deadline, 'Prazo de Revisão')}

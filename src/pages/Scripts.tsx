@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useCallback } from 'react';
 import { highlightQuotes, highlightQuotesForPdf, cleanHtml } from '@/lib/highlightQuotes';
 import { supabase } from '@/integrations/supabase/client';
 import { useApp } from '@/contexts/AppContext';
+import { useAuth } from '@/hooks/useAuth';
 import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS, SCRIPT_CONTENT_FORMAT_LABELS } from '@/types';
 import type { Script, ScriptVideoType, ScriptPriority, ScriptContentFormat } from '@/types';
 import { useEndoClientes } from '@/hooks/useEndomarketing';
@@ -117,6 +118,7 @@ function RichEditor({ content, onChange }: { content: string; onChange: (html: s
 
 export default function Scripts() {
   const { clients, scripts, addScript, updateScript, deleteScript } = useApp();
+  const { user } = useAuth();
   const { clientes: endoClientes } = useEndoClientes();
   const [open, setOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
@@ -212,6 +214,7 @@ export default function Scripts() {
         kanban_column: 'ideias',
         script_id: scriptId,
         description: null,
+        created_by: user?.id || null,
       } as any);
       if (error) console.error('Auto content_task creation error:', error);
       

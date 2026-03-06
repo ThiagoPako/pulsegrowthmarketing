@@ -16,6 +16,14 @@ import UserAvatar from '@/components/UserAvatar';
 
 const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'fotografo'];
 
+const PARTNER_FUNCTIONS = [
+  { value: 'fotografo', label: 'Fotografia' },
+  { value: 'videomaker', label: 'Videomaker' },
+  { value: 'editor', label: 'Editor' },
+  { value: 'social_media', label: 'Social Media' },
+  { value: 'endomarketing', label: 'Endomarketing' },
+];
+
 interface TeamMember {
   id: string;
   name: string;
@@ -53,6 +61,8 @@ export default function Team() {
   const [resetting, setResetting] = useState(false);
 
   const [tab, setTab] = useState<'equipe' | 'parceiros'>('equipe');
+  const [partnerOpen, setPartnerOpen] = useState(false);
+  const [partnerCreateForm, setPartnerCreateForm] = useState({ name: '', email: '', password: '', serviceFunction: 'fotografo', companyName: '', fixedRate: 0, phone: '', notes: '' });
 
   const fetchMembers = async () => {
     const { data } = await supabase.from('profiles').select('*');
@@ -150,6 +160,36 @@ export default function Team() {
     }
   };
 
+  const handleSavePartner = async () => {
+    if (!partnerCreateForm.name || !partnerCreateForm.email || !partnerCreateForm.password) { toast.error('Preencha todos os campos'); return; }
+    if (partnerCreateForm.password.length < 6) { toast.error('Senha deve ter no mínimo 6 caracteres'); return; }
+
+    // Register with the selected functional role so they get proper system access
+    const { error } = await signUp(partnerCreateForm.email, partnerCreateForm.password, partnerCreateForm.name, partnerCreateForm.serviceFunction as AppRole);
+    if (error) { toast.error(error); return; }
+
+    // Create partner record after profile is created by trigger
+    setTimeout(async () => {
+      const { data: profile } = await supabase.from('profiles').select('id').eq('email', partnerCreateForm.email).single();
+      if (profile) {
+        await supabase.from('partners').insert({
+          user_id: profile.id,
+          company_name: partnerCreateForm.companyName || null,
+          service_function: PARTNER_FUNCTIONS.find(f => f.value === partnerCreateForm.serviceFunction)?.label || partnerCreateForm.serviceFunction,
+          fixed_rate: partnerCreateForm.fixedRate,
+          phone: partnerCreateForm.phone,
+          notes: partnerCreateForm.notes,
+        } as any);
+      }
+      fetchPartners();
+      fetchMembers();
+    }, 1500);
+
+    toast.success('Parceiro cadastrado com sucesso!');
+    setPartnerOpen(false);
+    setPartnerCreateForm({ name: '', email: '', password: '', serviceFunction: 'fotografo', companyName: '', fixedRate: 0, phone: '', notes: '' });
+  };
+
   const roleColors: Record<UserRole, string> = {
     admin: 'bg-primary/20 text-primary',
     videomaker: 'bg-info/20 text-info',
@@ -160,8 +200,9 @@ export default function Team() {
     fotografo: 'bg-pink-100 text-pink-700',
   };
 
-  const teamMembers = members.filter(m => m.role !== 'parceiro');
-  const partnerMembers = members.filter(m => m.role === 'parceiro');
+  const partnerUserIds = partners.map(p => p.user_id);
+  const teamMembers = members.filter(m => !partnerUserIds.includes(m.id));
+  const partnerMembers = members.filter(m => partnerUserIds.includes(m.id));
 
   const getPartnerInfo = (userId: string) => partners.find(p => p.user_id === userId);
 
@@ -226,13 +267,64 @@ export default function Team() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2">
-        <Button variant={tab === 'equipe' ? 'default' : 'outline'} size="sm" onClick={() => setTab('equipe')} className="gap-2">
-          <Users size={14} /> Equipe ({teamMembers.length})
-        </Button>
-        <Button variant={tab === 'parceiros' ? 'default' : 'outline'} size="sm" onClick={() => setTab('parceiros')} className="gap-2">
-          <Handshake size={14} /> Parceiros ({partnerMembers.length})
-        </Button>
+      <div className="flex items-center justify-between">
+        <div className="flex gap-2">
+          <Button variant={tab === 'equipe' ? 'default' : 'outline'} size="sm" onClick={() => setTab('equipe')} className="gap-2">
+            <Users size={14} /> Equipe ({teamMembers.length})
+          </Button>
+          <Button variant={tab === 'parceiros' ? 'default' : 'outline'} size="sm" onClick={() => setTab('parceiros')} className="gap-2">
+            <Handshake size={14} /> Parceiros ({partnerMembers.length})
+          </Button>
+        </div>
+        {tab === 'parceiros' && currentUser?.role === 'admin' && (
+          <Dialog open={partnerOpen} onOpenChange={setPartnerOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline" onClick={() => { setPartnerCreateForm({ name: '', email: '', password: '', serviceFunction: 'fotografo', companyName: '', fixedRate: 0, phone: '', notes: '' }); }}>
+                <Plus size={16} className="mr-2" /> Novo Parceiro
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
+              <DialogHeader><DialogTitle>Novo Parceiro</DialogTitle></DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-1"><Label>Nome</Label><Input value={partnerCreateForm.name} onChange={e => setPartnerCreateForm({ ...partnerCreateForm, name: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Email</Label><Input type="email" value={partnerCreateForm.email} onChange={e => setPartnerCreateForm({ ...partnerCreateForm, email: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Senha</Label><Input type="password" value={partnerCreateForm.password} onChange={e => setPartnerCreateForm({ ...partnerCreateForm, password: e.target.value })} placeholder="Mínimo 6 caracteres" /></div>
+                <div className="space-y-1">
+                  <Label>Função no Sistema</Label>
+                  <Select value={partnerCreateForm.serviceFunction} onValueChange={v => setPartnerCreateForm({ ...partnerCreateForm, serviceFunction: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {PARTNER_FUNCTIONS.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">O parceiro terá acesso ao sistema de acordo com esta função</p>
+                </div>
+                <div className="space-y-3 p-3 rounded-lg bg-muted/50 border border-border">
+                  <p className="text-sm font-semibold flex items-center gap-2"><Handshake size={16} /> Dados do Parceiro</p>
+                  <div className="space-y-1">
+                    <Label>Empresa (opcional)</Label>
+                    <Input value={partnerCreateForm.companyName} onChange={e => setPartnerCreateForm({ ...partnerCreateForm, companyName: e.target.value })} placeholder="Nome da empresa" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label>Valor por serviço (R$)</Label>
+                      <Input type="number" min={0} step={0.01} value={partnerCreateForm.fixedRate} onChange={e => setPartnerCreateForm({ ...partnerCreateForm, fixedRate: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Telefone</Label>
+                      <Input value={partnerCreateForm.phone} onChange={e => setPartnerCreateForm({ ...partnerCreateForm, phone: e.target.value })} placeholder="(00) 00000-0000" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Observações</Label>
+                    <Textarea value={partnerCreateForm.notes} onChange={e => setPartnerCreateForm({ ...partnerCreateForm, notes: e.target.value })} rows={2} />
+                  </div>
+                </div>
+                <Button onClick={handleSavePartner} className="w-full">Cadastrar Parceiro</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {/* Reset Password Dialog */}

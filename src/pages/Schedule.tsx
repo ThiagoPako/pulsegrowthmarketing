@@ -598,6 +598,7 @@ export default function Schedule() {
           editing_deadline: editingDeadline.toISOString(),
           script_alteration_type: altType,
           script_alteration_notes: altNotes,
+          created_by: currentUser?.id || null,
         } as any);
       }
     }

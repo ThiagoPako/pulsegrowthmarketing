@@ -213,6 +213,7 @@ export default function Scripts() {
         kanban_column: 'ideias',
         script_id: scriptId,
         description: null,
+        created_by: user?.id || null,
       } as any);
       if (error) console.error('Auto content_task creation error:', error);
       

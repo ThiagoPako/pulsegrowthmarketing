@@ -677,7 +677,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
         <ScrollArea className="flex-1">
           <div className="px-5 py-4 space-y-4">
             {/* ─── JOURNEY TIMELINE ──────────────────────── */}
-            <JourneyTimeline currentColumn={task.kanban_column} task={task} users={users} scripts={scripts} history={history} />
+            <JourneyTimeline currentColumn={task.kanban_column} task={task} users={users} scripts={scripts} history={history} recordings={recordings.map(r => ({ id: r.id, videomaker_id: r.videomakerId }))} />
 
             {/* Deadlines */}
             {task.kanban_column === 'revisao' && renderDeadline(task.review_deadline, 'Prazo de Revisão')}

@@ -5,9 +5,10 @@ import { DAY_LABELS } from '@/types';
 import { motion } from 'framer-motion';
 import {
   Video, Plus, XCircle, RefreshCw, TrendingUp, Calendar, Check,
-  ChevronLeft, ChevronRight, Clock, Users as UsersIcon, MessageSquare, Trophy, BarChart3
+  ChevronLeft, ChevronRight, Clock, Users as UsersIcon, MessageSquare, Trophy, BarChart3,
+  Clapperboard, Film
 } from 'lucide-react';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, addDays } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, addDays, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Progress } from '@/components/ui/progress';
 import { useNavigate } from 'react-router-dom';
@@ -16,6 +17,17 @@ import AgencyCapacityWidget from '@/components/AgencyCapacityWidget';
 import ClientLogo from '@/components/ClientLogo';
 import { getMessageStats } from '@/services/whatsappService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
+import { Badge } from '@/components/ui/badge';
+
+interface LiveEditorTask {
+  id: string;
+  title: string;
+  client_id: string;
+  assigned_to: string | null;
+  kanban_column: string;
+  editing_started_at: string | null;
+  content_type: string;
+}
 
 const SCORE_WEIGHTS = { reel: 10, criativo: 5, story: 3, arte: 2, extra: 8 };
 const BAR_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
@@ -27,10 +39,30 @@ export default function Dashboard() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [waStats, setWaStats] = useState({ total: 0, sent: 0, failed: 0 });
   const [deliveryRecords, setDeliveryRecords] = useState<any[]>([]);
+  const [liveEditorTasks, setLiveEditorTasks] = useState<LiveEditorTask[]>([]);
 
   useEffect(() => { getMessageStats().then(setWaStats); }, []);
   useEffect(() => {
     supabase.from('delivery_records').select('*').then(({ data }) => { if (data) setDeliveryRecords(data); });
+  }, []);
+
+  // Fetch editor tasks in active editing
+  useEffect(() => {
+    const fetchLiveTasks = async () => {
+      const { data } = await supabase
+        .from('content_tasks')
+        .select('id, title, client_id, assigned_to, kanban_column, editing_started_at, content_type')
+        .not('editing_started_at', 'is', null)
+        .in('kanban_column', ['em_edicao', 'revisao', 'alteracao']);
+      if (data) setLiveEditorTasks(data);
+    };
+    fetchLiveTasks();
+
+    const channel = supabase
+      .channel('live-editor-tasks')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'content_tasks' }, () => fetchLiveTasks())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const weekStart = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
@@ -160,6 +192,104 @@ export default function Dashboard() {
           </motion.div>
         ))}
       </div>
+
+      {/* ── LIVE ACTIVITY: Videomakers Gravando + Editores Editando ── */}
+      {(activeRecordings.length > 0 || liveEditorTasks.length > 0) && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-5 border-primary/20">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+            </span>
+            <h3 className="font-display font-semibold text-sm">Atividade em Tempo Real</h3>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Videomakers Recording */}
+            <div>
+              <div className="flex items-center gap-1.5 mb-3">
+                <Clapperboard size={14} className="text-red-500" />
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Gravando Agora</p>
+                <Badge variant="destructive" className="text-[10px] h-4 px-1.5 ml-1">{activeRecordings.length}</Badge>
+              </div>
+              {activeRecordings.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-3">Nenhum videomaker gravando</p>
+              ) : (
+                <div className="space-y-2">
+                  {activeRecordings.map(ar => {
+                    const vm = users.find(u => u.id === ar.videomarkerId);
+                    const client = clients.find(c => c.id === ar.clientId);
+                    const elapsed = ar.startedAt ? formatDistanceToNow(parseISO(ar.startedAt), { locale: ptBR, addSuffix: false }) : '';
+                    return (
+                      <div key={ar.recordingId} className="flex items-center gap-3 p-3 rounded-lg bg-red-500/5 border border-red-500/15">
+                        <div className="relative">
+                          {vm && <UserAvatar user={vm} size="sm" />}
+                          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-background animate-pulse" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{vm?.name || '—'}</p>
+                          <div className="flex items-center gap-1.5">
+                            {client && <ClientLogo client={client} size="sm" className="w-4 h-4" />}
+                            <p className="text-xs text-muted-foreground truncate">{client?.companyName || '—'}</p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <Badge variant="destructive" className="text-[10px] gap-1">
+                            <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" /> REC
+                          </Badge>
+                          <p className="text-[10px] text-muted-foreground mt-1">há {elapsed}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Editors Editing */}
+            <div>
+              <div className="flex items-center gap-1.5 mb-3">
+                <Film size={14} className="text-blue-500" />
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Editando Agora</p>
+                <Badge className="text-[10px] h-4 px-1.5 ml-1 bg-blue-500">{liveEditorTasks.length}</Badge>
+              </div>
+              {liveEditorTasks.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-3">Nenhum editor em atividade</p>
+              ) : (
+                <div className="space-y-2">
+                  {liveEditorTasks.map(task => {
+                    const editor = users.find(u => u.id === task.assigned_to);
+                    const client = clients.find(c => c.id === task.client_id);
+                    const elapsed = task.editing_started_at ? formatDistanceToNow(parseISO(task.editing_started_at), { locale: ptBR, addSuffix: false }) : '';
+                    const columnLabels: Record<string, string> = { em_edicao: 'Editando', revisao: 'Em Revisão', alteracao: 'Alteração' };
+                    return (
+                      <div key={task.id} className="flex items-center gap-3 p-3 rounded-lg bg-blue-500/5 border border-blue-500/15">
+                        <div className="relative">
+                          {editor && <UserAvatar user={editor} size="sm" />}
+                          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-blue-500 rounded-full border-2 border-background animate-pulse" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{editor?.name || 'Sem editor'}</p>
+                          <div className="flex items-center gap-1.5">
+                            {client && <ClientLogo client={client} size="sm" className="w-4 h-4" />}
+                            <p className="text-xs text-muted-foreground truncate">{task.title || client?.companyName || '—'}</p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <Badge className="text-[10px] bg-blue-500 gap-1">
+                            {columnLabels[task.kanban_column] || task.kanban_column}
+                          </Badge>
+                          <p className="text-[10px] text-muted-foreground mt-1">há {elapsed}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* ── ROW 2: Today Schedule + Videomaker Progress ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

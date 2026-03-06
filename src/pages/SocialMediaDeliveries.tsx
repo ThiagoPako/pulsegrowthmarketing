@@ -78,7 +78,7 @@ export default function SocialMediaDeliveries() {
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [schedulingItem, setSchedulingItem] = useState<SocialDelivery | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('pendentes');
+  const [activeTab, setActiveTab] = useState('revisao');
 
   // Form state
   const [formClientId, setFormClientId] = useState('');
@@ -155,15 +155,16 @@ export default function SocialMediaDeliveries() {
     const start = format(startOfMonth(now), 'yyyy-MM-dd');
     const end = format(endOfMonth(now), 'yyyy-MM-dd');
     const thisMonth = deliveries.filter(d => d.delivered_at >= start && d.delivered_at <= end);
-    const byClient: Record<string, { reels: number; criativo: number; story: number; arte: number; total: number; pendentes: number; agendados: number; postados: number }> = {};
+    const byClient: Record<string, { reels: number; criativo: number; story: number; arte: number; total: number; pendentes: number; agendados: number; postados: number; revisao: number }> = {};
     thisMonth.forEach(d => {
-      if (!byClient[d.client_id]) byClient[d.client_id] = { reels: 0, criativo: 0, story: 0, arte: 0, total: 0, pendentes: 0, agendados: 0, postados: 0 };
+      if (!byClient[d.client_id]) byClient[d.client_id] = { reels: 0, criativo: 0, story: 0, arte: 0, total: 0, pendentes: 0, agendados: 0, postados: 0, revisao: 0 };
       byClient[d.client_id].total++;
       if (d.content_type === 'reels') byClient[d.client_id].reels++;
       if (d.content_type === 'criativo') byClient[d.client_id].criativo++;
       if (d.content_type === 'story') byClient[d.client_id].story++;
       if (d.content_type === 'arte') byClient[d.client_id].arte++;
-      if (d.status === 'entregue' || d.status === 'revisao') byClient[d.client_id].pendentes++;
+      if (d.status === 'revisao') byClient[d.client_id].revisao++;
+      if (d.status === 'entregue') byClient[d.client_id].pendentes++;
       if (d.status === 'agendado') byClient[d.client_id].agendados++;
       if (d.status === 'postado') byClient[d.client_id].postados++;
     });
@@ -399,7 +400,8 @@ export default function SocialMediaDeliveries() {
     const thisMonth = deliveries.filter(d => d.delivered_at >= start && d.delivered_at <= end);
     return {
       total: thisMonth.length,
-      pendentes: thisMonth.filter(d => d.status === 'entregue' || d.status === 'revisao' || d.status === 'aprovacao_cliente').length,
+      revisao: thisMonth.filter(d => d.status === 'revisao' || d.status === 'aprovacao_cliente').length,
+      pendentes: thisMonth.filter(d => d.status === 'entregue').length,
       agendados: thisMonth.filter(d => d.status === 'agendado').length,
       postados: thisMonth.filter(d => d.status === 'postado').length,
     };
@@ -409,7 +411,7 @@ export default function SocialMediaDeliveries() {
   const clientsWithData = useMemo(() => {
     return clients
       .map(c => {
-        const stats = monthlyStats[c.id] || { reels: 0, criativo: 0, story: 0, arte: 0, total: 0, pendentes: 0, agendados: 0, postados: 0 };
+        const stats = monthlyStats[c.id] || { reels: 0, criativo: 0, story: 0, arte: 0, total: 0, pendentes: 0, agendados: 0, postados: 0, revisao: 0 };
         const plan = getClientPlanGoals(c.id);
         const weeklyStories = weeklyStoriesMap[c.id] || 0;
         return { client: c, stats, plan, weeklyStories };
@@ -437,7 +439,7 @@ export default function SocialMediaDeliveries() {
   // ─── CLIENT DETAIL VIEW ────────────────────────────────────
   if (selectedClientId && selectedClient) {
     const plan = getClientPlanGoals(selectedClientId);
-    const stats = monthlyStats[selectedClientId] || { reels: 0, criativo: 0, story: 0, arte: 0, total: 0, pendentes: 0, agendados: 0, postados: 0 };
+    const stats = monthlyStats[selectedClientId] || { reels: 0, criativo: 0, story: 0, arte: 0, total: 0, pendentes: 0, agendados: 0, postados: 0, revisao: 0 };
     const weekStories = weeklyStoriesMap[selectedClientId] || 0;
     const storyGoal = selectedClient.weeklyStories || 0;
 
@@ -451,7 +453,7 @@ export default function SocialMediaDeliveries() {
       <div className="space-y-5">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => { setSelectedClientId(null); setActiveTab('pendentes'); }}>
+          <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => { setSelectedClientId(null); setActiveTab('revisao'); }}>
             <ArrowLeft size={18} />
           </Button>
           <ClientLogo client={selectedClient} size="lg" />
@@ -552,16 +554,12 @@ export default function SocialMediaDeliveries() {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="flex-wrap">
-            {clientDeliveries.review.length > 0 && (
-              <TabsTrigger value="revisao" className="gap-1.5">
-                <Eye size={14} /> Revisão ({clientDeliveries.review.length})
-              </TabsTrigger>
-            )}
-            {clientDeliveries.approval.length > 0 && (
-              <TabsTrigger value="aprovacao" className="gap-1.5">
-                <MessageSquare size={14} /> Aprovação ({clientDeliveries.approval.length})
-              </TabsTrigger>
-            )}
+            <TabsTrigger value="revisao" className="gap-1.5">
+              <Eye size={14} /> Revisão ({clientDeliveries.review.length})
+            </TabsTrigger>
+            <TabsTrigger value="aprovacao" className="gap-1.5">
+              <MessageSquare size={14} /> Aprovação ({clientDeliveries.approval.length})
+            </TabsTrigger>
             <TabsTrigger value="pendentes" className="gap-1.5">
               <Clock size={14} /> Prontos ({clientDeliveries.pending.length})
             </TabsTrigger>
@@ -817,9 +815,10 @@ export default function SocialMediaDeliveries() {
       </div>
 
       {/* Global summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
           { label: 'Total Mês', value: totalThisMonth.total, icon: TrendingUp, color: 'text-foreground' },
+          { label: 'Em Revisão', value: totalThisMonth.revisao, icon: Eye, color: 'text-orange-600' },
           { label: 'Pendentes', value: totalThisMonth.pendentes, icon: Clock, color: 'text-yellow-600' },
           { label: 'Agendados', value: totalThisMonth.agendados, icon: CalendarClock, color: 'text-blue-600' },
           { label: 'Postados', value: totalThisMonth.postados, icon: CheckCircle2, color: 'text-green-600' },
@@ -853,7 +852,7 @@ export default function SocialMediaDeliveries() {
               <Card
                 key={client.id}
                 className="border-border hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group"
-                onClick={() => { setSelectedClientId(client.id); setActiveTab('pendentes'); }}
+                onClick={() => { setSelectedClientId(client.id); setActiveTab('revisao'); }}
               >
                 <CardContent className="p-5">
                   <div className="flex items-start gap-3 mb-4">
@@ -868,7 +867,13 @@ export default function SocialMediaDeliveries() {
                   </div>
 
                   {/* Content counters */}
-                  <div className="grid grid-cols-3 gap-2 mb-3">
+                  <div className="grid grid-cols-4 gap-2 mb-3">
+                    {stats.revisao > 0 && (
+                      <div className="text-center p-2 rounded-md bg-orange-50 dark:bg-orange-900/10">
+                        <p className="text-lg font-bold text-orange-600">{stats.revisao}</p>
+                        <p className="text-[10px] text-muted-foreground">Revisão</p>
+                      </div>
+                    )}
                     <div className="text-center p-2 rounded-md bg-yellow-50 dark:bg-yellow-900/10">
                       <p className="text-lg font-bold text-yellow-600">{stats.pendentes}</p>
                       <p className="text-[10px] text-muted-foreground">Pendentes</p>

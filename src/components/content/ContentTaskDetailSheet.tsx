@@ -322,7 +322,7 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history }: Journ
                 {/* Person */}
                 {stage.person && (
                   <div className="flex items-center gap-2 mt-1.5">
-                    <UserAvatar user={{ name: stage.person.name, avatarUrl: stage.person.avatarUrl || undefined }} size="xs" />
+                    <UserAvatar user={{ name: stage.person.name, avatarUrl: stage.person.avatarUrl || undefined }} size="sm" />
                     <span className="text-xs font-medium text-foreground/80">{stage.person.name}</span>
                   </div>
                 )}

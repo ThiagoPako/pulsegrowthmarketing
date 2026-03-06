@@ -427,9 +427,21 @@ export default function EditorKanban() {
     fetchTasks();
   };
 
-  const openScript = (scriptId: string) => {
+  const openScript = async (scriptId: string) => {
     const script = scripts.find(s => s.id === scriptId);
-    if (script) { setViewingScript(script); setScriptDialogOpen(true); }
+    if (script) { setViewingScript(script); setScriptDialogOpen(true); return; }
+    // Fallback: fetch directly from DB (script may have been marked as recorded)
+    try {
+      const { data, error } = await supabase.from('scripts').select('*').eq('id', scriptId).single();
+      if (error || !data) {
+        toast.error('Roteiro não encontrado. Pode ter sido removido.');
+        return;
+      }
+      setViewingScript({ id: data.id, title: data.title, content: data.content, videoType: data.video_type, contentFormat: data.content_format });
+      setScriptDialogOpen(true);
+    } catch {
+      toast.error('Erro ao carregar roteiro.');
+    }
   };
 
   if (loading) return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Carregando...</p></div>;

@@ -77,11 +77,26 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   const [saving, setSaving] = useState(false);
   const [videomakerName, setVideomakerName] = useState<string | null>(null);
   const [videomakerAvatar, setVideomakerAvatar] = useState<string | null>(null);
+  const [fetchedScript, setFetchedScript] = useState<any>(null);
 
   const client = clients.find(c => c.id === task.client_id);
-  const script = task.script_id ? scripts.find(s => s.id === task.script_id) : null;
+  const contextScript = task.script_id ? scripts.find(s => s.id === task.script_id) : null;
+  const script = contextScript || fetchedScript;
   const deadline = getDeadlineStatus(task.editing_deadline);
   const cfg = getTypeConfig(task.content_type);
+
+  // Fetch script from DB if not found in context
+  useEffect(() => {
+    if (!open || !task.script_id || contextScript) { setFetchedScript(null); return; }
+    (async () => {
+      try {
+        const { data } = await supabase.from('scripts').select('*').eq('id', task.script_id!).single();
+        if (data) {
+          setFetchedScript({ id: data.id, title: data.title, content: data.content, videoType: data.video_type, contentFormat: data.content_format });
+        }
+      } catch { /* script may have been deleted */ }
+    })();
+  }, [open, task.script_id, contextScript]);
 
   // Fetch videomaker info from recording
   useEffect(() => {

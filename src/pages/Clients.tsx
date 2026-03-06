@@ -49,8 +49,19 @@ interface SlotInfo {
   freeSlots: number;
 }
 
+interface SocialAccountState {
+  instagram: { connected: boolean; accountName: string; username: string; pageId: string; businessId: string };
+  facebook: { connected: boolean; accountName: string; pageId: string };
+}
+
+const emptySocialAccounts = (): SocialAccountState => ({
+  instagram: { connected: false, accountName: '', username: '', pageId: '', businessId: '' },
+  facebook: { connected: false, accountName: '', pageId: '' },
+});
+
 const STEP_LABELS = [
-  { icon: User, label: 'Dados do Cliente' },
+  { icon: User, label: 'Dados da Empresa' },
+  { icon: Globe, label: 'Redes Sociais' },
   { icon: Video, label: 'Agenda & Gravação' },
   { icon: Target, label: 'Metas Semanais' },
   { icon: DollarSign, label: 'Financeiro' },

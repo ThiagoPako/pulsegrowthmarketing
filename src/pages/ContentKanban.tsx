@@ -734,14 +734,15 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
             </div>
             <p className="text-[11px] font-semibold text-foreground pl-4 -mt-1 line-clamp-2">{task.title}</p>
 
-            {/* RESPONSÁVEL */}
+            {/* RESPONSÁVEL com avatar */}
             {assignedUser && (
-              <>
-                <div className="flex items-start gap-1.5">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 shrink-0 mt-0.5">👤 Responsável</span>
+              <div className="flex items-center gap-2 mt-1.5 px-2 py-1.5 rounded-md bg-accent/40 border border-border/50">
+                <UserAvatar user={{ name: assignedUser.name, avatarUrl: assignedUser.avatarUrl }} size="sm" className="shrink-0" />
+                <div className="min-w-0">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 block leading-none">Responsável</span>
+                  <span className="text-[11px] font-semibold text-foreground truncate block">{assignedUser.name}</span>
                 </div>
-                <p className="text-[11px] text-foreground/80 pl-4 -mt-1">{assignedUser.name}</p>
-              </>
+              </div>
             )}
 
             {/* DATA DO POST (prominent in acompanhamento) */}

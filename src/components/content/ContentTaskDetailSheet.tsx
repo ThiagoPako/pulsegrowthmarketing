@@ -119,9 +119,10 @@ interface JourneyTimelineProps {
   users: Array<{ id: string; name: string; avatarUrl?: string | null }>;
   scripts: Script[];
   history: TaskHistory[];
+  recordings: Array<{ id: string; videomaker_id: string }>;
 }
 
-function JourneyTimeline({ currentColumn, task, users, scripts, history }: JourneyTimelineProps) {
+function JourneyTimeline({ currentColumn, task, users, scripts, history, recordings }: JourneyTimelineProps) {
   const activeIdx = getStageIndex(currentColumn);
   const isAlteracao = currentColumn === 'alteracao';
 

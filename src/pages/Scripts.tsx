@@ -349,7 +349,7 @@ export default function Scripts() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filteredScripts.map(script => (
-            <div key={script.id} className="glass-card p-4 flex flex-col gap-3"
+            <div key={script.id} className={`glass-card p-4 flex flex-col gap-3 transition-opacity ${script.recorded ? 'opacity-50 grayscale-[30%]' : ''}`}
               style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${getClientColor(script.clientId)})` }}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">

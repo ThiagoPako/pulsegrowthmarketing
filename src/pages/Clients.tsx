@@ -284,6 +284,8 @@ export default function Clients() {
         payment_method: paymentMethod,
         status: 'ativo',
       } as any, { onConflict: 'client_id' });
+      // Save social accounts
+      await saveSocialAccounts(editing.id);
       toast.success('Cliente atualizado');
     } else {
       const clientId = crypto.randomUUID();
@@ -303,6 +305,8 @@ export default function Clients() {
         payment_method: paymentMethod,
         status: 'ativo',
       } as any);
+      // Save social accounts
+      await saveSocialAccounts(clientId);
       const count = await generateScheduleForClient(newClient);
       if (count > 0) {
         toast.success(`Cliente cadastrado — ${count} gravação(ões) criada(s) na agenda`);
@@ -311,6 +315,45 @@ export default function Clients() {
       }
     }
     setOpen(false);
+  };
+
+  const saveSocialAccounts = async (clientId: string) => {
+    // Delete existing social accounts for this client
+    await supabase.from('social_accounts').delete().eq('client_id', clientId);
+    
+    const accounts = [];
+    if (socialAccounts.instagram.connected) {
+      accounts.push({
+        client_id: clientId,
+        platform: 'instagram',
+        facebook_page_id: socialAccounts.instagram.pageId || null,
+        instagram_business_id: socialAccounts.instagram.businessId || null,
+        account_name: socialAccounts.instagram.username || socialAccounts.instagram.accountName,
+        status: 'connected',
+      });
+    }
+    if (socialAccounts.facebook.connected) {
+      accounts.push({
+        client_id: clientId,
+        platform: 'facebook',
+        facebook_page_id: socialAccounts.facebook.pageId || null,
+        account_name: socialAccounts.facebook.accountName,
+        status: 'connected',
+      });
+    }
+    if (accounts.length > 0) {
+      await supabase.from('social_accounts').insert(accounts as any);
+      // Log the connection
+      for (const acc of accounts) {
+        await supabase.from('integration_logs').insert({
+          client_id: clientId,
+          platform: acc.platform,
+          action: 'connect',
+          status: 'success',
+          message: `Conta ${acc.platform} conectada: ${acc.account_name}`,
+        } as any);
+      }
+    }
   };
 
   const handleDelete = (id: string) => {

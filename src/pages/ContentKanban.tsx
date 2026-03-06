@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
+import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import { format } from 'date-fns';
@@ -636,6 +636,7 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
   const clientColor = client?.color || '217 91% 60%';
 
   const isCaptacao = task.kanban_column === 'captacao';
+  const isRevisao = task.kanban_column === 'revisao' || task.kanban_column === 'alteracao';
   const isAcompanhamento = task.kanban_column === 'acompanhamento';
   const isOverdue = isAcompanhamento && task.scheduled_recording_date && 
     new Date(task.scheduled_recording_date + 'T23:59:59') < new Date();
@@ -782,7 +783,21 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
             </button>
           )}
 
-          {/* Confirm posted button */}
+          {/* Watch video button (revisão/alteração) */}
+          {isRevisao && task.edited_video_link && (
+            <a
+              href={task.edited_video_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 transition-colors w-full text-left group/video"
+            >
+              <Film size={11} className="text-teal-600 shrink-0" />
+              <span className="text-[10px] font-medium text-teal-700 truncate flex-1">Assistir Vídeo</span>
+              <ExternalLink size={10} className="text-teal-500/60 group-hover/video:text-teal-600 transition-colors shrink-0" />
+            </a>
+          )}
+
           {isOverdue && onConfirmPosted && (
             <button
               onClick={e => { e.stopPropagation(); onConfirmPosted(); }}

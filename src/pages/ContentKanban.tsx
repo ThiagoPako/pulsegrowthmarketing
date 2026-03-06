@@ -612,6 +612,7 @@ export default function ContentKanban() {
                         onDragStart={e => handleDragStart(e, task)}
                         onEdit={() => openEdit(task)}
                         onDelete={() => handleDelete(task.id)}
+                        onCardClick={() => { setDetailTask(task); setDetailOpen(true); }}
                         onConfirmPosted={task.kanban_column === 'acompanhamento' ? () => handleConfirmPosted(task) : undefined}
                         onApprove={task.kanban_column === 'revisao' ? () => handleApproveTask(task) : undefined}
                         onRequestAdjustments={task.kanban_column === 'revisao' ? () => openAdjustmentDialog(task) : undefined}

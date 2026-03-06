@@ -193,39 +193,17 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
     setSaving(true);
     await supabase.from('content_tasks').update({
       kanban_column: 'revisao',
-      approval_sent_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq('id', task.id);
 
-    const existing = await supabase.from('social_media_deliveries')
-      .select('id').eq('content_task_id', task.id).limit(1);
-    if (!existing.data?.length) {
-      await supabase.from('social_media_deliveries').insert({
-        client_id: task.client_id,
-        content_type: task.content_type,
-        title: task.title,
-        description: task.description || null,
-        status: 'revisao',
-        delivered_at: format(new Date(), 'yyyy-MM-dd'),
-        recording_id: task.recording_id || null,
-        script_id: task.script_id || null,
-        created_by: user?.id || null,
-        content_task_id: task.id,
-      } as any);
-    } else {
-      await supabase.from('social_media_deliveries')
-        .update({ status: 'revisao' } as any)
-        .eq('content_task_id', task.id);
-    }
-
+    // Use shared sync
     const cl = clients.find(c => c.id === task.client_id);
-    await supabase.rpc('notify_role', {
-      _role: 'social_media',
-      _title: 'Vídeo para Revisão',
-      _message: `${task.title} (${cl?.companyName || ''}) está pronto para revisão`,
-      _type: 'review',
-      _link: '/entregas-social',
+    const ctx = buildSyncContext({ ...task, edited_video_link: currentLink } as any, {
+      userId: user?.id,
+      clientName: cl?.companyName,
+      clientWhatsapp: (cl as any)?.whatsapp,
     });
+    await syncContentTaskColumnChange('revisao', ctx);
 
     await logAction('Enviado para aprovação');
     toast.success('Enviado para aprovação!');
@@ -241,17 +219,16 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
       approved_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }).eq('id', task.id);
-    const existing = await supabase.from('social_media_deliveries')
-      .select('id').eq('title', task.title).eq('client_id', task.client_id).limit(1);
-    if (!existing.data?.length) {
-      await supabase.from('social_media_deliveries').insert({
-        client_id: task.client_id, content_type: task.content_type,
-        title: task.title, description: task.description || null,
-        status: 'entregue', delivered_at: format(new Date(), 'yyyy-MM-dd'),
-        script_id: task.script_id || null, recording_id: task.recording_id || null,
-        created_by: user?.id || null,
-      } as any);
-    }
+
+    // Use shared sync
+    const cl = clients.find(c => c.id === task.client_id);
+    const ctx = buildSyncContext({ ...task, approved_at: new Date().toISOString() } as any, {
+      userId: user?.id,
+      clientName: cl?.companyName,
+      clientWhatsapp: (cl as any)?.whatsapp,
+    });
+    await syncContentTaskColumnChange('envio', ctx);
+
     await logAction('Vídeo finalizado');
     toast.success('Vídeo finalizado!');
     onRefresh();

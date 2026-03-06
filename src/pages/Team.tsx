@@ -410,25 +410,22 @@ export default function Team() {
                       )}
                     </div>
                   </div>
-                    <div className="flex items-center gap-3 text-right">
-                      {info && (
-                        <div>
-                          <p className="text-sm font-bold">R$ {Number(info.fixed_rate).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                          <p className="text-[10px] text-muted-foreground">por serviço</p>
-                        </div>
-                      )}
-                      {currentUser?.role === 'admin' && (
-                        <>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Redefinir senha" onClick={() => { setResetTarget(u); setResetOpen(true); }}>
-                            <KeyRound size={16} />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Excluir parceiro" onClick={() => handleDeleteMember(u)}>
-                            <Trash2 size={16} />
-                          </Button>
-                        </>
-                      )}
+                  {info && (
+                    <div className="mt-3 text-center">
+                      <p className="text-lg font-bold text-foreground">R$ {Number(info.fixed_rate).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                      <p className="text-[11px] text-muted-foreground">por serviço</p>
                     </div>
-                  </div>
+                  )}
+                  {currentUser?.role === 'admin' && (
+                    <div className="flex items-center justify-center gap-2 mt-3">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Redefinir senha" onClick={() => { setResetTarget(u); setResetOpen(true); }}>
+                        <KeyRound size={16} />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Excluir parceiro" onClick={() => handleDeleteMember(u)}>
+                        <Trash2 size={16} />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               );
             })}

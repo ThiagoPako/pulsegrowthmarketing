@@ -24,7 +24,7 @@ export default function UserAvatar({ user, size = 'md', className = '' }: UserAv
   return (
     <Avatar className={`${sizeClasses[size]} ${className}`}>
       {user.avatarUrl ? <AvatarImage src={user.avatarUrl} alt={user.name} /> : null}
-      <AvatarFallback className="bg-primary text-primary-foreground font-bold">
+      <AvatarFallback className="bg-primary/90 text-primary-foreground font-bold tracking-wide">
         {initials}
       </AvatarFallback>
     </Avatar>

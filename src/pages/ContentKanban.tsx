@@ -36,10 +36,10 @@ const KANBAN_COLUMNS = [
 type KanbanColumnId = typeof KANBAN_COLUMNS[number]['id'];
 
 const CONTENT_TYPES = [
-  { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-700 bg-blue-100/80 border border-blue-300/50 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800 shadow-sm' },
-  { value: 'criativo', label: 'Criativos', icon: Megaphone, color: 'text-purple-700 bg-purple-100/80 border border-purple-300/50 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800 shadow-sm' },
-  { value: 'story', label: 'Story', icon: Image, color: 'text-pink-700 bg-pink-100/80 border border-pink-300/50 dark:bg-pink-900/30 dark:text-pink-400 dark:border-pink-800 shadow-sm' },
-  { value: 'arte', label: 'Arte', icon: Palette, color: 'text-amber-700 bg-amber-100/80 border border-amber-300/50 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800 shadow-sm' },
+  { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-700 bg-blue-50 border border-blue-200/60 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800' },
+  { value: 'criativo', label: 'Criativos', icon: Megaphone, color: 'text-purple-700 bg-purple-50 border border-purple-200/60 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800' },
+  { value: 'story', label: 'Story', icon: Image, color: 'text-pink-700 bg-pink-50 border border-pink-200/60 dark:bg-pink-900/30 dark:text-pink-400 dark:border-pink-800' },
+  { value: 'arte', label: 'Arte', icon: Palette, color: 'text-amber-700 bg-amber-50 border border-amber-200/60 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800' },
 ];
 
 interface ContentTask {
@@ -583,7 +583,7 @@ export default function ContentKanban() {
             return (
               <div
                 key={col.id}
-                className={`flex flex-col w-[290px] shrink-0 rounded-2xl transition-all duration-200 ${
+                className={`flex flex-col w-[270px] shrink-0 rounded-2xl transition-all duration-200 ${
                   isDragOver ? 'ring-2 ring-primary/40 bg-accent/20 scale-[1.01]' : 'bg-muted/10'
                 }`}
                 onDragOver={e => handleDragOver(e, col.id)}
@@ -1025,54 +1025,27 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
         </div>
 
         <div className="p-3 space-y-2.5">
-          {/* Client logo + name row */}
-          <div className="flex items-center gap-2.5 pr-8">
-            {client && (
-              <div className="shrink-0">
-                {client.logoUrl ? (
-                  <img src={client.logoUrl} alt={client.companyName} className="w-10 h-10 rounded-xl object-cover border border-border shadow-sm" />
-                ) : (
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 shadow-sm"
-                    style={{
-                      backgroundColor: `hsl(${client.color || '220 10% 50%'} / 0.15)`,
-                      color: `hsl(${client.color || '220 10% 50%'})`,
-                    }}
-                  >
-                    {client.companyName.substring(0, 2).toUpperCase()}
-                  </div>
-                )}
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <h3 className="text-[13px] font-bold text-foreground leading-snug tracking-tight truncate" style={{ fontFamily: 'var(--font-display)' }}>
-                {client?.companyName || 'Cliente'}
-              </h3>
-              <p className="text-[11px] text-foreground/60 leading-snug line-clamp-1 mt-0.5">{task.title}</p>
-            </div>
-          </div>
-
           {/* Tags row */}
           <div className="flex flex-wrap gap-1.5">
             {/* Content type badge */}
-            <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg ${typeConfig.color}`}>
-              <TypeIcon size={12} /> {typeConfig.label}
+            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md ${typeConfig.color}`}>
+              <TypeIcon size={10} /> {typeConfig.label}
             </span>
             {/* Priority editing badge */}
             {task.editing_priority && (
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-red-100/80 text-red-700 border border-red-300/50 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800 shadow-sm">
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-200/60 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800">
                 ⚡ Prioridade
               </span>
             )}
             {/* Immediate alteration badge */}
             {task.immediate_alteration && task.kanban_column === 'alteracao' && (
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-red-100 text-red-800 border border-red-300/50 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700 animate-pulse shadow-sm">
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-red-100 text-red-800 border border-red-300/60 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700 animate-pulse">
                 🚨 Imediato
               </span>
             )}
             {/* Altered tag */}
             {task.adjustment_notes && !task.immediate_alteration && (
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-amber-100/80 text-amber-700 border border-amber-300/50 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800 shadow-sm">
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/60 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800">
                 🔄 Alterado
               </span>
             )}
@@ -1104,23 +1077,31 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
             )}
           </div>
 
-          {/* (client name + title moved to top of card) */}
+          {/* Client name */}
+          <div className="flex items-center justify-between gap-2 pr-8">
+            <h3 className="text-[13px] font-bold text-foreground leading-snug tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
+              {client?.companyName || 'Cliente'}
+            </h3>
+          </div>
+
+          {/* Title */}
+          <p className="text-[12px] text-foreground/70 leading-relaxed line-clamp-2">{task.title}</p>
 
           {/* Responsible - real-time mini banner */}
           {assignedUser && (
-            <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/15 dark:from-primary/10 dark:to-primary/15 dark:border-primary/20">
+            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/15 dark:from-primary/10 dark:to-primary/15 dark:border-primary/20">
               <div className="relative shrink-0">
                 <UserAvatar user={{ name: assignedUser.name, avatarUrl: assignedUser.avatarUrl }} size="sm" />
-                <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
+                <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500 border-2 border-card"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500 border border-card"></span>
                 </span>
               </div>
               <div className="min-w-0 flex-1">
                 <span className="text-[9px] font-semibold uppercase tracking-widest text-primary/60 block leading-none mb-0.5" style={{ fontFamily: 'var(--font-display)' }}>Executando</span>
-                <span className="text-[12px] font-bold text-foreground truncate block">{assignedUser.name}</span>
+                <span className="text-[11px] font-bold text-foreground truncate block">{assignedUser.name}</span>
               </div>
-              <User size={13} className="text-primary/40 shrink-0" />
+              <User size={11} className="text-primary/40 shrink-0" />
             </div>
           )}
 

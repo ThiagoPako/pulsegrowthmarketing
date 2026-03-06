@@ -95,7 +95,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         onMouseLeave={() => setSidebarExpanded(false)}
       >
         <div className={`p-3 flex items-center border-b border-sidebar-border gap-2 ${sidebarExpanded ? 'px-4' : 'justify-center'}`}>
-          <img src={pulseLogo} alt="Pulse" className="w-10 h-10 rounded-xl object-cover shrink-0 shadow-sm ring-1 ring-border/50" />
+          <img src={pulseLogo} alt="Pulse" className="w-8 h-8 rounded-lg object-cover shrink-0" />
           {sidebarExpanded && (
             <span className="font-display font-bold text-sm text-foreground whitespace-nowrap overflow-hidden">Pulse</span>
           )}
@@ -142,7 +142,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               className={`flex items-center gap-2.5 rounded-xl transition-all duration-200 hover:bg-sidebar-accent ${sidebarExpanded ? 'px-3 py-2 w-full' : 'w-9 h-9 justify-center'} overflow-hidden`}
               title={currentUser?.displayName || currentUser?.name}
             >
-              {currentUser && <UserAvatar user={currentUser} size="sm" className="ring-2 ring-primary/20" />}
+              {currentUser && <UserAvatar user={currentUser} size="sm" />}
               {sidebarExpanded && currentUser && (
                 <span className="text-xs font-medium text-foreground whitespace-nowrap overflow-hidden text-ellipsis">
                   {currentUser.displayName || currentUser.name}

@@ -133,6 +133,10 @@ export default function VideomakerDashboard() {
   const handleFinishRecording = (rec: Recording) => {
     setFinishRecordingId(rec.id);
     setCompletedScriptIds(new Set());
+    setRejectedScripts(new Set());
+    setAlteredScripts(new Set());
+    setVerbalScripts(new Set());
+    setAlterationNotes({});
     setFinishStep('scripts');
     setDriveLinks({});
     setFinishDialogOpen(true);

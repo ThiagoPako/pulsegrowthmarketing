@@ -1256,8 +1256,23 @@ export default function SocialMediaDeliveries() {
                   className="mt-1"
                 />
               </div>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
+                <input
+                  type="checkbox"
+                  checked={alterationImmediate}
+                  onChange={e => setAlterationImmediate(e.target.checked)}
+                  className="h-4 w-4 rounded border-destructive/40 text-destructive focus:ring-destructive"
+                  id="sm-immediate-check"
+                />
+                <label htmlFor="sm-immediate-check" className="text-sm cursor-pointer">
+                  <span className="font-semibold text-destructive">🚨 Alteração Imediata</span>
+                  <span className="text-xs text-muted-foreground block">O editor será notificado para corrigir com prioridade máxima</span>
+                </label>
+              </div>
               <p className="text-xs text-muted-foreground">
-                O editor responsável receberá uma notificação com essas instruções.
+                {alterationImmediate 
+                  ? 'O editor receberá um alerta urgente para fazer a correção imediatamente.'
+                  : 'O editor terá 1 dia útil para realizar a alteração.'}
               </p>
             </div>
           )}

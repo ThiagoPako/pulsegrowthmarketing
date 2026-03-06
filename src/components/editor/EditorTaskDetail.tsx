@@ -278,6 +278,41 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
               </div>
             )}
 
+            {/* Script alteration warning */}
+            {(task as any).script_alteration_type === 'altered' && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                <p className="text-xs font-bold text-amber-600 mb-1 flex items-center gap-1">
+                  ⚠️ ROTEIRO ALTERADO
+                </p>
+                <p className="text-sm text-foreground mb-1">
+                  O roteiro original foi modificado durante a gravação. <strong>Não siga o roteiro original para editar.</strong>
+                </p>
+                {(task as any).script_alteration_notes && (
+                  <div className="mt-2 p-2 bg-background/50 rounded-md border border-amber-500/20">
+                    <p className="text-xs font-semibold text-amber-600 mb-0.5">📝 Notas do videomaker:</p>
+                    <p className="text-sm text-foreground">{(task as any).script_alteration_notes}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(task as any).script_alteration_type === 'verbal' && (
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                <p className="text-xs font-bold text-blue-600 mb-1 flex items-center gap-1">
+                  🗣️ ALTERAÇÃO VERBAL
+                </p>
+                <p className="text-sm text-foreground">
+                  A alteração deste roteiro foi comunicada presencialmente/verbalmente.
+                </p>
+                {(task as any).script_alteration_notes && (
+                  <div className="mt-2 p-2 bg-background/50 rounded-md border border-blue-500/20">
+                    <p className="text-xs font-semibold text-blue-600 mb-0.5">📝 Notas adicionais:</p>
+                    <p className="text-sm text-foreground">{(task as any).script_alteration_notes}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {task.description && (
               <div>
                 <p className="text-xs font-bold text-muted-foreground mb-1">DESCRIÇÃO</p>

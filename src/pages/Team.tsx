@@ -191,13 +191,13 @@ export default function Team() {
   };
 
   const roleColors: Record<UserRole, string> = {
-    admin: 'bg-primary/20 text-primary',
-    videomaker: 'bg-info/20 text-info',
-    social_media: 'bg-warning/20 text-warning',
-    editor: 'bg-success/20 text-success',
-    endomarketing: 'bg-accent text-accent-foreground',
-    parceiro: 'bg-purple-100 text-purple-700',
-    fotografo: 'bg-pink-100 text-pink-700',
+    admin: 'bg-primary/15 text-primary border border-primary/20',
+    videomaker: 'bg-info/15 text-info border border-info/20',
+    social_media: 'bg-warning/15 text-warning border border-warning/20',
+    editor: 'bg-success/15 text-success border border-success/20',
+    endomarketing: 'bg-accent text-accent-foreground border border-accent-foreground/20',
+    parceiro: 'bg-muted text-muted-foreground border border-border',
+    fotografo: 'bg-primary/10 text-primary border border-primary/15',
   };
 
   const partnerUserIds = partners.map(p => p.user_id);

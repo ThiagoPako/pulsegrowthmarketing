@@ -260,12 +260,22 @@ export default function SocialMediaDeliveries() {
       platform: schedPlatform || null, status: 'agendado',
     } as any).eq('id', schedulingItem.id);
     if (error) { toast.error('Erro ao agendar'); return; }
-    // Move content_task to acompanhamento
+    // Move content_task to acompanhamento with full sync
     if (schedulingItem.content_task_id) {
       await supabase.from('content_tasks').update({
         kanban_column: 'acompanhamento',
         updated_at: new Date().toISOString(),
       } as any).eq('id', schedulingItem.content_task_id);
+      const { data: taskData } = await supabase.from('content_tasks').select('*').eq('id', schedulingItem.content_task_id).single();
+      if (taskData) {
+        const client = clients.find(c => c.id === schedulingItem.client_id);
+        const ctx = buildSyncContext(taskData as any, {
+          userId: user?.id,
+          clientName: client?.companyName,
+          clientWhatsapp: client?.whatsapp,
+        });
+        await syncContentTaskColumnChange('acompanhamento', ctx);
+      }
     }
     toast.success('Conteúdo agendado para postagem');
     setScheduleDialogOpen(false); setSchedulingItem(null); fetchData();

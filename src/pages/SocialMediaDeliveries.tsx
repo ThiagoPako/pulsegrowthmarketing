@@ -55,11 +55,12 @@ const CONTENT_TYPES = [
 ];
 
 const STATUS_OPTIONS = [
-  { value: 'revisao', label: 'Em revisão', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
-  { value: 'aprovacao_cliente', label: 'Aprovação Cliente', color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400' },
-  { value: 'entregue', label: 'Entregue', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
+  { value: 'revisao', label: 'Revisão', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
+  { value: 'ajuste', label: 'Alteração', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
+  { value: 'aprovacao_cliente', label: 'Enviar p/ Cliente', color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400' },
+  { value: 'entregue', label: 'Pronto p/ Agendar', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
   { value: 'agendado', label: 'Agendado', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-  { value: 'postado', label: 'Postado', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+  { value: 'postado', label: 'Acompanhamento', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
 ];
 
 const PLATFORMS = ['Instagram', 'TikTok', 'YouTube', 'Facebook', 'LinkedIn'];
@@ -372,7 +373,7 @@ export default function SocialMediaDeliveries() {
         updated_at: new Date().toISOString(),
       } as any).eq('id', taskId);
 
-      await supabase.from('social_media_deliveries').update({ status: 'revisao' } as any).eq('id', alterationDelivery.id);
+      await supabase.from('social_media_deliveries').update({ status: 'ajuste' } as any).eq('id', alterationDelivery.id);
 
       if (editorId) {
         const clientName = clients.find(c => c.id === alterationDelivery.client_id)?.companyName || '';
@@ -445,7 +446,7 @@ export default function SocialMediaDeliveries() {
     const thisMonth = deliveries.filter(d => d.delivered_at >= start && d.delivered_at <= end);
     return {
       total: thisMonth.length,
-      revisao: thisMonth.filter(d => d.status === 'revisao' || d.status === 'aprovacao_cliente').length,
+      revisao: thisMonth.filter(d => d.status === 'revisao' || d.status === 'ajuste' || d.status === 'aprovacao_cliente').length,
       pendentes: thisMonth.filter(d => d.status === 'entregue').length,
       agendados: thisMonth.filter(d => d.status === 'agendado').length,
       postados: thisMonth.filter(d => d.status === 'postado').length,
@@ -468,10 +469,11 @@ export default function SocialMediaDeliveries() {
 
   // Deliveries for the selected client
   const clientDeliveries = useMemo(() => {
-    if (!selectedClientId) return { review: [], approval: [], pending: [], scheduled: [], posted: [] };
+    if (!selectedClientId) return { review: [], alteration: [], approval: [], pending: [], scheduled: [], posted: [] };
     const cd = deliveries.filter(d => d.client_id === selectedClientId);
     return {
       review: cd.filter(d => d.status === 'revisao'),
+      alteration: cd.filter(d => d.status === 'ajuste'),
       approval: cd.filter(d => d.status === 'aprovacao_cliente'),
       pending: cd.filter(d => d.status === 'entregue'),
       scheduled: cd.filter(d => d.status === 'agendado'),
@@ -489,9 +491,9 @@ export default function SocialMediaDeliveries() {
     const storyGoal = selectedClient.weeklyStories || 0;
 
     const currentFiltered = activeTab === 'revisao' ? clientDeliveries.review
-      : activeTab === 'aprovacao' ? clientDeliveries.approval
-      : activeTab === 'pendentes' ? clientDeliveries.pending
-      : activeTab === 'agendados' ? clientDeliveries.scheduled
+      : activeTab === 'alteracao' ? clientDeliveries.alteration
+      : activeTab === 'envio' ? clientDeliveries.approval
+      : activeTab === 'agendados' ? [...clientDeliveries.pending, ...clientDeliveries.scheduled]
       : clientDeliveries.posted;
 
     return (
@@ -514,7 +516,7 @@ export default function SocialMediaDeliveries() {
         {/* Stats row */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: 'Pendentes', value: stats.pendentes, icon: Clock, color: 'text-yellow-600' },
+            { label: 'Pendentes', value: stats.pendentes + stats.revisao, icon: Clock, color: 'text-yellow-600' },
             { label: 'Agendados', value: stats.agendados, icon: CalendarClock, color: 'text-blue-600' },
             { label: 'Postados', value: stats.postados, icon: CheckCircle2, color: 'text-green-600' },
             { label: 'Total Mês', value: stats.total, icon: TrendingUp, color: 'text-foreground' },
@@ -600,42 +602,43 @@ export default function SocialMediaDeliveries() {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="flex-wrap">
             <TabsTrigger value="pipeline" className="gap-1.5">
-              <TrendingUp size={14} /> Pipeline ({clientDeliveries.review.length + clientDeliveries.approval.length + clientDeliveries.pending.length + clientDeliveries.scheduled.length})
+              <TrendingUp size={14} /> Pipeline ({clientDeliveries.review.length + clientDeliveries.alteration.length + clientDeliveries.approval.length + clientDeliveries.pending.length + clientDeliveries.scheduled.length})
             </TabsTrigger>
             <TabsTrigger value="revisao" className="gap-1.5">
               <Eye size={14} /> Revisão ({clientDeliveries.review.length})
             </TabsTrigger>
-            <TabsTrigger value="aprovacao" className="gap-1.5">
-              <MessageSquare size={14} /> Aprovação ({clientDeliveries.approval.length})
+            <TabsTrigger value="alteracao" className="gap-1.5">
+              <AlertTriangle size={14} /> Alteração ({clientDeliveries.alteration.length})
             </TabsTrigger>
-            <TabsTrigger value="pendentes" className="gap-1.5">
-              <Clock size={14} /> Prontos ({clientDeliveries.pending.length})
+            <TabsTrigger value="envio" className="gap-1.5">
+              <Send size={14} /> Enviar p/ Cliente ({clientDeliveries.approval.length})
             </TabsTrigger>
             <TabsTrigger value="agendados" className="gap-1.5">
-              <CalendarClock size={14} /> Agendados ({clientDeliveries.scheduled.length})
+              <CalendarClock size={14} /> Agendados ({clientDeliveries.pending.length + clientDeliveries.scheduled.length})
             </TabsTrigger>
-            <TabsTrigger value="postados" className="gap-1.5">
-              <CheckCircle2 size={14} /> Postados ({clientDeliveries.posted.length})
+            <TabsTrigger value="acompanhamento" className="gap-1.5">
+              <CheckCircle2 size={14} /> Acompanhamento ({clientDeliveries.posted.length})
             </TabsTrigger>
           </TabsList>
 
           {/* Pipeline - All items */}
           <TabsContent value="pipeline" className="mt-4">
             {(() => {
-              const allItems = [...clientDeliveries.review, ...clientDeliveries.approval, ...clientDeliveries.pending, ...clientDeliveries.scheduled];
+              const allItems = [...clientDeliveries.review, ...clientDeliveries.alteration, ...clientDeliveries.approval, ...clientDeliveries.pending, ...clientDeliveries.scheduled];
               if (allItems.length === 0) return (
                 <Card className="border-border"><CardContent className="py-12 text-center text-muted-foreground">
                   Nenhum conteúdo em andamento. Todos os itens já foram postados! 🎉
                 </CardContent></Card>
               );
 
-              const statusOrder = { revisao: 0, aprovacao_cliente: 1, entregue: 2, agendado: 3 };
+              const statusOrder = { revisao: 0, ajuste: 1, aprovacao_cliente: 2, entregue: 3, agendado: 4 };
               const sorted = allItems.sort((a, b) => (statusOrder[a.status as keyof typeof statusOrder] ?? 99) - (statusOrder[b.status as keyof typeof statusOrder] ?? 99));
 
               const getStatusInfo = (status: string) => {
                 switch (status) {
-                  case 'revisao': return { label: '👁 Em Revisão', color: 'border-l-orange-500', badge: 'bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400', step: 1 };
-                  case 'aprovacao_cliente': return { label: '⏳ Aprovação Cliente', color: 'border-l-cyan-500', badge: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/20 dark:text-cyan-400', step: 2 };
+                  case 'revisao': return { label: '👁 Revisão', color: 'border-l-orange-500', badge: 'bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400', step: 1 };
+                  case 'ajuste': return { label: '🔄 Alteração', color: 'border-l-amber-500', badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400', step: 1 };
+                  case 'aprovacao_cliente': return { label: '📩 Enviar p/ Cliente', color: 'border-l-cyan-500', badge: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/20 dark:text-cyan-400', step: 2 };
                   case 'entregue': return { label: '✅ Pronto p/ Agendar', color: 'border-l-yellow-500', badge: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400', step: 3 };
                   case 'agendado': return { label: '📅 Agendado', color: 'border-l-blue-500', badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400', step: 4 };
                   default: return { label: status, color: 'border-l-muted', badge: 'bg-muted text-muted-foreground', step: 0 };
@@ -678,6 +681,11 @@ export default function SocialMediaDeliveries() {
                                     <AlertTriangle size={14} /> Alteração
                                   </Button>
                                 </>
+                              )}
+                              {d.status === 'ajuste' && (
+                                <Badge variant="outline" className="text-[10px] px-2 py-0.5 bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400">
+                                  🔄 Em Alteração
+                                </Badge>
                               )}
                               {d.status === 'aprovacao_cliente' && (
                                 <>
@@ -757,11 +765,46 @@ export default function SocialMediaDeliveries() {
             )}
           </TabsContent>
 
-          {/* Aprovação Cliente */}
-          <TabsContent value="aprovacao" className="mt-4">
+          {/* Alteração */}
+          <TabsContent value="alteracao" className="mt-4">
+            {clientDeliveries.alteration.length === 0 ? (
+              <Card className="border-border"><CardContent className="py-12 text-center text-muted-foreground">
+                Nenhum conteúdo em alteração.
+              </CardContent></Card>
+            ) : (
+              <div className="grid gap-3">
+                {clientDeliveries.alteration.map(d => {
+                  const typeConf = getTypeConfig(d.content_type);
+                  return (
+                    <Card key={d.id} className="border-border border-l-4 border-l-amber-500">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-sm text-foreground truncate">{d.title}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <Badge className={`${typeConf.color} border-0 gap-1 text-[10px] px-1.5 py-0`}>
+                                <typeConf.icon size={10} /> {typeConf.label}
+                              </Badge>
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
+                                🔄 Em Alteração
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                        <ReviewVideoLink contentTaskId={d.content_task_id} />
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Enviar p/ Cliente */}
+          <TabsContent value="envio" className="mt-4">
             {clientDeliveries.approval.length === 0 ? (
               <Card className="border-border"><CardContent className="py-12 text-center text-muted-foreground">
-                Nenhum conteúdo aguardando aprovação do cliente.
+                Nenhum conteúdo para enviar ao cliente.
               </CardContent></Card>
             ) : (
               <div className="grid gap-3">
@@ -778,7 +821,7 @@ export default function SocialMediaDeliveries() {
                                 <typeConf.icon size={10} /> {typeConf.label}
                               </Badge>
                               <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-900/20 dark:text-cyan-400 dark:border-cyan-800">
-                                ⏳ Aguardando Cliente
+                                📩 Aguardando Aprovação
                               </Badge>
                             </div>
                           </div>
@@ -803,61 +846,18 @@ export default function SocialMediaDeliveries() {
             )}
           </TabsContent>
 
-          {/* Pendentes */}
-          <TabsContent value="pendentes" className="mt-4">
-            {currentFiltered.length === 0 ? (
-              <Card className="border-border"><CardContent className="py-12 text-center text-muted-foreground">
-                Nenhum conteúdo pendente para este cliente.
-              </CardContent></Card>
-            ) : (
-              <div className="grid gap-3">
-                {currentFiltered.map(d => {
-                  const typeConf = getTypeConfig(d.content_type);
-                  return (
-                    <Card key={d.id} className="border-border hover:border-primary/30 transition-colors">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium text-sm text-foreground truncate">{d.title}</p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <Badge className={`${typeConf.color} border-0 gap-1 text-[10px] px-1.5 py-0`}>
-                                <typeConf.icon size={10} /> {typeConf.label}
-                              </Badge>
-                              <span className="text-[10px] text-muted-foreground">
-                                Gravado em {new Date(d.delivered_at + 'T12:00:00').toLocaleDateString('pt-BR')}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <Button size="sm" variant="default" className="gap-1.5 h-8" onClick={() => openSchedule(d)}>
-                              <CalendarClock size={14} /> Agendar
-                            </Button>
-                            <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => handleMarkPosted(d.id)}>
-                              <CheckCircle2 size={14} /> Postar
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(d)}><Edit size={14} /></Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(d.id)}><Trash2 size={14} /></Button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            )}
-          </TabsContent>
-
-          {/* Agendados */}
+          {/* Agendados (inclui Prontos p/ Agendar + Agendados) */}
           <TabsContent value="agendados" className="mt-4">
             {currentFiltered.length === 0 ? (
               <Card className="border-border"><CardContent className="py-12 text-center text-muted-foreground">
-                Nenhum conteúdo agendado.
+                Nenhum conteúdo para agendar.
               </CardContent></Card>
             ) : (
               <div className="grid gap-3">
                 {currentFiltered.map(d => {
                   const typeConf = getTypeConfig(d.content_type);
-                  const isOverdue = d.posted_at && isPast(parseISO(d.posted_at)) && !isToday(parseISO(d.posted_at));
+                  const isScheduled = d.status === 'agendado';
+                  const isOverdue = isScheduled && d.posted_at && isPast(parseISO(d.posted_at)) && !isToday(parseISO(d.posted_at));
                   return (
                     <Card key={d.id} className={`border-border ${isOverdue ? 'border-destructive/50 bg-destructive/5' : ''}`}>
                       <CardContent className="p-4">
@@ -868,21 +868,39 @@ export default function SocialMediaDeliveries() {
                               <Badge className={`${typeConf.color} border-0 gap-1 text-[10px] px-1.5 py-0`}>
                                 <typeConf.icon size={10} /> {typeConf.label}
                               </Badge>
-                              {d.platform && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{d.platform}</Badge>}
+                              {isScheduled ? (
+                                <>
+                                  {d.platform && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{d.platform}</Badge>}
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400">
+                                    📅 Agendado
+                                  </Badge>
+                                </>
+                              ) : (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400">
+                                  ✅ Pronto p/ Agendar
+                                </Badge>
+                              )}
                             </div>
                           </div>
                           <div className="flex items-center gap-3 shrink-0">
-                            <div className="text-right">
-                              <p className={`text-sm font-semibold ${isOverdue ? 'text-destructive' : 'text-foreground'}`}>
-                                {d.posted_at ? new Date(d.posted_at + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
-                              </p>
-                              {d.scheduled_time && <p className="text-xs text-muted-foreground">{d.scheduled_time}</p>}
-                              {isOverdue && <p className="text-[10px] text-destructive font-medium">Atrasado</p>}
-                            </div>
-                            <Button size="sm" variant="default" className="gap-1 h-8" onClick={() => handleMarkPosted(d.id)}>
+                            {isScheduled && (
+                              <div className="text-right">
+                                <p className={`text-sm font-semibold ${isOverdue ? 'text-destructive' : 'text-foreground'}`}>
+                                  {d.posted_at ? new Date(d.posted_at + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                                </p>
+                                {d.scheduled_time && <p className="text-xs text-muted-foreground">{d.scheduled_time}</p>}
+                                {isOverdue && <p className="text-[10px] text-destructive font-medium">Atrasado</p>}
+                              </div>
+                            )}
+                            {!isScheduled && (
+                              <Button size="sm" variant="default" className="gap-1.5 h-8" onClick={() => openSchedule(d)}>
+                                <CalendarClock size={14} /> Agendar
+                              </Button>
+                            )}
+                            <Button size="sm" variant={isScheduled ? 'default' : 'outline'} className="gap-1 h-8" onClick={() => handleMarkPosted(d.id)}>
                               <Send size={14} /> Postado
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openSchedule(d)}><Edit size={14} /></Button>
+                            {isScheduled && <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openSchedule(d)}><Edit size={14} /></Button>}
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(d.id)}><Trash2 size={14} /></Button>
                           </div>
                         </div>
@@ -894,8 +912,8 @@ export default function SocialMediaDeliveries() {
             )}
           </TabsContent>
 
-          {/* Postados */}
-          <TabsContent value="postados" className="mt-4">
+          {/* Acompanhamento (Postados) */}
+          <TabsContent value="acompanhamento" className="mt-4">
             <Card className="border-border">
               <CardContent className="p-0">
                 <Table>
@@ -910,9 +928,9 @@ export default function SocialMediaDeliveries() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {currentFiltered.length === 0 ? (
+                    {clientDeliveries.posted.length === 0 ? (
                       <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground">Nenhum conteúdo postado ainda.</TableCell></TableRow>
-                    ) : currentFiltered.map(d => {
+                    ) : clientDeliveries.posted.map(d => {
                       const typeConf = getTypeConfig(d.content_type);
                       return (
                         <TableRow key={d.id}>

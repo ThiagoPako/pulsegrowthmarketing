@@ -1111,11 +1111,33 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
             <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md ${typeConfig.color}`}>
               <TypeIcon size={10} /> {typeConfig.label}
             </span>
+            {/* Priority editing badge */}
+            {task.editing_priority && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-200/60 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800">
+                ⚡ Prioridade
+              </span>
+            )}
+            {/* Immediate alteration badge */}
+            {task.immediate_alteration && task.kanban_column === 'alteracao' && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-red-100 text-red-800 border border-red-300/60 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700 animate-pulse">
+                🚨 Imediato
+              </span>
+            )}
             {/* Altered tag */}
-            {task.adjustment_notes && (
+            {task.adjustment_notes && !task.immediate_alteration && (
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/60 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800">
                 🔄 Alterado
               </span>
+            )}
+            {/* Deadline badges */}
+            {task.kanban_column === 'revisao' && task.review_deadline && (
+              <DeadlineBadge deadline={task.review_deadline} label="Revisão" />
+            )}
+            {task.kanban_column === 'alteracao' && task.alteration_deadline && !task.immediate_alteration && (
+              <DeadlineBadge deadline={task.alteration_deadline} label="Alteração" />
+            )}
+            {task.kanban_column === 'envio' && task.approval_deadline && (
+              <DeadlineBadge deadline={task.approval_deadline} label="Aprovação" />
             )}
             {/* Status tags */}
             {task.kanban_column === 'envio' && (

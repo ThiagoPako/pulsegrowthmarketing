@@ -14,7 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Film, Megaphone, Image, Palette, ExternalLink, Clock, AlertTriangle,
   Eye, Star, TrendingUp, BarChart3, Timer, Scissors, Kanban, ArrowRight, Check,
-  Search, Filter, Users, Calendar, MessageSquare, Upload, Send, History
+  Search, Filter, Users, Calendar, MessageSquare, Upload, Send, History, Zap, Flame
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import { highlightQuotes } from '@/lib/highlightQuotes';

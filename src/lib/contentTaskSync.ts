@@ -40,6 +40,15 @@ export async function syncContentTaskColumnChange(
 ) {
   const updates: Record<string, any> = {};
 
+  // Fetch deadline settings
+  const { data: settingsRow } = await supabase.from('company_settings').select('editing_deadline_hours, review_deadline_hours, alteration_deadline_hours, approval_deadline_hours').limit(1).single();
+  const deadlineHours = {
+    editing: settingsRow?.editing_deadline_hours ?? 48,
+    review: settingsRow?.review_deadline_hours ?? 24,
+    alteration: settingsRow?.alteration_deadline_hours ?? 24,
+    approval: settingsRow?.approval_deadline_hours ?? 6,
+  };
+
   // 1. Set editing_started_at when entering edicao
   if (newColumn === 'edicao') {
     updates.editing_started_at = new Date().toISOString();
@@ -52,20 +61,20 @@ export async function syncContentTaskColumnChange(
   // 2. Set deadlines based on column transitions
   if (newColumn === 'revisao') {
     const deadline = new Date();
-    deadline.setHours(deadline.getHours() + 24);
+    deadline.setHours(deadline.getHours() + deadlineHours.review);
     updates.review_deadline = deadline.toISOString();
     updates.approval_sent_at = new Date().toISOString();
   }
   if (newColumn === 'alteracao') {
     if (!ctx.immediateAlteration) {
       const deadline = new Date();
-      deadline.setHours(deadline.getHours() + 24);
+      deadline.setHours(deadline.getHours() + deadlineHours.alteration);
       updates.alteration_deadline = deadline.toISOString();
     }
   }
   if (newColumn === 'envio') {
     const deadline = new Date();
-    deadline.setHours(deadline.getHours() + 6);
+    deadline.setHours(deadline.getHours() + deadlineHours.approval);
     updates.approval_deadline = deadline.toISOString();
     updates.approval_sent_at = new Date().toISOString();
   }

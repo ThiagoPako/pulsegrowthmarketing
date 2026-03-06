@@ -319,7 +319,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
           )}
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 pr-2">
+        <div className="flex-1 min-h-0 overflow-y-auto pr-2">
           <div className="space-y-4 pb-4">
             {/* Client + Meta */}
             <div className="flex flex-wrap items-center gap-3">

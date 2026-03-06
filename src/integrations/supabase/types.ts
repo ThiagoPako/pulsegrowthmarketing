@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           client_id: string
           id: string
+          planned_script_ids: string[]
           recording_id: string
           started_at: string
           videomaker_id: string
@@ -25,6 +26,7 @@ export type Database = {
         Insert: {
           client_id: string
           id?: string
+          planned_script_ids?: string[]
           recording_id: string
           started_at?: string
           videomaker_id: string
@@ -32,6 +34,7 @@ export type Database = {
         Update: {
           client_id?: string
           id?: string
+          planned_script_ids?: string[]
           recording_id?: string
           started_at?: string
           videomaker_id?: string

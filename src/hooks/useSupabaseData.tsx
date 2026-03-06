@@ -162,6 +162,7 @@ function rowToActiveRecording(r: any): ActiveRecording {
     videomarkerId: r.videomaker_id,
     clientId: r.client_id,
     startedAt: r.started_at,
+    plannedScriptIds: r.planned_script_ids || [],
   };
 }
 
@@ -377,6 +378,7 @@ export function useSupabaseData() {
       videomaker_id: rec.videomarkerId,
       client_id: rec.clientId,
       started_at: rec.startedAt,
+      planned_script_ids: rec.plannedScriptIds || [],
     } as any);
     setActiveRecordings(prev => [...prev.filter(a => a.recordingId !== rec.recordingId), rec]);
   }, []);

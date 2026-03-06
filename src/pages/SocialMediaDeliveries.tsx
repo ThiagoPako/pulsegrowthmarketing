@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, Film, Palette, Image, Megaphone, Trash2, Edit, CheckCircle2, Clock, TrendingUp, CalendarClock, CalendarCheck, Send, Zap, ArrowLeft, Eye, MessageSquare, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Plus, Film, Palette, Image, Megaphone, Trash2, Edit, CheckCircle2, Clock, TrendingUp, CalendarClock, CalendarCheck, Send, Zap, ArrowLeft, Eye, MessageSquare, AlertTriangle, ExternalLink, Link2 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import { sendWhatsAppMessage, getWhatsAppConfig } from '@/services/whatsappService';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isToday, isPast, parseISO } from 'date-fns';
@@ -63,6 +63,31 @@ const STATUS_OPTIONS = [
 ];
 
 const PLATFORMS = ['Instagram', 'TikTok', 'YouTube', 'Facebook', 'LinkedIn'];
+
+function ReviewVideoLink({ contentTaskId }: { contentTaskId: string | null }) {
+  const [link, setLink] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!contentTaskId) { setLoading(false); return; }
+    supabase.from('content_tasks').select('edited_video_link, drive_link').eq('id', contentTaskId).single()
+      .then(({ data }) => {
+        setLink(data?.edited_video_link || data?.drive_link || null);
+        setLoading(false);
+      });
+  }, [contentTaskId]);
+
+  if (loading || !link) return null;
+
+  return (
+    <a href={link} target="_blank" rel="noopener noreferrer"
+      className="flex items-center gap-2 text-sm font-medium text-primary hover:underline bg-primary/5 border border-primary/20 rounded-lg px-3 py-2.5 transition-colors hover:bg-primary/10">
+      <Link2 size={16} className="shrink-0" />
+      <span className="truncate">🎬 Assistir vídeo para revisão</span>
+      <ExternalLink size={14} className="shrink-0 ml-auto" />
+    </a>
+  );
+}
 
 export default function SocialMediaDeliveries() {
   const { clients } = useApp();
@@ -583,7 +608,7 @@ export default function SocialMediaDeliveries() {
                   const typeConf = getTypeConfig(d.content_type);
                   return (
                     <Card key={d.id} className="border-border border-l-4 border-l-orange-500">
-                      <CardContent className="p-4">
+                      <CardContent className="p-4 space-y-3">
                         <div className="flex items-center justify-between gap-4">
                           <div className="min-w-0 flex-1">
                             <p className="font-medium text-sm text-foreground truncate">{d.title}</p>
@@ -605,6 +630,8 @@ export default function SocialMediaDeliveries() {
                             </Button>
                           </div>
                         </div>
+                        {/* Video link for review */}
+                        <ReviewVideoLink contentTaskId={d.content_task_id} />
                       </CardContent>
                     </Card>
                   );
@@ -625,7 +652,7 @@ export default function SocialMediaDeliveries() {
                   const typeConf = getTypeConfig(d.content_type);
                   return (
                     <Card key={d.id} className="border-border border-l-4 border-l-cyan-500">
-                      <CardContent className="p-4">
+                      <CardContent className="p-4 space-y-3">
                         <div className="flex items-center justify-between gap-4">
                           <div className="min-w-0 flex-1">
                             <p className="font-medium text-sm text-foreground truncate">{d.title}</p>
@@ -650,6 +677,7 @@ export default function SocialMediaDeliveries() {
                             </Button>
                           </div>
                         </div>
+                        <ReviewVideoLink contentTaskId={d.content_task_id} />
                       </CardContent>
                     </Card>
                   );

@@ -51,6 +51,8 @@ interface ContentTask {
   created_by: string | null;
   scheduled_recording_date: string | null;
   scheduled_recording_time: string | null;
+  drive_link: string | null;
+  edited_video_link: string | null;
   position: number;
   created_at: string;
   updated_at: string;
@@ -252,6 +254,14 @@ export default function ContentKanban() {
       return;
     }
 
+    // ─── VALIDATION RULES ─────────────────────────────────
+    const validationError = validateKanbanTransition(draggedTask, targetColumn);
+    if (validationError) {
+      toast.error(validationError);
+      setDraggedTask(null);
+      return;
+    }
+
     const oldColumn = draggedTask.kanban_column;
     // Optimistic update
     setTasks(prev => prev.map(t =>
@@ -274,6 +284,21 @@ export default function ContentKanban() {
       toast.success(`Movido para ${KANBAN_COLUMNS.find(c => c.id === targetColumn)?.label}`);
     }
     setDraggedTask(null);
+  };
+
+  // ─── VALIDATION FOR TRANSITIONS ───────────────────────────
+  const validateKanbanTransition = (task: ContentTask, targetColumn: string): string | null => {
+    // captacao → edicao: needs drive_link (materiais brutos)
+    if (targetColumn === 'edicao' && task.kanban_column === 'captacao' && !task.drive_link) {
+      return 'O card precisa ter o link dos materiais brutos (Drive) para ir para edição';
+    }
+    // edicao → revisao: needs edited_video_link
+    if (targetColumn === 'revisao' && !task.edited_video_link) {
+      return 'O editor precisa adicionar o link do vídeo editado antes de enviar para revisão';
+    }
+    // revisao → envio: should go through social media flow
+    // envio → agendamentos: needs approval (approved_at)
+    return null;
   };
 
   // ─── SYNC WITH OTHER MODULES ──────────────────────────────

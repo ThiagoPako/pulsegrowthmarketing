@@ -5,14 +5,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import {
   Film, Megaphone, Image, Palette, ExternalLink, Clock, AlertTriangle,
-  Check, Eye, Search, Scissors, Send
+  Check, Eye, Search, Scissors, Send, Link2
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import { highlightQuotes } from '@/lib/highlightQuotes';
@@ -45,6 +45,7 @@ interface EditorTask {
   assigned_to: string | null;
   created_by: string | null;
   drive_link: string | null;
+  edited_video_link: string | null;
   editing_deadline: string | null;
   editing_started_at: string | null;
   position: number;
@@ -67,9 +68,10 @@ function getTypeConfig(type: string) {
   return CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];
 }
 
-function TaskCard({ task, clients, onOpenScript, onSendToReview, draggedId, onDragStart }: {
+function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink, draggedId, onDragStart }: {
   task: EditorTask; clients: any[]; onOpenScript: (id: string) => void;
   onSendToReview: (task: EditorTask) => void;
+  onAddVideoLink: (task: EditorTask) => void;
   draggedId: string | null; onDragStart: (e: React.DragEvent, task: EditorTask) => void;
 }) {
   const client = clients.find(c => c.id === task.client_id);
@@ -77,6 +79,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, draggedId, onDr
   const TypeIcon = typeConfig.icon;
   const clientColor = client?.color || '217 91% 60%';
   const deadlineStatus = getDeadlineStatus(task.editing_deadline);
+  const hasVideoLink = !!task.edited_video_link;
 
   return (
     <div draggable onDragStart={e => onDragStart(e, task)}
@@ -113,32 +116,71 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, draggedId, onDr
           )}
         </div>
         <p className="text-sm font-semibold text-foreground leading-tight">{task.title}</p>
+        
+        {/* Alteration notes */}
         {task.kanban_column === 'alteracao' && task.description && (
           <div className="bg-warning/10 border border-warning/20 rounded-md p-2">
             <p className="text-[10px] font-semibold text-warning mb-0.5">📝 Notas de alteração:</p>
             <p className="text-[10px] text-foreground/80 whitespace-pre-wrap">{task.description}</p>
           </div>
         )}
+
+        {/* Script link */}
         {task.script_id && (
           <button onClick={() => onOpenScript(task.script_id!)} className="flex items-center gap-1 text-[11px] text-primary hover:underline">
             <Eye size={11} /> Ver roteiro gravado
           </button>
         )}
+
+        {/* Drive link (raw materials) */}
         {task.drive_link && (
           <a href={task.drive_link} target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-1.5 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline bg-blue-50 dark:bg-blue-900/20 rounded-md px-2 py-1.5">
             <ExternalLink size={12} />📁 Abrir materiais no Drive
           </a>
         )}
+
+        {/* Edited video link */}
+        {hasVideoLink && (
+          <a href={task.edited_video_link!} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-1.5 text-[11px] font-medium text-green-600 dark:text-green-400 hover:underline bg-green-50 dark:bg-green-900/20 rounded-md px-2 py-1.5">
+            <Link2 size={12} />🎬 Vídeo editado
+          </a>
+        )}
+
+        {/* Deadline */}
         {task.editing_deadline && task.kanban_column === 'edicao' && (
           <p className="text-[10px] text-muted-foreground">
             Prazo: {format(new Date(task.editing_deadline), "dd/MM 'às' HH:mm", { locale: ptBR })}
           </p>
         )}
-        {task.kanban_column === 'alteracao' && (
-          <Button size="sm" className="w-full gap-1.5 h-7 text-xs mt-1" onClick={(e) => { e.stopPropagation(); onSendToReview(task); }}>
-            <Send size={11} /> Enviar para Aprovação
+
+        {/* Action buttons based on column */}
+        {task.kanban_column === 'edicao' && (
+          <Button size="sm" variant={hasVideoLink ? 'default' : 'outline'} 
+            className={`w-full gap-1.5 h-7 text-xs mt-1 ${!hasVideoLink ? 'border-dashed' : ''}`} 
+            onClick={(e) => { e.stopPropagation(); onAddVideoLink(task); }}>
+            <Link2 size={11} /> {hasVideoLink ? 'Atualizar link do vídeo' : '📎 Adicionar link do vídeo editado'}
           </Button>
+        )}
+        
+        {task.kanban_column === 'alteracao' && (
+          <div className="space-y-1.5 mt-1">
+            {!hasVideoLink && (
+              <Button size="sm" variant="outline" className="w-full gap-1.5 h-7 text-xs border-dashed" 
+                onClick={(e) => { e.stopPropagation(); onAddVideoLink(task); }}>
+                <Link2 size={11} /> 📎 Adicionar link do vídeo corrigido
+              </Button>
+            )}
+            <Button size="sm" className="w-full gap-1.5 h-7 text-xs" 
+              disabled={!hasVideoLink}
+              onClick={(e) => { e.stopPropagation(); onSendToReview(task); }}>
+              <Send size={11} /> Enviar para Aprovação
+            </Button>
+            {!hasVideoLink && (
+              <p className="text-[9px] text-destructive text-center">⚠️ Adicione o link do vídeo antes de enviar</p>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -156,6 +198,12 @@ export default function EditorKanban() {
   const [scriptDialogOpen, setScriptDialogOpen] = useState(false);
   const [draggedTask, setDraggedTask] = useState<EditorTask | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+
+  // Video link dialog
+  const [videoLinkDialogOpen, setVideoLinkDialogOpen] = useState(false);
+  const [videoLinkTask, setVideoLinkTask] = useState<EditorTask | null>(null);
+  const [videoLinkValue, setVideoLinkValue] = useState('');
+  const [sendToReviewAfterLink, setSendToReviewAfterLink] = useState(false);
 
   const fetchTasks = useCallback(async () => {
     const { data } = await supabase.from('content_tasks').select('*')
@@ -205,10 +253,39 @@ export default function EditorKanban() {
     e.dataTransfer.setData('text/plain', task.id);
   };
 
+  // ─── VALIDATION RULES ─────────────────────────────────────
+  const validateTransition = (task: EditorTask, targetColumn: string): string | null => {
+    // Moving to revisao requires edited_video_link
+    if (targetColumn === 'revisao' && !task.edited_video_link) {
+      return 'Adicione o link do vídeo editado antes de enviar para revisão';
+    }
+    // Moving to envio requires edited_video_link
+    if (targetColumn === 'envio' && !task.edited_video_link) {
+      return 'Adicione o link do vídeo editado antes de concluir';
+    }
+    return null;
+  };
+
   const handleDrop = async (e: React.DragEvent, targetColumn: string) => {
     e.preventDefault();
     setDragOverColumn(null);
     if (!draggedTask || draggedTask.kanban_column === targetColumn) { setDraggedTask(null); return; }
+
+    // Validate transition
+    const validationError = validateTransition(draggedTask, targetColumn);
+    if (validationError) {
+      toast.error(validationError);
+      // If trying to move to revisao without link, open the link dialog
+      if (targetColumn === 'revisao' && !draggedTask.edited_video_link) {
+        setVideoLinkTask(draggedTask);
+        setVideoLinkValue('');
+        setSendToReviewAfterLink(true);
+        setVideoLinkDialogOpen(true);
+      }
+      setDraggedTask(null);
+      return;
+    }
+
     const updateData: any = { kanban_column: targetColumn, updated_at: new Date().toISOString() };
     if (targetColumn === 'edicao' && !draggedTask.editing_started_at) {
       updateData.editing_started_at = new Date().toISOString();
@@ -217,21 +294,8 @@ export default function EditorKanban() {
     if (error) {
       toast.error('Erro ao mover cartão');
     } else {
-      // When moving to revisao, create social_media_delivery + notify social_media
       if (targetColumn === 'revisao') {
-        const existing = await supabase.from('social_media_deliveries')
-          .select('id').eq('content_task_id', draggedTask.id).limit(1);
-        if (!existing.data?.length) {
-          await supabase.from('social_media_deliveries').insert({
-            client_id: draggedTask.client_id, content_type: draggedTask.content_type,
-            title: draggedTask.title, description: draggedTask.description || null,
-            status: 'revisao', delivered_at: format(new Date(), 'yyyy-MM-dd'),
-            script_id: draggedTask.script_id || null, recording_id: draggedTask.recording_id || null,
-            created_by: user?.id || null, content_task_id: draggedTask.id,
-          } as any);
-        } else {
-          await supabase.from('social_media_deliveries').update({ status: 'revisao' } as any).eq('content_task_id', draggedTask.id);
-        }
+        await createOrUpdateDelivery(draggedTask, 'revisao');
         const clientName = clients.find(c => c.id === draggedTask.client_id)?.companyName || '';
         await supabase.rpc('notify_role', {
           _role: 'social_media',
@@ -242,19 +306,7 @@ export default function EditorKanban() {
         });
       }
       if (targetColumn === 'envio') {
-        const existing = await supabase.from('social_media_deliveries')
-          .select('id').eq('content_task_id', draggedTask.id).limit(1);
-        if (!existing.data?.length) {
-          await supabase.from('social_media_deliveries').insert({
-            client_id: draggedTask.client_id, content_type: draggedTask.content_type,
-            title: draggedTask.title, description: draggedTask.description || null,
-            status: 'entregue', delivered_at: format(new Date(), 'yyyy-MM-dd'),
-            script_id: draggedTask.script_id || null, recording_id: draggedTask.recording_id || null,
-            created_by: user?.id || null, content_task_id: draggedTask.id,
-          } as any);
-        } else {
-          await supabase.from('social_media_deliveries').update({ status: 'entregue' } as any).eq('content_task_id', draggedTask.id);
-        }
+        await createOrUpdateDelivery(draggedTask, 'entregue');
       }
       toast.success(`Movido para ${EDITOR_COLUMNS.find(c => c.id === targetColumn)?.label}`);
       fetchTasks();
@@ -262,12 +314,35 @@ export default function EditorKanban() {
     setDraggedTask(null);
   };
 
+  const createOrUpdateDelivery = async (task: EditorTask, status: string) => {
+    const existing = await supabase.from('social_media_deliveries')
+      .select('id').eq('content_task_id', task.id).limit(1);
+    if (!existing.data?.length) {
+      await supabase.from('social_media_deliveries').insert({
+        client_id: task.client_id, content_type: task.content_type,
+        title: task.title, description: task.description || null,
+        status, delivered_at: format(new Date(), 'yyyy-MM-dd'),
+        script_id: task.script_id || null, recording_id: task.recording_id || null,
+        created_by: user?.id || null, content_task_id: task.id,
+      } as any);
+    } else {
+      await supabase.from('social_media_deliveries').update({ status } as any).eq('content_task_id', task.id);
+    }
+  };
+
   const handleSendToReview = async (task: EditorTask) => {
+    if (!task.edited_video_link) {
+      toast.error('Adicione o link do vídeo editado antes de enviar para revisão');
+      setVideoLinkTask(task);
+      setVideoLinkValue('');
+      setSendToReviewAfterLink(true);
+      setVideoLinkDialogOpen(true);
+      return;
+    }
     const { error } = await supabase.from('content_tasks').update({
       kanban_column: 'revisao', updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
     if (error) { toast.error('Erro ao enviar para revisão'); return; }
-    // Update delivery status
     await supabase.from('social_media_deliveries').update({ status: 'revisao' } as any).eq('content_task_id', task.id);
     const clientName = clients.find(c => c.id === task.client_id)?.companyName || '';
     await supabase.rpc('notify_role', {
@@ -278,6 +353,58 @@ export default function EditorKanban() {
       _link: '/entregas-social',
     });
     toast.success('Enviado para revisão');
+    fetchTasks();
+  };
+
+  // ─── VIDEO LINK DIALOG ─────────────────────────────────────
+  const openVideoLinkDialog = (task: EditorTask) => {
+    setVideoLinkTask(task);
+    setVideoLinkValue(task.edited_video_link || '');
+    setSendToReviewAfterLink(false);
+    setVideoLinkDialogOpen(true);
+  };
+
+  const handleSaveVideoLink = async () => {
+    if (!videoLinkTask || !videoLinkValue.trim()) {
+      toast.error('Cole o link do vídeo editado');
+      return;
+    }
+    const { error } = await supabase.from('content_tasks').update({
+      edited_video_link: videoLinkValue.trim(),
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', videoLinkTask.id);
+    if (error) { toast.error('Erro ao salvar link'); return; }
+
+    toast.success('Link do vídeo salvo!');
+    setVideoLinkDialogOpen(false);
+
+    // If user was trying to send to review, do it now
+    if (sendToReviewAfterLink) {
+      const updatedTask = { ...videoLinkTask, edited_video_link: videoLinkValue.trim() };
+      // Check if from edicao (drag) or alteracao (button)
+      if (videoLinkTask.kanban_column === 'edicao') {
+        // Move to revisao
+        await supabase.from('content_tasks').update({
+          kanban_column: 'revisao', updated_at: new Date().toISOString(),
+        } as any).eq('id', videoLinkTask.id);
+        await createOrUpdateDelivery(updatedTask, 'revisao');
+        const clientName = clients.find(c => c.id === videoLinkTask.client_id)?.companyName || '';
+        await supabase.rpc('notify_role', {
+          _role: 'social_media',
+          _title: 'Vídeo para Revisão',
+          _message: `${videoLinkTask.title} (${clientName}) está pronto para revisão`,
+          _type: 'review',
+          _link: '/entregas-social',
+        });
+        toast.success('Enviado para revisão!');
+      } else if (videoLinkTask.kanban_column === 'alteracao') {
+        await handleSendToReview(updatedTask);
+      }
+    }
+
+    setVideoLinkTask(null);
+    setVideoLinkValue('');
+    setSendToReviewAfterLink(false);
     fetchTasks();
   };
 
@@ -332,7 +459,8 @@ export default function EditorKanban() {
                   <div className="space-y-2">
                     {colTasks.map(task => (
                       <TaskCard key={task.id} task={task} clients={clients} onOpenScript={openScript}
-                        onSendToReview={handleSendToReview} draggedId={draggedTask?.id || null} onDragStart={handleDragStart} />
+                        onSendToReview={handleSendToReview} onAddVideoLink={openVideoLinkDialog}
+                        draggedId={draggedTask?.id || null} onDragStart={handleDragStart} />
                     ))}
                     {colTasks.length === 0 && (
                       <div className="text-center py-10 text-xs text-muted-foreground italic">
@@ -349,6 +477,7 @@ export default function EditorKanban() {
         </div>
       </div>
 
+      {/* Script viewer dialog */}
       <Dialog open={scriptDialogOpen} onOpenChange={setScriptDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -358,6 +487,54 @@ export default function EditorKanban() {
             <div className="prose prose-sm max-w-none p-4 rounded-xl bg-muted/30 border border-border min-h-[200px]"
               dangerouslySetInnerHTML={{ __html: highlightQuotes(viewingScript.content) || '<em>Sem conteúdo</em>' }} />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Video link dialog */}
+      <Dialog open={videoLinkDialogOpen} onOpenChange={setVideoLinkDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link2 size={18} className="text-primary" /> Link do Vídeo Editado
+            </DialogTitle>
+          </DialogHeader>
+          {videoLinkTask && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                <p className="font-medium text-sm">{videoLinkTask.title}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {clients.find(c => c.id === videoLinkTask.client_id)?.companyName}
+                </p>
+              </div>
+              <div>
+                <Label>Cole o link do vídeo editado *</Label>
+                <Input
+                  placeholder="https://drive.google.com/... ou outro link"
+                  value={videoLinkValue}
+                  onChange={e => setVideoLinkValue(e.target.value)}
+                  className="mt-1"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Este link será usado pela equipe de social media para revisar e enviar ao cliente
+                </p>
+              </div>
+              {sendToReviewAfterLink && (
+                <div className="p-2 rounded-md bg-primary/10 border border-primary/20">
+                  <p className="text-xs text-primary font-medium">
+                    ✨ Após salvar, o vídeo será enviado automaticamente para revisão
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setVideoLinkDialogOpen(false); setSendToReviewAfterLink(false); }}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveVideoLink} className="gap-1.5" disabled={!videoLinkValue.trim()}>
+              <Check size={14} /> {sendToReviewAfterLink ? 'Salvar e Enviar para Revisão' : 'Salvar Link'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

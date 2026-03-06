@@ -12,15 +12,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Film, Megaphone, Image, Palette, Calendar, User, FileText, CheckCircle2,
   AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2,
   ArrowRight, Send, Eye, Zap, Flame, MessageSquare, CalendarClock, Trash2, Edit,
-  History
+  History, Lightbulb, Video, Scissors, ScanEye, Pencil, MailCheck, CalendarCheck, MonitorCheck
 } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 import { sendWhatsAppMessage, getWhatsAppConfig } from '@/services/whatsappService';

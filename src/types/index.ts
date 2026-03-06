@@ -165,6 +165,7 @@ export interface Script {
   isEndomarketing: boolean;
   endoClientId?: string;
   scheduledDate?: string; // YYYY-MM-DD
+  createdBy?: string; // user id
 }
 
 export interface ActiveRecording {

@@ -143,6 +143,7 @@ function scriptToRow(s: Script) {
     is_endomarketing: s.isEndomarketing,
     endo_client_id: s.endoClientId || null,
     scheduled_date: s.scheduledDate || null,
+    created_by: s.createdBy || null,
   };
 }
 

@@ -347,6 +347,17 @@ export default function SocialMediaDeliveries() {
     await supabase.from('social_media_deliveries').update({ status: 'aprovacao_cliente' } as any).eq('id', d.id);
     if (d.content_task_id) {
       await supabase.from('content_tasks').update({ kanban_column: 'envio', updated_at: new Date().toISOString() } as any).eq('id', d.content_task_id);
+      // Use shared sync for full cross-module synchronization
+      const { data: taskData } = await supabase.from('content_tasks').select('*').eq('id', d.content_task_id).single();
+      if (taskData) {
+        const client = clients.find(c => c.id === d.client_id);
+        const ctx = buildSyncContext(taskData as any, {
+          userId: user?.id,
+          clientName: client?.companyName,
+          clientWhatsapp: client?.whatsapp,
+        });
+        await syncContentTaskColumnChange('envio', ctx);
+      }
     }
     toast.success('Revisão aprovada! Pronto para enviar ao cliente.');
     fetchData();
@@ -366,32 +377,26 @@ export default function SocialMediaDeliveries() {
     }
     const taskId = alterationDelivery.content_task_id;
     if (taskId) {
-      const { data: taskData } = await supabase.from('content_tasks').select('assigned_to').eq('id', taskId).single();
-      const editorId = taskData?.assigned_to;
-
-      const alterationDeadline = alterationImmediate ? null : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
       await supabase.from('content_tasks').update({
         kanban_column: 'alteracao',
         adjustment_notes: alterationNotes.trim(),
         description: alterationNotes.trim(),
         immediate_alteration: alterationImmediate,
-        alteration_deadline: alterationDeadline,
         updated_at: new Date().toISOString(),
       } as any).eq('id', taskId);
 
       await supabase.from('social_media_deliveries').update({ status: 'ajuste' } as any).eq('id', alterationDelivery.id);
 
-      if (editorId) {
-        const clientName = clients.find(c => c.id === alterationDelivery.client_id)?.companyName || '';
-        const urgencyPrefix = alterationImmediate ? '🚨 IMEDIATO: ' : '';
-        await supabase.rpc('notify_user', {
-          _user_id: editorId,
-          _title: `${urgencyPrefix}Alteração de Vídeo`,
-          _message: `${alterationDelivery.title} (${clientName}) precisa de alteração${alterationImmediate ? ' IMEDIATA' : ''}: ${alterationNotes.trim().substring(0, 100)}`,
-          _type: 'alteration',
-          _link: '/edicao/kanban',
+      // Use shared sync for full cross-module synchronization
+      const { data: taskData } = await supabase.from('content_tasks').select('*').eq('id', taskId).single();
+      if (taskData) {
+        const client = clients.find(c => c.id === alterationDelivery.client_id);
+        const ctx = buildSyncContext({ ...taskData, immediate_alteration: alterationImmediate } as any, {
+          userId: user?.id,
+          clientName: client?.companyName,
+          clientWhatsapp: client?.whatsapp,
         });
+        await syncContentTaskColumnChange('alteracao', ctx);
       }
     }
     toast.success(alterationImmediate ? '🚨 Enviado para alteração IMEDIATA!' : 'Enviado para alteração');

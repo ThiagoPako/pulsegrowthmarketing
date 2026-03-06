@@ -119,9 +119,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 ml-auto">
-            <Button size="sm" className="gap-1.5 hidden sm:flex">
-              <Plus size={16} /> Criar
-            </Button>
             <button className="w-9 h-9 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary transition-colors">
               <Bell size={18} />
             </button>

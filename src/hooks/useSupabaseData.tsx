@@ -155,6 +155,10 @@ function rowToSettings(r: any): CompanySettings {
     shiftBEnd: r.shift_b_end,
     workDays: r.work_days as DayOfWeek[],
     recordingDuration: r.recording_duration,
+    editingDeadlineHours: r.editing_deadline_hours ?? 48,
+    reviewDeadlineHours: r.review_deadline_hours ?? 24,
+    alterationDeadlineHours: r.alteration_deadline_hours ?? 24,
+    approvalDeadlineHours: r.approval_deadline_hours ?? 6,
   };
 }
 

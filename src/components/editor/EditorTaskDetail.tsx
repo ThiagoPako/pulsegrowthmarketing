@@ -343,9 +343,11 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
               <div className="flex items-start justify-between relative">
                 {/* Background line */}
                 <div className="absolute top-3 left-0 right-0 h-0.5 bg-border" />
-                <div
-                  className="absolute top-3 left-0 h-0.5 bg-gradient-to-r from-emerald-500 via-primary to-violet-500 transition-all duration-500"
-                  style={{ width: `${(currentStageIdx / (TIMELINE_STAGES.length - 1)) * 100}%` }}
+                <motion.div
+                  className="absolute top-3 left-0 h-0.5 bg-gradient-to-r from-emerald-500 via-primary to-violet-500"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${(currentStageIdx / (TIMELINE_STAGES.length - 1)) * 100}%` }}
+                  transition={{ duration: 0.8, ease: 'easeOut', delay: 0.3 }}
                 />
 
                 {TIMELINE_STAGES.map((stage, idx) => {
@@ -355,20 +357,32 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
                   const StageIcon = stage.icon;
 
                   return (
-                    <div key={stage.key} className="flex flex-col items-center relative z-10" style={{ width: `${100 / TIMELINE_STAGES.length}%` }}>
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-300 ${
-                        isCurrent
-                          ? 'bg-primary text-primary-foreground ring-4 ring-primary/20 scale-110'
-                          : isPassed
-                            ? 'bg-emerald-500 text-white'
-                            : 'bg-muted text-muted-foreground border-2 border-border'
-                      }`}>
+                    <motion.div
+                      key={stage.key}
+                      className="flex flex-col items-center relative z-10"
+                      style={{ width: `${100 / TIMELINE_STAGES.length}%` }}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.4, delay: 0.15 * idx + 0.2 }}
+                    >
+                      <motion.div
+                        className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                          isCurrent
+                            ? 'bg-primary text-primary-foreground ring-4 ring-primary/20'
+                            : isPassed
+                              ? 'bg-emerald-500 text-white'
+                              : 'bg-muted text-muted-foreground border-2 border-border'
+                        }`}
+                        initial={{ scale: 0 }}
+                        animate={{ scale: isCurrent ? 1.1 : 1 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.15 * idx + 0.3 }}
+                      >
                         {isPassed && !isCurrent ? (
                           <Check size={12} />
                         ) : (
                           <StageIcon size={12} />
                         )}
-                      </div>
+                      </motion.div>
                       <span className={`text-[10px] mt-1.5 font-medium text-center leading-tight ${
                         isCurrent ? 'text-primary font-bold' : isPassed ? 'text-foreground' : 'text-muted-foreground'
                       }`}>
@@ -379,7 +393,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
                           {format(new Date(date), 'dd/MM', { locale: ptBR })}
                         </span>
                       )}
-                    </div>
+                    </motion.div>
                   );
                 })}
               </div>

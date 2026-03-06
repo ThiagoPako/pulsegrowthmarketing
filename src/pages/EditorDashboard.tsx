@@ -181,6 +181,13 @@ export default function EditorDashboard() {
   }, [reviewTasks, filterClient, filterType, searchQuery, clients]);
 
   const sortedFiltered = [...filteredQueueTasks].sort((a, b) => {
+    // Immediate alterations first
+    if (a.immediate_alteration && !b.immediate_alteration) return -1;
+    if (b.immediate_alteration && !a.immediate_alteration) return 1;
+    // Then priority tasks
+    if (a.editing_priority && !b.editing_priority) return -1;
+    if (b.editing_priority && !a.editing_priority) return 1;
+    // Then by deadline urgency
     const aStatus = getDeadlineStatus(a.editing_deadline);
     const bStatus = getDeadlineStatus(b.editing_deadline);
     if (aStatus.variant === 'destructive' && bStatus.variant !== 'destructive') return -1;

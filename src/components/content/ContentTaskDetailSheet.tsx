@@ -71,6 +71,7 @@ interface ContentTask {
   alteration_deadline: string | null;
   approval_deadline: string | null;
   position: number;
+  editing_started_at: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -970,6 +970,7 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
       <div
         draggable
         onDragStart={onDragStart}
+        onClick={onCardClick}
         className={`group relative bg-card rounded-xl cursor-grab active:cursor-grabbing transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 overflow-hidden ${
           isDragging ? 'opacity-40 scale-95 shadow-none' : 'shadow-sm'
         } ${isOverdue ? 'ring-1 ring-destructive/40' : ''} ${

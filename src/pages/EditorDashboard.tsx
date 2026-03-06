@@ -401,9 +401,7 @@ export default function EditorDashboard() {
               <SelectContent>
                 <SelectItem value="all">Todos Status</SelectItem>
                 <SelectItem value="edicao">Aguardando edição</SelectItem>
-                <SelectItem value="revisao">Aguardando aprovação</SelectItem>
                 <SelectItem value="alteracao">Solicitado ajuste</SelectItem>
-                <SelectItem value="envio">Finalizado</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterType} onValueChange={setFilterType}>

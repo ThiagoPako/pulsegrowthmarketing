@@ -245,10 +245,23 @@ export default function EditorDashboard() {
         </Button>
       </div>
 
-      <Tabs defaultValue="dashboard" className="space-y-4">
+      <Tabs defaultValue="queue" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="dashboard">📊 Desempenho</TabsTrigger>
-          <TabsTrigger value="queue">📋 Fila de Edição</TabsTrigger>
+          <TabsTrigger value="queue" className="gap-1.5">
+            <Scissors size={13} /> Fila de Edição
+            {editingQueueTasks.length > 0 && (
+              <Badge variant="destructive" className="text-[9px] px-1.5 py-0 ml-1">{editingQueueTasks.length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="review" className="gap-1.5">
+            <Eye size={13} /> Em Revisão
+            {reviewTasks.length > 0 && (
+              <Badge variant="outline" className="text-[9px] px-1.5 py-0 ml-1 bg-teal-500/10 text-teal-600 border-teal-500/30">{reviewTasks.length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="performance" className="gap-1.5">
+            <BarChart3 size={13} /> Desempenho
+          </TabsTrigger>
         </TabsList>
 
         {/* DASHBOARD TAB */}

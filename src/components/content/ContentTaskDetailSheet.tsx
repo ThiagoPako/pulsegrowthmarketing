@@ -12,15 +12,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Film, Megaphone, Image, Palette, Calendar, User, FileText, CheckCircle2,
   AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2,
   ArrowRight, Send, Eye, Zap, Flame, MessageSquare, CalendarClock, Trash2, Edit,
-  History
+  History, Lightbulb, Video, Scissors, ScanEye, Pencil, MailCheck, CalendarCheck, MonitorCheck
 } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 import { sendWhatsAppMessage, getWhatsAppConfig } from '@/services/whatsappService';
@@ -86,6 +87,146 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onRefresh: () => void;
+}
+
+// ─── JOURNEY TIMELINE STAGES ─────────────────────────────
+const JOURNEY_STAGES = [
+  { id: 'ideias', label: 'Criado', icon: Lightbulb, emoji: '💡' },
+  { id: 'captacao', label: 'Captação', icon: Video, emoji: '📹' },
+  { id: 'edicao', label: 'Edição', icon: Scissors, emoji: '🎬' },
+  { id: 'revisao', label: 'Revisão', icon: ScanEye, emoji: '👁' },
+  { id: 'envio', label: 'Enviado', icon: MailCheck, emoji: '📤' },
+  { id: 'agendamentos', label: 'Agendado', icon: CalendarCheck, emoji: '📅' },
+  { id: 'acompanhamento', label: 'Publicado', icon: MonitorCheck, emoji: '✅' },
+];
+
+function getStageIndex(column: string) {
+  if (column === 'alteracao') return 3;
+  if (column === 'arquivado') return 7;
+  const idx = JOURNEY_STAGES.findIndex(s => s.id === column);
+  return idx >= 0 ? idx : 0;
+}
+
+function JourneyTimeline({ currentColumn, task }: { currentColumn: string; task: ContentTask }) {
+  const activeIdx = getStageIndex(currentColumn);
+  const isAlteracao = currentColumn === 'alteracao';
+
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-center gap-2">
+        <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
+          <ArrowRight size={13} className="text-primary" />
+        </div>
+        <span className="text-xs font-bold uppercase tracking-wider text-foreground" style={{ fontFamily: 'var(--font-display)' }}>
+          Jornada do Conteúdo
+        </span>
+      </div>
+
+      <div className="relative px-1 py-3">
+        {/* Progress bar background */}
+        <div className="absolute top-1/2 left-4 right-4 h-1 -translate-y-1/2 rounded-full bg-muted" />
+        {/* Progress bar fill */}
+        <motion.div
+          className="absolute top-1/2 left-4 h-1 -translate-y-1/2 rounded-full bg-gradient-to-r from-primary/80 to-primary"
+          initial={{ width: '0%' }}
+          animate={{ width: `${Math.min((activeIdx / (JOURNEY_STAGES.length - 1)) * 100, 100)}%` }}
+          transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
+          style={{ maxWidth: 'calc(100% - 2rem)' }}
+        />
+
+        <div className="relative flex justify-between">
+          {JOURNEY_STAGES.map((stage, idx) => {
+            const isCompleted = idx < activeIdx;
+            const isCurrent = idx === activeIdx;
+            const StageIcon = stage.icon;
+
+            return (
+              <motion.div
+                key={stage.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 + idx * 0.08, duration: 0.4 }}
+                className="flex flex-col items-center gap-1.5 z-10"
+              >
+                <motion.div
+                  className={`relative w-7 h-7 rounded-full flex items-center justify-center transition-all duration-300 ${
+                    isCurrent
+                      ? 'bg-primary text-primary-foreground shadow-md ring-4 ring-primary/20'
+                      : isCompleted
+                        ? 'bg-primary/80 text-primary-foreground'
+                        : 'bg-muted border-2 border-border text-muted-foreground/40'
+                  }`}
+                  animate={isCurrent ? { scale: [1, 1.1, 1] } : {}}
+                  transition={isCurrent ? { repeat: Infinity, duration: 2.5, ease: 'easeInOut' } : {}}
+                >
+                  {isCompleted ? <CheckCircle2 size={14} /> : <StageIcon size={12} />}
+                  {isCurrent && (
+                    <motion.div
+                      className="absolute inset-0 rounded-full border-2 border-primary/40"
+                      animate={{ scale: [1, 1.6], opacity: [0.6, 0] }}
+                      transition={{ repeat: Infinity, duration: 2, ease: 'easeOut' }}
+                    />
+                  )}
+                </motion.div>
+                <span className={`text-[9px] font-semibold leading-tight text-center max-w-[3.5rem] ${
+                  isCurrent ? 'text-primary' : isCompleted ? 'text-foreground/70' : 'text-muted-foreground/40'
+                }`}>
+                  {stage.label}
+                </span>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+
+      {isAlteracao && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20"
+        >
+          <Pencil size={13} className="text-amber-600" />
+          <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
+            Em alteração — aguardando correções do editor
+          </span>
+        </motion.div>
+      )}
+
+      {task.description && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          className="px-3 py-2 rounded-lg bg-muted/50 border border-border/50"
+        >
+          <p className="text-xs text-foreground/70 leading-relaxed">{task.description}</p>
+        </motion.div>
+      )}
+    </div>
+  );
+}
+
+// ─── HISTORY HELPERS ─────────────────────────────────────
+function getHistoryIcon(action: string): string {
+  if (action.includes('Criado') || action.includes('criado')) return '✨';
+  if (action.includes('Captação') || action.includes('captação')) return '📹';
+  if (action.includes('Edição') || action.includes('edição') || action.includes('editor')) return '🎬';
+  if (action.includes('Revisão') || action.includes('revisão')) return '👁';
+  if (action.includes('Alteração') || action.includes('alteração') || action.includes('ajuste')) return '✏️';
+  if (action.includes('Aprovado') || action.includes('aprovado') || action.includes('aprovou')) return '✅';
+  if (action.includes('Enviado') || action.includes('enviado') || action.includes('cliente')) return '📤';
+  if (action.includes('Agendado') || action.includes('agendado')) return '📅';
+  if (action.includes('WhatsApp') || action.includes('whatsapp')) return '💬';
+  if (action.includes('Prioridade') || action.includes('prioridade')) return '⚡';
+  if (action.includes('Postado') || action.includes('postado')) return '🎯';
+  return '📝';
+}
+
+function getHistoryColor(action: string): string {
+  if (action.includes('Aprovado') || action.includes('aprovado')) return 'bg-green-500';
+  if (action.includes('Alteração') || action.includes('ajuste')) return 'bg-amber-500';
+  if (action.includes('Prioridade')) return 'bg-red-500';
+  return 'bg-primary';
 }
 
 export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRefresh }: Props) {
@@ -396,13 +537,8 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
 
         <ScrollArea className="flex-1">
           <div className="px-5 py-4 space-y-4">
-            {/* Description */}
-            {task.description && (
-              <div className="space-y-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Descrição</span>
-                <p className="text-sm text-foreground/80 leading-relaxed">{task.description}</p>
-              </div>
-            )}
+            {/* ─── JOURNEY TIMELINE ──────────────────────── */}
+            <JourneyTimeline currentColumn={task.kanban_column} task={task} />
 
             {/* Deadlines */}
             {task.kanban_column === 'revisao' && renderDeadline(task.review_deadline, 'Prazo de Revisão')}
@@ -643,27 +779,71 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
 
             <Separator />
 
-            {/* History */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-1.5">
-                <History size={13} className="text-muted-foreground" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Histórico</span>
+            {/* History Timeline */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <History size={13} className="text-primary" />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-wider text-foreground" style={{ fontFamily: 'var(--font-display)' }}>
+                  Histórico
+                </span>
+                {history.length > 0 && (
+                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4">{history.length}</Badge>
+                )}
               </div>
               {history.length === 0 ? (
-                <p className="text-xs text-muted-foreground/60 italic">Nenhum registro</p>
+                <div className="flex flex-col items-center py-6 text-center">
+                  <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mb-2">
+                    <Clock size={16} className="text-muted-foreground/40" />
+                  </div>
+                  <p className="text-xs text-muted-foreground/60 italic">Nenhum registro ainda</p>
+                </div>
               ) : (
-                <div className="space-y-1.5">
-                  {history.map(h => (
-                    <div key={h.id} className="flex items-start gap-2 text-xs">
-                      <div className="w-1.5 h-1.5 rounded-full bg-primary/40 mt-1.5 shrink-0" />
-                      <div className="min-w-0">
-                        <span className="text-foreground/80">{h.action}</span>
-                        <span className="text-muted-foreground/60 block text-[10px]">
-                          {getUserName(h.user_id)} · {format(new Date(h.created_at), "dd/MM HH:mm", { locale: ptBR })}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                <div className="relative ml-3">
+                  {/* Vertical line */}
+                  <div className="absolute left-0 top-2 bottom-2 w-px bg-gradient-to-b from-primary/30 via-border to-transparent" />
+                  
+                  <AnimatePresence>
+                    {history.map((h, idx) => {
+                      const actionIcon = getHistoryIcon(h.action);
+                      const actionColor = getHistoryColor(h.action);
+                      return (
+                        <motion.div
+                          key={h.id}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: idx * 0.05, duration: 0.3 }}
+                          className="relative pl-6 pb-4 last:pb-0 group"
+                        >
+                          {/* Dot */}
+                          <div className={`absolute left-0 top-1 w-2 h-2 rounded-full -translate-x-[3.5px] ring-2 ring-card transition-all duration-200 group-hover:scale-125 ${
+                            idx === 0 ? `${actionColor} shadow-sm` : 'bg-border'
+                          }`} />
+                          
+                          <div className={`rounded-lg px-3 py-2 transition-all duration-200 ${
+                            idx === 0 ? 'bg-primary/5 border border-primary/10' : 'hover:bg-muted/50'
+                          }`}>
+                            <div className="flex items-start gap-2">
+                              <span className="text-sm leading-none mt-0.5">{actionIcon}</span>
+                              <div className="min-w-0 flex-1">
+                                <span className={`text-xs leading-snug block ${idx === 0 ? 'text-foreground font-medium' : 'text-foreground/70'}`}>
+                                  {h.action}
+                                </span>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <span className="text-[10px] font-medium text-primary/70">{getUserName(h.user_id)}</span>
+                                  <span className="text-[10px] text-muted-foreground/40">·</span>
+                                  <span className="text-[10px] text-muted-foreground/50">
+                                    {formatDistanceToNow(new Date(h.created_at), { addSuffix: true, locale: ptBR })}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
                 </div>
               )}
             </div>

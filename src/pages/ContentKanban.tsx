@@ -111,6 +111,9 @@ export default function ContentKanban() {
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
 
+  // Detail sheet
+  const [detailTask, setDetailTask] = useState<ContentTask | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   // ─── FETCH ─────────────────────────────────────────────────
   const fetchTasks = useCallback(async () => {
     const { data, error } = await supabase

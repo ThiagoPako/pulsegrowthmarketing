@@ -91,7 +91,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
       <div className="p-3 space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <ClientLogo client={client as any} size="sm" />
+            {client && <ClientLogo client={client as any} size="sm" />}
             <div className="min-w-0">
               <p className="text-xs font-bold text-foreground truncate">{client?.companyName || 'Cliente'}</p>
               <Badge className={`text-[9px] px-1.5 py-0 ${typeConfig.color} border-0`}>

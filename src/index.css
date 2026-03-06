@@ -82,11 +82,11 @@
   }
 
   .nav-icon-btn {
-    @apply flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl text-sidebar-foreground transition-all duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
+    @apply flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl text-sidebar-foreground transition-all duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-sm;
   }
 
   .nav-icon-btn.active {
-    @apply bg-sidebar-accent text-primary;
+    @apply bg-sidebar-accent text-primary shadow-sm;
   }
 }
 

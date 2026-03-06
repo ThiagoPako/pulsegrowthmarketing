@@ -9,31 +9,60 @@ import { Button } from '@/components/ui/button';
 import UserAvatar from '@/components/UserAvatar';
 import ProfileDialog from '@/components/ProfileDialog';
 import {
-  LayoutDashboard, Users, Building2, Calendar, Settings, LogOut, Target, Search, Plus, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors
+  LayoutDashboard, Users, Building2, Calendar, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 
-const navItems = [
-  { path: '/dashboard', label: 'Início', icon: LayoutDashboard, roles: ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing'] },
-  { path: '/agenda', label: 'Agenda', icon: Calendar, roles: ['admin', 'videomaker', 'social_media'] },
-  { path: '/roteiros', label: 'Roteiros', icon: FileText, roles: ['admin', 'social_media', 'videomaker'] },
-  { path: '/clientes', label: 'Clientes', icon: Building2, roles: ['admin', 'social_media'] },
-  { path: '/equipe', label: 'Equipe', icon: Users, roles: ['admin', 'social_media'] },
-  { path: '/metas', label: 'Metas', icon: Target, roles: ['admin', 'social_media'] },
-  { path: '/endomarketing', label: 'Endomkt', icon: Megaphone, roles: ['admin', 'endomarketing', 'social_media'] },
-  { path: '/endomarketing/clientes', label: 'Clientes E.', icon: Building2, roles: ['endomarketing'] },
-  { path: '/endomarketing/agenda', label: 'Agenda E.', icon: Calendar, roles: ['endomarketing'] },
-  { path: '/planos', label: 'Planos', icon: Package, roles: ['admin', 'social_media'] },
-  { path: '/entregas', label: 'Entregas', icon: ClipboardList, roles: ['admin', 'social_media'] },
-  { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media'] },
-  { path: '/conteudo', label: 'Conteúdo', icon: Kanban, roles: ['admin', 'social_media', 'videomaker', 'editor'] },
-  { path: '/edicao', label: 'Edição', icon: Scissors, roles: ['admin', 'editor', 'social_media'] },
-  { path: '/edicao/kanban', label: 'Kanban Ed.', icon: Kanban, roles: ['admin', 'editor', 'social_media'] },
-  { path: '/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin', 'social_media'] },
-  { path: '/desempenho', label: 'Desempenho', icon: Target, roles: ['admin', 'social_media'] },
-  { path: '/financeiro', label: 'Financeiro', icon: DollarSign, roles: ['admin'] },
-  { path: '/whatsapp', label: 'WhatsApp', icon: MessageSquare, roles: ['admin', 'social_media'] },
-  { path: '/configuracoes', label: 'Config', icon: Settings, roles: ['admin', 'social_media'] },
+type NavCategory = {
+  label: string;
+  items: { path: string; label: string; icon: any; roles: string[] }[];
+};
+
+const navCategories: NavCategory[] = [
+  {
+    label: 'Principal',
+    items: [
+      { path: '/dashboard', label: 'Início', icon: LayoutDashboard, roles: ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing'] },
+      { path: '/conteudo', label: 'Conteúdo', icon: Kanban, roles: ['admin', 'social_media', 'videomaker', 'editor'] },
+      { path: '/agenda', label: 'Agenda', icon: Calendar, roles: ['admin', 'videomaker', 'social_media'] },
+      { path: '/roteiros', label: 'Roteiros', icon: FileText, roles: ['admin', 'social_media', 'videomaker'] },
+    ],
+  },
+  {
+    label: 'Produção',
+    items: [
+      { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media'] },
+      { path: '/edicao', label: 'Edição', icon: Scissors, roles: ['admin', 'editor', 'social_media'] },
+      { path: '/entregas', label: 'Entregas', icon: ClipboardList, roles: ['admin', 'social_media'] },
+      { path: '/desempenho', label: 'Desempenho', icon: Target, roles: ['admin', 'social_media'] },
+    ],
+  },
+  {
+    label: 'Gestão',
+    items: [
+      { path: '/clientes', label: 'Clientes', icon: Building2, roles: ['admin', 'social_media'] },
+      { path: '/equipe', label: 'Equipe', icon: Users, roles: ['admin', 'social_media'] },
+      { path: '/planos', label: 'Planos', icon: Package, roles: ['admin', 'social_media'] },
+      { path: '/metas', label: 'Metas', icon: Target, roles: ['admin', 'social_media'] },
+    ],
+  },
+  {
+    label: 'Marketing',
+    items: [
+      { path: '/endomarketing', label: 'Endomkt', icon: Megaphone, roles: ['admin', 'endomarketing', 'social_media'] },
+      { path: '/endomarketing/clientes', label: 'Clientes E.', icon: Building2, roles: ['endomarketing'] },
+      { path: '/endomarketing/agenda', label: 'Agenda E.', icon: Calendar, roles: ['endomarketing'] },
+    ],
+  },
+  {
+    label: 'Sistema',
+    items: [
+      { path: '/financeiro', label: 'Financeiro', icon: DollarSign, roles: ['admin'] },
+      { path: '/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin', 'social_media'] },
+      { path: '/whatsapp', label: 'WhatsApp', icon: MessageSquare, roles: ['admin', 'social_media'] },
+      { path: '/configuracoes', label: 'Config', icon: Settings, roles: ['admin', 'social_media'] },
+    ],
+  },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -42,9 +71,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const filteredNav = navItems.filter(item =>
-    currentUser && item.roles.includes(currentUser.role)
-  );
+  const filteredCategories = navCategories
+    .map(cat => ({
+      ...cat,
+      items: cat.items.filter(item => currentUser && item.roles.includes(currentUser.role)),
+    }))
+    .filter(cat => cat.items.length > 0);
+
+  const allFilteredItems = filteredCategories.flatMap(c => c.items);
 
   const handleLogout = async () => {
     await signOut();
@@ -59,27 +93,37 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <img src={pulseLogo} alt="Pulse" className="w-10 h-10 rounded-lg object-cover" />
         </div>
 
-        <nav className="flex-1 flex flex-col items-center gap-1 py-3 px-1.5 overflow-y-auto">
-          {filteredNav.map(item => {
-            const active = location.pathname === item.path;
-            return (
-              <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                className={`nav-icon-btn w-full ${active ? 'active' : ''}`}
-                title={item.label}
-              >
-                <item.icon size={20} strokeWidth={active ? 2.2 : 1.5} />
-                <span className="text-[10px] font-medium leading-none">{item.label}</span>
-              </button>
-            );
-          })}
+        <nav className="flex-1 flex flex-col items-center gap-0.5 py-2 px-1.5 overflow-y-auto">
+          {filteredCategories.map((cat, catIdx) => (
+            <div key={cat.label} className="w-full">
+              {catIdx > 0 && (
+                <div className="my-1.5 mx-2 h-px bg-sidebar-border" />
+              )}
+              <span className="text-[8px] uppercase tracking-wider text-muted-foreground/60 font-semibold px-2 mb-0.5 block">
+                {cat.label}
+              </span>
+              {cat.items.map(item => {
+                const active = location.pathname === item.path;
+                return (
+                  <button
+                    key={item.path}
+                    onClick={() => navigate(item.path)}
+                    className={`nav-icon-btn w-full group ${active ? 'active' : ''}`}
+                    title={item.label}
+                  >
+                    <item.icon size={18} strokeWidth={active ? 2.2 : 1.5} className="transition-transform duration-200 group-hover:scale-110" />
+                    <span className="text-[9px] font-medium leading-none">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <div className="p-2 border-t border-sidebar-border flex flex-col items-center gap-2">
           <ProfileDialog>
             <button
-              className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center"
+              className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center transition-transform duration-200 hover:scale-110"
               title={currentUser?.displayName || currentUser?.name}
             >
               {currentUser && <UserAvatar user={currentUser} />}
@@ -87,10 +131,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </ProfileDialog>
           <button
             onClick={handleLogout}
-            className="nav-icon-btn w-full"
+            className="nav-icon-btn w-full group"
             title="Sair"
           >
-            <LogOut size={18} />
+            <LogOut size={16} className="transition-transform duration-200 group-hover:scale-110" />
           </button>
         </div>
       </aside>
@@ -101,7 +145,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <header className="h-14 bg-card border-b border-border flex items-center px-4 lg:px-6 gap-4 shrink-0">
           {/* Mobile nav */}
           <div className="flex md:hidden gap-1 overflow-x-auto shrink-0">
-            {filteredNav.slice(0, 5).map(item => {
+            {allFilteredItems.slice(0, 5).map(item => {
               const active = location.pathname === item.path;
               return (
                 <button key={item.path} onClick={() => navigate(item.path)}

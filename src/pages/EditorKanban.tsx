@@ -3,14 +3,16 @@ import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import {
   Film, Megaphone, Image, Palette, ExternalLink, Clock, AlertTriangle,
-  Check, Eye, Search, Scissors
+  Check, Eye, Search, Scissors, Send
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import { highlightQuotes } from '@/lib/highlightQuotes';
@@ -65,8 +67,9 @@ function getTypeConfig(type: string) {
   return CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];
 }
 
-function TaskCard({ task, clients, onOpenScript, draggedId, onDragStart }: {
+function TaskCard({ task, clients, onOpenScript, onSendToReview, draggedId, onDragStart }: {
   task: EditorTask; clients: any[]; onOpenScript: (id: string) => void;
+  onSendToReview: (task: EditorTask) => void;
   draggedId: string | null; onDragStart: (e: React.DragEvent, task: EditorTask) => void;
 }) {
   const client = clients.find(c => c.id === task.client_id);
@@ -110,6 +113,12 @@ function TaskCard({ task, clients, onOpenScript, draggedId, onDragStart }: {
           )}
         </div>
         <p className="text-sm font-semibold text-foreground leading-tight">{task.title}</p>
+        {task.kanban_column === 'alteracao' && task.description && (
+          <div className="bg-warning/10 border border-warning/20 rounded-md p-2">
+            <p className="text-[10px] font-semibold text-warning mb-0.5">📝 Notas de alteração:</p>
+            <p className="text-[10px] text-foreground/80 whitespace-pre-wrap">{task.description}</p>
+          </div>
+        )}
         {task.script_id && (
           <button onClick={() => onOpenScript(task.script_id!)} className="flex items-center gap-1 text-[11px] text-primary hover:underline">
             <Eye size={11} /> Ver roteiro gravado
@@ -125,6 +134,11 @@ function TaskCard({ task, clients, onOpenScript, draggedId, onDragStart }: {
           <p className="text-[10px] text-muted-foreground">
             Prazo: {format(new Date(task.editing_deadline), "dd/MM 'às' HH:mm", { locale: ptBR })}
           </p>
+        )}
+        {task.kanban_column === 'alteracao' && (
+          <Button size="sm" className="w-full gap-1.5 h-7 text-xs mt-1" onClick={(e) => { e.stopPropagation(); onSendToReview(task); }}>
+            <Send size={11} /> Enviar para Aprovação
+          </Button>
         )}
       </div>
     </div>
@@ -203,23 +217,68 @@ export default function EditorKanban() {
     if (error) {
       toast.error('Erro ao mover cartão');
     } else {
+      // When moving to revisao, create social_media_delivery + notify social_media
+      if (targetColumn === 'revisao') {
+        const existing = await supabase.from('social_media_deliveries')
+          .select('id').eq('content_task_id', draggedTask.id).limit(1);
+        if (!existing.data?.length) {
+          await supabase.from('social_media_deliveries').insert({
+            client_id: draggedTask.client_id, content_type: draggedTask.content_type,
+            title: draggedTask.title, description: draggedTask.description || null,
+            status: 'revisao', delivered_at: format(new Date(), 'yyyy-MM-dd'),
+            script_id: draggedTask.script_id || null, recording_id: draggedTask.recording_id || null,
+            created_by: user?.id || null, content_task_id: draggedTask.id,
+          } as any);
+        } else {
+          await supabase.from('social_media_deliveries').update({ status: 'revisao' } as any).eq('content_task_id', draggedTask.id);
+        }
+        const clientName = clients.find(c => c.id === draggedTask.client_id)?.companyName || '';
+        await supabase.rpc('notify_role', {
+          _role: 'social_media',
+          _title: 'Vídeo para Revisão',
+          _message: `${draggedTask.title} (${clientName}) está pronto para revisão`,
+          _type: 'review',
+          _link: '/entregas-social',
+        });
+      }
       if (targetColumn === 'envio') {
         const existing = await supabase.from('social_media_deliveries')
-          .select('id').eq('title', draggedTask.title).eq('client_id', draggedTask.client_id).limit(1);
+          .select('id').eq('content_task_id', draggedTask.id).limit(1);
         if (!existing.data?.length) {
           await supabase.from('social_media_deliveries').insert({
             client_id: draggedTask.client_id, content_type: draggedTask.content_type,
             title: draggedTask.title, description: draggedTask.description || null,
             status: 'entregue', delivered_at: format(new Date(), 'yyyy-MM-dd'),
             script_id: draggedTask.script_id || null, recording_id: draggedTask.recording_id || null,
-            created_by: user?.id || null,
+            created_by: user?.id || null, content_task_id: draggedTask.id,
           } as any);
+        } else {
+          await supabase.from('social_media_deliveries').update({ status: 'entregue' } as any).eq('content_task_id', draggedTask.id);
         }
       }
       toast.success(`Movido para ${EDITOR_COLUMNS.find(c => c.id === targetColumn)?.label}`);
       fetchTasks();
     }
     setDraggedTask(null);
+  };
+
+  const handleSendToReview = async (task: EditorTask) => {
+    const { error } = await supabase.from('content_tasks').update({
+      kanban_column: 'revisao', updated_at: new Date().toISOString(),
+    } as any).eq('id', task.id);
+    if (error) { toast.error('Erro ao enviar para revisão'); return; }
+    // Update delivery status
+    await supabase.from('social_media_deliveries').update({ status: 'revisao' } as any).eq('content_task_id', task.id);
+    const clientName = clients.find(c => c.id === task.client_id)?.companyName || '';
+    await supabase.rpc('notify_role', {
+      _role: 'social_media',
+      _title: 'Alteração Concluída',
+      _message: `${task.title} (${clientName}) foi corrigido e está pronto para nova revisão`,
+      _type: 'review',
+      _link: '/entregas-social',
+    });
+    toast.success('Enviado para revisão');
+    fetchTasks();
   };
 
   const openScript = (scriptId: string) => {
@@ -273,7 +332,7 @@ export default function EditorKanban() {
                   <div className="space-y-2">
                     {colTasks.map(task => (
                       <TaskCard key={task.id} task={task} clients={clients} onOpenScript={openScript}
-                        draggedId={draggedTask?.id || null} onDragStart={handleDragStart} />
+                        onSendToReview={handleSendToReview} draggedId={draggedTask?.id || null} onDragStart={handleDragStart} />
                     ))}
                     {colTasks.length === 0 && (
                       <div className="text-center py-10 text-xs text-muted-foreground italic">

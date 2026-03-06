@@ -282,22 +282,44 @@ export default function ContentKanban() {
     if (newColumn === 'edicao' && task.script_id) {
       await supabase.from('scripts').update({ recorded: true } as any).eq('id', task.script_id);
     }
+    // When moving to "revisao", create/update social_media_delivery + notify
+    if (newColumn === 'revisao') {
+      const existing = await supabase.from('social_media_deliveries')
+        .select('id').eq('content_task_id', task.id).limit(1);
+      if (!existing.data?.length) {
+        await supabase.from('social_media_deliveries').insert({
+          client_id: task.client_id, content_type: task.content_type,
+          title: task.title, description: task.description || null,
+          status: 'revisao', delivered_at: format(new Date(), 'yyyy-MM-dd'),
+          recording_id: task.recording_id || null, script_id: task.script_id || null,
+          created_by: user?.id || null, content_task_id: task.id,
+        } as any);
+      } else {
+        await supabase.from('social_media_deliveries').update({ status: 'revisao' } as any).eq('content_task_id', task.id);
+      }
+      const client = clients.find(c => c.id === task.client_id);
+      await supabase.rpc('notify_role', {
+        _role: 'social_media',
+        _title: 'Vídeo para Revisão',
+        _message: `${task.title} (${client?.companyName || ''}) está pronto para revisão`,
+        _type: 'review',
+        _link: '/entregas-social',
+      });
+    }
     // When moving to "envio" (send to client), create a social_media_delivery
     if (newColumn === 'envio') {
       const existing = await supabase.from('social_media_deliveries')
-        .select('id').eq('title', task.title).eq('client_id', task.client_id).limit(1);
+        .select('id').eq('content_task_id', task.id).limit(1);
       if (!existing.data?.length) {
         await supabase.from('social_media_deliveries').insert({
-          client_id: task.client_id,
-          content_type: task.content_type,
-          title: task.title,
-          description: task.description || null,
-          status: 'entregue',
-          delivered_at: format(new Date(), 'yyyy-MM-dd'),
-          recording_id: task.recording_id || null,
-          script_id: task.script_id || null,
-          created_by: user?.id || null,
+          client_id: task.client_id, content_type: task.content_type,
+          title: task.title, description: task.description || null,
+          status: 'entregue', delivered_at: format(new Date(), 'yyyy-MM-dd'),
+          recording_id: task.recording_id || null, script_id: task.script_id || null,
+          created_by: user?.id || null, content_task_id: task.id,
         } as any);
+      } else {
+        await supabase.from('social_media_deliveries').update({ status: 'entregue' } as any).eq('content_task_id', task.id);
       }
     }
   };

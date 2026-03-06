@@ -860,6 +860,39 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          link: string | null
+          message: string
+          read: boolean
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          link?: string | null
+          message?: string
+          read?: boolean
+          title?: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          link?: string | null
+          message?: string
+          read?: boolean
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       payment_config: {
         Row: {
           bank: string
@@ -1163,6 +1196,7 @@ export type Database = {
       social_media_deliveries: {
         Row: {
           client_id: string
+          content_task_id: string | null
           content_type: string
           created_at: string
           created_by: string | null
@@ -1180,6 +1214,7 @@ export type Database = {
         }
         Insert: {
           client_id: string
+          content_task_id?: string | null
           content_type?: string
           created_at?: string
           created_by?: string | null
@@ -1197,6 +1232,7 @@ export type Database = {
         }
         Update: {
           client_id?: string
+          content_task_id?: string | null
           content_type?: string
           created_at?: string
           created_by?: string | null
@@ -1218,6 +1254,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_media_deliveries_content_task_id_fkey"
+            columns: ["content_task_id"]
+            isOneToOne: false
+            referencedRelation: "content_tasks"
             referencedColumns: ["id"]
           },
           {
@@ -1524,6 +1567,26 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      notify_role: {
+        Args: {
+          _link?: string
+          _message: string
+          _role: Database["public"]["Enums"]["app_role"]
+          _title: string
+          _type: string
+        }
+        Returns: undefined
+      }
+      notify_user: {
+        Args: {
+          _link?: string
+          _message: string
+          _title: string
+          _type: string
+          _user_id: string
+        }
+        Returns: undefined
       }
     }
     Enums: {

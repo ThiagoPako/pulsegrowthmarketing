@@ -245,8 +245,11 @@ export default function EditorDashboard() {
         </Button>
       </div>
 
-      <Tabs defaultValue="queue" className="space-y-4">
+      <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="overview" className="gap-1.5">
+            <BarChart3 size={13} /> Visão Geral
+          </TabsTrigger>
           <TabsTrigger value="queue" className="gap-1.5">
             <Scissors size={13} /> Fila de Edição
             {editingQueueTasks.length > 0 && (
@@ -260,9 +263,194 @@ export default function EditorDashboard() {
             )}
           </TabsTrigger>
           <TabsTrigger value="performance" className="gap-1.5">
-            <BarChart3 size={13} /> Desempenho
+            <TrendingUp size={13} /> Desempenho
           </TabsTrigger>
         </TabsList>
+
+        {/* OVERVIEW TAB */}
+        <TabsContent value="overview" className="space-y-5">
+          {/* Quick Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: 'Para Editar', value: pendingTasks.length, icon: Clock, color: 'text-blue-500', bg: 'bg-blue-500/10', desc: 'aguardando edição' },
+              { label: 'Ajustes Solicitados', value: adjustmentTasks.length, icon: AlertTriangle, color: 'text-amber-500', bg: 'bg-amber-500/10', desc: 'precisam de correção' },
+              { label: 'Em Revisão', value: inReviewTasks.length, icon: Eye, color: 'text-teal-500', bg: 'bg-teal-500/10', desc: 'aguardando aprovação' },
+              { label: 'Finalizados (Mês)', value: monthCompleted.length, icon: Check, color: 'text-green-500', bg: 'bg-green-500/10', desc: `${todayCompleted.length} hoje` },
+            ].map((s, i) => (
+              <motion.div key={s.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                className={`${s.bg} rounded-xl p-4 border border-border/50`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <s.icon size={16} className={s.color} />
+                  <span className="text-xs text-muted-foreground font-medium">{s.label}</span>
+                </div>
+                <p className={`text-3xl font-black ${s.color}`}>{s.value}</p>
+                <p className="text-[11px] text-muted-foreground mt-1">{s.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Alertas + Pontuação */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Alertas urgentes */}
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+              className="bg-card border border-border rounded-xl p-4">
+              <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                <AlertTriangle size={14} className="text-destructive" /> Atenção Imediata
+              </h3>
+              {(() => {
+                const urgentTasks = editingQueueTasks.filter(t => {
+                  const s = getDeadlineStatus(t.editing_deadline);
+                  return s.variant === 'destructive' || s.variant === 'warning';
+                }).slice(0, 5);
+                if (urgentTasks.length === 0) return (
+                  <div className="text-center py-4">
+                    <Check size={24} className="mx-auto mb-2 text-green-500/60" />
+                    <p className="text-sm text-muted-foreground">Nenhuma tarefa urgente 🎉</p>
+                  </div>
+                );
+                return (
+                  <div className="space-y-2">
+                    {urgentTasks.map(t => {
+                      const client = clients.find(c => c.id === t.client_id);
+                      const dl = getDeadlineStatus(t.editing_deadline);
+                      const cfg = getTypeConfig(t.content_type);
+                      return (
+                        <div key={t.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                          onClick={() => openTaskDetail(t)}>
+                          <ClientLogo client={client as any} size="sm" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{t.title}</p>
+                            <p className="text-[11px] text-muted-foreground">{client?.companyName}</p>
+                          </div>
+                          <Badge variant={dl.variant === 'destructive' ? 'destructive' : 'outline'}
+                            className={`text-[9px] shrink-0 ${dl.variant === 'warning' ? 'bg-warning/20 text-warning border-warning/30' : ''}`}>
+                            {dl.variant === 'destructive' && <AlertTriangle size={9} className="mr-0.5" />}
+                            {dl.label}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </motion.div>
+
+            {/* Pontuação resumo */}
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
+              className="bg-card border border-border rounded-xl p-4">
+              <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                <Star size={14} className="text-amber-500" /> Pontuação
+              </h3>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="text-center p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                  <p className="text-[11px] text-muted-foreground mb-1">Esta Semana</p>
+                  <p className="text-2xl font-black text-amber-600">{weekPoints}</p>
+                  <p className="text-[10px] text-muted-foreground">{weekCompleted.length} vídeos</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-primary/5 border border-primary/20">
+                  <p className="text-[11px] text-muted-foreground mb-1">Este Mês</p>
+                  <p className="text-2xl font-black text-primary">{monthPoints}</p>
+                  <p className="text-[10px] text-muted-foreground">{monthCompleted.length} vídeos</p>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                {CONTENT_TYPES.filter(ct => ct.value !== 'arte').map(ct => {
+                  const count = monthCompleted.filter(t => t.content_type === ct.value).length;
+                  return (
+                    <div key={ct.value} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <ct.icon size={12} className={ct.color.split(' ')[0]} />
+                        <span className="text-xs text-foreground">{ct.label}</span>
+                      </div>
+                      <span className="text-xs font-bold text-foreground">{count}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Produtividade diária + Tempo médio */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+              className="bg-card border border-border rounded-xl p-4">
+              <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                <TrendingUp size={14} className="text-primary" /> Produtividade
+              </h3>
+              <div className="space-y-3">
+                {[
+                  { label: 'Hoje', value: todayCompleted.length },
+                  { label: 'Esta semana', value: weekCompleted.length },
+                  { label: 'Este mês', value: monthCompleted.length },
+                ].map(item => (
+                  <div key={item.label} className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">{item.label}</span>
+                    <span className="text-lg font-black text-foreground">{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
+              className="bg-card border border-border rounded-xl p-4">
+              <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                <Timer size={14} className="text-primary" /> Tempo Médio de Edição
+              </h3>
+              {avgTimes.length > 0 ? (
+                <div className="space-y-2">
+                  {avgTimes.map(at => {
+                    const cfg = getTypeConfig(at.type);
+                    const hours = Math.floor(at.avg);
+                    const mins = Math.round((at.avg - hours) * 60);
+                    return (
+                      <div key={at.type} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <cfg.icon size={14} className={cfg.color.split(' ')[0]} />
+                          <span className="text-sm text-foreground">{cfg.label}</span>
+                        </div>
+                        <span className="text-sm font-bold text-foreground">{hours > 0 ? `${hours}h ` : ''}{mins}min</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">Dados insuficientes</p>
+              )}
+            </motion.div>
+          </div>
+
+          {/* Últimos finalizados */}
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+            className="bg-card border border-border rounded-xl p-4">
+            <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+              <History size={14} className="text-primary" /> Últimos Finalizados
+            </h3>
+            {completedTasks.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic">Nenhum conteúdo finalizado ainda</p>
+            ) : (
+              <div className="space-y-2">
+                {completedTasks.slice(0, 5).map(t => {
+                  const client = clients.find(c => c.id === t.client_id);
+                  const cfg = getTypeConfig(t.content_type);
+                  return (
+                    <div key={t.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                      onClick={() => openTaskDetail(t)}>
+                      <ClientLogo client={client as any} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{t.title}</p>
+                        <p className="text-[11px] text-muted-foreground">{client?.companyName}</p>
+                      </div>
+                      <Badge className={`text-[9px] ${cfg.color} border-0`}>
+                        <cfg.icon size={9} className="mr-0.5" /> {cfg.label}
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground">{format(parseISO(t.updated_at), "dd/MM", { locale: ptBR })}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </motion.div>
+        </TabsContent>
 
         {/* PERFORMANCE TAB */}
         <TabsContent value="performance" className="space-y-4">
@@ -282,7 +470,6 @@ export default function EditorDashboard() {
 
           {/* Productivity + Time */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Produtividade */}
             <div className="bg-card border border-border rounded-xl p-4">
               <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
                 <TrendingUp size={14} className="text-primary" /> Produtividade
@@ -303,7 +490,6 @@ export default function EditorDashboard() {
               </div>
             </div>
 
-            {/* Produção por tipo */}
             <div className="bg-card border border-border rounded-xl p-4">
               <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
                 <BarChart3 size={14} className="text-primary" /> Produção do Mês
@@ -336,7 +522,6 @@ export default function EditorDashboard() {
               </div>
             </div>
 
-            {/* Tempo médio */}
             <div className="bg-card border border-border rounded-xl p-4">
               <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
                 <Timer size={14} className="text-primary" /> Tempo Médio de Edição
@@ -367,7 +552,6 @@ export default function EditorDashboard() {
             </div>
           </div>
 
-          {/* Pontos semana */}
           <div className="bg-card border border-border rounded-xl p-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-foreground flex items-center gap-2">

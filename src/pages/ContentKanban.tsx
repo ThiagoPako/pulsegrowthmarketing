@@ -1030,6 +1030,32 @@ export default function ContentKanban() {
   );
 }
 
+// ─── DEADLINE BADGE COMPONENT ────────────────────────────────
+function DeadlineBadge({ deadline, label }: { deadline: string; label: string }) {
+  const now = new Date();
+  const dl = new Date(deadline);
+  const diffMs = dl.getTime() - now.getTime();
+  const isExpired = diffMs <= 0;
+  const hours = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60));
+  const mins = Math.floor((Math.abs(diffMs) % (1000 * 60 * 60)) / (1000 * 60));
+  
+  const timeStr = isExpired 
+    ? `Expirado há ${hours}h${mins}m`
+    : hours > 0 ? `${hours}h${mins}m restantes` : `${mins}m restantes`;
+
+  return (
+    <span className={`inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-md ${
+      isExpired 
+        ? 'bg-red-100 text-red-800 border border-red-300 dark:bg-red-900/40 dark:text-red-300 animate-pulse' 
+        : diffMs < 2 * 60 * 60 * 1000 
+          ? 'bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400'
+          : 'bg-muted text-muted-foreground border border-border'
+    }`}>
+      <Clock size={9} /> {timeStr}
+    </span>
+  );
+}
+
 // ─── TASK CARD COMPONENT ─────────────────────────────────────
 interface TaskCardProps {
   task: ContentTask;

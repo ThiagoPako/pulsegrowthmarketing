@@ -14,7 +14,8 @@ import { format, differenceInHours, differenceInMinutes, isPast } from 'date-fns
 import { ptBR } from 'date-fns/locale';
 import {
   Eye, ExternalLink, Upload, Send, History, MessageSquare, Clock,
-  AlertTriangle, Check, Film, Megaphone, Image, Palette, Link2, Play
+  AlertTriangle, Check, Film, Megaphone, Image, Palette, Link2, Play,
+  Video, Camera, CircleCheck, CircleDot, Circle
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import { highlightQuotes } from '@/lib/highlightQuotes';
@@ -46,6 +47,26 @@ interface Props {
   onRefresh: () => void;
 }
 
+// Timeline stages
+const TIMELINE_STAGES = [
+  { key: 'created', label: 'Criado', icon: Circle },
+  { key: 'captured', label: 'Captação', icon: Camera },
+  { key: 'editing', label: 'Edição', icon: Video },
+  { key: 'review', label: 'Revisão', icon: Eye },
+  { key: 'done', label: 'Concluído', icon: CircleCheck },
+] as const;
+
+function getStageIndex(column: string): number {
+  switch (column) {
+    case 'ideias': return 0;
+    case 'captacao': return 1;
+    case 'edicao': case 'alteracao': return 2;
+    case 'revisao': return 3;
+    case 'envio': case 'concluido': return 4;
+    default: return 0;
+  }
+}
+
 export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }: Props) {
   const { clients, scripts, users } = useApp();
   const { user } = useAuth();
@@ -54,11 +75,28 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   const [newComment, setNewComment] = useState('');
   const [videoLink, setVideoLink] = useState(task.edited_video_link || '');
   const [saving, setSaving] = useState(false);
+  const [videomakerName, setVideomakerName] = useState<string | null>(null);
+  const [videomakerAvatar, setVideomakerAvatar] = useState<string | null>(null);
 
   const client = clients.find(c => c.id === task.client_id);
   const script = task.script_id ? scripts.find(s => s.id === task.script_id) : null;
   const deadline = getDeadlineStatus(task.editing_deadline);
   const cfg = getTypeConfig(task.content_type);
+
+  // Fetch videomaker info from recording
+  useEffect(() => {
+    if (!open || !task.recording_id) return;
+    (async () => {
+      const { data: rec } = await supabase.from('recordings').select('videomaker_id').eq('id', task.recording_id!).single();
+      if (rec?.videomaker_id) {
+        const vm = users.find(u => u.id === rec.videomaker_id);
+        if (vm) {
+          setVideomakerName(vm.displayName || vm.name);
+          setVideomakerAvatar(vm.avatarUrl || null);
+        }
+      }
+    })();
+  }, [open, task.recording_id, users]);
 
   const fetchComments = useCallback(async () => {
     const { data } = await supabase.from('task_comments').select('*').eq('task_id', task.id).order('created_at', { ascending: true });
@@ -142,7 +180,6 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
       updated_at: new Date().toISOString(),
     }).eq('id', task.id);
 
-    // Create or update social_media_deliveries record so Social Media can see it
     const existing = await supabase.from('social_media_deliveries')
       .select('id').eq('content_task_id', task.id).limit(1);
     if (!existing.data?.length) {
@@ -164,12 +201,11 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
         .eq('content_task_id', task.id);
     }
 
-    // Notify social media team
-    const client = clients.find(c => c.id === task.client_id);
+    const cl = clients.find(c => c.id === task.client_id);
     await supabase.rpc('notify_role', {
       _role: 'social_media',
       _title: 'Vídeo para Revisão',
-      _message: `${task.title} (${client?.companyName || ''}) está pronto para revisão`,
+      _message: `${task.title} (${cl?.companyName || ''}) está pronto para revisão`,
       _type: 'review',
       _link: '/entregas-social',
     });
@@ -188,7 +224,6 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
       approved_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }).eq('id', task.id);
-    // Auto-register delivery
     const existing = await supabase.from('social_media_deliveries')
       .select('id').eq('title', task.title).eq('client_id', task.client_id).limit(1);
     if (!existing.data?.length) {
@@ -207,7 +242,6 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
     setSaving(false);
   };
 
-  // Countdown
   const getCountdown = () => {
     if (!task.editing_deadline) return null;
     const dl = new Date(task.editing_deadline);
@@ -224,15 +258,50 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   };
 
   const countdown = getCountdown();
+  const currentStageIdx = getStageIndex(task.kanban_column);
+
+  // Build timeline dates
+  const stageDates: Record<string, string | null> = {
+    created: task.created_at,
+    captured: task.editing_deadline ? (() => {
+      // Captured = editing_deadline - 2 days (approx when it moved to edição)
+      const d = new Date(task.editing_deadline);
+      d.setDate(d.getDate() - 2);
+      return d.toISOString();
+    })() : task.created_at,
+    editing: task.editing_started_at || (currentStageIdx >= 2 ? task.updated_at : null),
+    review: task.approval_sent_at,
+    done: task.approved_at,
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
+        <DialogHeader className="space-y-3">
           <DialogTitle className="flex items-center gap-2 text-lg">
             <cfg.icon size={18} className={cfg.color.split(' ')[0]} />
             {task.title}
           </DialogTitle>
+
+          {/* Videomaker mini-banner */}
+          {videomakerName && (
+            <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-500/10 via-purple-500/10 to-fuchsia-500/10 border border-purple-500/20">
+              <div className="relative">
+                {videomakerAvatar ? (
+                  <img src={videomakerAvatar} alt={videomakerName} className="w-7 h-7 rounded-full object-cover ring-2 ring-purple-400/50" />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center ring-2 ring-purple-400/50">
+                    <span className="text-[10px] font-bold text-white">{videomakerName.charAt(0).toUpperCase()}</span>
+                  </div>
+                )}
+                <Camera size={10} className="absolute -bottom-0.5 -right-0.5 text-purple-500 bg-background rounded-full p-[1px]" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] text-muted-foreground leading-none">Gravado por</span>
+                <span className="text-xs font-semibold text-foreground leading-tight">{videomakerName}</span>
+              </div>
+            </div>
+          )}
         </DialogHeader>
 
         <ScrollArea className="flex-1 pr-2">
@@ -253,6 +322,53 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
               </Badge>
             </div>
 
+            {/* Visual Timeline */}
+            <div className="relative px-2 py-3">
+              <div className="flex items-start justify-between relative">
+                {/* Background line */}
+                <div className="absolute top-3 left-0 right-0 h-0.5 bg-border" />
+                <div
+                  className="absolute top-3 left-0 h-0.5 bg-gradient-to-r from-emerald-500 via-primary to-violet-500 transition-all duration-500"
+                  style={{ width: `${(currentStageIdx / (TIMELINE_STAGES.length - 1)) * 100}%` }}
+                />
+
+                {TIMELINE_STAGES.map((stage, idx) => {
+                  const isPassed = idx <= currentStageIdx;
+                  const isCurrent = idx === currentStageIdx;
+                  const date = stageDates[stage.key];
+                  const StageIcon = stage.icon;
+
+                  return (
+                    <div key={stage.key} className="flex flex-col items-center relative z-10" style={{ width: `${100 / TIMELINE_STAGES.length}%` }}>
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-300 ${
+                        isCurrent
+                          ? 'bg-primary text-primary-foreground ring-4 ring-primary/20 scale-110'
+                          : isPassed
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-muted text-muted-foreground border-2 border-border'
+                      }`}>
+                        {isPassed && !isCurrent ? (
+                          <Check size={12} />
+                        ) : (
+                          <StageIcon size={12} />
+                        )}
+                      </div>
+                      <span className={`text-[10px] mt-1.5 font-medium text-center leading-tight ${
+                        isCurrent ? 'text-primary font-bold' : isPassed ? 'text-foreground' : 'text-muted-foreground'
+                      }`}>
+                        {stage.label}
+                      </span>
+                      {date && isPassed && (
+                        <span className="text-[9px] text-muted-foreground mt-0.5">
+                          {format(new Date(date), 'dd/MM', { locale: ptBR })}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Deadline countdown */}
             {countdown && (
               <div className={`flex items-center gap-2 p-3 rounded-lg border ${
@@ -270,7 +386,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
               </div>
             )}
 
-            {/* Adjustment notes (if any) */}
+            {/* Adjustment notes */}
             {task.kanban_column === 'alteracao' && task.adjustment_notes && (
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
                 <p className="text-xs font-bold text-amber-600 mb-1 flex items-center gap-1"><AlertTriangle size={12} /> Ajustes solicitados:</p>
@@ -310,13 +426,6 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
                     <p className="text-sm text-foreground">{(task as any).script_alteration_notes}</p>
                   </div>
                 )}
-              </div>
-            )}
-
-            {task.description && (
-              <div>
-                <p className="text-xs font-bold text-muted-foreground mb-1">DESCRIÇÃO</p>
-                <p className="text-sm text-foreground">{task.description}</p>
               </div>
             )}
 
@@ -413,7 +522,6 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
               {/* History */}
               <TabsContent value="history">
                 <div className="space-y-2">
-                  {/* Auto-generated timeline */}
                   <div className="space-y-1.5">
                     <HistoryLine label="Criado em" date={task.created_at} />
                     {task.editing_started_at && <HistoryLine label="Edição iniciada" date={task.editing_started_at} />}

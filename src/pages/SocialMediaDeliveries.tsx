@@ -799,6 +799,57 @@ export default function SocialMediaDeliveries() {
             })()}
           </TabsContent>
 
+          {/* Fila de Edição */}
+          <TabsContent value="edicao" className="mt-4">
+            {editingQueueTasks.length === 0 ? (
+              <Card className="border-border"><CardContent className="py-12 text-center text-muted-foreground">
+                <Scissors size={32} className="mx-auto mb-2 opacity-40" />
+                Nenhum vídeo na fila de edição para este cliente.
+              </CardContent></Card>
+            ) : (
+              <div className="grid gap-3">
+                {editingQueueTasks.map(t => {
+                  const typeConf = getTypeConfig(t.content_type);
+                  return (
+                    <Card key={t.id} className={`border-border border-l-4 border-l-blue-500 ${t.editing_priority ? 'ring-1 ring-amber-500/40' : ''}`}>
+                      <CardContent className="p-4">
+                        {t.editing_priority && (
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-amber-600 dark:text-amber-400 mb-2">
+                            <Flame size={10} /> PRIORIDADE
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-sm text-foreground truncate">{t.title}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge className={`${typeConf.color} border-0 gap-1 text-[10px] px-1.5 py-0`}>
+                                <typeConf.icon size={10} /> {typeConf.label}
+                              </Badge>
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
+                                <Scissors size={9} className="mr-0.5" /> Aguardando edição
+                              </Badge>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant={t.editing_priority ? 'default' : 'outline'}
+                            className={`gap-1.5 h-8 ${t.editing_priority
+                              ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                              : 'text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700 dark:hover:bg-amber-900/20'
+                            }`}
+                            onClick={() => handleTogglePriorityFromQueue(t.id, t.editing_priority)}
+                          >
+                            <Zap size={14} /> {t.editing_priority ? 'Prioritário' : 'Prioridade'}
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
+
           {/* Revisão */}
           <TabsContent value="revisao" className="mt-4">
             {clientDeliveries.review.length === 0 ? (

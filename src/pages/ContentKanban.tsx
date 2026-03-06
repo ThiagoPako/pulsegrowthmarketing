@@ -18,6 +18,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Client, Recording, Script } from '@/types';
 import { getWhatsAppConfig, sendWhatsAppMessage } from '@/services/whatsappService';
+import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 
 // ─── COLUMN DEFINITIONS ───────────────────────────────────────
 const KANBAN_COLUMNS = [

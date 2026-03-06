@@ -126,6 +126,7 @@ export default function Scripts() {
   const [filterClient, setFilterClient] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [filterEndo, setFilterEndo] = useState<'all' | 'video' | 'endo'>('all');
+  const [showRecorded, setShowRecorded] = useState(false);
 
   const [form, setForm] = useState({
     clientId: '',
@@ -142,7 +143,7 @@ export default function Scripts() {
   const printRef = useRef<HTMLDivElement>(null);
 
   const filteredScripts = useMemo(() => {
-    let result = scripts.filter(s => !s.recorded);
+    let result = showRecorded ? scripts : scripts.filter(s => !s.recorded);
     if (filterEndo === 'endo') result = result.filter(s => s.isEndomarketing);
     else if (filterEndo === 'video') result = result.filter(s => !s.isEndomarketing);
     if (filterClient !== 'all') result = result.filter(s => s.clientId === filterClient);
@@ -161,7 +162,7 @@ export default function Scripts() {
       if (pA !== pB) return pA - pB;
       return b.updatedAt.localeCompare(a.updatedAt);
     });
-  }, [scripts, filterClient, filterType, filterEndo, searchTerm, clients]);
+  }, [scripts, filterClient, filterType, filterEndo, searchTerm, clients, showRecorded]);
 
   const handleOpen = (script?: Script) => {
     if (script) {
@@ -331,6 +332,12 @@ export default function Scripts() {
             {VIDEO_TYPES.map(t => <SelectItem key={t} value={t}>{SCRIPT_VIDEO_TYPE_LABELS[t]}</SelectItem>)}
           </SelectContent>
         </Select>
+        <div className="flex items-center gap-2 ml-auto">
+          <Switch checked={showRecorded} onCheckedChange={setShowRecorded} id="show-recorded" />
+          <Label htmlFor="show-recorded" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+            Mostrar gravados
+          </Label>
+        </div>
       </div>
 
       {/* Scripts list */}

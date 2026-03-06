@@ -354,6 +354,7 @@ export default function SocialMediaDeliveries() {
   const openAlterationDialog = (d: SocialDelivery) => {
     setAlterationDelivery(d);
     setAlterationNotes('');
+    setAlterationImmediate(false);
     setAlterationDialogOpen(true);
   };
 

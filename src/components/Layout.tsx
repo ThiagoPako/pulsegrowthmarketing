@@ -142,7 +142,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               className={`flex items-center gap-2.5 rounded-xl transition-all duration-200 hover:bg-sidebar-accent ${sidebarExpanded ? 'px-3 py-2 w-full' : 'w-9 h-9 justify-center'} overflow-hidden`}
               title={currentUser?.displayName || currentUser?.name}
             >
-              {currentUser && <UserAvatar user={currentUser} size="sm" />}
+              {currentUser && <UserAvatar user={currentUser} size="sm" className="ring-2 ring-primary/20" />}
               {sidebarExpanded && currentUser && (
                 <span className="text-xs font-medium text-foreground whitespace-nowrap overflow-hidden text-ellipsis">
                   {currentUser.displayName || currentUser.name}

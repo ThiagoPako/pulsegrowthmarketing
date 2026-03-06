@@ -583,7 +583,7 @@ export default function ContentKanban() {
             return (
               <div
                 key={col.id}
-                className={`flex flex-col w-[270px] shrink-0 rounded-2xl transition-all duration-200 ${
+                className={`flex flex-col w-[290px] shrink-0 rounded-2xl transition-all duration-200 ${
                   isDragOver ? 'ring-2 ring-primary/40 bg-accent/20 scale-[1.01]' : 'bg-muted/10'
                 }`}
                 onDragOver={e => handleDragOver(e, col.id)}

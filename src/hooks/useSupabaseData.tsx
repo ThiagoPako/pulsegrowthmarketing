@@ -124,6 +124,7 @@ function rowToScript(r: any): Script {
     isEndomarketing: r.is_endomarketing || false,
     endoClientId: r.endo_client_id || undefined,
     scheduledDate: r.scheduled_date || undefined,
+    createdBy: r.created_by || undefined,
   };
 }
 

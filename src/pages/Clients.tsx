@@ -417,7 +417,7 @@ export default function Clients() {
   }, [form.videomaker, settings, clients, users, editing, preferredShift]);
 
   const canProceedStep0 = form.companyName && form.responsiblePerson && form.whatsapp;
-  const canProceedStep1 = form.videomaker && form.fixedDay && form.fixedTime;
+  const canProceedStep2 = form.videomaker && form.fixedDay && form.fixedTime;
 
   // ========== STEP RENDERERS ==========
 

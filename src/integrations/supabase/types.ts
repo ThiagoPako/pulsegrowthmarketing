@@ -242,8 +242,12 @@ export type Database = {
       }
       company_settings: {
         Row: {
+          alteration_deadline_hours: number
+          approval_deadline_hours: number
+          editing_deadline_hours: number
           id: string
           recording_duration: number
+          review_deadline_hours: number
           shift_a_end: string
           shift_a_start: string
           shift_b_end: string
@@ -252,8 +256,12 @@ export type Database = {
           work_days: string[]
         }
         Insert: {
+          alteration_deadline_hours?: number
+          approval_deadline_hours?: number
+          editing_deadline_hours?: number
           id?: string
           recording_duration?: number
+          review_deadline_hours?: number
           shift_a_end?: string
           shift_a_start?: string
           shift_b_end?: string
@@ -262,8 +270,12 @@ export type Database = {
           work_days?: string[]
         }
         Update: {
+          alteration_deadline_hours?: number
+          approval_deadline_hours?: number
+          editing_deadline_hours?: number
           id?: string
           recording_duration?: number
+          review_deadline_hours?: number
           shift_a_end?: string
           shift_a_start?: string
           shift_b_end?: string

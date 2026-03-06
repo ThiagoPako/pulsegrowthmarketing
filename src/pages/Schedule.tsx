@@ -554,7 +554,7 @@ export default function Schedule() {
     updateRecording({ ...finishRecording, status: 'concluida' });
 
     const editingDeadline = new Date();
-    editingDeadline.setDate(editingDeadline.getDate() + 2);
+    editingDeadline.setHours(editingDeadline.getHours() + (settings.editingDeadlineHours || 48));
 
     for (const scriptId of allRecordedArray) {
       const script = scripts.find(s => s.id === scriptId);

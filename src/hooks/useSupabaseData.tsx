@@ -155,6 +155,10 @@ function rowToSettings(r: any): CompanySettings {
     shiftBEnd: r.shift_b_end,
     workDays: r.work_days as DayOfWeek[],
     recordingDuration: r.recording_duration,
+    editingDeadlineHours: r.editing_deadline_hours ?? 48,
+    reviewDeadlineHours: r.review_deadline_hours ?? 24,
+    alterationDeadlineHours: r.alteration_deadline_hours ?? 24,
+    approvalDeadlineHours: r.approval_deadline_hours ?? 6,
   };
 }
 
@@ -175,6 +179,10 @@ const defaultSettings: CompanySettings = {
   shiftBEnd: '18:00',
   workDays: ['segunda', 'terca', 'quarta', 'quinta', 'sexta'],
   recordingDuration: 120,
+  editingDeadlineHours: 48,
+  reviewDeadlineHours: 24,
+  alterationDeadlineHours: 24,
+  approvalDeadlineHours: 6,
 };
 
 export function useSupabaseData() {
@@ -366,6 +374,10 @@ export function useSupabaseData() {
         shift_b_end: s.shiftBEnd,
         work_days: s.workDays,
         recording_duration: s.recordingDuration,
+        editing_deadline_hours: s.editingDeadlineHours,
+        review_deadline_hours: s.reviewDeadlineHours,
+        alteration_deadline_hours: s.alterationDeadlineHours,
+        approval_deadline_hours: s.approvalDeadlineHours,
       } as any).eq('id', settingsId);
     }
     setSettings(s);

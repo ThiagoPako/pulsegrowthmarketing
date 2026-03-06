@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
+import { Clock, Timer, CalendarClock } from 'lucide-react';
 
 const ALL_DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 
@@ -24,11 +26,24 @@ export default function CompanySettings() {
     toast.success('Configurações salvas');
   };
 
+  const formatDeadlineLabel = (hours: number) => {
+    if (hours < 24) return `${hours}h`;
+    const days = Math.floor(hours / 24);
+    const remaining = hours % 24;
+    return remaining > 0 ? `${days}d ${remaining}h` : `${days}d`;
+  };
+
   return (
-    <div className="max-w-lg space-y-6">
+    <div className="max-w-2xl space-y-6">
       <h1 className="text-2xl font-display font-bold">Configurações</h1>
 
+      {/* Turnos e Expediente */}
       <div className="glass-card p-6 space-y-5">
+        <div className="flex items-center gap-2 text-primary">
+          <Clock size={18} />
+          <h2 className="text-base font-semibold">Turnos e Expediente</h2>
+        </div>
+
         {/* Turno A */}
         <div className="space-y-2">
           <Label className="text-sm font-semibold text-primary">Turno A (Manhã)</Label>
@@ -83,9 +98,94 @@ export default function CompanySettings() {
           />
           <p className="text-xs text-muted-foreground">Duração padrão de cada sessão de gravação</p>
         </div>
-
-        <Button onClick={handleSave} className="w-full">Salvar Configurações</Button>
       </div>
+
+      {/* Prazos de Tarefas */}
+      <div className="glass-card p-6 space-y-5">
+        <div className="flex items-center gap-2 text-primary">
+          <CalendarClock size={18} />
+          <h2 className="text-base font-semibold">Prazos de Tarefas</h2>
+        </div>
+        <p className="text-xs text-muted-foreground -mt-2">
+          Defina os prazos automáticos para cada etapa do fluxo de produção de conteúdo.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Editing Deadline */}
+          <div className="space-y-1.5 p-3 rounded-lg border border-border bg-muted/30">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">🎬 Prazo de Edição</Label>
+              <span className="text-xs font-mono text-primary font-semibold">{formatDeadlineLabel(form.editingDeadlineHours)}</span>
+            </div>
+            <Input
+              type="number"
+              min={1}
+              max={720}
+              value={form.editingDeadlineHours}
+              onChange={e => setForm({ ...form, editingDeadlineHours: Number(e.target.value) })}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Tempo para o editor concluir a edição após receber o material
+            </p>
+          </div>
+
+          {/* Review Deadline */}
+          <div className="space-y-1.5 p-3 rounded-lg border border-border bg-muted/30">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">👁 Prazo de Revisão</Label>
+              <span className="text-xs font-mono text-primary font-semibold">{formatDeadlineLabel(form.reviewDeadlineHours)}</span>
+            </div>
+            <Input
+              type="number"
+              min={1}
+              max={720}
+              value={form.reviewDeadlineHours}
+              onChange={e => setForm({ ...form, reviewDeadlineHours: Number(e.target.value) })}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Tempo para a social media revisar o conteúdo editado
+            </p>
+          </div>
+
+          {/* Alteration Deadline */}
+          <div className="space-y-1.5 p-3 rounded-lg border border-border bg-muted/30">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">✏️ Prazo de Alteração</Label>
+              <span className="text-xs font-mono text-primary font-semibold">{formatDeadlineLabel(form.alterationDeadlineHours)}</span>
+            </div>
+            <Input
+              type="number"
+              min={1}
+              max={720}
+              value={form.alterationDeadlineHours}
+              onChange={e => setForm({ ...form, alterationDeadlineHours: Number(e.target.value) })}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Tempo para o editor aplicar os ajustes solicitados
+            </p>
+          </div>
+
+          {/* Approval Deadline */}
+          <div className="space-y-1.5 p-3 rounded-lg border border-border bg-muted/30">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">✅ Prazo de Aprovação</Label>
+              <span className="text-xs font-mono text-primary font-semibold">{formatDeadlineLabel(form.approvalDeadlineHours)}</span>
+            </div>
+            <Input
+              type="number"
+              min={1}
+              max={720}
+              value={form.approvalDeadlineHours}
+              onChange={e => setForm({ ...form, approvalDeadlineHours: Number(e.target.value) })}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Tempo para o cliente aprovar o conteúdo enviado
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <Button onClick={handleSave} className="w-full">Salvar Configurações</Button>
     </div>
   );
 }

@@ -24,7 +24,7 @@ import { ptBR } from 'date-fns/locale';
 
 export default function VideomakerDashboard() {
   const {
-    currentUser, recordings, clients, scripts, users, activeRecordings,
+    currentUser, recordings, clients, scripts, users, activeRecordings, settings,
     updateRecording, updateScript, startActiveRecording, stopActiveRecording,
   } = useApp();
 
@@ -246,7 +246,7 @@ export default function VideomakerDashboard() {
 
     // Create/update content_tasks for recorded scripts
     const editingDeadline = new Date();
-    editingDeadline.setDate(editingDeadline.getDate() + 2);
+    editingDeadline.setHours(editingDeadline.getHours() + (settings.editingDeadlineHours || 48));
 
     for (const scriptId of allRecordedArray) {
       const script = scripts.find(s => s.id === scriptId);

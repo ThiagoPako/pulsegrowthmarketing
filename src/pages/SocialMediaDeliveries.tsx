@@ -505,7 +505,7 @@ export default function SocialMediaDeliveries() {
     const thisMonth = deliveries.filter(d => d.delivered_at >= start && d.delivered_at <= end);
     return {
       total: thisMonth.length,
-      revisao: thisMonth.filter(d => d.status === 'revisao' || d.status === 'ajuste' || d.status === 'aprovacao_cliente').length,
+      revisao: thisMonth.filter(d => d.status === 'revisao' || d.status === 'aprovacao_cliente').length,
       pendentes: thisMonth.filter(d => d.status === 'entregue').length,
       agendados: thisMonth.filter(d => d.status === 'agendado').length,
       postados: thisMonth.filter(d => d.status === 'postado').length,

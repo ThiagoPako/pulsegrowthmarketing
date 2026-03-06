@@ -204,6 +204,16 @@ export default function Clients() {
           setContractValue(0); setDueDay(10); setPaymentMethod('pix');
         }
       });
+      // Load social accounts for editing
+      supabase.from('social_accounts').select('*').eq('client_id', client.id).then(({ data }) => {
+        setExistingSocialAccounts(data || []);
+        const ig = (data || []).find((a: any) => a.platform === 'instagram');
+        const fb = (data || []).find((a: any) => a.platform === 'facebook');
+        setSocialAccounts({
+          instagram: ig ? { connected: true, accountName: ig.account_name, username: ig.account_name, pageId: ig.facebook_page_id || '', businessId: ig.instagram_business_id || '' } : emptySocialAccounts().instagram,
+          facebook: fb ? { connected: true, accountName: fb.account_name, pageId: fb.facebook_page_id || '' } : emptySocialAccounts().facebook,
+        });
+      });
     }
     else {
       setEditing(null);
@@ -216,6 +226,8 @@ export default function Clients() {
       setContractValue(0);
       setDueDay(10);
       setPaymentMethod('pix');
+      setSocialAccounts(emptySocialAccounts());
+      setExistingSocialAccounts([]);
     }
     setLogoFile(null);
     setStep(0);

@@ -686,7 +686,7 @@ export default function VideomakerDashboard() {
           {finishStep === 'scripts' ? (
             <>
               <p className="text-sm text-muted-foreground">
-                Selecione os roteiros que foram gravados nesta sessão. Os não selecionados permanecerão no banco de roteiros pendentes.
+                Defina o status de cada roteiro. Os não marcados permanecerão no banco de roteiros pendentes.
               </p>
 
               {finishClientScripts.length === 0 ? (
@@ -695,34 +695,105 @@ export default function VideomakerDashboard() {
                   <p className="text-sm">Nenhum roteiro planejado para esta sessão</p>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {finishClientScripts.map(script => (
-                    <div key={script.id} className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
-                      completedScriptIds.has(script.id) ? 'border-success/40 bg-success/5' :
-                      script.priority === 'urgent' ? 'border-destructive/40 bg-destructive/5' :
-                      script.priority === 'priority' ? 'border-warning/40 bg-warning/5' : 'border-border hover:bg-muted/30'
-                    }`}>
-                      <Checkbox
-                        checked={completedScriptIds.has(script.id)}
-                        onCheckedChange={checked => {
-                          const next = new Set(completedScriptIds);
-                          checked ? next.add(script.id) : next.delete(script.id);
-                          setCompletedScriptIds(next);
-                        }}
-                        className="mt-1"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
+                <div className="space-y-3">
+                  {finishClientScripts.map(script => {
+                    const isCompleted = completedScriptIds.has(script.id);
+                    const isRejected = rejectedScripts.has(script.id);
+                    const isAltered = alteredScripts.has(script.id);
+                    const isVerbal = verbalScripts.has(script.id);
+                    const hasStatus = isCompleted || isRejected || isAltered || isVerbal;
+
+                    const setScriptStatus = (status: 'completed' | 'rejected' | 'altered' | 'verbal' | null) => {
+                      // Remove from all sets first
+                      setCompletedScriptIds(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                      setRejectedScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                      setAlteredScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                      setVerbalScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                      // Add to the right set
+                      if (status === 'completed') setCompletedScriptIds(prev => new Set(prev).add(script.id));
+                      if (status === 'rejected') setRejectedScripts(prev => new Set(prev).add(script.id));
+                      if (status === 'altered') setAlteredScripts(prev => new Set(prev).add(script.id));
+                      if (status === 'verbal') setVerbalScripts(prev => new Set(prev).add(script.id));
+                    };
+
+                    return (
+                      <div key={script.id} className={`p-3 rounded-lg border transition-colors ${
+                        isCompleted ? 'border-success/40 bg-success/5' :
+                        isRejected ? 'border-destructive/40 bg-destructive/5' :
+                        isAltered ? 'border-amber-500/40 bg-amber-500/5' :
+                        isVerbal ? 'border-blue-500/40 bg-blue-500/5' :
+                        'border-border hover:bg-muted/30'
+                      }`}>
+                        <div className="flex items-center gap-1.5 mb-2">
                           {script.priority === 'urgent' && <AlertTriangle size={13} className="text-destructive shrink-0" />}
                           {script.priority === 'priority' && <Star size={13} className="text-warning shrink-0" />}
                           <p className="font-medium text-sm">{script.title}</p>
+                          <Badge variant="outline" className="text-[10px] ml-auto">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
                         </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="outline" className="text-[10px]">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button
+                            onClick={() => setScriptStatus(isCompleted ? null : 'completed')}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                              isCompleted ? 'bg-success/20 text-success border-success/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                            }`}
+                          >
+                            <Check size={12} /> Gravado
+                          </button>
+                          <button
+                            onClick={() => setScriptStatus(isRejected ? null : 'rejected')}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                              isRejected ? 'bg-destructive/20 text-destructive border-destructive/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                            }`}
+                          >
+                            <ThumbsDown size={12} /> Não gostou
+                          </button>
+                          <button
+                            onClick={() => setScriptStatus(isAltered ? null : 'altered')}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                              isAltered ? 'bg-amber-500/20 text-amber-600 border-amber-500/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                            }`}
+                          >
+                            <Pencil size={12} /> Alterado
+                          </button>
+                          <button
+                            onClick={() => setScriptStatus(isVerbal ? null : 'verbal')}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                              isVerbal ? 'bg-blue-500/20 text-blue-600 border-blue-500/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                            }`}
+                          >
+                            <MessageCircle size={12} /> Verbal
+                          </button>
                         </div>
+                        {/* Notes box for altered scripts */}
+                        {isAltered && (
+                          <div className="mt-2">
+                            <label className="text-[11px] text-amber-600 font-medium mb-1 block">
+                              📝 O que mudou? (opcional — ajuda o editor a entender)
+                            </label>
+                            <Textarea
+                              value={alterationNotes[script.id] || ''}
+                              onChange={e => setAlterationNotes(prev => ({ ...prev, [script.id]: e.target.value }))}
+                              placeholder="Descreva a ideia do vídeo e como o editor deve editar..."
+                              className="min-h-[60px] text-xs"
+                            />
+                          </div>
+                        )}
+                        {isVerbal && (
+                          <div className="mt-2">
+                            <label className="text-[11px] text-blue-600 font-medium mb-1 block">
+                              📝 Notas adicionais (opcional)
+                            </label>
+                            <Textarea
+                              value={alterationNotes[script.id] || ''}
+                              onChange={e => setAlterationNotes(prev => ({ ...prev, [script.id]: e.target.value }))}
+                              placeholder="Alguma observação extra para o editor..."
+                              className="min-h-[60px] text-xs"
+                            />
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
@@ -732,7 +803,7 @@ export default function VideomakerDashboard() {
                 </Button>
                 <Button onClick={handleGoToDriveStep} className="flex-1 gap-1.5">
                   <ArrowRight size={16} />
-                  Próximo ({completedScriptIds.size} selecionado{completedScriptIds.size !== 1 ? 's' : ''})
+                  Próximo ({completedScriptIds.size + alteredScripts.size + verbalScripts.size} gravado{(completedScriptIds.size + alteredScripts.size + verbalScripts.size) !== 1 ? 's' : ''}{rejectedScripts.size > 0 ? ` · ${rejectedScripts.size} rejeitado${rejectedScripts.size !== 1 ? 's' : ''}` : ''})
                 </Button>
               </div>
             </>
@@ -743,14 +814,23 @@ export default function VideomakerDashboard() {
               </p>
 
               <div className="space-y-3">
-                {Array.from(completedScriptIds).map(id => {
+                {Array.from(new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts])).map(id => {
                   const s = scripts.find(s => s.id === id);
                   if (!s) return null;
+                  const isAlt = alteredScripts.has(id);
+                  const isVerb = verbalScripts.has(id);
                   return (
-                    <div key={id} className="p-4 rounded-xl bg-muted/30 border border-border">
-                      <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
-                        📁 {s.title}
-                      </p>
+                    <div key={id} className={`p-4 rounded-xl border ${
+                      isAlt ? 'bg-amber-500/5 border-amber-500/30' :
+                      isVerb ? 'bg-blue-500/5 border-blue-500/30' : 'bg-muted/30 border-border'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          📁 {s.title}
+                        </p>
+                        {isAlt && <Badge className="text-[9px] bg-amber-500/20 text-amber-600 border-amber-500/40">✏️ Alterado</Badge>}
+                        {isVerb && <Badge className="text-[9px] bg-blue-500/20 text-blue-600 border-blue-500/40">🗣️ Verbal</Badge>}
+                      </div>
                       <div className="flex items-center gap-2">
                         <Link size={16} className="text-muted-foreground shrink-0" />
                         <Input
@@ -771,7 +851,7 @@ export default function VideomakerDashboard() {
                 </Button>
                 <Button 
                   onClick={confirmFinish} 
-                  disabled={Array.from(completedScriptIds).some(id => !driveLinks[id]?.trim())}
+                  disabled={Array.from(new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts])).some(id => !driveLinks[id]?.trim())}
                   className="flex-1 gap-1.5 bg-success hover:bg-success/90 text-success-foreground"
                 >
                   <Check size={16} />

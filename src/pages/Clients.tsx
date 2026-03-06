@@ -464,6 +464,16 @@ export default function Clients() {
         <Label>Telefone</Label>
         <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="(62) 99999-9999" />
       </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label>Email</Label>
+          <Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="contato@empresa.com" />
+        </div>
+        <div className="space-y-1">
+          <Label>Cidade</Label>
+          <Input value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} placeholder="Goiânia - GO" />
+        </div>
+      </div>
       <div className="space-y-1">
         <Label>WhatsApp do Cliente *</Label>
         <Input value={form.whatsapp} onChange={e => setForm({ ...form, whatsapp: e.target.value })} placeholder="5562999999999" />

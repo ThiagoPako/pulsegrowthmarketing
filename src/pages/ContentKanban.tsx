@@ -941,6 +941,7 @@ interface TaskCardProps {
   onDragStart: (e: React.DragEvent) => void;
   onEdit: () => void;
   onDelete: () => void;
+  onCardClick?: () => void;
   onConfirmPosted?: () => void;
   onApprove?: () => void;
   onRequestAdjustments?: () => void;
@@ -952,7 +953,7 @@ interface TaskCardProps {
   onResubmit?: () => void;
 }
 
-function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDragStart, onEdit, onDelete, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit }: TaskCardProps) {
+function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit }: TaskCardProps) {
   const [scriptPreviewOpen, setScriptPreviewOpen] = useState(false);
   const typeConfig = CONTENT_TYPES.find(t => t.value === task.content_type) || CONTENT_TYPES[0];
   const TypeIcon = typeConfig.icon;

@@ -1143,6 +1143,7 @@ export default function Clients() {
                   {renderStep1()}
                   {renderStep2()}
                   {renderStep3()}
+                  {renderStep4()}
                 </div>
               ) : (
                 <>
@@ -1150,6 +1151,7 @@ export default function Clients() {
                   {step === 1 && renderStep1()}
                   {step === 2 && renderStep2()}
                   {step === 3 && renderStep3()}
+                  {step === 4 && renderStep4()}
                 </>
               )}
             </div>
@@ -1165,9 +1167,9 @@ export default function Clients() {
                       <ChevronLeft size={14} /> Voltar
                     </Button>
                   )}
-                  {step < 3 ? (
+                  {step < 4 ? (
                     <Button onClick={() => setStep(s => s + 1)} className="ml-auto gap-1"
-                      disabled={step === 0 ? !canProceedStep0 : step === 1 ? !canProceedStep1 : false}>
+                      disabled={step === 0 ? !canProceedStep0 : step === 2 ? !canProceedStep2 : false}>
                       Próximo <ChevronRight size={14} />
                     </Button>
                   ) : (

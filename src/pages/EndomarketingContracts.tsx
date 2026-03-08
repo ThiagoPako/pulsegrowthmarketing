@@ -250,12 +250,12 @@ export default function EndomarketingContracts() {
               </Select>
             </div>
 
-            <div className={`grid ${isAdmin ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
+            <div className={`grid ${canSeeFinancials ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
               <div className="space-y-1">
                 <Label>💰 Custo Parceiro (R$) *</Label>
                 <Input type="number" min={0} step={0.01} value={formPartnerCost} onChange={e => setFormPartnerCost(Number(e.target.value))} />
               </div>
-              {isAdmin && (
+              {canSeeFinancials && (
                 <div className="space-y-1">
                   <Label>💵 Valor de Venda (R$) *</Label>
                   <Input type="number" min={0} step={0.01} value={formSalePrice} onChange={e => setFormSalePrice(Number(e.target.value))} />

@@ -27,6 +27,7 @@ export default function EndomarketingTasks() {
   const [completingTaskId, setCompletingTaskId] = useState('');
   const [completeNotes, setCompleteNotes] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [sendingNotifications, setSendingNotifications] = useState(false);
 
   const activeContracts = contracts.filter(c => c.status === 'ativo');
 

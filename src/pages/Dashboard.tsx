@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import {
   Video, Plus, XCircle, RefreshCw, TrendingUp, Calendar, Check,
   ChevronLeft, ChevronRight, Clock, Users as UsersIcon, MessageSquare, Trophy, BarChart3,
-  Clapperboard, Film
+  Clapperboard, Film, Megaphone
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, addDays, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -40,6 +40,7 @@ export default function Dashboard() {
   const [waStats, setWaStats] = useState({ total: 0, sent: 0, failed: 0 });
   const [deliveryRecords, setDeliveryRecords] = useState<any[]>([]);
   const [liveEditorTasks, setLiveEditorTasks] = useState<LiveEditorTask[]>([]);
+  const [endoMetrics, setEndoMetrics] = useState({ totalClients: 0, revenue: 0, costs: 0, profit: 0, margin: 0, topClients: [] as { name: string; profit: number }[] });
 
   useEffect(() => { getMessageStats().then(setWaStats); }, []);
   useEffect(() => {
@@ -63,6 +64,28 @@ export default function Dashboard() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'content_tasks' }, () => fetchLiveTasks())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  // Fetch endomarketing metrics
+  useEffect(() => {
+    const fetchEndo = async () => {
+      const { data: contracts } = await (supabase as any)
+        .from('client_endomarketing_contracts')
+        .select('*, clients(company_name)')
+        .eq('status', 'ativo');
+      if (contracts && contracts.length > 0) {
+        const revenue = contracts.reduce((s: number, c: any) => s + Number(c.sale_price), 0);
+        const costs = contracts.reduce((s: number, c: any) => s + Number(c.partner_cost), 0);
+        const profit = revenue - costs;
+        const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+        const topClients = contracts
+          .map((c: any) => ({ name: c.clients?.company_name || 'Cliente', profit: Number(c.sale_price) - Number(c.partner_cost) }))
+          .sort((a: any, b: any) => b.profit - a.profit)
+          .slice(0, 5);
+        setEndoMetrics({ totalClients: contracts.length, revenue, costs, profit, margin, topClients });
+      }
+    };
+    fetchEndo();
   }, []);
 
   const weekStart = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
@@ -418,6 +441,56 @@ export default function Dashboard() {
       )}
       {/* ── ROW 2.8: Agency Capacity ── */}
       <AgencyCapacityWidget clients={clients} users={users} recordings={recordings} settings={settings} />
+
+      {/* ── ROW 2.9: Endomarketing Metrics ── */}
+      {endoMetrics.totalClients > 0 && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display font-semibold text-sm flex items-center gap-2">
+              <Megaphone size={16} className="text-primary" /> Endomarketing
+            </h3>
+            <button onClick={() => navigate('/endomarketing')} className="text-[11px] text-primary font-semibold hover:underline">
+              VER MÓDULO
+            </button>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl p-4 bg-primary/5 border border-primary/10">
+                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Faturamento</p>
+                <p className="text-xl font-display font-bold text-primary mt-1">R$ {endoMetrics.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{endoMetrics.totalClients} cliente{endoMetrics.totalClients !== 1 ? 's' : ''} ativo{endoMetrics.totalClients !== 1 ? 's' : ''}</p>
+              </div>
+              <div className="rounded-xl p-4 bg-destructive/5 border border-destructive/10">
+                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Custos</p>
+                <p className="text-xl font-display font-bold text-destructive mt-1">R$ {endoMetrics.costs.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Parceiros</p>
+              </div>
+              <div className="rounded-xl p-4 bg-success/5 border border-success/10">
+                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Lucro</p>
+                <p className="text-xl font-display font-bold text-success mt-1">R$ {endoMetrics.profit.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+              </div>
+              <div className="rounded-xl p-4 bg-info/5 border border-info/10">
+                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Margem</p>
+                <p className="text-xl font-display font-bold text-info mt-1">{endoMetrics.margin.toFixed(1)}%</p>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Clientes Mais Lucrativos</p>
+              <div className="space-y-2">
+                {endoMetrics.topClients.map((c, i) => (
+                  <div key={i} className={`flex items-center justify-between p-2.5 rounded-lg ${i < 3 ? 'bg-primary/5' : 'bg-secondary/40'}`}>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-sm font-bold w-6 text-center">{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}º`}</span>
+                      <p className="text-sm font-medium">{c.name}</p>
+                    </div>
+                    <p className="text-sm font-display font-bold text-success">R$ {c.profit.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* ── ROW 3: Week Agenda ── */}
       <div className="glass-card p-5">

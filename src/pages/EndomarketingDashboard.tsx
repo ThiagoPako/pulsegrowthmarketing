@@ -36,7 +36,7 @@ export default function EndomarketingDashboard() {
   ];
 
   // Grid cols based on number of cards
-  const gridCols = canSeeFinancials ? 'grid-cols-2 md:grid-cols-5' : 'grid-cols-1 md:grid-cols-1';
+  const gridCols = isAdmin ? 'grid-cols-2 md:grid-cols-5' : canSeeFinancials ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-1';
 
   if (loadingC || loadingT) return <div className="flex items-center justify-center p-12"><p className="text-muted-foreground">Carregando...</p></div>;
 

@@ -12,6 +12,7 @@ import EndomarketingDashboard from "@/pages/EndomarketingDashboard";
 import EndomarketingContracts from "@/pages/EndomarketingContracts";
 import EndomarketingTasks from "@/pages/EndomarketingTasks";
 import EndomarketingReports from "@/pages/EndomarketingReports";
+import EndomarketingCalendar from "@/pages/EndomarketingCalendar";
 import EndomarketingPartnerPanel from "@/pages/EndomarketingPartnerPanel";
 import Clients from "@/pages/Clients";
 import Team from "@/pages/Team";

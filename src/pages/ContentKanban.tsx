@@ -265,9 +265,20 @@ export default function ContentKanban() {
     } else {
       payload.created_by = user?.id || null;
       payload.position = tasksByColumn[formColumn]?.length || 0;
-      const { error } = await supabase.from('content_tasks').insert(payload);
-      if (error) { toast.error('Erro ao criar cartão'); return; }
+      const { data: inserted, error } = await supabase.from('content_tasks').insert(payload).select().single();
+      if (error || !inserted) { toast.error('Erro ao criar cartão'); return; }
       toast.success('Cartão criado');
+
+      // Trigger sync for the initial column (sets deadlines, etc.)
+      if (payload.kanban_column !== 'ideias') {
+        const client = clients.find(c => c.id === inserted.client_id);
+        const ctx = buildSyncContext(inserted as any, {
+          userId: user?.id,
+          clientName: client?.companyName,
+          clientWhatsapp: client?.whatsapp,
+        });
+        await syncContentTaskColumnChange(payload.kanban_column, ctx);
+      }
     }
     setDialogOpen(false);
     resetForm();

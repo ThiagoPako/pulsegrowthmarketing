@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
+import { format, addDays, getDay } from 'date-fns';
 import { getWhatsAppConfig, sendWhatsAppMessage } from '@/services/whatsappService';
 
 /**
@@ -34,20 +34,59 @@ const COLUMN_TO_SOCIAL_STATUS: Record<string, string> = {
   acompanhamento: 'agendado',
 };
 
+// Map JS getDay() (0=Sun) to our DayOfWeek keys
+const NUM_TO_DAYKEY: Record<number, string> = {
+  0: 'domingo', 1: 'segunda', 2: 'terca', 3: 'quarta', 4: 'quinta', 5: 'sexta', 6: 'sabado',
+};
+
+/**
+ * Add hours to a date, but only count hours that fall on work days.
+ * Non-work days are skipped entirely (the clock "pauses").
+ */
+function addBusinessHours(from: Date, hours: number, workDays: string[]): Date {
+  const result = new Date(from);
+  let remaining = hours;
+
+  while (remaining > 0) {
+    const dayKey = NUM_TO_DAYKEY[getDay(result)];
+    if (workDays.includes(dayKey)) {
+      // This is a work day — consume up to 24h
+      const hoursToConsume = Math.min(remaining, 24);
+      result.setHours(result.getHours() + hoursToConsume);
+      remaining -= hoursToConsume;
+
+      // After adding hours, if we land on a non-work day, jump forward
+      if (remaining <= 0) break;
+    } else {
+      // Skip this entire day
+      result.setDate(result.getDate() + 1);
+      result.setHours(from.getHours(), from.getMinutes(), 0, 0);
+    }
+  }
+
+  // If we landed on a non-work day, advance to next work day
+  while (!workDays.includes(NUM_TO_DAYKEY[getDay(result)])) {
+    result.setDate(result.getDate() + 1);
+  }
+
+  return result;
+}
+
 export async function syncContentTaskColumnChange(
   newColumn: string,
   ctx: SyncContext
 ) {
   const updates: Record<string, any> = {};
 
-  // Fetch deadline settings
-  const { data: settingsRow } = await supabase.from('company_settings').select('editing_deadline_hours, review_deadline_hours, alteration_deadline_hours, approval_deadline_hours').limit(1).single();
+  // Fetch deadline settings + work_days
+  const { data: settingsRow } = await supabase.from('company_settings').select('editing_deadline_hours, review_deadline_hours, alteration_deadline_hours, approval_deadline_hours, work_days').limit(1).single();
   const deadlineHours = {
     editing: settingsRow?.editing_deadline_hours ?? 48,
     review: settingsRow?.review_deadline_hours ?? 24,
     alteration: settingsRow?.alteration_deadline_hours ?? 24,
     approval: settingsRow?.approval_deadline_hours ?? 6,
   };
+  const workDays: string[] = (settingsRow?.work_days as string[]) ?? ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
 
   // 1. Set editing_started_at when entering edicao
   if (newColumn === 'edicao') {
@@ -58,23 +97,20 @@ export async function syncContentTaskColumnChange(
     }
   }
 
-  // 2. Set deadlines based on column transitions
+  // 2. Set deadlines based on column transitions (business hours only)
   if (newColumn === 'revisao') {
-    const deadline = new Date();
-    deadline.setHours(deadline.getHours() + deadlineHours.review);
+    const deadline = addBusinessHours(new Date(), deadlineHours.review, workDays);
     updates.review_deadline = deadline.toISOString();
     updates.approval_sent_at = new Date().toISOString();
   }
   if (newColumn === 'alteracao') {
     if (!ctx.immediateAlteration) {
-      const deadline = new Date();
-      deadline.setHours(deadline.getHours() + deadlineHours.alteration);
+      const deadline = addBusinessHours(new Date(), deadlineHours.alteration, workDays);
       updates.alteration_deadline = deadline.toISOString();
     }
   }
   if (newColumn === 'envio') {
-    const deadline = new Date();
-    deadline.setHours(deadline.getHours() + deadlineHours.approval);
+    const deadline = addBusinessHours(new Date(), deadlineHours.approval, workDays);
     updates.approval_deadline = deadline.toISOString();
     updates.approval_sent_at = new Date().toISOString();
   }

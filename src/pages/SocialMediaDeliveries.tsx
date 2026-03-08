@@ -771,6 +771,15 @@ export default function SocialMediaDeliveries() {
                                 <Badge variant="outline" className={`text-[10px] px-1.5 py-0 border-0 ${statusInfo.badge}`}>
                                   {statusInfo.label}
                                 </Badge>
+                                {/* Deadline badge from linked content_task */}
+                                {d.content_task_id && (() => {
+                                  const td = taskDeadlines[d.content_task_id];
+                                  if (!td) return null;
+                                  if (d.status === 'revisao' && td.review_deadline) return <DeadlineBadge deadline={td.review_deadline} label="Revisão" />;
+                                  if (d.status === 'ajuste' && td.alteration_deadline && !td.immediate_alteration) return <DeadlineBadge deadline={td.alteration_deadline} label="Alteração" />;
+                                  if (d.status === 'aprovacao_cliente' && td.approval_deadline) return <DeadlineBadge deadline={td.approval_deadline} label="Aprovação" />;
+                                  return null;
+                                })()}
                                 {/* Step indicator */}
                                 <div className="flex items-center gap-0.5 ml-1">
                                   {[1, 2, 3, 4, 5].map(step => (

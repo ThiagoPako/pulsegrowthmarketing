@@ -95,7 +95,6 @@ export default function EndomarketingTasks() {
     }
     setSendingNotifications(false);
   };
-  };
 
   const stats = {
     total: tasks.length,

@@ -205,6 +205,62 @@ export default function EndomarketingPartnerPanel() {
         </CardContent>
       </Card>
 
+      {/* Financial Earnings */}
+      <Card className="glass-card">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <DollarSign size={18} className="text-primary" /> Meus Ganhos
+            </CardTitle>
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="w-[140px] h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 6 }, (_, i) => {
+                  const d = new Date();
+                  d.setMonth(d.getMonth() - i);
+                  const val = format(d, 'yyyy-MM');
+                  return (
+                    <SelectItem key={val} value={val}>
+                      {format(d, 'MMMM yyyy', { locale: ptBR })}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-3 rounded-lg bg-primary/10 text-center">
+              <p className="text-xl font-bold text-primary">
+                R$ {earnings.totalEarnings.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
+              <p className="text-xs text-muted-foreground">Recebimento Mensal</p>
+            </div>
+            <div className="p-3 rounded-lg bg-muted text-center">
+              <p className="text-xl font-bold">{earnings.completedTasks}</p>
+              <p className="text-xs text-muted-foreground">Tarefas Concluídas</p>
+            </div>
+          </div>
+
+          {earnings.endoContracts.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Contratos Ativos</p>
+              {earnings.endoContracts.filter(c => c.status === 'ativo').map((c, i) => (
+                <div key={i} className="flex items-center justify-between p-2 rounded-lg border border-border">
+                  <span className="text-sm">{c.client_name}</span>
+                  <span className="text-sm font-semibold text-primary">
+                    R$ {c.partner_cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Complete Dialog */}
       <Dialog open={completeDialogOpen} onOpenChange={setCompleteDialogOpen}>
         <DialogContent>

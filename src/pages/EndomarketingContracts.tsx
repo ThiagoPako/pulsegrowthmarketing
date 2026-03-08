@@ -248,18 +248,20 @@ export default function EndomarketingContracts() {
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className={`grid ${isAdmin ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
               <div className="space-y-1">
                 <Label>💰 Custo Parceiro (R$) *</Label>
                 <Input type="number" min={0} step={0.01} value={formPartnerCost} onChange={e => setFormPartnerCost(Number(e.target.value))} />
               </div>
-              <div className="space-y-1">
-                <Label>💵 Valor de Venda (R$) *</Label>
-                <Input type="number" min={0} step={0.01} value={formSalePrice} onChange={e => setFormSalePrice(Number(e.target.value))} />
-              </div>
+              {isAdmin && (
+                <div className="space-y-1">
+                  <Label>💵 Valor de Venda (R$) *</Label>
+                  <Input type="number" min={0} step={0.01} value={formSalePrice} onChange={e => setFormSalePrice(Number(e.target.value))} />
+                </div>
+              )}
             </div>
 
-            {formSalePrice > 0 && formPartnerCost > 0 && (
+            {isAdmin && formSalePrice > 0 && formPartnerCost > 0 && (
               <div className={`p-3 rounded-lg border ${formSalePrice < formPartnerCost ? 'border-red-300 bg-red-50 dark:bg-red-950/20' : 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20'}`}>
                 <div className="flex items-center gap-2">
                   {formSalePrice < formPartnerCost ? <AlertTriangle size={16} className="text-red-500" /> : <TrendingUp size={16} className="text-emerald-500" />}

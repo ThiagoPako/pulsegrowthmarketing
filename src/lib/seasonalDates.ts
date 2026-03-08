@@ -226,7 +226,7 @@ export function getSeasonalAlerts(
       const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
       
       if (diffDays > 0 && diffDays <= sd.daysBeforeAlert) {
-        const urgency = diffDays <= 5 ? 'high' : diffDays <= 10 ? 'medium' : 'low';
+        const urgency = diffDays <= 10 ? 'high' : diffDays <= 20 ? 'medium' : 'low';
         results.push({ label: sd.label, date: eventDate, daysUntil: diffDays, urgency });
       }
     }

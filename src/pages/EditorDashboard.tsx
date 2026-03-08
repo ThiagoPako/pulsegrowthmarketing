@@ -50,6 +50,9 @@ export interface EditorTask {
   adjustment_notes: string | null;
   editing_priority: boolean;
   immediate_alteration: boolean;
+  review_deadline: string | null;
+  alteration_deadline: string | null;
+  approval_deadline: string | null;
   position: number;
   created_at: string;
   updated_at: string;

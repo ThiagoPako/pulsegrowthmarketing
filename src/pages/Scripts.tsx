@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
+import { getUpcomingSeasonalDates, NICHE_OPTIONS } from '@/lib/seasonalDates';
 import { highlightQuotes, highlightQuotesForPdf, cleanHtml } from '@/lib/highlightQuotes';
 import { supabase } from '@/integrations/supabase/client';
 import { useApp } from '@/contexts/AppContext';
@@ -459,6 +460,29 @@ export default function Scripts() {
                 </Select>
               </div>
             </div>
+
+            {/* Seasonal dates alert */}
+            {(() => {
+              const selectedClient = clients.find(c => c.id === form.clientId);
+              if (!selectedClient?.niche) return null;
+              const nicheLabel = NICHE_OPTIONS.find(n => n.value === selectedClient.niche)?.label || selectedClient.niche;
+              const upcoming = getUpcomingSeasonalDates(selectedClient.niche, 45);
+              if (upcoming.length === 0) return null;
+              return (
+                <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2">
+                  <p className="text-xs font-semibold text-amber-600 flex items-center gap-1.5">
+                    <AlertTriangle size={14} /> Datas sazonais próximas — {nicheLabel}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {upcoming.slice(0, 8).map((d, i) => (
+                      <Badge key={i} variant="outline" className={`text-[11px] ${d.daysUntil <= 5 ? 'border-red-500 text-red-600 bg-red-500/10' : d.daysUntil <= 10 ? 'border-amber-500 text-amber-600 bg-amber-500/10' : 'border-green-500 text-green-600 bg-green-500/10'}`}>
+                        {d.label} — {d.daysUntil}d
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="space-y-1">
               <Label>Prioridade</Label>

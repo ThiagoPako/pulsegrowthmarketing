@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useEndoTasks, useEndoContracts, getTaskTypeLabel } from '@/hooks/useEndomarketing';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,9 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Zap, CheckCircle, XCircle, Clock, CalendarPlus, Filter } from 'lucide-react';
+import { Zap, CheckCircle, XCircle, Clock, CalendarPlus, Filter, Send, MessageCircle } from 'lucide-react';
 
 export default function EndomarketingTasks() {
   const { tasks, loading, completeTask, cancelTask, generateTasks } = useEndoTasks();
@@ -26,6 +27,7 @@ export default function EndomarketingTasks() {
   const [completingTaskId, setCompletingTaskId] = useState('');
   const [completeNotes, setCompleteNotes] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [sendingNotifications, setSendingNotifications] = useState(false);
 
   const activeContracts = contracts.filter(c => c.status === 'ativo');
 
@@ -75,6 +77,25 @@ export default function EndomarketingTasks() {
     toast.success('Tarefa cancelada');
   };
 
+  const handleSendDailyNotifications = async () => {
+    setSendingNotifications(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('endo-daily-tasks-notify', {});
+      if (error) throw error;
+      const result = data as any;
+      if (result.sent > 0) {
+        toast.success(`📱 Notificações enviadas para ${result.sent} parceiro(s)!`, {
+          description: result.errors?.length ? `⚠️ ${result.errors.length} erro(s)` : undefined,
+        });
+      } else {
+        toast.info(result.message || 'Sem tarefas pendentes para hoje');
+      }
+    } catch (err: any) {
+      toast.error('Erro ao enviar notificações', { description: err.message });
+    }
+    setSendingNotifications(false);
+  };
+
   const stats = {
     total: tasks.length,
     pending: tasks.filter(t => t.status === 'pendente').length,
@@ -91,9 +112,15 @@ export default function EndomarketingTasks() {
           <h1 className="text-2xl font-display font-bold">Tarefas Endomarketing</h1>
           <p className="text-sm text-muted-foreground">{stats.pending} pendentes · {stats.completed} concluídas</p>
         </div>
-        <Button onClick={() => setGenDialogOpen(true)}>
-          <CalendarPlus size={16} className="mr-1" /> Gerar Tarefas
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleSendDailyNotifications} disabled={sendingNotifications}>
+            <MessageCircle size={16} className="mr-1" />
+            {sendingNotifications ? 'Enviando...' : 'Enviar Tarefas via WhatsApp'}
+          </Button>
+          <Button onClick={() => setGenDialogOpen(true)}>
+            <CalendarPlus size={16} className="mr-1" /> Gerar Tarefas
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}

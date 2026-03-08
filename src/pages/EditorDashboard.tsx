@@ -17,6 +17,7 @@ import {
   Search, Filter, Users, Calendar, MessageSquare, Upload, Send, History, Zap, Flame
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
+import DeadlineBadge from '@/components/DeadlineBadge';
 import { highlightQuotes } from '@/lib/highlightQuotes';
 import { format, differenceInHours, isPast, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, isToday, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';

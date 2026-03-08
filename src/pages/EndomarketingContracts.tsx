@@ -263,7 +263,7 @@ export default function EndomarketingContracts() {
               )}
             </div>
 
-            {isAdmin && formSalePrice > 0 && formPartnerCost > 0 && (
+            {canSeeFinancials && formSalePrice > 0 && formPartnerCost > 0 && (
               <div className={`p-3 rounded-lg border ${formSalePrice < formPartnerCost ? 'border-red-300 bg-red-50 dark:bg-red-950/20' : 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20'}`}>
                 <div className="flex items-center gap-2">
                   {formSalePrice < formPartnerCost ? <AlertTriangle size={16} className="text-red-500" /> : <TrendingUp size={16} className="text-emerald-500" />}

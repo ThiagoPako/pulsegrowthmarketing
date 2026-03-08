@@ -194,7 +194,7 @@ export default function EndomarketingContracts() {
                 );
               })}
               {contracts.length === 0 && (
-                <TableRow><TableCell colSpan={isAdmin ? 9 : 6} className="text-center py-8 text-muted-foreground">Nenhum contrato cadastrado</TableCell></TableRow>
+                <TableRow><TableCell colSpan={canSeeFinancials ? 9 : 6} className="text-center py-8 text-muted-foreground">Nenhum contrato cadastrado</TableCell></TableRow>
               )}
             </TableBody>
           </Table>

@@ -620,7 +620,7 @@ export default function EditorDashboard() {
             Object.entries(groupedTasks).map(([clientName, clientTasks]) => (
               <div key={clientName} className="space-y-2">
                 <h4 className="text-sm font-bold text-foreground flex items-center gap-2 pt-2">
-                  <ClientLogo client={clients.find(c => c.companyName === clientName) as any} size="sm" />
+                  {clients.find(c => c.companyName === clientName) && <ClientLogo client={clients.find(c => c.companyName === clientName) as any} size="sm" />}
                   {clientName}
                   <Badge variant="outline" className="text-[10px]">{clientTasks.length}</Badge>
                 </h4>

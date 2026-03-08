@@ -300,8 +300,8 @@ export default function Team() {
                     <Input value={partnerCreateForm.companyName} onChange={e => setPartnerCreateForm({ ...partnerCreateForm, companyName: e.target.value })} placeholder="Nome da empresa" />
                   </div>
                   <div className="space-y-1">
-                    <Label>Telefone</Label>
-                    <Input value={partnerCreateForm.phone} onChange={e => setPartnerCreateForm({ ...partnerCreateForm, phone: e.target.value })} placeholder="(00) 00000-0000" />
+                    <Label>WhatsApp</Label>
+                    <Input value={partnerCreateForm.phone} onChange={e => setPartnerCreateForm({ ...partnerCreateForm, phone: e.target.value })} placeholder="5511999999999" />
                   </div>
                   <div className="space-y-1">
                     <Label>Observações</Label>

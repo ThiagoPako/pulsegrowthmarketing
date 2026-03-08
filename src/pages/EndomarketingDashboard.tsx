@@ -18,18 +18,25 @@ export default function EndomarketingDashboard() {
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+  const ticketMedio = metrics.totalClients > 0 ? metrics.monthlyCosts / metrics.totalClients : 0;
+  const ganhoTotal = metrics.monthlyCosts;
+
   const metricCards = [
     { label: 'Clientes Ativos', value: String(metrics.totalClients), icon: Users, color: 'text-blue-500' },
-    ...(canSeeFinancials ? [
+    ...(canSeeFinancials ? (isAdmin ? [
       { label: 'Faturamento Mensal', value: fmt(metrics.monthlyRevenue), icon: DollarSign, color: 'text-green-500' },
       { label: 'Custos Parceiros', value: fmt(metrics.monthlyCosts), icon: Receipt, color: 'text-orange-500' },
       { label: 'Lucro Mensal', value: fmt(metrics.monthlyProfit), icon: TrendingUp, color: metrics.monthlyProfit >= 0 ? 'text-emerald-500' : 'text-red-500' },
       { label: 'Margem Média', value: `${metrics.avgMargin.toFixed(1)}%`, icon: Percent, color: metrics.avgMargin >= 30 ? 'text-emerald-500' : metrics.avgMargin >= 15 ? 'text-yellow-500' : 'text-red-500' },
-    ] : []),
+    ] : [
+      { label: 'Faturamento', value: fmt(metrics.monthlyCosts), icon: DollarSign, color: 'text-green-500' },
+      { label: 'Ticket Médio', value: fmt(ticketMedio), icon: Receipt, color: 'text-orange-500' },
+      { label: 'Ganho Total', value: fmt(ganhoTotal), icon: TrendingUp, color: 'text-emerald-500' },
+    ]) : []),
   ];
 
   // Grid cols based on number of cards
-  const gridCols = canSeeFinancials ? 'grid-cols-2 md:grid-cols-5' : 'grid-cols-1 md:grid-cols-1';
+  const gridCols = isAdmin ? 'grid-cols-2 md:grid-cols-5' : canSeeFinancials ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-1';
 
   if (loadingC || loadingT) return <div className="flex items-center justify-center p-12"><p className="text-muted-foreground">Carregando...</p></div>;
 

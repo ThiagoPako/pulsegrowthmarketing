@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useEndoContracts, useEndoPackages, getCategoryLabel, EndoContract } from '@/hooks/useEndomarketing';
+import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,8 @@ interface SimpleClient { id: string; company_name: string; color: string; }
 interface SimpleProfile { id: string; name: string; display_name: string | null; role: string; }
 
 export default function EndomarketingContracts() {
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
   const { contracts, loading, addContract, updateContract, deactivateContract } = useEndoContracts();
   const { packages } = useEndoPackages();
   const [clients, setClients] = useState<SimpleClient[]>([]);

@@ -15,6 +15,7 @@ import {
   Check, Eye, Search, Scissors, Send, Link2
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
+import DeadlineBadge from '@/components/DeadlineBadge';
 import { highlightQuotes } from '@/lib/highlightQuotes';
 import { format, differenceInHours, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';

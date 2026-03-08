@@ -28,7 +28,7 @@ const emptyClient = (): Partial<Client> => ({
   extraContentTypes: [], acceptsExtra: false, extraClientAppears: false,
   weeklyReels: 0, weeklyCreatives: 0, weeklyGoal: 10,
   hasEndomarketing: false, weeklyStories: 0, presenceDays: 1,
-  monthlyRecordings: 4,
+  monthlyRecordings: 4, niche: '',
 });
 
 function timeToMinutes(t: string) {

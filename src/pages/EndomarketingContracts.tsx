@@ -129,7 +129,7 @@ export default function EndomarketingContracts() {
           <h1 className="text-2xl font-display font-bold">Contratos Endomarketing</h1>
           <p className="text-sm text-muted-foreground">{contracts.length} contratos</p>
         </div>
-        <Button onClick={openAdd}><Plus size={16} className="mr-1" /> Novo Contrato</Button>
+        {isAdmin && <Button onClick={openAdd}><Plus size={16} className="mr-1" /> Novo Contrato</Button>}
       </div>
 
       <Card className="glass-card">

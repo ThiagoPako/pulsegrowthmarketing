@@ -164,8 +164,8 @@ export default function Team() {
     if (!partnerCreateForm.name || !partnerCreateForm.email || !partnerCreateForm.password) { toast.error('Preencha todos os campos'); return; }
     if (partnerCreateForm.password.length < 6) { toast.error('Senha deve ter no mínimo 6 caracteres'); return; }
 
-    // Register with the selected functional role so they get proper system access
-    const { error } = await signUp(partnerCreateForm.email, partnerCreateForm.password, partnerCreateForm.name, partnerCreateForm.serviceFunction as AppRole);
+    // Register with 'parceiro' role so they appear in the partners list
+    const { error } = await signUp(partnerCreateForm.email, partnerCreateForm.password, partnerCreateForm.name, 'parceiro' as AppRole);
     if (error) { toast.error(error); return; }
 
     // Create partner record after profile is created by trigger

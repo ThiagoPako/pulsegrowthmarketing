@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
+import { getUpcomingSeasonalDates, NICHE_OPTIONS } from '@/lib/seasonalDates';
 import { highlightQuotes, highlightQuotesForPdf, cleanHtml } from '@/lib/highlightQuotes';
 import { supabase } from '@/integrations/supabase/client';
 import { useApp } from '@/contexts/AppContext';

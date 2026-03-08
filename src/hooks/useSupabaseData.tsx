@@ -62,6 +62,7 @@ function clientToRow(c: Client) {
     weekly_stories: c.weeklyStories,
     presence_days: c.presenceDays,
     monthly_recordings: c.monthlyRecordings,
+    niche: c.niche || '',
   };
 }
 

@@ -122,6 +122,7 @@ export default function EndomarketingTasks() {
             <CalendarPlus size={16} className="mr-1" /> Gerar Tarefas
           </Button>
         </div>
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3">

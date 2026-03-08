@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Users, DollarSign, TrendingUp, Percent, Receipt, Plus, BarChart3, ArrowRight } from 'lucide-react';
+import { Users, DollarSign, TrendingUp, Percent, Receipt, Plus, BarChart3, ArrowRight, CalendarDays } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function EndomarketingDashboard() {

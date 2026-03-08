@@ -274,7 +274,7 @@ export default function ContentKanban() {
         const client = clients.find(c => c.id === inserted.client_id);
         const ctx = buildSyncContext(inserted as any, {
           userId: user?.id,
-          clientName: client?.company_name,
+          clientName: client?.companyName,
           clientWhatsapp: client?.whatsapp,
         });
         await syncContentTaskColumnChange(payload.kanban_column, ctx);

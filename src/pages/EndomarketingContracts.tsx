@@ -19,6 +19,8 @@ interface SimpleProfile { id: string; name: string; display_name: string | null;
 export default function EndomarketingContracts() {
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
+  const isEndo = profile?.role === 'endomarketing';
+  const canSeeFinancials = isAdmin || isEndo;
   const { contracts, loading, addContract, updateContract, deactivateContract } = useEndoContracts();
   const { packages } = useEndoPackages();
   const [clients, setClients] = useState<SimpleClient[]>([]);
@@ -127,7 +129,7 @@ export default function EndomarketingContracts() {
           <h1 className="text-2xl font-display font-bold">Contratos Endomarketing</h1>
           <p className="text-sm text-muted-foreground">{contracts.length} contratos</p>
         </div>
-        <Button onClick={openAdd}><Plus size={16} className="mr-1" /> Novo Contrato</Button>
+        {isAdmin && <Button onClick={openAdd}><Plus size={16} className="mr-1" /> Novo Contrato</Button>}
       </div>
 
       <Card className="glass-card">
@@ -139,9 +141,9 @@ export default function EndomarketingContracts() {
                 <TableHead>Pacote</TableHead>
                 <TableHead>Parceiro</TableHead>
                 <TableHead className="text-right">Custo</TableHead>
-                {isAdmin && <TableHead className="text-right">Venda</TableHead>}
-                {isAdmin && <TableHead className="text-right">Lucro</TableHead>}
-                {isAdmin && <TableHead className="text-right">Margem</TableHead>}
+                {canSeeFinancials && <TableHead className="text-right">Venda</TableHead>}
+                {canSeeFinancials && <TableHead className="text-right">Lucro</TableHead>}
+                {canSeeFinancials && <TableHead className="text-right">Margem</TableHead>}
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -167,14 +169,14 @@ export default function EndomarketingContracts() {
                     </TableCell>
                     <TableCell className="text-sm">{c.partner_profile?.display_name || c.partner_profile?.name || '—'}</TableCell>
                     <TableCell className="text-right text-sm">{fmt(c.partner_cost)}</TableCell>
-                    {isAdmin && <TableCell className="text-right text-sm font-medium">{fmt(c.sale_price)}</TableCell>}
-                    {isAdmin && (
+                    {canSeeFinancials && <TableCell className="text-right text-sm font-medium">{fmt(c.sale_price)}</TableCell>}
+                    {canSeeFinancials && (
                       <TableCell className={`text-right text-sm font-bold ${isNegative ? 'text-red-500' : 'text-emerald-600'}`}>
                         {isNegative && <AlertTriangle size={12} className="inline mr-1" />}
                         {fmt(profit)}
                       </TableCell>
                     )}
-                    {isAdmin && <TableCell className="text-right text-sm">{margin.toFixed(0)}%</TableCell>}
+                    {canSeeFinancials && <TableCell className="text-right text-sm">{margin.toFixed(0)}%</TableCell>}
                     <TableCell>
                       <Badge variant={c.status === 'ativo' ? 'default' : 'secondary'}>
                         {c.status === 'ativo' ? 'Ativo' : 'Inativo'}
@@ -192,7 +194,7 @@ export default function EndomarketingContracts() {
                 );
               })}
               {contracts.length === 0 && (
-                <TableRow><TableCell colSpan={isAdmin ? 9 : 6} className="text-center py-8 text-muted-foreground">Nenhum contrato cadastrado</TableCell></TableRow>
+                <TableRow><TableCell colSpan={canSeeFinancials ? 9 : 6} className="text-center py-8 text-muted-foreground">Nenhum contrato cadastrado</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -248,12 +250,12 @@ export default function EndomarketingContracts() {
               </Select>
             </div>
 
-            <div className={`grid ${isAdmin ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
+            <div className={`grid ${canSeeFinancials ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
               <div className="space-y-1">
                 <Label>💰 Custo Parceiro (R$) *</Label>
                 <Input type="number" min={0} step={0.01} value={formPartnerCost} onChange={e => setFormPartnerCost(Number(e.target.value))} />
               </div>
-              {isAdmin && (
+              {canSeeFinancials && (
                 <div className="space-y-1">
                   <Label>💵 Valor de Venda (R$) *</Label>
                   <Input type="number" min={0} step={0.01} value={formSalePrice} onChange={e => setFormSalePrice(Number(e.target.value))} />
@@ -261,7 +263,7 @@ export default function EndomarketingContracts() {
               )}
             </div>
 
-            {isAdmin && formSalePrice > 0 && formPartnerCost > 0 && (
+            {canSeeFinancials && formSalePrice > 0 && formPartnerCost > 0 && (
               <div className={`p-3 rounded-lg border ${formSalePrice < formPartnerCost ? 'border-red-300 bg-red-50 dark:bg-red-950/20' : 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20'}`}>
                 <div className="flex items-center gap-2">
                   {formSalePrice < formPartnerCost ? <AlertTriangle size={16} className="text-red-500" /> : <TrendingUp size={16} className="text-emerald-500" />}

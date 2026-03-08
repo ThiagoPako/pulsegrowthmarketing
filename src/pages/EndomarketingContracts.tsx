@@ -139,9 +139,9 @@ export default function EndomarketingContracts() {
                 <TableHead>Pacote</TableHead>
                 <TableHead>Parceiro</TableHead>
                 <TableHead className="text-right">Custo</TableHead>
-                <TableHead className="text-right">Venda</TableHead>
-                <TableHead className="text-right">Lucro</TableHead>
-                <TableHead className="text-right">Margem</TableHead>
+                {isAdmin && <TableHead className="text-right">Venda</TableHead>}
+                {isAdmin && <TableHead className="text-right">Lucro</TableHead>}
+                {isAdmin && <TableHead className="text-right">Margem</TableHead>}
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -167,12 +167,14 @@ export default function EndomarketingContracts() {
                     </TableCell>
                     <TableCell className="text-sm">{c.partner_profile?.display_name || c.partner_profile?.name || '—'}</TableCell>
                     <TableCell className="text-right text-sm">{fmt(c.partner_cost)}</TableCell>
-                    <TableCell className="text-right text-sm font-medium">{fmt(c.sale_price)}</TableCell>
-                    <TableCell className={`text-right text-sm font-bold ${isNegative ? 'text-red-500' : 'text-emerald-600'}`}>
-                      {isNegative && <AlertTriangle size={12} className="inline mr-1" />}
-                      {fmt(profit)}
-                    </TableCell>
-                    <TableCell className="text-right text-sm">{margin.toFixed(0)}%</TableCell>
+                    {isAdmin && <TableCell className="text-right text-sm font-medium">{fmt(c.sale_price)}</TableCell>}
+                    {isAdmin && (
+                      <TableCell className={`text-right text-sm font-bold ${isNegative ? 'text-red-500' : 'text-emerald-600'}`}>
+                        {isNegative && <AlertTriangle size={12} className="inline mr-1" />}
+                        {fmt(profit)}
+                      </TableCell>
+                    )}
+                    {isAdmin && <TableCell className="text-right text-sm">{margin.toFixed(0)}%</TableCell>}
                     <TableCell>
                       <Badge variant={c.status === 'ativo' ? 'default' : 'secondary'}>
                         {c.status === 'ativo' ? 'Ativo' : 'Inativo'}
@@ -190,7 +192,7 @@ export default function EndomarketingContracts() {
                 );
               })}
               {contracts.length === 0 && (
-                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhum contrato cadastrado</TableCell></TableRow>
+                <TableRow><TableCell colSpan={isAdmin ? 9 : 6} className="text-center py-8 text-muted-foreground">Nenhum contrato cadastrado</TableCell></TableRow>
               )}
             </TableBody>
           </Table>

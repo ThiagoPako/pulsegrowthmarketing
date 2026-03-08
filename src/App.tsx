@@ -9,8 +9,10 @@ import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import VideomakerDashboard from "@/pages/VideomakerDashboard";
 import EndomarketingDashboard from "@/pages/EndomarketingDashboard";
-import EndomarketingClientes from "@/pages/EndomarketingClientes";
-import EndomarketingAgenda from "@/pages/EndomarketingAgenda";
+import EndomarketingContracts from "@/pages/EndomarketingContracts";
+import EndomarketingTasks from "@/pages/EndomarketingTasks";
+import EndomarketingReports from "@/pages/EndomarketingReports";
+import EndomarketingPartnerPanel from "@/pages/EndomarketingPartnerPanel";
 import Clients from "@/pages/Clients";
 import Team from "@/pages/Team";
 import Schedule from "@/pages/Schedule";
@@ -61,6 +63,7 @@ function AppRoutes() {
           {currentUser?.role === 'videomaker' ? <VideomakerDashboard /> :
            currentUser?.role === 'endomarketing' ? <EndomarketingDashboard /> :
            currentUser?.role === 'editor' ? <EditorDashboard /> :
+           currentUser?.role === 'parceiro' ? <EndomarketingPartnerPanel /> :
            <Dashboard />}
         </ProtectedRoute>
       } />
@@ -71,8 +74,12 @@ function AppRoutes() {
       <Route path="/metas" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
       <Route path="/configuracoes" element={<ProtectedRoute><CompanySettings /></ProtectedRoute>} />
       <Route path="/endomarketing" element={<ProtectedRoute><EndomarketingDashboard /></ProtectedRoute>} />
-      <Route path="/endomarketing/clientes" element={<ProtectedRoute><EndomarketingClientes /></ProtectedRoute>} />
-      <Route path="/endomarketing/agenda" element={<ProtectedRoute><EndomarketingAgenda /></ProtectedRoute>} />
+      <Route path="/endomarketing/contratos" element={<ProtectedRoute><EndomarketingContracts /></ProtectedRoute>} />
+      <Route path="/endomarketing/tarefas" element={<ProtectedRoute><EndomarketingTasks /></ProtectedRoute>} />
+      <Route path="/endomarketing/relatorios" element={<ProtectedRoute><EndomarketingReports /></ProtectedRoute>} />
+      {/* Legacy redirects */}
+      <Route path="/endomarketing/clientes" element={<Navigate to="/endomarketing/contratos" replace />} />
+      <Route path="/endomarketing/agenda" element={<Navigate to="/endomarketing/tarefas" replace />} />
       <Route path="/planos" element={<ProtectedRoute><Plans /></ProtectedRoute>} />
       <Route path="/entregas" element={<ProtectedRoute><DeliveryRecords /></ProtectedRoute>} />
       <Route path="/relatorios" element={<ProtectedRoute><Reports /></ProtectedRoute>} />

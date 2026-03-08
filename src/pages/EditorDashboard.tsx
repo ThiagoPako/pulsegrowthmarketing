@@ -444,7 +444,7 @@ export default function EditorDashboard() {
                   return (
                     <div key={t.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
                       onClick={() => openTaskDetail(t)}>
-                      <ClientLogo client={client as any} size="sm" />
+                      {client && <ClientLogo client={client as any} size="sm" />}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">{t.title}</p>
                         <p className="text-[11px] text-muted-foreground">{client?.companyName}</p>

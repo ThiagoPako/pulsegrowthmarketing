@@ -38,7 +38,6 @@ export default function EndomarketingDashboard() {
           <Button variant="outline" size="sm" onClick={() => navigate('/endomarketing/relatorios')}>
             <BarChart3 size={16} className="mr-1" /> Relatórios
           </Button>
-          </Button>
           <Button size="sm" onClick={() => navigate('/endomarketing/contratos')}>
             <Plus size={16} className="mr-1" /> Novo Contrato
           </Button>

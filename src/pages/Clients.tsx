@@ -1127,6 +1127,8 @@ export default function Clients() {
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
           <span className="text-muted-foreground">Empresa:</span>
           <span className="font-medium">{form.companyName}</span>
+          <span className="text-muted-foreground">Nicho:</span>
+          <span className="font-medium">{NICHE_OPTIONS.find(n => n.value === form.niche)?.label || '—'}</span>
           <span className="text-muted-foreground">Videomaker:</span>
           <span className="font-medium">{users.find(u => u.id === form.videomaker)?.name || '—'}</span>
           <span className="text-muted-foreground">Dia fixo:</span>

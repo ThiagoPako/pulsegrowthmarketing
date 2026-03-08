@@ -214,6 +214,7 @@ export type Database = {
           id: string
           logo_url: string | null
           monthly_recordings: number
+          niche: string | null
           phone: string
           plan_id: string | null
           presence_days: number
@@ -246,6 +247,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           monthly_recordings?: number
+          niche?: string | null
           phone?: string
           plan_id?: string | null
           presence_days?: number
@@ -278,6 +280,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           monthly_recordings?: number
+          niche?: string | null
           phone?: string
           plan_id?: string | null
           presence_days?: number

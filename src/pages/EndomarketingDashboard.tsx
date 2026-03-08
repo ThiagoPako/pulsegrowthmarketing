@@ -130,7 +130,7 @@ export default function EndomarketingDashboard() {
         </Card>
       </div>
 
-      {isAdmin && metrics.activeContracts.length > 0 && (
+      {canSeeFinancials && metrics.activeContracts.length > 0 && (
         <Card className="glass-card">
           <CardHeader className="pb-3"><CardTitle className="text-base">🏆 Ranking de Lucratividade</CardTitle></CardHeader>
           <CardContent>

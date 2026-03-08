@@ -174,8 +174,8 @@ export default function EndomarketingReports() {
       <Tabs defaultValue="delivery">
         <TabsList>
           <TabsTrigger value="delivery"><FileText size={14} className="mr-1" /> Entregas</TabsTrigger>
-          {isAdmin && <TabsTrigger value="financial"><DollarSign size={14} className="mr-1" /> Financeiro</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="general"><BarChart3 size={14} className="mr-1" /> Geral</TabsTrigger>}
+          {canSeeFinancials && <TabsTrigger value="financial"><DollarSign size={14} className="mr-1" /> Financeiro</TabsTrigger>}
+          {canSeeFinancials && <TabsTrigger value="general"><BarChart3 size={14} className="mr-1" /> Geral</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="delivery" className="space-y-4">

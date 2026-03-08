@@ -31,6 +31,7 @@ function rowToClient(r: any): Client {
     weeklyStories: r.weekly_stories,
     presenceDays: r.presence_days,
     monthlyRecordings: r.monthly_recordings ?? 4,
+    niche: r.niche || '',
   };
 }
 

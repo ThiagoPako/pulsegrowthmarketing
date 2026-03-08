@@ -66,6 +66,28 @@ export default function Dashboard() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
+  // Fetch endomarketing metrics
+  useEffect(() => {
+    const fetchEndo = async () => {
+      const { data: contracts } = await (supabase as any)
+        .from('client_endomarketing_contracts')
+        .select('*, clients(company_name)')
+        .eq('status', 'ativo');
+      if (contracts && contracts.length > 0) {
+        const revenue = contracts.reduce((s: number, c: any) => s + Number(c.sale_price), 0);
+        const costs = contracts.reduce((s: number, c: any) => s + Number(c.partner_cost), 0);
+        const profit = revenue - costs;
+        const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+        const topClients = contracts
+          .map((c: any) => ({ name: c.clients?.company_name || 'Cliente', profit: Number(c.sale_price) - Number(c.partner_cost) }))
+          .sort((a: any, b: any) => b.profit - a.profit)
+          .slice(0, 5);
+        setEndoMetrics({ totalClients: contracts.length, revenue, costs, profit, margin, topClients });
+      }
+    };
+    fetchEndo();
+  }, []);
+
   const weekStart = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
   const weekEnd = endOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));

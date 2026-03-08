@@ -1,5 +1,6 @@
 import { useEndoContracts, useEndoTasks, useEndoMetrics, getCategoryLabel } from '@/hooks/useEndomarketing';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,15 +12,19 @@ export default function EndomarketingDashboard() {
   const { tasks, loading: loadingT } = useEndoTasks();
   const metrics = useEndoMetrics(contracts, tasks);
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   const metricCards = [
     { label: 'Clientes Ativos', value: String(metrics.totalClients), icon: Users, color: 'text-blue-500' },
-    { label: 'Faturamento Mensal', value: fmt(metrics.monthlyRevenue), icon: DollarSign, color: 'text-green-500' },
-    { label: 'Custos Parceiros', value: fmt(metrics.monthlyCosts), icon: Receipt, color: 'text-orange-500' },
-    { label: 'Lucro Mensal', value: fmt(metrics.monthlyProfit), icon: TrendingUp, color: metrics.monthlyProfit >= 0 ? 'text-emerald-500' : 'text-red-500' },
-    { label: 'Margem Média', value: `${metrics.avgMargin.toFixed(1)}%`, icon: Percent, color: metrics.avgMargin >= 30 ? 'text-emerald-500' : metrics.avgMargin >= 15 ? 'text-yellow-500' : 'text-red-500' },
+    ...(isAdmin ? [
+      { label: 'Faturamento Mensal', value: fmt(metrics.monthlyRevenue), icon: DollarSign, color: 'text-green-500' },
+      { label: 'Custos Parceiros', value: fmt(metrics.monthlyCosts), icon: Receipt, color: 'text-orange-500' },
+      { label: 'Lucro Mensal', value: fmt(metrics.monthlyProfit), icon: TrendingUp, color: metrics.monthlyProfit >= 0 ? 'text-emerald-500' : 'text-red-500' },
+      { label: 'Margem Média', value: `${metrics.avgMargin.toFixed(1)}%`, icon: Percent, color: metrics.avgMargin >= 30 ? 'text-emerald-500' : metrics.avgMargin >= 15 ? 'text-yellow-500' : 'text-red-500' },
+    ] : []),
   ];
 
   if (loadingC || loadingT) return <div className="flex items-center justify-center p-12"><p className="text-muted-foreground">Carregando...</p></div>;

@@ -683,6 +683,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
             <JourneyTimeline currentColumn={task.kanban_column} task={task} users={users} scripts={scripts} history={history} recordings={recordings.map(r => ({ id: r.id, videomaker_id: r.videomakerId }))} />
 
             {/* Deadlines */}
+            {task.kanban_column === 'edicao' && renderDeadline(task.editing_deadline, 'Prazo de Edição')}
             {task.kanban_column === 'revisao' && renderDeadline(task.review_deadline, 'Prazo de Revisão')}
             {task.kanban_column === 'alteracao' && !task.immediate_alteration && renderDeadline(task.alteration_deadline, 'Prazo de Alteração')}
             {task.kanban_column === 'envio' && renderDeadline(task.approval_deadline, 'Prazo de Aprovação')}

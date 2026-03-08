@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useEndoContracts, useEndoTasks, useEndoMetrics, getCategoryLabel, getTaskTypeLabel } from '@/hooks/useEndomarketing';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,6 +18,8 @@ export default function EndomarketingReports() {
   const { contracts } = useEndoContracts();
   const { tasks } = useEndoTasks();
   const metrics = useEndoMetrics(contracts, tasks);
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
   const [filterClient, setFilterClient] = useState('all');
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');

@@ -88,9 +88,11 @@ export async function syncContentTaskColumnChange(
   };
   const workDays: string[] = (settingsRow?.work_days as string[]) ?? ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
 
-  // 1. Set editing_started_at when entering edicao
+  // 1. Set editing_started_at and editing_deadline when entering edicao
   if (newColumn === 'edicao') {
     updates.editing_started_at = new Date().toISOString();
+    const editingDeadline = addBusinessHours(new Date(), deadlineHours.editing, workDays);
+    updates.editing_deadline = editingDeadline.toISOString();
     // Mark script as recorded
     if (ctx.scriptId) {
       await supabase.from('scripts').update({ recorded: true } as any).eq('id', ctx.scriptId);

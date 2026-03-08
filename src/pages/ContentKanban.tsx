@@ -1027,6 +1027,9 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
               </span>
             )}
             {/* Deadline badges */}
+            {task.kanban_column === 'edicao' && (task as any).editing_started_at && (
+              <DeadlineBadge deadline={new Date(new Date((task as any).editing_started_at).getTime() + 48 * 60 * 60 * 1000).toISOString()} label="Edição" />
+            )}
             {task.kanban_column === 'revisao' && task.review_deadline && (
               <DeadlineBadge deadline={task.review_deadline} label="Revisão" />
             )}

@@ -77,6 +77,26 @@ export default function EndomarketingTasks() {
     toast.success('Tarefa cancelada');
   };
 
+  const handleSendDailyNotifications = async () => {
+    setSendingNotifications(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('endo-daily-tasks-notify', {});
+      if (error) throw error;
+      const result = data as any;
+      if (result.sent > 0) {
+        toast.success(`📱 Notificações enviadas para ${result.sent} parceiro(s)!`, {
+          description: result.errors?.length ? `⚠️ ${result.errors.length} erro(s)` : undefined,
+        });
+      } else {
+        toast.info(result.message || 'Sem tarefas pendentes para hoje');
+      }
+    } catch (err: any) {
+      toast.error('Erro ao enviar notificações', { description: err.message });
+    }
+    setSendingNotifications(false);
+  };
+  };
+
   const stats = {
     total: tasks.length,
     pending: tasks.filter(t => t.status === 'pendente').length,

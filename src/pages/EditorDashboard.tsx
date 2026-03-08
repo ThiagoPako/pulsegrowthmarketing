@@ -723,7 +723,7 @@ function TaskCard({ task, clients, index, onClick }: {
       <div className="p-4 space-y-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2.5 min-w-0">
-            <ClientLogo client={client as any} size="sm" />
+            {client ? <ClientLogo client={client as any} size="sm" /> : null}
             <div className="min-w-0">
               <p className="text-sm font-bold text-foreground truncate">{client?.companyName || 'Cliente'}</p>
               <Badge className={`text-[10px] px-1.5 py-0 ${cfg.color} border-0`}>

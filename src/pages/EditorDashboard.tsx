@@ -326,7 +326,7 @@ export default function EditorDashboard() {
                       return (
                         <div key={t.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
                           onClick={() => openTaskDetail(t)}>
-                          <ClientLogo client={client as any} size="sm" />
+                          {client && <ClientLogo client={client as any} size="sm" />}
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-foreground truncate">{t.title}</p>
                             <p className="text-[11px] text-muted-foreground">{client?.companyName}</p>
@@ -444,7 +444,7 @@ export default function EditorDashboard() {
                   return (
                     <div key={t.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
                       onClick={() => openTaskDetail(t)}>
-                      <ClientLogo client={client as any} size="sm" />
+                      {client && <ClientLogo client={client as any} size="sm" />}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">{t.title}</p>
                         <p className="text-[11px] text-muted-foreground">{client?.companyName}</p>
@@ -620,7 +620,7 @@ export default function EditorDashboard() {
             Object.entries(groupedTasks).map(([clientName, clientTasks]) => (
               <div key={clientName} className="space-y-2">
                 <h4 className="text-sm font-bold text-foreground flex items-center gap-2 pt-2">
-                  <ClientLogo client={clients.find(c => c.companyName === clientName) as any} size="sm" />
+                  {clients.find(c => c.companyName === clientName) && <ClientLogo client={clients.find(c => c.companyName === clientName) as any} size="sm" />}
                   {clientName}
                   <Badge variant="outline" className="text-[10px]">{clientTasks.length}</Badge>
                 </h4>
@@ -723,7 +723,7 @@ function TaskCard({ task, clients, index, onClick }: {
       <div className="p-4 space-y-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2.5 min-w-0">
-            <ClientLogo client={client as any} size="sm" />
+            {client ? <ClientLogo client={client as any} size="sm" /> : null}
             <div className="min-w-0">
               <p className="text-sm font-bold text-foreground truncate">{client?.companyName || 'Cliente'}</p>
               <Badge className={`text-[10px] px-1.5 py-0 ${cfg.color} border-0`}>

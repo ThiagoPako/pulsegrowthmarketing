@@ -132,6 +132,67 @@ export type Database = {
         }
         Relationships: []
       }
+      client_endomarketing_contracts: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          package_id: string
+          partner_cost: number
+          partner_id: string | null
+          sale_price: number
+          start_date: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          package_id: string
+          partner_cost?: number
+          partner_id?: string | null
+          sale_price?: number
+          start_date?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          package_id?: string
+          partner_cost?: number
+          partner_id?: string | null
+          sale_price?: number
+          start_date?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_endomarketing_contracts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_endomarketing_contracts_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "endomarketing_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_endomarketing_contracts_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           accepts_extra: boolean
@@ -669,6 +730,115 @@ export type Database = {
             columns: ["cliente_id"]
             isOneToOne: false
             referencedRelation: "endomarketing_clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      endomarketing_packages: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          duration_hours: number
+          id: string
+          package_name: string
+          partner_cost: number
+          sessions_per_week: number
+          stories_per_day: number
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          description?: string | null
+          duration_hours?: number
+          id?: string
+          package_name: string
+          partner_cost?: number
+          sessions_per_week?: number
+          stories_per_day?: number
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          duration_hours?: number
+          id?: string
+          package_name?: string
+          partner_cost?: number
+          sessions_per_week?: number
+          stories_per_day?: number
+        }
+        Relationships: []
+      }
+      endomarketing_partner_tasks: {
+        Row: {
+          attachment_url: string | null
+          client_id: string
+          completed_at: string | null
+          contract_id: string
+          created_at: string
+          date: string
+          duration_minutes: number
+          id: string
+          notes: string | null
+          partner_id: string | null
+          start_time: string | null
+          status: string
+          task_type: string
+          updated_at: string
+        }
+        Insert: {
+          attachment_url?: string | null
+          client_id: string
+          completed_at?: string | null
+          contract_id: string
+          created_at?: string
+          date: string
+          duration_minutes?: number
+          id?: string
+          notes?: string | null
+          partner_id?: string | null
+          start_time?: string | null
+          status?: string
+          task_type?: string
+          updated_at?: string
+        }
+        Update: {
+          attachment_url?: string | null
+          client_id?: string
+          completed_at?: string | null
+          contract_id?: string
+          created_at?: string
+          date?: string
+          duration_minutes?: number
+          id?: string
+          notes?: string | null
+          partner_id?: string | null
+          start_time?: string | null
+          status?: string
+          task_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "endomarketing_partner_tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "endomarketing_partner_tasks_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "client_endomarketing_contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "endomarketing_partner_tasks_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

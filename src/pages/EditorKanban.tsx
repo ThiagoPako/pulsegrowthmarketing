@@ -15,6 +15,7 @@ import {
   Check, Eye, Search, Scissors, Send, Link2
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
+import DeadlineBadge from '@/components/DeadlineBadge';
 import { highlightQuotes } from '@/lib/highlightQuotes';
 import { format, differenceInHours, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -49,6 +50,10 @@ interface EditorTask {
   edited_video_link: string | null;
   editing_deadline: string | null;
   editing_started_at: string | null;
+  review_deadline: string | null;
+  alteration_deadline: string | null;
+  approval_deadline: string | null;
+  immediate_alteration: boolean;
   position: number;
   created_at: string;
   updated_at: string;
@@ -168,11 +173,18 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
           </a>
         )}
 
-        {/* Deadline */}
-        {task.editing_deadline && task.kanban_column === 'edicao' && (
-          <p className="text-[10px] text-muted-foreground">
-            Prazo: {format(new Date(task.editing_deadline), "dd/MM 'às' HH:mm", { locale: ptBR })}
-          </p>
+        {/* Deadlines per column */}
+        {task.kanban_column === 'edicao' && task.editing_deadline && (
+          <DeadlineBadge deadline={task.editing_deadline} label="Edição" />
+        )}
+        {task.kanban_column === 'revisao' && task.review_deadline && (
+          <DeadlineBadge deadline={task.review_deadline} label="Revisão" />
+        )}
+        {task.kanban_column === 'alteracao' && task.alteration_deadline && !task.immediate_alteration && (
+          <DeadlineBadge deadline={task.alteration_deadline} label="Alteração" />
+        )}
+        {task.kanban_column === 'envio' && task.approval_deadline && (
+          <DeadlineBadge deadline={task.approval_deadline} label="Aprovação" />
         )}
 
         {/* Action buttons based on column */}

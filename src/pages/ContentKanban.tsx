@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, Send, Eye, Maximize2 } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
+import DeadlineBadge from '@/components/DeadlineBadge';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Client, Recording, Script } from '@/types';
@@ -65,6 +66,7 @@ interface ContentTask {
   review_deadline: string | null;
   alteration_deadline: string | null;
   approval_deadline: string | null;
+  editing_deadline: string | null;
   position: number;
   editing_started_at: string | null;
   created_at: string;
@@ -914,31 +916,7 @@ export default function ContentKanban() {
   );
 }
 
-// ─── DEADLINE BADGE COMPONENT ────────────────────────────────
-function DeadlineBadge({ deadline, label }: { deadline: string; label: string }) {
-  const now = new Date();
-  const dl = new Date(deadline);
-  const diffMs = dl.getTime() - now.getTime();
-  const isExpired = diffMs <= 0;
-  const hours = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60));
-  const mins = Math.floor((Math.abs(diffMs) % (1000 * 60 * 60)) / (1000 * 60));
-  
-  const timeStr = isExpired 
-    ? `Expirado há ${hours}h${mins}m`
-    : hours > 0 ? `${hours}h${mins}m restantes` : `${mins}m restantes`;
 
-  return (
-    <span className={`inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-md ${
-      isExpired 
-        ? 'bg-red-100 text-red-800 border border-red-300 dark:bg-red-900/40 dark:text-red-300 animate-pulse' 
-        : diffMs < 2 * 60 * 60 * 1000 
-          ? 'bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400'
-          : 'bg-muted text-muted-foreground border border-border'
-    }`}>
-      <Clock size={9} /> {timeStr}
-    </span>
-  );
-}
 
 // ─── TASK CARD COMPONENT ─────────────────────────────────────
 interface TaskCardProps {
@@ -1050,6 +1028,9 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
               </span>
             )}
             {/* Deadline badges */}
+            {task.kanban_column === 'edicao' && task.editing_deadline && (
+              <DeadlineBadge deadline={task.editing_deadline} label="Edição" />
+            )}
             {task.kanban_column === 'revisao' && task.review_deadline && (
               <DeadlineBadge deadline={task.review_deadline} label="Revisão" />
             )}

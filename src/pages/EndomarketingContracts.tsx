@@ -141,9 +141,9 @@ export default function EndomarketingContracts() {
                 <TableHead>Pacote</TableHead>
                 <TableHead>Parceiro</TableHead>
                 <TableHead className="text-right">Custo</TableHead>
-                {isAdmin && <TableHead className="text-right">Venda</TableHead>}
-                {isAdmin && <TableHead className="text-right">Lucro</TableHead>}
-                {isAdmin && <TableHead className="text-right">Margem</TableHead>}
+                {canSeeFinancials && <TableHead className="text-right">Venda</TableHead>}
+                {canSeeFinancials && <TableHead className="text-right">Lucro</TableHead>}
+                {canSeeFinancials && <TableHead className="text-right">Margem</TableHead>}
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>

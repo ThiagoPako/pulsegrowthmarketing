@@ -19,7 +19,7 @@ interface SimpleProfile { id: string; name: string; display_name: string | null;
 export default function EndomarketingContracts() {
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
-  const isEndo = profile?.role === 'endomarketing';
+  const isEndo = profile?.role === 'endomarketing' || profile?.role === 'parceiro';
   const canSeeFinancials = isAdmin || isEndo;
   const { contracts, loading, addContract, updateContract, deactivateContract } = useEndoContracts();
   const { packages } = useEndoPackages();

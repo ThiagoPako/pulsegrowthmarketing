@@ -14,12 +14,13 @@ export default function EndomarketingDashboard() {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
+  const canSeeFinancials = isAdmin || profile?.role === 'endomarketing' || profile?.role === 'parceiro';
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   const metricCards = [
     { label: 'Clientes Ativos', value: String(metrics.totalClients), icon: Users, color: 'text-blue-500' },
-    ...(isAdmin ? [
+    ...(canSeeFinancials ? [
       { label: 'Faturamento Mensal', value: fmt(metrics.monthlyRevenue), icon: DollarSign, color: 'text-green-500' },
       { label: 'Custos Parceiros', value: fmt(metrics.monthlyCosts), icon: Receipt, color: 'text-orange-500' },
       { label: 'Lucro Mensal', value: fmt(metrics.monthlyProfit), icon: TrendingUp, color: metrics.monthlyProfit >= 0 ? 'text-emerald-500' : 'text-red-500' },
@@ -28,7 +29,7 @@ export default function EndomarketingDashboard() {
   ];
 
   // Grid cols based on number of cards
-  const gridCols = isAdmin ? 'grid-cols-2 md:grid-cols-5' : 'grid-cols-1 md:grid-cols-1';
+  const gridCols = canSeeFinancials ? 'grid-cols-2 md:grid-cols-5' : 'grid-cols-1 md:grid-cols-1';
 
   if (loadingC || loadingT) return <div className="flex items-center justify-center p-12"><p className="text-muted-foreground">Carregando...</p></div>;
 
@@ -88,7 +89,7 @@ export default function EndomarketingDashboard() {
                       <p className="text-xs text-muted-foreground">{c.endomarketing_packages?.package_name}</p>
                     </div>
                   </div>
-                  {isAdmin && (
+                  {canSeeFinancials && (
                     <div className="text-right">
                       <p className="text-sm font-semibold text-emerald-600">{fmt(c.sale_price - c.partner_cost)}</p>
                       <p className="text-xs text-muted-foreground">Margem: {c.sale_price > 0 ? ((c.sale_price - c.partner_cost) / c.sale_price * 100).toFixed(0) : 0}%</p>
@@ -129,7 +130,7 @@ export default function EndomarketingDashboard() {
         </Card>
       </div>
 
-      {isAdmin && metrics.activeContracts.length > 0 && (
+      {canSeeFinancials && metrics.activeContracts.length > 0 && (
         <Card className="glass-card">
           <CardHeader className="pb-3"><CardTitle className="text-base">🏆 Ranking de Lucratividade</CardTitle></CardHeader>
           <CardContent>

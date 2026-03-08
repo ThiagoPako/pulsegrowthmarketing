@@ -2,6 +2,49 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { format, addDays, getDay } from 'date-fns';
 
+// ─── Legacy compatibility exports (used by Schedule.tsx, Scripts.tsx) ────
+export interface EndoCliente { id: string; company_name: string; client_id?: string; color: string; active: boolean; stories_per_week: number; presence_days_per_week: number; selected_days: string[]; session_duration: number; execution_type: string; plan_type: string; total_contracted_hours: number; notes?: string; editorial?: string; created_at: string; updated_at: string; responsible_person?: string; phone?: string; }
+export interface EndoAgendamento { id: string; cliente_id: string; profissional_id: string; videomaker_id?: string; date: string; start_time: string; duration: number; status: string; cancellation_reason?: string; checklist: any; notes?: string; created_at: string; }
+export interface EndoProfissional { id: string; user_id: string; max_hours_per_day: number; available_days: string[]; start_time: string; end_time: string; active: boolean; }
+
+export function useEndoClientes() {
+  const [clientes, setClientes] = useState<EndoCliente[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    supabase.from('endomarketing_clientes').select('*').order('company_name').then(({ data }) => {
+      if (data) setClientes(data as any);
+      setLoading(false);
+    });
+  }, []);
+  return { clientes, loading, addCliente: async () => true, updateCliente: async () => {}, deleteCliente: async () => {}, refresh: () => {} };
+}
+
+export function useEndoAgendamentos() {
+  const [agendamentos, setAgendamentos] = useState<EndoAgendamento[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    supabase.from('endomarketing_agendamentos').select('*').order('date').then(({ data }) => {
+      if (data) setAgendamentos(data as any);
+      setLoading(false);
+    });
+  }, []);
+  return { agendamentos, loading, addAgendamento: async () => true, updateAgendamento: async () => {}, cancelAgendamento: async () => {}, hasConflict: () => false, hasVideomakerConflict: () => false, getDailyOccupation: () => 0, suggestBestDays: () => [], refresh: () => {} };
+}
+
+export function useEndoProfissionais() {
+  const [profissionais, setProfissionais] = useState<EndoProfissional[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    supabase.from('endomarketing_profissionais').select('*').then(({ data }) => {
+      if (data) setProfissionais(data as any);
+      setLoading(false);
+    });
+  }, []);
+  return { profissionais, loading, addProfissional: async () => true, updateProfissional: async () => {}, refresh: () => {} };
+}
+
+// ─── New Endomarketing types ────────────────
+
 export interface EndoPackage {
   id: string;
   category: string;

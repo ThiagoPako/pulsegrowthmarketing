@@ -442,8 +442,8 @@ export default function Dashboard() {
       {/* ── ROW 2.8: Agency Capacity ── */}
       <AgencyCapacityWidget clients={clients} users={users} recordings={recordings} settings={settings} />
 
-      {/* ── ROW 2.9: Endomarketing Metrics ── */}
-      {endoMetrics.totalClients > 0 && (
+      {/* ── ROW 2.9: Endomarketing Metrics (admin only) ── */}
+      {endoMetrics.totalClients > 0 && currentUser?.role === 'admin' && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-display font-semibold text-sm flex items-center gap-2">

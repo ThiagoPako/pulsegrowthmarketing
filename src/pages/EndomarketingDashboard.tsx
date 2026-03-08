@@ -89,7 +89,7 @@ export default function EndomarketingDashboard() {
                       <p className="text-xs text-muted-foreground">{c.endomarketing_packages?.package_name}</p>
                     </div>
                   </div>
-                  {isAdmin && (
+                  {canSeeFinancials && (
                     <div className="text-right">
                       <p className="text-sm font-semibold text-emerald-600">{fmt(c.sale_price - c.partner_cost)}</p>
                       <p className="text-xs text-muted-foreground">Margem: {c.sale_price > 0 ? ((c.sale_price - c.partner_cost) / c.sale_price * 100).toFixed(0) : 0}%</p>

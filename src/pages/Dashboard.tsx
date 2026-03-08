@@ -442,6 +442,56 @@ export default function Dashboard() {
       {/* ── ROW 2.8: Agency Capacity ── */}
       <AgencyCapacityWidget clients={clients} users={users} recordings={recordings} settings={settings} />
 
+      {/* ── ROW 2.9: Endomarketing Metrics ── */}
+      {endoMetrics.totalClients > 0 && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display font-semibold text-sm flex items-center gap-2">
+              <Megaphone size={16} className="text-primary" /> Endomarketing
+            </h3>
+            <button onClick={() => navigate('/endomarketing')} className="text-[11px] text-primary font-semibold hover:underline">
+              VER MÓDULO
+            </button>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl p-4 bg-primary/5 border border-primary/10">
+                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Faturamento</p>
+                <p className="text-xl font-display font-bold text-primary mt-1">R$ {endoMetrics.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{endoMetrics.totalClients} cliente{endoMetrics.totalClients !== 1 ? 's' : ''} ativo{endoMetrics.totalClients !== 1 ? 's' : ''}</p>
+              </div>
+              <div className="rounded-xl p-4 bg-destructive/5 border border-destructive/10">
+                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Custos</p>
+                <p className="text-xl font-display font-bold text-destructive mt-1">R$ {endoMetrics.costs.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Parceiros</p>
+              </div>
+              <div className="rounded-xl p-4 bg-success/5 border border-success/10">
+                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Lucro</p>
+                <p className="text-xl font-display font-bold text-success mt-1">R$ {endoMetrics.profit.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+              </div>
+              <div className="rounded-xl p-4 bg-info/5 border border-info/10">
+                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Margem</p>
+                <p className="text-xl font-display font-bold text-info mt-1">{endoMetrics.margin.toFixed(1)}%</p>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Clientes Mais Lucrativos</p>
+              <div className="space-y-2">
+                {endoMetrics.topClients.map((c, i) => (
+                  <div key={i} className={`flex items-center justify-between p-2.5 rounded-lg ${i < 3 ? 'bg-primary/5' : 'bg-secondary/40'}`}>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-sm font-bold w-6 text-center">{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}º`}</span>
+                      <p className="text-sm font-medium">{c.name}</p>
+                    </div>
+                    <p className="text-sm font-display font-bold text-success">R$ {c.profit.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* ── ROW 3: Week Agenda ── */}
       <div className="glass-card p-5">
         <div className="flex items-center justify-between mb-4">

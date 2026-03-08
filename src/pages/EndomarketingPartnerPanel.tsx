@@ -1,23 +1,72 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useEndoTasks, getTaskTypeLabel } from '@/hooks/useEndomarketing';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { format, startOfWeek, endOfWeek, addDays } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CheckCircle, Clock, Calendar, Megaphone } from 'lucide-react';
-import { useState } from 'react';
+import { CheckCircle, Clock, Calendar, Megaphone, DollarSign, TrendingUp } from 'lucide-react';
+
+interface PartnerEarnings {
+  endoContracts: { client_name: string; partner_cost: number; status: string }[];
+  completedTasks: number;
+  totalEarnings: number;
+}
 
 export default function EndomarketingPartnerPanel() {
   const { user } = useAuth();
   const { tasks, loading, completeTask } = useEndoTasks(user?.id);
   const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
   const [completingTaskId, setCompletingTaskId] = useState('');
+  const [earnings, setEarnings] = useState<PartnerEarnings>({ endoContracts: [], completedTasks: 0, totalEarnings: 0 });
+  const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
+
+  // Fetch partner's financial data
+  useEffect(() => {
+    if (!user?.id) return;
+    const fetchEarnings = async () => {
+      // Endo contracts where this user is the partner
+      const { data: endoContracts } = await supabase
+        .from('client_endomarketing_contracts')
+        .select('*, clients!client_endomarketing_contracts_client_id_fkey(company_name)')
+        .eq('partner_id', user.id);
+
+      // Completed tasks this month
+      const [yearStr, monthStr] = selectedMonth.split('-');
+      const monthStart = `${yearStr}-${monthStr}-01`;
+      const lastDay = new Date(parseInt(yearStr), parseInt(monthStr), 0).getDate();
+      const monthEnd = `${yearStr}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
+
+      const { data: monthTasks } = await supabase
+        .from('endomarketing_partner_tasks')
+        .select('*')
+        .eq('partner_id', user.id)
+        .eq('status', 'concluida')
+        .gte('date', monthStart)
+        .lte('date', monthEnd);
+
+      const activeContracts = (endoContracts || []).filter(c => c.status === 'ativo');
+      const totalMonthly = activeContracts.reduce((sum, c) => sum + Number(c.partner_cost || 0), 0);
+
+      setEarnings({
+        endoContracts: (endoContracts || []).map(c => ({
+          client_name: (c as any).clients?.company_name || 'Cliente',
+          partner_cost: Number(c.partner_cost || 0),
+          status: c.status,
+        })),
+        completedTasks: (monthTasks || []).length,
+        totalEarnings: totalMonthly,
+      });
+    };
+    fetchEarnings();
+  }, [user?.id, selectedMonth]);
   const [notes, setNotes] = useState('');
 
   const today = format(new Date(), 'yyyy-MM-dd');

@@ -1255,6 +1255,11 @@ export default function Clients() {
                     {DAY_LABELS[c.fixedDay]} · {c.fixedTime} · {users.find(u => u.id === c.videomaker)?.name || '—'}
                   </p>
                   <div className="flex gap-1 mt-1 flex-wrap">
+                    {c.niche && c.niche !== 'outro' && (
+                      <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
+                        {NICHE_OPTIONS.find(n => n.value === c.niche)?.label || c.niche}
+                      </Badge>
+                    )}
                     {(c.weeklyReels ?? 0) > 0 && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{c.weeklyReels} reels</Badge>}
                     {(c.weeklyCreatives ?? 0) > 0 && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{c.weeklyCreatives} criativos</Badge>}
                     {c.acceptsExtra && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">Extra{c.extraClientAppears ? ' · Aparece' : ''}</Badge>}

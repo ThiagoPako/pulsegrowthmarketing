@@ -97,23 +97,20 @@ export async function syncContentTaskColumnChange(
     }
   }
 
-  // 2. Set deadlines based on column transitions
+  // 2. Set deadlines based on column transitions (business hours only)
   if (newColumn === 'revisao') {
-    const deadline = new Date();
-    deadline.setHours(deadline.getHours() + deadlineHours.review);
+    const deadline = addBusinessHours(new Date(), deadlineHours.review, workDays);
     updates.review_deadline = deadline.toISOString();
     updates.approval_sent_at = new Date().toISOString();
   }
   if (newColumn === 'alteracao') {
     if (!ctx.immediateAlteration) {
-      const deadline = new Date();
-      deadline.setHours(deadline.getHours() + deadlineHours.alteration);
+      const deadline = addBusinessHours(new Date(), deadlineHours.alteration, workDays);
       updates.alteration_deadline = deadline.toISOString();
     }
   }
   if (newColumn === 'envio') {
-    const deadline = new Date();
-    deadline.setHours(deadline.getHours() + deadlineHours.approval);
+    const deadline = addBusinessHours(new Date(), deadlineHours.approval, workDays);
     updates.approval_deadline = deadline.toISOString();
     updates.approval_sent_at = new Date().toISOString();
   }

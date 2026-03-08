@@ -67,6 +67,7 @@ export interface Client {
   weeklyStories: number;
   presenceDays: number;
   monthlyRecordings: number;
+  niche: string;
 }
 
 export interface SocialAccount {

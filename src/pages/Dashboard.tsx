@@ -2,11 +2,12 @@ import { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/integrations/supabase/client';
 import { DAY_LABELS } from '@/types';
+import { getSeasonalAlerts, NICHE_OPTIONS } from '@/lib/seasonalDates';
 import { motion } from 'framer-motion';
 import {
   Video, Plus, XCircle, RefreshCw, TrendingUp, Calendar, Check,
   ChevronLeft, ChevronRight, Clock, Users as UsersIcon, MessageSquare, Trophy, BarChart3,
-  Clapperboard, Film, Megaphone
+  Clapperboard, Film, Megaphone, AlertTriangle
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, addDays, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -313,6 +314,79 @@ export default function Dashboard() {
           </div>
         </motion.div>
       )}
+
+      {/* ── SEASONAL DATES ALERTS ── */}
+      {(() => {
+        const allAlerts: { clientName: string; clientColor: string; label: string; date: Date; daysUntil: number; urgency: 'high' | 'medium' | 'low' }[] = [];
+        clients.forEach(c => {
+          if (!c.niche || c.niche === 'outro') return;
+          const alerts = getSeasonalAlerts(c.niche);
+          alerts.forEach(a => {
+            // Avoid duplicate dates across clients
+            if (!allAlerts.some(x => x.label === a.label && x.clientName === c.companyName)) {
+              allAlerts.push({ ...a, clientName: c.companyName, clientColor: c.color });
+            }
+          });
+        });
+        // Deduplicate by date label, group clients
+        const grouped = new Map<string, { label: string; date: Date; daysUntil: number; urgency: 'high' | 'medium' | 'low'; clients: { name: string; color: string }[] }>();
+        allAlerts.forEach(a => {
+          const key = a.label;
+          if (!grouped.has(key)) {
+            grouped.set(key, { label: a.label, date: a.date, daysUntil: a.daysUntil, urgency: a.urgency, clients: [] });
+          }
+          grouped.get(key)!.clients.push({ name: a.clientName, color: a.clientColor });
+        });
+        const sortedAlerts = Array.from(grouped.values()).sort((a, b) => a.daysUntil - b.daysUntil);
+        if (sortedAlerts.length === 0) return null;
+        return (
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-5 border-warning/30">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertTriangle size={16} className="text-warning" />
+              <h3 className="font-display font-semibold text-sm">📅 Datas Sazonais — Criar Conteúdo</h3>
+              <Badge variant="outline" className="text-[10px] h-5 border-warning/40 text-warning">{sortedAlerts.length}</Badge>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+              {sortedAlerts.slice(0, 6).map((alert, i) => (
+                <div key={i} className={`p-3 rounded-lg border transition-all ${
+                  alert.urgency === 'high' ? 'bg-destructive/5 border-destructive/30' :
+                  alert.urgency === 'medium' ? 'bg-warning/5 border-warning/30' :
+                  'bg-secondary/50 border-border'
+                }`}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-semibold">
+                      {alert.urgency === 'high' ? '🔴' : alert.urgency === 'medium' ? '🟡' : '🟢'} {alert.label}
+                    </span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                      alert.urgency === 'high' ? 'bg-destructive/15 text-destructive' :
+                      alert.urgency === 'medium' ? 'bg-warning/15 text-warning' :
+                      'bg-muted text-muted-foreground'
+                    }`}>
+                      {alert.daysUntil}d
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mb-1.5">
+                    {alert.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {alert.clients.slice(0, 3).map((c, j) => (
+                      <span key={j} className="text-[9px] px-1.5 py-0.5 rounded font-medium"
+                        style={{ backgroundColor: `hsl(${c.color} / 0.12)`, color: `hsl(${c.color})` }}>
+                        {c.name}
+                      </span>
+                    ))}
+                    {alert.clients.length > 3 && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                        +{alert.clients.length - 3}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        );
+      })()}
 
       {/* ── ROW 2: Today Schedule + Videomaker Progress ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

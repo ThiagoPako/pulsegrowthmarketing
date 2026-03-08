@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
+import { NICHE_OPTIONS, getSeasonalAlerts } from '@/lib/seasonalDates';
 import { DAY_LABELS, CONTENT_TYPE_LABELS, CLIENT_COLORS } from '@/types';
 import type { Client, DayOfWeek, ContentType } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -27,7 +28,7 @@ const emptyClient = (): Partial<Client> => ({
   extraContentTypes: [], acceptsExtra: false, extraClientAppears: false,
   weeklyReels: 0, weeklyCreatives: 0, weeklyGoal: 10,
   hasEndomarketing: false, weeklyStories: 0, presenceDays: 1,
-  monthlyRecordings: 4,
+  monthlyRecordings: 4, niche: '',
 });
 
 function timeToMinutes(t: string) {
@@ -490,6 +491,49 @@ export default function Clients() {
           ))}
         </div>
       </div>
+
+      {/* Niche selector */}
+      <div className="space-y-1">
+        <Label>Nicho de Atuação *</Label>
+        <Select value={form.niche || ''} onValueChange={v => setForm({ ...form, niche: v })}>
+          <SelectTrigger>
+            <SelectValue placeholder="Selecione o nicho do cliente" />
+          </SelectTrigger>
+          <SelectContent>
+            {NICHE_OPTIONS.map(n => (
+              <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Seasonal dates alert preview */}
+      {form.niche && form.niche !== 'outro' && (() => {
+        const alerts = getSeasonalAlerts(form.niche);
+        if (alerts.length === 0) return null;
+        return (
+          <div className="p-3 rounded-xl bg-warning/10 border border-warning/30 space-y-2">
+            <p className="text-xs font-semibold flex items-center gap-1.5 text-warning">
+              <AlertTriangle size={14} /> Datas sazonais próximas para este nicho
+            </p>
+            <div className="space-y-1">
+              {alerts.slice(0, 5).map((a, i) => (
+                <div key={i} className="flex items-center justify-between text-xs">
+                  <span className={`font-medium ${a.urgency === 'high' ? 'text-destructive' : a.urgency === 'medium' ? 'text-warning' : 'text-foreground'}`}>
+                    {a.urgency === 'high' ? '🔴' : a.urgency === 'medium' ? '🟡' : '🟢'} {a.label}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {a.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} · {a.daysUntil}d
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              O sistema notificará sobre datas importantes para criação de conteúdo sazonal.
+            </p>
+          </div>
+        );
+      })()}
     </div>
   );
 
@@ -1083,6 +1127,8 @@ export default function Clients() {
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
           <span className="text-muted-foreground">Empresa:</span>
           <span className="font-medium">{form.companyName}</span>
+          <span className="text-muted-foreground">Nicho:</span>
+          <span className="font-medium">{NICHE_OPTIONS.find(n => n.value === form.niche)?.label || '—'}</span>
           <span className="text-muted-foreground">Videomaker:</span>
           <span className="font-medium">{users.find(u => u.id === form.videomaker)?.name || '—'}</span>
           <span className="text-muted-foreground">Dia fixo:</span>
@@ -1209,6 +1255,11 @@ export default function Clients() {
                     {DAY_LABELS[c.fixedDay]} · {c.fixedTime} · {users.find(u => u.id === c.videomaker)?.name || '—'}
                   </p>
                   <div className="flex gap-1 mt-1 flex-wrap">
+                    {c.niche && c.niche !== 'outro' && (
+                      <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
+                        {NICHE_OPTIONS.find(n => n.value === c.niche)?.label || c.niche}
+                      </Badge>
+                    )}
                     {(c.weeklyReels ?? 0) > 0 && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{c.weeklyReels} reels</Badge>}
                     {(c.weeklyCreatives ?? 0) > 0 && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{c.weeklyCreatives} criativos</Badge>}
                     {c.acceptsExtra && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">Extra{c.extraClientAppears ? ' · Aparece' : ''}</Badge>}

@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, Send, Eye, Maximize2 } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
+import DeadlineBadge from '@/components/DeadlineBadge';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Client, Recording, Script } from '@/types';

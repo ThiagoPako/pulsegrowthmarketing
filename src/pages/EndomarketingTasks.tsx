@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useEndoTasks, useEndoContracts, getTaskTypeLabel } from '@/hooks/useEndomarketing';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,9 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Zap, CheckCircle, XCircle, Clock, CalendarPlus, Filter } from 'lucide-react';
+import { Zap, CheckCircle, XCircle, Clock, CalendarPlus, Filter, Send, MessageCircle } from 'lucide-react';
 
 export default function EndomarketingTasks() {
   const { tasks, loading, completeTask, cancelTask, generateTasks } = useEndoTasks();

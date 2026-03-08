@@ -148,12 +148,14 @@ export default function SocialMediaDeliveries() {
   const [alterationDelivery, setAlterationDelivery] = useState<SocialDelivery | null>(null);
   const [alterationImmediate, setAlterationImmediate] = useState(false);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
+  const [taskDeadlines, setTaskDeadlines] = useState<Record<string, { review_deadline: string | null; alteration_deadline: string | null; approval_deadline: string | null; immediate_alteration: boolean }>>({});
 
   const fetchData = useCallback(async () => {
-    const [dRes, pRes, cRes] = await Promise.all([
+    const [dRes, pRes, cRes, tRes] = await Promise.all([
       supabase.from('social_media_deliveries').select('*').order('delivered_at', { ascending: false }),
       supabase.from('plans').select('id, name, reels_qty, creatives_qty, stories_qty, arts_qty'),
       supabase.from('clients').select('id, plan_id'),
+      supabase.from('content_tasks').select('id, review_deadline, alteration_deadline, approval_deadline, immediate_alteration'),
     ]);
     if (dRes.data) setDeliveries(dRes.data as SocialDelivery[]);
     if (pRes.data) setPlans(pRes.data as Plan[]);
@@ -161,6 +163,11 @@ export default function SocialMediaDeliveries() {
       const map: Record<string, string | null> = {};
       (cRes.data as any[]).forEach(c => { map[c.id] = c.plan_id; });
       setClientPlans(map);
+    }
+    if (tRes.data) {
+      const dlMap: Record<string, any> = {};
+      (tRes.data as any[]).forEach(t => { dlMap[t.id] = t; });
+      setTaskDeadlines(dlMap);
     }
     setLoading(false);
   }, []);

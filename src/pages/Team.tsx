@@ -242,15 +242,9 @@ export default function Team() {
                       <Label>Função/Serviço *</Label>
                       <Input value={partnerForm.serviceFunction} onChange={e => setPartnerForm({ ...partnerForm, serviceFunction: e.target.value })} placeholder="Ex: Fotógrafo, Designer, Tráfego..." />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label>Valor por serviço (R$)</Label>
-                        <Input type="number" min={0} step={0.01} value={partnerForm.fixedRate} onChange={e => setPartnerForm({ ...partnerForm, fixedRate: parseFloat(e.target.value) || 0 })} />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Telefone</Label>
-                        <Input value={partnerForm.phone} onChange={e => setPartnerForm({ ...partnerForm, phone: e.target.value })} placeholder="(00) 00000-0000" />
-                      </div>
+                    <div className="space-y-1">
+                      <Label>Telefone</Label>
+                      <Input value={partnerForm.phone} onChange={e => setPartnerForm({ ...partnerForm, phone: e.target.value })} placeholder="(00) 00000-0000" />
                     </div>
                     <div className="space-y-1">
                       <Label>Observações</Label>
@@ -305,15 +299,9 @@ export default function Team() {
                     <Label>Empresa (opcional)</Label>
                     <Input value={partnerCreateForm.companyName} onChange={e => setPartnerCreateForm({ ...partnerCreateForm, companyName: e.target.value })} placeholder="Nome da empresa" />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label>Valor por serviço (R$)</Label>
-                      <Input type="number" min={0} step={0.01} value={partnerCreateForm.fixedRate} onChange={e => setPartnerCreateForm({ ...partnerCreateForm, fixedRate: parseFloat(e.target.value) || 0 })} />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Telefone</Label>
-                      <Input value={partnerCreateForm.phone} onChange={e => setPartnerCreateForm({ ...partnerCreateForm, phone: e.target.value })} placeholder="(00) 00000-0000" />
-                    </div>
+                  <div className="space-y-1">
+                    <Label>Telefone</Label>
+                    <Input value={partnerCreateForm.phone} onChange={e => setPartnerCreateForm({ ...partnerCreateForm, phone: e.target.value })} placeholder="(00) 00000-0000" />
                   </div>
                   <div className="space-y-1">
                     <Label>Observações</Label>

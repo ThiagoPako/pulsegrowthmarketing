@@ -79,8 +79,6 @@ export default function EndomarketingDashboard() {
           <CardContent className="space-y-2">
             {metrics.activeContracts.length === 0 && <p className="text-sm text-muted-foreground py-4 text-center">Nenhum contrato ativo</p>}
             {metrics.activeContracts.slice(0, 6).map(c => {
-              const profit = c.sale_price - c.partner_cost;
-              const margin = c.sale_price > 0 ? (profit / c.sale_price * 100) : 0;
               return (
                 <div key={c.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 transition-colors">
                   <div className="flex items-center gap-3">
@@ -90,10 +88,12 @@ export default function EndomarketingDashboard() {
                       <p className="text-xs text-muted-foreground">{c.endomarketing_packages?.package_name}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-emerald-600">{fmt(profit)}</p>
-                    <p className="text-xs text-muted-foreground">Margem: {margin.toFixed(0)}%</p>
-                  </div>
+                  {isAdmin && (
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-emerald-600">{fmt(c.sale_price - c.partner_cost)}</p>
+                      <p className="text-xs text-muted-foreground">Margem: {c.sale_price > 0 ? ((c.sale_price - c.partner_cost) / c.sale_price * 100).toFixed(0) : 0}%</p>
+                    </div>
+                  )}
                 </div>
               );
             })}

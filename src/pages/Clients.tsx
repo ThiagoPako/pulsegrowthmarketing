@@ -491,6 +491,49 @@ export default function Clients() {
           ))}
         </div>
       </div>
+
+      {/* Niche selector */}
+      <div className="space-y-1">
+        <Label>Nicho de Atuação *</Label>
+        <Select value={form.niche || ''} onValueChange={v => setForm({ ...form, niche: v })}>
+          <SelectTrigger>
+            <SelectValue placeholder="Selecione o nicho do cliente" />
+          </SelectTrigger>
+          <SelectContent>
+            {NICHE_OPTIONS.map(n => (
+              <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Seasonal dates alert preview */}
+      {form.niche && form.niche !== 'outro' && (() => {
+        const alerts = getSeasonalAlerts(form.niche);
+        if (alerts.length === 0) return null;
+        return (
+          <div className="p-3 rounded-xl bg-warning/10 border border-warning/30 space-y-2">
+            <p className="text-xs font-semibold flex items-center gap-1.5 text-warning">
+              <AlertTriangle size={14} /> Datas sazonais próximas para este nicho
+            </p>
+            <div className="space-y-1">
+              {alerts.slice(0, 5).map((a, i) => (
+                <div key={i} className="flex items-center justify-between text-xs">
+                  <span className={`font-medium ${a.urgency === 'high' ? 'text-destructive' : a.urgency === 'medium' ? 'text-warning' : 'text-foreground'}`}>
+                    {a.urgency === 'high' ? '🔴' : a.urgency === 'medium' ? '🟡' : '🟢'} {a.label}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {a.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} · {a.daysUntil}d
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              O sistema notificará sobre datas importantes para criação de conteúdo sazonal.
+            </p>
+          </div>
+        );
+      })()}
     </div>
   );
 

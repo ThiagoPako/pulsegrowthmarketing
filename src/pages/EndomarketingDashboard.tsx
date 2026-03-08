@@ -52,7 +52,7 @@ export default function EndomarketingDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className={`grid ${gridCols} gap-3`}>
         {metricCards.map(m => (
           <Card key={m.label} className="glass-card">
             <CardContent className="p-4">

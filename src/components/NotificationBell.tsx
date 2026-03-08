@@ -84,6 +84,7 @@ export default function NotificationBell() {
       case 'alteration': return '✏️';
       case 'approval': return '✅';
       case 'video_ready': return '🎬';
+      case 'script_low': return '📝';
       default: return '🔔';
     }
   };

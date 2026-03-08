@@ -12,6 +12,7 @@ import EndomarketingDashboard from "@/pages/EndomarketingDashboard";
 import EndomarketingContracts from "@/pages/EndomarketingContracts";
 import EndomarketingTasks from "@/pages/EndomarketingTasks";
 import EndomarketingReports from "@/pages/EndomarketingReports";
+import EndomarketingCalendar from "@/pages/EndomarketingCalendar";
 import EndomarketingPartnerPanel from "@/pages/EndomarketingPartnerPanel";
 import Clients from "@/pages/Clients";
 import Team from "@/pages/Team";
@@ -77,6 +78,7 @@ function AppRoutes() {
       <Route path="/endomarketing/contratos" element={<ProtectedRoute><EndomarketingContracts /></ProtectedRoute>} />
       <Route path="/endomarketing/tarefas" element={<ProtectedRoute><EndomarketingTasks /></ProtectedRoute>} />
       <Route path="/endomarketing/relatorios" element={<ProtectedRoute><EndomarketingReports /></ProtectedRoute>} />
+      <Route path="/endomarketing/calendario" element={<ProtectedRoute><EndomarketingCalendar /></ProtectedRoute>} />
       {/* Legacy redirects */}
       <Route path="/endomarketing/clientes" element={<Navigate to="/endomarketing/contratos" replace />} />
       <Route path="/endomarketing/agenda" element={<Navigate to="/endomarketing/tarefas" replace />} />

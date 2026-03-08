@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Users, DollarSign, TrendingUp, Percent, Receipt, Plus, BarChart3, ArrowRight } from 'lucide-react';
+import { Users, DollarSign, TrendingUp, Percent, Receipt, Plus, BarChart3, ArrowRight, CalendarDays } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function EndomarketingDashboard() {
@@ -32,6 +32,9 @@ export default function EndomarketingDashboard() {
           <p className="text-sm text-muted-foreground">Gestão de pacotes e parceiros</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => navigate('/endomarketing/calendario')}>
+            <CalendarDays size={16} className="mr-1" /> Calendário
+          </Button>
           <Button variant="outline" size="sm" onClick={() => navigate('/endomarketing/relatorios')}>
             <BarChart3 size={16} className="mr-1" /> Relatórios
           </Button>

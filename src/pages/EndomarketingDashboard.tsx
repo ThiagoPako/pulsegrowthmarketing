@@ -14,6 +14,7 @@ export default function EndomarketingDashboard() {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
+  const canSeeFinancials = isAdmin || profile?.role === 'endomarketing' || profile?.role === 'parceiro';
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 

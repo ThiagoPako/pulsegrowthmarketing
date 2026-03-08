@@ -20,6 +20,7 @@ export default function EndomarketingReports() {
   const metrics = useEndoMetrics(contracts, tasks);
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
+  const canSeeFinancials = isAdmin || profile?.role === 'endomarketing' || profile?.role === 'parceiro';
   const [filterClient, setFilterClient] = useState('all');
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');

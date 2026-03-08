@@ -20,7 +20,7 @@ export default function EndomarketingDashboard() {
 
   const metricCards = [
     { label: 'Clientes Ativos', value: String(metrics.totalClients), icon: Users, color: 'text-blue-500' },
-    ...(isAdmin ? [
+    ...(canSeeFinancials ? [
       { label: 'Faturamento Mensal', value: fmt(metrics.monthlyRevenue), icon: DollarSign, color: 'text-green-500' },
       { label: 'Custos Parceiros', value: fmt(metrics.monthlyCosts), icon: Receipt, color: 'text-orange-500' },
       { label: 'Lucro Mensal', value: fmt(metrics.monthlyProfit), icon: TrendingUp, color: metrics.monthlyProfit >= 0 ? 'text-emerald-500' : 'text-red-500' },

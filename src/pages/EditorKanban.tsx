@@ -49,6 +49,10 @@ interface EditorTask {
   edited_video_link: string | null;
   editing_deadline: string | null;
   editing_started_at: string | null;
+  review_deadline: string | null;
+  alteration_deadline: string | null;
+  approval_deadline: string | null;
+  immediate_alteration: boolean;
   position: number;
   created_at: string;
   updated_at: string;

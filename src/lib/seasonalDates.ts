@@ -32,21 +32,21 @@ interface SeasonalDate {
 
 // Universal dates that apply to ALL niches
 const UNIVERSAL_DATES: SeasonalDate[] = [
-  { month: 1, day: 1, label: 'Ano Novo', daysBeforeAlert: 15 },
-  { month: 2, day: 14, label: 'Carnaval (aprox.)', daysBeforeAlert: 20 },
-  { month: 3, day: 8, label: 'Dia Internacional da Mulher', daysBeforeAlert: 15 },
-  { month: 3, day: 15, label: 'Dia do Consumidor', daysBeforeAlert: 15 },
-  { month: 4, day: 21, label: 'Tiradentes', daysBeforeAlert: 10 },
-  { month: 5, day: 1, label: 'Dia do Trabalho', daysBeforeAlert: 15 },
-  { month: 5, day: 11, label: 'Dia das Mães', daysBeforeAlert: 20 },
-  { month: 6, day: 12, label: 'Dia dos Namorados', daysBeforeAlert: 20 },
-  { month: 6, day: 24, label: 'São João / Festa Junina', daysBeforeAlert: 20 },
-  { month: 8, day: 10, label: 'Dia dos Pais', daysBeforeAlert: 20 },
-  { month: 9, day: 7, label: 'Independência do Brasil', daysBeforeAlert: 15 },
-  { month: 10, day: 12, label: 'Dia das Crianças', daysBeforeAlert: 20 },
-  { month: 10, day: 31, label: 'Halloween', daysBeforeAlert: 15 },
-  { month: 11, day: 25, label: 'Black Friday (aprox.)', daysBeforeAlert: 25 },
-  { month: 12, day: 25, label: 'Natal', daysBeforeAlert: 25 },
+  { month: 1, day: 1, label: 'Ano Novo', daysBeforeAlert: 30 },
+  { month: 2, day: 14, label: 'Carnaval (aprox.)', daysBeforeAlert: 40 },
+  { month: 3, day: 8, label: 'Dia Internacional da Mulher', daysBeforeAlert: 30 },
+  { month: 3, day: 15, label: 'Dia do Consumidor', daysBeforeAlert: 30 },
+  { month: 4, day: 21, label: 'Tiradentes', daysBeforeAlert: 20 },
+  { month: 5, day: 1, label: 'Dia do Trabalho', daysBeforeAlert: 30 },
+  { month: 5, day: 11, label: 'Dia das Mães', daysBeforeAlert: 40 },
+  { month: 6, day: 12, label: 'Dia dos Namorados', daysBeforeAlert: 40 },
+  { month: 6, day: 24, label: 'São João / Festa Junina', daysBeforeAlert: 40 },
+  { month: 8, day: 10, label: 'Dia dos Pais', daysBeforeAlert: 40 },
+  { month: 9, day: 7, label: 'Independência do Brasil', daysBeforeAlert: 30 },
+  { month: 10, day: 12, label: 'Dia das Crianças', daysBeforeAlert: 40 },
+  { month: 10, day: 31, label: 'Halloween', daysBeforeAlert: 30 },
+  { month: 11, day: 25, label: 'Black Friday (aprox.)', daysBeforeAlert: 45 },
+  { month: 12, day: 25, label: 'Natal', daysBeforeAlert: 45 },
 ];
 
 // Niche-specific dates

@@ -96,9 +96,24 @@ export async function generateClientCardPdf(client: Client, videomakerName: stri
   addSection('ACESSOS E LINKS');
   addField('Login', client.clientLogin || '');
   addField('Senha', client.clientPassword || '');
-  addField('Drive (Geral)', client.driveLink || '');
-  addField('Drive Fotos', client.driveFotos || '');
-  addField('Drive ID Visual', client.driveIdentidadeVisual || '');
+
+  // Drive button (clickable)
+  if (client.driveLink) {
+    y += 2;
+    const btnWidth = 60;
+    const btnHeight = 9;
+    const btnX = margin;
+    const btnY = y - 5.5;
+    doc.setFillColor(66, 133, 244);
+    doc.roundedRect(btnX, btnY, btnWidth, btnHeight, 2, 2, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(255, 255, 255);
+    doc.textWithLink('📂  Abrir Google Drive', btnX + 4, y, { url: client.driveLink });
+    doc.link(btnX, btnY, btnWidth, btnHeight, { url: client.driveLink });
+    y += 10;
+    doc.setTextColor(30, 30, 40);
+  }
 
   // === AGENDA ===
   addSection('AGENDA DE GRAVAÇÃO');

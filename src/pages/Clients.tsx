@@ -268,7 +268,7 @@ export default function Clients() {
   };
 
   const handleSave = async () => {
-    if (!form.companyName || !form.responsiblePerson || !form.whatsapp || !form.videomaker) {
+    if (!form.companyName || !form.responsiblePerson || !form.whatsapp) {
       toast.error('Preencha todos os campos obrigatórios'); return;
     }
     if (editing) {

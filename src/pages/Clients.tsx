@@ -358,9 +358,10 @@ export default function Clients() {
     }
   };
 
-  const handleDelete = (id: string) => {
-    if (!deleteClient(id)) { toast.error('Não é possível excluir cliente com gravações futuras'); return; }
-    toast.success('Cliente removido');
+  const handleDelete = async (id: string) => {
+    if (!confirm('Tem certeza? Todos os dados deste cliente serão removidos permanentemente.')) return;
+    await deleteClient(id);
+    toast.success('Cliente e todos os dados relacionados foram removidos');
   };
 
   const toggleContentType = (ct: ContentType) => {

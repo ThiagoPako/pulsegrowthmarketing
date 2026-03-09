@@ -535,6 +535,35 @@ export default function Clients() {
           </div>
         );
       })()}
+
+      {/* Access & Drive links */}
+      <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
+        <p className="text-sm font-semibold flex items-center gap-2">
+          <KeyRound size={16} className="text-primary" /> Acessos e Links
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label>Login</Label>
+            <Input value={form.clientLogin || ''} onChange={e => setForm({ ...form, clientLogin: e.target.value })} placeholder="login@email.com" />
+          </div>
+          <div className="space-y-1">
+            <Label>Senha</Label>
+            <Input value={form.clientPassword || ''} onChange={e => setForm({ ...form, clientPassword: e.target.value })} placeholder="••••••••" />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <Label className="flex items-center gap-1"><FolderOpen size={12} /> Link do Drive (Geral)</Label>
+          <Input value={form.driveLink || ''} onChange={e => setForm({ ...form, driveLink: e.target.value })} placeholder="https://drive.google.com/..." />
+        </div>
+        <div className="space-y-1">
+          <Label className="flex items-center gap-1"><FolderOpen size={12} /> Drive de Fotos</Label>
+          <Input value={form.driveFotos || ''} onChange={e => setForm({ ...form, driveFotos: e.target.value })} placeholder="https://drive.google.com/..." />
+        </div>
+        <div className="space-y-1">
+          <Label className="flex items-center gap-1"><FolderOpen size={12} /> Drive de Identidade Visual</Label>
+          <Input value={form.driveIdentidadeVisual || ''} onChange={e => setForm({ ...form, driveIdentidadeVisual: e.target.value })} placeholder="https://drive.google.com/..." />
+        </div>
+      </div>
     </div>
   );
 

@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
@@ -65,7 +65,6 @@ const emptySocialAccounts = (): SocialAccountState => ({
 const STEP_LABELS = [
   { icon: User, label: 'Dados da Empresa' },
   { icon: Globe, label: 'Redes Sociais' },
-  { icon: Video, label: 'Agenda & Gravação' },
   { icon: Target, label: 'Metas Semanais' },
   { icon: DollarSign, label: 'Financeiro' },
 ];
@@ -269,7 +268,7 @@ export default function Clients() {
   };
 
   const handleSave = async () => {
-    if (!form.companyName || !form.responsiblePerson || !form.whatsapp || !form.videomaker) {
+    if (!form.companyName || !form.responsiblePerson || !form.whatsapp) {
       toast.error('Preencha todos os campos obrigatórios'); return;
     }
     if (editing) {
@@ -420,7 +419,6 @@ export default function Clients() {
   }, [form.videomaker, settings, clients, users, editing, preferredShift]);
 
   const canProceedStep0 = form.companyName && form.responsiblePerson && form.whatsapp;
-  const canProceedStep2 = form.videomaker && form.fixedDay && form.fixedTime;
 
   // ========== STEP RENDERERS ==========
 
@@ -1226,9 +1224,8 @@ export default function Clients() {
                 <>
                   {step === 0 && renderStep0()}
                   {step === 1 && renderStep1()}
-                  {step === 2 && renderStep2()}
-                  {step === 3 && renderStep3()}
-                  {step === 4 && renderStep4()}
+                  {step === 2 && renderStep3()}
+                  {step === 3 && renderStep4()}
                 </>
               )}
             </div>
@@ -1244,9 +1241,9 @@ export default function Clients() {
                       <ChevronLeft size={14} /> Voltar
                     </Button>
                   )}
-                  {step < 4 ? (
+                  {step < 3 ? (
                     <Button onClick={() => setStep(s => s + 1)} className="ml-auto gap-1"
-                      disabled={step === 0 ? !canProceedStep0 : step === 2 ? !canProceedStep2 : false}>
+                      disabled={step === 0 ? !canProceedStep0 : false}>
                       Próximo <ChevronRight size={14} />
                     </Button>
                   ) : (
@@ -1298,6 +1295,15 @@ export default function Clients() {
                 </div>
               </div>
               <div className="flex gap-1 shrink-0">
+                {/* Onboarding link */}
+                <Button variant="ghost" size="icon" className="h-8 w-8" title="Copiar link de onboarding"
+                  onClick={() => {
+                    const link = `${window.location.origin}/onboarding/${c.id}`;
+                    navigator.clipboard.writeText(link);
+                    toast.success('Link de onboarding copiado!');
+                  }}>
+                  <Copy size={14} />
+                </Button>
                 {c.whatsapp && (
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => {
                     setSendWaClient(c);

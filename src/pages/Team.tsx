@@ -32,6 +32,7 @@ interface TeamMember {
   avatarUrl?: string;
   displayName?: string;
   jobTitle?: string;
+  bio?: string;
 }
 
 interface PartnerInfo {
@@ -75,6 +76,7 @@ export default function Team() {
         avatarUrl: p.avatar_url,
         displayName: p.display_name,
         jobTitle: p.job_title,
+        bio: p.bio,
       })));
     }
     setLoading(false);
@@ -351,9 +353,10 @@ export default function Team() {
               <div key={u.id} className="glass-card p-4 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <UserAvatar user={u} size="lg" />
-                  <div>
+                   <div>
                     <p className="font-medium">{u.displayName || u.name}</p>
                     <p className="text-xs text-muted-foreground">{u.email}{u.jobTitle ? ` · ${u.jobTitle}` : ''}</p>
+                    {u.bio && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{u.bio}</p>}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">

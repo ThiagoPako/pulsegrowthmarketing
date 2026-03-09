@@ -140,8 +140,62 @@ Deno.serve(async (req) => {
 
       if (recError) {
         console.error('Error creating recordings:', recError.message)
-        // Don't fail the whole request, client was already updated
       }
+    }
+
+    // Send welcome WhatsApp message after onboarding
+    try {
+      const { data: clientData } = await supabase
+        .from('clients')
+        .select('company_name, responsible_person, whatsapp')
+        .eq('id', clientId)
+        .single()
+
+      if (clientData?.whatsapp) {
+        const { data: whatsConfig } = await supabase
+          .from('whatsapp_config')
+          .select('integration_active, api_token, default_user_id, default_queue_id, send_signature, close_ticket')
+          .limit(1)
+          .single()
+
+        if (whatsConfig?.integration_active && whatsConfig?.api_token) {
+          const clientName = clientData.responsible_person || clientData.company_name
+          const welcomeMsg = `Olá, ${clientName}! 🎉\n\nSeja muito bem-vindo(a) à *Pulse Growth Marketing*! 🚀\n\nEstamos felizes em tê-lo(a) conosco! A partir de agora, você receberá:\n\n📅 *Lembrete 24h antes* de cada gravação agendada\n🎬 *Atualizações* quando seus vídeos entrarem em edição\n📲 *Link para aprovação* assim que o conteúdo estiver pronto\n\nNosso objetivo é manter você sempre informado(a) sobre o andamento dos seus conteúdos.\n\nQualquer dúvida, estamos à disposição!\n\nEquipe Pulse Growth Marketing 🚀`
+
+          const WHATSAPP_API_URL = 'https://api.atendeclique.com.br/api/messages/send'
+          const apiBody = {
+            number: clientData.whatsapp.replace(/\D/g, ''),
+            body: welcomeMsg,
+            userId: whatsConfig.default_user_id || '',
+            queueId: whatsConfig.default_queue_id || '',
+            sendSignature: whatsConfig.send_signature || false,
+            closeTicket: whatsConfig.close_ticket || false,
+          }
+
+          const apiResponse = await fetch(WHATSAPP_API_URL, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${whatsConfig.api_token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(apiBody),
+          })
+
+          const apiResult = await apiResponse.json()
+
+          // Log the message
+          await supabase.from('whatsapp_messages').insert({
+            phone_number: clientData.whatsapp.replace(/\D/g, ''),
+            message: welcomeMsg,
+            status: apiResponse.ok ? 'sent' : 'failed',
+            api_response: apiResult,
+            client_id: clientId,
+            trigger_type: 'auto_recording',
+          })
+        }
+      }
+    } catch (err) {
+      console.error('Welcome WhatsApp error:', err)
     }
 
     return new Response(JSON.stringify({ success: true }), {

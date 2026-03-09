@@ -97,6 +97,23 @@ export async function syncContentTaskColumnChange(
     if (ctx.scriptId) {
       await supabase.from('scripts').update({ recorded: true } as any).eq('id', ctx.scriptId);
     }
+
+    // Send WhatsApp to client: video recorded, now in editing
+    try {
+      const whatsConfig = await getWhatsAppConfig();
+      if (whatsConfig?.integrationActive && ctx.clientWhatsapp) {
+        const editingMsg = `Olá, ${ctx.clientName || ''}! 🎬\n\nHoje gravamos o vídeo *"${ctx.title}"* e ele já está com o nosso time de edição! ✂️\n\nAssim que estiver pronto, enviaremos o link aqui para sua aprovação. 📲\n\nAgradecemos pela confiança!\n\nEquipe Pulse Growth Marketing 🚀`;
+
+        await sendWhatsAppMessage({
+          number: ctx.clientWhatsapp,
+          message: editingMsg,
+          clientId: ctx.clientId,
+          triggerType: 'auto_recording',
+        });
+      }
+    } catch (err) {
+      console.error('WhatsApp editing notification error:', err);
+    }
   }
 
   // 2. Set deadlines based on column transitions (business hours only)

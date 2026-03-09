@@ -32,6 +32,7 @@ interface TeamMember {
   avatarUrl?: string;
   displayName?: string;
   jobTitle?: string;
+  bio?: string;
 }
 
 interface PartnerInfo {

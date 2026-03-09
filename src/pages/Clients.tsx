@@ -1295,6 +1295,15 @@ export default function Clients() {
                 </div>
               </div>
               <div className="flex gap-1 shrink-0">
+                {/* Onboarding link */}
+                <Button variant="ghost" size="icon" className="h-8 w-8" title="Copiar link de onboarding"
+                  onClick={() => {
+                    const link = `${window.location.origin}/onboarding/${c.id}`;
+                    navigator.clipboard.writeText(link);
+                    toast.success('Link de onboarding copiado!');
+                  }}>
+                  <Copy size={14} />
+                </Button>
                 {c.whatsapp && (
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => {
                     setSendWaClient(c);

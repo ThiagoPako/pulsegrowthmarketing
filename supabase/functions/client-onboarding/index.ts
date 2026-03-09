@@ -5,6 +5,28 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+function getNextDayOccurrences(dayName: string, count: number): string[] {
+  const dayMap: Record<string, number> = {
+    domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6,
+  }
+  const targetDay = dayMap[dayName]
+  if (targetDay === undefined) return []
+
+  const dates: string[] = []
+  const today = new Date()
+  const current = new Date(today)
+  // Start from tomorrow
+  current.setDate(current.getDate() + 1)
+
+  while (dates.length < count) {
+    if (current.getDay() === targetDay) {
+      dates.push(current.toISOString().split('T')[0])
+    }
+    current.setDate(current.getDate() + 1)
+  }
+  return dates
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -74,6 +96,7 @@ Deno.serve(async (req) => {
       })
     }
 
+    // Update client record
     const { error } = await supabase
       .from('clients')
       .update({
@@ -94,6 +117,31 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: error.message }), {
         status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
+    }
+
+    // Create upcoming recording entries in the agency schedule
+    const recordingsCount = monthly_recordings || 4
+    const upcomingDates = getNextDayOccurrences(fixed_day, recordingsCount)
+
+    const recordingsToInsert = upcomingDates.map(date => ({
+      client_id: clientId,
+      videomaker_id,
+      date,
+      start_time: fixed_time,
+      type: 'fixa',
+      status: 'agendada',
+      confirmation_status: 'pendente',
+    }))
+
+    if (recordingsToInsert.length > 0) {
+      const { error: recError } = await supabase
+        .from('recordings')
+        .insert(recordingsToInsert)
+
+      if (recError) {
+        console.error('Error creating recordings:', recError.message)
+        // Don't fail the whole request, client was already updated
+      }
     }
 
     return new Response(JSON.stringify({ success: true }), {

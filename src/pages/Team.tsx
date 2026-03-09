@@ -76,6 +76,7 @@ export default function Team() {
         avatarUrl: p.avatar_url,
         displayName: p.display_name,
         jobTitle: p.job_title,
+        bio: p.bio,
       })));
     }
     setLoading(false);

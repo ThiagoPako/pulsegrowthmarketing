@@ -40,6 +40,7 @@ import FinancialCashReserve from "@/pages/FinancialCashReserve";
 import FinancialMovements from "@/pages/FinancialMovements";
 import FinancialPartners from "@/pages/FinancialPartners";
 import NotFound from "@/pages/NotFound";
+import ClientOnboarding from "@/pages/ClientOnboarding";
 
 const queryClient = new QueryClient();
 

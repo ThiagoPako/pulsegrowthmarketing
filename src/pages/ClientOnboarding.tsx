@@ -271,7 +271,7 @@ export default function ClientOnboarding() {
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-sm">{vm.display_name || vm.name}</p>
                     {vm.job_title && <p className="text-xs text-primary font-medium">{vm.job_title}</p>}
-                    {vm.bio && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{vm.bio}</p>}
+                    {vm.bio && <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">{vm.bio}</p>}
                   </div>
                   {selectedVm === vm.id && (
                     <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center shrink-0">

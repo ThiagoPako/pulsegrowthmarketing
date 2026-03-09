@@ -21,7 +21,7 @@ interface AppContextType {
   deleteUser: (id: string) => void;
   addClient: (client: Client) => boolean;
   updateClient: (client: Client) => void;
-  deleteClient: (id: string) => boolean;
+  deleteClient: (id: string) => Promise<boolean>;
   addRecording: (recording: Recording) => boolean;
   updateRecording: (recording: Recording) => void;
   cancelRecording: (id: string) => void;
@@ -84,9 +84,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const updateClient = useCallback((client: Client) => { data.updateClient(client); }, [data]);
 
-  const deleteClient = useCallback((id: string): boolean => {
-    data.deleteClient(id);
-    return true;
+  const deleteClient = useCallback(async (id: string): Promise<boolean> => {
+    return await data.deleteClient(id);
   }, [data]);
 
   const timeToMinutes = (t: string) => {

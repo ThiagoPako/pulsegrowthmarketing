@@ -286,71 +286,72 @@ export function useSupabaseData() {
   }, []);
 
   const deleteClient = useCallback(async (id: string): Promise<boolean> => {
-    // 1. Content tasks and related data
-    const { data: contentTasks } = await supabase.from('content_tasks').select('id').eq('client_id', id);
-    if (contentTasks && contentTasks.length > 0) {
-      const taskIds = contentTasks.map(t => t.id);
-      await supabase.from('task_comments').delete().in('task_id', taskIds);
-      await supabase.from('task_history').delete().in('task_id', taskIds);
-    }
-    await supabase.from('content_tasks').delete().eq('client_id', id);
+    try {
+      // 1. Content tasks and related data
+      const { data: contentTasks } = await supabase.from('content_tasks').select('id').eq('client_id', id);
+      if (contentTasks && contentTasks.length > 0) {
+        const taskIds = contentTasks.map(t => t.id);
+        await supabase.from('task_comments').delete().in('task_id', taskIds);
+        await supabase.from('task_history').delete().in('task_id', taskIds);
+      }
+      await supabase.from('content_tasks').delete().eq('client_id', id);
 
-    // 2. Social media deliveries
-    await supabase.from('social_media_deliveries').delete().eq('client_id', id);
+      // 2. Social media deliveries
+      await supabase.from('social_media_deliveries').delete().eq('client_id', id);
 
-    // 3. Delivery records
-    await supabase.from('delivery_records').delete().eq('client_id', id);
+      // 3. Delivery records
+      await supabase.from('delivery_records').delete().eq('client_id', id);
 
-    // 4. Active recordings & recordings
-    await supabase.from('active_recordings').delete().eq('client_id', id);
-    await supabase.from('recordings').delete().eq('client_id', id);
-    setRecordings(prev => prev.filter(r => r.clientId !== id));
-    setActiveRecordings(prev => prev.filter(a => a.clientId !== id));
+      // 4. Active recordings & recordings
+      await supabase.from('active_recordings').delete().eq('client_id', id);
+      // WhatsApp confirmations reference recordings, delete first
+      await supabase.from('whatsapp_confirmations').delete().eq('client_id', id);
+      await supabase.from('recordings').delete().eq('client_id', id);
+      setRecordings(prev => prev.filter(r => r.clientId !== id));
+      setActiveRecordings(prev => prev.filter(a => a.clientId !== id));
 
-    // 5. WhatsApp confirmations & messages
-    await supabase.from('whatsapp_confirmations').delete().eq('client_id', id);
-    await supabase.from('whatsapp_messages').delete().eq('client_id', id);
+      // 5. WhatsApp messages
+      await supabase.from('whatsapp_messages').delete().eq('client_id', id);
 
-    // 6. Billing messages & revenues & financial contracts
-    await supabase.from('billing_messages').delete().eq('client_id', id);
-    const { data: contracts } = await supabase.from('financial_contracts').select('id').eq('client_id', id);
-    if (contracts && contracts.length > 0) {
-      const contractIds = contracts.map(c => c.id);
-      await supabase.from('revenues').delete().in('contract_id', contractIds);
-    }
-    await supabase.from('financial_contracts').delete().eq('client_id', id);
+      // 6. Billing messages & revenues & financial contracts
+      await supabase.from('billing_messages').delete().eq('client_id', id);
+      await supabase.from('revenues').delete().eq('client_id', id);
+      await supabase.from('financial_contracts').delete().eq('client_id', id);
 
-    // 7. Endomarketing contracts & partner tasks
-    const { data: endoContracts } = await supabase.from('client_endomarketing_contracts').select('id').eq('client_id', id);
-    if (endoContracts && endoContracts.length > 0) {
-      const endoContractIds = endoContracts.map(c => c.id);
-      await supabase.from('endomarketing_partner_tasks').delete().in('contract_id', endoContractIds);
-    }
-    await supabase.from('client_endomarketing_contracts').delete().eq('client_id', id);
+      // 7. Endomarketing partner tasks (direct client_id FK)
+      await supabase.from('endomarketing_partner_tasks').delete().eq('client_id', id);
 
-    // 8. Endomarketing clientes & related
-    const { data: endoClients } = await supabase.from('endomarketing_clientes').select('id').eq('client_id', id);
-    if (endoClients && endoClients.length > 0) {
-      const endoIds = endoClients.map(e => e.id);
-      await supabase.from('endomarketing_agendamentos').delete().in('cliente_id', endoIds);
-      await supabase.from('endomarketing_logs').delete().in('cliente_id', endoIds);
+      // 8. Endomarketing contracts
+      await supabase.from('client_endomarketing_contracts').delete().eq('client_id', id);
+
+      // 9. Endomarketing clientes & related
+      const { data: endoClients } = await supabase.from('endomarketing_clientes').select('id').eq('client_id', id);
+      if (endoClients && endoClients.length > 0) {
+        const endoIds = endoClients.map(e => e.id);
+        await supabase.from('endomarketing_agendamentos').delete().in('cliente_id', endoIds);
+        await supabase.from('endomarketing_logs').delete().in('cliente_id', endoIds);
+      }
       await supabase.from('endomarketing_clientes').delete().eq('client_id', id);
+
+      // 10. Social accounts & integration logs
+      await supabase.from('social_accounts').delete().eq('client_id', id);
+      await supabase.from('integration_logs').delete().eq('client_id', id);
+
+      // 11. Kanban tasks & scripts
+      await supabase.from('kanban_tasks').delete().eq('client_id', id);
+      setTasks(prev => prev.filter(t => t.clientId !== id));
+      await supabase.from('scripts').delete().eq('client_id', id);
+      setScripts(prev => prev.filter(s => s.clientId !== id));
+
+      // 12. Finally delete the client
+      const { error } = await supabase.from('clients').delete().eq('id', id);
+      if (error) { console.error('deleteClient error:', error); return false; }
+      setClients(prev => prev.filter(c => c.id !== id));
+      return true;
+    } catch (err) {
+      console.error('deleteClient cascade error:', err);
+      return false;
     }
-
-    // 9. Social accounts & integration logs
-    await supabase.from('social_accounts').delete().eq('client_id', id);
-    await supabase.from('integration_logs').delete().eq('client_id', id);
-
-    // 10. Kanban tasks & scripts
-    await supabase.from('kanban_tasks').delete().eq('client_id', id);
-    setTasks(prev => prev.filter(t => t.clientId !== id));
-    await supabase.from('scripts').delete().eq('client_id', id);
-    setScripts(prev => prev.filter(s => s.clientId !== id));
-
-    // 11. Finally delete the client
-    await supabase.from('clients').delete().eq('id', id);
-    setClients(prev => prev.filter(c => c.id !== id));
-    return true;
   }, []);
 
   // ── Recording CRUD ──

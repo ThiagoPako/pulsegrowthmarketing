@@ -220,6 +220,7 @@ export type Database = {
           logo_url: string | null
           monthly_recordings: number
           niche: string | null
+          onboarding_completed: boolean | null
           phone: string
           plan_id: string | null
           presence_days: number
@@ -258,6 +259,7 @@ export type Database = {
           logo_url?: string | null
           monthly_recordings?: number
           niche?: string | null
+          onboarding_completed?: boolean | null
           phone?: string
           plan_id?: string | null
           presence_days?: number
@@ -296,6 +298,7 @@ export type Database = {
           logo_url?: string | null
           monthly_recordings?: number
           niche?: string | null
+          onboarding_completed?: boolean | null
           phone?: string
           plan_id?: string | null
           presence_days?: number
@@ -1358,6 +1361,7 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          bio: string | null
           created_at: string
           display_name: string | null
           email: string
@@ -1369,6 +1373,7 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          bio?: string | null
           created_at?: string
           display_name?: string | null
           email: string
@@ -1380,6 +1385,7 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          bio?: string | null
           created_at?: string
           display_name?: string | null
           email?: string

@@ -62,6 +62,7 @@ const ProfileDialog = forwardRef<HTMLDivElement, { children: React.ReactNode }>(
           setDisplayName(currentUser.displayName || currentUser.name);
           setJobTitle(currentUser.jobTitle || '');
           setAvatarUrl(currentUser.avatarUrl || '');
+          setBio((currentUser as any)?.bio || '');
         }
       }}>
         <DialogTrigger asChild>{children}</DialogTrigger>

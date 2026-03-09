@@ -29,6 +29,7 @@ const emptyClient = (): Partial<Client> => ({
   weeklyReels: 0, weeklyCreatives: 0, weeklyGoal: 10,
   hasEndomarketing: false, weeklyStories: 0, presenceDays: 1,
   monthlyRecordings: 4, niche: '',
+  clientLogin: '', clientPassword: '', driveLink: '', driveFotos: '', driveIdentidadeVisual: '',
 });
 
 function timeToMinutes(t: string) {

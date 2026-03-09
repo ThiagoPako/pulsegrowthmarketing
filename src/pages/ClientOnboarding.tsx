@@ -56,12 +56,6 @@ export default function ClientOnboarding() {
     if (!clientId) return;
     const fetchData = async () => {
       try {
-        const res = await supabase.functions.invoke('client-onboarding', {
-          method: 'GET',
-          body: undefined,
-          headers: { 'Content-Type': 'application/json' },
-        });
-        // Edge function invoked via POST by default in supabase-js, use fetch instead
         const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/client-onboarding?clientId=${clientId}`;
         const response = await fetch(url, {
           headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY }

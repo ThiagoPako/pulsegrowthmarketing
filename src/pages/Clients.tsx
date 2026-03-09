@@ -1241,9 +1241,9 @@ export default function Clients() {
                       <ChevronLeft size={14} /> Voltar
                     </Button>
                   )}
-                  {step < 4 ? (
+                  {step < 3 ? (
                     <Button onClick={() => setStep(s => s + 1)} className="ml-auto gap-1"
-                      disabled={step === 0 ? !canProceedStep0 : step === 2 ? !canProceedStep2 : false}>
+                      disabled={step === 0 ? !canProceedStep0 : false}>
                       Próximo <ChevronRight size={14} />
                     </Button>
                   ) : (

@@ -105,6 +105,17 @@ const ProfileDialog = forwardRef<HTMLDivElement, { children: React.ReactNode }>(
                 <Input value={jobTitle} onChange={e => setJobTitle(e.target.value)} placeholder="Ex: Diretor Criativo" />
               </div>
               <div className="space-y-1.5">
+                <Label>Biografia</Label>
+                <textarea
+                  value={bio}
+                  onChange={e => setBio(e.target.value)}
+                  placeholder="Conte um pouco sobre você, seu estilo e especialidades..."
+                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  maxLength={300}
+                />
+                <p className="text-[10px] text-muted-foreground text-right">{bio.length}/300</p>
+              </div>
+              <div className="space-y-1.5">
                 <Label>Email</Label>
                 <Input value={currentUser.email} disabled className="opacity-60" />
               </div>

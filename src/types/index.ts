@@ -68,6 +68,11 @@ export interface Client {
   presenceDays: number;
   monthlyRecordings: number;
   niche: string;
+  clientLogin?: string;
+  clientPassword?: string;
+  driveLink?: string;
+  driveFotos?: string;
+  driveIdentidadeVisual?: string;
 }
 
 export interface SocialAccount {

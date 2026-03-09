@@ -68,6 +68,11 @@ function clientToRow(c: Client) {
     presence_days: c.presenceDays,
     monthly_recordings: c.monthlyRecordings,
     niche: c.niche || '',
+    client_login: c.clientLogin || '',
+    client_password: c.clientPassword || '',
+    drive_link: c.driveLink || '',
+    drive_fotos: c.driveFotos || '',
+    drive_identidade_visual: c.driveIdentidadeVisual || '',
   };
 }
 

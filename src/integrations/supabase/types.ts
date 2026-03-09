@@ -200,10 +200,15 @@ export type Database = {
           backup_day: string
           backup_time: string
           city: string
+          client_login: string | null
+          client_password: string | null
           color: string
           company_name: string
           contract_start_date: string | null
           created_at: string
+          drive_fotos: string | null
+          drive_identidade_visual: string | null
+          drive_link: string | null
           email: string
           extra_client_appears: boolean
           extra_content_types: string[]
@@ -233,10 +238,15 @@ export type Database = {
           backup_day?: string
           backup_time?: string
           city?: string
+          client_login?: string | null
+          client_password?: string | null
           color?: string
           company_name: string
           contract_start_date?: string | null
           created_at?: string
+          drive_fotos?: string | null
+          drive_identidade_visual?: string | null
+          drive_link?: string | null
           email?: string
           extra_client_appears?: boolean
           extra_content_types?: string[]
@@ -266,10 +276,15 @@ export type Database = {
           backup_day?: string
           backup_time?: string
           city?: string
+          client_login?: string | null
+          client_password?: string | null
           color?: string
           company_name?: string
           contract_start_date?: string | null
           created_at?: string
+          drive_fotos?: string | null
+          drive_identidade_visual?: string | null
+          drive_link?: string | null
           email?: string
           extra_client_appears?: boolean
           extra_content_types?: string[]

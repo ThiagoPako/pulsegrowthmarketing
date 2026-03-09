@@ -32,6 +32,11 @@ function rowToClient(r: any): Client {
     presenceDays: r.presence_days,
     monthlyRecordings: r.monthly_recordings ?? 4,
     niche: r.niche || '',
+    clientLogin: r.client_login || '',
+    clientPassword: r.client_password || '',
+    driveLink: r.drive_link || '',
+    driveFotos: r.drive_fotos || '',
+    driveIdentidadeVisual: r.drive_identidade_visual || '',
   };
 }
 
@@ -63,6 +68,11 @@ function clientToRow(c: Client) {
     presence_days: c.presenceDays,
     monthly_recordings: c.monthlyRecordings,
     niche: c.niche || '',
+    client_login: c.clientLogin || '',
+    client_password: c.clientPassword || '',
+    drive_link: c.driveLink || '',
+    drive_fotos: c.driveFotos || '',
+    drive_identidade_visual: c.driveIdentidadeVisual || '',
   };
 }
 

@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
+import { generateClientCardPdf } from '@/lib/clientCardPdf';
 import { NICHE_OPTIONS, getSeasonalAlerts } from '@/lib/seasonalDates';
 import { DAY_LABELS, CONTENT_TYPE_LABELS, CLIENT_COLORS } from '@/types';
 import type { Client, DayOfWeek, ContentType } from '@/types';
@@ -10,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
@@ -29,6 +30,7 @@ const emptyClient = (): Partial<Client> => ({
   weeklyReels: 0, weeklyCreatives: 0, weeklyGoal: 10,
   hasEndomarketing: false, weeklyStories: 0, presenceDays: 1,
   monthlyRecordings: 4, niche: '',
+  clientLogin: '', clientPassword: '', driveLink: '', driveFotos: '', driveIdentidadeVisual: '',
 });
 
 function timeToMinutes(t: string) {
@@ -534,6 +536,35 @@ export default function Clients() {
           </div>
         );
       })()}
+
+      {/* Access & Drive links */}
+      <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
+        <p className="text-sm font-semibold flex items-center gap-2">
+          <KeyRound size={16} className="text-primary" /> Acessos e Links
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label>Login</Label>
+            <Input value={form.clientLogin || ''} onChange={e => setForm({ ...form, clientLogin: e.target.value })} placeholder="login@email.com" />
+          </div>
+          <div className="space-y-1">
+            <Label>Senha</Label>
+            <Input value={form.clientPassword || ''} onChange={e => setForm({ ...form, clientPassword: e.target.value })} placeholder="••••••••" />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <Label className="flex items-center gap-1"><FolderOpen size={12} /> Link do Drive (Geral)</Label>
+          <Input value={form.driveLink || ''} onChange={e => setForm({ ...form, driveLink: e.target.value })} placeholder="https://drive.google.com/..." />
+        </div>
+        <div className="space-y-1">
+          <Label className="flex items-center gap-1"><FolderOpen size={12} /> Drive de Fotos</Label>
+          <Input value={form.driveFotos || ''} onChange={e => setForm({ ...form, driveFotos: e.target.value })} placeholder="https://drive.google.com/..." />
+        </div>
+        <div className="space-y-1">
+          <Label className="flex items-center gap-1"><FolderOpen size={12} /> Drive de Identidade Visual</Label>
+          <Input value={form.driveIdentidadeVisual || ''} onChange={e => setForm({ ...form, driveIdentidadeVisual: e.target.value })} placeholder="https://drive.google.com/..." />
+        </div>
+      </div>
     </div>
   );
 
@@ -1273,6 +1304,10 @@ export default function Clients() {
                     setSendWaOpen(true);
                   }}><MessageSquare size={14} /></Button>
                 )}
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                  const vmName = users.find(u => u.id === c.videomaker)?.name || '—';
+                  generateClientCardPdf(c, vmName);
+                }}><Printer size={14} /></Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpen(c)}><Pencil size={14} /></Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(c.id)}><Trash2 size={14} /></Button>
               </div>

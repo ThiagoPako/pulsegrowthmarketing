@@ -12,6 +12,7 @@ export interface Profile {
   avatar_url?: string;
   display_name?: string;
   job_title?: string;
+  bio?: string;
 }
 
 interface AuthContextType {

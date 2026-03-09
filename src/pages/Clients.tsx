@@ -65,7 +65,6 @@ const emptySocialAccounts = (): SocialAccountState => ({
 const STEP_LABELS = [
   { icon: User, label: 'Dados da Empresa' },
   { icon: Globe, label: 'Redes Sociais' },
-  { icon: Video, label: 'Agenda & Gravação' },
   { icon: Target, label: 'Metas Semanais' },
   { icon: DollarSign, label: 'Financeiro' },
 ];

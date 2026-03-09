@@ -1224,9 +1224,8 @@ export default function Clients() {
                 <>
                   {step === 0 && renderStep0()}
                   {step === 1 && renderStep1()}
-                  {step === 2 && renderStep2()}
-                  {step === 3 && renderStep3()}
-                  {step === 4 && renderStep4()}
+                  {step === 2 && renderStep3()}
+                  {step === 3 && renderStep4()}
                 </>
               )}
             </div>

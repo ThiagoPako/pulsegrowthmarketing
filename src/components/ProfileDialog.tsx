@@ -42,7 +42,8 @@ const ProfileDialog = forwardRef<HTMLDivElement, { children: React.ReactNode }>(
         display_name: displayName,
         job_title: jobTitle,
         avatar_url: avatarUrl,
-      });
+        bio,
+      } as any);
       toast.success('Perfil atualizado!');
       setOpen(false);
     };

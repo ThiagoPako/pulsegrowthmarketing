@@ -17,6 +17,7 @@ const ProfileDialog = forwardRef<HTMLDivElement, { children: React.ReactNode }>(
     const [open, setOpen] = useState(false);
     const [displayName, setDisplayName] = useState(currentUser?.displayName || currentUser?.name || '');
     const [jobTitle, setJobTitle] = useState(currentUser?.jobTitle || '');
+    const [bio, setBio] = useState((currentUser as any)?.bio || '');
     const [avatarUrl, setAvatarUrl] = useState(currentUser?.avatarUrl || '');
     const fileInputRef = useRef<HTMLInputElement>(null);
 

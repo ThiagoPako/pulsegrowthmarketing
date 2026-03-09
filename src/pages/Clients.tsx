@@ -1304,6 +1304,10 @@ export default function Clients() {
                     setSendWaOpen(true);
                   }}><MessageSquare size={14} /></Button>
                 )}
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                  const vmName = users.find(u => u.id === c.videomaker)?.name || '—';
+                  generateClientCardPdf(c, vmName);
+                }}><Printer size={14} /></Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpen(c)}><Pencil size={14} /></Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(c.id)}><Trash2 size={14} /></Button>
               </div>

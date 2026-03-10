@@ -158,8 +158,8 @@ Deno.serve(async (req) => {
     }
 
     // Create upcoming recording entries in the agency schedule
-    const recordingsCount = monthly_recordings || 4
-    const upcomingDates = getNextDayOccurrences(fixed_day, recordingsCount)
+    const weeks = selected_weeks || [1, 2, 3, 4]
+    const upcomingDates = getNextDayOccurrencesForWeeks(fixed_day, weeks)
 
     const recordingsToInsert = upcomingDates.map(date => ({
       client_id: clientId,

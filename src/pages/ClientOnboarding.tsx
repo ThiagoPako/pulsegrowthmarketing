@@ -43,6 +43,7 @@ export default function ClientOnboarding() {
   // Form state
   const [selectedVm, setSelectedVm] = useState('');
   const [monthlyRecordings, setMonthlyRecordings] = useState(4);
+  const [selectedWeeks, setSelectedWeeks] = useState<number[]>([1, 2, 3, 4]);
   const [preferredShift, setPreferredShift] = useState<'turnoA' | 'turnoB' | 'ambos'>('ambos');
   const [fixedDay, setFixedDay] = useState<DayOfWeek>('segunda');
   const [fixedTime, setFixedTime] = useState('');

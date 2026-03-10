@@ -72,7 +72,16 @@ export default function ClientOnboarding() {
         if (data.client.onboarding_completed) setCompleted(true);
         if (data.client.videomaker_id) setSelectedVm(data.client.videomaker_id);
         if (data.client.monthly_recordings) setMonthlyRecordings(data.client.monthly_recordings);
-        if (data.client.selected_weeks?.length) setSelectedWeeks(data.client.selected_weeks);
+        // Clamp selected weeks based on plan limit
+        const planName = data.plan?.name?.toLowerCase() || '';
+        const planMaxWeeks = planName.includes('booster') || planName.includes('boost') ? 3 
+          : planName.includes('premium') ? 4 
+          : data.plan?.recording_sessions || 4;
+        if (data.client.selected_weeks?.length) {
+          setSelectedWeeks(data.client.selected_weeks.slice(0, planMaxWeeks));
+        } else {
+          setSelectedWeeks([1, 2, 3].slice(0, planMaxWeeks));
+        }
         if (data.client.fixed_day) setFixedDay(data.client.fixed_day);
         if (data.client.fixed_time) setFixedTime(data.client.fixed_time);
         if (data.client.backup_day) setBackupDay(data.client.backup_day);

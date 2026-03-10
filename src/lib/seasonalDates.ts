@@ -119,9 +119,12 @@ const NICHE_DATES: Record<string, SeasonalDate[]> = {
   educacao: [
     { month: 1, day: 15, label: 'Volta às Aulas', daysBeforeAlert: 40 },
     { month: 3, day: 14, label: 'Dia Nacional da Poesia', daysBeforeAlert: 20 },
+    { month: 3, day: 15, label: 'Dia da Escola', daysBeforeAlert: 30 },
+    { month: 4, day: 28, label: 'Dia da Educação', daysBeforeAlert: 30 },
     { month: 7, day: 25, label: 'Dia do Escritor', daysBeforeAlert: 20 },
     { month: 8, day: 11, label: 'Dia do Estudante', daysBeforeAlert: 30 },
     { month: 10, day: 15, label: 'Dia do Professor', daysBeforeAlert: 30 },
+    { month: 11, day: 17, label: 'Dia da Criatividade e Inovação na Educação', daysBeforeAlert: 20 },
   ],
   tecnologia: [
     { month: 1, day: 28, label: 'Dia Internacional da Proteção de Dados', daysBeforeAlert: 20 },

@@ -326,13 +326,6 @@ export default function ClientOnboarding() {
                     <p className="text-sm font-semibold flex items-center gap-2">
                       <Video size={16} className="text-primary" /> Quantas vezes por mês você tem disponibilidade para gravar?
                     </p>
-                    {plan && (
-                      <div className="p-2 rounded-lg bg-primary/10 border border-primary/20">
-                        <p className="text-xs text-primary font-medium">
-                          📋 Plano <strong>{plan.name}</strong> — até <strong>{maxWeeks}x</strong> por mês
-                        </p>
-                      </div>
-                    )}
                     <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${Math.min(frequencyOptions.length, 4)}, 1fr)` }}>
                       {frequencyOptions.map(n => (
                         <button

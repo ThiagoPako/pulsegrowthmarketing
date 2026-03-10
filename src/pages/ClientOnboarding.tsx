@@ -78,9 +78,13 @@ export default function ClientOnboarding() {
           : planName.includes('premium') ? 4 
           : data.plan?.recording_sessions || 4;
         if (data.client.selected_weeks?.length) {
-          setSelectedWeeks(data.client.selected_weeks.slice(0, planMaxWeeks));
+          const clamped = data.client.selected_weeks.slice(0, planMaxWeeks);
+          setSelectedWeeks(clamped);
+          setMonthlyRecordings(clamped.length);
         } else {
-          setSelectedWeeks([1, 2, 3].slice(0, planMaxWeeks));
+          const defaultWeeks = [1, 2, 3].slice(0, planMaxWeeks);
+          setSelectedWeeks(defaultWeeks);
+          setMonthlyRecordings(defaultWeeks.length);
         }
         if (data.client.fixed_day) setFixedDay(data.client.fixed_day);
         if (data.client.fixed_time) setFixedTime(data.client.fixed_time);
@@ -293,65 +297,95 @@ export default function ClientOnboarding() {
               )}
             </div>
 
-            {/* Monthly recordings */}
-            {selectedVm && (
-              <div className="space-y-3">
-                <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
-                  <p className="text-sm font-semibold flex items-center gap-2">
-                    <Video size={16} className="text-primary" /> Em quais semanas do mês deseja gravar?
-                  </p>
-                  {plan && (
-                    <div className="p-2 rounded-lg bg-primary/10 border border-primary/20">
-                      <p className="text-xs text-primary font-medium">
-                        📋 Plano <strong>{plan.name}</strong> — até <strong>{plan.name.toLowerCase().includes('booster') || plan.name.toLowerCase().includes('boost') ? '3' : plan.name.toLowerCase().includes('premium') ? '4' : plan.recording_sessions || 4}x</strong> gravações por mês
-                      </p>
-                    </div>
-                  )}
-                  {(() => {
-                    const maxWeeks = plan 
-                      ? (plan.name.toLowerCase().includes('booster') || plan.name.toLowerCase().includes('boost') ? 3 
-                        : plan.name.toLowerCase().includes('premium') ? 4 
-                        : plan.recording_sessions || 4)
-                      : 4;
-                    
-                    const toggleWeek = (week: number) => {
-                      if (selectedWeeks.includes(week)) {
-                        if (selectedWeeks.length > 1) {
-                          setSelectedWeeks(prev => prev.filter(w => w !== week).sort());
-                        }
-                      } else if (selectedWeeks.length < maxWeeks) {
-                        setSelectedWeeks(prev => [...prev, week].sort());
-                      }
-                    };
-                    
-                    const WEEK_LABELS = ['1ª Semana', '2ª Semana', '3ª Semana', '4ª Semana'];
-                    
-                    return (
-                      <>
-                        <div className="grid grid-cols-4 gap-2">
-                          {[1, 2, 3, 4].map(n => (
-                            <button
-                              key={n}
-                              onClick={() => toggleWeek(n)}
-                              className={`p-3 rounded-xl border-2 text-center transition-all ${
-                                selectedWeeks.includes(n)
-                                  ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
-                                  : selectedWeeks.length >= maxWeeks
-                                    ? 'border-border opacity-40 cursor-not-allowed'
-                                    : 'border-border hover:border-primary/40'
-                              }`}
-                            >
-                              <span className="text-lg font-bold block">{n}ª</span>
-                              <span className="text-[10px] text-muted-foreground">semana</span>
-                            </button>
-                          ))}
-                        </div>
-                        <p className="text-xs text-muted-foreground text-center">
-                          {selectedWeeks.length}/{maxWeeks} semanas selecionadas — Gravações na{selectedWeeks.length > 1 ? 's' : ''} {selectedWeeks.map(w => WEEK_LABELS[w-1]).join(', ')}
+            {/* Monthly recordings - two-step: frequency then weeks */}
+            {selectedVm && (() => {
+              const maxWeeks = plan 
+                ? (plan.name.toLowerCase().includes('booster') || plan.name.toLowerCase().includes('boost') ? 3 
+                  : plan.name.toLowerCase().includes('premium') ? 4 
+                  : plan.recording_sessions || 4)
+                : 4;
+              
+              const frequencyOptions = Array.from({ length: maxWeeks }, (_, i) => i + 1);
+              
+              const toggleWeek = (week: number) => {
+                if (selectedWeeks.includes(week)) {
+                  if (selectedWeeks.length > 1) {
+                    setSelectedWeeks(prev => prev.filter(w => w !== week).sort());
+                  }
+                } else if (selectedWeeks.length < monthlyRecordings) {
+                  setSelectedWeeks(prev => [...prev, week].sort());
+                }
+              };
+              
+              const WEEK_LABELS = ['1ª Semana', '2ª Semana', '3ª Semana', '4ª Semana'];
+              
+              return (
+                <div className="space-y-3">
+                  {/* Step 1: Frequency */}
+                  <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
+                    <p className="text-sm font-semibold flex items-center gap-2">
+                      <Video size={16} className="text-primary" /> Quantas vezes por mês você tem disponibilidade para gravar?
+                    </p>
+                    {plan && (
+                      <div className="p-2 rounded-lg bg-primary/10 border border-primary/20">
+                        <p className="text-xs text-primary font-medium">
+                          📋 Plano <strong>{plan.name}</strong> — até <strong>{maxWeeks}x</strong> por mês
                         </p>
-                      </>
-                    );
-                  })()}
+                      </div>
+                    )}
+                    <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${Math.min(frequencyOptions.length, 4)}, 1fr)` }}>
+                      {frequencyOptions.map(n => (
+                        <button
+                          key={n}
+                          onClick={() => {
+                            setMonthlyRecordings(n);
+                            setSelectedWeeks(prev => prev.slice(0, n));
+                          }}
+                          className={`p-3 rounded-xl border-2 text-center transition-all ${
+                            monthlyRecordings === n
+                              ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                              : 'border-border hover:border-primary/40'
+                          }`}
+                        >
+                          <span className="text-lg font-bold block">{n}x</span>
+                          <span className="text-[10px] text-muted-foreground">por mês</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Step 2: Which weeks */}
+                  <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
+                    <p className="text-sm font-semibold flex items-center gap-2">
+                      <Calendar size={16} className="text-primary" /> Em quais semanas do mês prefere gravar?
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Selecione {monthlyRecordings} semana{monthlyRecordings > 1 ? 's' : ''} de sua preferência.
+                    </p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[1, 2, 3, 4].map(n => (
+                        <button
+                          key={n}
+                          onClick={() => toggleWeek(n)}
+                          className={`p-3 rounded-xl border-2 text-center transition-all ${
+                            selectedWeeks.includes(n)
+                              ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                              : selectedWeeks.length >= monthlyRecordings
+                                ? 'border-border opacity-40 cursor-not-allowed'
+                                : 'border-border hover:border-primary/40'
+                          }`}
+                        >
+                          <span className="text-lg font-bold block">{n}ª</span>
+                          <span className="text-[10px] text-muted-foreground">semana</span>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground text-center">
+                      {selectedWeeks.length}/{monthlyRecordings} semana{monthlyRecordings > 1 ? 's' : ''} selecionada{selectedWeeks.length > 1 ? 's' : ''} 
+                      {selectedWeeks.length > 0 && <> — Gravações na{selectedWeeks.length > 1 ? 's' : ''} {selectedWeeks.map(w => WEEK_LABELS[w-1]).join(', ')}</>}
+                    </p>
+                  </div>
+
                   <div className="p-3 rounded-lg bg-accent/50 border border-accent text-xs text-muted-foreground">
                     <p>
                       <strong className="text-foreground">💡 Importante:</strong> Gravar menos semanas por mês <strong>não significa produzir menos conteúdo</strong>. 
@@ -360,8 +394,8 @@ export default function ClientOnboarding() {
                     </p>
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         )}
 

@@ -78,9 +78,13 @@ export default function ClientOnboarding() {
           : planName.includes('premium') ? 4 
           : data.plan?.recording_sessions || 4;
         if (data.client.selected_weeks?.length) {
-          setSelectedWeeks(data.client.selected_weeks.slice(0, planMaxWeeks));
+          const clamped = data.client.selected_weeks.slice(0, planMaxWeeks);
+          setSelectedWeeks(clamped);
+          setMonthlyRecordings(clamped.length);
         } else {
-          setSelectedWeeks([1, 2, 3].slice(0, planMaxWeeks));
+          const defaultWeeks = [1, 2, 3].slice(0, planMaxWeeks);
+          setSelectedWeeks(defaultWeeks);
+          setMonthlyRecordings(defaultWeeks.length);
         }
         if (data.client.fixed_day) setFixedDay(data.client.fixed_day);
         if (data.client.fixed_time) setFixedTime(data.client.fixed_time);

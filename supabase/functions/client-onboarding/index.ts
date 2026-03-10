@@ -76,11 +76,23 @@ Deno.serve(async (req) => {
       .select('id, videomaker_id, fixed_day, fixed_time')
       .not('videomaker_id', 'is', null)
 
+    // Fetch plan info if client has a plan
+    let plan = null
+    if (client.plan_id) {
+      const { data: planData } = await supabase
+        .from('plans')
+        .select('id, name, recording_sessions')
+        .eq('id', client.plan_id)
+        .single()
+      plan = planData
+    }
+
     return new Response(JSON.stringify({
       client,
       videomakers: videomakers || [],
       settings,
       existingClients: existingClients || [],
+      plan,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })

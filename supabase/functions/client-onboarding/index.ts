@@ -5,25 +5,50 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-function getNextDayOccurrences(dayName: string, count: number): string[] {
+function getNextDayOccurrencesForWeeks(dayName: string, selectedWeeks: number[]): string[] {
   const dayMap: Record<string, number> = {
     domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6,
   }
   const targetDay = dayMap[dayName]
   if (targetDay === undefined) return []
 
-  const dates: string[] = []
   const today = new Date()
-  const current = new Date(today)
-  // Start from tomorrow
-  current.setDate(current.getDate() + 1)
-
-  while (dates.length < count) {
+  const year = today.getFullYear()
+  const month = today.getMonth()
+  
+  // Find all occurrences of the target day in the current month
+  const allDates: string[] = []
+  const current = new Date(year, month, 1)
+  while (current.getMonth() === month) {
     if (current.getDay() === targetDay) {
-      dates.push(current.toISOString().split('T')[0])
+      allDates.push(current.toISOString().split('T')[0])
     }
     current.setDate(current.getDate() + 1)
   }
+  
+  // Filter by selected weeks (1-indexed) and only future dates
+  const todayStr = today.toISOString().split('T')[0]
+  const dates = selectedWeeks
+    .filter(w => w >= 1 && w <= allDates.length)
+    .map(w => allDates[w - 1])
+    .filter(d => d > todayStr)
+  
+  // If no dates left in current month, get from next month
+  if (dates.length === 0) {
+    const nextMonth = new Date(year, month + 1, 1)
+    const nextAllDates: string[] = []
+    const next = new Date(nextMonth)
+    while (next.getMonth() === nextMonth.getMonth()) {
+      if (next.getDay() === targetDay) {
+        nextAllDates.push(next.toISOString().split('T')[0])
+      }
+      next.setDate(next.getDate() + 1)
+    }
+    return selectedWeeks
+      .filter(w => w >= 1 && w <= nextAllDates.length)
+      .map(w => nextAllDates[w - 1])
+  }
+  
   return dates
 }
 

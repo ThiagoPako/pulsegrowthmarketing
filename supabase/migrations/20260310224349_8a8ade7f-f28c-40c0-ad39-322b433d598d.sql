@@ -1,0 +1,1 @@
+ALTER TABLE public.clients ADD COLUMN selected_weeks integer[] NOT NULL DEFAULT '{1,2,3,4}'::integer[];

@@ -38,10 +38,12 @@ export default function ClientOnboarding() {
   const [videomakers, setVideomakers] = useState<Videomaker[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [existingClients, setExistingClients] = useState<ExistingClient[]>([]);
+  const [plan, setPlan] = useState<{ id: string; name: string; recording_sessions: number } | null>(null);
 
   // Form state
   const [selectedVm, setSelectedVm] = useState('');
   const [monthlyRecordings, setMonthlyRecordings] = useState(4);
+  const [selectedWeeks, setSelectedWeeks] = useState<number[]>([1, 2, 3, 4]);
   const [preferredShift, setPreferredShift] = useState<'turnoA' | 'turnoB' | 'ambos'>('ambos');
   const [fixedDay, setFixedDay] = useState<DayOfWeek>('segunda');
   const [fixedTime, setFixedTime] = useState('');
@@ -66,9 +68,11 @@ export default function ClientOnboarding() {
         setVideomakers(data.videomakers || []);
         setSettings(data.settings);
         setExistingClients(data.existingClients || []);
+        if (data.plan) setPlan(data.plan);
         if (data.client.onboarding_completed) setCompleted(true);
         if (data.client.videomaker_id) setSelectedVm(data.client.videomaker_id);
         if (data.client.monthly_recordings) setMonthlyRecordings(data.client.monthly_recordings);
+        if (data.client.selected_weeks?.length) setSelectedWeeks(data.client.selected_weeks);
         if (data.client.fixed_day) setFixedDay(data.client.fixed_day);
         if (data.client.fixed_time) setFixedTime(data.client.fixed_time);
         if (data.client.backup_day) setBackupDay(data.client.backup_day);
@@ -144,7 +148,8 @@ export default function ClientOnboarding() {
           fixed_time: fixedTime,
           backup_day: backupDay,
           backup_time: backupTime || '14:00',
-          monthly_recordings: monthlyRecordings,
+          monthly_recordings: selectedWeeks.length,
+          selected_weeks: selectedWeeks,
           accepts_extra: acceptsExtra,
           extra_content_types: extraTypes,
           extra_client_appears: extraAppears,
@@ -284,27 +289,63 @@ export default function ClientOnboarding() {
               <div className="space-y-3">
                 <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
                   <p className="text-sm font-semibold flex items-center gap-2">
-                    <Video size={16} className="text-primary" /> Quantas vezes por mês deseja gravar?
+                    <Video size={16} className="text-primary" /> Em quais semanas do mês deseja gravar?
                   </p>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[1, 2, 3, 4].map(n => (
-                      <button
-                        key={n}
-                        onClick={() => setMonthlyRecordings(n)}
-                        className={`p-3 rounded-xl border-2 text-center transition-all ${
-                          monthlyRecordings === n
-                            ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
-                            : 'border-border hover:border-primary/40'
-                        }`}
-                      >
-                        <span className="text-lg font-bold block">{n}x</span>
-                        <span className="text-[10px] text-muted-foreground">/mês</span>
-                      </button>
-                    ))}
-                  </div>
+                  {plan && (
+                    <div className="p-2 rounded-lg bg-primary/10 border border-primary/20">
+                      <p className="text-xs text-primary font-medium">
+                        📋 Plano <strong>{plan.name}</strong> — até <strong>{plan.name.toLowerCase().includes('booster') || plan.name.toLowerCase().includes('boost') ? '3' : plan.name.toLowerCase().includes('premium') ? '4' : plan.recording_sessions || 4}x</strong> gravações por mês
+                      </p>
+                    </div>
+                  )}
+                  {(() => {
+                    const maxWeeks = plan 
+                      ? (plan.name.toLowerCase().includes('booster') || plan.name.toLowerCase().includes('boost') ? 3 
+                        : plan.name.toLowerCase().includes('premium') ? 4 
+                        : plan.recording_sessions || 4)
+                      : 4;
+                    
+                    const toggleWeek = (week: number) => {
+                      if (selectedWeeks.includes(week)) {
+                        if (selectedWeeks.length > 1) {
+                          setSelectedWeeks(prev => prev.filter(w => w !== week).sort());
+                        }
+                      } else if (selectedWeeks.length < maxWeeks) {
+                        setSelectedWeeks(prev => [...prev, week].sort());
+                      }
+                    };
+                    
+                    const WEEK_LABELS = ['1ª Semana', '2ª Semana', '3ª Semana', '4ª Semana'];
+                    
+                    return (
+                      <>
+                        <div className="grid grid-cols-4 gap-2">
+                          {[1, 2, 3, 4].map(n => (
+                            <button
+                              key={n}
+                              onClick={() => toggleWeek(n)}
+                              className={`p-3 rounded-xl border-2 text-center transition-all ${
+                                selectedWeeks.includes(n)
+                                  ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                                  : selectedWeeks.length >= maxWeeks
+                                    ? 'border-border opacity-40 cursor-not-allowed'
+                                    : 'border-border hover:border-primary/40'
+                              }`}
+                            >
+                              <span className="text-lg font-bold block">{n}ª</span>
+                              <span className="text-[10px] text-muted-foreground">semana</span>
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground text-center">
+                          {selectedWeeks.length}/{maxWeeks} semanas selecionadas — Gravações na{selectedWeeks.length > 1 ? 's' : ''} {selectedWeeks.map(w => WEEK_LABELS[w-1]).join(', ')}
+                        </p>
+                      </>
+                    );
+                  })()}
                   <div className="p-3 rounded-lg bg-accent/50 border border-accent text-xs text-muted-foreground">
                     <p>
-                      <strong className="text-foreground">💡 Importante:</strong> Gravar menos vezes por mês <strong>não significa produzir menos conteúdo</strong>. 
+                      <strong className="text-foreground">💡 Importante:</strong> Gravar menos semanas por mês <strong>não significa produzir menos conteúdo</strong>. 
                       Vamos otimizar cada sessão para extrair o máximo de material, sem interferir no fluxo da sua empresa. 
                       Menos visitas = menos interrupção na sua rotina, com a mesma qualidade e volume de entrega.
                     </p>

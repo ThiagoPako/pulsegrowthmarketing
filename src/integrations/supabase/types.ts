@@ -225,6 +225,7 @@ export type Database = {
           plan_id: string | null
           presence_days: number
           responsible_person: string
+          selected_weeks: number[]
           updated_at: string
           videomaker_id: string | null
           weekly_creatives: number
@@ -264,6 +265,7 @@ export type Database = {
           plan_id?: string | null
           presence_days?: number
           responsible_person?: string
+          selected_weeks?: number[]
           updated_at?: string
           videomaker_id?: string | null
           weekly_creatives?: number
@@ -303,6 +305,7 @@ export type Database = {
           plan_id?: string | null
           presence_days?: number
           responsible_person?: string
+          selected_weeks?: number[]
           updated_at?: string
           videomaker_id?: string | null
           weekly_creatives?: number

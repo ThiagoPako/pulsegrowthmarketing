@@ -121,6 +121,7 @@ Deno.serve(async (req) => {
         accepts_extra: accepts_extra || false,
         extra_content_types: extra_content_types || [],
         extra_client_appears: extra_client_appears || false,
+        selected_weeks: selected_weeks || [1, 2, 3, 4],
         onboarding_completed: true,
       })
       .eq('id', clientId)

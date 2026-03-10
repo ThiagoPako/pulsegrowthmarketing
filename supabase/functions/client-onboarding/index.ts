@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
 
   if (req.method === 'POST') {
     const body = await req.json()
-    const { clientId, videomaker_id, fixed_day, fixed_time, backup_day, backup_time, monthly_recordings, accepts_extra, extra_content_types, extra_client_appears } = body
+    const { clientId, videomaker_id, fixed_day, fixed_time, backup_day, backup_time, monthly_recordings, accepts_extra, extra_content_types, extra_client_appears, selected_weeks } = body
 
     if (!clientId || !videomaker_id || !fixed_day || !fixed_time) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {

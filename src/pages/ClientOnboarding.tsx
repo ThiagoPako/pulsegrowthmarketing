@@ -68,9 +68,11 @@ export default function ClientOnboarding() {
         setVideomakers(data.videomakers || []);
         setSettings(data.settings);
         setExistingClients(data.existingClients || []);
+        if (data.plan) setPlan(data.plan);
         if (data.client.onboarding_completed) setCompleted(true);
         if (data.client.videomaker_id) setSelectedVm(data.client.videomaker_id);
         if (data.client.monthly_recordings) setMonthlyRecordings(data.client.monthly_recordings);
+        if (data.client.selected_weeks?.length) setSelectedWeeks(data.client.selected_weeks);
         if (data.client.fixed_day) setFixedDay(data.client.fixed_day);
         if (data.client.fixed_time) setFixedTime(data.client.fixed_time);
         if (data.client.backup_day) setBackupDay(data.client.backup_day);

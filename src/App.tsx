@@ -48,7 +48,16 @@ import DesignerReports from "@/pages/DesignerReports";
 import OnboardingManagement from "@/pages/OnboardingManagement";
 import ClientBriefing from "@/pages/ClientBriefing";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+      retry: 2,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();

@@ -156,12 +156,13 @@ export default function SocialMediaDeliveries() {
   const [mainTab, setMainTab] = useState<'clientes' | 'calendario'>('clientes');
 
   const fetchData = useCallback(async () => {
-    const [dRes, pRes, cRes, tRes, oRes] = await Promise.all([
+    const [dRes, pRes, cRes, tRes, oRes, ctRes] = await Promise.all([
       supabase.from('social_media_deliveries').select('*').order('delivered_at', { ascending: false }),
       supabase.from('plans').select('id, name, reels_qty, creatives_qty, stories_qty, arts_qty'),
       supabase.from('clients').select('id, plan_id'),
       supabase.from('content_tasks').select('id, review_deadline, alteration_deadline, approval_deadline, immediate_alteration'),
       supabase.from('onboarding_tasks').select('client_id, status'),
+      supabase.from('content_tasks').select('id, client_id, review_deadline, alteration_deadline, approval_deadline, kanban_column').not('kanban_column', 'in', '(concluido,acompanhamento)'),
     ]);
     if (dRes.data) setDeliveries(dRes.data as SocialDelivery[]);
     if (pRes.data) setPlans(pRes.data as Plan[]);
@@ -183,6 +184,27 @@ export default function SocialMediaDeliveries() {
         if (o.status === 'concluido') oMap[o.client_id].completed++;
       });
       setOnboardingStatus(oMap);
+    }
+    // Calculate overdue/almost overdue per client
+    if (ctRes.data) {
+      const now = new Date();
+      const almostThreshold = 4 * 60 * 60 * 1000; // 4 hours
+      const odMap: Record<string, { overdue: number; almostOverdue: number }> = {};
+      (ctRes.data as any[]).forEach(t => {
+        if (!odMap[t.client_id]) odMap[t.client_id] = { overdue: 0, almostOverdue: 0 };
+        const deadlines = [t.review_deadline, t.alteration_deadline, t.approval_deadline].filter(Boolean);
+        for (const dl of deadlines) {
+          const dlDate = new Date(dl);
+          if (dlDate < now) {
+            odMap[t.client_id].overdue++;
+            break;
+          } else if (dlDate.getTime() - now.getTime() < almostThreshold) {
+            odMap[t.client_id].almostOverdue++;
+            break;
+          }
+        }
+      });
+      setOverdueByClient(odMap);
     }
     setLoading(false);
   }, []);

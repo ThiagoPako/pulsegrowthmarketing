@@ -393,6 +393,16 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
           {task.kanban_column === 'em_analise' && isSocialMedia && (
             <div className="space-y-3">
+              {(task as any).mockup_url && isReformulacaoOrIdentidade && (
+                <div className="p-2.5 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800">
+                  <Label className="text-[10px] font-semibold text-violet-700 dark:text-violet-300 flex items-center gap-1 mb-1">
+                    <Image size={11} /> Mockup do Perfil
+                  </Label>
+                  <a href={(task as any).mockup_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1 hover:underline">
+                    <ExternalLink size={12} /> Ver mockup
+                  </a>
+                </div>
+              )}
               {task.attachment_url && (
                 <a href={task.attachment_url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary flex items-center gap-1 hover:underline">
                   <ExternalLink size={14} /> Ver arte

@@ -667,6 +667,7 @@ export type Database = {
           format_type: string
           id: string
           kanban_column: string
+          mockup_url: string | null
           observations: string | null
           priority: string
           reference_images: string[] | null
@@ -696,6 +697,7 @@ export type Database = {
           format_type?: string
           id?: string
           kanban_column?: string
+          mockup_url?: string | null
           observations?: string | null
           priority?: string
           reference_images?: string[] | null
@@ -725,6 +727,7 @@ export type Database = {
           format_type?: string
           id?: string
           kanban_column?: string
+          mockup_url?: string | null
           observations?: string | null
           priority?: string
           reference_images?: string[] | null

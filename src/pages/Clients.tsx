@@ -72,6 +72,7 @@ const STEP_LABELS = [
 
 export default function Clients() {
   const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient } = useApp();
+  const { createOnboardingForClient } = useOnboarding();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
   const [form, setForm] = useState<Partial<Client> & { clientType?: string }>(emptyClient());

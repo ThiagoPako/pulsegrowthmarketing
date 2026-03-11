@@ -164,18 +164,13 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
             </Badge>
           </div>
 
-          {/* Timer */}
-          <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
-            <Clock size={16} className="text-muted-foreground" />
-            <span className="font-mono text-lg font-bold">{timerDisplay}</span>
-            <div className="ml-auto flex gap-1">
-              {!task.timer_running ? (
-                <Button size="sm" variant="outline" onClick={handleStartTimer}><Play size={14} /></Button>
-              ) : (
-                <Button size="sm" variant="outline" onClick={handlePauseTimer}><Pause size={14} /></Button>
-              )}
+          {/* Elapsed time (auto from started_at) */}
+          {task.started_at && elapsedDisplay && (
+            <div className="flex items-center gap-2 p-2.5 bg-muted/50 rounded-lg text-xs text-muted-foreground">
+              <Clock size={14} />
+              <span>Em execução há <strong className="text-foreground">{elapsedDisplay}</strong></span>
             </div>
-          </div>
+          )}
 
           {/* Description */}
           {task.description && (

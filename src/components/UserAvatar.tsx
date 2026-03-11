@@ -1,3 +1,4 @@
+import React from 'react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import type { User } from '@/types';
 
@@ -13,20 +14,26 @@ const sizeClasses = {
   lg: 'w-10 h-10 text-sm',
 };
 
-export default function UserAvatar({ user, size = 'md', className = '' }: UserAvatarProps) {
-  const initials = user.name
-    .split(' ')
-    .map(w => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+const UserAvatar = React.forwardRef<HTMLSpanElement, UserAvatarProps>(
+  ({ user, size = 'md', className = '' }, ref) => {
+    const initials = user.name
+      .split(' ')
+      .map(w => w[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
 
-  return (
-    <Avatar className={`${sizeClasses[size]} ${className}`}>
-      {user.avatarUrl ? <AvatarImage src={user.avatarUrl} alt={user.name} /> : null}
-      <AvatarFallback className="bg-primary text-primary-foreground font-bold">
-        {initials}
-      </AvatarFallback>
-    </Avatar>
-  );
-}
+    return (
+      <Avatar ref={ref} className={`${sizeClasses[size]} ${className}`}>
+        {user.avatarUrl ? <AvatarImage src={user.avatarUrl} alt={user.name} /> : null}
+        <AvatarFallback className="bg-primary text-primary-foreground font-bold">
+          {initials}
+        </AvatarFallback>
+      </Avatar>
+    );
+  }
+);
+
+UserAvatar.displayName = 'UserAvatar';
+
+export default UserAvatar;

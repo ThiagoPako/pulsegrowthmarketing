@@ -73,7 +73,8 @@ export default function Clients() {
   const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient } = useApp();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
-  const [form, setForm] = useState<Partial<Client>>(emptyClient());
+  const [form, setForm] = useState<Partial<Client> & { clientType?: string }>(emptyClient());
+  const [clientType, setClientType] = useState<'novo' | 'existente'>('novo');
   const [step, setStep] = useState(0);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);

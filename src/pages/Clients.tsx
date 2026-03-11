@@ -1343,6 +1343,9 @@ export default function Clients() {
                     setSendWaOpen(true);
                   }}><MessageSquare size={14} /></Button>
                 )}
+                <Button variant="ghost" size="icon" className="h-8 w-8" title="Banco de Dados" onClick={() => setArtDbClient(c)}>
+                  <Database size={14} />
+                </Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
                   const vmName = users.find(u => u.id === c.videomaker)?.name || '—';
                   generateClientCardPdf(c, vmName);

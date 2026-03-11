@@ -33,7 +33,7 @@ interface ChecklistItem {
   done: boolean;
 }
 
-const FORMAT_LABELS: Record<string, string> = { feed: 'Feed', story: 'Story', midia_fisica: 'Mídia Física' };
+const FORMAT_LABELS: Record<string, string> = { feed: 'Feed', story: 'Story', logomarca: 'Logomarca', midia_fisica: 'Mídia Física' };
 const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
   baixa: { label: 'Baixa', color: 'bg-muted text-muted-foreground' },
   media: { label: 'Média', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' },

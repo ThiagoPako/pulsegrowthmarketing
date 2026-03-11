@@ -20,6 +20,7 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string; icon?: any
 const FORMAT_LABELS: Record<string, string> = {
   feed: 'Feed',
   story: 'Story',
+  logomarca: 'Logomarca',
   midia_fisica: 'Mídia Física',
 };
 

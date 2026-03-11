@@ -38,6 +38,7 @@ export interface DesignTask {
   timer_running: boolean;
   timer_started_at: string | null;
   version: number;
+  mockup_url: string | null;
   created_at: string;
   updated_at: string;
   clients?: { company_name: string; color: string; logo_url: string | null; whatsapp: string; responsible_person: string };

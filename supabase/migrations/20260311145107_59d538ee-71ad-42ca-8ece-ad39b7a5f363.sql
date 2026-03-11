@@ -1,0 +1,1 @@
+ALTER TABLE public.design_tasks ADD COLUMN IF NOT EXISTS mockup_url text DEFAULT NULL;

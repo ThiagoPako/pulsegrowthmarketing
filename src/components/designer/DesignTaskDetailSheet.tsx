@@ -12,7 +12,7 @@ import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import ClientLogo from '@/components/ClientLogo';
-import { Play, Pause, Square, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History, Plus, X } from 'lucide-react';
+import { Play, Pause, Square, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History, Plus, X, Image, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Props {
@@ -37,10 +37,14 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [observations, setObservations] = useState(task.observations || '');
   const [attachmentUrl, setAttachmentUrl] = useState(task.attachment_url || '');
   const [editableFileUrl, setEditableFileUrl] = useState(task.editable_file_url || '');
+  const [mockupUrl, setMockupUrl] = useState((task as any).mockup_url || '');
   const [adjustmentNotes, setAdjustmentNotes] = useState('');
   const [timerDisplay, setTimerDisplay] = useState('00:00:00');
   const [checklist, setChecklist] = useState<ChecklistItem[]>((task as any).checklist || []);
   const [newChecklistItem, setNewChecklistItem] = useState('');
+  const [uploadingMockup, setUploadingMockup] = useState(false);
+
+  const isReformulacaoOrIdentidade = task.title.toLowerCase().includes('reformulação') || task.title.toLowerCase().includes('identidade visual');
 
   const history = historyQuery(task.id);
 
@@ -288,6 +292,89 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
           {(task.kanban_column === 'executando' || task.kanban_column === 'ajustes') && isDesigner && (
             <div className="space-y-3">
+              {/* Mockup section for reformulação/identidade visual */}
+              {isReformulacaoOrIdentidade && (
+                <div className="p-3 rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-900/20 space-y-2">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5 text-violet-700 dark:text-violet-300">
+                    <Image size={13} /> Mockup para Aprovação
+                  </Label>
+                  <p className="text-[10px] text-muted-foreground">
+                    Anexe o mockup para o cliente visualizar como ficará o perfil.
+                  </p>
+                  {mockupUrl ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 p-2 rounded bg-card border">
+                        <CheckCircle size={14} className="text-emerald-500 shrink-0" />
+                        <a href={mockupUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline truncate flex-1">
+                          {mockupUrl}
+                        </a>
+                      </div>
+                      <Input
+                        value={mockupUrl}
+                        onChange={e => setMockupUrl(e.target.value)}
+                        placeholder="Alterar link do mockup..."
+                        className="text-xs"
+                      />
+                      <Button size="sm" variant="outline" className="w-full" onClick={async () => {
+                        await updateTask.mutateAsync({ id: task.id, mockup_url: mockupUrl } as any);
+                        await addHistory.mutateAsync({ task_id: task.id, action: 'Mockup atualizado', details: mockupUrl, user_id: user?.id });
+                        toast.success('Mockup atualizado!');
+                      }}>Salvar Mockup</Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Input
+                        value={mockupUrl}
+                        onChange={e => setMockupUrl(e.target.value)}
+                        placeholder="https://drive.google.com/... ou link do mockup"
+                        className="text-xs"
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={async () => {
+                          if (!mockupUrl) { toast.error('Cole o link do mockup'); return; }
+                          await updateTask.mutateAsync({ id: task.id, mockup_url: mockupUrl } as any);
+                          await addHistory.mutateAsync({ task_id: task.id, action: 'Mockup anexado', details: mockupUrl, user_id: user?.id });
+                          toast.success('Mockup anexado!');
+                        }}>
+                          <Upload size={12} /> Salvar Link
+                        </Button>
+                        <label className="flex-1">
+                          <input
+                            type="file"
+                            accept="image/*,.pdf"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setUploadingMockup(true);
+                              try {
+                                const fileName = `mockups/${task.client_id}/${Date.now()}_${file.name}`;
+                                const { data, error } = await supabase.storage.from('design-files').upload(fileName, file);
+                                if (error) throw error;
+                                const { data: { publicUrl } } = supabase.storage.from('design-files').getPublicUrl(data.path);
+                                setMockupUrl(publicUrl);
+                                await updateTask.mutateAsync({ id: task.id, mockup_url: publicUrl } as any);
+                                await addHistory.mutateAsync({ task_id: task.id, action: 'Mockup enviado', details: publicUrl, user_id: user?.id });
+                                toast.success('Mockup enviado!');
+                              } catch (err: any) {
+                                toast.error(err.message || 'Erro ao enviar mockup');
+                              } finally {
+                                setUploadingMockup(false);
+                              }
+                            }}
+                          />
+                          <Button size="sm" variant="secondary" className="w-full gap-1" asChild disabled={uploadingMockup}>
+                            <span>
+                              <Upload size={12} /> {uploadingMockup ? 'Enviando...' : 'Upload Arquivo'}
+                            </span>
+                          </Button>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
                 <Label>Link da arte</Label>
                 <Input value={attachmentUrl} onChange={e => setAttachmentUrl(e.target.value)} placeholder="https://drive.google.com/..." />
@@ -306,6 +393,16 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
           {task.kanban_column === 'em_analise' && isSocialMedia && (
             <div className="space-y-3">
+              {(task as any).mockup_url && isReformulacaoOrIdentidade && (
+                <div className="p-2.5 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800">
+                  <Label className="text-[10px] font-semibold text-violet-700 dark:text-violet-300 flex items-center gap-1 mb-1">
+                    <Image size={11} /> Mockup do Perfil
+                  </Label>
+                  <a href={(task as any).mockup_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1 hover:underline">
+                    <ExternalLink size={12} /> Ver mockup
+                  </a>
+                </div>
+              )}
               {task.attachment_url && (
                 <a href={task.attachment_url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary flex items-center gap-1 hover:underline">
                   <ExternalLink size={14} /> Ver arte

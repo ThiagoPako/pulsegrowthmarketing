@@ -88,8 +88,14 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   }, [task.started_at]);
 
   const moveToColumn = async (column: DesignTaskColumn, extraFields?: Partial<DesignTask>) => {
-    await updateTask.mutateAsync({ id: task.id, kanban_column: column, ...extraFields } as any);
-    await addHistory.mutateAsync({ task_id: task.id, action: `Movido para ${DESIGN_COLUMNS.find(c => c.key === column)?.label}`, user_id: user?.id });
+    const label = DESIGN_COLUMNS.find(c => c.key === column)?.label || column;
+    setMovingAction(label);
+    try {
+      await updateTask.mutateAsync({ id: task.id, kanban_column: column, ...extraFields } as any);
+      await addHistory.mutateAsync({ task_id: task.id, action: `Movido para ${label}`, user_id: user?.id });
+    } finally {
+      setTimeout(() => setMovingAction(null), 600);
+    }
   };
 
   const handleStartTask = async () => {

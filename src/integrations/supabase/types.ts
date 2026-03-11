@@ -193,6 +193,117 @@ export type Database = {
           },
         ]
       }
+      client_portal_comments: {
+        Row: {
+          author_id: string | null
+          author_name: string
+          author_type: string
+          content_id: string
+          created_at: string
+          id: string
+          message: string
+        }
+        Insert: {
+          author_id?: string | null
+          author_name?: string
+          author_type?: string
+          content_id: string
+          created_at?: string
+          id?: string
+          message?: string
+        }
+        Update: {
+          author_id?: string | null
+          author_name?: string
+          author_type?: string
+          content_id?: string
+          created_at?: string
+          id?: string
+          message?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_portal_comments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_portal_comments_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "client_portal_contents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_portal_contents: {
+        Row: {
+          approved_at: string | null
+          client_id: string
+          content_type: string
+          created_at: string
+          duration_seconds: number | null
+          file_url: string | null
+          id: string
+          season_month: number
+          season_year: number
+          status: string
+          thumbnail_url: string | null
+          title: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          client_id: string
+          content_type?: string
+          created_at?: string
+          duration_seconds?: number | null
+          file_url?: string | null
+          id?: string
+          season_month: number
+          season_year: number
+          status?: string
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          client_id?: string
+          content_type?: string
+          created_at?: string
+          duration_seconds?: number | null
+          file_url?: string | null
+          id?: string
+          season_month?: number
+          season_year?: number
+          status?: string
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_portal_contents_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_portal_contents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           accepts_extra: boolean

@@ -66,6 +66,24 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [showAdjustmentForm, setShowAdjustmentForm] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [movingAction, setMovingAction] = useState<string | null>(null);
+  const [stageAnimKey, setStageAnimKey] = useState(0);
+  const prevColumnRef = useState(task.kanban_column)[0];
+
+  // Animate when column changes (task updated from query)
+  useEffect(() => {
+    if (task.kanban_column !== prevColumnRef) {
+      setStageAnimKey(k => k + 1);
+    }
+  }, [task.kanban_column]);
+
+  // Sync local state when task prop changes
+  useEffect(() => {
+    setObservations(task.observations || '');
+    setAttachmentUrl(task.attachment_url || '');
+    setEditableFileUrl(task.editable_file_url || '');
+    setMockupUrl((task as any).mockup_url || '');
+    setChecklist((task as any).checklist || []);
+  }, [task.id, task.kanban_column, task.observations, task.attachment_url, task.editable_file_url, (task as any).mockup_url]);
 
   const taskCategory = getTaskCategory(task);
   const hasChecklist = taskCategory !== 'normal';

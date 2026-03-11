@@ -12,13 +12,13 @@ interface BrandPresentationData {
   createdAt: string;
 }
 
-const PULSE_BLUE = [30, 64, 175];
-const PULSE_DARK = [25, 25, 35];
-const LIGHT_BG = [245, 247, 250];
-const ACCENT = [99, 102, 241];
-const TEXT_DARK = [30, 30, 40];
-const TEXT_MUTED = [120, 120, 135];
-const WHITE = [255, 255, 255];
+const PULSE_BLUE: [number, number, number] = [30, 64, 175];
+const PULSE_DARK: [number, number, number] = [25, 25, 35];
+const LIGHT_BG: [number, number, number] = [245, 247, 250];
+const ACCENT: [number, number, number] = [99, 102, 241];
+const TEXT_DARK: [number, number, number] = [30, 30, 40];
+const TEXT_MUTED: [number, number, number] = [120, 120, 135];
+const WHITE: [number, number, number] = [255, 255, 255];
 
 async function loadImageAsDataUrl(url: string): Promise<{ dataUrl: string; width: number; height: number } | null> {
   return new Promise((resolve) => {

@@ -1398,6 +1398,11 @@ export default function Clients() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Art Database Dialog */}
+      {artDbClient && (
+        <ClientArtDatabaseDialog client={artDbClient} open={!!artDbClient} onOpenChange={o => !o && setArtDbClient(null)} />
+      )}
     </div>
   );
 }

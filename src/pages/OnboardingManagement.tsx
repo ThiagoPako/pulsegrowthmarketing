@@ -113,8 +113,19 @@ export default function OnboardingManagement() {
       const allDone = g.tasks.length > 0 && g.tasks.every(t => t.status === 'concluido');
       if (allDone) {
         result['reformulacao_perfil']?.push(g);
-      } else if (result[g.currentStage]) {
-        result[g.currentStage].push(g);
+      } else {
+        // A client can appear in MULTIPLE columns if they have parallel stages
+        const placed = new Set<string>();
+        g.activeStages.forEach(stage => {
+          if (result[stage] && !placed.has(stage)) {
+            result[stage].push(g);
+            placed.add(stage);
+          }
+        });
+        // If no active stages placed yet (shouldn't happen), fall back
+        if (placed.size === 0 && result[g.currentStage]) {
+          result[g.currentStage].push(g);
+        }
       }
     });
     return result;

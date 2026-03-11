@@ -681,6 +681,26 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           </div>
         </div>
       </SheetContent>
+
+      {/* Image Preview Lightbox */}
+      <Dialog open={!!previewImage} onOpenChange={(o) => !o && setPreviewImage(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-2 bg-black/95 border-none">
+          {previewImage && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              className="flex items-center justify-center w-full h-full"
+            >
+              <img
+                src={previewImage}
+                alt="Preview"
+                className="max-w-full max-h-[80vh] object-contain rounded-lg"
+              />
+            </motion.div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Sheet>
   );
 }

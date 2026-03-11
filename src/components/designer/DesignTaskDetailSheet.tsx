@@ -9,15 +9,17 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn } from '@/hooks/useDesignTasks';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import ClientLogo from '@/components/ClientLogo';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History,
   Upload, Image, FileText, Palette, Info, User, Calendar, ArrowRight, X,
-  ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip
+  ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip, ZoomIn
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -61,6 +63,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [checklist, setChecklist] = useState<ChecklistItem[]>((task as any).checklist || []);
   const [uploadingMockup, setUploadingMockup] = useState(false);
   const [showAdjustmentForm, setShowAdjustmentForm] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [movingAction, setMovingAction] = useState<string | null>(null);
 
   const taskCategory = getTaskCategory(task);
   const hasChecklist = taskCategory !== 'normal';
@@ -84,8 +88,14 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   }, [task.started_at]);
 
   const moveToColumn = async (column: DesignTaskColumn, extraFields?: Partial<DesignTask>) => {
-    await updateTask.mutateAsync({ id: task.id, kanban_column: column, ...extraFields } as any);
-    await addHistory.mutateAsync({ task_id: task.id, action: `Movido para ${DESIGN_COLUMNS.find(c => c.key === column)?.label}`, user_id: user?.id });
+    const label = DESIGN_COLUMNS.find(c => c.key === column)?.label || column;
+    setMovingAction(label);
+    try {
+      await updateTask.mutateAsync({ id: task.id, kanban_column: column, ...extraFields } as any);
+      await addHistory.mutateAsync({ task_id: task.id, action: `Movido para ${label}`, user_id: user?.id });
+    } finally {
+      setTimeout(() => setMovingAction(null), 600);
+    }
   };
 
   const handleStartTask = async () => {
@@ -296,12 +306,22 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                   {task.reference_images?.length > 0 && (
                     <div className="rounded-lg border border-border p-3">
                       <Label className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Imagens de Referência</Label>
-                      <div className="flex flex-wrap gap-2 mt-1">
-                        {task.reference_images.map((img, i) => (
-                          <a key={i} href={img} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
-                            <Image size={11} /> Imagem {i + 1}
-                          </a>
-                        ))}
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {task.reference_images.map((img, i) => {
+                          const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(img);
+                          return isImage ? (
+                            <button key={i} onClick={() => setPreviewImage(img)} className="relative group rounded-lg overflow-hidden border border-border w-20 h-20 hover:ring-2 hover:ring-primary/50 transition-all">
+                              <img src={img} alt={`Ref ${i + 1}`} className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                                <ZoomIn size={16} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
+                            </button>
+                          ) : (
+                            <a key={i} href={img} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
+                              <Image size={11} /> Ref {i + 1}
+                            </a>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -427,9 +447,20 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                       </div>
                     </div>
                   ) : task.attachment_url ? (
-                    <a href={task.attachment_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-sm text-primary">
-                      <Eye size={14} /> Ver arte anexada
-                    </a>
+                    <div className="space-y-2">
+                      {/\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(task.attachment_url) ? (
+                        <button onClick={() => setPreviewImage(task.attachment_url!)} className="relative group rounded-lg overflow-hidden border border-border w-full hover:ring-2 hover:ring-primary/50 transition-all">
+                          <img src={task.attachment_url} alt="Arte" className="w-full max-h-48 object-contain bg-muted/30" />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                            <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        </button>
+                      ) : (
+                        <a href={task.attachment_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-sm text-primary">
+                          <Eye size={14} /> Ver arte anexada
+                        </a>
+                      )}
+                    </div>
                   ) : (
                     <div className="rounded-lg border border-dashed border-border p-6 text-center">
                       <Paperclip size={20} className="mx-auto text-muted-foreground/40 mb-2" />
@@ -487,9 +518,20 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                         </div>
                       </div>
                     ) : (task as any).mockup_url ? (
-                      <a href={(task as any).mockup_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-sm text-primary">
-                        <Eye size={14} /> Ver mockup
-                      </a>
+                      <div className="space-y-2">
+                        {/\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test((task as any).mockup_url) ? (
+                          <button onClick={() => setPreviewImage((task as any).mockup_url)} className="relative group rounded-lg overflow-hidden border border-border w-full hover:ring-2 hover:ring-primary/50 transition-all">
+                            <img src={(task as any).mockup_url} alt="Mockup" className="w-full max-h-48 object-contain bg-muted/30" />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                              <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                          </button>
+                        ) : (
+                          <a href={(task as any).mockup_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-sm text-primary">
+                            <Eye size={14} /> Ver mockup
+                          </a>
+                        )}
+                      </div>
                     ) : (
                       <div className="rounded-lg border border-dashed border-border p-4 text-center">
                         <Image size={18} className="mx-auto text-muted-foreground/40 mb-1" />
@@ -536,17 +578,39 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                 {moveActions.length > 0 && (
                   <div className="space-y-2">
                     <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Mover Para</Label>
-                    {moveActions.map(action => {
+                    <AnimatePresence>
+                      {movingAction && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 8 }}
+                          className="text-xs text-center py-2 px-3 rounded-lg bg-primary/10 text-primary font-semibold"
+                        >
+                          ✓ Movido para {movingAction}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                    {moveActions.map((action, index) => {
                       const Icon = action.icon;
                       return (
-                        <Button
+                        <motion.div
                           key={action.label}
-                          onClick={action.onClick}
-                          className="w-full justify-start gap-2 text-xs font-bold h-10 text-white border-0 hover:opacity-90"
-                          style={{ backgroundColor: action.color }}
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.08, type: 'spring', stiffness: 300, damping: 24 }}
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.95 }}
                         >
-                          <Icon size={14} /> {action.label}
-                        </Button>
+                          <Button
+                            onClick={action.onClick}
+                            disabled={!!movingAction}
+                            className="w-full justify-start gap-2 text-xs font-bold h-10 text-white border-0 hover:opacity-90 transition-opacity"
+                            style={{ backgroundColor: action.color }}
+                          >
+                            <Icon size={14} /> {action.label}
+                            <ArrowRight size={12} className="ml-auto" />
+                          </Button>
+                        </motion.div>
                       );
                     })}
                   </div>
@@ -617,6 +681,26 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           </div>
         </div>
       </SheetContent>
+
+      {/* Image Preview Lightbox */}
+      <Dialog open={!!previewImage} onOpenChange={(o) => !o && setPreviewImage(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-2 bg-black/95 border-none">
+          {previewImage && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              className="flex items-center justify-center w-full h-full"
+            >
+              <img
+                src={previewImage}
+                alt="Preview"
+                className="max-w-full max-h-[80vh] object-contain rounded-lg"
+              />
+            </motion.div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Sheet>
   );
 }

@@ -112,7 +112,8 @@ export function useOnboarding() {
         .eq('id', clientId)
         .single();
 
-      const hasIdentity = client?.briefing_data?.has_identity === 'sim';
+      const bd = client?.briefing_data as Record<string, any> | null;
+      const hasIdentity = bd?.has_identity === 'sim';
       const needsPhotos = client?.photo_preference === 'fotos_reais';
 
       const fullFlow: OnboardingStage[] = ['cliente_novo', 'contrato'];

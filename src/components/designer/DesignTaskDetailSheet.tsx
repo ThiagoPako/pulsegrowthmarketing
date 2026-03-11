@@ -209,8 +209,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
         {/* Body: 3-column layout */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Left column: Briefing with tabs */}
-          <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
+          {/* Left column: Briefing with tabs - takes ~80% */}
+          <div className="w-[80%] min-w-0 overflow-hidden flex flex-col">
             <Tabs defaultValue="briefing" className="flex-1 flex flex-col overflow-hidden">
               <TabsList className="h-10 rounded-none border-b border-border bg-transparent px-4 justify-start gap-0">
                 <TabsTrigger value="briefing" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs gap-1.5">
@@ -389,8 +389,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
             </Tabs>
           </div>
 
-          {/* Right sidebar: Stage + Actions + Files + Info */}
-          <div className="w-[300px] shrink-0 border-l border-border flex flex-col overflow-hidden">
+          {/* Right sidebar: Stage + Actions + Files + Info - takes ~20% */}
+          <div className="w-[20%] shrink-0 border-l border-border flex flex-col overflow-hidden">
             <ScrollArea className="flex-1">
               <div className="p-4 space-y-4 overflow-hidden">
                 {/* Current stage card */}

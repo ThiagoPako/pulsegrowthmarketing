@@ -116,6 +116,7 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
                 <SelectContent>
                   <SelectItem value="feed">Feed</SelectItem>
                   <SelectItem value="story">Story</SelectItem>
+                  <SelectItem value="logomarca">Logomarca</SelectItem>
                   <SelectItem value="midia_fisica">Mídia Física</SelectItem>
                 </SelectContent>
               </Select>

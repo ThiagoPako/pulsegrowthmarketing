@@ -55,6 +55,37 @@ export interface OnboardingTask {
   };
 }
 
+async function createDesignTaskForIdentity(clientId: string, client: any) {
+  const bd = client?.briefing_data as Record<string, any> | null;
+  const description = [
+    `Cliente: ${client?.company_name || ''}`,
+    client?.responsible_person ? `Responsável: ${client.responsible_person}` : '',
+    client?.niche ? `Nicho: ${client.niche}` : '',
+    bd?.brand_voice ? `Tom de voz: ${bd.brand_voice}` : '',
+    bd?.social_links ? `Redes: ${bd.social_links}` : '',
+    bd?.competitors ? `Concorrentes: ${bd.competitors}` : '',
+    bd?.website ? `Site: ${bd.website}` : '',
+  ].filter(Boolean).join('\n');
+
+  const { data: existingDesign } = await supabase
+    .from('design_tasks')
+    .select('id')
+    .eq('client_id', clientId)
+    .ilike('title', '%Identidade Visual%')
+    .limit(1);
+
+  if (!existingDesign?.length) {
+    await supabase.from('design_tasks').insert({
+      client_id: clientId,
+      title: `Identidade Visual - ${client?.company_name || 'Cliente'}`,
+      description,
+      format_type: 'feed',
+      priority: 'alta',
+      kanban_column: 'nova_tarefa',
+    } as any);
+  }
+}
+
 export function useOnboarding() {
   const queryClient = useQueryClient();
 

@@ -20,7 +20,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History,
   Upload, Image, FileText, Palette, Info, User, Calendar, ArrowRight, X,
-  ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip, ZoomIn
+  ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip, ZoomIn, Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -63,6 +63,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [elapsedDisplay, setElapsedDisplay] = useState('');
   const [checklist, setChecklist] = useState<ChecklistItem[]>((task as any).checklist || []);
   const [uploadingMockup, setUploadingMockup] = useState(false);
+  const [uploadingArt, setUploadingArt] = useState(false);
+  const [artInputMode, setArtInputMode] = useState<'link' | 'upload'>('link');
   const [showAdjustmentForm, setShowAdjustmentForm] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [movingAction, setMovingAction] = useState<string | null>(null);
@@ -653,10 +655,70 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
                   {(task.kanban_column === 'executando' || task.kanban_column === 'ajustes') && isDesigner ? (
                     <div className="space-y-3">
-                      <div>
-                        <Label className="text-[10px] text-muted-foreground uppercase">Link da arte</Label>
-                        <Input value={attachmentUrl} onChange={e => setAttachmentUrl(e.target.value)} placeholder="https://drive.google.com/..." className="text-xs h-9 mt-1" />
+                      {/* Toggle: Link ou Upload */}
+                      <div className="flex items-center gap-1 p-0.5 bg-muted rounded-lg w-fit">
+                        <button
+                          onClick={() => setArtInputMode('link')}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${artInputMode === 'link' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                          <Link2 size={12} /> Link
+                        </button>
+                        <button
+                          onClick={() => setArtInputMode('upload')}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${artInputMode === 'upload' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                          <Upload size={12} /> Enviar arquivo
+                        </button>
                       </div>
+
+                      {artInputMode === 'link' ? (
+                        <div>
+                          <Label className="text-[10px] text-muted-foreground uppercase">Link da arte</Label>
+                          <Input value={attachmentUrl} onChange={e => setAttachmentUrl(e.target.value)} placeholder="https://drive.google.com/..." className="text-xs h-9 mt-1" />
+                        </div>
+                      ) : (
+                        <div>
+                          <Label className="text-[10px] text-muted-foreground uppercase">Upload da arte</Label>
+                          {attachmentUrl && /\.(jpg|jpeg|png|gif|webp|svg|bmp|pdf)(\?|$)/i.test(attachmentUrl) && (
+                            <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 mt-1 mb-2">
+                              <CheckCircle size={14} className="text-emerald-600 shrink-0" />
+                              <span className="text-xs text-muted-foreground truncate flex-1">Arquivo enviado</span>
+                              <a href={attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">Ver</a>
+                            </div>
+                          )}
+                          <label className="mt-1 flex flex-col items-center justify-center gap-2 p-6 rounded-lg border-2 border-dashed border-border hover:border-primary/50 cursor-pointer transition-colors bg-muted/20 hover:bg-muted/40">
+                            <input type="file" accept="image/*,.pdf,.ai,.psd,.svg,.eps" className="hidden" onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setUploadingArt(true);
+                              try {
+                                const ext = file.name.split('.').pop();
+                                const fileName = `artes/${task.client_id}/${Date.now()}_${file.name}`;
+                                const { data, error } = await supabase.storage.from('design-files').upload(fileName, file);
+                                if (error) throw error;
+                                const { data: { publicUrl } } = supabase.storage.from('design-files').getPublicUrl(data.path);
+                                setAttachmentUrl(publicUrl);
+                                await updateTask.mutateAsync({ id: task.id, attachment_url: publicUrl } as any);
+                                await addHistory.mutateAsync({ task_id: task.id, action: 'Arte enviada por upload', details: file.name, user_id: user?.id });
+                                toast.success('Arte enviada com sucesso!');
+                              } catch (err: any) { toast.error(err.message || 'Erro ao enviar arquivo'); }
+                              finally { setUploadingArt(false); }
+                            }} />
+                            {uploadingArt ? (
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Loader2 size={16} className="animate-spin" /> Enviando...
+                              </div>
+                            ) : (
+                              <>
+                                <Upload size={20} className="text-muted-foreground/50" />
+                                <p className="text-xs text-muted-foreground">Clique para selecionar ou arraste o arquivo</p>
+                                <p className="text-[10px] text-muted-foreground/60">JPG, PNG, SVG, PDF, AI, PSD, EPS</p>
+                              </>
+                            )}
+                          </label>
+                        </div>
+                      )}
+
                       <div>
                         <Label className="text-[10px] text-muted-foreground uppercase">Arquivo editável</Label>
                         <Input value={editableFileUrl} onChange={e => setEditableFileUrl(e.target.value)} placeholder="Link do arquivo editável" className="text-xs h-9 mt-1" />

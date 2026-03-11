@@ -13,6 +13,9 @@ export interface WhatsAppConfig {
   autoVideoApproval: boolean;
   autoVideoApproved: boolean;
   autoConfirmation: boolean;
+  autoTaskEditing: boolean;
+  autoTaskApproved: boolean;
+  autoApprovalExpired: boolean;
   msgRecordingScheduled: string;
   msgRecordingReminder: string;
   msgVideoApproval: string;
@@ -22,6 +25,9 @@ export interface WhatsAppConfig {
   msgConfirmationCancelled: string;
   msgBackupInvite: string;
   msgBackupConfirmed: string;
+  msgTaskEditing: string;
+  msgTaskApproved: string;
+  msgApprovalExpired: string;
 }
 
 interface SendMessageParams {

@@ -587,6 +587,139 @@ export type Database = {
           },
         ]
       }
+      design_task_history: {
+        Row: {
+          action: string
+          attachment_url: string | null
+          created_at: string
+          details: string | null
+          id: string
+          task_id: string
+          user_id: string | null
+        }
+        Insert: {
+          action?: string
+          attachment_url?: string | null
+          created_at?: string
+          details?: string | null
+          id?: string
+          task_id: string
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          attachment_url?: string | null
+          created_at?: string
+          details?: string | null
+          id?: string
+          task_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_task_history_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "design_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      design_tasks: {
+        Row: {
+          assigned_to: string | null
+          attachment_url: string | null
+          auto_approved: boolean
+          client_approved_at: string | null
+          client_id: string
+          completed_at: string | null
+          copy_text: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          editable_file_url: string | null
+          format_type: string
+          id: string
+          kanban_column: string
+          observations: string | null
+          priority: string
+          reference_images: string[] | null
+          references_links: string[] | null
+          sent_to_client_at: string | null
+          started_at: string | null
+          time_spent_seconds: number
+          timer_running: boolean
+          timer_started_at: string | null
+          title: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          assigned_to?: string | null
+          attachment_url?: string | null
+          auto_approved?: boolean
+          client_approved_at?: string | null
+          client_id: string
+          completed_at?: string | null
+          copy_text?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          editable_file_url?: string | null
+          format_type?: string
+          id?: string
+          kanban_column?: string
+          observations?: string | null
+          priority?: string
+          reference_images?: string[] | null
+          references_links?: string[] | null
+          sent_to_client_at?: string | null
+          started_at?: string | null
+          time_spent_seconds?: number
+          timer_running?: boolean
+          timer_started_at?: string | null
+          title?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          assigned_to?: string | null
+          attachment_url?: string | null
+          auto_approved?: boolean
+          client_approved_at?: string | null
+          client_id?: string
+          completed_at?: string | null
+          copy_text?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          editable_file_url?: string | null
+          format_type?: string
+          id?: string
+          kanban_column?: string
+          observations?: string | null
+          priority?: string
+          reference_images?: string[] | null
+          references_links?: string[] | null
+          sent_to_client_at?: string | null
+          started_at?: string | null
+          time_spent_seconds?: number
+          timer_running?: boolean
+          timer_started_at?: string | null
+          title?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       endomarketing_agendamentos: {
         Row: {
           cancellation_reason: string | null

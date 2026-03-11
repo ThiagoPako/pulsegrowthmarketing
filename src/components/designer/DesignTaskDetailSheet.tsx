@@ -159,7 +159,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
       <SheetContent className="w-[450px] sm:w-[500px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <ClientLogo name={task.clients?.company_name || ''} color={task.clients?.color || '217 91% 60%'} logoUrl={task.clients?.logo_url} size="sm" />
+            <ClientLogo client={{ companyName: task.clients?.company_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="sm" />
             <span className="truncate">{task.title}</span>
           </SheetTitle>
         </SheetHeader>

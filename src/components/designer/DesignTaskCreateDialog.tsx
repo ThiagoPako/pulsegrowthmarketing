@@ -87,7 +87,7 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
                 {clients.map(c => (
                   <SelectItem key={c.id} value={c.id}>
                     <div className="flex items-center gap-2">
-                      <ClientLogo name={c.companyName} color={c.color} logoUrl={c.logoUrl} size="sm" />
+                      <ClientLogo client={{ companyName: c.companyName, color: c.color, logoUrl: c.logoUrl }} size="sm" />
                       {c.companyName}
                     </div>
                   </SelectItem>

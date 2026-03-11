@@ -130,7 +130,7 @@ function TaskCard({ task, onClick }: { task: DesignTask; onClick: () => void }) 
       className="bg-card border rounded-xl p-3 cursor-pointer hover:shadow-md transition-shadow space-y-2"
     >
       <div className="flex items-center gap-2">
-        <ClientLogo name={task.clients?.company_name || ''} color={task.clients?.color || '217 91% 60%'} logoUrl={task.clients?.logo_url} size="sm" />
+        <ClientLogo client={{ companyName: task.clients?.company_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="sm" />
         <span className="text-[11px] text-muted-foreground truncate">{task.clients?.company_name}</span>
       </div>
       <p className="text-sm font-medium line-clamp-2">{task.title}</p>

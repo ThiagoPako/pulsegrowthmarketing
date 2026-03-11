@@ -92,6 +92,7 @@ function AppRoutes() {
       <Route path="/conteudo" element={<ProtectedRoute><ContentKanban /></ProtectedRoute>} />
       <Route path="/edicao" element={<ProtectedRoute><EditorDashboard /></ProtectedRoute>} />
       <Route path="/edicao/kanban" element={<ProtectedRoute><EditorKanban /></ProtectedRoute>} />
+      <Route path="/designer" element={<ProtectedRoute><DesignerKanban /></ProtectedRoute>} />
       <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppDashboard /></ProtectedRoute>} />
       <Route path="/financeiro" element={<ProtectedRoute><FinancialDashboard /></ProtectedRoute>} />
       <Route path="/financeiro/contratos" element={<ProtectedRoute><FinancialContracts /></ProtectedRoute>} />

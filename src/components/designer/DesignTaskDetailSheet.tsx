@@ -207,10 +207,11 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           </div>
         </div>
 
-        {/* Body: 3-column layout */}
+        {/* Body: 3-column layout like reference */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Left column: Briefing with tabs - takes ~80% */}
-          <div className="w-[80%] min-w-0 overflow-hidden flex flex-col">
+
+          {/* LEFT COLUMN (~40%): Briefing / Formulário */}
+          <div className="w-[40%] min-w-0 overflow-hidden flex flex-col border-r border-border">
             <Tabs defaultValue="briefing" className="flex-1 flex flex-col overflow-hidden">
               <TabsList className="h-10 rounded-none border-b border-border bg-transparent px-4 justify-start gap-0">
                 <TabsTrigger value="briefing" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs gap-1.5">
@@ -234,29 +235,18 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                       <Info size={10} /> Cliente
                     </Label>
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">{task.clients?.company_name || '—'}</p>
-                        {task.clients?.responsible_person && (
-                          <p className="text-xs text-muted-foreground">{task.clients.responsible_person}</p>
-                        )}
+                      <div className="flex items-center gap-3">
+                        <ClientLogo client={{ companyName: task.clients?.company_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="sm" />
+                        <div>
+                          <p className="text-sm font-medium">{task.clients?.company_name || '—'}</p>
+                          {task.clients?.responsible_person && (
+                            <p className="text-xs text-muted-foreground">{task.clients.responsible_person}</p>
+                          )}
+                        </div>
                       </div>
                       <a href={`/clients`} className="text-primary hover:text-primary/80">
                         <ExternalLink size={14} />
                       </a>
-                    </div>
-                  </div>
-
-                  {/* Format + Priority */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-lg border border-border p-3">
-                      <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Formato</Label>
-                      <p className="text-sm font-semibold mt-1">{FORMAT_LABELS[task.format_type] || task.format_type}</p>
-                    </div>
-                    <div className="rounded-lg border border-border p-3">
-                      <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Prioridade</Label>
-                      <Badge className={`mt-1.5 ${PRIORITY_CONFIG[task.priority]?.color || ''}`}>
-                        {PRIORITY_CONFIG[task.priority]?.label || task.priority}
-                      </Badge>
                     </div>
                   </div>
 
@@ -294,8 +284,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                       </Label>
                       <div className="space-y-1.5">
                         {task.references_links.map((link, i) => (
-                          <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1.5 hover:underline">
-                            <ExternalLink size={11} /> {link}
+                          <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1.5 hover:underline break-all">
+                            <ExternalLink size={11} className="shrink-0" /> {link}
                           </a>
                         ))}
                       </div>
@@ -341,7 +331,6 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                             {checklist.filter(c => c.done).length}/{checklist.length}
                           </span>
                         </div>
-                        {/* Progress bar */}
                         <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-3">
                           <div
                             className="h-full bg-primary rounded-full transition-all"
@@ -389,107 +378,90 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
             </Tabs>
           </div>
 
-          {/* Right sidebar: Stage + Actions + Files + Info - takes ~20% */}
-          <div className="w-[20%] shrink-0 border-l border-border flex flex-col overflow-hidden">
+          {/* CENTER COLUMN (~40%): Etapa atual + Arquivos + Colaboração */}
+          <div className="w-[40%] min-w-0 overflow-hidden flex flex-col border-r border-border">
             <ScrollArea className="flex-1">
-              <div className="p-4 space-y-4 overflow-hidden">
+              <div className="p-5 space-y-5">
+                {/* Etapa Atual header */}
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">Etapa atual</h3>
+                </div>
+
                 {/* Current stage card */}
-                <div className="rounded-xl border-2 p-3" style={{ borderColor: `hsl(${currentCol?.color})` }}>
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: `hsl(${currentCol?.color})` }}>
-                      <Play size={12} className="text-white" />
+                <div className="rounded-xl border-2 p-4" style={{ borderColor: `hsl(${currentCol?.color})` }}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: `hsl(${currentCol?.color})` }}>
+                      <Play size={14} className="text-white" />
                     </div>
                     <div>
-                      <p className="text-sm font-bold uppercase">{currentCol?.label}</p>
-                      <p className="text-[10px] text-muted-foreground">
+                      <p className="text-base font-bold uppercase">{currentCol?.label}</p>
+                      <p className="text-xs text-muted-foreground">
                         {task.kanban_column === 'nova_tarefa' && 'Aguardando início'}
-                        {task.kanban_column === 'executando' && 'Tarefa em andamento'}
-                        {task.kanban_column === 'em_analise' && 'Aguardando revisão'}
-                        {task.kanban_column === 'enviar_cliente' && 'Pronto para enviar'}
-                        {task.kanban_column === 'aprovado' && 'Finalizado'}
+                        {task.kanban_column === 'executando' && 'Tarefas que estão atualmente em andamento'}
+                        {task.kanban_column === 'em_analise' && 'Aguardando revisão interna'}
+                        {task.kanban_column === 'enviar_cliente' && 'Pronto para enviar ao cliente'}
+                        {task.kanban_column === 'aprovado' && 'Finalizado e aprovado'}
                         {task.kanban_column === 'ajustes' && 'Correções pendentes'}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Move actions */}
-                {moveActions.length > 0 && (
-                  <div className="space-y-2">
-                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Mover Para</Label>
-                    {moveActions.map(action => {
-                      const Icon = action.icon;
-                      return (
-                        <Button
-                          key={action.label}
-                          onClick={action.onClick}
-                          className="w-full justify-start gap-2 text-xs font-bold h-9 text-white border-0 hover:opacity-90"
-                          style={{ backgroundColor: action.color }}
-                        >
-                          <Icon size={14} /> {action.label}
-                        </Button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Files section */}
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <Paperclip size={12} /> Arquivos
-                  </Label>
+                {/* Arquivo section */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold">Arquivo</h4>
 
                   {(task.kanban_column === 'executando' || task.kanban_column === 'ajustes') && isDesigner ? (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <div>
-                        <Label className="text-[10px] text-muted-foreground">Link da arte</Label>
-                        <Input value={attachmentUrl} onChange={e => setAttachmentUrl(e.target.value)} placeholder="https://drive.google.com/..." className="text-xs h-8" />
+                        <Label className="text-[10px] text-muted-foreground uppercase">Link da arte</Label>
+                        <Input value={attachmentUrl} onChange={e => setAttachmentUrl(e.target.value)} placeholder="https://drive.google.com/..." className="text-xs h-9 mt-1" />
                       </div>
                       <div>
-                        <Label className="text-[10px] text-muted-foreground">Arquivo editável</Label>
-                        <Input value={editableFileUrl} onChange={e => setEditableFileUrl(e.target.value)} placeholder="Link do arquivo editável" className="text-xs h-8" />
+                        <Label className="text-[10px] text-muted-foreground uppercase">Arquivo editável</Label>
+                        <Input value={editableFileUrl} onChange={e => setEditableFileUrl(e.target.value)} placeholder="Link do arquivo editável" className="text-xs h-9 mt-1" />
                       </div>
                       <div>
-                        <Label className="text-[10px] text-muted-foreground">Observações</Label>
-                        <Textarea value={observations} onChange={e => setObservations(e.target.value)} rows={2} className="text-xs" />
+                        <Label className="text-[10px] text-muted-foreground uppercase">Observações</Label>
+                        <Textarea value={observations} onChange={e => setObservations(e.target.value)} rows={3} className="text-xs mt-1" />
                       </div>
                     </div>
                   ) : task.attachment_url ? (
-                    <a href={task.attachment_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2 rounded-lg border border-border hover:bg-muted/30 transition-colors text-xs text-primary">
-                      <Eye size={13} /> Ver arte anexada
+                    <a href={task.attachment_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-sm text-primary">
+                      <Eye size={14} /> Ver arte anexada
                     </a>
                   ) : (
-                    <div className="rounded-lg border border-dashed border-border p-4 text-center">
-                      <Paperclip size={16} className="mx-auto text-muted-foreground/50 mb-1" />
-                      <p className="text-[11px] text-muted-foreground">Nenhum arquivo</p>
+                    <div className="rounded-lg border border-dashed border-border p-6 text-center">
+                      <Paperclip size={20} className="mx-auto text-muted-foreground/40 mb-2" />
+                      <p className="text-xs text-muted-foreground">Clique aqui ou arraste arquivos para anexar</p>
                     </div>
                   )}
                 </div>
 
                 {/* Mockup section */}
                 {showMockup && (
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                      <Image size={12} /> Mockup
-                    </Label>
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                      <Image size={14} /> Mockup
+                    </h4>
 
                     {(task.kanban_column === 'executando' || task.kanban_column === 'ajustes') && isDesigner ? (
                       <div className="space-y-2">
                         {mockupUrl && (
-                          <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 min-w-0">
-                            <CheckCircle size={13} className="text-emerald-600 shrink-0" />
+                          <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 min-w-0">
+                            <CheckCircle size={14} className="text-emerald-600 shrink-0" />
                             <a href={mockupUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline truncate block overflow-hidden">{mockupUrl}</a>
                           </div>
                         )}
-                        <Input value={mockupUrl} onChange={e => setMockupUrl(e.target.value)} placeholder="Link do mockup..." className="text-xs h-8" />
+                        <Input value={mockupUrl} onChange={e => setMockupUrl(e.target.value)} placeholder="Link do mockup..." className="text-xs h-9" />
                         <div className="flex gap-2">
-                          <Button size="sm" variant="outline" className="flex-1 h-8 text-xs" onClick={async () => {
+                          <Button size="sm" variant="outline" className="flex-1 h-9 text-xs" onClick={async () => {
                             if (!mockupUrl) { toast.error('Cole o link do mockup'); return; }
                             await updateTask.mutateAsync({ id: task.id, mockup_url: mockupUrl } as any);
                             await addHistory.mutateAsync({ task_id: task.id, action: 'Mockup anexado', details: mockupUrl, user_id: user?.id });
                             toast.success('Mockup salvo!');
                           }}>
-                            <Link2 size={11} className="mr-1" /> Salvar
+                            <Link2 size={12} className="mr-1" /> Salvar
                           </Button>
                           <label className="flex-1">
                             <input type="file" accept="image/*,.pdf" className="hidden" onChange={async (e) => {
@@ -508,20 +480,20 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                               } catch (err: any) { toast.error(err.message || 'Erro ao enviar'); }
                               finally { setUploadingMockup(false); }
                             }} />
-                            <Button size="sm" variant="secondary" className="w-full h-8 text-xs" asChild disabled={uploadingMockup}>
-                              <span><Upload size={11} className="mr-1" /> {uploadingMockup ? '...' : 'Upload'}</span>
+                            <Button size="sm" variant="secondary" className="w-full h-9 text-xs" asChild disabled={uploadingMockup}>
+                              <span><Upload size={12} className="mr-1" /> {uploadingMockup ? '...' : 'Upload'}</span>
                             </Button>
                           </label>
                         </div>
                       </div>
                     ) : (task as any).mockup_url ? (
-                      <a href={(task as any).mockup_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2 rounded-lg border border-border hover:bg-muted/30 transition-colors text-xs text-primary">
-                        <Eye size={13} /> Ver mockup
+                      <a href={(task as any).mockup_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-sm text-primary">
+                        <Eye size={14} /> Ver mockup
                       </a>
                     ) : (
-                      <div className="rounded-lg border border-dashed border-border p-3 text-center">
-                        <Image size={16} className="mx-auto text-muted-foreground/50 mb-1" />
-                        <p className="text-[11px] text-muted-foreground">Sem mockup</p>
+                      <div className="rounded-lg border border-dashed border-border p-4 text-center">
+                        <Image size={18} className="mx-auto text-muted-foreground/40 mb-1" />
+                        <p className="text-xs text-muted-foreground">Sem mockup</p>
                       </div>
                     )}
                   </div>
@@ -529,53 +501,116 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
                 {/* Adjustment form */}
                 {showAdjustmentForm && (
-                  <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                  <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
                     <Label className="text-xs font-semibold text-destructive">Descreva os ajustes</Label>
                     <Textarea value={adjustmentNotes} onChange={e => setAdjustmentNotes(e.target.value)} rows={3} className="text-xs" placeholder="O que precisa ser corrigido..." />
                     <div className="flex gap-2">
-                      <Button size="sm" variant="destructive" className="flex-1 h-8 text-xs" onClick={handleRequestAdjustments}>Solicitar</Button>
-                      <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setShowAdjustmentForm(false)}>Cancelar</Button>
+                      <Button size="sm" variant="destructive" className="flex-1 h-9 text-xs" onClick={handleRequestAdjustments}>Solicitar</Button>
+                      <Button size="sm" variant="ghost" className="h-9 text-xs" onClick={() => setShowAdjustmentForm(false)}>Cancelar</Button>
                     </div>
+                  </div>
+                )}
+
+                {/* Format + Priority cards */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg border border-border p-3">
+                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Formato</Label>
+                    <p className="text-sm font-semibold mt-1">{FORMAT_LABELS[task.format_type] || task.format_type}</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-3">
+                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Prioridade</Label>
+                    <Badge className={`mt-1.5 ${PRIORITY_CONFIG[task.priority]?.color || ''}`}>
+                      {PRIORITY_CONFIG[task.priority]?.label || task.priority}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            </ScrollArea>
+          </div>
+
+          {/* RIGHT COLUMN (~20%): Mover Para + Informações */}
+          <div className="w-[20%] shrink-0 flex flex-col overflow-hidden">
+            <ScrollArea className="flex-1">
+              <div className="p-4 space-y-5 overflow-hidden">
+                {/* Move actions */}
+                {moveActions.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Mover Para</Label>
+                    {moveActions.map(action => {
+                      const Icon = action.icon;
+                      return (
+                        <Button
+                          key={action.label}
+                          onClick={action.onClick}
+                          className="w-full justify-start gap-2 text-xs font-bold h-10 text-white border-0 hover:opacity-90"
+                          style={{ backgroundColor: action.color }}
+                        >
+                          <Icon size={14} /> {action.label}
+                        </Button>
+                      );
+                    })}
                   </div>
                 )}
 
                 <Separator />
 
-                {/* Meta info */}
-                <div className="space-y-2.5">
-                  <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Informações</Label>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-xs">
-                      <User size={13} className="text-muted-foreground shrink-0" />
-                      <div>
-                        <p className="text-[10px] text-muted-foreground">Responsável</p>
-                        <p className="font-medium">{task.profiles?.display_name || task.profiles?.name || 'Não atribuído'}</p>
-                      </div>
+                {/* Adicionar ao cartão section */}
+                <div className="space-y-3">
+                  <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Adicionar ao Cartão</Label>
+
+                  {/* Responsável */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <User size={13} /> <span>Responsável</span>
                     </div>
-                    <div className="flex items-center gap-2 text-xs">
-                      <Calendar size={13} className="text-muted-foreground shrink-0" />
-                      <div>
-                        <p className="text-[10px] text-muted-foreground">Data</p>
-                        <p className="font-medium">{new Date(task.created_at).toLocaleDateString('pt-BR')}</p>
-                      </div>
+                    <div className="rounded-md px-3 py-1.5 text-xs font-medium text-center text-white" style={{ backgroundColor: `hsl(${currentCol?.color})` }}>
+                      {task.profiles?.display_name || task.profiles?.name || 'Não atribuído'}
                     </div>
-                    <div className="flex items-center gap-2 text-xs">
-                      <FileText size={13} className="text-muted-foreground shrink-0" />
-                      <div>
-                        <p className="text-[10px] text-muted-foreground">Formato</p>
-                        <p className="font-medium">{FORMAT_LABELS[task.format_type] || task.format_type}</p>
-                      </div>
-                    </div>
-                    {task.version > 1 && (
-                      <div className="flex items-center gap-2 text-xs">
-                        <RotateCcw size={13} className="text-muted-foreground shrink-0" />
-                        <div>
-                          <p className="text-[10px] text-muted-foreground">Versão</p>
-                          <p className="font-medium">v{task.version}</p>
-                        </div>
-                      </div>
-                    )}
                   </div>
+
+                  {/* Data */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Calendar size={13} /> <span>Data</span>
+                    </div>
+                    <div className="rounded-md px-3 py-1.5 text-xs font-medium text-center text-white" style={{ backgroundColor: `hsl(${currentCol?.color})` }}>
+                      {new Date(task.created_at).toLocaleDateString('pt-BR')}
+                    </div>
+                  </div>
+
+                  {/* Formato */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <FileText size={13} /> <span>Formato</span>
+                    </div>
+                    <Badge variant="outline" className="w-full justify-center text-xs py-1">
+                      {FORMAT_LABELS[task.format_type] || task.format_type}
+                    </Badge>
+                  </div>
+
+                  {/* Versão */}
+                  {task.version > 1 && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <RotateCcw size={13} /> <span>Versão</span>
+                      </div>
+                      <Badge variant="secondary" className="w-full justify-center text-xs py-1">
+                        v{task.version}
+                      </Badge>
+                    </div>
+                  )}
+
+                  {/* Timer */}
+                  {task.started_at && elapsedDisplay && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Clock size={13} /> <span>Tempo</span>
+                      </div>
+                      <Badge variant="secondary" className="w-full justify-center text-xs py-1">
+                        {elapsedDisplay}
+                      </Badge>
+                    </div>
+                  )}
                 </div>
               </div>
             </ScrollArea>

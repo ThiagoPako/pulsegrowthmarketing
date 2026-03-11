@@ -209,7 +209,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
         {/* Body: 3-column layout */}
         <div className="flex flex-1 overflow-hidden">
           {/* Left column: Briefing with tabs */}
-          <div className="flex-1 border-r border-border overflow-hidden flex flex-col">
+          <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
             <Tabs defaultValue="briefing" className="flex-1 flex flex-col overflow-hidden">
               <TabsList className="h-10 rounded-none border-b border-border bg-transparent px-4 justify-start gap-0">
                 <TabsTrigger value="briefing" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs gap-1.5">
@@ -388,14 +388,14 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
             </Tabs>
           </div>
 
-          {/* Center column: Current stage + files */}
-          <div className="w-[280px] border-r border-border flex flex-col overflow-hidden">
+          {/* Right sidebar: Stage + Actions + Files + Info */}
+          <div className="w-[300px] shrink-0 border-l border-border flex flex-col overflow-hidden">
             <ScrollArea className="flex-1">
               <div className="p-4 space-y-4">
                 {/* Current stage card */}
-                <div className="rounded-xl border-2 p-4 space-y-1" style={{ borderColor: `hsl(${currentCol?.color})` }}>
+                <div className="rounded-xl border-2 p-3" style={{ borderColor: `hsl(${currentCol?.color})` }}>
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: `hsl(${currentCol?.color})` }}>
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: `hsl(${currentCol?.color})` }}>
                       <Play size={12} className="text-white" />
                     </div>
                     <div>
@@ -412,13 +412,32 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                   </div>
                 </div>
 
+                {/* Move actions */}
+                {moveActions.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Mover Para</Label>
+                    {moveActions.map(action => {
+                      const Icon = action.icon;
+                      return (
+                        <Button
+                          key={action.label}
+                          onClick={action.onClick}
+                          className="w-full justify-start gap-2 text-xs font-bold h-9 text-white border-0 hover:opacity-90"
+                          style={{ backgroundColor: action.color }}
+                        >
+                          <Icon size={14} /> {action.label}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {/* Files section */}
-                <div className="space-y-3">
+                <div className="space-y-2">
                   <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                     <Paperclip size={12} /> Arquivos
                   </Label>
 
-                  {/* Attachment URL */}
                   {(task.kanban_column === 'executando' || task.kanban_column === 'ajustes') && isDesigner ? (
                     <div className="space-y-2">
                       <div>
@@ -435,32 +454,32 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                       </div>
                     </div>
                   ) : task.attachment_url ? (
-                    <a href={task.attachment_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2.5 rounded-lg border border-border hover:bg-muted/30 transition-colors text-xs text-primary">
+                    <a href={task.attachment_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2 rounded-lg border border-border hover:bg-muted/30 transition-colors text-xs text-primary">
                       <Eye size={13} /> Ver arte anexada
                     </a>
                   ) : (
-                    <div className="rounded-lg border border-dashed border-border p-6 text-center">
-                      <Paperclip size={20} className="mx-auto text-muted-foreground/50 mb-1" />
-                      <p className="text-[11px] text-muted-foreground">Nenhum arquivo anexado</p>
+                    <div className="rounded-lg border border-dashed border-border p-4 text-center">
+                      <Paperclip size={16} className="mx-auto text-muted-foreground/50 mb-1" />
+                      <p className="text-[11px] text-muted-foreground">Nenhum arquivo</p>
                     </div>
                   )}
                 </div>
 
                 {/* Mockup section */}
                 {showMockup && (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                       <Image size={12} /> Mockup
                     </Label>
 
                     {(task.kanban_column === 'executando' || task.kanban_column === 'ajustes') && isDesigner ? (
                       <div className="space-y-2">
-                        {mockupUrl ? (
+                        {mockupUrl && (
                           <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
                             <CheckCircle size={13} className="text-emerald-600 shrink-0" />
                             <a href={mockupUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline truncate flex-1">{mockupUrl}</a>
                           </div>
-                        ) : null}
+                        )}
                         <Input value={mockupUrl} onChange={e => setMockupUrl(e.target.value)} placeholder="Link do mockup..." className="text-xs h-8" />
                         <div className="flex gap-2">
                           <Button size="sm" variant="outline" className="flex-1 h-8 text-xs" onClick={async () => {
@@ -469,7 +488,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                             await addHistory.mutateAsync({ task_id: task.id, action: 'Mockup anexado', details: mockupUrl, user_id: user?.id });
                             toast.success('Mockup salvo!');
                           }}>
-                            <Link2 size={11} className="mr-1" /> Salvar Link
+                            <Link2 size={11} className="mr-1" /> Salvar
                           </Button>
                           <label className="flex-1">
                             <input type="file" accept="image/*,.pdf" className="hidden" onChange={async (e) => {
@@ -489,18 +508,18 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                               finally { setUploadingMockup(false); }
                             }} />
                             <Button size="sm" variant="secondary" className="w-full h-8 text-xs" asChild disabled={uploadingMockup}>
-                              <span><Upload size={11} className="mr-1" /> {uploadingMockup ? 'Enviando...' : 'Upload'}</span>
+                              <span><Upload size={11} className="mr-1" /> {uploadingMockup ? '...' : 'Upload'}</span>
                             </Button>
                           </label>
                         </div>
                       </div>
                     ) : (task as any).mockup_url ? (
-                      <a href={(task as any).mockup_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2.5 rounded-lg border border-border hover:bg-muted/30 transition-colors text-xs text-primary">
+                      <a href={(task as any).mockup_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2 rounded-lg border border-border hover:bg-muted/30 transition-colors text-xs text-primary">
                         <Eye size={13} /> Ver mockup
                       </a>
                     ) : (
-                      <div className="rounded-lg border border-dashed border-border p-4 text-center">
-                        <Image size={18} className="mx-auto text-muted-foreground/50 mb-1" />
+                      <div className="rounded-lg border border-dashed border-border p-3 text-center">
+                        <Image size={16} className="mx-auto text-muted-foreground/50 mb-1" />
                         <p className="text-[11px] text-muted-foreground">Sem mockup</p>
                       </div>
                     )}
@@ -518,41 +537,13 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                     </div>
                   </div>
                 )}
-              </div>
-            </ScrollArea>
-          </div>
-
-          {/* Right column: Move actions */}
-          <div className="w-[200px] flex flex-col overflow-hidden">
-            <ScrollArea className="flex-1">
-              <div className="p-4 space-y-4">
-                <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Mover Para</Label>
-                <div className="space-y-2">
-                  {moveActions.map(action => {
-                    const Icon = action.icon;
-                    return (
-                      <Button
-                        key={action.label}
-                        onClick={action.onClick}
-                        className="w-full justify-start gap-2 text-xs font-bold h-10 text-white border-0 hover:opacity-90"
-                        style={{ backgroundColor: action.color }}
-                      >
-                        <Icon size={14} /> {action.label}
-                      </Button>
-                    );
-                  })}
-                  {moveActions.length === 0 && (
-                    <p className="text-[11px] text-muted-foreground text-center py-4">Nenhuma ação disponível</p>
-                  )}
-                </div>
 
                 <Separator />
 
                 {/* Meta info */}
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Informações</Label>
-
-                  <div className="space-y-2.5">
+                  <div className="space-y-2">
                     <div className="flex items-center gap-2 text-xs">
                       <User size={13} className="text-muted-foreground shrink-0" />
                       <div>
@@ -560,7 +551,6 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                         <p className="font-medium">{task.profiles?.display_name || task.profiles?.name || 'Não atribuído'}</p>
                       </div>
                     </div>
-
                     <div className="flex items-center gap-2 text-xs">
                       <Calendar size={13} className="text-muted-foreground shrink-0" />
                       <div>
@@ -568,7 +558,6 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                         <p className="font-medium">{new Date(task.created_at).toLocaleDateString('pt-BR')}</p>
                       </div>
                     </div>
-
                     <div className="flex items-center gap-2 text-xs">
                       <FileText size={13} className="text-muted-foreground shrink-0" />
                       <div>
@@ -576,7 +565,6 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                         <p className="font-medium">{FORMAT_LABELS[task.format_type] || task.format_type}</p>
                       </div>
                     </div>
-
                     {task.version > 1 && (
                       <div className="flex items-center gap-2 text-xs">
                         <RotateCcw size={13} className="text-muted-foreground shrink-0" />

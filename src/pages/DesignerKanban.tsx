@@ -1,14 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, DragEvent } from 'react';
 import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn } from '@/hooks/useDesignTasks';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Kanban, List, Clock, AlertTriangle } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, Kanban, List, Clock, GripVertical } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DesignTaskCreateDialog from '@/components/designer/DesignTaskCreateDialog';
 import DesignTaskDetailSheet from '@/components/designer/DesignTaskDetailSheet';
+import { toast } from 'sonner';
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string; icon?: any }> = {
   baixa: { label: 'Baixa', color: 'bg-muted text-muted-foreground' },
@@ -25,11 +26,14 @@ const FORMAT_LABELS: Record<string, string> = {
 };
 
 export default function DesignerKanban() {
-  const { tasksQuery } = useDesignTasks();
+  const { tasksQuery, updateTask, addHistory } = useDesignTasks();
   const { currentUser } = useApp();
+  const { user } = useAuth();
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<DesignTask | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
 
   const tasks = tasksQuery.data || [];
 
@@ -41,6 +45,92 @@ export default function DesignerKanban() {
     });
     return map;
   }, [tasks]);
+
+  const handleDragStart = useCallback((e: DragEvent, task: DesignTask) => {
+    e.dataTransfer.setData('text/plain', task.id);
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggingTaskId(task.id);
+  }, []);
+
+  const handleDragOver = useCallback((e: DragEvent, colKey: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverColumn(colKey);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setDragOverColumn(null);
+  }, []);
+
+  const handleDrop = useCallback(async (e: DragEvent, targetColumn: DesignTaskColumn) => {
+    e.preventDefault();
+    setDragOverColumn(null);
+    setDraggingTaskId(null);
+
+    const taskId = e.dataTransfer.getData('text/plain');
+    const task = tasks.find(t => t.id === taskId);
+    if (!task || task.kanban_column === targetColumn) return;
+
+    const targetLabel = DESIGN_COLUMNS.find(c => c.key === targetColumn)?.label || targetColumn;
+
+    // Build extra fields based on target column
+    const extraFields: Record<string, any> = {};
+
+    // Moving TO executando: set started_at and assigned_to
+    if (targetColumn === 'executando') {
+      if (!task.started_at) {
+        extraFields.started_at = new Date().toISOString();
+      }
+      if (!task.assigned_to && user?.id) {
+        extraFields.assigned_to = user.id;
+      }
+    }
+
+    // Moving TO em_analise: validate attachment
+    if (targetColumn === 'em_analise') {
+      const hasAttachment = task.attachment_url || (task as any).mockup_url;
+      if (!hasAttachment) {
+        toast.error('Anexe a arte ou mockup antes de enviar para análise');
+        return;
+      }
+    }
+
+    // Moving TO aprovado: set completed_at and client_approved_at
+    if (targetColumn === 'aprovado') {
+      extraFields.completed_at = new Date().toISOString();
+      extraFields.client_approved_at = new Date().toISOString();
+    }
+
+    // Moving TO enviar_cliente: mark as sent
+    if (targetColumn === 'enviar_cliente') {
+      if (!task.sent_to_client_at) {
+        extraFields.sent_to_client_at = new Date().toISOString();
+      }
+    }
+
+    try {
+      await updateTask.mutateAsync({
+        id: taskId,
+        kanban_column: targetColumn,
+        ...extraFields,
+      } as any);
+
+      await addHistory.mutateAsync({
+        task_id: taskId,
+        action: `Movido para ${targetLabel}`,
+        user_id: user?.id,
+      });
+
+      toast.success(`Tarefa movida para "${targetLabel}"`);
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao mover tarefa');
+    }
+  }, [tasks, user, updateTask, addHistory]);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggingTaskId(null);
+    setDragOverColumn(null);
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -67,15 +157,32 @@ export default function DesignerKanban() {
       {view === 'kanban' ? (
         <div className="flex gap-3 overflow-x-auto pb-4">
           {DESIGN_COLUMNS.map(col => (
-            <div key={col.key} className="min-w-[260px] w-[260px] flex-shrink-0">
+            <div
+              key={col.key}
+              className={`min-w-[260px] w-[260px] flex-shrink-0 rounded-lg transition-colors ${
+                dragOverColumn === col.key
+                  ? 'bg-primary/10 ring-2 ring-primary/30'
+                  : ''
+              }`}
+              onDragOver={e => handleDragOver(e, col.key)}
+              onDragLeave={handleDragLeave}
+              onDrop={e => handleDrop(e, col.key)}
+            >
               <div className="flex items-center gap-2 mb-2 px-1">
                 <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: `hsl(${col.color})` }} />
                 <span className="text-xs font-semibold uppercase tracking-wide">{col.label}</span>
                 <Badge variant="secondary" className="text-[10px] h-5">{tasksByColumn[col.key]?.length || 0}</Badge>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-h-[60px] p-1">
                 {tasksByColumn[col.key]?.map(task => (
-                  <TaskCard key={task.id} task={task} onClick={() => setSelectedTask(task)} />
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    isDragging={draggingTaskId === task.id}
+                    onClick={() => setSelectedTask(task)}
+                    onDragStart={e => handleDragStart(e, task)}
+                    onDragEnd={handleDragEnd}
+                  />
                 ))}
               </div>
             </div>
@@ -123,14 +230,28 @@ export default function DesignerKanban() {
   );
 }
 
-function TaskCard({ task, onClick }: { task: DesignTask; onClick: () => void }) {
+interface TaskCardProps {
+  task: DesignTask;
+  isDragging: boolean;
+  onClick: () => void;
+  onDragStart: (e: DragEvent<HTMLDivElement>) => void;
+  onDragEnd: () => void;
+}
+
+function TaskCard({ task, isDragging, onClick, onDragStart, onDragEnd }: TaskCardProps) {
   const priorityCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.media;
   return (
     <div
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       onClick={onClick}
-      className="bg-card border rounded-xl p-3 cursor-pointer hover:shadow-md transition-shadow space-y-2"
+      className={`bg-card border rounded-xl p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-all space-y-2 ${
+        isDragging ? 'opacity-40 scale-95 ring-2 ring-primary/40' : ''
+      }`}
     >
       <div className="flex items-center gap-2">
+        <GripVertical size={12} className="text-muted-foreground/40 shrink-0" />
         <ClientLogo client={{ companyName: task.clients?.company_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="sm" />
         <span className="text-[11px] text-muted-foreground truncate">{task.clients?.company_name}</span>
       </div>

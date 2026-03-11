@@ -180,7 +180,7 @@ export default function DesignerKanban() {
                     key={task.id}
                     task={task}
                     isDragging={draggingTaskId === task.id}
-                    onClick={() => setSelectedTask(task)}
+                    onClick={() => setSelectedTaskId(task.id)}
                     onDragStart={e => handleDragStart(e, task)}
                     onDragEnd={handleDragEnd}
                   />

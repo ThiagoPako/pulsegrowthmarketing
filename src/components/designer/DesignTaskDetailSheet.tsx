@@ -578,17 +578,39 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                 {moveActions.length > 0 && (
                   <div className="space-y-2">
                     <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Mover Para</Label>
-                    {moveActions.map(action => {
+                    <AnimatePresence>
+                      {movingAction && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 8 }}
+                          className="text-xs text-center py-2 px-3 rounded-lg bg-primary/10 text-primary font-semibold"
+                        >
+                          ✓ Movido para {movingAction}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                    {moveActions.map((action, index) => {
                       const Icon = action.icon;
                       return (
-                        <Button
+                        <motion.div
                           key={action.label}
-                          onClick={action.onClick}
-                          className="w-full justify-start gap-2 text-xs font-bold h-10 text-white border-0 hover:opacity-90"
-                          style={{ backgroundColor: action.color }}
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.08, type: 'spring', stiffness: 300, damping: 24 }}
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.95 }}
                         >
-                          <Icon size={14} /> {action.label}
-                        </Button>
+                          <Button
+                            onClick={action.onClick}
+                            disabled={!!movingAction}
+                            className="w-full justify-start gap-2 text-xs font-bold h-10 text-white border-0 hover:opacity-90 transition-opacity"
+                            style={{ backgroundColor: action.color }}
+                          >
+                            <Icon size={14} /> {action.label}
+                            <ArrowRight size={12} className="ml-auto" />
+                          </Button>
+                        </motion.div>
                       );
                     })}
                   </div>

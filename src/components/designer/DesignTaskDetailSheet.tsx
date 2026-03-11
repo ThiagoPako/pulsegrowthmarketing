@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -67,12 +67,16 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [movingAction, setMovingAction] = useState<string | null>(null);
   const [stageAnimKey, setStageAnimKey] = useState(0);
-  const prevColumnRef = useState(task.kanban_column)[0];
+  const [showRocketFlyby, setShowRocketFlyby] = useState(false);
+  const prevColumnRef = useRef(task.kanban_column);
 
-  // Animate when column changes (task updated from query)
+  // Animate rocket flyby when column changes
   useEffect(() => {
-    if (task.kanban_column !== prevColumnRef) {
+    if (task.kanban_column !== prevColumnRef.current) {
+      prevColumnRef.current = task.kanban_column;
       setStageAnimKey(k => k + 1);
+      setShowRocketFlyby(true);
+      setTimeout(() => setShowRocketFlyby(false), 1200);
     }
   }, [task.kanban_column]);
 
@@ -476,6 +480,51 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold">Etapa atual</h3>
                 </div>
+
+                {/* Rocket flyby animation on stage change */}
+                <AnimatePresence>
+                  {showRocketFlyby && (
+                    <motion.div
+                      className="absolute inset-0 z-50 pointer-events-none overflow-hidden"
+                      initial={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                    >
+                      {/* Trail particles */}
+                      {[...Array(8)].map((_, i) => (
+                        <motion.span
+                          key={i}
+                          className="absolute text-sm"
+                          initial={{ left: '-5%', top: `${35 + Math.random() * 30}%`, opacity: 0 }}
+                          animate={{
+                            left: `${20 + i * 10}%`,
+                            top: `${35 + Math.sin(i) * 8}%`,
+                            opacity: [0, 1, 0],
+                          }}
+                          transition={{ duration: 0.8, delay: 0.05 * i + 0.2, ease: 'easeOut' }}
+                        >
+                          ✨
+                        </motion.span>
+                      ))}
+                      {/* Rocket */}
+                      <motion.span
+                        className="absolute text-4xl"
+                        style={{ top: '38%' }}
+                        initial={{ left: '-10%', rotate: 45 }}
+                        animate={{ left: '110%', rotate: 45 }}
+                        transition={{ duration: 1, ease: [0.25, 0.1, 0.25, 1] }}
+                      >
+                        🚀
+                      </motion.span>
+                      {/* Flash overlay */}
+                      <motion.div
+                        className="absolute inset-0 bg-primary/10 rounded-xl"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: [0, 0.3, 0] }}
+                        transition={{ duration: 0.6, delay: 0.3 }}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 {/* Current stage card - animated on column change */}
                 <AnimatePresence mode="wait">

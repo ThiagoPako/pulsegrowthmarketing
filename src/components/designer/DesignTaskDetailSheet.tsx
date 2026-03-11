@@ -306,12 +306,22 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                   {task.reference_images?.length > 0 && (
                     <div className="rounded-lg border border-border p-3">
                       <Label className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Imagens de Referência</Label>
-                      <div className="flex flex-wrap gap-2 mt-1">
-                        {task.reference_images.map((img, i) => (
-                          <a key={i} href={img} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
-                            <Image size={11} /> Imagem {i + 1}
-                          </a>
-                        ))}
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {task.reference_images.map((img, i) => {
+                          const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(img);
+                          return isImage ? (
+                            <button key={i} onClick={() => setPreviewImage(img)} className="relative group rounded-lg overflow-hidden border border-border w-20 h-20 hover:ring-2 hover:ring-primary/50 transition-all">
+                              <img src={img} alt={`Ref ${i + 1}`} className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                                <ZoomIn size={16} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
+                            </button>
+                          ) : (
+                            <a key={i} href={img} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
+                              <Image size={11} /> Ref {i + 1}
+                            </a>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

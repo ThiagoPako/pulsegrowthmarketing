@@ -57,7 +57,7 @@ export default function OnboardingManagement() {
     tasks.forEach(t => {
       if (!map.has(t.client_id)) {
         const c = t.clients;
-        const hasIdentity = c?.briefing_data?.has_identity === 'sim';
+        const hasIdentity = c?.briefing_data?.has_identity?.toLowerCase() === 'sim';
         const needsPhotos = c?.photo_preference === 'fotos_reais';
 
         const allStages: OnboardingStage[] = ['cliente_novo', 'contrato'];

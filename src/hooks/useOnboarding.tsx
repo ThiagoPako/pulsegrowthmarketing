@@ -172,12 +172,12 @@ export function useOnboarding() {
       if (existing?.length) return; // Already has tasks
 
       const designTasks = [
-        { client_id: clientId, title: 'Reformulação - Foto de Perfil', format_type: 'perfil', priority: 'alta', kanban_column: 'nova_tarefa' },
-        { client_id: clientId, title: 'Reformulação - Destaque 1', format_type: 'destaque', priority: 'alta', kanban_column: 'nova_tarefa' },
-        { client_id: clientId, title: 'Reformulação - Destaque 2', format_type: 'destaque', priority: 'alta', kanban_column: 'nova_tarefa' },
-        { client_id: clientId, title: 'Reformulação - Destaque 3', format_type: 'destaque', priority: 'alta', kanban_column: 'nova_tarefa' },
-        { client_id: clientId, title: 'Reformulação - Destaque 4', format_type: 'destaque', priority: 'alta', kanban_column: 'nova_tarefa' },
-        { client_id: clientId, title: 'Reformulação - Destaque 5', format_type: 'destaque', priority: 'alta', kanban_column: 'nova_tarefa' },
+        { client_id: clientId, title: 'Reformulação - Foto de Perfil', format_type: 'story', priority: 'alta', kanban_column: 'nova_tarefa' },
+        { client_id: clientId, title: 'Reformulação - Destaque 1', format_type: 'story', priority: 'alta', kanban_column: 'nova_tarefa' },
+        { client_id: clientId, title: 'Reformulação - Destaque 2', format_type: 'story', priority: 'alta', kanban_column: 'nova_tarefa' },
+        { client_id: clientId, title: 'Reformulação - Destaque 3', format_type: 'story', priority: 'alta', kanban_column: 'nova_tarefa' },
+        { client_id: clientId, title: 'Reformulação - Destaque 4', format_type: 'story', priority: 'alta', kanban_column: 'nova_tarefa' },
+        { client_id: clientId, title: 'Reformulação - Destaque 5', format_type: 'story', priority: 'alta', kanban_column: 'nova_tarefa' },
         { client_id: clientId, title: 'Reformulação - Arte Feed 1', format_type: 'feed', priority: 'alta', kanban_column: 'nova_tarefa' },
         { client_id: clientId, title: 'Reformulação - Arte Feed 2', format_type: 'feed', priority: 'alta', kanban_column: 'nova_tarefa' },
         { client_id: clientId, title: 'Reformulação - Arte Feed 3', format_type: 'feed', priority: 'alta', kanban_column: 'nova_tarefa' },

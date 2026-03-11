@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -377,20 +378,71 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                   </TabsContent>
                 )}
 
-                <TabsContent value="historico" className="p-4 space-y-3 mt-0">
-                  {history.data?.map((h: any) => (
-                    <div key={h.id} className="flex gap-3 text-sm">
-                      <div className="w-1.5 rounded-full bg-primary/30 shrink-0" />
-                      <div className="flex-1 pb-3">
-                        <p className="font-medium text-xs">{h.action}</p>
-                        {h.details && <p className="text-xs text-muted-foreground mt-0.5">{h.details}</p>}
-                        <p className="text-[11px] text-muted-foreground mt-1">
-                          {new Date(h.created_at).toLocaleString('pt-BR')}
-                        </p>
-                      </div>
+                <TabsContent value="historico" className="p-4 space-y-0 mt-0">
+                  {history.data && history.data.length > 0 ? (
+                    <div className="relative">
+                      {/* Timeline vertical line */}
+                      <div className="absolute left-[15px] top-4 bottom-4 w-0.5 bg-border" />
+                      
+                      {history.data.map((h: any, idx: number) => {
+                        const profile = h.profiles;
+                        const userName = profile?.display_name || profile?.name || 'Sistema';
+                        const avatarUrl = profile?.avatar_url;
+                        const initials = userName.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
+                        
+                        // Calculate duration to next entry (previous chronologically)
+                        const nextEntry = history.data![idx + 1];
+                        let duration = '';
+                        if (nextEntry) {
+                          const diff = Math.floor((new Date(h.created_at).getTime() - new Date(nextEntry.created_at).getTime()) / 1000);
+                          if (diff < 60) duration = `${diff}s`;
+                          else if (diff < 3600) duration = `${Math.floor(diff / 60)}min`;
+                          else if (diff < 86400) {
+                            const hours = Math.floor(diff / 3600);
+                            const mins = Math.floor((diff % 3600) / 60);
+                            duration = mins > 0 ? `${hours}h ${mins}min` : `${hours}h`;
+                          } else {
+                            const days = Math.floor(diff / 86400);
+                            const hours = Math.floor((diff % 86400) / 3600);
+                            duration = hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+                          }
+                        }
+
+                        return (
+                          <div key={h.id} className="relative flex gap-3 pb-6 last:pb-0">
+                            {/* Avatar node */}
+                            <div className="relative z-10 shrink-0">
+                              <Avatar className="w-[30px] h-[30px] text-[10px] ring-2 ring-background">
+                                {avatarUrl ? <AvatarImage src={avatarUrl} alt={userName} /> : null}
+                                <AvatarFallback className="bg-primary text-primary-foreground font-bold text-[10px]">
+                                  {initials}
+                                </AvatarFallback>
+                              </Avatar>
+                            </div>
+
+                            {/* Content */}
+                            <div className="flex-1 min-w-0 pt-0.5">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-semibold">{userName}</span>
+                                {duration && (
+                                  <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                                    <Clock size={9} /> {duration}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-foreground/80 mt-0.5">{h.action}</p>
+                              {h.details && (
+                                <p className="text-[11px] text-muted-foreground mt-0.5 break-all line-clamp-2">{h.details}</p>
+                              )}
+                              <p className="text-[10px] text-muted-foreground mt-1">
+                                {new Date(h.created_at).toLocaleString('pt-BR')}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
-                  {(!history.data || history.data.length === 0) && (
+                  ) : (
                     <p className="text-sm text-muted-foreground text-center py-8">Nenhum registro ainda.</p>
                   )}
                 </TabsContent>

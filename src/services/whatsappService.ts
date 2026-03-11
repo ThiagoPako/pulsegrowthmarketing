@@ -171,11 +171,34 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<{ 
       closeTicket: config.closeTicket,
       clientId: params.clientId,
       triggerType: params.triggerType || 'manual',
+      mediaUrl: params.mediaUrl,
+      mediaFileName: params.mediaFileName,
     },
   });
 
   if (error) return { success: false, error: error.message };
   return { success: data?.success || false, error: data?.error };
+}
+
+/**
+ * Send a WhatsApp message with a media file (image, PDF, etc.)
+ */
+export async function sendWhatsAppMediaMessage(params: {
+  number: string;
+  message: string;
+  mediaUrl: string;
+  mediaFileName?: string;
+  clientId?: string;
+  triggerType?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  return sendWhatsAppMessage({
+    number: params.number,
+    message: params.message,
+    mediaUrl: params.mediaUrl,
+    mediaFileName: params.mediaFileName,
+    clientId: params.clientId,
+    triggerType: (params.triggerType as any) || 'manual',
+  });
 }
 
 export async function getWhatsAppMessages(filters?: {

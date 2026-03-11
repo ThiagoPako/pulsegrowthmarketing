@@ -138,6 +138,45 @@ export function useOnboarding() {
           status: 'pendente',
         } as any);
         if (error) throw error;
+
+        // When moving to identidade_visual, auto-create design task with client data
+        if (nextStage === 'identidade_visual') {
+          const { data: clientFull } = await supabase
+            .from('clients')
+            .select('company_name, responsible_person, niche, briefing_data, logo_url')
+            .eq('id', clientId)
+            .single();
+
+          const bd2 = clientFull?.briefing_data as Record<string, any> | null;
+          const description = [
+            `Cliente: ${clientFull?.company_name || ''}`,
+            clientFull?.responsible_person ? `Responsável: ${clientFull.responsible_person}` : '',
+            clientFull?.niche ? `Nicho: ${clientFull.niche}` : '',
+            bd2?.brand_voice ? `Tom de voz: ${bd2.brand_voice}` : '',
+            bd2?.social_links ? `Redes: ${bd2.social_links}` : '',
+            bd2?.competitors ? `Concorrentes: ${bd2.competitors}` : '',
+            bd2?.website ? `Site: ${bd2.website}` : '',
+          ].filter(Boolean).join('\n');
+
+          // Check if design task already exists
+          const { data: existingDesign } = await supabase
+            .from('design_tasks')
+            .select('id')
+            .eq('client_id', clientId)
+            .ilike('title', '%Identidade Visual%')
+            .limit(1);
+
+          if (!existingDesign?.length) {
+            await supabase.from('design_tasks').insert({
+              client_id: clientId,
+              title: `Identidade Visual - ${clientFull?.company_name || 'Cliente'}`,
+              description,
+              format_type: 'feed',
+              priority: 'alta',
+              kanban_column: 'nova_tarefa',
+            } as any);
+          }
+        }
       }
     },
     onSuccess: () => {

@@ -662,7 +662,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                   </div>
                 )}
 
-                {/* Adjustment form */}
+                </>)}
                 {showAdjustmentForm && (
                   <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
                     <Label className="text-xs font-semibold text-destructive">Descreva os ajustes</Label>

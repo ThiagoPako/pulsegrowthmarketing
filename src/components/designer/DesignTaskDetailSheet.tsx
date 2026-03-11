@@ -152,21 +152,32 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
   const handleSendToClient = async () => {
     try {
-      const { data: whatsConfig } = await supabase.from('whatsapp_config').select('*').limit(1).single();
-      if (whatsConfig?.integration_active && whatsConfig?.api_token && task.clients?.whatsapp) {
-        const clientName = task.clients?.responsible_person || task.clients?.company_name;
-        const msg = `Olá, ${clientName}! 🎨\n\nSegue a arte criada para sua empresa. Pode nos confirmar se está aprovado?\n\n${attachmentUrl || task.attachment_url || ''}`;
-        await fetch('https://api.atendeclique.com.br/api/messages/send', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${whatsConfig.api_token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            number: task.clients.whatsapp.replace(/\D/g, ''),
-            body: msg,
-            userId: whatsConfig.default_user_id || '',
-            queueId: whatsConfig.default_queue_id || '',
-            sendSignature: whatsConfig.send_signature || false,
-            closeTicket: whatsConfig.close_ticket || false,
-          }),
+      const fileUrl = attachmentUrl || task.attachment_url;
+      const clientName = task.clients?.responsible_person || task.clients?.company_name;
+      const msg = `Olá, ${clientName}! 🎨\n\nSegue a arte criada para sua empresa. Pode nos confirmar se está aprovado?`;
+
+      if (fileUrl && task.clients?.whatsapp) {
+        // Send as media attachment (image) via edge function
+        const fileName = fileUrl.split('/').pop() || 'arte.png';
+        const result = await sendWhatsAppMediaMessage({
+          number: task.clients.whatsapp,
+          message: msg,
+          mediaUrl: fileUrl,
+          mediaFileName: fileName,
+          clientId: task.client_id,
+          triggerType: 'auto_design_approved',
+        });
+        if (!result.success) {
+          console.error('WhatsApp media send error:', result.error);
+          toast.error('Erro ao enviar arte: ' + (result.error || 'erro desconhecido'));
+        }
+      } else if (task.clients?.whatsapp) {
+        // Fallback: text-only
+        await sendWhatsAppMessage({
+          number: task.clients.whatsapp,
+          message: msg,
+          clientId: task.client_id,
+          triggerType: 'auto_design_approved',
         });
       }
     } catch (err) { console.error('WhatsApp send error:', err); }

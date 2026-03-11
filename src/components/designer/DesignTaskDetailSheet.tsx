@@ -381,7 +381,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           {/* CENTER COLUMN (~40%): Etapa atual + Arquivos + Colaboração */}
           <div className="flex-[4] min-w-0 overflow-hidden flex flex-col border-r border-border">
             <ScrollArea className="flex-1">
-              <div className="p-6 space-y-5">
+              <div className="px-6 py-5 space-y-5">
                 {/* Etapa Atual header */}
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold">Etapa atual</h3>
@@ -448,9 +448,9 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                     {(task.kanban_column === 'executando' || task.kanban_column === 'ajustes') && isDesigner ? (
                       <div className="space-y-2">
                         {mockupUrl && (
-                          <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 min-w-0">
+                          <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 overflow-hidden">
                             <CheckCircle size={14} className="text-emerald-600 shrink-0" />
-                            <a href={mockupUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline truncate block overflow-hidden">{mockupUrl}</a>
+                            <a href={mockupUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline break-all line-clamp-2">{mockupUrl}</a>
                           </div>
                         )}
                         <Input value={mockupUrl} onChange={e => setMockupUrl(e.target.value)} placeholder="Link do mockup..." className="text-xs h-9" />

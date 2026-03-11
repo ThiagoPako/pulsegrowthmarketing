@@ -12,7 +12,7 @@ import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import ClientLogo from '@/components/ClientLogo';
-import { Play, Pause, Square, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History, Plus, X, Image, Upload } from 'lucide-react';
+import { Play, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History, Plus, X, Image, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Props {
@@ -39,7 +39,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [editableFileUrl, setEditableFileUrl] = useState(task.editable_file_url || '');
   const [mockupUrl, setMockupUrl] = useState((task as any).mockup_url || '');
   const [adjustmentNotes, setAdjustmentNotes] = useState('');
-  const [timerDisplay, setTimerDisplay] = useState('00:00:00');
+  const [elapsedDisplay, setElapsedDisplay] = useState('');
   const [checklist, setChecklist] = useState<ChecklistItem[]>((task as any).checklist || []);
   const [newChecklistItem, setNewChecklistItem] = useState('');
   const [uploadingMockup, setUploadingMockup] = useState(false);
@@ -48,26 +48,20 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
   const history = historyQuery(task.id);
 
-  // Timer display
+  // Auto elapsed time from started_at
   useEffect(() => {
-    if (!task.timer_running) {
-      const h = Math.floor(task.time_spent_seconds / 3600);
-      const m = Math.floor((task.time_spent_seconds % 3600) / 60);
-      const s = task.time_spent_seconds % 60;
-      setTimerDisplay(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`);
-      return;
-    }
-    const interval = setInterval(() => {
-      const elapsed = task.timer_started_at
-        ? Math.floor((Date.now() - new Date(task.timer_started_at).getTime()) / 1000) + task.time_spent_seconds
-        : task.time_spent_seconds;
+    if (!task.started_at) { setElapsedDisplay(''); return; }
+    const update = () => {
+      const elapsed = Math.floor((Date.now() - new Date(task.started_at!).getTime()) / 1000);
       const h = Math.floor(elapsed / 3600);
       const m = Math.floor((elapsed % 3600) / 60);
-      const s = elapsed % 60;
-      setTimerDisplay(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`);
-    }, 1000);
+      if (h > 0) setElapsedDisplay(`${h}h ${m}min`);
+      else setElapsedDisplay(`${m}min`);
+    };
+    update();
+    const interval = setInterval(update, 60000);
     return () => clearInterval(interval);
-  }, [task.timer_running, task.timer_started_at, task.time_spent_seconds]);
+  }, [task.started_at]);
 
   const moveToColumn = async (column: DesignTaskColumn, extraFields?: Partial<DesignTask>) => {
     await updateTask.mutateAsync({ id: task.id, kanban_column: column, ...extraFields } as any);
@@ -77,22 +71,6 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const handleStartTask = async () => {
     await moveToColumn('executando', { started_at: new Date().toISOString(), assigned_to: user?.id } as any);
     toast.success('Tarefa iniciada!');
-  };
-
-  const handleStartTimer = async () => {
-    await updateTask.mutateAsync({ id: task.id, timer_running: true, timer_started_at: new Date().toISOString() } as any);
-  };
-
-  const handlePauseTimer = async () => {
-    const elapsed = task.timer_started_at
-      ? Math.floor((Date.now() - new Date(task.timer_started_at).getTime()) / 1000)
-      : 0;
-    await updateTask.mutateAsync({
-      id: task.id,
-      timer_running: false,
-      time_spent_seconds: task.time_spent_seconds + elapsed,
-      timer_started_at: null,
-    } as any);
   };
 
   const handleSendForReview = async () => {
@@ -186,18 +164,13 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
             </Badge>
           </div>
 
-          {/* Timer */}
-          <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
-            <Clock size={16} className="text-muted-foreground" />
-            <span className="font-mono text-lg font-bold">{timerDisplay}</span>
-            <div className="ml-auto flex gap-1">
-              {!task.timer_running ? (
-                <Button size="sm" variant="outline" onClick={handleStartTimer}><Play size={14} /></Button>
-              ) : (
-                <Button size="sm" variant="outline" onClick={handlePauseTimer}><Pause size={14} /></Button>
-              )}
+          {/* Elapsed time (auto from started_at) */}
+          {task.started_at && elapsedDisplay && (
+            <div className="flex items-center gap-2 p-2.5 bg-muted/50 rounded-lg text-xs text-muted-foreground">
+              <Clock size={14} />
+              <span>Em execução há <strong className="text-foreground">{elapsedDisplay}</strong></span>
             </div>
-          </div>
+          )}
 
           {/* Description */}
           {task.description && (

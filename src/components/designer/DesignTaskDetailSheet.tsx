@@ -541,6 +541,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                   </motion.div>
                 )}
 
+                {task.kanban_column !== 'nova_tarefa' && (<>
                 {/* Arquivo section */}
                 <div className="space-y-3">
                   <h4 className="text-sm font-semibold">Arquivo</h4>

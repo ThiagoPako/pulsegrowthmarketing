@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { sendWhatsAppMessage, sendWhatsAppMediaMessage } from '@/services/whatsappService';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';

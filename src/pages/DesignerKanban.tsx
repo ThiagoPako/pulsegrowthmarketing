@@ -101,6 +101,15 @@ export default function DesignerKanban() {
     if (targetColumn === 'aprovado') {
       extraFields.completed_at = new Date().toISOString();
       extraFields.client_approved_at = new Date().toISOString();
+
+      // Auto-fill client drive_identidade_visual when logomarca is approved
+      if (task.format_type === 'logomarca' && task.client_id) {
+        const fileUrl = task.attachment_url || (task as any).mockup_url;
+        if (fileUrl) {
+          await supabase.from('clients').update({ drive_identidade_visual: fileUrl }).eq('id', task.client_id);
+          toast.info('Drive de Identidade Visual do cliente atualizado!');
+        }
+      }
     }
 
     // Moving TO enviar_cliente: mark as sent

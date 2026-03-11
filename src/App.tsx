@@ -126,6 +126,8 @@ function AppRoutes() {
       <Route path="/financeiro/movimentacoes" element={<ProtectedRoute><FinancialMovements /></ProtectedRoute>} />
       <Route path="/financeiro/parceiros" element={<ProtectedRoute><FinancialPartners /></ProtectedRoute>} />
       <Route path="/onboarding/:clientId" element={<ClientOnboarding />} />
+      <Route path="/portal/:clientId" element={<ClientPortal />} />
+      <Route path="/conteudos-portal" element={<ProtectedRoute><ContentManager /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

@@ -73,8 +73,10 @@ const STEP_LABELS = [
 ];
 
 export default function Clients() {
-  const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient } = useApp();
+  const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient, currentUser } = useApp();
   const { createOnboardingForClient } = useOnboarding();
+  const isDesignerOnly = currentUser?.role === 'designer' || currentUser?.role === 'fotografo';
+  const [briefingClient, setBriefingClient] = useState<Client | null>(null);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
   const [form, setForm] = useState<Partial<Client> & { clientType?: string }>(emptyClient());

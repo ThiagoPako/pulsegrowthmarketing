@@ -65,7 +65,7 @@ export function useDesignTasks() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('design_task_history')
-        .select('*')
+        .select('*, profiles:user_id(name, display_name, avatar_url)')
         .eq('task_id', taskId)
         .order('created_at', { ascending: false });
       if (error) throw error;

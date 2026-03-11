@@ -42,6 +42,7 @@ interface ClientGroup {
   clientType: string;
   tasks: OnboardingTask[];
   currentStage: OnboardingStage;
+  activeStages: OnboardingStage[]; // parallel stages currently active
   allStages: OnboardingStage[];
   completedStages: OnboardingStage[];
 }
@@ -82,6 +83,7 @@ export default function OnboardingManagement() {
           clientType: c?.client_type || 'novo',
           tasks: [],
           currentStage: 'cliente_novo',
+          activeStages: [],
           allStages,
           completedStages: [],
         });
@@ -94,8 +96,10 @@ export default function OnboardingManagement() {
         .filter(t => t.status === 'concluido')
         .map(t => t.stage as OnboardingStage);
 
-      const currentTask = group.tasks.find(t => t.status !== 'concluido');
-      group.currentStage = (currentTask?.stage as OnboardingStage) || 
+      // Find all active (non-completed) stages
+      const activeTasks = group.tasks.filter(t => t.status !== 'concluido');
+      group.activeStages = activeTasks.map(t => t.stage as OnboardingStage);
+      group.currentStage = (activeTasks[0]?.stage as OnboardingStage) || 
         (group.completedStages.length === group.tasks.length && group.tasks.length > 0 ? 'reformulacao_perfil' : 'cliente_novo');
     });
 
@@ -109,8 +113,19 @@ export default function OnboardingManagement() {
       const allDone = g.tasks.length > 0 && g.tasks.every(t => t.status === 'concluido');
       if (allDone) {
         result['reformulacao_perfil']?.push(g);
-      } else if (result[g.currentStage]) {
-        result[g.currentStage].push(g);
+      } else {
+        // A client can appear in MULTIPLE columns if they have parallel stages
+        const placed = new Set<string>();
+        g.activeStages.forEach(stage => {
+          if (result[stage] && !placed.has(stage)) {
+            result[stage].push(g);
+            placed.add(stage);
+          }
+        });
+        // If no active stages placed yet (shouldn't happen), fall back
+        if (placed.size === 0 && result[g.currentStage]) {
+          result[g.currentStage].push(g);
+        }
       }
     });
     return result;
@@ -186,7 +201,7 @@ function OnboardingCard({ group, onClick }: { group: ClientGroup; onClick: () =>
       <div className="flex items-center gap-0.5">
         {group.allStages.map((stageKey, i) => {
           const isDone = group.completedStages.includes(stageKey);
-          const isCurrent = stageKey === group.currentStage && !isDone;
+          const isCurrent = group.activeStages.includes(stageKey) && !isDone;
           const stage = ONBOARDING_STAGES.find(s => s.key === stageKey)!;
           return (
             <div key={stageKey} className="flex items-center gap-0.5 flex-1">
@@ -229,20 +244,28 @@ function OnboardingDetailSheet({ group, open, onOpenChange }: { group: ClientGro
   const [uploading, setUploading] = useState(false);
   const [driveLink, setDriveLink] = useState('');
 
-  const currentTask = group.tasks.find(t => t.status !== 'concluido');
+  const activeTasks = group.tasks.filter(t => t.status !== 'concluido');
+  const currentTask = activeTasks[0]; // primary task for non-parallel views
   const completedTasks = group.tasks.filter(t => t.status === 'concluido').sort(
     (a, b) => new Date(a.completed_at || a.created_at).getTime() - new Date(b.completed_at || b.created_at).getTime()
   );
   const allDone = group.tasks.length > 0 && group.tasks.every(t => t.status === 'concluido');
+  const hasParallelStages = activeTasks.length > 1;
 
-  const handleAdvance = async () => {
-    if (!currentTask) return;
+  const handleAdvance = async (stage?: OnboardingStage) => {
+    const task = stage ? activeTasks.find(t => t.stage === stage) : currentTask;
+    if (!task) return;
     try {
       await advanceToNextStage.mutateAsync({
         clientId: group.clientId,
-        currentStage: currentTask.stage as OnboardingStage,
+        currentStage: task.stage as OnboardingStage,
       });
-      toast.success('Avançado para próxima etapa!');
+      const otherActive = activeTasks.filter(t => t.id !== task.id && t.status !== 'concluido');
+      if (otherActive.length === 0) {
+        toast.success('Etapas concluídas! Avançando...');
+      } else {
+        toast.success('Etapa concluída! Aguardando a outra etapa paralela.');
+      }
       onOpenChange(false);
     } catch (e) {
       console.error(e);
@@ -308,9 +331,10 @@ function OnboardingDetailSheet({ group, open, onOpenChange }: { group: ClientGro
     }
   };
 
-  const handleStartStage = async () => {
-    if (!currentTask) return;
-    await updateOnboardingTask.mutateAsync({ id: currentTask.id, status: 'em_andamento' } as any);
+  const handleStartStage = async (taskId?: string) => {
+    const task = taskId ? activeTasks.find(t => t.id === taskId) : currentTask;
+    if (!task) return;
+    await updateOnboardingTask.mutateAsync({ id: task.id, status: 'em_andamento' } as any);
     toast.success('Etapa iniciada!');
   };
 
@@ -356,7 +380,7 @@ function OnboardingDetailSheet({ group, open, onOpenChange }: { group: ClientGro
           <div className="flex items-center gap-1 mt-4">
             {group.allStages.map((stageKey, i) => {
               const isDone = group.completedStages.includes(stageKey);
-              const isCurrent = stageKey === group.currentStage && !isDone;
+              const isCurrent = group.activeStages.includes(stageKey) && !isDone;
               const stage = ONBOARDING_STAGES.find(s => s.key === stageKey)!;
               return (
                 <div key={stageKey} className="flex items-center gap-1 flex-1">
@@ -467,55 +491,72 @@ function OnboardingDetailSheet({ group, open, onOpenChange }: { group: ClientGro
                 <h3 className="text-sm font-bold text-emerald-700 dark:text-emerald-300">Cliente Integrado!</h3>
                 <p className="text-xs text-muted-foreground">Todas as etapas de onboarding foram concluídas.</p>
               </div>
-            ) : currentTask ? (
+            ) : activeTasks.length > 0 ? (
               <div className="space-y-4">
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1.5">
-                    <Sparkles size={12} /> Etapa Atual
-                  </h3>
-                  <div className="flex items-center gap-2">
-                    <Badge className="bg-primary/15 text-primary text-xs">
-                      {ONBOARDING_STAGES.find(s => s.key === currentTask.stage)?.icon}{' '}
-                      {ONBOARDING_STAGES.find(s => s.key === currentTask.stage)?.label}
-                    </Badge>
-                    <Badge className={STATUS_COLORS[currentTask.status]}>
-                      {currentTask.status === 'pendente' ? 'Pendente' : currentTask.status === 'em_andamento' ? 'Em Andamento' : 'Concluído'}
-                    </Badge>
+                {hasParallelStages && (
+                  <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                    <p className="text-[10px] text-blue-700 dark:text-blue-300 font-semibold">
+                      ⚡ Etapas simultâneas — Identidade Visual e Fotografia estão sendo executadas em paralelo.
+                    </p>
                   </div>
-                </div>
+                )}
 
-                <Separator />
+                {activeTasks.map(task => {
+                  const stage = ONBOARDING_STAGES.find(s => s.key === task.stage);
+                  return (
+                    <div key={task.id} className="space-y-3">
+                      <div>
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1.5">
+                          <Sparkles size={12} /> {hasParallelStages ? stage?.label : 'Etapa Atual'}
+                        </h3>
+                        <div className="flex items-center gap-2">
+                          <Badge className="bg-primary/15 text-primary text-xs">
+                            {stage?.icon} {stage?.label}
+                          </Badge>
+                          <Badge className={STATUS_COLORS[task.status]}>
+                            {task.status === 'pendente' ? 'Pendente' : task.status === 'em_andamento' ? 'Em Andamento' : 'Concluído'}
+                          </Badge>
+                        </div>
+                      </div>
 
-                {/* Stage-specific actions */}
-                {currentTask.stage === 'cliente_novo' && (
-                  <ClienteNovoActions group={group} task={currentTask} onAdvance={handleAdvance} onStart={handleStartStage} />
-                )}
-                {currentTask.stage === 'contrato' && (
-                  <ContratoActions
-                    task={currentTask}
-                    fileInputRef={fileInputRef}
-                    uploading={uploading}
-                    onUpload={handleContractUpload}
-                    onAdvance={handleAdvance}
-                    onStart={handleStartStage}
-                  />
-                )}
-                {currentTask.stage === 'identidade_visual' && (
-                  <IdentidadeVisualActions task={currentTask} onAdvance={handleAdvance} onStart={handleStartStage} />
-                )}
-                {currentTask.stage === 'fotografia' && (
-                  <FotografiaActions
-                    task={currentTask}
-                    driveLink={driveLink}
-                    setDriveLink={setDriveLink}
-                    onSaveDrive={handleSaveDriveLink}
-                    onAdvance={handleAdvance}
-                    onStart={handleStartStage}
-                  />
-                )}
-                {currentTask.stage === 'reformulacao_perfil' && (
-                  <ReformulacaoActions task={currentTask} onFinish={handleFinishReformulacao} onStart={handleStartStage} />
-                )}
+                      <Separator />
+
+                      {task.stage === 'cliente_novo' && (
+                        <ClienteNovoActions group={group} task={task} onAdvance={() => handleAdvance()} onStart={() => handleStartStage(task.id)} />
+                      )}
+                      {task.stage === 'contrato' && (
+                        <ContratoActions
+                          task={task}
+                          fileInputRef={fileInputRef}
+                          uploading={uploading}
+                          onUpload={handleContractUpload}
+                          onAdvance={() => handleAdvance()}
+                          onStart={() => handleStartStage(task.id)}
+                        />
+                      )}
+                      {task.stage === 'identidade_visual' && (
+                        <IdentidadeVisualActions task={task} onAdvance={() => handleAdvance('identidade_visual')} onStart={() => handleStartStage(task.id)} />
+                      )}
+                      {task.stage === 'fotografia' && (
+                        <FotografiaActions
+                          task={task}
+                          driveLink={driveLink}
+                          setDriveLink={setDriveLink}
+                          onSaveDrive={handleSaveDriveLink}
+                          onAdvance={() => handleAdvance('fotografia')}
+                          onStart={() => handleStartStage(task.id)}
+                        />
+                      )}
+                      {task.stage === 'reformulacao_perfil' && (
+                        <ReformulacaoActions task={task} onFinish={handleFinishReformulacao} onStart={() => handleStartStage(task.id)} />
+                      )}
+
+                      {hasParallelStages && task !== activeTasks[activeTasks.length - 1] && (
+                        <Separator className="my-2" />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : null}
           </div>

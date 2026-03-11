@@ -55,6 +55,37 @@ export interface OnboardingTask {
   };
 }
 
+async function createDesignTaskForIdentity(clientId: string, client: any) {
+  const bd = client?.briefing_data as Record<string, any> | null;
+  const description = [
+    `Cliente: ${client?.company_name || ''}`,
+    client?.responsible_person ? `Responsável: ${client.responsible_person}` : '',
+    client?.niche ? `Nicho: ${client.niche}` : '',
+    bd?.brand_voice ? `Tom de voz: ${bd.brand_voice}` : '',
+    bd?.social_links ? `Redes: ${bd.social_links}` : '',
+    bd?.competitors ? `Concorrentes: ${bd.competitors}` : '',
+    bd?.website ? `Site: ${bd.website}` : '',
+  ].filter(Boolean).join('\n');
+
+  const { data: existingDesign } = await supabase
+    .from('design_tasks')
+    .select('id')
+    .eq('client_id', clientId)
+    .ilike('title', '%Identidade Visual%')
+    .limit(1);
+
+  if (!existingDesign?.length) {
+    await supabase.from('design_tasks').insert({
+      client_id: clientId,
+      title: `Identidade Visual - ${client?.company_name || 'Cliente'}`,
+      description,
+      format_type: 'feed',
+      priority: 'alta',
+      kanban_column: 'nova_tarefa',
+    } as any);
+  }
+}
+
 export function useOnboarding() {
   const queryClient = useQueryClient();
 
@@ -103,12 +134,10 @@ export function useOnboarding() {
           .eq('id', currentTasks[0].id);
       }
 
-      // Determine next stage
-      const stageFlow = getStageFlow(clientId);
       // We need client data to determine flow
       const { data: client } = await supabase
         .from('clients')
-        .select('photo_preference, has_photo_shoot, briefing_data')
+        .select('company_name, responsible_person, niche, briefing_data, logo_url, photo_preference, has_photo_shoot')
         .eq('id', clientId)
         .single();
 
@@ -116,68 +145,87 @@ export function useOnboarding() {
       const hasIdentity = bd?.has_identity?.toLowerCase() === 'sim';
       const needsPhotos = client?.photo_preference === 'fotos_reais';
 
-      const fullFlow: OnboardingStage[] = ['cliente_novo', 'contrato'];
-      if (!hasIdentity) fullFlow.push('identidade_visual');
-      if (needsPhotos) fullFlow.push('fotografia');
-      fullFlow.push('reformulacao_perfil');
+      const titleMap: Record<string, string> = {
+        contrato: 'Contrato - Assinatura',
+        identidade_visual: 'Criação de Identidade Visual',
+        fotografia: 'Ensaio Fotográfico',
+        reformulacao_perfil: 'Reformulação de Perfil',
+      };
 
-      const currentIdx = fullFlow.indexOf(currentStage);
-      const nextStage = fullFlow[currentIdx + 1];
+      // PARALLEL LOGIC: After contrato, create both identidade_visual and fotografia simultaneously
+      if (currentStage === 'contrato') {
+        const parallelStages: OnboardingStage[] = [];
+        if (!hasIdentity) parallelStages.push('identidade_visual');
+        if (needsPhotos) parallelStages.push('fotografia');
 
-      if (nextStage) {
-        const titleMap: Record<string, string> = {
-          contrato: 'Contrato - Assinatura',
-          identidade_visual: 'Criação de Identidade Visual',
-          fotografia: 'Ensaio Fotográfico',
-          reformulacao_perfil: 'Reformulação de Perfil',
-        };
+        if (parallelStages.length > 0) {
+          // Create all parallel tasks at once
+          const tasksToInsert = parallelStages.map(stage => ({
+            client_id: clientId,
+            stage,
+            title: titleMap[stage] || stage,
+            status: 'pendente',
+          }));
+          const { error } = await supabase.from('onboarding_tasks').insert(tasksToInsert as any);
+          if (error) throw error;
+
+          // Auto-create design task for identidade_visual
+          if (parallelStages.includes('identidade_visual')) {
+            await createDesignTaskForIdentity(clientId, client);
+          }
+        } else {
+          // No parallel stages needed, go straight to reformulacao_perfil
+          const { error } = await supabase.from('onboarding_tasks').insert({
+            client_id: clientId,
+            stage: 'reformulacao_perfil',
+            title: titleMap['reformulacao_perfil'],
+            status: 'pendente',
+          } as any);
+          if (error) throw error;
+        }
+      } else if (currentStage === 'identidade_visual' || currentStage === 'fotografia') {
+        // Check if the OTHER parallel stage is also done (or doesn't exist)
+        const otherStage = currentStage === 'identidade_visual' ? 'fotografia' : 'identidade_visual';
+        const { data: otherTasks } = await supabase
+          .from('onboarding_tasks')
+          .select('id, status')
+          .eq('client_id', clientId)
+          .eq('stage', otherStage);
+
+        const otherExists = otherTasks && otherTasks.length > 0;
+        const otherDone = !otherExists || otherTasks.every(t => t.status === 'concluido');
+
+        if (otherDone) {
+          // Both parallel stages done, advance to reformulacao_perfil
+          const { data: existing } = await supabase
+            .from('onboarding_tasks')
+            .select('id')
+            .eq('client_id', clientId)
+            .eq('stage', 'reformulacao_perfil')
+            .limit(1);
+
+          if (!existing?.length) {
+            const { error } = await supabase.from('onboarding_tasks').insert({
+              client_id: clientId,
+              stage: 'reformulacao_perfil',
+              title: titleMap['reformulacao_perfil'],
+              status: 'pendente',
+            } as any);
+            if (error) throw error;
+          }
+        }
+        // If other is not done, just wait — no next stage yet
+      } else if (currentStage === 'cliente_novo') {
+        // Advance to contrato
         const { error } = await supabase.from('onboarding_tasks').insert({
           client_id: clientId,
-          stage: nextStage,
-          title: titleMap[nextStage] || nextStage,
+          stage: 'contrato',
+          title: titleMap['contrato'],
           status: 'pendente',
         } as any);
         if (error) throw error;
-
-        // When moving to identidade_visual, auto-create design task with client data
-        if (nextStage === 'identidade_visual') {
-          const { data: clientFull } = await supabase
-            .from('clients')
-            .select('company_name, responsible_person, niche, briefing_data, logo_url')
-            .eq('id', clientId)
-            .single();
-
-          const bd2 = clientFull?.briefing_data as Record<string, any> | null;
-          const description = [
-            `Cliente: ${clientFull?.company_name || ''}`,
-            clientFull?.responsible_person ? `Responsável: ${clientFull.responsible_person}` : '',
-            clientFull?.niche ? `Nicho: ${clientFull.niche}` : '',
-            bd2?.brand_voice ? `Tom de voz: ${bd2.brand_voice}` : '',
-            bd2?.social_links ? `Redes: ${bd2.social_links}` : '',
-            bd2?.competitors ? `Concorrentes: ${bd2.competitors}` : '',
-            bd2?.website ? `Site: ${bd2.website}` : '',
-          ].filter(Boolean).join('\n');
-
-          // Check if design task already exists
-          const { data: existingDesign } = await supabase
-            .from('design_tasks')
-            .select('id')
-            .eq('client_id', clientId)
-            .ilike('title', '%Identidade Visual%')
-            .limit(1);
-
-          if (!existingDesign?.length) {
-            await supabase.from('design_tasks').insert({
-              client_id: clientId,
-              title: `Identidade Visual - ${clientFull?.company_name || 'Cliente'}`,
-              description,
-              format_type: 'feed',
-              priority: 'alta',
-              kanban_column: 'nova_tarefa',
-            } as any);
-          }
-        }
       }
+      // reformulacao_perfil completion is handled by handleFinishReformulacao
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['onboarding-tasks'] });

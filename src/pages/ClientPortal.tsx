@@ -1,11 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Play, Pause, Maximize, Check, MessageSquare, X, ChevronLeft, ChevronRight, BarChart3, Send, Clock, Film, Image, Palette, Video, Award } from 'lucide-react';
+import {
+  Play, Pause, Maximize, Check, MessageSquare, X, ChevronLeft, ChevronRight,
+  BarChart3, Send, Clock, Film, Image, Palette, Video, Award, Bell, Volume2,
+  VolumeX, Eye, TrendingUp, Sparkles, ChevronDown, Loader2
+} from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
   reel: 'Reel', criativo: 'Criativo', institucional: 'Institucional', anuncio: 'Anúncio', arte: 'Arte',
@@ -15,6 +20,11 @@ const CONTENT_TYPE_ICONS: Record<string, any> = {
 };
 const STATUS_LABELS: Record<string, string> = {
   pendente: 'Pendente', aprovado: 'Aprovado', ajuste_solicitado: 'Ajuste Solicitado',
+};
+const STATUS_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
+  pendente: { bg: 'bg-amber-500/15', text: 'text-amber-400', dot: 'bg-amber-400' },
+  aprovado: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', dot: 'bg-emerald-400' },
+  ajuste_solicitado: { bg: 'bg-orange-500/15', text: 'text-orange-400', dot: 'bg-orange-400' },
 };
 
 interface PortalContent {
@@ -33,6 +43,8 @@ interface ClientData {
   monthly_recordings: number; plan_id: string | null;
 }
 
+type TabView = 'library' | 'metrics';
+
 export default function ClientPortal() {
   const { clientId } = useParams<{ clientId: string }>();
   const [client, setClient] = useState<ClientData | null>(null);
@@ -40,12 +52,16 @@ export default function ClientPortal() {
   const [selectedContent, setSelectedContent] = useState<PortalContent | null>(null);
   const [comments, setComments] = useState<PortalComment[]>([]);
   const [newComment, setNewComment] = useState('');
-  const [showMetrics, setShowMetrics] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabView>('library');
   const [loading, setLoading] = useState(true);
   const [adjustmentNote, setAdjustmentNote] = useState('');
   const [showAdjustment, setShowAdjustment] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const commentsEndRef = useRef<HTMLDivElement>(null);
 
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
@@ -77,6 +93,8 @@ export default function ClientPortal() {
     setSelectedContent(content);
     setShowAdjustment(false);
     setAdjustmentNote('');
+    setIsPlaying(false);
+    setVideoProgress(0);
     loadComments(content.id);
   };
 
@@ -107,12 +125,20 @@ export default function ClientPortal() {
     await supabase.from('client_portal_comments').insert({ content_id: selectedContent.id, author_name: client?.company_name || 'Cliente', author_type: 'client', message: newComment });
     setNewComment('');
     loadComments(selectedContent.id);
+    setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 200);
   };
 
   const togglePlay = () => {
     if (!videoRef.current) return;
-    if (isPlaying) { videoRef.current.pause(); } else { videoRef.current.play(); }
+    if (isPlaying) videoRef.current.pause();
+    else videoRef.current.play();
     setIsPlaying(!isPlaying);
+  };
+
+  const toggleMute = () => {
+    if (!videoRef.current) return;
+    videoRef.current.muted = !isMuted;
+    setIsMuted(!isMuted);
   };
 
   const toggleFullscreen = () => {
@@ -121,346 +147,737 @@ export default function ClientPortal() {
     else videoRef.current.requestFullscreen();
   };
 
+  const handleTimeUpdate = () => {
+    if (!videoRef.current) return;
+    setVideoProgress(videoRef.current.currentTime);
+    setVideoDuration(videoRef.current.duration || 0);
+  };
+
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!videoRef.current) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct = (e.clientX - rect.left) / rect.width;
+    videoRef.current.currentTime = pct * videoRef.current.duration;
+  };
+
   const formatDuration = (seconds: number) => {
     const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
+    const s = Math.floor(seconds % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Group contents by season
-  const seasons = contents.reduce((acc, c) => {
-    const key = `${c.season_year}-${c.season_month}`;
-    if (!acc[key]) acc[key] = { month: c.season_month, year: c.season_year, items: [] };
-    acc[key].items.push(c);
-    return acc;
-  }, {} as Record<string, { month: number; year: number; items: PortalContent[] }>);
+  const changeMonth = (dir: number) => {
+    const newMonth = selectedMonth + dir;
+    if (newMonth < 1) { setSelectedMonth(12); setSelectedYear(y => y - 1); }
+    else if (newMonth > 12) { setSelectedMonth(1); setSelectedYear(y => y + 1); }
+    else setSelectedMonth(newMonth);
+  };
 
-  const sortedSeasons = Object.values(seasons).sort((a, b) => b.year - a.year || b.month - a.month);
+  // Group contents by type for current season
+  const seasonContents = useMemo(() => 
+    contents.filter(c => c.season_month === selectedMonth && c.season_year === selectedYear),
+    [contents, selectedMonth, selectedYear]
+  );
 
-  // Metrics for selected month
-  const monthContents = contents.filter(c => c.season_month === selectedMonth && c.season_year === selectedYear);
-  const reelsCount = monthContents.filter(c => c.content_type === 'reel').length;
-  const creativosCount = monthContents.filter(c => c.content_type === 'criativo').length;
-  const artesCount = monthContents.filter(c => c.content_type === 'arte').length;
-  const videosCount = monthContents.filter(c => ['institucional', 'anuncio'].includes(c.content_type)).length;
-  const approvedCount = monthContents.filter(c => c.status === 'aprovado').length;
-  const totalDelivered = monthContents.length;
+  const contentByType = useMemo(() => {
+    const groups: Record<string, PortalContent[]> = {};
+    seasonContents.forEach(c => {
+      if (!groups[c.content_type]) groups[c.content_type] = [];
+      groups[c.content_type].push(c);
+    });
+    return groups;
+  }, [seasonContents]);
 
-  // Contracted (weekly * 4)
+  // Also group all contents by season for browsing
+  const allSeasons = useMemo(() => {
+    const seasons = contents.reduce((acc, c) => {
+      const key = `${c.season_year}-${c.season_month}`;
+      if (!acc[key]) acc[key] = { month: c.season_month, year: c.season_year, items: [] };
+      acc[key].items.push(c);
+      return acc;
+    }, {} as Record<string, { month: number; year: number; items: PortalContent[] }>);
+    return Object.values(seasons).sort((a, b) => b.year - a.year || b.month - a.month);
+  }, [contents]);
+
+  // Available months for selector
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>();
+    contents.forEach(c => months.add(`${c.season_year}-${c.season_month}`));
+    return months;
+  }, [contents]);
+
+  // Metrics
+  const reelsCount = seasonContents.filter(c => c.content_type === 'reel').length;
+  const creativosCount = seasonContents.filter(c => c.content_type === 'criativo').length;
+  const artesCount = seasonContents.filter(c => c.content_type === 'arte').length;
+  const videosCount = seasonContents.filter(c => ['institucional', 'anuncio'].includes(c.content_type)).length;
+  const approvedCount = seasonContents.filter(c => c.status === 'aprovado').length;
+  const pendingCount = seasonContents.filter(c => c.status === 'pendente').length;
+  const adjustmentCount = seasonContents.filter(c => c.status === 'ajuste_solicitado').length;
+  const totalDelivered = seasonContents.length;
+
   const contractedReels = (client?.weekly_reels || 0) * 4;
   const contractedCreatives = (client?.weekly_creatives || 0) * 4;
   const contractedRecordings = client?.monthly_recordings || 4;
+  const totalContracted = contractedReels + contractedCreatives;
+  const deliveryPct = totalContracted > 0 ? Math.round((totalDelivered / totalContracted) * 100) : 0;
 
   const clientColor = client?.color || '217 91% 60%';
+  const seasonLabel = format(new Date(selectedYear, selectedMonth - 1), "MMMM yyyy", { locale: pt });
+
+  // Featured content (first video with thumbnail)
+  const featuredContent = seasonContents.find(c => c.thumbnail_url || c.file_url) || seasonContents[0];
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <div className="animate-pulse text-white/60 text-lg">Carregando...</div>
+      <div className="min-h-screen bg-[#080810] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-white/40" />
       </div>
     );
   }
 
   if (!client) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+      <div className="min-h-screen bg-[#080810] flex items-center justify-center">
         <p className="text-white/60">Cliente não encontrado.</p>
       </div>
     );
   }
 
+  const ROW_LABELS: Record<string, string> = {
+    reel: 'Reels',
+    criativo: 'Criativos & Anúncios',
+    institucional: 'Vídeos Institucionais',
+    anuncio: 'Anúncios',
+    arte: 'Artes & Design',
+  };
+
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-gradient-to-b from-[#0a0a0a] via-[#0a0a0a]/95 to-transparent backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+    <div className="min-h-screen bg-[#080810] text-white selection:bg-white/20 overflow-x-hidden">
+      {/* ── HEADER ── */}
+      <header className="sticky top-0 z-50 bg-[#080810]/80 backdrop-blur-xl border-b border-white/[0.06]">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {client.logo_url ? (
-              <img src={client.logo_url} alt={client.company_name} className="w-10 h-10 rounded-lg object-cover" />
+              <img src={client.logo_url} alt={client.company_name} className="w-9 h-9 rounded-lg object-cover ring-1 ring-white/10" />
             ) : (
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold" style={{ background: `hsl(${clientColor})` }}>
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ background: `hsl(${clientColor})` }}>
                 {client.company_name.charAt(0)}
               </div>
             )}
-            <div>
-              <h1 className="text-lg font-bold">{client.company_name}</h1>
-              <p className="text-xs text-white/50">Área de Conteúdos</p>
+            <div className="hidden sm:block">
+              <h1 className="text-sm font-semibold tracking-tight leading-none">{client.company_name}</h1>
+              <p className="text-[11px] text-white/40 mt-0.5">Content Hub</p>
             </div>
           </div>
-          <button onClick={() => setShowMetrics(!showMetrics)} className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all hover:scale-105" style={{ background: `hsl(${clientColor})` }}>
-            <BarChart3 size={16} />
-            Métricas
-          </button>
+
+          {/* Season selector */}
+          <div className="flex items-center gap-1 bg-white/[0.06] rounded-full px-1 py-1">
+            <button onClick={() => changeMonth(-1)} className="p-1.5 rounded-full hover:bg-white/10 transition-colors">
+              <ChevronLeft size={14} />
+            </button>
+            <span className="text-xs font-medium min-w-[120px] text-center capitalize">{seasonLabel}</span>
+            <button onClick={() => changeMonth(1)} className="p-1.5 rounded-full hover:bg-white/10 transition-colors">
+              <ChevronRight size={14} />
+            </button>
+          </div>
+
+          {/* Nav tabs + notifications */}
+          <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-1 bg-white/[0.06] rounded-full p-1">
+              <button
+                onClick={() => setActiveTab('library')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'library' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+              >
+                Biblioteca
+              </button>
+              <button
+                onClick={() => setActiveTab('metrics')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'metrics' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+              >
+                Métricas
+              </button>
+            </div>
+            <button className="p-2 rounded-full hover:bg-white/10 transition-colors relative">
+              <Bell size={16} className="text-white/60" />
+              {pendingCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center" style={{ background: `hsl(${clientColor})` }}>
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: `hsl(${clientColor})` }}>
+              {client.company_name.charAt(0)}
+            </div>
+          </div>
         </div>
       </header>
 
-      {/* Metrics Dashboard */}
-      {showMetrics && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-8">
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold flex items-center gap-2"><Award size={22} /> Relatório do Mês</h2>
-              <div className="flex items-center gap-2">
-                <button onClick={() => { if (selectedMonth === 1) { setSelectedMonth(12); setSelectedYear(y => y - 1); } else setSelectedMonth(m => m - 1); }} className="p-1 rounded hover:bg-white/10"><ChevronLeft size={18} /></button>
-                <span className="text-sm font-medium min-w-[140px] text-center">
-                  {format(new Date(selectedYear, selectedMonth - 1), 'MMMM yyyy', { locale: pt })}
-                </span>
-                <button onClick={() => { if (selectedMonth === 12) { setSelectedMonth(1); setSelectedYear(y => y + 1); } else setSelectedMonth(m => m + 1); }} className="p-1 rounded hover:bg-white/10"><ChevronRight size={18} /></button>
-              </div>
-            </div>
+      {/* Mobile tab bar */}
+      <div className="sm:hidden flex border-b border-white/[0.06]">
+        <button onClick={() => setActiveTab('library')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'library' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'library' ? { borderColor: `hsl(${clientColor})` } : {}}>
+          Biblioteca
+        </button>
+        <button onClick={() => setActiveTab('metrics')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'metrics' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'metrics' ? { borderColor: `hsl(${clientColor})` } : {}}>
+          Métricas
+        </button>
+      </div>
 
-            {/* Overall delivery percentage */}
-            {contractedReels > 0 && (
-              <div className="text-center py-4">
-                <div className="text-5xl font-black" style={{ color: `hsl(${clientColor})` }}>
-                  {contractedReels > 0 ? Math.round((totalDelivered / contractedReels) * 100) : 0}%
+      <AnimatePresence mode="wait">
+        {activeTab === 'library' ? (
+          <motion.div key="library" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+            {/* ── HERO BANNER ── */}
+            {featuredContent && (
+              <div className="relative overflow-hidden">
+                <div className="absolute inset-0">
+                  {featuredContent.thumbnail_url ? (
+                    <img src={featuredContent.thumbnail_url} alt="" className="w-full h-full object-cover opacity-30 blur-sm scale-110" />
+                  ) : (
+                    <div className="w-full h-full" style={{ background: `linear-gradient(135deg, hsl(${clientColor} / 0.3), transparent)` }} />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#080810] via-[#080810]/80 to-[#080810]/40" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#080810]/90 to-transparent" />
                 </div>
-                <p className="text-white/60 text-sm mt-1">do pacote entregue</p>
+
+                <div className="relative max-w-[1400px] mx-auto px-4 sm:px-8 py-12 sm:py-20">
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.08] border border-white/[0.08] text-xs font-medium text-white/70 mb-4">
+                      <Sparkles size={12} style={{ color: `hsl(${clientColor})` }} />
+                      <span className="capitalize">Temporada {seasonLabel}</span>
+                    </div>
+                    <h2 className="text-3xl sm:text-5xl font-bold tracking-tight max-w-lg leading-tight">
+                      Sua biblioteca de conteúdos
+                    </h2>
+                    <p className="text-white/50 mt-3 max-w-md text-sm sm:text-base">
+                      {totalDelivered} conteúdos produzidos • {reelsCount} vídeos • {artesCount + creativosCount} artes
+                    </p>
+
+                    <div className="flex flex-wrap gap-3 mt-6">
+                      {totalDelivered > 0 && (
+                        <button
+                          onClick={() => {
+                            const first = seasonContents.find(c => c.content_type !== 'arte');
+                            if (first) handleSelectContent(first);
+                          }}
+                          className="inline-flex items-center gap-2 px-6 py-3 rounded-full font-semibold text-sm transition-all hover:scale-105 active:scale-95 text-white"
+                          style={{ background: `hsl(${clientColor})` }}
+                        >
+                          <Play size={16} fill="currentColor" /> Assistir conteúdos
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setActiveTab('metrics')}
+                        className="inline-flex items-center gap-2 px-6 py-3 rounded-full font-semibold text-sm bg-white/10 hover:bg-white/15 transition-all hover:scale-105 active:scale-95"
+                      >
+                        <BarChart3 size={16} /> Ver métricas
+                      </button>
+                    </div>
+
+                    {/* Quick stats */}
+                    <div className="flex gap-6 mt-8">
+                      {[
+                        { label: 'Aprovados', value: approvedCount, color: 'text-emerald-400' },
+                        { label: 'Pendentes', value: pendingCount, color: 'text-amber-400' },
+                        { label: 'Em ajuste', value: adjustmentCount, color: 'text-orange-400' },
+                      ].map(s => (
+                        <div key={s.label} className="text-center">
+                          <p className={`text-xl sm:text-2xl font-bold ${s.color}`}>{s.value}</p>
+                          <p className="text-[10px] sm:text-xs text-white/40 mt-0.5">{s.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                </div>
               </div>
             )}
 
-            {/* Metrics grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* ── CONTENT ROWS ── */}
+            <div className="max-w-[1400px] mx-auto px-4 sm:px-8 pb-20 space-y-10 mt-4">
+              {seasonContents.length === 0 && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-24">
+                  <Film size={48} className="mx-auto mb-4 text-white/15" />
+                  <p className="text-lg text-white/30 font-medium">Nenhum conteúdo nesta temporada</p>
+                  <p className="text-sm text-white/20 mt-1">Conteúdos aparecerão aqui quando publicados pela equipe.</p>
+                </motion.div>
+              )}
+
+              {Object.entries(contentByType).map(([type, items], idx) => (
+                <ContentRow
+                  key={type}
+                  label={ROW_LABELS[type] || type}
+                  items={items}
+                  clientColor={clientColor}
+                  onSelect={handleSelectContent}
+                  delay={idx * 0.05}
+                />
+              ))}
+
+              {/* Other seasons */}
+              {allSeasons.filter(s => !(s.month === selectedMonth && s.year === selectedYear)).length > 0 && (
+                <div className="pt-8 border-t border-white/[0.06]">
+                  <h3 className="text-lg font-semibold text-white/60 mb-6">Outras temporadas</h3>
+                  {allSeasons
+                    .filter(s => !(s.month === selectedMonth && s.year === selectedYear))
+                    .map(season => (
+                      <ContentRow
+                        key={`${season.year}-${season.month}`}
+                        label={`Temporada ${format(new Date(season.year, season.month - 1), 'MMMM yyyy', { locale: pt })}`}
+                        items={season.items}
+                        clientColor={clientColor}
+                        onSelect={handleSelectContent}
+                        delay={0}
+                      />
+                    ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        ) : (
+          /* ── METRICS TAB ── */
+          <motion.div key="metrics" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8 pb-20 space-y-8">
+            {/* Delivery percentage hero */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-8">
+              <p className="text-xs uppercase tracking-widest text-white/40 mb-2">Entrega da temporada</p>
+              <div className="relative inline-flex items-center justify-center">
+                <svg width="160" height="160" viewBox="0 0 160 160">
+                  <circle cx="80" cy="80" r="70" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
+                  <circle
+                    cx="80" cy="80" r="70" fill="none"
+                    stroke={`hsl(${clientColor})`}
+                    strokeWidth="8"
+                    strokeLinecap="round"
+                    strokeDasharray={`${Math.min(deliveryPct, 100) * 4.4} 440`}
+                    transform="rotate(-90 80 80)"
+                    className="transition-all duration-1000"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-4xl font-black" style={{ color: `hsl(${clientColor})` }}>{deliveryPct}%</span>
+                  <span className="text-[10px] text-white/40 mt-1">do pacote</span>
+                </div>
+              </div>
+              {deliveryPct >= 100 && (
+                <p className="text-sm text-emerald-400 mt-3 font-medium flex items-center justify-center gap-1">
+                  <TrendingUp size={14} /> Entregamos acima do contratado!
+                </p>
+              )}
+            </motion.div>
+
+            {/* Contracted vs Delivered */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[
-                { label: 'Reels', value: reelsCount, contracted: contractedReels, icon: Film },
-                { label: 'Criativos', value: creativosCount, contracted: contractedCreatives, icon: Palette },
-                { label: 'Artes', value: artesCount, contracted: 0, icon: Image },
-                { label: 'Vídeos', value: videosCount, contracted: 0, icon: Video },
-              ].map(metric => {
-                const pct = metric.contracted > 0 ? Math.round((metric.value / metric.contracted) * 100) : 0;
+                { label: 'Reels', delivered: reelsCount, contracted: contractedReels, icon: Film },
+                { label: 'Criativos', delivered: creativosCount, contracted: contractedCreatives, icon: Palette },
+                { label: 'Artes', delivered: artesCount, contracted: 0, icon: Image },
+                { label: 'Vídeos', delivered: videosCount, contracted: 0, icon: Video },
+                { label: 'Gravações', delivered: 0, contracted: contractedRecordings, icon: Film },
+              ].filter(m => m.delivered > 0 || m.contracted > 0).map(metric => {
+                const pct = metric.contracted > 0 ? Math.round((metric.delivered / metric.contracted) * 100) : 0;
+                const overDelivered = pct > 100;
                 return (
-                  <div key={metric.label} className="bg-white/5 rounded-xl p-4 space-y-2">
-                    <div className="flex items-center gap-2 text-white/70">
-                      <metric.icon size={16} />
-                      <span className="text-sm font-medium">{metric.label}</span>
+                  <motion.div
+                    key={metric.label}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white/[0.04] border border-white/[0.06] rounded-2xl p-5 hover:bg-white/[0.06] transition-colors"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-lg bg-white/[0.06]">
+                          <metric.icon size={16} className="text-white/60" />
+                        </div>
+                        <span className="text-sm font-medium text-white/80">{metric.label}</span>
+                      </div>
+                      {metric.contracted > 0 && (
+                        <span className={`text-xs font-bold ${overDelivered ? 'text-emerald-400' : 'text-white/40'}`}>
+                          {pct}%
+                        </span>
+                      )}
                     </div>
-                    <div className="text-2xl font-bold">{metric.value}</div>
+                    <div className="text-3xl font-bold">{metric.delivered}</div>
                     {metric.contracted > 0 && (
                       <>
-                        <Progress value={Math.min(pct, 100)} className="h-2 bg-white/10" />
-                        <p className="text-xs text-white/50">
-                          {metric.value}/{metric.contracted} contratados •{' '}
-                          <span style={{ color: pct >= 100 ? '#22c55e' : `hsl(${clientColor})` }} className="font-semibold">{pct}%</span>
+                        <div className="mt-3 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{
+                              width: `${Math.min(pct, 100)}%`,
+                              background: overDelivered ? '#34d399' : `hsl(${clientColor})`,
+                            }}
+                          />
+                        </div>
+                        <p className="text-[11px] text-white/30 mt-2">
+                          {metric.delivered} de {metric.contracted} contratados
                         </p>
                       </>
                     )}
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <div className="bg-white/5 rounded-xl p-4">
-                <p className="text-white/70 text-sm">Aprovados</p>
-                <p className="text-2xl font-bold text-green-400">{approvedCount}</p>
-              </div>
-              <div className="bg-white/5 rounded-xl p-4">
-                <p className="text-white/70 text-sm">Pendentes</p>
-                <p className="text-2xl font-bold text-yellow-400">{monthContents.filter(c => c.status === 'pendente').length}</p>
-              </div>
-              <div className="bg-white/5 rounded-xl p-4">
-                <p className="text-white/70 text-sm">Em Ajuste</p>
-                <p className="text-2xl font-bold text-orange-400">{monthContents.filter(c => c.status === 'ajuste_solicitado').length}</p>
-              </div>
+            {/* Status summary */}
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                { label: 'Aprovados', value: approvedCount, color: 'emerald' },
+                { label: 'Pendentes', value: pendingCount, color: 'amber' },
+                { label: 'Em Ajuste', value: adjustmentCount, color: 'orange' },
+              ].map(s => (
+                <motion.div
+                  key={s.label}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-white/[0.04] border border-white/[0.06] rounded-2xl p-5 text-center"
+                >
+                  <p className={`text-3xl font-bold text-${s.color}-400`}>{s.value}</p>
+                  <p className="text-xs text-white/40 mt-1">{s.label}</p>
+                </motion.div>
+              ))}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Content Rows by Season */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-16 space-y-10">
-        {sortedSeasons.length === 0 && (
-          <div className="text-center py-20 text-white/40">
-            <Film size={48} className="mx-auto mb-4 opacity-50" />
-            <p className="text-lg">Nenhum conteúdo disponível ainda.</p>
-            <p className="text-sm mt-2">Os conteúdos aparecerão aqui assim que forem publicados pela equipe.</p>
-          </div>
+          </motion.div>
         )}
+      </AnimatePresence>
 
-        {sortedSeasons.map(season => {
-          const seasonLabel = format(new Date(season.year, season.month - 1), "MMMM yyyy", { locale: pt });
-          return (
-            <section key={`${season.year}-${season.month}`}>
-              <h2 className="text-xl font-bold mb-4 capitalize flex items-center gap-2">
-                <span className="w-1 h-6 rounded-full" style={{ background: `hsl(${clientColor})` }} />
-                Temporada {seasonLabel}
-                <span className="text-sm font-normal text-white/40 ml-2">{season.items.length} conteúdos</span>
-              </h2>
+      {/* ── CONTENT DETAIL MODAL ── */}
+      <AnimatePresence>
+        {selectedContent && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm overflow-y-auto"
+            onClick={() => setSelectedContent(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 40 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="max-w-5xl mx-auto my-4 sm:my-8"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Close button */}
+              <div className="flex justify-end px-4 mb-2">
+                <button onClick={() => setSelectedContent(null)} className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
 
-              <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-none">
-                {season.items.map(content => {
-                  const Icon = CONTENT_TYPE_ICONS[content.content_type] || Film;
-                  return (
-                    <button
-                      key={content.id}
-                      onClick={() => handleSelectContent(content)}
-                      className="group relative shrink-0 w-[200px] sm:w-[240px] snap-start rounded-xl overflow-hidden transition-all duration-300 hover:scale-105 hover:ring-2 focus:outline-none"
-                      style={{ '--tw-ring-color': `hsl(${clientColor})` } as any}
-                    >
-                      {/* Thumbnail */}
-                      <div className="aspect-[9/16] sm:aspect-video bg-white/5 relative">
-                        {content.thumbnail_url ? (
-                          <img src={content.thumbnail_url} alt={content.title} className="w-full h-full object-cover" />
-                        ) : content.content_type === 'arte' && content.file_url ? (
-                          <img src={content.file_url} alt={content.title} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Icon size={40} className="text-white/20" />
-                          </div>
-                        )}
-                        {/* Play overlay */}
-                        {content.content_type !== 'arte' && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Play size={40} className="text-white drop-shadow-lg" />
-                          </div>
-                        )}
-                        {/* Duration badge */}
-                        {content.duration_seconds > 0 && (
-                          <span className="absolute bottom-2 right-2 bg-black/80 text-xs px-1.5 py-0.5 rounded font-mono">
-                            {formatDuration(content.duration_seconds)}
-                          </span>
-                        )}
-                        {/* Status badge */}
-                        <span className={`absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                          content.status === 'aprovado' ? 'bg-green-500/90 text-white' :
-                          content.status === 'ajuste_solicitado' ? 'bg-orange-500/90 text-white' :
-                          'bg-yellow-500/90 text-black'
-                        }`}>
-                          {STATUS_LABELS[content.status]}
-                        </span>
-                      </div>
-                      {/* Info */}
-                      <div className="p-3 text-left bg-white/5">
-                        <p className="text-sm font-medium truncate">{content.title}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/70">{CONTENT_TYPE_LABELS[content.content_type]}</span>
+              {/* Player / Image */}
+              <div className="relative bg-black rounded-2xl overflow-hidden mx-4 sm:mx-0">
+                {selectedContent.content_type === 'arte' && selectedContent.file_url ? (
+                  <div className="aspect-video flex items-center justify-center bg-[#0c0c14]">
+                    <img src={selectedContent.file_url} alt={selectedContent.title} className="max-w-full max-h-full object-contain" />
+                  </div>
+                ) : selectedContent.file_url ? (
+                  <div className="relative group">
+                    <video
+                      ref={videoRef}
+                      src={selectedContent.file_url}
+                      className="w-full aspect-video object-contain bg-black"
+                      onPlay={() => setIsPlaying(true)}
+                      onPause={() => setIsPlaying(false)}
+                      onEnded={() => setIsPlaying(false)}
+                      onTimeUpdate={handleTimeUpdate}
+                      onLoadedMetadata={handleTimeUpdate}
+                      onClick={togglePlay}
+                    />
+                    {/* Custom controls */}
+                    <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-12 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {/* Progress bar */}
+                      <div className="cursor-pointer h-1 bg-white/20 rounded-full mb-3 group/bar" onClick={handleSeek}>
+                        <div
+                          className="h-full rounded-full relative transition-all"
+                          style={{
+                            width: videoDuration ? `${(videoProgress / videoDuration) * 100}%` : '0%',
+                            background: `hsl(${clientColor})`,
+                          }}
+                        >
+                          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white opacity-0 group-hover/bar:opacity-100 transition-opacity" />
                         </div>
                       </div>
-                    </button>
-                  );
-                })}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <button onClick={togglePlay} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
+                            {isPlaying ? <Pause size={18} /> : <Play size={18} fill="white" />}
+                          </button>
+                          <button onClick={toggleMute} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
+                            {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                          </button>
+                          <span className="text-xs text-white/60 font-mono">
+                            {formatDuration(videoProgress)} / {formatDuration(videoDuration)}
+                          </span>
+                        </div>
+                        <button onClick={toggleFullscreen} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
+                          <Maximize size={16} />
+                        </button>
+                      </div>
+                    </div>
+                    {/* Center play button */}
+                    {!isPlaying && (
+                      <button onClick={togglePlay} className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
+                          <Play size={28} fill="white" className="ml-1" />
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="aspect-video flex items-center justify-center bg-[#0c0c14]">
+                    <Film size={64} className="text-white/10" />
+                  </div>
+                )}
               </div>
-            </section>
+
+              {/* Content info + actions */}
+              <div className="px-4 sm:px-0 mt-6 space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-xl sm:text-2xl font-bold">{selectedContent.title}</h3>
+                    <div className="flex flex-wrap items-center gap-2.5 mt-2">
+                      <span className="text-xs px-2.5 py-1 rounded-full bg-white/[0.08] text-white/60">{CONTENT_TYPE_LABELS[selectedContent.content_type]}</span>
+                      <span className="text-xs text-white/40">{format(new Date(selectedContent.created_at), "dd MMM yyyy", { locale: pt })}</span>
+                      {selectedContent.duration_seconds > 0 && (
+                        <span className="text-xs text-white/40 flex items-center gap-1"><Clock size={12} /> {formatDuration(selectedContent.duration_seconds)}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${STATUS_COLORS[selectedContent.status]?.bg} ${STATUS_COLORS[selectedContent.status]?.text}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${STATUS_COLORS[selectedContent.status]?.dot}`} />
+                    {STATUS_LABELS[selectedContent.status]}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                {selectedContent.status !== 'aprovado' && (
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={handleApprove}
+                      className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full font-semibold text-sm bg-emerald-500 hover:bg-emerald-400 text-white transition-all hover:scale-105 active:scale-95"
+                    >
+                      <Check size={16} /> Aprovar conteúdo
+                    </button>
+                    <button
+                      onClick={() => setShowAdjustment(!showAdjustment)}
+                      className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full font-semibold text-sm bg-white/10 hover:bg-white/15 text-white transition-all hover:scale-105 active:scale-95"
+                    >
+                      <MessageSquare size={16} /> Solicitar ajuste
+                    </button>
+                  </div>
+                )}
+
+                {selectedContent.status === 'aprovado' && (
+                  <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm">
+                    <Check size={16} /> Conteúdo aprovado
+                    {selectedContent.approved_at && (
+                      <span className="text-emerald-400/60 text-xs ml-1">
+                        em {format(new Date(selectedContent.approved_at), "dd/MM/yyyy 'às' HH:mm")}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Adjustment form */}
+                <AnimatePresence>
+                  {showAdjustment && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                      <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-4 space-y-3">
+                        <textarea
+                          value={adjustmentNote}
+                          onChange={e => setAdjustmentNote(e.target.value)}
+                          placeholder="Descreva o ajuste necessário..."
+                          className="w-full bg-white/[0.06] border border-white/[0.08] rounded-xl p-3 text-sm text-white placeholder:text-white/30 resize-none focus:outline-none focus:ring-1 transition-all"
+                          style={{ '--tw-ring-color': `hsl(${clientColor})` } as any}
+                          rows={3}
+                        />
+                        <div className="flex justify-end">
+                          <button
+                            onClick={handleRequestAdjustment}
+                            disabled={!adjustmentNote.trim()}
+                            className="px-5 py-2 rounded-full text-sm font-semibold disabled:opacity-30 text-white transition-all hover:scale-105"
+                            style={{ background: `hsl(${clientColor})` }}
+                          >
+                            Enviar solicitação
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Comments */}
+                <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
+                  <div className="px-5 py-3 border-b border-white/[0.06] flex items-center gap-2">
+                    <MessageSquare size={14} className="text-white/40" />
+                    <span className="text-sm font-medium text-white/70">Comentários</span>
+                    <span className="text-xs text-white/30">({comments.length})</span>
+                  </div>
+                  <div className="max-h-72 overflow-y-auto p-4 space-y-3">
+                    {comments.length === 0 && <p className="text-sm text-white/20 text-center py-4">Nenhum comentário ainda.</p>}
+                    {comments.map(comment => (
+                      <motion.div
+                        key={comment.id}
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`flex ${comment.author_type === 'client' ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${
+                          comment.author_type === 'client'
+                            ? 'bg-white/[0.08] rounded-br-md'
+                            : 'rounded-bl-md'
+                        }`} style={comment.author_type === 'team' ? { background: `hsl(${clientColor} / 0.15)` } : {}}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-semibold text-[11px]" style={comment.author_type === 'team' ? { color: `hsl(${clientColor})` } : {}}>
+                              {comment.author_name}
+                            </span>
+                            <span className="text-[10px] text-white/25">{format(new Date(comment.created_at), "dd/MM HH:mm")}</span>
+                          </div>
+                          <p className="text-white/80 leading-relaxed">{comment.message}</p>
+                        </div>
+                      </motion.div>
+                    ))}
+                    <div ref={commentsEndRef} />
+                  </div>
+                  <div className="px-4 py-3 border-t border-white/[0.06] flex gap-2">
+                    <input
+                      value={newComment}
+                      onChange={e => setNewComment(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSendComment()}
+                      placeholder="Escreva um comentário..."
+                      className="flex-1 bg-white/[0.06] border border-white/[0.08] rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-1 transition-all"
+                      style={{ '--tw-ring-color': `hsl(${clientColor})` } as any}
+                    />
+                    <button
+                      onClick={handleSendComment}
+                      disabled={!newComment.trim()}
+                      className="p-2.5 rounded-full disabled:opacity-20 text-white transition-all hover:scale-105"
+                      style={{ background: `hsl(${clientColor})` }}
+                    >
+                      <Send size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="h-8" />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* ── Content Row Component ── */
+function ContentRow({ label, items, clientColor, onSelect, delay = 0 }: {
+  label: string;
+  items: PortalContent[];
+  clientColor: string;
+  onSelect: (c: PortalContent) => void;
+  delay?: number;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkScroll = () => {
+    if (!scrollRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+    setCanScrollLeft(scrollLeft > 0);
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 4);
+  };
+
+  useEffect(() => {
+    checkScroll();
+    const el = scrollRef.current;
+    el?.addEventListener('scroll', checkScroll);
+    return () => el?.removeEventListener('scroll', checkScroll);
+  }, [items]);
+
+  const scroll = (dir: number) => {
+    scrollRef.current?.scrollBy({ left: dir * 300, behavior: 'smooth' });
+  };
+
+  return (
+    <motion.section initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }}>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+          <span className="w-1 h-5 rounded-full" style={{ background: `hsl(${clientColor})` }} />
+          {label}
+          <span className="text-xs font-normal text-white/30 ml-1">{items.length}</span>
+        </h3>
+        <div className="flex gap-1">
+          {canScrollLeft && (
+            <button onClick={() => scroll(-1)} className="p-1.5 rounded-full bg-white/[0.06] hover:bg-white/10 transition-colors">
+              <ChevronLeft size={14} />
+            </button>
+          )}
+          {canScrollRight && (
+            <button onClick={() => scroll(1)} className="p-1.5 rounded-full bg-white/[0.06] hover:bg-white/10 transition-colors">
+              <ChevronRight size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div ref={scrollRef} className="flex gap-3 overflow-x-auto pb-2 scrollbar-none snap-x snap-mandatory" onScroll={checkScroll}>
+        {items.map(content => {
+          const Icon = CONTENT_TYPE_ICONS[content.content_type] || Film;
+          const statusStyle = STATUS_COLORS[content.status];
+          return (
+            <button
+              key={content.id}
+              onClick={() => onSelect(content)}
+              className="group relative shrink-0 w-[160px] sm:w-[200px] snap-start rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.04] hover:ring-1 focus:outline-none bg-white/[0.03]"
+              style={{ '--tw-ring-color': `hsl(${clientColor} / 0.5)` } as any}
+            >
+              <div className="aspect-[9/16] sm:aspect-video relative overflow-hidden">
+                {content.thumbnail_url ? (
+                  <img src={content.thumbnail_url} alt={content.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                ) : content.content_type === 'arte' && content.file_url ? (
+                  <img src={content.file_url} alt={content.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-white/[0.04]">
+                    <Icon size={32} className="text-white/10" />
+                  </div>
+                )}
+                {/* Gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                {/* Play overlay */}
+                {content.content_type !== 'arte' && (
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                      <Play size={18} fill="white" className="ml-0.5" />
+                    </div>
+                  </div>
+                )}
+                {content.content_type === 'arte' && (
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                      <Eye size={18} />
+                    </div>
+                  </div>
+                )}
+                {/* Duration */}
+                {content.duration_seconds > 0 && (
+                  <span className="absolute bottom-1.5 right-1.5 bg-black/80 text-[10px] px-1.5 py-0.5 rounded font-mono text-white/80">
+                    {Math.floor(content.duration_seconds / 60)}:{(content.duration_seconds % 60).toString().padStart(2, '0')}
+                  </span>
+                )}
+                {/* Status */}
+                <div className={`absolute top-1.5 left-1.5 flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold ${statusStyle?.bg} ${statusStyle?.text} backdrop-blur-sm`}>
+                  <span className={`w-1 h-1 rounded-full ${statusStyle?.dot}`} />
+                  {STATUS_LABELS[content.status]}
+                </div>
+              </div>
+              <div className="p-2.5">
+                <p className="text-xs font-medium truncate text-white/90">{content.title}</p>
+                <span className="text-[10px] text-white/30 mt-0.5 block">{CONTENT_TYPE_LABELS[content.content_type]}</span>
+              </div>
+            </button>
           );
         })}
       </div>
-
-      {/* Content Detail Modal */}
-      {selectedContent && (
-        <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4" onClick={() => setSelectedContent(null)}>
-          <div className="bg-[#141414] rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            {/* Video Player / Image */}
-            <div className="relative aspect-video bg-black rounded-t-2xl overflow-hidden">
-              {selectedContent.content_type === 'arte' && selectedContent.file_url ? (
-                <img src={selectedContent.file_url} alt={selectedContent.title} className="w-full h-full object-contain" />
-              ) : selectedContent.file_url ? (
-                <>
-                  <video
-                    ref={videoRef}
-                    src={selectedContent.file_url}
-                    className="w-full h-full object-contain"
-                    onPlay={() => setIsPlaying(true)}
-                    onPause={() => setIsPlaying(false)}
-                    onEnded={() => setIsPlaying(false)}
-                    controls
-                  />
-                </>
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-white/30">
-                  <Film size={64} />
-                </div>
-              )}
-              <button onClick={() => setSelectedContent(null)} className="absolute top-4 right-4 p-2 rounded-full bg-black/60 hover:bg-black/80 transition-colors">
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Content info */}
-            <div className="p-6 space-y-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h3 className="text-xl font-bold">{selectedContent.title}</h3>
-                  <div className="flex items-center gap-3 mt-2 text-sm text-white/60">
-                    <span className="px-2 py-0.5 rounded bg-white/10">{CONTENT_TYPE_LABELS[selectedContent.content_type]}</span>
-                    <span>{format(new Date(selectedContent.created_at), "dd/MM/yyyy", { locale: pt })}</span>
-                    {selectedContent.duration_seconds > 0 && (
-                      <span className="flex items-center gap-1"><Clock size={14} /> {formatDuration(selectedContent.duration_seconds)}</span>
-                    )}
-                  </div>
-                </div>
-                <span className={`shrink-0 px-3 py-1 rounded-full text-sm font-semibold ${
-                  selectedContent.status === 'aprovado' ? 'bg-green-500/20 text-green-400' :
-                  selectedContent.status === 'ajuste_solicitado' ? 'bg-orange-500/20 text-orange-400' :
-                  'bg-yellow-500/20 text-yellow-400'
-                }`}>
-                  {STATUS_LABELS[selectedContent.status]}
-                </span>
-              </div>
-
-              {/* Action buttons */}
-              {selectedContent.status !== 'aprovado' && (
-                <div className="flex flex-wrap gap-3">
-                  <button onClick={handleApprove} className="flex items-center gap-2 px-5 py-2.5 rounded-full font-medium transition-all hover:scale-105 bg-green-500 text-white">
-                    <Check size={18} /> Aprovar
-                  </button>
-                  <button onClick={() => setShowAdjustment(!showAdjustment)} className="flex items-center gap-2 px-5 py-2.5 rounded-full font-medium transition-all hover:scale-105 bg-orange-500 text-white">
-                    <MessageSquare size={18} /> Solicitar Ajuste
-                  </button>
-                </div>
-              )}
-
-              {/* Adjustment input */}
-              {showAdjustment && (
-                <div className="space-y-3 bg-white/5 rounded-xl p-4">
-                  <textarea
-                    value={adjustmentNote}
-                    onChange={e => setAdjustmentNote(e.target.value)}
-                    placeholder="Descreva o ajuste necessário..."
-                    className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-sm text-white placeholder:text-white/40 resize-none focus:outline-none focus:ring-2"
-                    style={{ '--tw-ring-color': `hsl(${clientColor})` } as any}
-                    rows={3}
-                  />
-                  <button onClick={handleRequestAdjustment} disabled={!adjustmentNote.trim()} className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-40 transition-all" style={{ background: `hsl(${clientColor})` }}>
-                    Enviar Solicitação
-                  </button>
-                </div>
-              )}
-
-              {/* Comments */}
-              <div className="space-y-4">
-                <h4 className="text-sm font-semibold text-white/80 flex items-center gap-2"><MessageSquare size={16} /> Comentários</h4>
-                <div className="space-y-3 max-h-60 overflow-y-auto">
-                  {comments.length === 0 && <p className="text-sm text-white/40">Nenhum comentário ainda.</p>}
-                  {comments.map(comment => (
-                    <div key={comment.id} className={`p-3 rounded-xl text-sm ${comment.author_type === 'client' ? 'bg-white/5 ml-0 mr-8' : 'bg-white/10 ml-8 mr-0'}`}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-semibold text-xs" style={comment.author_type === 'team' ? { color: `hsl(${clientColor})` } : {}}>
-                          {comment.author_name}
-                        </span>
-                        <span className="text-[10px] text-white/40">{format(new Date(comment.created_at), "dd/MM HH:mm")}</span>
-                      </div>
-                      <p className="text-white/80">{comment.message}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    value={newComment}
-                    onChange={e => setNewComment(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleSendComment()}
-                    placeholder="Escreva um comentário..."
-                    className="flex-1 bg-white/10 border border-white/20 rounded-full px-4 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2"
-                    style={{ '--tw-ring-color': `hsl(${clientColor})` } as any}
-                  />
-                  <button onClick={handleSendComment} disabled={!newComment.trim()} className="p-2.5 rounded-full disabled:opacity-40 transition-all" style={{ background: `hsl(${clientColor})` }}>
-                    <Send size={16} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+    </motion.section>
   );
 }

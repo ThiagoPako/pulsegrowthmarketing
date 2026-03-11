@@ -201,7 +201,7 @@ function OnboardingCard({ group, onClick }: { group: ClientGroup; onClick: () =>
       <div className="flex items-center gap-0.5">
         {group.allStages.map((stageKey, i) => {
           const isDone = group.completedStages.includes(stageKey);
-          const isCurrent = stageKey === group.currentStage && !isDone;
+          const isCurrent = group.activeStages.includes(stageKey) && !isDone;
           const stage = ONBOARDING_STAGES.find(s => s.key === stageKey)!;
           return (
             <div key={stageKey} className="flex items-center gap-0.5 flex-1">

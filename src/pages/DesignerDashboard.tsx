@@ -10,13 +10,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import ClientLogo from '@/components/ClientLogo';
 import DesignTaskDetailSheet from '@/components/designer/DesignTaskDetailSheet';
+import DesignTaskCreateDialog from '@/components/designer/DesignTaskCreateDialog';
 import { motion } from 'framer-motion';
 import { format, addDays, startOfWeek, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Palette, CheckCircle, Clock, Play, Eye, RotateCcw, Kanban, BarChart3,
   TrendingUp, Zap, Timer, Building2, CalendarDays,
-  Flame, Target, Award, Send, ArrowRight, FileText
+  Flame, Target, Award, Send, ArrowRight, FileText, Plus
 } from 'lucide-react';
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
@@ -41,6 +42,7 @@ export default function DesignerDashboard() {
   const { currentUser, clients } = useApp();
   const navigate = useNavigate();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const tasks = tasksQuery.data || [];
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
@@ -168,6 +170,9 @@ export default function DesignerDashboard() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button onClick={() => setCreateOpen(true)} size="sm" className="gap-1.5 text-xs">
+            <Plus size={14} /> Nova Demanda
+          </Button>
           <Button onClick={() => navigate('/clientes')} variant="outline" size="sm" className="gap-1.5 text-xs">
             <Building2 size={14} /> Clientes
           </Button>
@@ -464,6 +469,8 @@ export default function DesignerDashboard() {
       {selectedTask && (
         <DesignTaskDetailSheet task={selectedTask} open={!!selectedTask} onOpenChange={o => !o && setSelectedTaskId(null)} />
       )}
+
+      <DesignTaskCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }

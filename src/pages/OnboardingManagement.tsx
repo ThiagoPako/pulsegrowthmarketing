@@ -556,7 +556,6 @@ function OnboardingDetailSheet({ group, open, onOpenChange }: { group: ClientGro
                     </div>
                   );
                 })}
-                )}
               </div>
             ) : null}
           </div>

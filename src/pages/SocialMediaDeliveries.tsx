@@ -151,6 +151,8 @@ export default function SocialMediaDeliveries() {
   const [alterationImmediate, setAlterationImmediate] = useState(false);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
   const [taskDeadlines, setTaskDeadlines] = useState<Record<string, { review_deadline: string | null; alteration_deadline: string | null; approval_deadline: string | null; immediate_alteration: boolean }>>({});
+  const [onboardingStatus, setOnboardingStatus] = useState<Record<string, { total: number; completed: number }>>({});
+  const [mainTab, setMainTab] = useState<'clientes' | 'calendario'>('clientes');
 
   const fetchData = useCallback(async () => {
     const [dRes, pRes, cRes, tRes] = await Promise.all([

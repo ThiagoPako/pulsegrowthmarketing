@@ -48,26 +48,20 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
   const history = historyQuery(task.id);
 
-  // Timer display
+  // Auto elapsed time from started_at
   useEffect(() => {
-    if (!task.timer_running) {
-      const h = Math.floor(task.time_spent_seconds / 3600);
-      const m = Math.floor((task.time_spent_seconds % 3600) / 60);
-      const s = task.time_spent_seconds % 60;
-      setTimerDisplay(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`);
-      return;
-    }
-    const interval = setInterval(() => {
-      const elapsed = task.timer_started_at
-        ? Math.floor((Date.now() - new Date(task.timer_started_at).getTime()) / 1000) + task.time_spent_seconds
-        : task.time_spent_seconds;
+    if (!task.started_at) { setElapsedDisplay(''); return; }
+    const update = () => {
+      const elapsed = Math.floor((Date.now() - new Date(task.started_at!).getTime()) / 1000);
       const h = Math.floor(elapsed / 3600);
       const m = Math.floor((elapsed % 3600) / 60);
-      const s = elapsed % 60;
-      setTimerDisplay(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`);
-    }, 1000);
+      if (h > 0) setElapsedDisplay(`${h}h ${m}min`);
+      else setElapsedDisplay(`${m}min`);
+    };
+    update();
+    const interval = setInterval(update, 60000);
     return () => clearInterval(interval);
-  }, [task.timer_running, task.timer_started_at, task.time_spent_seconds]);
+  }, [task.started_at]);
 
   const moveToColumn = async (column: DesignTaskColumn, extraFields?: Partial<DesignTask>) => {
     await updateTask.mutateAsync({ id: task.id, kanban_column: column, ...extraFields } as any);

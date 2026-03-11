@@ -475,9 +475,9 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                     {(task.kanban_column === 'executando' || task.kanban_column === 'ajustes') && isDesigner ? (
                       <div className="space-y-2">
                         {mockupUrl && (
-                          <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+                          <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 min-w-0">
                             <CheckCircle size={13} className="text-emerald-600 shrink-0" />
-                            <a href={mockupUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline truncate flex-1">{mockupUrl}</a>
+                            <a href={mockupUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline truncate block overflow-hidden">{mockupUrl}</a>
                           </div>
                         )}
                         <Input value={mockupUrl} onChange={e => setMockupUrl(e.target.value)} placeholder="Link do mockup..." className="text-xs h-8" />

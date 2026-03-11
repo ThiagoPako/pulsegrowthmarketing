@@ -88,6 +88,7 @@ export default function Clients() {
   const [sendWaClient, setSendWaClient] = useState<Client | null>(null);
   const [sendWaMsg, setSendWaMsg] = useState('');
   const [sendWaLoading, setSendWaLoading] = useState(false);
+  const [artDbClient, setArtDbClient] = useState<Client | null>(null);
   
   // Plan-related state
   const [plans, setPlans] = useState<{ id: string; name: string; status: string; reels_qty: number; creatives_qty: number; stories_qty: number }[]>([]);

@@ -389,8 +389,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
             </Tabs>
           </div>
 
-          {/* Right sidebar: Stage + Actions + Files + Info */}
-          <div className="w-[300px] shrink-0 border-l border-border flex flex-col overflow-hidden">
+          {/* Right sidebar: Stage + Actions + Files + Info - takes ~20% */}
+          <div className="w-[20%] shrink-0 border-l border-border flex flex-col overflow-hidden">
             <ScrollArea className="flex-1">
               <div className="p-4 space-y-4 overflow-hidden">
                 {/* Current stage card */}

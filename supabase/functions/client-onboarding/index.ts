@@ -176,8 +176,30 @@ Deno.serve(async (req) => {
         .select('id, stage, status')
         .eq('client_id', clientId)
 
-      const clienteNovoTask = existingTasks?.find((t: any) => t.stage === 'cliente_novo' && t.status !== 'concluido')
-      if (clienteNovoTask) {
+      let clienteNovoTask = existingTasks?.find((t: any) => t.stage === 'cliente_novo' && t.status !== 'concluido')
+      
+      // If no cliente_novo task exists at all, create and complete it
+      if (!existingTasks?.some((t: any) => t.stage === 'cliente_novo')) {
+        const { data: created } = await supabase.from('onboarding_tasks').insert({
+          client_id: clientId,
+          stage: 'cliente_novo',
+          title: 'Novo cliente - Onboarding concluído',
+          status: 'concluido',
+          completed_at: new Date().toISOString(),
+        }).select('id').single()
+        clienteNovoTask = null // already completed
+        
+        // Create contrato task
+        const hasContratoTask = existingTasks?.some((t: any) => t.stage === 'contrato')
+        if (!hasContratoTask) {
+          await supabase.from('onboarding_tasks').insert({
+            client_id: clientId,
+            stage: 'contrato',
+            title: 'Contrato - Assinatura',
+            status: 'pendente',
+          })
+        }
+      } else if (clienteNovoTask) {
         await supabase
           .from('onboarding_tasks')
           .update({ status: 'concluido', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })

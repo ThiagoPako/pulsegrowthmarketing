@@ -211,7 +211,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
         <div className="flex flex-1 overflow-hidden">
 
           {/* LEFT COLUMN (~40%): Briefing / Formulário */}
-          <div className="w-[40%] shrink-0 min-w-0 overflow-hidden flex flex-col border-r border-border">
+          <div className="flex-[4] min-w-0 overflow-hidden flex flex-col border-r border-border">
             <Tabs defaultValue="briefing" className="flex-1 flex flex-col overflow-hidden">
               <TabsList className="h-10 rounded-none border-b border-border bg-transparent px-4 justify-start gap-0">
                 <TabsTrigger value="briefing" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs gap-1.5">
@@ -379,7 +379,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           </div>
 
           {/* CENTER COLUMN (~40%): Etapa atual + Arquivos + Colaboração */}
-          <div className="w-[40%] shrink-0 min-w-0 overflow-hidden flex flex-col border-r border-border">
+          <div className="flex-[4] min-w-0 overflow-hidden flex flex-col border-r border-border">
             <ScrollArea className="flex-1">
               <div className="p-5 space-y-5">
                 {/* Etapa Atual header */}
@@ -529,7 +529,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           </div>
 
           {/* RIGHT COLUMN (~20%): Mover Para + Informações */}
-          <div className="w-[20%] shrink-0 flex flex-col overflow-hidden">
+          <div className="flex-[2] min-w-0 flex flex-col overflow-hidden">
             <ScrollArea className="flex-1">
               <div className="p-4 space-y-5 overflow-hidden">
                 {/* Move actions */}

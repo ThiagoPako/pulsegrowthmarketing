@@ -6,8 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CheckCircle2, ChevronLeft, ChevronRight, Video, Calendar, Shield, Sparkles, Clock, User, Camera, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Video, Calendar, Shield, Sparkles, Clock, User, Camera, AlertTriangle, ImageIcon, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 
@@ -25,6 +28,38 @@ function minutesToTime(m: number) { return `${String(Math.floor(m / 60)).padStar
 interface Videomaker { id: string; name: string; display_name: string | null; avatar_url: string | null; bio: string | null; job_title: string | null; }
 interface Settings { shift_a_start: string; shift_a_end: string; shift_b_start: string; shift_b_end: string; work_days: string[]; recording_duration: number; }
 interface ExistingClient { id: string; videomaker_id: string | null; fixed_day: string; fixed_time: string; }
+
+interface BriefingData {
+  niche: string;
+  differentials: string;
+  products_services: string;
+  service_mode: string;
+  target_cities: string;
+  has_identity: string;
+  website: string;
+  social_links: string;
+  competitors: string;
+  social_objectives: string[];
+  comfortable_on_camera: string;
+  focus_topics: string;
+  target_age: string[];
+  target_class: string;
+  ideal_client: string;
+  brand_voice: string;
+  avoid_voice: string;
+  additional_info: string;
+  instagram_login: string;
+  instagram_password: string;
+}
+
+const EMPTY_BRIEFING: BriefingData = {
+  niche: '', differentials: '', products_services: '', service_mode: '',
+  target_cities: '', has_identity: '', website: '', social_links: '',
+  competitors: '', social_objectives: [], comfortable_on_camera: '',
+  focus_topics: '', target_age: [], target_class: '', ideal_client: '',
+  brand_voice: '', avoid_voice: '', additional_info: '',
+  instagram_login: '', instagram_password: '',
+};
 
 export default function ClientOnboarding() {
   const { clientId } = useParams<{ clientId: string }>();
@@ -54,6 +89,26 @@ export default function ClientOnboarding() {
   const [extraAppears, setExtraAppears] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
 
+  // Photo preferences
+  const [photoPreference, setPhotoPreference] = useState<string>('nao_precisa');
+  const [hasPhotoShoot, setHasPhotoShoot] = useState(false);
+  const [acceptsPhotoShootCost, setAcceptsPhotoShootCost] = useState(false);
+
+  // Briefing (new clients only)
+  const [briefing, setBriefing] = useState<BriefingData>(EMPTY_BRIEFING);
+  const [isNewClient, setIsNewClient] = useState(false);
+
+  const updateBriefing = (field: keyof BriefingData, value: any) => {
+    setBriefing(prev => ({ ...prev, [field]: value }));
+  };
+
+  const toggleBriefingArray = (field: 'social_objectives' | 'target_age', value: string) => {
+    setBriefing(prev => {
+      const arr = prev[field] as string[];
+      return { ...prev, [field]: arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value] };
+    });
+  };
+
   useEffect(() => {
     if (!clientId) return;
     const fetchData = async () => {
@@ -72,7 +127,14 @@ export default function ClientOnboarding() {
         if (data.client.onboarding_completed) setCompleted(true);
         if (data.client.videomaker_id) setSelectedVm(data.client.videomaker_id);
         if (data.client.monthly_recordings) setMonthlyRecordings(data.client.monthly_recordings);
-        // Clamp selected weeks based on plan limit
+        if (data.client.client_type === 'novo') setIsNewClient(true);
+        if (data.client.photo_preference) setPhotoPreference(data.client.photo_preference);
+        if (data.client.has_photo_shoot) setHasPhotoShoot(data.client.has_photo_shoot);
+        if (data.client.accepts_photo_shoot_cost) setAcceptsPhotoShootCost(data.client.accepts_photo_shoot_cost);
+        if (data.client.briefing_data && Object.keys(data.client.briefing_data).length > 0) {
+          setBriefing({ ...EMPTY_BRIEFING, ...data.client.briefing_data });
+        }
+
         const planName = data.plan?.name?.toLowerCase() || '';
         const planMaxWeeks = planName.includes('booster') || planName.includes('boost') ? 3 
           : planName.includes('premium') ? 4 
@@ -103,7 +165,6 @@ export default function ClientOnboarding() {
     fetchData();
   }, [clientId]);
 
-  // Compute available slots for selected videomaker
   const availableSlots = useMemo(() => {
     if (!selectedVm || !settings) return [];
     const duration = settings.recording_duration;
@@ -129,7 +190,6 @@ export default function ClientOnboarding() {
   const slotsForDay = useMemo(() => availableSlots.filter(s => s.day === fixedDay), [availableSlots, fixedDay]);
   const backupSlotsForDay = useMemo(() => availableSlots.filter(s => s.day === backupDay && s.day !== fixedDay), [availableSlots, backupDay, fixedDay]);
 
-  // Group available slots by day for best suggestions
   const bestDays = useMemo(() => {
     const map = new Map<string, number>();
     for (const s of availableSlots) {
@@ -148,6 +208,9 @@ export default function ClientOnboarding() {
   const handleSave = async () => {
     if (!acceptTerms) { toast.error('Aceite os termos para continuar'); return; }
     if (!selectedVm || !fixedDay || !fixedTime) { toast.error('Preencha todos os campos obrigatórios'); return; }
+    if (photoPreference === 'fotos_reais' && !hasPhotoShoot && !acceptsPhotoShootCost) {
+      toast.error('Aceite o agendamento do ensaio fotográfico para continuar'); return;
+    }
     setSaving(true);
     try {
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/client-onboarding`;
@@ -166,6 +229,10 @@ export default function ClientOnboarding() {
           accepts_extra: acceptsExtra,
           extra_content_types: extraTypes,
           extra_client_appears: extraAppears,
+          photo_preference: photoPreference,
+          has_photo_shoot: hasPhotoShoot,
+          accepts_photo_shoot_cost: acceptsPhotoShootCost,
+          briefing_data: isNewClient ? briefing : undefined,
         }),
       });
       const data = await response.json();
@@ -208,11 +275,31 @@ export default function ClientOnboarding() {
     </div>
   );
 
+  // Dynamic steps based on client type
   const STEPS = [
     { icon: Camera, label: 'Videomaker' },
     { icon: Calendar, label: 'Agenda' },
+    { icon: ImageIcon, label: 'Fotos' },
+    ...(isNewClient ? [{ icon: FileText, label: 'Briefing' }] : []),
     { icon: Sparkles, label: 'Extra & Termos' },
   ];
+
+  const PHOTO_STEP = 2;
+  const BRIEFING_STEP = isNewClient ? 3 : -1;
+  const EXTRA_STEP = isNewClient ? 4 : 3;
+  const LAST_STEP = STEPS.length - 1;
+
+  const canProceed = () => {
+    if (step === 0) return !!selectedVm;
+    if (step === 1) return !!fixedTime;
+    if (step === PHOTO_STEP) {
+      if (photoPreference === 'fotos_reais' && !hasPhotoShoot && !acceptsPhotoShootCost) return false;
+      return true;
+    }
+    if (step === BRIEFING_STEP) return !!briefing.niche && !!briefing.differentials;
+    if (step === EXTRA_STEP) return acceptTerms;
+    return true;
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -229,22 +316,22 @@ export default function ClientOnboarding() {
         {/* Welcome */}
         <div className="text-center space-y-2">
           <h1 className="text-xl font-bold">Olá, {client.responsible_person}! 👋</h1>
-          <p className="text-sm text-muted-foreground">Configure suas preferências de gravação em poucos passos.</p>
+          <p className="text-sm text-muted-foreground">Configure suas preferências em poucos passos.</p>
         </div>
 
         {/* Step indicator */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 overflow-x-auto">
           {STEPS.map((s, i) => {
             const Icon = s.icon;
             return (
-              <div key={i} className="flex items-center gap-1 flex-1">
-                <div className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors w-full justify-center ${
+              <div key={i} className="flex items-center gap-1 flex-1 min-w-0">
+                <div className={`flex items-center gap-1 px-2 py-2 rounded-lg text-xs font-medium transition-colors w-full justify-center ${
                   i === step ? 'bg-primary text-primary-foreground' : i < step ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
                 }`}>
-                  <Icon size={14} />
-                  <span>{s.label}</span>
+                  <Icon size={13} className="shrink-0" />
+                  <span className="truncate">{s.label}</span>
                 </div>
-                {i < STEPS.length - 1 && <ChevronRight size={14} className="text-muted-foreground shrink-0" />}
+                {i < STEPS.length - 1 && <ChevronRight size={12} className="text-muted-foreground shrink-0" />}
               </div>
             );
           })}
@@ -258,7 +345,7 @@ export default function ClientOnboarding() {
                 <Camera size={16} className="text-primary" /> Escolha seu Videomaker
               </p>
               <p className="text-xs text-muted-foreground">
-                Selecione o profissional que será responsável pelas suas gravações. Cada videomaker tem um estilo e especialidade.
+                Selecione o profissional que será responsável pelas suas gravações.
               </p>
             </div>
 
@@ -297,7 +384,7 @@ export default function ClientOnboarding() {
               )}
             </div>
 
-            {/* Monthly recordings - two-step: frequency then weeks */}
+            {/* Monthly recordings */}
             {selectedVm && (() => {
               const maxWeeks = plan 
                 ? (plan.name.toLowerCase().includes('booster') || plan.name.toLowerCase().includes('boost') ? 3 
@@ -321,12 +408,11 @@ export default function ClientOnboarding() {
               
               return (
                 <div className="space-y-3">
-                  {/* Step 1: Frequency */}
                   <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
                     <p className="text-sm font-semibold flex items-center gap-2">
                       <Video size={16} className="text-primary" /> Quantas vezes por mês você tem disponibilidade para gravar?
                     </p>
-                    <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${Math.min(frequencyOptions.length, 4)}, 1fr)` }}>
+                    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(frequencyOptions.length, 4)}, 1fr)` }}>
                       {frequencyOptions.map(n => (
                         <button
                           key={n}
@@ -347,13 +433,12 @@ export default function ClientOnboarding() {
                     </div>
                   </div>
 
-                  {/* Step 2: Which weeks */}
                   <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
                     <p className="text-sm font-semibold flex items-center gap-2">
                       <Calendar size={16} className="text-primary" /> Em quais semanas do mês prefere gravar?
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Selecione {monthlyRecordings} semana{monthlyRecordings > 1 ? 's' : ''} de sua preferência.
+                      Selecione {monthlyRecordings} semana{monthlyRecordings > 1 ? 's' : ''}.
                     </p>
                     <div className="grid grid-cols-4 gap-2">
                       {[1, 2, 3, 4].map(n => (
@@ -374,16 +459,15 @@ export default function ClientOnboarding() {
                       ))}
                     </div>
                     <p className="text-xs text-muted-foreground text-center">
-                      {selectedWeeks.length}/{monthlyRecordings} semana{monthlyRecordings > 1 ? 's' : ''} selecionada{selectedWeeks.length > 1 ? 's' : ''} 
-                      {selectedWeeks.length > 0 && <> — Gravações na{selectedWeeks.length > 1 ? 's' : ''} {selectedWeeks.map(w => WEEK_LABELS[w-1]).join(', ')}</>}
+                      {selectedWeeks.length}/{monthlyRecordings} selecionada{selectedWeeks.length > 1 ? 's' : ''} 
+                      {selectedWeeks.length > 0 && <> — {selectedWeeks.map(w => WEEK_LABELS[w-1]).join(', ')}</>}
                     </p>
                   </div>
 
                   <div className="p-3 rounded-lg bg-accent/50 border border-accent text-xs text-muted-foreground">
                     <p>
                       <strong className="text-foreground">💡 Importante:</strong> Gravar menos semanas por mês <strong>não significa produzir menos conteúdo</strong>. 
-                      Vamos otimizar cada sessão para extrair o máximo de material, sem interferir no fluxo da sua empresa. 
-                      Menos visitas = menos interrupção na sua rotina, com a mesma qualidade e volume de entrega.
+                      Vamos otimizar cada sessão para extrair o máximo de material.
                     </p>
                   </div>
                 </div>
@@ -395,7 +479,6 @@ export default function ClientOnboarding() {
         {/* Step 1: Schedule */}
         {step === 1 && settings && (
           <div className="space-y-5">
-            {/* Preferred shift */}
             <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-3">
               <p className="text-sm font-semibold">Em qual período prefere gravar?</p>
               <div className="grid grid-cols-3 gap-2">
@@ -418,7 +501,6 @@ export default function ClientOnboarding() {
               </div>
             </div>
 
-            {/* Best day suggestions */}
             {bestDays.length > 0 && (
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-primary flex items-center gap-2">
@@ -446,7 +528,6 @@ export default function ClientOnboarding() {
               </div>
             )}
 
-            {/* Day and time selection */}
             <div className="space-y-3">
               <p className="text-xs text-muted-foreground font-medium">Selecione o dia e horário fixo de gravação:</p>
               <div className="grid grid-cols-2 gap-3">
@@ -457,11 +538,7 @@ export default function ClientOnboarding() {
                     <SelectContent>
                       {(settings.work_days as string[]).map(d => {
                         const count = availableSlots.filter(s => s.day === d).length;
-                        return (
-                          <SelectItem key={d} value={d}>
-                            {DAY_LABELS[d]} ({count} vagas)
-                          </SelectItem>
-                        );
+                        return <SelectItem key={d} value={d}>{DAY_LABELS[d]} ({count} vagas)</SelectItem>;
                       })}
                     </SelectContent>
                   </Select>
@@ -490,15 +567,12 @@ export default function ClientOnboarding() {
               </div>
             </div>
 
-            {/* Backup section */}
             <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
               <p className="text-sm font-semibold flex items-center gap-2">
                 <Shield size={14} className="text-primary" /> Dia de Backup
               </p>
               <p className="text-xs text-muted-foreground">
-                Caso precise cancelar a gravação no dia marcado, você pode escolher <strong>1 dia de backup na semana</strong> para 
-                dar continuidade à entrega. Esse backup fica sujeito à disponibilidade de agenda. Se não houver espaço, a gravação 
-                segue normalmente na próxima semana.
+                Caso precise cancelar, escolha <strong>1 dia de backup</strong> sujeito à disponibilidade.
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
@@ -537,17 +611,403 @@ export default function ClientOnboarding() {
           </div>
         )}
 
-        {/* Step 2: Extra content + Terms */}
-        {step === 2 && (
+        {/* Step 2: Photo Preferences */}
+        {step === PHOTO_STEP && (
           <div className="space-y-5">
-            {/* Extra content */}
+            <div className="p-4 rounded-xl bg-primary/5 border border-primary/20">
+              <p className="text-sm font-semibold flex items-center gap-2 mb-1">
+                <ImageIcon size={16} className="text-primary" /> Fotos para Artes
+              </p>
+              <p className="text-xs text-muted-foreground">
+                As artes (posts, banners, criativos) da sua marca podem usar fotos reais suas ou da equipe. Defina sua preferência abaixo.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold">Como você prefere que as artes sejam feitas?</Label>
+              <RadioGroup value={photoPreference} onValueChange={setPhotoPreference} className="space-y-2">
+                <label className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                  photoPreference === 'fotos_reais' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'
+                }`}>
+                  <RadioGroupItem value="fotos_reais" className="mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium">Quero fotos reais (minhas ou da equipe)</p>
+                    <p className="text-xs text-muted-foreground">As artes serão criadas com fotos suas, dos colaboradores ou do ambiente da empresa.</p>
+                  </div>
+                </label>
+                <label className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                  photoPreference === 'banco_imagens' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'
+                }`}>
+                  <RadioGroupItem value="banco_imagens" className="mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium">Pode usar banco de imagens</p>
+                    <p className="text-xs text-muted-foreground">Usaremos fotos profissionais de bancos de imagem que combinem com sua marca.</p>
+                  </div>
+                </label>
+                <label className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                  photoPreference === 'nao_precisa' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'
+                }`}>
+                  <RadioGroupItem value="nao_precisa" className="mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium">Não preciso de fotos nas artes</p>
+                    <p className="text-xs text-muted-foreground">Artes com design gráfico, ícones e elementos visuais sem fotos.</p>
+                  </div>
+                </label>
+              </RadioGroup>
+            </div>
+
+            {photoPreference === 'fotos_reais' && (
+              <div className="space-y-4">
+                <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
+                  <Label className="text-sm font-semibold">Você já possui ensaio fotográfico para nos enviar?</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setHasPhotoShoot(true)}
+                      className={`p-3 rounded-xl border-2 text-center transition-all ${
+                        hasPhotoShoot ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
+                      }`}
+                    >
+                      <span className="text-sm font-semibold block">✅ Sim, tenho</span>
+                      <span className="text-xs text-muted-foreground">Vou enviar as fotos</span>
+                    </button>
+                    <button
+                      onClick={() => { setHasPhotoShoot(false); setAcceptsPhotoShootCost(false); }}
+                      className={`p-3 rounded-xl border-2 text-center transition-all ${
+                        !hasPhotoShoot ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
+                      }`}
+                    >
+                      <span className="text-sm font-semibold block">❌ Não tenho</span>
+                      <span className="text-xs text-muted-foreground">Preciso agendar</span>
+                    </button>
+                  </div>
+                </div>
+
+                {!hasPhotoShoot && (
+                  <div className="p-4 rounded-xl border-2 border-warning/40 bg-warning/5 space-y-3">
+                    <div className="flex gap-2 items-start">
+                      <AlertTriangle size={18} className="text-warning shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-semibold">Ensaio Fotográfico</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Para usar fotos reais nas artes, é necessário um ensaio fotográfico profissional. 
+                          Vamos agendar com nosso fotógrafo parceiro. <strong>Este serviço tem custo adicional</strong> que será informado pela equipe.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 pt-2 border-t border-warning/20">
+                      <Checkbox
+                        id="photo-cost"
+                        checked={acceptsPhotoShootCost}
+                        onCheckedChange={v => setAcceptsPhotoShootCost(v === true)}
+                      />
+                      <label htmlFor="photo-cost" className="text-sm font-medium cursor-pointer">
+                        Aceito agendar o ensaio fotográfico (custo adicional do fotógrafo)
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {hasPhotoShoot && (
+                  <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 text-xs text-muted-foreground">
+                    <p><strong className="text-foreground">📸 Ótimo!</strong> Após concluir o onboarding, envie as fotos do ensaio para nossa equipe pelo WhatsApp ou pelo link do Google Drive que compartilharemos.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Briefing Step (new clients only) */}
+        {step === BRIEFING_STEP && isNewClient && (
+          <div className="space-y-5">
+            <div className="p-4 rounded-xl bg-primary/5 border border-primary/20">
+              <p className="text-sm font-semibold flex items-center gap-2 mb-1">
+                <FileText size={16} className="text-primary" /> Briefing do seu Negócio
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Responda com calma — vamos usar essas informações para criar a melhor estratégia para sua marca. Quanto mais detalhes, melhor!
+              </p>
+            </div>
+
+            {/* Section: Sobre o Negócio */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-primary flex items-center gap-2">🏢 Sobre o seu Negócio</h3>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Qual seu nicho de atuação? <span className="text-destructive">*</span></Label>
+                <Input
+                  value={briefing.niche}
+                  onChange={e => updateBriefing('niche', e.target.value)}
+                  placeholder="Ex: Odontologia, Advocacia, Restaurante..."
+                  maxLength={200}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Qual o seu principal diferencial? <span className="text-destructive">*</span></Label>
+                <Textarea
+                  value={briefing.differentials}
+                  onChange={e => updateBriefing('differentials', e.target.value)}
+                  placeholder="O que te diferencia dos concorrentes?"
+                  rows={2}
+                  maxLength={500}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Quais produtos/serviços deseja divulgar?</Label>
+                <Textarea
+                  value={briefing.products_services}
+                  onChange={e => updateBriefing('products_services', e.target.value)}
+                  placeholder="Liste os principais produtos ou serviços"
+                  rows={2}
+                  maxLength={500}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Forma de atendimento</Label>
+                <RadioGroup value={briefing.service_mode} onValueChange={v => updateBriefing('service_mode', v)} className="flex gap-3">
+                  {['Digital', 'Presencial', 'Ambos'].map(opt => (
+                    <label key={opt} className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all ${
+                      briefing.service_mode === opt ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/40'
+                    }`}>
+                      <RadioGroupItem value={opt} />
+                      <span className="text-sm">{opt}</span>
+                    </label>
+                  ))}
+                </RadioGroup>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Cidades que deseja atingir</Label>
+                <Input
+                  value={briefing.target_cities}
+                  onChange={e => updateBriefing('target_cities', e.target.value)}
+                  placeholder="Ex: São Paulo, Campinas, região metropolitana"
+                  maxLength={300}
+                />
+              </div>
+            </div>
+
+            {/* Section: Identidade & Redes */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-primary flex items-center gap-2">📱 Identidade & Redes Sociais</h3>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Já possui identidade visual (logo, cores, fontes)?</Label>
+                <RadioGroup value={briefing.has_identity} onValueChange={v => updateBriefing('has_identity', v)} className="flex gap-3">
+                  {['Sim', 'Não'].map(opt => (
+                    <label key={opt} className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all ${
+                      briefing.has_identity === opt ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/40'
+                    }`}>
+                      <RadioGroupItem value={opt} />
+                      <span className="text-sm">{opt}</span>
+                    </label>
+                  ))}
+                </RadioGroup>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Link do site (se tiver)</Label>
+                <Input
+                  value={briefing.website}
+                  onChange={e => updateBriefing('website', e.target.value)}
+                  placeholder="https://www.seusite.com.br"
+                  maxLength={300}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Links das redes sociais atuais</Label>
+                <Textarea
+                  value={briefing.social_links}
+                  onChange={e => updateBriefing('social_links', e.target.value)}
+                  placeholder="Instagram, Facebook, TikTok, YouTube... (um por linha)"
+                  rows={2}
+                  maxLength={500}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Objetivo com as redes sociais</Label>
+                <div className="flex flex-wrap gap-2">
+                  {['Captar clientes', 'Aumentar visibilidade', 'Gerar autoridade', 'Iniciar novo negócio', 'Manter presença'].map(obj => (
+                    <button
+                      key={obj}
+                      onClick={() => toggleBriefingArray('social_objectives', obj)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        briefing.social_objectives.includes(obj) ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                      }`}
+                    >
+                      {obj}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Você se sente confortável aparecendo em vídeos/stories?</Label>
+                <RadioGroup value={briefing.comfortable_on_camera} onValueChange={v => updateBriefing('comfortable_on_camera', v)} className="flex gap-2 flex-wrap">
+                  {['Sim', 'Não', 'Ainda não, mas quero melhorar'].map(opt => (
+                    <label key={opt} className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all text-sm ${
+                      briefing.comfortable_on_camera === opt ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/40'
+                    }`}>
+                      <RadioGroupItem value={opt} />
+                      {opt}
+                    </label>
+                  ))}
+                </RadioGroup>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Temas que deseja abordar nas redes</Label>
+                <Textarea
+                  value={briefing.focus_topics}
+                  onChange={e => updateBriefing('focus_topics', e.target.value)}
+                  placeholder="Assuntos importantes para o seu público"
+                  rows={2}
+                  maxLength={500}
+                />
+              </div>
+            </div>
+
+            {/* Section: Público & Concorrentes */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-primary flex items-center gap-2">👥 Público & Concorrentes</h3>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Faixa etária do público-alvo</Label>
+                <div className="flex flex-wrap gap-2">
+                  {['18-24', '25-34', '35-45', '45+'].map(age => (
+                    <button
+                      key={age}
+                      onClick={() => toggleBriefingArray('target_age', age)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        briefing.target_age.includes(age) ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                      }`}
+                    >
+                      {age} anos
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Classe social do público</Label>
+                <RadioGroup value={briefing.target_class} onValueChange={v => updateBriefing('target_class', v)} className="flex gap-2 flex-wrap">
+                  {['A', 'B', 'C', 'D', 'Misto'].map(opt => (
+                    <label key={opt} className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all text-sm ${
+                      briefing.target_class === opt ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/40'
+                    }`}>
+                      <RadioGroupItem value={opt} />
+                      Classe {opt}
+                    </label>
+                  ))}
+                </RadioGroup>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Principais concorrentes (nome e Instagram)</Label>
+                <Textarea
+                  value={briefing.competitors}
+                  onChange={e => updateBriefing('competitors', e.target.value)}
+                  placeholder="Liste os 3 principais concorrentes"
+                  rows={2}
+                  maxLength={500}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Descreva seu cliente ideal</Label>
+                <Textarea
+                  value={briefing.ideal_client}
+                  onChange={e => updateBriefing('ideal_client', e.target.value)}
+                  placeholder="Como seria o cliente perfeito do seu negócio?"
+                  rows={2}
+                  maxLength={500}
+                />
+              </div>
+            </div>
+
+            {/* Section: Tom de Comunicação */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-primary flex items-center gap-2">🎯 Tom de Comunicação</h3>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Como gostaria que sua marca fosse reconhecida?</Label>
+                <Textarea
+                  value={briefing.brand_voice}
+                  onChange={e => updateBriefing('brand_voice', e.target.value)}
+                  placeholder="Ex: Profissional e acessível, divertido e próximo..."
+                  rows={2}
+                  maxLength={500}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Como NÃO gostaria que fosse reconhecida?</Label>
+                <Textarea
+                  value={briefing.avoid_voice}
+                  onChange={e => updateBriefing('avoid_voice', e.target.value)}
+                  placeholder="O que deve ser evitado na comunicação?"
+                  rows={2}
+                  maxLength={500}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Algo mais que devemos saber?</Label>
+                <Textarea
+                  value={briefing.additional_info}
+                  onChange={e => updateBriefing('additional_info', e.target.value)}
+                  placeholder="Informações extras, história da empresa, curiosidades..."
+                  rows={3}
+                  maxLength={1000}
+                />
+              </div>
+            </div>
+
+            {/* Section: Acesso */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-primary flex items-center gap-2">🔐 Acesso às Redes</h3>
+              <p className="text-xs text-muted-foreground">Precisamos do acesso para gerenciar e publicar conteúdo. Seus dados estão seguros.</p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="text-sm">Login do Instagram</Label>
+                  <Input
+                    value={briefing.instagram_login}
+                    onChange={e => updateBriefing('instagram_login', e.target.value)}
+                    placeholder="Seu login"
+                    maxLength={100}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm">Senha do Instagram</Label>
+                  <Input
+                    type="password"
+                    value={briefing.instagram_password}
+                    onChange={e => updateBriefing('instagram_password', e.target.value)}
+                    placeholder="Sua senha"
+                    maxLength={100}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Last Step: Extra content + Terms */}
+        {step === EXTRA_STEP && (
+          <div className="space-y-5">
             <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-3">
               <p className="text-sm font-semibold flex items-center gap-2">
                 <Sparkles size={16} className="text-primary" /> Conteúdo Extra
               </p>
               <p className="text-xs text-muted-foreground">
-                Caso algum videomaker tenha uma vaga livre na agenda, podemos enviar um profissional à sua empresa 
-                <strong> sem aviso prévio</strong> para produzir conteúdo adicional gratuitamente. Escolha se deseja receber esse benefício.
+                Caso algum videomaker tenha vaga livre, podemos enviar um profissional à sua empresa 
+                <strong> sem aviso prévio</strong> para produzir conteúdo extra gratuitamente.
               </p>
             </div>
 
@@ -585,7 +1045,7 @@ export default function ClientOnboarding() {
                 <div className="p-3 rounded-lg bg-warning/10 border border-warning/20 flex gap-2 items-start">
                   <AlertTriangle size={16} className="text-warning shrink-0 mt-0.5" />
                   <p className="text-xs text-muted-foreground">
-                    O conteúdo extra depende da disponibilidade de agenda e pode ser produzido por <strong>qualquer videomaker disponível</strong> da agência.
+                    O conteúdo extra depende da disponibilidade e pode ser produzido por <strong>qualquer videomaker</strong> da agência.
                   </p>
                 </div>
               </div>
@@ -598,10 +1058,12 @@ export default function ClientOnboarding() {
                 <p>Ao aceitar, você concorda com os seguintes termos:</p>
                 <ul className="list-disc pl-4 space-y-1">
                   <li>O dia e horário fixo de gravação serão reservados exclusivamente para sua empresa.</li>
-                  <li>Cancelamentos no dia da gravação podem ser reagendados para o dia de backup, sujeito à disponibilidade.</li>
-                  <li>Se não houver vaga no backup, a gravação será realizada na semana seguinte no horário fixo.</li>
-                  <li>O conteúdo extra (se aceito) será produzido sem aviso prévio, por qualquer profissional disponível.</li>
+                  <li>Cancelamentos podem ser reagendados para o dia de backup, sujeito à disponibilidade.</li>
+                  <li>O conteúdo extra (se aceito) será produzido sem aviso prévio.</li>
                   <li>A quantidade de gravações mensais pode ser ajustada com aviso prévio de 7 dias.</li>
+                  {photoPreference === 'fotos_reais' && !hasPhotoShoot && (
+                    <li className="text-warning font-medium">O ensaio fotográfico tem custo adicional e será agendado pela equipe.</li>
+                  )}
                 </ul>
               </div>
               <div className="flex items-center gap-3 pt-2 border-t border-border">
@@ -625,11 +1087,11 @@ export default function ClientOnboarding() {
               <ChevronLeft size={14} /> Voltar
             </Button>
           )}
-          {step < 2 ? (
+          {step < LAST_STEP ? (
             <Button
               onClick={() => setStep(s => s + 1)}
               className="ml-auto gap-1"
-              disabled={step === 0 ? !selectedVm : step === 1 ? !fixedTime : false}
+              disabled={!canProceed()}
             >
               Próximo <ChevronRight size={14} />
             </Button>
@@ -640,7 +1102,6 @@ export default function ClientOnboarding() {
           )}
         </div>
 
-        {/* Footer */}
         <div className="text-center pb-6">
           <img src="/pulse_header.png" alt="Pulse Growth Marketing" className="h-6 mx-auto opacity-40" />
         </div>

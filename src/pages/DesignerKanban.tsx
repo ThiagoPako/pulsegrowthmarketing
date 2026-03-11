@@ -31,11 +31,12 @@ export default function DesignerKanban() {
   const { user } = useAuth();
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
   const [createOpen, setCreateOpen] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<DesignTask | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const tasks = tasksQuery.data || [];
+  const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
 
   const tasksByColumn = useMemo(() => {
     const map: Record<string, DesignTask[]> = {};
@@ -179,7 +180,7 @@ export default function DesignerKanban() {
                     key={task.id}
                     task={task}
                     isDragging={draggingTaskId === task.id}
-                    onClick={() => setSelectedTask(task)}
+                    onClick={() => setSelectedTaskId(task.id)}
                     onDragStart={e => handleDragStart(e, task)}
                     onDragEnd={handleDragEnd}
                   />
@@ -203,7 +204,7 @@ export default function DesignerKanban() {
             </thead>
             <tbody>
               {tasks.map(task => (
-                <tr key={task.id} className="border-t hover:bg-muted/30 cursor-pointer" onClick={() => setSelectedTask(task)}>
+                <tr key={task.id} className="border-t hover:bg-muted/30 cursor-pointer" onClick={() => setSelectedTaskId(task.id)}>
                   <td className="p-3">
                     <div className="flex items-center gap-2">
                       <ClientLogo client={{ companyName: task.clients?.company_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="sm" />
@@ -224,7 +225,7 @@ export default function DesignerKanban() {
 
       <DesignTaskCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
       {selectedTask && (
-        <DesignTaskDetailSheet task={selectedTask} open={!!selectedTask} onOpenChange={o => !o && setSelectedTask(null)} />
+        <DesignTaskDetailSheet task={selectedTask} open={!!selectedTask} onOpenChange={o => !o && setSelectedTaskId(null)} />
       )}
     </div>
   );

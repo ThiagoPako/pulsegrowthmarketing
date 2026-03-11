@@ -119,17 +119,19 @@ export default function WhatsAppDashboard() {
     expired: { label: 'Expirado', variant: 'secondary' },
   };
 
-  const templateFields: { key: keyof WhatsAppConfig; label: string; description: string; variables: string }[] = [
+  const templateFields: { key: keyof WhatsAppConfig; toggleKey?: keyof WhatsAppConfig; label: string; description: string; variables: string }[] = [
     {
       key: 'msgRecordingScheduled',
+      toggleKey: 'autoRecordingScheduled',
       label: 'Novo Agendamento de Gravação',
       description: 'Enviada quando uma gravação é agendada',
       variables: '{nome_cliente}, {data_gravacao}, {hora_gravacao}, {videomaker}',
     },
     {
       key: 'msgConfirmation',
+      toggleKey: 'autoConfirmation',
       label: '📋 Confirmação de Gravação (24h)',
-      description: 'Enviada 24h antes pedindo confirmação — substitui o lembrete antigo',
+      description: 'Enviada 24h antes pedindo confirmação',
       variables: '{nome_cliente}, {data_gravacao}, {hora_gravacao}, {videomaker}',
     },
     {
@@ -155,6 +157,34 @@ export default function WhatsAppDashboard() {
       label: '🎯 Backup Confirmado',
       description: 'Enviada quando um cliente backup aceita a vaga',
       variables: '{nome_cliente}',
+    },
+    {
+      key: 'msgTaskEditing',
+      toggleKey: 'autoTaskEditing',
+      label: '✂️ Vídeo em Edição',
+      description: 'Enviada quando o vídeo é gravado e entra na fila de edição',
+      variables: '{nome_cliente}, {titulo}',
+    },
+    {
+      key: 'msgVideoApproval',
+      toggleKey: 'autoVideoApproval',
+      label: '📤 Envio para Aprovação do Cliente',
+      description: 'Enviada quando o vídeo editado é enviado para aprovação',
+      variables: '{nome_cliente}, {link_video}, {titulo}',
+    },
+    {
+      key: 'msgTaskApproved',
+      toggleKey: 'autoTaskApproved',
+      label: '✅ Vídeo Aprovado',
+      description: 'Enviada quando o vídeo é aprovado e vai para agendamento',
+      variables: '{nome_cliente}, {titulo}',
+    },
+    {
+      key: 'msgApprovalExpired',
+      toggleKey: 'autoApprovalExpired',
+      label: '⏰ Aprovação Expirada',
+      description: 'Enviada quando o prazo de aprovação expira e o vídeo segue automaticamente',
+      variables: '{nome_cliente}, {titulo}',
     },
   ];
 

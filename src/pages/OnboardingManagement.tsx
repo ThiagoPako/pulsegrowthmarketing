@@ -96,8 +96,10 @@ export default function OnboardingManagement() {
         .filter(t => t.status === 'concluido')
         .map(t => t.stage as OnboardingStage);
 
-      const currentTask = group.tasks.find(t => t.status !== 'concluido');
-      group.currentStage = (currentTask?.stage as OnboardingStage) || 
+      // Find all active (non-completed) stages
+      const activeTasks = group.tasks.filter(t => t.status !== 'concluido');
+      group.activeStages = activeTasks.map(t => t.stage as OnboardingStage);
+      group.currentStage = (activeTasks[0]?.stage as OnboardingStage) || 
         (group.completedStages.length === group.tasks.length && group.tasks.length > 0 ? 'reformulacao_perfil' : 'cliente_novo');
     });
 

@@ -529,7 +529,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           </div>
 
           {/* RIGHT COLUMN (~20%): Mover Para + Informações */}
-          <div className="w-[20%] shrink-0 flex flex-col overflow-hidden">
+          <div className="flex-[2] min-w-0 flex flex-col overflow-hidden">
             <ScrollArea className="flex-1">
               <div className="p-4 space-y-5 overflow-hidden">
                 {/* Move actions */}

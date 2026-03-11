@@ -31,7 +31,8 @@ export default function DesignerKanban() {
   const { user } = useAuth();
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
   const [createOpen, setCreateOpen] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<DesignTask | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
 

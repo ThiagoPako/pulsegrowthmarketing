@@ -157,7 +157,7 @@ export default function DesignerKanban() {
               <TabsTrigger value="lista" className="text-xs gap-1"><List size={14} /> Lista</TabsTrigger>
             </TabsList>
           </Tabs>
-          {(currentUser?.role === 'admin' || currentUser?.role === 'social_media') && (
+          {(currentUser?.role === 'admin' || currentUser?.role === 'social_media' || currentUser?.role === 'designer') && (
             <Button size="sm" onClick={() => setCreateOpen(true)}>
               <Plus size={16} className="mr-1" /> Nova Tarefa
             </Button>

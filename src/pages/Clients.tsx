@@ -16,13 +16,14 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
 import { Textarea } from '@/components/ui/textarea';
+import { useOnboarding } from '@/hooks/useOnboarding';
 
 const DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 const CONTENT_TYPES: ContentType[] = ['reels', 'story', 'produto'];
 
 type PreferredShift = 'turnoA' | 'turnoB' | 'ambos';
 
-const emptyClient = (): Partial<Client> => ({
+const emptyClient = (): Partial<Client> & { clientType?: string } => ({
   companyName: '', responsiblePerson: '', phone: '', whatsapp: '', email: '', city: '', color: CLIENT_COLORS[0].value,
   fixedDay: 'segunda', fixedTime: '09:00',
   videomaker: '', backupTime: '14:00', backupDay: 'terca', extraDay: 'quarta',
@@ -71,9 +72,11 @@ const STEP_LABELS = [
 
 export default function Clients() {
   const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient } = useApp();
+  const { createOnboardingForClient } = useOnboarding();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
-  const [form, setForm] = useState<Partial<Client>>(emptyClient());
+  const [form, setForm] = useState<Partial<Client> & { clientType?: string }>(emptyClient());
+  const [clientType, setClientType] = useState<'novo' | 'existente'>('novo');
   const [step, setStep] = useState(0);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -296,7 +299,7 @@ export default function Clients() {
       const ok = addClient(newClient);
       if (!ok) { toast.error('Empresa já cadastrada'); return; }
       // Update plan fields after insert
-      await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal } as any).eq('id', clientId);
+      await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, client_type: clientType } as any).eq('id', clientId);
       // Create financial contract
       await supabase.from('financial_contracts').insert({
         client_id: clientId,
@@ -309,6 +312,10 @@ export default function Clients() {
       } as any);
       // Save social accounts
       await saveSocialAccounts(clientId);
+      // Generate onboarding tasks for new clients
+      if (clientType === 'novo') {
+        await createOnboardingForClient.mutateAsync(clientId);
+      }
       const count = await generateScheduleForClient(newClient);
       if (count > 0) {
         toast.success(`Cliente cadastrado — ${count} gravação(ões) criada(s) na agenda`);
@@ -453,6 +460,29 @@ export default function Clients() {
           <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoSelect} />
         </div>
       </div>
+
+      {/* Client Type - only on create */}
+      {!editing && (
+        <div className="space-y-2">
+          <Label>Tipo de Cliente *</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => setClientType('novo')}
+              className={`p-3 rounded-xl border-2 text-center transition-all text-sm ${
+                clientType === 'novo' ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
+              }`}>
+              <span className="font-semibold block">🆕 Cliente Novo</span>
+              <span className="text-[10px] text-muted-foreground">Gera onboarding automático</span>
+            </button>
+            <button type="button" onClick={() => setClientType('existente')}
+              className={`p-3 rounded-xl border-2 text-center transition-all text-sm ${
+                clientType === 'existente' ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
+              }`}>
+              <span className="font-semibold block">📋 Cliente Existente</span>
+              <span className="text-[10px] text-muted-foreground">Sem onboarding</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-1">
         <Label>Nome da Empresa *</Label>

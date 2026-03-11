@@ -42,6 +42,9 @@ import FinancialPartners from "@/pages/FinancialPartners";
 import NotFound from "@/pages/NotFound";
 import ClientOnboarding from "@/pages/ClientOnboarding";
 import DesignerKanban from "@/pages/DesignerKanban";
+import DesignerReports from "@/pages/DesignerReports";
+import OnboardingManagement from "@/pages/OnboardingManagement";
+import ClientBriefing from "@/pages/ClientBriefing";
 
 const queryClient = new QueryClient();
 
@@ -93,6 +96,9 @@ function AppRoutes() {
       <Route path="/edicao" element={<ProtectedRoute><EditorDashboard /></ProtectedRoute>} />
       <Route path="/edicao/kanban" element={<ProtectedRoute><EditorKanban /></ProtectedRoute>} />
       <Route path="/designer" element={<ProtectedRoute><DesignerKanban /></ProtectedRoute>} />
+      <Route path="/designer/relatorios" element={<ProtectedRoute><DesignerReports /></ProtectedRoute>} />
+      <Route path="/onboarding-gestao" element={<ProtectedRoute><OnboardingManagement /></ProtectedRoute>} />
+      <Route path="/briefing/:clientId" element={<ClientBriefing />} />
       <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppDashboard /></ProtectedRoute>} />
       <Route path="/financeiro" element={<ProtectedRoute><FinancialDashboard /></ProtectedRoute>} />
       <Route path="/financeiro/contratos" element={<ProtectedRoute><FinancialContracts /></ProtectedRoute>} />

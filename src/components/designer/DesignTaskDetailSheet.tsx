@@ -12,13 +12,19 @@ import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import ClientLogo from '@/components/ClientLogo';
-import { Play, Pause, Square, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History } from 'lucide-react';
+import { Play, Pause, Square, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Props {
   task: DesignTask;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+interface ChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
 }
 
 const FORMAT_LABELS: Record<string, string> = { feed: 'Feed', story: 'Story', midia_fisica: 'Mídia Física' };
@@ -33,6 +39,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [editableFileUrl, setEditableFileUrl] = useState(task.editable_file_url || '');
   const [adjustmentNotes, setAdjustmentNotes] = useState('');
   const [timerDisplay, setTimerDisplay] = useState('00:00:00');
+  const [checklist, setChecklist] = useState<ChecklistItem[]>((task as any).checklist || []);
+  const [newChecklistItem, setNewChecklistItem] = useState('');
 
   const history = historyQuery(task.id);
 
@@ -216,6 +224,60 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
               </div>
             </div>
           )}
+
+          <Separator />
+
+          {/* Checklist */}
+          <div>
+            <Label className="text-xs text-muted-foreground mb-2 block">Checklist</Label>
+            <div className="space-y-1.5">
+              {checklist.map(item => (
+                <div key={item.id} className="flex items-center gap-2">
+                  <Checkbox
+                    checked={item.done}
+                    onCheckedChange={async (checked) => {
+                      const updated = checklist.map(c => c.id === item.id ? { ...c, done: !!checked } : c);
+                      setChecklist(updated);
+                      await updateTask.mutateAsync({ id: task.id, checklist: updated } as any);
+                    }}
+                  />
+                  <span className={`text-sm flex-1 ${item.done ? 'line-through text-muted-foreground' : ''}`}>{item.text}</span>
+                  <button onClick={async () => {
+                    const updated = checklist.filter(c => c.id !== item.id);
+                    setChecklist(updated);
+                    await updateTask.mutateAsync({ id: task.id, checklist: updated } as any);
+                  }} className="text-muted-foreground hover:text-destructive">
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 mt-2">
+              <Input
+                value={newChecklistItem}
+                onChange={e => setNewChecklistItem(e.target.value)}
+                placeholder="Novo item..."
+                className="text-sm h-8"
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter' && newChecklistItem.trim()) {
+                    const updated = [...checklist, { id: crypto.randomUUID(), text: newChecklistItem.trim(), done: false }];
+                    setChecklist(updated);
+                    setNewChecklistItem('');
+                    await updateTask.mutateAsync({ id: task.id, checklist: updated } as any);
+                  }
+                }}
+              />
+              <Button size="sm" variant="outline" className="h-8" onClick={async () => {
+                if (!newChecklistItem.trim()) return;
+                const updated = [...checklist, { id: crypto.randomUUID(), text: newChecklistItem.trim(), done: false }];
+                setChecklist(updated);
+                setNewChecklistItem('');
+                await updateTask.mutateAsync({ id: task.id, checklist: updated } as any);
+              }}>
+                <Plus size={14} />
+              </Button>
+            </div>
+          </div>
 
           <Separator />
 

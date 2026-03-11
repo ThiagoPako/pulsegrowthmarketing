@@ -212,7 +212,6 @@ export async function syncContentTaskColumnChange(
           .replace('{nome_cliente}', ctx.clientName || '')
           .replace('{link_video}', ctx.editedVideoLink || 'Link não disponível')
           .replace('{titulo}', ctx.title);
-        msg += '\\n\\n⏰ Você tem até *6 horas* para avaliar e aprovar o vídeo. Após esse prazo, ele será encaminhado para agendamento automaticamente.';
 
         await sendWhatsAppMessage({
           number: ctx.clientWhatsapp,

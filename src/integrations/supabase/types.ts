@@ -2045,9 +2045,12 @@ export type Database = {
         Row: {
           api_token: string
           api_token_configured: boolean
+          auto_approval_expired: boolean
           auto_confirmation: boolean
           auto_recording_reminder: boolean
           auto_recording_scheduled: boolean
+          auto_task_approved: boolean
+          auto_task_editing: boolean
           auto_video_approval: boolean
           auto_video_approved: boolean
           close_ticket: boolean
@@ -2063,6 +2066,8 @@ export type Database = {
           msg_confirmation_confirmed: string
           msg_recording_reminder: string
           msg_recording_scheduled: string
+          msg_task_approved: string
+          msg_task_editing: string
           msg_video_approval: string
           msg_video_approved: string
           send_signature: boolean
@@ -2071,9 +2076,12 @@ export type Database = {
         Insert: {
           api_token?: string
           api_token_configured?: boolean
+          auto_approval_expired?: boolean
           auto_confirmation?: boolean
           auto_recording_reminder?: boolean
           auto_recording_scheduled?: boolean
+          auto_task_approved?: boolean
+          auto_task_editing?: boolean
           auto_video_approval?: boolean
           auto_video_approved?: boolean
           close_ticket?: boolean
@@ -2089,6 +2097,8 @@ export type Database = {
           msg_confirmation_confirmed?: string
           msg_recording_reminder?: string
           msg_recording_scheduled?: string
+          msg_task_approved?: string
+          msg_task_editing?: string
           msg_video_approval?: string
           msg_video_approved?: string
           send_signature?: boolean
@@ -2097,9 +2107,12 @@ export type Database = {
         Update: {
           api_token?: string
           api_token_configured?: boolean
+          auto_approval_expired?: boolean
           auto_confirmation?: boolean
           auto_recording_reminder?: boolean
           auto_recording_scheduled?: boolean
+          auto_task_approved?: boolean
+          auto_task_editing?: boolean
           auto_video_approval?: boolean
           auto_video_approved?: boolean
           close_ticket?: boolean
@@ -2115,6 +2128,8 @@ export type Database = {
           msg_confirmation_confirmed?: string
           msg_recording_reminder?: string
           msg_recording_scheduled?: string
+          msg_task_approved?: string
+          msg_task_editing?: string
           msg_video_approval?: string
           msg_video_approved?: string
           send_signature?: boolean

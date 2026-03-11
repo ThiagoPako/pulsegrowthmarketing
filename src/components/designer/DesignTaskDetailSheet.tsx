@@ -381,7 +381,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           {/* CENTER COLUMN (~40%): Etapa atual + Arquivos + Colaboração */}
           <div className="flex-[4] min-w-0 overflow-hidden flex flex-col border-r border-border">
             <ScrollArea className="flex-1">
-              <div className="p-6 space-y-5">
+              <div className="px-6 py-5 space-y-5">
                 {/* Etapa Atual header */}
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold">Etapa atual</h3>

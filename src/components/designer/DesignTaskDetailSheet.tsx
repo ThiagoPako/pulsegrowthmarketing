@@ -509,6 +509,10 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                             <input type="file" accept=".pdf,application/pdf" className="hidden" onChange={async (e) => {
                               const file = e.target.files?.[0];
                               if (!file) return;
+                              if (file.type !== 'application/pdf') {
+                                toast.error('Apenas arquivos PDF são aceitos para o mockup de apresentação');
+                                return;
+                              }
                               setUploadingMockup(true);
                               try {
                                 const fileName = `mockups/${task.client_id}/${Date.now()}_${file.name}`;
@@ -517,8 +521,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                                 const { data: { publicUrl } } = supabase.storage.from('design-files').getPublicUrl(data.path);
                                 setMockupUrl(publicUrl);
                                 await updateTask.mutateAsync({ id: task.id, mockup_url: publicUrl } as any);
-                                await addHistory.mutateAsync({ task_id: task.id, action: 'Mockup enviado', details: publicUrl, user_id: user?.id });
-                                toast.success('Mockup enviado!');
+                                await addHistory.mutateAsync({ task_id: task.id, action: 'Mockup de apresentação enviado (PDF)', details: publicUrl, user_id: user?.id });
+                                toast.success('PDF de apresentação enviado!');
                               } catch (err: any) { toast.error(err.message || 'Erro ao enviar'); }
                               finally { setUploadingMockup(false); }
                             }} />

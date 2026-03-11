@@ -469,12 +469,23 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                   )}
                 </div>
 
-                {/* Mockup section */}
+                {/* Mockup de Apresentação section */}
                 {showMockup && (
                   <div className="space-y-3">
                     <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                      <Image size={14} /> Mockup
+                      <FileText size={14} /> Mockup de Apresentação
                     </h4>
+
+                    {/* Aviso obrigatório */}
+                    <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3">
+                      <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">⚠️ O PDF deve conter a apresentação completa:</p>
+                      <ul className="text-[11px] text-amber-700 dark:text-amber-400 space-y-0.5 list-disc list-inside">
+                        <li>Logo</li>
+                        <li>Manual da Marca</li>
+                        <li>Usabilidade</li>
+                        <li>Cartão de Visita</li>
+                      </ul>
+                    </div>
 
                     {(task.kanban_column === 'executando' || task.kanban_column === 'ajustes') && isDesigner ? (
                       <div className="space-y-2">
@@ -484,18 +495,18 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                             <a href={mockupUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline break-all line-clamp-2">{mockupUrl}</a>
                           </div>
                         )}
-                        <Input value={mockupUrl} onChange={e => setMockupUrl(e.target.value)} placeholder="Link do mockup..." className="text-xs h-9" />
+                        <Input value={mockupUrl} onChange={e => setMockupUrl(e.target.value)} placeholder="Link do PDF de apresentação..." className="text-xs h-9" />
                         <div className="flex gap-2">
                           <Button size="sm" variant="outline" className="flex-1 h-9 text-xs" onClick={async () => {
                             if (!mockupUrl) { toast.error('Cole o link do mockup'); return; }
                             await updateTask.mutateAsync({ id: task.id, mockup_url: mockupUrl } as any);
-                            await addHistory.mutateAsync({ task_id: task.id, action: 'Mockup anexado', details: mockupUrl, user_id: user?.id });
+                            await addHistory.mutateAsync({ task_id: task.id, action: 'Mockup de apresentação anexado (PDF)', details: mockupUrl, user_id: user?.id });
                             toast.success('Mockup salvo!');
                           }}>
                             <Link2 size={12} className="mr-1" /> Salvar
                           </Button>
                           <label className="flex-1">
-                            <input type="file" accept="image/*,.pdf" className="hidden" onChange={async (e) => {
+                            <input type="file" accept=".pdf,application/pdf" className="hidden" onChange={async (e) => {
                               const file = e.target.files?.[0];
                               if (!file) return;
                               setUploadingMockup(true);

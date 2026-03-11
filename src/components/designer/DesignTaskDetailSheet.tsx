@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -172,7 +172,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[95vw] sm:w-[900px] sm:max-w-[900px] p-0 overflow-hidden flex flex-col">
+      <SheetContent className="w-[95vw] sm:w-[900px] sm:max-w-[900px] p-0 overflow-hidden flex flex-col" aria-describedby={undefined}>
+        <SheetTitle className="sr-only">{task.title}</SheetTitle>
         {/* Header */}
         <div className="border-b border-border px-5 py-4">
           <div className="flex items-center justify-between">

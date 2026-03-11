@@ -477,25 +477,53 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                   <h3 className="text-sm font-semibold">Etapa atual</h3>
                 </div>
 
-                {/* Current stage card */}
-                <div className="rounded-xl border-2 p-4" style={{ borderColor: `hsl(${currentCol?.color})` }}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: `hsl(${currentCol?.color})` }}>
-                      <Play size={14} className="text-white" />
+                {/* Current stage card - animated on column change */}
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={task.kanban_column}
+                    initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -20, scale: 0.95 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                    className="rounded-xl border-2 p-4"
+                    style={{ borderColor: `hsl(${currentCol?.color})` }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <motion.div
+                        initial={{ rotate: -180, scale: 0 }}
+                        animate={{ rotate: 0, scale: 1 }}
+                        transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.1 }}
+                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: `hsl(${currentCol?.color})` }}
+                      >
+                        <Play size={14} className="text-white" />
+                      </motion.div>
+                      <div>
+                        <motion.p
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.15 }}
+                          className="text-base font-bold uppercase"
+                        >
+                          {currentCol?.label}
+                        </motion.p>
+                        <motion.p
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: 0.25 }}
+                          className="text-xs text-muted-foreground"
+                        >
+                          {task.kanban_column === 'nova_tarefa' && 'Aguardando início'}
+                          {task.kanban_column === 'executando' && 'Tarefas que estão atualmente em andamento'}
+                          {task.kanban_column === 'em_analise' && 'Aguardando revisão interna'}
+                          {task.kanban_column === 'enviar_cliente' && 'Pronto para enviar ao cliente'}
+                          {task.kanban_column === 'aprovado' && 'Finalizado e aprovado'}
+                          {task.kanban_column === 'ajustes' && 'Correções pendentes'}
+                        </motion.p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-base font-bold uppercase">{currentCol?.label}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {task.kanban_column === 'nova_tarefa' && 'Aguardando início'}
-                        {task.kanban_column === 'executando' && 'Tarefas que estão atualmente em andamento'}
-                        {task.kanban_column === 'em_analise' && 'Aguardando revisão interna'}
-                        {task.kanban_column === 'enviar_cliente' && 'Pronto para enviar ao cliente'}
-                        {task.kanban_column === 'aprovado' && 'Finalizado e aprovado'}
-                        {task.kanban_column === 'ajustes' && 'Correções pendentes'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                  </motion.div>
+                </AnimatePresence>
 
                 {/* CTA for nova_tarefa - rocket launch button */}
                 {task.kanban_column === 'nova_tarefa' && isDesigner && (

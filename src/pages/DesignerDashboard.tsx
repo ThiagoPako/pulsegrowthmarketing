@@ -17,7 +17,7 @@ import { ptBR } from 'date-fns/locale';
 import {
   Palette, CheckCircle, Clock, Play, Eye, RotateCcw, Kanban, BarChart3,
   TrendingUp, Zap, Timer, Building2, CalendarDays,
-  Flame, Target, Award, Send, ArrowRight, FileText
+  Flame, Target, Award, Send, ArrowRight, FileText, Plus
 } from 'lucide-react';
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string; dot: string }> = {

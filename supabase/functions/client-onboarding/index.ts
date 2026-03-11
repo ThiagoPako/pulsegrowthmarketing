@@ -16,7 +16,6 @@ function getNextDayOccurrencesForWeeks(dayName: string, selectedWeeks: number[])
   const year = today.getFullYear()
   const month = today.getMonth()
   
-  // Find all occurrences of the target day in the current month
   const allDates: string[] = []
   const current = new Date(year, month, 1)
   while (current.getMonth() === month) {
@@ -26,14 +25,12 @@ function getNextDayOccurrencesForWeeks(dayName: string, selectedWeeks: number[])
     current.setDate(current.getDate() + 1)
   }
   
-  // Filter by selected weeks (1-indexed) and only future dates
   const todayStr = today.toISOString().split('T')[0]
   const dates = selectedWeeks
     .filter(w => w >= 1 && w <= allDates.length)
     .map(w => allDates[w - 1])
     .filter(d => d > todayStr)
   
-  // If no dates left in current month, get from next month
   if (dates.length === 0) {
     const nextMonth = new Date(year, month + 1, 1)
     const nextAllDates: string[] = []
@@ -74,7 +71,7 @@ Deno.serve(async (req) => {
 
     const { data: client, error: clientErr } = await supabase
       .from('clients')
-      .select('id, company_name, responsible_person, logo_url, onboarding_completed, videomaker_id, fixed_day, fixed_time, backup_day, backup_time, monthly_recordings, accepts_extra, extra_content_types, extra_client_appears, plan_id, selected_weeks')
+      .select('id, company_name, responsible_person, logo_url, onboarding_completed, videomaker_id, fixed_day, fixed_time, backup_day, backup_time, monthly_recordings, accepts_extra, extra_content_types, extra_client_appears, plan_id, selected_weeks, client_type, photo_preference, has_photo_shoot, accepts_photo_shoot_cost, briefing_data')
       .eq('id', clientId)
       .single()
 
@@ -95,13 +92,11 @@ Deno.serve(async (req) => {
       .limit(1)
       .single()
 
-    // Get existing client slot assignments for availability calculation
     const { data: existingClients } = await supabase
       .from('clients')
       .select('id, videomaker_id, fixed_day, fixed_time')
       .not('videomaker_id', 'is', null)
 
-    // Fetch plan info if client has a plan
     let plan = null
     if (client.plan_id) {
       const { data: planData } = await supabase
@@ -125,7 +120,12 @@ Deno.serve(async (req) => {
 
   if (req.method === 'POST') {
     const body = await req.json()
-    const { clientId, videomaker_id, fixed_day, fixed_time, backup_day, backup_time, monthly_recordings, accepts_extra, extra_content_types, extra_client_appears, selected_weeks } = body
+    const {
+      clientId, videomaker_id, fixed_day, fixed_time, backup_day, backup_time,
+      monthly_recordings, accepts_extra, extra_content_types, extra_client_appears,
+      selected_weeks, photo_preference, has_photo_shoot, accepts_photo_shoot_cost,
+      briefing_data,
+    } = body
 
     if (!clientId || !videomaker_id || !fixed_day || !fixed_time) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
@@ -133,22 +133,34 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Update client record
+    const updatePayload: Record<string, unknown> = {
+      videomaker_id,
+      fixed_day,
+      fixed_time,
+      backup_day: backup_day || 'terca',
+      backup_time: backup_time || '14:00',
+      monthly_recordings: monthly_recordings || 4,
+      accepts_extra: accepts_extra || false,
+      extra_content_types: extra_content_types || [],
+      extra_client_appears: extra_client_appears || false,
+      selected_weeks: selected_weeks || [1, 2, 3, 4],
+      onboarding_completed: true,
+      photo_preference: photo_preference || 'nao_precisa',
+      has_photo_shoot: has_photo_shoot || false,
+      accepts_photo_shoot_cost: accepts_photo_shoot_cost || false,
+    }
+
+    if (briefing_data && Object.keys(briefing_data).length > 0) {
+      updatePayload.briefing_data = briefing_data
+      // Also save instagram credentials to client record
+      if (briefing_data.instagram_login) updatePayload.client_login = briefing_data.instagram_login
+      if (briefing_data.instagram_password) updatePayload.client_password = briefing_data.instagram_password
+      if (briefing_data.niche) updatePayload.niche = briefing_data.niche
+    }
+
     const { error } = await supabase
       .from('clients')
-      .update({
-        videomaker_id,
-        fixed_day,
-        fixed_time,
-        backup_day: backup_day || 'terca',
-        backup_time: backup_time || '14:00',
-        monthly_recordings: monthly_recordings || 4,
-        accepts_extra: accepts_extra || false,
-        extra_content_types: extra_content_types || [],
-        extra_client_appears: extra_client_appears || false,
-        selected_weeks: selected_weeks || [1, 2, 3, 4],
-        onboarding_completed: true,
-      })
+      .update(updatePayload)
       .eq('id', clientId)
 
     if (error) {
@@ -157,7 +169,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Create upcoming recording entries in the agency schedule
+    // Create upcoming recording entries
     const weeks = selected_weeks || [1, 2, 3, 4]
     const upcomingDates = getNextDayOccurrencesForWeeks(fixed_day, weeks)
 
@@ -181,7 +193,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Send welcome WhatsApp message after onboarding
+    // Send welcome WhatsApp message
     try {
       const { data: clientData } = await supabase
         .from('clients')
@@ -221,7 +233,6 @@ Deno.serve(async (req) => {
 
           const apiResult = await apiResponse.json()
 
-          // Log the message
           await supabase.from('whatsapp_messages').insert({
             phone_number: clientData.whatsapp.replace(/\D/g, ''),
             message: welcomeMsg,

@@ -196,9 +196,11 @@ export type Database = {
       clients: {
         Row: {
           accepts_extra: boolean
+          accepts_photo_shoot_cost: boolean
           auto_renewal: boolean
           backup_day: string
           backup_time: string
+          briefing_data: Json | null
           city: string
           client_login: string | null
           client_password: string | null
@@ -218,12 +220,14 @@ export type Database = {
           fixed_day: string
           fixed_time: string
           has_endomarketing: boolean
+          has_photo_shoot: boolean
           id: string
           logo_url: string | null
           monthly_recordings: number
           niche: string | null
           onboarding_completed: boolean | null
           phone: string
+          photo_preference: string
           plan_id: string | null
           presence_days: number
           responsible_person: string
@@ -238,9 +242,11 @@ export type Database = {
         }
         Insert: {
           accepts_extra?: boolean
+          accepts_photo_shoot_cost?: boolean
           auto_renewal?: boolean
           backup_day?: string
           backup_time?: string
+          briefing_data?: Json | null
           city?: string
           client_login?: string | null
           client_password?: string | null
@@ -260,12 +266,14 @@ export type Database = {
           fixed_day?: string
           fixed_time?: string
           has_endomarketing?: boolean
+          has_photo_shoot?: boolean
           id?: string
           logo_url?: string | null
           monthly_recordings?: number
           niche?: string | null
           onboarding_completed?: boolean | null
           phone?: string
+          photo_preference?: string
           plan_id?: string | null
           presence_days?: number
           responsible_person?: string
@@ -280,9 +288,11 @@ export type Database = {
         }
         Update: {
           accepts_extra?: boolean
+          accepts_photo_shoot_cost?: boolean
           auto_renewal?: boolean
           backup_day?: string
           backup_time?: string
+          briefing_data?: Json | null
           city?: string
           client_login?: string | null
           client_password?: string | null
@@ -302,12 +312,14 @@ export type Database = {
           fixed_day?: string
           fixed_time?: string
           has_endomarketing?: boolean
+          has_photo_shoot?: boolean
           id?: string
           logo_url?: string | null
           monthly_recordings?: number
           niche?: string | null
           onboarding_completed?: boolean | null
           phone?: string
+          photo_preference?: string
           plan_id?: string | null
           presence_days?: number
           responsible_person?: string

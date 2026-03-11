@@ -132,6 +132,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   endomarketing: 'Endomarketing',
   parceiro: 'Parceiro',
   fotografo: 'Fotografia',
+  designer: 'Designer',
 };
 
 export const COLUMN_LABELS: Record<KanbanColumn, string> = {

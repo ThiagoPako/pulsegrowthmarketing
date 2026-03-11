@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import { Plus, KeyRound, Users, Handshake, Trash2 } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 
-const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'fotografo'];
+const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'fotografo', 'designer'];
 
 const PARTNER_FUNCTIONS = [
   { value: 'fotografo', label: 'Fotografia' },

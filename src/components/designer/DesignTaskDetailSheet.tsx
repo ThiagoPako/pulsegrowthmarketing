@@ -12,7 +12,7 @@ import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import ClientLogo from '@/components/ClientLogo';
-import { Play, Pause, Square, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History, Plus, X } from 'lucide-react';
+import { Play, Pause, Square, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History, Plus, X, Image, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Props {

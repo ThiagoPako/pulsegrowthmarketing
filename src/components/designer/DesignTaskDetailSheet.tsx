@@ -176,6 +176,16 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const handleClientApproval = async () => {
     await updateTask.mutateAsync({ id: task.id, kanban_column: 'aprovado', client_approved_at: new Date().toISOString(), completed_at: new Date().toISOString() } as any);
     await addHistory.mutateAsync({ task_id: task.id, action: 'Aprovado pelo cliente', user_id: user?.id });
+
+    // Auto-fill client drive_identidade_visual when logomarca is approved
+    if (task.format_type === 'logomarca' && task.client_id) {
+      const fileUrl = task.attachment_url || (task as any).mockup_url || attachmentUrl || mockupUrl;
+      if (fileUrl) {
+        await supabase.from('clients').update({ drive_identidade_visual: fileUrl }).eq('id', task.client_id);
+        toast.success('Drive de Identidade Visual do cliente atualizado automaticamente!');
+      }
+    }
+
     toast.success('Arte aprovada pelo cliente!');
   };
 

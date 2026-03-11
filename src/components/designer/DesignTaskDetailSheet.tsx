@@ -447,9 +447,20 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                       </div>
                     </div>
                   ) : task.attachment_url ? (
-                    <a href={task.attachment_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-sm text-primary">
-                      <Eye size={14} /> Ver arte anexada
-                    </a>
+                    <div className="space-y-2">
+                      {/\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(task.attachment_url) ? (
+                        <button onClick={() => setPreviewImage(task.attachment_url!)} className="relative group rounded-lg overflow-hidden border border-border w-full hover:ring-2 hover:ring-primary/50 transition-all">
+                          <img src={task.attachment_url} alt="Arte" className="w-full max-h-48 object-contain bg-muted/30" />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                            <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        </button>
+                      ) : (
+                        <a href={task.attachment_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-sm text-primary">
+                          <Eye size={14} /> Ver arte anexada
+                        </a>
+                      )}
+                    </div>
                   ) : (
                     <div className="rounded-lg border border-dashed border-border p-6 text-center">
                       <Paperclip size={20} className="mx-auto text-muted-foreground/40 mb-2" />

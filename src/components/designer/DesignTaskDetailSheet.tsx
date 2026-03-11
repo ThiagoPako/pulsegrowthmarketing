@@ -94,9 +94,10 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   };
 
   const handleSendForReview = async () => {
-    if (!attachmentUrl) { toast.error('Anexe a arte antes de enviar'); return; }
-    await updateTask.mutateAsync({ id: task.id, kanban_column: 'em_analise', attachment_url: attachmentUrl, editable_file_url: editableFileUrl, observations } as any);
-    await addHistory.mutateAsync({ task_id: task.id, action: 'Enviado para análise', attachment_url: attachmentUrl, user_id: user?.id });
+    const finalAttachment = attachmentUrl || mockupUrl || (task as any).mockup_url || task.attachment_url;
+    if (!finalAttachment) { toast.error('Anexe a arte ou mockup antes de enviar'); return; }
+    await updateTask.mutateAsync({ id: task.id, kanban_column: 'em_analise', attachment_url: finalAttachment, editable_file_url: editableFileUrl, observations } as any);
+    await addHistory.mutateAsync({ task_id: task.id, action: 'Enviado para análise', attachment_url: finalAttachment, user_id: user?.id });
     toast.success('Enviado para análise!');
   };
 

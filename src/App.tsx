@@ -70,6 +70,8 @@ function AppRoutes() {
           {currentUser?.role === 'videomaker' ? <VideomakerDashboard /> :
            currentUser?.role === 'endomarketing' ? <EndomarketingDashboard /> :
            currentUser?.role === 'editor' ? <EditorDashboard /> :
+           currentUser?.role === 'designer' ? <DesignerDashboard /> :
+           currentUser?.role === 'fotografo' ? <DesignerDashboard /> :
            currentUser?.role === 'parceiro' ? <EndomarketingDashboard /> :
            <Dashboard />}
         </ProtectedRoute>

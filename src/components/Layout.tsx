@@ -33,8 +33,8 @@ const navCategories: NavCategory[] = [
     items: [
       { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media'] },
       { path: '/edicao', label: 'Edição', icon: Scissors, roles: ['admin', 'editor', 'social_media'] },
-      { path: '/designer', label: 'Designer', icon: Palette, roles: ['admin', 'social_media', 'fotografo'] },
-      { path: '/designer/relatorios', label: 'Produtividade D.', icon: BarChart3, roles: ['admin', 'social_media'] },
+      { path: '/designer', label: 'Designer', icon: Palette, roles: ['admin', 'social_media', 'fotografo', 'designer'] },
+      { path: '/designer/relatorios', label: 'Produtividade D.', icon: BarChart3, roles: ['admin', 'social_media', 'designer'] },
       { path: '/entregas', label: 'Entregas', icon: ClipboardList, roles: ['admin', 'social_media'] },
       { path: '/desempenho', label: 'Desempenho', icon: Target, roles: ['admin', 'social_media'] },
     ],

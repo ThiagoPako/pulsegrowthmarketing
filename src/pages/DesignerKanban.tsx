@@ -225,7 +225,7 @@ export default function DesignerKanban() {
 
       <DesignTaskCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
       {selectedTask && (
-        <DesignTaskDetailSheet task={selectedTask} open={!!selectedTask} onOpenChange={o => !o && setSelectedTask(null)} />
+        <DesignTaskDetailSheet task={selectedTask} open={!!selectedTask} onOpenChange={o => !o && setSelectedTaskId(null)} />
       )}
     </div>
   );

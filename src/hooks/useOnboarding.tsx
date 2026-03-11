@@ -258,19 +258,24 @@ export function useOnboarding() {
       
       if (existing?.length) return; // Already has tasks
 
+      const profileChecklist = [
+        { id: crypto.randomUUID(), text: 'Criar arte do perfil', done: false },
+        { id: crypto.randomUUID(), text: 'Montar mockup do perfil', done: false },
+        { id: crypto.randomUUID(), text: 'Anexar mockup para aprovação', done: false },
+      ];
+      const destaqueChecklist = (n: number) => [
+        { id: crypto.randomUUID(), text: `Criar arte destaque ${n}`, done: false },
+        { id: crypto.randomUUID(), text: 'Incluir no mockup geral', done: false },
+      ];
+      const feedChecklist = (n: number) => [
+        { id: crypto.randomUUID(), text: `Criar arte feed ${n}`, done: false },
+        { id: crypto.randomUUID(), text: 'Incluir no mockup do feed', done: false },
+      ];
+
       const designTasks = [
-        { client_id: clientId, title: 'Reformulação - Foto de Perfil', format_type: 'story', priority: 'alta', kanban_column: 'nova_tarefa' },
-        { client_id: clientId, title: 'Reformulação - Destaque 1', format_type: 'story', priority: 'alta', kanban_column: 'nova_tarefa' },
-        { client_id: clientId, title: 'Reformulação - Destaque 2', format_type: 'story', priority: 'alta', kanban_column: 'nova_tarefa' },
-        { client_id: clientId, title: 'Reformulação - Destaque 3', format_type: 'story', priority: 'alta', kanban_column: 'nova_tarefa' },
-        { client_id: clientId, title: 'Reformulação - Destaque 4', format_type: 'story', priority: 'alta', kanban_column: 'nova_tarefa' },
-        { client_id: clientId, title: 'Reformulação - Destaque 5', format_type: 'story', priority: 'alta', kanban_column: 'nova_tarefa' },
-        { client_id: clientId, title: 'Reformulação - Arte Feed 1', format_type: 'feed', priority: 'alta', kanban_column: 'nova_tarefa' },
-        { client_id: clientId, title: 'Reformulação - Arte Feed 2', format_type: 'feed', priority: 'alta', kanban_column: 'nova_tarefa' },
-        { client_id: clientId, title: 'Reformulação - Arte Feed 3', format_type: 'feed', priority: 'alta', kanban_column: 'nova_tarefa' },
-        { client_id: clientId, title: 'Reformulação - Arte Feed 4', format_type: 'feed', priority: 'alta', kanban_column: 'nova_tarefa' },
-        { client_id: clientId, title: 'Reformulação - Arte Feed 5', format_type: 'feed', priority: 'alta', kanban_column: 'nova_tarefa' },
-        { client_id: clientId, title: 'Reformulação - Arte Feed 6', format_type: 'feed', priority: 'alta', kanban_column: 'nova_tarefa' },
+        { client_id: clientId, title: 'Reformulação - Foto de Perfil', format_type: 'story', priority: 'alta', kanban_column: 'nova_tarefa', checklist: profileChecklist },
+        ...Array.from({ length: 5 }, (_, i) => ({ client_id: clientId, title: `Reformulação - Destaque ${i + 1}`, format_type: 'story', priority: 'alta', kanban_column: 'nova_tarefa', checklist: destaqueChecklist(i + 1) })),
+        ...Array.from({ length: 6 }, (_, i) => ({ client_id: clientId, title: `Reformulação - Arte Feed ${i + 1}`, format_type: 'feed', priority: 'alta', kanban_column: 'nova_tarefa', checklist: feedChecklist(i + 1) })),
       ];
 
       const { error } = await supabase.from('design_tasks').insert(designTasks as any);

@@ -481,6 +481,51 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                   <h3 className="text-sm font-semibold">Etapa atual</h3>
                 </div>
 
+                {/* Rocket flyby animation on stage change */}
+                <AnimatePresence>
+                  {showRocketFlyby && (
+                    <motion.div
+                      className="absolute inset-0 z-50 pointer-events-none overflow-hidden"
+                      initial={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                    >
+                      {/* Trail particles */}
+                      {[...Array(8)].map((_, i) => (
+                        <motion.span
+                          key={i}
+                          className="absolute text-sm"
+                          initial={{ left: '-5%', top: `${35 + Math.random() * 30}%`, opacity: 0 }}
+                          animate={{
+                            left: `${20 + i * 10}%`,
+                            top: `${35 + Math.sin(i) * 8}%`,
+                            opacity: [0, 1, 0],
+                          }}
+                          transition={{ duration: 0.8, delay: 0.05 * i + 0.2, ease: 'easeOut' }}
+                        >
+                          ✨
+                        </motion.span>
+                      ))}
+                      {/* Rocket */}
+                      <motion.span
+                        className="absolute text-4xl"
+                        style={{ top: '38%' }}
+                        initial={{ left: '-10%', rotate: 45 }}
+                        animate={{ left: '110%', rotate: 45 }}
+                        transition={{ duration: 1, ease: [0.25, 0.1, 0.25, 1] }}
+                      >
+                        🚀
+                      </motion.span>
+                      {/* Flash overlay */}
+                      <motion.div
+                        className="absolute inset-0 bg-primary/10 rounded-xl"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: [0, 0.3, 0] }}
+                        transition={{ duration: 0.6, delay: 0.3 }}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 {/* Current stage card - animated on column change */}
                 <AnimatePresence mode="wait">
                   <motion.div

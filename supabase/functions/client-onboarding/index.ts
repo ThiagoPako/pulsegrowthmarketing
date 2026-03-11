@@ -169,7 +169,35 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Create upcoming recording entries
+    // Auto-complete the "cliente_novo" onboarding task and create "contrato" task
+    try {
+      const { data: existingTasks } = await supabase
+        .from('onboarding_tasks')
+        .select('id, stage, status')
+        .eq('client_id', clientId)
+
+      const clienteNovoTask = existingTasks?.find((t: any) => t.stage === 'cliente_novo' && t.status !== 'concluido')
+      if (clienteNovoTask) {
+        await supabase
+          .from('onboarding_tasks')
+          .update({ status: 'concluido', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .eq('id', clienteNovoTask.id)
+
+        // Create contrato task
+        const hasContratoTask = existingTasks?.some((t: any) => t.stage === 'contrato')
+        if (!hasContratoTask) {
+          await supabase.from('onboarding_tasks').insert({
+            client_id: clientId,
+            stage: 'contrato',
+            title: 'Contrato - Assinatura',
+            status: 'pendente',
+          })
+        }
+      }
+    } catch (err) {
+      console.error('Error updating onboarding tasks:', err)
+    }
+
     const weeks = selected_weeks || [1, 2, 3, 4]
     const upcomingDates = getNextDayOccurrencesForWeeks(fixed_day, weeks)
 

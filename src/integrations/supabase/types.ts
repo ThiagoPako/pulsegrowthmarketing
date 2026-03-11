@@ -1396,6 +1396,7 @@ export type Database = {
           contract_url: string | null
           created_at: string
           description: string | null
+          drive_link: string | null
           id: string
           photo_warning_shown: boolean | null
           stage: string
@@ -1416,6 +1417,7 @@ export type Database = {
           contract_url?: string | null
           created_at?: string
           description?: string | null
+          drive_link?: string | null
           id?: string
           photo_warning_shown?: boolean | null
           stage?: string
@@ -1436,6 +1438,7 @@ export type Database = {
           contract_url?: string | null
           created_at?: string
           description?: string | null
+          drive_link?: string | null
           id?: string
           photo_warning_shown?: boolean | null
           stage?: string

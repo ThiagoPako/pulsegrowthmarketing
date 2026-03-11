@@ -11,12 +11,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink, Database } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
 import { Textarea } from '@/components/ui/textarea';
 import { useOnboarding } from '@/hooks/useOnboarding';
+import ClientArtDatabaseDialog from '@/components/ClientArtDatabaseDialog';
 
 const DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 const CONTENT_TYPES: ContentType[] = ['reels', 'story', 'produto'];
@@ -87,6 +88,7 @@ export default function Clients() {
   const [sendWaClient, setSendWaClient] = useState<Client | null>(null);
   const [sendWaMsg, setSendWaMsg] = useState('');
   const [sendWaLoading, setSendWaLoading] = useState(false);
+  const [artDbClient, setArtDbClient] = useState<Client | null>(null);
   
   // Plan-related state
   const [plans, setPlans] = useState<{ id: string; name: string; status: string; reels_qty: number; creatives_qty: number; stories_qty: number }[]>([]);
@@ -1341,6 +1343,9 @@ export default function Clients() {
                     setSendWaOpen(true);
                   }}><MessageSquare size={14} /></Button>
                 )}
+                <Button variant="ghost" size="icon" className="h-8 w-8" title="Banco de Dados" onClick={() => setArtDbClient(c)}>
+                  <Database size={14} />
+                </Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
                   const vmName = users.find(u => u.id === c.videomaker)?.name || '—';
                   generateClientCardPdf(c, vmName);
@@ -1393,6 +1398,11 @@ export default function Clients() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Art Database Dialog */}
+      {artDbClient && (
+        <ClientArtDatabaseDialog client={artDbClient} open={!!artDbClient} onOpenChange={o => !o && setArtDbClient(null)} />
+      )}
     </div>
   );
 }

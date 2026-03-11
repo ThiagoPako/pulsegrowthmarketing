@@ -152,15 +152,17 @@ export default function SocialMediaDeliveries() {
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
   const [taskDeadlines, setTaskDeadlines] = useState<Record<string, { review_deadline: string | null; alteration_deadline: string | null; approval_deadline: string | null; immediate_alteration: boolean }>>({});
   const [onboardingStatus, setOnboardingStatus] = useState<Record<string, { total: number; completed: number }>>({});
+  const [overdueByClient, setOverdueByClient] = useState<Record<string, { overdue: number; almostOverdue: number }>>({});
   const [mainTab, setMainTab] = useState<'clientes' | 'calendario'>('clientes');
 
   const fetchData = useCallback(async () => {
-    const [dRes, pRes, cRes, tRes, oRes] = await Promise.all([
+    const [dRes, pRes, cRes, tRes, oRes, ctRes] = await Promise.all([
       supabase.from('social_media_deliveries').select('*').order('delivered_at', { ascending: false }),
       supabase.from('plans').select('id, name, reels_qty, creatives_qty, stories_qty, arts_qty'),
       supabase.from('clients').select('id, plan_id'),
       supabase.from('content_tasks').select('id, review_deadline, alteration_deadline, approval_deadline, immediate_alteration'),
       supabase.from('onboarding_tasks').select('client_id, status'),
+      supabase.from('content_tasks').select('id, client_id, review_deadline, alteration_deadline, approval_deadline, kanban_column').not('kanban_column', 'in', '(concluido,acompanhamento)'),
     ]);
     if (dRes.data) setDeliveries(dRes.data as SocialDelivery[]);
     if (pRes.data) setPlans(pRes.data as Plan[]);
@@ -182,6 +184,27 @@ export default function SocialMediaDeliveries() {
         if (o.status === 'concluido') oMap[o.client_id].completed++;
       });
       setOnboardingStatus(oMap);
+    }
+    // Calculate overdue/almost overdue per client
+    if (ctRes.data) {
+      const now = new Date();
+      const almostThreshold = 4 * 60 * 60 * 1000; // 4 hours
+      const odMap: Record<string, { overdue: number; almostOverdue: number }> = {};
+      (ctRes.data as any[]).forEach(t => {
+        if (!odMap[t.client_id]) odMap[t.client_id] = { overdue: 0, almostOverdue: 0 };
+        const deadlines = [t.review_deadline, t.alteration_deadline, t.approval_deadline].filter(Boolean);
+        for (const dl of deadlines) {
+          const dlDate = new Date(dl);
+          if (dlDate < now) {
+            odMap[t.client_id].overdue++;
+            break;
+          } else if (dlDate.getTime() - now.getTime() < almostThreshold) {
+            odMap[t.client_id].almostOverdue++;
+            break;
+          }
+        }
+      });
+      setOverdueByClient(odMap);
     }
     setLoading(false);
   }, []);
@@ -541,10 +564,22 @@ export default function SocialMediaDeliveries() {
         const stats = monthlyStats[c.id] || { reels: 0, criativo: 0, story: 0, arte: 0, total: 0, pendentes: 0, agendados: 0, postados: 0, revisao: 0 };
         const plan = getClientPlanGoals(c.id);
         const weeklyStories = weeklyStoriesMap[c.id] || 0;
-        return { client: c, stats, plan, weeklyStories };
+        const od = overdueByClient[c.id] || { overdue: 0, almostOverdue: 0 };
+        const onboarding = onboardingStatus[c.id];
+        const isOnboarding = onboarding && onboarding.completed < onboarding.total;
+        return { client: c, stats, plan, weeklyStories, overdue: od, isOnboarding: !!isOnboarding };
       })
-      .sort((a, b) => b.stats.pendentes - a.stats.pendentes || b.stats.total - a.stats.total);
-  }, [clients, deliveries, monthlyStats, clientPlans, plans, weeklyStoriesMap]);
+      .sort((a, b) => {
+        // 1st: overdue clients first
+        if (a.overdue.overdue !== b.overdue.overdue) return b.overdue.overdue - a.overdue.overdue;
+        // 2nd: almost overdue
+        if (a.overdue.almostOverdue !== b.overdue.almostOverdue) return b.overdue.almostOverdue - a.overdue.almostOverdue;
+        // 3rd: onboarding clients
+        if (a.isOnboarding !== b.isOnboarding) return a.isOnboarding ? -1 : 1;
+        // 4th: most pending
+        return b.stats.pendentes - a.stats.pendentes || b.stats.total - a.stats.total;
+      });
+  }, [clients, deliveries, monthlyStats, clientPlans, plans, weeklyStoriesMap, overdueByClient, onboardingStatus]);
 
   const selectedClient = clients.find(c => c.id === selectedClientId);
 
@@ -1174,9 +1209,14 @@ export default function SocialMediaDeliveries() {
           <h1 className="text-2xl font-bold text-foreground">Entregas Social Media</h1>
           <p className="text-sm text-muted-foreground">Selecione um cliente para gerenciar suas entregas</p>
         </div>
-        <Button onClick={() => openNew()} className="gap-2">
-          <Plus size={16} /> Nova Entrega
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" className="gap-2" onClick={() => setMainTab('calendario')}>
+            <CalendarIcon size={16} /> Calendário
+          </Button>
+          <Button onClick={() => openNew()} className="gap-2">
+            <Plus size={16} /> Nova Entrega
+          </Button>
+        </div>
       </div>
 
       {/* Global summary */}
@@ -1221,16 +1261,20 @@ export default function SocialMediaDeliveries() {
             </Card>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {clientsWithData.map(({ client, stats, plan, weeklyStories: ws }) => {
+              {clientsWithData.map(({ client, stats, plan, weeklyStories: ws, overdue, isOnboarding }) => {
                 const storyGoal = client.weeklyStories || 0;
                 const storyPct = storyGoal > 0 ? Math.min(Math.round((ws / storyGoal) * 100), 100) : 0;
                 const onboarding = onboardingStatus[client.id];
-                const isOnboarding = onboarding && onboarding.completed < onboarding.total;
+                const hasOverdue = overdue.overdue > 0;
+                const hasAlmostOverdue = overdue.almostOverdue > 0;
 
                 return (
                   <Card
                     key={client.id}
-                    className={`border-border hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group ${isOnboarding ? 'ring-1 ring-amber-400/40' : ''}`}
+                    className={`border-border hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group 
+                      ${isOnboarding ? 'animate-[pulse_3s_ease-in-out_infinite] ring-2 ring-amber-400/50 shadow-amber-200/30 shadow-lg' : ''} 
+                      ${hasOverdue ? 'ring-2 ring-red-500/60 border-red-400/50 shadow-red-200/30 shadow-lg animate-[pulse_2s_ease-in-out_infinite]' : ''} 
+                      ${!hasOverdue && hasAlmostOverdue ? 'ring-1 ring-orange-400/50 border-orange-300/50' : ''}`}
                     onClick={() => { setSelectedClientId(client.id); setActiveTab('pipeline'); }}
                   >
                     <CardContent className="p-5">
@@ -1244,7 +1288,17 @@ export default function SocialMediaDeliveries() {
                             {plan && <Badge variant="outline" className="text-[10px]">{plan.name}</Badge>}
                             {isOnboarding && (
                               <Badge className="bg-amber-500 text-white border-0 text-[9px] font-bold px-1.5 py-0 gap-0.5">
-                                🚀 Onboarding {Math.round((onboarding.completed / onboarding.total) * 100)}%
+                                🚀 Onboarding {Math.round((onboarding!.completed / onboarding!.total) * 100)}%
+                              </Badge>
+                            )}
+                            {hasOverdue && (
+                              <Badge className="bg-red-500 text-white border-0 text-[9px] font-bold px-1.5 py-0 gap-0.5 animate-[pulse_1.5s_ease-in-out_infinite]">
+                                🚨 {overdue.overdue} atrasada{overdue.overdue > 1 ? 's' : ''}
+                              </Badge>
+                            )}
+                            {!hasOverdue && hasAlmostOverdue && (
+                              <Badge className="bg-orange-500 text-white border-0 text-[9px] font-bold px-1.5 py-0 gap-0.5">
+                                ⚠️ {overdue.almostOverdue} quase vencendo
                               </Badge>
                             )}
                           </div>
@@ -1252,8 +1306,18 @@ export default function SocialMediaDeliveries() {
                         <Eye size={16} className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-1" />
                       </div>
 
+                      {/* Overdue alert banner */}
+                      {hasOverdue && (
+                        <div className="mb-3 p-2 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-200/50 dark:border-red-800/30 flex items-center gap-2">
+                          <AlertTriangle size={14} className="text-red-600 shrink-0" />
+                          <span className="text-[10px] font-semibold text-red-700 dark:text-red-400">
+                            {overdue.overdue} demanda{overdue.overdue > 1 ? 's' : ''} com prazo vencido!
+                          </span>
+                        </div>
+                      )}
+
                       {/* Onboarding mini-progress */}
-                      {isOnboarding && (
+                      {isOnboarding && onboarding && (
                         <div className="mb-3 p-2 rounded-lg bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200/50 dark:border-amber-800/30">
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-[10px] font-medium text-amber-700 dark:text-amber-400">Onboarding</span>

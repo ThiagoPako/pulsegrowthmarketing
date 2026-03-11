@@ -47,6 +47,8 @@ import DesignerDashboard from "@/pages/DesignerDashboard";
 import DesignerReports from "@/pages/DesignerReports";
 import OnboardingManagement from "@/pages/OnboardingManagement";
 import ClientBriefing from "@/pages/ClientBriefing";
+import ClientPortal from "@/pages/ClientPortal";
+import ContentManager from "@/pages/ContentManager";
 
 const queryClient = new QueryClient({
   defaultOptions: {

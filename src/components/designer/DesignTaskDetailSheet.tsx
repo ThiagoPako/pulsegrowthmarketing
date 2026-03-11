@@ -39,7 +39,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [editableFileUrl, setEditableFileUrl] = useState(task.editable_file_url || '');
   const [mockupUrl, setMockupUrl] = useState((task as any).mockup_url || '');
   const [adjustmentNotes, setAdjustmentNotes] = useState('');
-  const [timerDisplay, setTimerDisplay] = useState('00:00:00');
+  const [elapsedDisplay, setElapsedDisplay] = useState('');
   const [checklist, setChecklist] = useState<ChecklistItem[]>((task as any).checklist || []);
   const [newChecklistItem, setNewChecklistItem] = useState('');
   const [uploadingMockup, setUploadingMockup] = useState(false);

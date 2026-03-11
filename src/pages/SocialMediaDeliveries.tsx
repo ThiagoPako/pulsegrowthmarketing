@@ -155,11 +155,12 @@ export default function SocialMediaDeliveries() {
   const [mainTab, setMainTab] = useState<'clientes' | 'calendario'>('clientes');
 
   const fetchData = useCallback(async () => {
-    const [dRes, pRes, cRes, tRes] = await Promise.all([
+    const [dRes, pRes, cRes, tRes, oRes] = await Promise.all([
       supabase.from('social_media_deliveries').select('*').order('delivered_at', { ascending: false }),
       supabase.from('plans').select('id, name, reels_qty, creatives_qty, stories_qty, arts_qty'),
       supabase.from('clients').select('id, plan_id'),
       supabase.from('content_tasks').select('id, review_deadline, alteration_deadline, approval_deadline, immediate_alteration'),
+      supabase.from('onboarding_tasks').select('client_id, status'),
     ]);
     if (dRes.data) setDeliveries(dRes.data as SocialDelivery[]);
     if (pRes.data) setPlans(pRes.data as Plan[]);
@@ -172,6 +173,15 @@ export default function SocialMediaDeliveries() {
       const dlMap: Record<string, any> = {};
       (tRes.data as any[]).forEach(t => { dlMap[t.id] = t; });
       setTaskDeadlines(dlMap);
+    }
+    if (oRes.data) {
+      const oMap: Record<string, { total: number; completed: number }> = {};
+      (oRes.data as any[]).forEach(o => {
+        if (!oMap[o.client_id]) oMap[o.client_id] = { total: 0, completed: 0 };
+        oMap[o.client_id].total++;
+        if (o.status === 'concluido') oMap[o.client_id].completed++;
+      });
+      setOnboardingStatus(oMap);
     }
     setLoading(false);
   }, []);

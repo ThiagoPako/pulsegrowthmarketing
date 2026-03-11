@@ -20,7 +20,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History,
   Upload, Image, FileText, Palette, Info, User, Calendar, ArrowRight, X,
-  ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip, ZoomIn
+  ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip, ZoomIn, Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 

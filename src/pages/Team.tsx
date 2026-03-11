@@ -200,6 +200,7 @@ export default function Team() {
     endomarketing: 'bg-accent text-accent-foreground',
     parceiro: 'bg-purple-100 text-purple-700',
     fotografo: 'bg-pink-100 text-pink-700',
+    designer: 'bg-orange-100 text-orange-700',
   };
 
   const partnerUserIds = partners.map(p => p.user_id);

@@ -244,20 +244,28 @@ function OnboardingDetailSheet({ group, open, onOpenChange }: { group: ClientGro
   const [uploading, setUploading] = useState(false);
   const [driveLink, setDriveLink] = useState('');
 
-  const currentTask = group.tasks.find(t => t.status !== 'concluido');
+  const activeTasks = group.tasks.filter(t => t.status !== 'concluido');
+  const currentTask = activeTasks[0]; // primary task for non-parallel views
   const completedTasks = group.tasks.filter(t => t.status === 'concluido').sort(
     (a, b) => new Date(a.completed_at || a.created_at).getTime() - new Date(b.completed_at || b.created_at).getTime()
   );
   const allDone = group.tasks.length > 0 && group.tasks.every(t => t.status === 'concluido');
+  const hasParallelStages = activeTasks.length > 1;
 
-  const handleAdvance = async () => {
-    if (!currentTask) return;
+  const handleAdvance = async (stage?: OnboardingStage) => {
+    const task = stage ? activeTasks.find(t => t.stage === stage) : currentTask;
+    if (!task) return;
     try {
       await advanceToNextStage.mutateAsync({
         clientId: group.clientId,
-        currentStage: currentTask.stage as OnboardingStage,
+        currentStage: task.stage as OnboardingStage,
       });
-      toast.success('Avançado para próxima etapa!');
+      const otherActive = activeTasks.filter(t => t.id !== task.id && t.status !== 'concluido');
+      if (otherActive.length === 0) {
+        toast.success('Etapas concluídas! Avançando...');
+      } else {
+        toast.success('Etapa concluída! Aguardando a outra etapa paralela.');
+      }
       onOpenChange(false);
     } catch (e) {
       console.error(e);

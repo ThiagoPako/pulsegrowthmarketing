@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink, Database, FileText as FileTextIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink, Database, FileText as FileTextIcon, MonitorPlay } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { sendWhatsAppMessage } from '@/services/whatsappService';

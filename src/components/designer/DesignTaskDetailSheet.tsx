@@ -16,10 +16,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import ClientLogo from '@/components/ClientLogo';
 import { motion, AnimatePresence } from 'framer-motion';
+import { generateBrandPresentationPdf } from '@/lib/brandPresentationPdf';
 import {
   Play, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History,
   Upload, Image, FileText, Palette, Info, User, Calendar, ArrowRight, X,
-  ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip, ZoomIn
+  ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip, ZoomIn, FileDown
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -537,6 +538,36 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                         <Image size={18} className="mx-auto text-muted-foreground/40 mb-1" />
                         <p className="text-xs text-muted-foreground">Sem mockup</p>
                       </div>
+                    )}
+
+                    {/* PDF Presentation Button - only for identity visual */}
+                    {taskCategory === 'identidade_visual' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full h-9 text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/5"
+                        onClick={async () => {
+                          try {
+                            toast.loading('Gerando PDF de apresentação...', { id: 'brand-pdf' });
+                            await generateBrandPresentationPdf({
+                              clientName: task.clients?.company_name || 'Cliente',
+                              responsiblePerson: task.clients?.responsible_person,
+                              logoUrl: task.clients?.logo_url,
+                              attachmentUrl: attachmentUrl || task.attachment_url,
+                              mockupUrl: mockupUrl || (task as any).mockup_url,
+                              referenceImages: task.reference_images || [],
+                              observations: observations || task.observations,
+                              designerName: task.profiles?.display_name || task.profiles?.name,
+                              createdAt: task.created_at,
+                            });
+                            toast.success('PDF gerado com sucesso!', { id: 'brand-pdf' });
+                          } catch (err: any) {
+                            toast.error(err.message || 'Erro ao gerar PDF', { id: 'brand-pdf' });
+                          }
+                        }}
+                      >
+                        <FileDown size={13} /> Gerar Apresentação PDF
+                      </Button>
                     )}
                   </div>
                 )}

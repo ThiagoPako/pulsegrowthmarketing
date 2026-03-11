@@ -73,22 +73,6 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
     toast.success('Tarefa iniciada!');
   };
 
-  const handleStartTimer = async () => {
-    await updateTask.mutateAsync({ id: task.id, timer_running: true, timer_started_at: new Date().toISOString() } as any);
-  };
-
-  const handlePauseTimer = async () => {
-    const elapsed = task.timer_started_at
-      ? Math.floor((Date.now() - new Date(task.timer_started_at).getTime()) / 1000)
-      : 0;
-    await updateTask.mutateAsync({
-      id: task.id,
-      timer_running: false,
-      time_spent_seconds: task.time_spent_seconds + elapsed,
-      timer_started_at: null,
-    } as any);
-  };
-
   const handleSendForReview = async () => {
     if (!attachmentUrl) { toast.error('Anexe a arte antes de enviar'); return; }
     await updateTask.mutateAsync({ id: task.id, kanban_column: 'em_analise', attachment_url: attachmentUrl, editable_file_url: editableFileUrl, observations } as any);

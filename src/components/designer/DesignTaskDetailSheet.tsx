@@ -12,13 +12,19 @@ import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import ClientLogo from '@/components/ClientLogo';
-import { Play, Pause, Square, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History } from 'lucide-react';
+import { Play, Pause, Square, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Props {
   task: DesignTask;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+interface ChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
 }
 
 const FORMAT_LABELS: Record<string, string> = { feed: 'Feed', story: 'Story', midia_fisica: 'Mídia Física' };
@@ -33,6 +39,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [editableFileUrl, setEditableFileUrl] = useState(task.editable_file_url || '');
   const [adjustmentNotes, setAdjustmentNotes] = useState('');
   const [timerDisplay, setTimerDisplay] = useState('00:00:00');
+  const [checklist, setChecklist] = useState<ChecklistItem[]>((task as any).checklist || []);
+  const [newChecklistItem, setNewChecklistItem] = useState('');
 
   const history = historyQuery(task.id);
 

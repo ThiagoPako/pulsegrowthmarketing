@@ -381,12 +381,27 @@ export default function WhatsAppDashboard() {
           ) : config ? (
             <div className="space-y-4">
               {templateFields.map(tmpl => (
-                <Card key={tmpl.key}>
+                <Card key={tmpl.key} className={tmpl.toggleKey && config[tmpl.toggleKey] === false ? 'opacity-60' : ''}>
                   <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="text-sm">{tmpl.label}</CardTitle>
-                        <CardDescription className="text-[11px]">{tmpl.description}</CardDescription>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-sm">{tmpl.label}</CardTitle>
+                          {tmpl.toggleKey && (
+                            <Switch
+                              checked={config[tmpl.toggleKey] as boolean}
+                              onCheckedChange={v => setConfig({ ...config, [tmpl.toggleKey!]: v })}
+                            />
+                          )}
+                        </div>
+                        <CardDescription className="text-[11px]">
+                          {tmpl.description}
+                          {tmpl.toggleKey && (
+                            <span className={`ml-1 font-medium ${config[tmpl.toggleKey] ? 'text-success' : 'text-muted-foreground'}`}>
+                              — {config[tmpl.toggleKey] ? 'Ativo' : 'Desativado'}
+                            </span>
+                          )}
+                        </CardDescription>
                       </div>
                       <Button
                         variant={editingTemplate === tmpl.key ? 'default' : 'outline'}

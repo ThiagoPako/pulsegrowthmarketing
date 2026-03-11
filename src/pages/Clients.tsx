@@ -461,6 +461,29 @@ export default function Clients() {
         </div>
       </div>
 
+      {/* Client Type - only on create */}
+      {!editing && (
+        <div className="space-y-2">
+          <Label>Tipo de Cliente *</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => setClientType('novo')}
+              className={`p-3 rounded-xl border-2 text-center transition-all text-sm ${
+                clientType === 'novo' ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
+              }`}>
+              <span className="font-semibold block">🆕 Cliente Novo</span>
+              <span className="text-[10px] text-muted-foreground">Gera onboarding automático</span>
+            </button>
+            <button type="button" onClick={() => setClientType('existente')}
+              className={`p-3 rounded-xl border-2 text-center transition-all text-sm ${
+                clientType === 'existente' ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
+              }`}>
+              <span className="font-semibold block">📋 Cliente Existente</span>
+              <span className="text-[10px] text-muted-foreground">Sem onboarding</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-1">
         <Label>Nome da Empresa *</Label>
         <Input value={form.companyName} onChange={e => setForm({ ...form, companyName: e.target.value })} placeholder="Ex: Padaria do João" />

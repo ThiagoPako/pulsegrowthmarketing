@@ -119,17 +119,19 @@ export default function WhatsAppDashboard() {
     expired: { label: 'Expirado', variant: 'secondary' },
   };
 
-  const templateFields: { key: keyof WhatsAppConfig; label: string; description: string; variables: string }[] = [
+  const templateFields: { key: keyof WhatsAppConfig; toggleKey?: keyof WhatsAppConfig; label: string; description: string; variables: string }[] = [
     {
       key: 'msgRecordingScheduled',
+      toggleKey: 'autoRecordingScheduled',
       label: 'Novo Agendamento de Gravação',
       description: 'Enviada quando uma gravação é agendada',
       variables: '{nome_cliente}, {data_gravacao}, {hora_gravacao}, {videomaker}',
     },
     {
       key: 'msgConfirmation',
+      toggleKey: 'autoConfirmation',
       label: '📋 Confirmação de Gravação (24h)',
-      description: 'Enviada 24h antes pedindo confirmação — substitui o lembrete antigo',
+      description: 'Enviada 24h antes pedindo confirmação',
       variables: '{nome_cliente}, {data_gravacao}, {hora_gravacao}, {videomaker}',
     },
     {
@@ -155,6 +157,34 @@ export default function WhatsAppDashboard() {
       label: '🎯 Backup Confirmado',
       description: 'Enviada quando um cliente backup aceita a vaga',
       variables: '{nome_cliente}',
+    },
+    {
+      key: 'msgTaskEditing',
+      toggleKey: 'autoTaskEditing',
+      label: '✂️ Vídeo em Edição',
+      description: 'Enviada quando o vídeo é gravado e entra na fila de edição',
+      variables: '{nome_cliente}, {titulo}',
+    },
+    {
+      key: 'msgVideoApproval',
+      toggleKey: 'autoVideoApproval',
+      label: '📤 Envio para Aprovação do Cliente',
+      description: 'Enviada quando o vídeo editado é enviado para aprovação',
+      variables: '{nome_cliente}, {link_video}, {titulo}',
+    },
+    {
+      key: 'msgTaskApproved',
+      toggleKey: 'autoTaskApproved',
+      label: '✅ Vídeo Aprovado',
+      description: 'Enviada quando o vídeo é aprovado e vai para agendamento',
+      variables: '{nome_cliente}, {titulo}',
+    },
+    {
+      key: 'msgApprovalExpired',
+      toggleKey: 'autoApprovalExpired',
+      label: '⏰ Aprovação Expirada',
+      description: 'Enviada quando o prazo de aprovação expira e o vídeo segue automaticamente',
+      variables: '{nome_cliente}, {titulo}',
     },
   ];
 
@@ -351,12 +381,27 @@ export default function WhatsAppDashboard() {
           ) : config ? (
             <div className="space-y-4">
               {templateFields.map(tmpl => (
-                <Card key={tmpl.key}>
+                <Card key={tmpl.key} className={tmpl.toggleKey && config[tmpl.toggleKey] === false ? 'opacity-60' : ''}>
                   <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="text-sm">{tmpl.label}</CardTitle>
-                        <CardDescription className="text-[11px]">{tmpl.description}</CardDescription>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-sm">{tmpl.label}</CardTitle>
+                          {tmpl.toggleKey && (
+                            <Switch
+                              checked={config[tmpl.toggleKey] as boolean}
+                              onCheckedChange={v => setConfig({ ...config, [tmpl.toggleKey!]: v })}
+                            />
+                          )}
+                        </div>
+                        <CardDescription className="text-[11px]">
+                          {tmpl.description}
+                          {tmpl.toggleKey && (
+                            <span className={`ml-1 font-medium ${config[tmpl.toggleKey] ? 'text-success' : 'text-muted-foreground'}`}>
+                              — {config[tmpl.toggleKey] ? 'Ativo' : 'Desativado'}
+                            </span>
+                          )}
+                        </CardDescription>
                       </div>
                       <Button
                         variant={editingTemplate === tmpl.key ? 'default' : 'outline'}

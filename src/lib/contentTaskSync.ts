@@ -101,8 +101,10 @@ export async function syncContentTaskColumnChange(
     // Send WhatsApp to client: video recorded, now in editing
     try {
       const whatsConfig = await getWhatsAppConfig();
-      if (whatsConfig?.integrationActive && ctx.clientWhatsapp) {
-        const editingMsg = `Olá, ${ctx.clientName || ''}! 🎬\n\nHoje gravamos o vídeo *"${ctx.title}"* e ele já está com o nosso time de edição! ✂️\n\nAssim que estiver pronto, enviaremos o link aqui para sua aprovação. 📲\n\nAgradecemos pela confiança!\n\nEquipe Pulse Growth Marketing 🚀`;
+      if (whatsConfig?.integrationActive && whatsConfig?.autoTaskEditing && ctx.clientWhatsapp) {
+        const editingMsg = whatsConfig.msgTaskEditing
+          .replace('{nome_cliente}', ctx.clientName || '')
+          .replace('{titulo}', ctx.title);
 
         await sendWhatsAppMessage({
           number: ctx.clientWhatsapp,
@@ -210,7 +212,6 @@ export async function syncContentTaskColumnChange(
           .replace('{nome_cliente}', ctx.clientName || '')
           .replace('{link_video}', ctx.editedVideoLink || 'Link não disponível')
           .replace('{titulo}', ctx.title);
-        msg += '\\n\\n⏰ Você tem até *6 horas* para avaliar e aprovar o vídeo. Após esse prazo, ele será encaminhado para agendamento automaticamente.';
 
         await sendWhatsAppMessage({
           number: ctx.clientWhatsapp,

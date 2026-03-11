@@ -13,6 +13,9 @@ export interface WhatsAppConfig {
   autoVideoApproval: boolean;
   autoVideoApproved: boolean;
   autoConfirmation: boolean;
+  autoTaskEditing: boolean;
+  autoTaskApproved: boolean;
+  autoApprovalExpired: boolean;
   msgRecordingScheduled: string;
   msgRecordingReminder: string;
   msgVideoApproval: string;
@@ -22,6 +25,9 @@ export interface WhatsAppConfig {
   msgConfirmationCancelled: string;
   msgBackupInvite: string;
   msgBackupConfirmed: string;
+  msgTaskEditing: string;
+  msgTaskApproved: string;
+  msgApprovalExpired: string;
 }
 
 interface SendMessageParams {
@@ -70,6 +76,9 @@ function rowToConfig(r: any): WhatsAppConfig {
     autoVideoApproval: r.auto_video_approval,
     autoVideoApproved: r.auto_video_approved,
     autoConfirmation: r.auto_confirmation,
+    autoTaskEditing: r.auto_task_editing ?? true,
+    autoTaskApproved: r.auto_task_approved ?? true,
+    autoApprovalExpired: r.auto_approval_expired ?? true,
     msgRecordingScheduled: r.msg_recording_scheduled || '',
     msgRecordingReminder: r.msg_recording_reminder || '',
     msgVideoApproval: r.msg_video_approval || '',
@@ -79,6 +88,9 @@ function rowToConfig(r: any): WhatsAppConfig {
     msgConfirmationCancelled: r.msg_confirmation_cancelled || '',
     msgBackupInvite: r.msg_backup_invite || '',
     msgBackupConfirmed: r.msg_backup_confirmed || '',
+    msgTaskEditing: r.msg_task_editing || '',
+    msgTaskApproved: r.msg_task_approved || '',
+    msgApprovalExpired: r.msg_approval_expired || '',
   };
 }
 
@@ -117,6 +129,9 @@ export async function updateWhatsAppConfig(config: Partial<WhatsAppConfig>): Pro
   if (config.autoVideoApproval !== undefined) updateData.auto_video_approval = config.autoVideoApproval;
   if (config.autoVideoApproved !== undefined) updateData.auto_video_approved = config.autoVideoApproved;
   if (config.autoConfirmation !== undefined) updateData.auto_confirmation = config.autoConfirmation;
+  if (config.autoTaskEditing !== undefined) updateData.auto_task_editing = config.autoTaskEditing;
+  if (config.autoTaskApproved !== undefined) updateData.auto_task_approved = config.autoTaskApproved;
+  if (config.autoApprovalExpired !== undefined) updateData.auto_approval_expired = config.autoApprovalExpired;
   if (config.msgRecordingScheduled !== undefined) updateData.msg_recording_scheduled = config.msgRecordingScheduled;
   if (config.msgRecordingReminder !== undefined) updateData.msg_recording_reminder = config.msgRecordingReminder;
   if (config.msgVideoApproval !== undefined) updateData.msg_video_approval = config.msgVideoApproval;
@@ -126,6 +141,9 @@ export async function updateWhatsAppConfig(config: Partial<WhatsAppConfig>): Pro
   if (config.msgConfirmationCancelled !== undefined) updateData.msg_confirmation_cancelled = config.msgConfirmationCancelled;
   if (config.msgBackupInvite !== undefined) updateData.msg_backup_invite = config.msgBackupInvite;
   if (config.msgBackupConfirmed !== undefined) updateData.msg_backup_confirmed = config.msgBackupConfirmed;
+  if (config.msgTaskEditing !== undefined) updateData.msg_task_editing = config.msgTaskEditing;
+  if (config.msgTaskApproved !== undefined) updateData.msg_task_approved = config.msgTaskApproved;
+  if (config.msgApprovalExpired !== undefined) updateData.msg_approval_expired = config.msgApprovalExpired;
   updateData.updated_at = new Date().toISOString();
 
   const { error } = await supabase.from('whatsapp_config').update(updateData).eq('id', current.id);

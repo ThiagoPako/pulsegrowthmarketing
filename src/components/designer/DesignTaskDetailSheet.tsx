@@ -479,6 +479,68 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                   </div>
                 </div>
 
+                {/* CTA for nova_tarefa - rocket launch button */}
+                {task.kanban_column === 'nova_tarefa' && isDesigner && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3, duration: 0.5 }}
+                    className="rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 via-accent/10 to-primary/5 p-5 text-center space-y-3"
+                  >
+                    <p className="text-sm text-muted-foreground font-medium">
+                      Leu o briefing e entendeu tudo? 🎯
+                    </p>
+                    <p className="text-xs text-muted-foreground/70">
+                      Então vamos pra cima! Clique abaixo para começar a execução.
+                    </p>
+                    <motion.button
+                      onClick={handleStartTask}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="relative w-full py-3.5 rounded-xl font-bold text-sm text-primary-foreground overflow-hidden bg-primary shadow-lg cursor-pointer group"
+                    >
+                      {/* Animated gradient overlay */}
+                      <motion.div
+                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+                        animate={{ x: ['-200%', '200%'] }}
+                        transition={{ repeat: Infinity, duration: 2.5, ease: 'linear' }}
+                      />
+                      {/* Floating particles */}
+                      <motion.span
+                        className="absolute left-[15%] top-1/2 text-lg"
+                        animate={{ y: [-2, -12, -2], opacity: [0.3, 0.8, 0.3] }}
+                        transition={{ repeat: Infinity, duration: 2, delay: 0.2 }}
+                      >
+                        ✨
+                      </motion.span>
+                      <motion.span
+                        className="absolute right-[15%] top-1/2 text-lg"
+                        animate={{ y: [-2, -14, -2], opacity: [0.3, 0.8, 0.3] }}
+                        transition={{ repeat: Infinity, duration: 2.2, delay: 0.6 }}
+                      >
+                        ✨
+                      </motion.span>
+                      {/* Rocket icon + text */}
+                      <span className="relative z-10 flex items-center justify-center gap-2">
+                        <motion.span
+                          animate={{ y: [0, -3, 0], rotate: [0, -5, 0] }}
+                          transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
+                          className="text-xl"
+                        >
+                          🚀
+                        </motion.span>
+                        INICIAR EXECUÇÃO
+                        <motion.span
+                          animate={{ x: [0, 4, 0] }}
+                          transition={{ repeat: Infinity, duration: 1, ease: 'easeInOut' }}
+                        >
+                          <ArrowRight size={16} />
+                        </motion.span>
+                      </span>
+                    </motion.button>
+                  </motion.div>
+                )}
+
                 {/* Arquivo section */}
                 <div className="space-y-3">
                   <h4 className="text-sm font-semibold">Arquivo</h4>

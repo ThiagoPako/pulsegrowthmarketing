@@ -530,23 +530,14 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                       </div>
                     ) : (task as any).mockup_url ? (
                       <div className="space-y-2">
-                        {/\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test((task as any).mockup_url) ? (
-                          <button onClick={() => setPreviewImage((task as any).mockup_url)} className="relative group rounded-lg overflow-hidden border border-border w-full hover:ring-2 hover:ring-primary/50 transition-all">
-                            <img src={(task as any).mockup_url} alt="Mockup" className="w-full max-h-48 object-contain bg-muted/30" />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                              <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                          </button>
-                        ) : (
-                          <a href={(task as any).mockup_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-sm text-primary">
-                            <Eye size={14} /> Ver mockup
-                          </a>
-                        )}
+                        <a href={(task as any).mockup_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-sm text-primary">
+                          <FileText size={14} /> Ver PDF de apresentação
+                        </a>
                       </div>
                     ) : (
                       <div className="rounded-lg border border-dashed border-border p-4 text-center">
-                        <Image size={18} className="mx-auto text-muted-foreground/40 mb-1" />
-                        <p className="text-xs text-muted-foreground">Sem mockup</p>
+                        <FileText size={18} className="mx-auto text-muted-foreground/40 mb-1" />
+                        <p className="text-xs text-muted-foreground">Sem mockup de apresentação</p>
                       </div>
                     )}
                   </div>

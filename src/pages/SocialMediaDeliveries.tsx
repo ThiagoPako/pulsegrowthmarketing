@@ -1209,9 +1209,14 @@ export default function SocialMediaDeliveries() {
           <h1 className="text-2xl font-bold text-foreground">Entregas Social Media</h1>
           <p className="text-sm text-muted-foreground">Selecione um cliente para gerenciar suas entregas</p>
         </div>
-        <Button onClick={() => openNew()} className="gap-2">
-          <Plus size={16} /> Nova Entrega
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" className="gap-2" onClick={() => setMainTab('calendario')}>
+            <CalendarIcon size={16} /> Calendário
+          </Button>
+          <Button onClick={() => openNew()} className="gap-2">
+            <Plus size={16} /> Nova Entrega
+          </Button>
+        </div>
       </div>
 
       {/* Global summary */}

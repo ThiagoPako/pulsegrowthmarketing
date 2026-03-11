@@ -11,13 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink, Database } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink, Database, FileText as FileTextIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
 import { Textarea } from '@/components/ui/textarea';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import ClientArtDatabaseDialog from '@/components/ClientArtDatabaseDialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 const CONTENT_TYPES: ContentType[] = ['reels', 'story', 'produto'];
@@ -72,8 +73,10 @@ const STEP_LABELS = [
 ];
 
 export default function Clients() {
-  const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient } = useApp();
+  const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient, currentUser } = useApp();
   const { createOnboardingForClient } = useOnboarding();
+  const isDesignerOnly = currentUser?.role === 'designer' || currentUser?.role === 'fotografo';
+  const [briefingClient, setBriefingClient] = useState<Client | null>(null);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
   const [form, setForm] = useState<Partial<Client> & { clientType?: string }>(emptyClient());
@@ -1210,85 +1213,87 @@ export default function Clients() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-display font-bold">Clientes</h1>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => handleOpen()}><Plus size={16} className="mr-2" /> Novo Cliente</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editing ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
-            </DialogHeader>
+        {!isDesignerOnly && (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => handleOpen()}><Plus size={16} className="mr-2" /> Novo Cliente</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>{editing ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
+              </DialogHeader>
 
-            {/* Stepper indicator */}
-            {!editing && (
-              <div className="flex items-center gap-1 mb-2">
-                {STEP_LABELS.map((s, i) => {
-                  const Icon = s.icon;
-                  const isActive = i === step;
-                  const isDone = i < step;
-                  return (
-                    <div key={i} className="flex items-center gap-1 flex-1">
-                      <div className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors w-full justify-center ${
-                        isActive ? 'bg-primary text-primary-foreground' : isDone ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
-                      }`}>
-                        <Icon size={13} />
-                        <span className="hidden sm:inline">{s.label}</span>
-                        <span className="sm:hidden">{i + 1}</span>
+              {/* Stepper indicator */}
+              {!editing && (
+                <div className="flex items-center gap-1 mb-2">
+                  {STEP_LABELS.map((s, i) => {
+                    const Icon = s.icon;
+                    const isActive = i === step;
+                    const isDone = i < step;
+                    return (
+                      <div key={i} className="flex items-center gap-1 flex-1">
+                        <div className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors w-full justify-center ${
+                          isActive ? 'bg-primary text-primary-foreground' : isDone ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
+                        }`}>
+                          <Icon size={13} />
+                          <span className="hidden sm:inline">{s.label}</span>
+                          <span className="sm:hidden">{i + 1}</span>
+                        </div>
+                        {i < STEP_LABELS.length - 1 && <ChevronRight size={14} className="text-muted-foreground shrink-0" />}
                       </div>
-                      {i < STEP_LABELS.length - 1 && <ChevronRight size={14} className="text-muted-foreground shrink-0" />}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Step content */}
-            <div className="min-h-[200px]">
-              {editing ? (
-                // Editing: show all fields together
-                <div className="space-y-5">
-                  {renderStep0()}
-                  {renderStep1()}
-                  {renderStep2()}
-                  {renderStep3()}
-                  {renderStep4()}
+                    );
+                  })}
                 </div>
-              ) : (
-                <>
-                  {step === 0 && renderStep0()}
-                  {step === 1 && renderStep1()}
-                  {step === 2 && renderStep3()}
-                  {step === 3 && renderStep4()}
-                </>
               )}
-            </div>
 
-            {/* Navigation buttons */}
-            <div className="flex gap-2 pt-2">
-              {editing ? (
-                <Button onClick={handleSave} className="w-full">Salvar Alterações</Button>
-              ) : (
-                <>
-                  {step > 0 && (
-                    <Button variant="outline" onClick={() => setStep(s => s - 1)} className="gap-1">
-                      <ChevronLeft size={14} /> Voltar
-                    </Button>
-                  )}
-                  {step < 3 ? (
-                    <Button onClick={() => setStep(s => s + 1)} className="ml-auto gap-1"
-                      disabled={step === 0 ? !canProceedStep0 : false}>
-                      Próximo <ChevronRight size={14} />
-                    </Button>
-                  ) : (
-                    <Button onClick={handleSave} className="ml-auto gap-1">
-                      <CalendarCheck size={14} /> Cadastrar Cliente
-                    </Button>
-                  )}
-                </>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
+              {/* Step content */}
+              <div className="min-h-[200px]">
+                {editing ? (
+                  // Editing: show all fields together
+                  <div className="space-y-5">
+                    {renderStep0()}
+                    {renderStep1()}
+                    {renderStep2()}
+                    {renderStep3()}
+                    {renderStep4()}
+                  </div>
+                ) : (
+                  <>
+                    {step === 0 && renderStep0()}
+                    {step === 1 && renderStep1()}
+                    {step === 2 && renderStep3()}
+                    {step === 3 && renderStep4()}
+                  </>
+                )}
+              </div>
+
+              {/* Navigation buttons */}
+              <div className="flex gap-2 pt-2">
+                {editing ? (
+                  <Button onClick={handleSave} className="w-full">Salvar Alterações</Button>
+                ) : (
+                  <>
+                    {step > 0 && (
+                      <Button variant="outline" onClick={() => setStep(s => s - 1)} className="gap-1">
+                        <ChevronLeft size={14} /> Voltar
+                      </Button>
+                    )}
+                    {step < 3 ? (
+                      <Button onClick={() => setStep(s => s + 1)} className="ml-auto gap-1"
+                        disabled={step === 0 ? !canProceedStep0 : false}>
+                        Próximo <ChevronRight size={14} />
+                      </Button>
+                    ) : (
+                      <Button onClick={handleSave} className="ml-auto gap-1">
+                        <CalendarCheck size={14} /> Cadastrar Cliente
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {clients.length === 0 ? (
@@ -1312,46 +1317,60 @@ export default function Clients() {
                 )}
                 <div className="min-w-0">
                   <p className="font-medium text-sm truncate">{c.companyName}</p>
-                  <p className="text-[11px] text-muted-foreground truncate">
-                    {DAY_LABELS[c.fixedDay]} · {c.fixedTime} · {users.find(u => u.id === c.videomaker)?.name || '—'}
-                  </p>
+                  {!isDesignerOnly && (
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {DAY_LABELS[c.fixedDay]} · {c.fixedTime} · {users.find(u => u.id === c.videomaker)?.name || '—'}
+                    </p>
+                  )}
                   <div className="flex gap-1 mt-1 flex-wrap">
                     {c.niche && c.niche !== 'outro' && (
                       <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
                         {NICHE_OPTIONS.find(n => n.value === c.niche)?.label || c.niche}
                       </Badge>
                     )}
-                    {(c.weeklyReels ?? 0) > 0 && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{c.weeklyReels} reels</Badge>}
-                    {(c.weeklyCreatives ?? 0) > 0 && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{c.weeklyCreatives} criativos</Badge>}
-                    {c.acceptsExtra && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">Extra{c.extraClientAppears ? ' · Aparece' : ''}</Badge>}
+                    {!isDesignerOnly && (
+                      <>
+                        {(c.weeklyReels ?? 0) > 0 && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{c.weeklyReels} reels</Badge>}
+                        {(c.weeklyCreatives ?? 0) > 0 && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{c.weeklyCreatives} criativos</Badge>}
+                        {c.acceptsExtra && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">Extra{c.extraClientAppears ? ' · Aparece' : ''}</Badge>}
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
               <div className="flex gap-1 shrink-0">
-                {/* Onboarding link */}
-                <Button variant="ghost" size="icon" className="h-8 w-8" title="Copiar link de onboarding"
-                  onClick={() => {
-                    const link = `${window.location.origin}/onboarding/${c.id}`;
-                    navigator.clipboard.writeText(link);
-                    toast.success('Link de onboarding copiado!');
-                  }}>
-                  <Copy size={14} />
+                {/* Designer-only: Briefing + Art Database */}
+                <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver Briefing" onClick={() => setBriefingClient(c)}>
+                  <FileTextIcon size={14} />
                 </Button>
-                {c.whatsapp && (
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => {
-                    setSendWaClient(c);
-                    setSendWaOpen(true);
-                  }}><MessageSquare size={14} /></Button>
-                )}
                 <Button variant="ghost" size="icon" className="h-8 w-8" title="Banco de Dados" onClick={() => setArtDbClient(c)}>
                   <Database size={14} />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
-                  const vmName = users.find(u => u.id === c.videomaker)?.name || '—';
-                  generateClientCardPdf(c, vmName);
-                }}><Printer size={14} /></Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpen(c)}><Pencil size={14} /></Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(c.id)}><Trash2 size={14} /></Button>
+                {/* Full actions only for non-designers */}
+                {!isDesignerOnly && (
+                  <>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Copiar link de onboarding"
+                      onClick={() => {
+                        const link = `${window.location.origin}/onboarding/${c.id}`;
+                        navigator.clipboard.writeText(link);
+                        toast.success('Link de onboarding copiado!');
+                      }}>
+                      <Copy size={14} />
+                    </Button>
+                    {c.whatsapp && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => {
+                        setSendWaClient(c);
+                        setSendWaOpen(true);
+                      }}><MessageSquare size={14} /></Button>
+                    )}
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                      const vmName = users.find(u => u.id === c.videomaker)?.name || '—';
+                      generateClientCardPdf(c, vmName);
+                    }}><Printer size={14} /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpen(c)}><Pencil size={14} /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(c.id)}><Trash2 size={14} /></Button>
+                  </>
+                )}
               </div>
             </div>
           ))}
@@ -1403,6 +1422,123 @@ export default function Clients() {
       {artDbClient && (
         <ClientArtDatabaseDialog client={artDbClient} open={!!artDbClient} onOpenChange={o => !o && setArtDbClient(null)} />
       )}
+
+      {/* Briefing Dialog */}
+      <Dialog open={!!briefingClient} onOpenChange={o => !o && setBriefingClient(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileTextIcon size={18} className="text-primary" />
+              Briefing — {briefingClient?.companyName}
+            </DialogTitle>
+          </DialogHeader>
+          {briefingClient && <ClientBriefingView client={briefingClient} />}
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+/* ==================== Briefing Viewer for Designer ==================== */
+function ClientBriefingView({ client }: { client: Client }) {
+  const briefing = (client as any).briefingData || {};
+  const editorial = (client as any).editorial || '';
+  const niche = client.niche;
+  const nicheLabel = NICHE_OPTIONS.find(n => n.value === niche)?.label || niche || '—';
+
+  const briefingFields: { label: string; value: string }[] = [
+    { label: 'Empresa', value: client.companyName },
+    { label: 'Responsável', value: client.responsiblePerson },
+    { label: 'Nicho', value: nicheLabel },
+    { label: 'Cidade', value: (client as any).city || '—' },
+  ];
+
+  // Extract briefing_data fields
+  const briefingDataFields: { label: string; value: string }[] = [];
+  if (briefing && typeof briefing === 'object') {
+    const fieldMap: Record<string, string> = {
+      business_description: 'Descrição do Negócio',
+      target_audience: 'Público-Alvo',
+      differentials: 'Diferenciais',
+      tone_of_voice: 'Tom de Voz',
+      competitors: 'Concorrentes',
+      goals: 'Objetivos',
+      visual_references: 'Referências Visuais',
+      brand_colors: 'Cores da Marca',
+      avoid: 'Evitar',
+      additional_notes: 'Observações',
+      products_services: 'Produtos/Serviços',
+      social_media_links: 'Redes Sociais',
+    };
+    for (const [key, label] of Object.entries(fieldMap)) {
+      if (briefing[key]) {
+        briefingDataFields.push({ label, value: String(briefing[key]) });
+      }
+    }
+    // Also capture any other keys not in the map
+    for (const [key, val] of Object.entries(briefing)) {
+      if (!fieldMap[key] && val && typeof val === 'string' && val.trim()) {
+        briefingDataFields.push({ label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), value: val });
+      }
+    }
+  }
+
+  const driveIV = (client as any).driveIdentidadeVisual;
+
+  return (
+    <ScrollArea className="max-h-[65vh]">
+      <div className="space-y-4 pr-2">
+        {/* Basic info */}
+        <div className="grid grid-cols-2 gap-3">
+          {briefingFields.map(f => (
+            <div key={f.label} className="rounded-lg border border-border p-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{f.label}</p>
+              <p className="text-sm font-medium mt-0.5">{f.value || '—'}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Drive Identidade Visual */}
+        {driveIV && (
+          <div className="rounded-lg border border-border p-3">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Drive de Identidade Visual</p>
+            <a href={driveIV} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1.5">
+              <ExternalLink size={12} /> Abrir Drive
+            </a>
+          </div>
+        )}
+
+        {/* Editorial line */}
+        {editorial && (
+          <div className="rounded-lg border border-accent bg-accent/10 p-4">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
+              <FileTextIcon size={10} /> Linha Editorial
+            </p>
+            <div className="text-sm leading-relaxed prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: editorial }} />
+          </div>
+        )}
+
+        {/* Briefing data */}
+        {briefingDataFields.length > 0 ? (
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Dados do Briefing</p>
+            {briefingDataFields.map(f => (
+              <div key={f.label} className="rounded-lg border border-border p-3">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{f.label}</p>
+                <p className="text-sm mt-1 whitespace-pre-line">{f.value}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          !editorial && (
+            <div className="text-center py-8 text-muted-foreground">
+              <FileTextIcon size={32} className="mx-auto mb-2 opacity-30" />
+              <p className="text-sm">Nenhum briefing preenchido para este cliente</p>
+              <p className="text-xs mt-1">O briefing é preenchido durante o onboarding do cliente</p>
+            </div>
+          )
+        )}
+      </div>
+    </ScrollArea>
   );
 }

@@ -34,7 +34,9 @@ interface SendMessageParams {
   number: string;
   message: string;
   clientId?: string;
-  triggerType?: 'manual' | 'auto_recording' | 'auto_reminder' | 'auto_confirmation' | 'auto_backup';
+  triggerType?: 'manual' | 'auto_recording' | 'auto_reminder' | 'auto_confirmation' | 'auto_backup' | 'auto_design_approved';
+  mediaUrl?: string;
+  mediaFileName?: string;
 }
 
 export interface WhatsAppMessage {

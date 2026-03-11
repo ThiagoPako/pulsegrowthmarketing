@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json()
-    const { action, number, message, userId: apiUserId, queueId, sendSignature, closeTicket, clientId, triggerType } = body
+    const { action, number, message, userId: apiUserId, queueId, sendSignature, closeTicket, clientId, triggerType, mediaUrl, mediaFileName } = body
 
     // Test connection mode
     if (action === 'test_connection') {
@@ -55,7 +55,6 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({ number: '0', body: '', userId: '', queueId: '', sendSignature: false, closeTicket: false }),
         })
-        // A 401/403 means bad token; anything else means token is valid (even 400/422 for bad payload)
         const isTokenValid = testResponse.status !== 401 && testResponse.status !== 403
         return new Response(JSON.stringify({ success: isTokenValid, status: testResponse.status }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -72,31 +71,72 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'number and message are required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    const apiBody = {
-      number: number.replace(/\D/g, ''),
-      body: message,
-      userId: apiUserId || '',
-      queueId: queueId || '',
-      sendSignature: sendSignature || false,
-      closeTicket: closeTicket || false,
+    const cleanNumber = number.replace(/\D/g, '')
+    let apiResponse: Response
+    let apiResult: any
+
+    if (mediaUrl) {
+      // ── Send with media using multipart/form-data ──
+      // Download the file first
+      const fileResponse = await fetch(mediaUrl)
+      if (!fileResponse.ok) {
+        return new Response(JSON.stringify({ error: 'Não foi possível baixar o arquivo de mídia' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const fileBlob = await fileResponse.blob()
+      const fileName = mediaFileName || mediaUrl.split('/').pop() || 'file'
+
+      const formData = new FormData()
+      formData.append('number', cleanNumber)
+      formData.append('body', message)
+      formData.append('userId', apiUserId || '')
+      formData.append('queueId', queueId || '')
+      formData.append('sendSignature', String(sendSignature || false))
+      formData.append('closeTicket', String(closeTicket || false))
+      formData.append('medias', fileBlob, fileName)
+
+      apiResponse = await fetch(WHATSAPP_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+          // Don't set Content-Type - browser/runtime sets it with boundary for multipart
+        },
+        body: formData,
+      })
+
+      apiResult = await apiResponse.json()
+    } else {
+      // ── Send text-only using JSON ──
+      const apiBody = {
+        number: cleanNumber,
+        body: message,
+        userId: apiUserId || '',
+        queueId: queueId || '',
+        sendSignature: sendSignature || false,
+        closeTicket: closeTicket || false,
+      }
+
+      apiResponse = await fetch(WHATSAPP_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(apiBody),
+      })
+
+      apiResult = await apiResponse.json()
     }
 
-    const apiResponse = await fetch(WHATSAPP_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(apiBody),
-    })
-
-    const apiResult = await apiResponse.json()
     const status = apiResponse.ok ? 'sent' : 'failed'
 
-    // Log message using user's client (respects RLS INSERT policy)
+    // Log message
     await supabaseUser.from('whatsapp_messages').insert({
-      phone_number: number.replace(/\D/g, ''),
-      message,
+      phone_number: cleanNumber,
+      message: mediaUrl ? `${message} [📎 ${mediaFileName || 'arquivo'}]` : message,
       status,
       api_response: apiResult,
       sent_by: userId,

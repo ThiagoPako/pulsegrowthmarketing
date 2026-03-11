@@ -42,6 +42,7 @@ interface ClientGroup {
   clientType: string;
   tasks: OnboardingTask[];
   currentStage: OnboardingStage;
+  activeStages: OnboardingStage[]; // parallel stages currently active
   allStages: OnboardingStage[];
   completedStages: OnboardingStage[];
 }

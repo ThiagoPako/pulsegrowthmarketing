@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import { Plus, KeyRound, Users, Handshake, Trash2 } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 
-const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'fotografo'];
+const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'fotografo', 'designer'];
 
 const PARTNER_FUNCTIONS = [
   { value: 'fotografo', label: 'Fotografia' },
@@ -200,6 +200,7 @@ export default function Team() {
     endomarketing: 'bg-accent text-accent-foreground',
     parceiro: 'bg-purple-100 text-purple-700',
     fotografo: 'bg-pink-100 text-pink-700',
+    designer: 'bg-orange-100 text-orange-700',
   };
 
   const partnerUserIds = partners.map(p => p.user_id);

@@ -12,7 +12,7 @@ import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import ClientLogo from '@/components/ClientLogo';
-import { Play, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History, Plus, X, Image, Upload } from 'lucide-react';
+import { Play, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History, Plus, X, Image, Upload, FileText, Palette, Info } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Props {
@@ -30,6 +30,13 @@ interface ChecklistItem {
 const FORMAT_LABELS: Record<string, string> = { feed: 'Feed', story: 'Story', midia_fisica: 'Mídia Física' };
 const PRIORITY_LABELS: Record<string, string> = { baixa: 'Baixa', media: 'Média', alta: 'Alta', urgente: 'Urgente' };
 
+function getTaskCategory(task: DesignTask): 'identidade_visual' | 'reformulacao' | 'normal' {
+  const t = task.title.toLowerCase();
+  if (t.includes('identidade visual')) return 'identidade_visual';
+  if (t.includes('reformulação')) return 'reformulacao';
+  return 'normal';
+}
+
 export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Props) {
   const { updateTask, addHistory, historyQuery } = useDesignTasks();
   const { currentUser } = useApp();
@@ -44,19 +51,19 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [newChecklistItem, setNewChecklistItem] = useState('');
   const [uploadingMockup, setUploadingMockup] = useState(false);
 
-  const isReformulacaoOrIdentidade = task.title.toLowerCase().includes('reformulação') || task.title.toLowerCase().includes('identidade visual');
+  const taskCategory = getTaskCategory(task);
+  const hasChecklist = taskCategory !== 'normal';
+  const showMockup = taskCategory === 'identidade_visual' || taskCategory === 'reformulacao';
 
   const history = historyQuery(task.id);
 
-  // Auto elapsed time from started_at
   useEffect(() => {
     if (!task.started_at) { setElapsedDisplay(''); return; }
     const update = () => {
       const elapsed = Math.floor((Date.now() - new Date(task.started_at!).getTime()) / 1000);
       const h = Math.floor(elapsed / 3600);
       const m = Math.floor((elapsed % 3600) / 60);
-      if (h > 0) setElapsedDisplay(`${h}h ${m}min`);
-      else setElapsedDisplay(`${m}min`);
+      setElapsedDisplay(h > 0 ? `${h}h ${m}min` : `${m}min`);
     };
     update();
     const interval = setInterval(update, 60000);
@@ -77,7 +84,6 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
     if (!attachmentUrl) { toast.error('Anexe a arte antes de enviar'); return; }
     await updateTask.mutateAsync({ id: task.id, kanban_column: 'em_analise', attachment_url: attachmentUrl, editable_file_url: editableFileUrl, observations } as any);
     await addHistory.mutateAsync({ task_id: task.id, action: 'Enviado para análise', attachment_url: attachmentUrl, user_id: user?.id });
-    // Notify social media
     await supabase.rpc('notify_role', { _role: 'social_media', _title: 'Arte em análise', _message: `Arte "${task.title}" pronta para revisão`, _type: 'design', _link: '/designer' });
     toast.success('Enviado para análise!');
   };
@@ -98,13 +104,11 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   };
 
   const handleSendToClient = async () => {
-    // Send via WhatsApp
     try {
       const { data: whatsConfig } = await supabase.from('whatsapp_config').select('*').limit(1).single();
       if (whatsConfig?.integration_active && whatsConfig?.api_token && task.clients?.whatsapp) {
         const clientName = task.clients?.responsible_person || task.clients?.company_name;
         const msg = `Olá, ${clientName}! 🎨\n\nSegue a arte criada para sua empresa. Pode nos confirmar se está aprovado?\n\n${attachmentUrl || task.attachment_url || ''}`;
-        
         await fetch('https://api.atendeclique.com.br/api/messages/send', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${whatsConfig.api_token}`, 'Content-Type': 'application/json' },
@@ -117,19 +121,10 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
             closeTicket: whatsConfig.close_ticket || false,
           }),
         });
-
-        await supabase.from('whatsapp_messages').insert({
-          phone_number: task.clients.whatsapp.replace(/\D/g, ''),
-          message: msg,
-          status: 'sent',
-          client_id: task.client_id,
-          trigger_type: 'auto_recording',
-        } as any);
       }
     } catch (err) {
       console.error('WhatsApp send error:', err);
     }
-
     await updateTask.mutateAsync({ id: task.id, sent_to_client_at: new Date().toISOString() } as any);
     await addHistory.mutateAsync({ task_id: task.id, action: 'Enviado para cliente via WhatsApp', user_id: user?.id });
     toast.success('Arte enviada ao cliente!');
@@ -144,9 +139,260 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const isDesigner = currentUser?.role === 'fotografo' || currentUser?.role === 'admin';
   const isSocialMedia = currentUser?.role === 'social_media' || currentUser?.role === 'admin';
 
+  // --- LEFT COLUMN: Briefing / Info for the designer ---
+  const renderBriefingColumn = () => (
+    <div className="space-y-3">
+      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+        <Info size={12} /> Briefing da Demanda
+      </h3>
+
+      <div className="space-y-2.5">
+        <div className="p-2.5 rounded-lg bg-muted/50 border border-border">
+          <Label className="text-[10px] text-muted-foreground uppercase">Cliente</Label>
+          <p className="text-sm font-medium">{task.clients?.company_name || '—'}</p>
+          {task.clients?.responsible_person && (
+            <p className="text-xs text-muted-foreground">Responsável: {task.clients.responsible_person}</p>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="p-2 rounded-lg bg-muted/50 border border-border">
+            <Label className="text-[10px] text-muted-foreground uppercase">Formato</Label>
+            <p className="text-sm font-medium">{FORMAT_LABELS[task.format_type] || task.format_type}</p>
+          </div>
+          <div className="p-2 rounded-lg bg-muted/50 border border-border">
+            <Label className="text-[10px] text-muted-foreground uppercase">Prioridade</Label>
+            <Badge variant="secondary" className="mt-0.5">{PRIORITY_LABELS[task.priority]}</Badge>
+          </div>
+        </div>
+
+        {task.description && (
+          <div className="p-2.5 rounded-lg bg-muted/50 border border-border">
+            <Label className="text-[10px] text-muted-foreground uppercase flex items-center gap-1">
+              <FileText size={10} /> Descrição
+            </Label>
+            <p className="text-sm mt-1 whitespace-pre-line">{task.description}</p>
+          </div>
+        )}
+
+        {task.copy_text && (
+          <div className="p-2.5 rounded-lg bg-accent/50 border border-accent">
+            <Label className="text-[10px] text-muted-foreground uppercase flex items-center gap-1">
+              <Palette size={10} /> Copy / Texto
+            </Label>
+            <p className="text-sm mt-1 whitespace-pre-line">{task.copy_text}</p>
+          </div>
+        )}
+
+        {task.references_links?.length > 0 && (
+          <div className="p-2.5 rounded-lg bg-muted/50 border border-border">
+            <Label className="text-[10px] text-muted-foreground uppercase">Referências</Label>
+            <div className="space-y-1 mt-1">
+              {task.references_links.map((link, i) => (
+                <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1 hover:underline">
+                  <ExternalLink size={10} /> {link}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {task.reference_images?.length > 0 && (
+          <div className="p-2.5 rounded-lg bg-muted/50 border border-border">
+            <Label className="text-[10px] text-muted-foreground uppercase">Imagens de Referência</Label>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {task.reference_images.map((img, i) => (
+                <a key={i} href={img} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+                  📷 Imagem {i + 1}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {task.observations && task.kanban_column === 'ajustes' && (
+          <div className="p-2.5 rounded-lg bg-destructive/10 border border-destructive/30">
+            <Label className="text-[10px] text-destructive uppercase">⚠️ Ajustes Solicitados</Label>
+            <p className="text-sm mt-1">{task.observations}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // --- RIGHT COLUMN: Execution area ---
+  const renderExecutionColumn = () => (
+    <div className="space-y-3">
+      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+        <Play size={12} /> Execução
+      </h3>
+
+      {/* Elapsed time */}
+      {task.started_at && elapsedDisplay && (
+        <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg text-xs text-muted-foreground">
+          <Clock size={13} />
+          <span>Em execução há <strong className="text-foreground">{elapsedDisplay}</strong></span>
+        </div>
+      )}
+
+      {/* Checklist - only for identidade visual / reformulação */}
+      {hasChecklist && checklist.length > 0 && (
+        <div className="p-2.5 rounded-lg border border-border bg-card">
+          <Label className="text-[10px] text-muted-foreground uppercase mb-2 block">Checklist</Label>
+          <div className="space-y-1.5">
+            {checklist.map(item => (
+              <div key={item.id} className="flex items-center gap-2">
+                <Checkbox
+                  checked={item.done}
+                  onCheckedChange={async (checked) => {
+                    const updated = checklist.map(c => c.id === item.id ? { ...c, done: !!checked } : c);
+                    setChecklist(updated);
+                    await updateTask.mutateAsync({ id: task.id, checklist: updated } as any);
+                  }}
+                />
+                <span className={`text-xs flex-1 ${item.done ? 'line-through text-muted-foreground' : ''}`}>{item.text}</span>
+              </div>
+            ))}
+          </div>
+          <div className="text-[10px] text-muted-foreground mt-2">
+            {checklist.filter(c => c.done).length}/{checklist.length} concluídos
+          </div>
+        </div>
+      )}
+
+      {/* Mockup section for reformulação/identidade visual */}
+      {showMockup && (task.kanban_column === 'executando' || task.kanban_column === 'ajustes') && isDesigner && (
+        <div className="p-2.5 rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-900/20 space-y-2">
+          <Label className="text-xs font-semibold flex items-center gap-1.5 text-violet-700 dark:text-violet-300">
+            <Image size={13} /> Mockup para Aprovação
+          </Label>
+          <p className="text-[10px] text-muted-foreground">
+            Anexe o mockup para o cliente visualizar como ficará.
+          </p>
+          {mockupUrl ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 p-2 rounded bg-card border">
+                <CheckCircle size={14} className="text-emerald-500 shrink-0" />
+                <a href={mockupUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline truncate flex-1">
+                  {mockupUrl}
+                </a>
+              </div>
+              <Input value={mockupUrl} onChange={e => setMockupUrl(e.target.value)} placeholder="Alterar link..." className="text-xs" />
+              <Button size="sm" variant="outline" className="w-full" onClick={async () => {
+                await updateTask.mutateAsync({ id: task.id, mockup_url: mockupUrl } as any);
+                await addHistory.mutateAsync({ task_id: task.id, action: 'Mockup atualizado', details: mockupUrl, user_id: user?.id });
+                toast.success('Mockup atualizado!');
+              }}>Salvar Mockup</Button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Input value={mockupUrl} onChange={e => setMockupUrl(e.target.value)} placeholder="https://drive.google.com/... ou link do mockup" className="text-xs" />
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={async () => {
+                  if (!mockupUrl) { toast.error('Cole o link do mockup'); return; }
+                  await updateTask.mutateAsync({ id: task.id, mockup_url: mockupUrl } as any);
+                  await addHistory.mutateAsync({ task_id: task.id, action: 'Mockup anexado', details: mockupUrl, user_id: user?.id });
+                  toast.success('Mockup anexado!');
+                }}>
+                  <Upload size={12} /> Salvar Link
+                </Button>
+                <label className="flex-1">
+                  <input type="file" accept="image/*,.pdf" className="hidden" onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploadingMockup(true);
+                    try {
+                      const fileName = `mockups/${task.client_id}/${Date.now()}_${file.name}`;
+                      const { data, error } = await supabase.storage.from('design-files').upload(fileName, file);
+                      if (error) throw error;
+                      const { data: { publicUrl } } = supabase.storage.from('design-files').getPublicUrl(data.path);
+                      setMockupUrl(publicUrl);
+                      await updateTask.mutateAsync({ id: task.id, mockup_url: publicUrl } as any);
+                      await addHistory.mutateAsync({ task_id: task.id, action: 'Mockup enviado', details: publicUrl, user_id: user?.id });
+                      toast.success('Mockup enviado!');
+                    } catch (err: any) {
+                      toast.error(err.message || 'Erro ao enviar mockup');
+                    } finally {
+                      setUploadingMockup(false);
+                    }
+                  }} />
+                  <Button size="sm" variant="secondary" className="w-full gap-1" asChild disabled={uploadingMockup}>
+                    <span><Upload size={12} /> {uploadingMockup ? 'Enviando...' : 'Upload'}</span>
+                  </Button>
+                </label>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Mockup view for social media in analysis */}
+      {showMockup && task.kanban_column === 'em_analise' && (task as any).mockup_url && (
+        <div className="p-2.5 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800">
+          <Label className="text-[10px] font-semibold text-violet-700 dark:text-violet-300 flex items-center gap-1 mb-1">
+            <Image size={11} /> Mockup do Perfil
+          </Label>
+          <a href={(task as any).mockup_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1 hover:underline">
+            <ExternalLink size={12} /> Ver mockup
+          </a>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      {task.kanban_column === 'nova_tarefa' && isDesigner && (
+        <Button onClick={handleStartTask} className="w-full"><Play size={16} className="mr-2" /> Iniciar Tarefa</Button>
+      )}
+
+      {(task.kanban_column === 'executando' || task.kanban_column === 'ajustes') && isDesigner && (
+        <div className="space-y-2.5">
+          <div>
+            <Label className="text-xs">Link da arte</Label>
+            <Input value={attachmentUrl} onChange={e => setAttachmentUrl(e.target.value)} placeholder="https://drive.google.com/..." className="text-xs" />
+          </div>
+          <div>
+            <Label className="text-xs">Arquivo editável (opcional)</Label>
+            <Input value={editableFileUrl} onChange={e => setEditableFileUrl(e.target.value)} placeholder="Link do arquivo editável" className="text-xs" />
+          </div>
+          <div>
+            <Label className="text-xs">Observações</Label>
+            <Textarea value={observations} onChange={e => setObservations(e.target.value)} rows={2} className="text-xs" />
+          </div>
+          <Button onClick={handleSendForReview} className="w-full"><Send size={16} className="mr-2" /> Enviar para Análise</Button>
+        </div>
+      )}
+
+      {task.kanban_column === 'em_analise' && isSocialMedia && (
+        <div className="space-y-2.5">
+          {task.attachment_url && (
+            <a href={task.attachment_url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary flex items-center gap-1 hover:underline">
+              <ExternalLink size={14} /> Ver arte
+            </a>
+          )}
+          <div className="flex gap-2">
+            <Button onClick={handleApprove} className="flex-1"><CheckCircle size={16} className="mr-1" /> Aprovar</Button>
+            <Button variant="destructive" onClick={() => setAdjustmentNotes(' ')} className="flex-1"><RotateCcw size={16} className="mr-1" /> Ajustes</Button>
+          </div>
+          {adjustmentNotes !== '' && (
+            <div className="space-y-2">
+              <Textarea value={adjustmentNotes} onChange={e => setAdjustmentNotes(e.target.value)} placeholder="Descreva os ajustes necessários..." rows={3} className="text-xs" />
+              <Button variant="destructive" onClick={handleRequestAdjustments} className="w-full">Solicitar Ajustes</Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {task.kanban_column === 'enviar_cliente' && isSocialMedia && (
+        <div className="space-y-2">
+          <Button onClick={handleSendToClient} className="w-full"><Send size={16} className="mr-2" /> Enviar ao Cliente via WhatsApp</Button>
+          <Button variant="outline" onClick={handleClientApproval} className="w-full"><CheckCircle size={16} className="mr-2" /> Marcar como Aprovado</Button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[450px] sm:w-[500px] overflow-y-auto">
+      <SheetContent className="w-[90vw] sm:w-[750px] sm:max-w-[750px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <ClientLogo client={{ companyName: task.clients?.company_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="sm" />
@@ -154,270 +400,49 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           </SheetTitle>
         </SheetHeader>
 
-        <div className="space-y-4 mt-4">
-          {/* Info badges */}
-          <div className="flex flex-wrap gap-1.5">
-            <Badge variant="outline">{FORMAT_LABELS[task.format_type]}</Badge>
-            <Badge variant="secondary">{PRIORITY_LABELS[task.priority]}</Badge>
-            <Badge style={{ backgroundColor: `hsl(${DESIGN_COLUMNS.find(c => c.key === task.kanban_column)?.color})`, color: 'white' }}>
-              {DESIGN_COLUMNS.find(c => c.key === task.kanban_column)?.label}
+        {/* Top badges */}
+        <div className="flex flex-wrap gap-1.5 mt-3 mb-4">
+          <Badge variant="outline">{FORMAT_LABELS[task.format_type] || task.format_type}</Badge>
+          <Badge variant="secondary">{PRIORITY_LABELS[task.priority]}</Badge>
+          <Badge style={{ backgroundColor: `hsl(${DESIGN_COLUMNS.find(c => c.key === task.kanban_column)?.color})`, color: 'white' }}>
+            {DESIGN_COLUMNS.find(c => c.key === task.kanban_column)?.label}
+          </Badge>
+          {task.profiles && (
+            <Badge variant="outline" className="gap-1">
+              👤 {task.profiles.display_name || task.profiles.name}
             </Badge>
+          )}
+        </div>
+
+        {/* Two-column layout */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Left: Briefing */}
+          <div className="border border-border rounded-lg p-3 bg-muted/20">
+            {renderBriefingColumn()}
           </div>
 
-          {/* Elapsed time (auto from started_at) */}
-          {task.started_at && elapsedDisplay && (
-            <div className="flex items-center gap-2 p-2.5 bg-muted/50 rounded-lg text-xs text-muted-foreground">
-              <Clock size={14} />
-              <span>Em execução há <strong className="text-foreground">{elapsedDisplay}</strong></span>
-            </div>
-          )}
-
-          {/* Description */}
-          {task.description && (
-            <div>
-              <Label className="text-xs text-muted-foreground">Descrição</Label>
-              <p className="text-sm mt-1">{task.description}</p>
-            </div>
-          )}
-
-          {/* Copy */}
-          {task.copy_text && (
-            <div>
-              <Label className="text-xs text-muted-foreground">Copy</Label>
-              <p className="text-sm mt-1 bg-muted/50 p-2 rounded">{task.copy_text}</p>
-            </div>
-          )}
-
-          {/* References */}
-          {task.references_links?.length > 0 && (
-            <div>
-              <Label className="text-xs text-muted-foreground">Referências</Label>
-              <div className="space-y-1 mt-1">
-                {task.references_links.map((link, i) => (
-                  <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1 hover:underline">
-                    <ExternalLink size={12} /> {link}
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <Separator />
-
-          {/* Checklist */}
-          <div>
-            <Label className="text-xs text-muted-foreground mb-2 block">Checklist</Label>
-            <div className="space-y-1.5">
-              {checklist.map(item => (
-                <div key={item.id} className="flex items-center gap-2">
-                  <Checkbox
-                    checked={item.done}
-                    onCheckedChange={async (checked) => {
-                      const updated = checklist.map(c => c.id === item.id ? { ...c, done: !!checked } : c);
-                      setChecklist(updated);
-                      await updateTask.mutateAsync({ id: task.id, checklist: updated } as any);
-                    }}
-                  />
-                  <span className={`text-sm flex-1 ${item.done ? 'line-through text-muted-foreground' : ''}`}>{item.text}</span>
-                  <button onClick={async () => {
-                    const updated = checklist.filter(c => c.id !== item.id);
-                    setChecklist(updated);
-                    await updateTask.mutateAsync({ id: task.id, checklist: updated } as any);
-                  }} className="text-muted-foreground hover:text-destructive">
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2 mt-2">
-              <Input
-                value={newChecklistItem}
-                onChange={e => setNewChecklistItem(e.target.value)}
-                placeholder="Novo item..."
-                className="text-sm h-8"
-                onKeyDown={async (e) => {
-                  if (e.key === 'Enter' && newChecklistItem.trim()) {
-                    const updated = [...checklist, { id: crypto.randomUUID(), text: newChecklistItem.trim(), done: false }];
-                    setChecklist(updated);
-                    setNewChecklistItem('');
-                    await updateTask.mutateAsync({ id: task.id, checklist: updated } as any);
-                  }
-                }}
-              />
-              <Button size="sm" variant="outline" className="h-8" onClick={async () => {
-                if (!newChecklistItem.trim()) return;
-                const updated = [...checklist, { id: crypto.randomUUID(), text: newChecklistItem.trim(), done: false }];
-                setChecklist(updated);
-                setNewChecklistItem('');
-                await updateTask.mutateAsync({ id: task.id, checklist: updated } as any);
-              }}>
-                <Plus size={14} />
-              </Button>
-            </div>
+          {/* Right: Execution */}
+          <div className="border border-border rounded-lg p-3">
+            {renderExecutionColumn()}
           </div>
+        </div>
 
-          <Separator />
+        <Separator className="my-4" />
 
-          {/* Actions based on column */}
-          {task.kanban_column === 'nova_tarefa' && isDesigner && (
-            <Button onClick={handleStartTask} className="w-full"><Play size={16} className="mr-2" /> Iniciar Tarefa</Button>
-          )}
-
-          {(task.kanban_column === 'executando' || task.kanban_column === 'ajustes') && isDesigner && (
-            <div className="space-y-3">
-              {/* Mockup section for reformulação/identidade visual */}
-              {isReformulacaoOrIdentidade && (
-                <div className="p-3 rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-900/20 space-y-2">
-                  <Label className="text-xs font-semibold flex items-center gap-1.5 text-violet-700 dark:text-violet-300">
-                    <Image size={13} /> Mockup para Aprovação
-                  </Label>
-                  <p className="text-[10px] text-muted-foreground">
-                    Anexe o mockup para o cliente visualizar como ficará o perfil.
-                  </p>
-                  {mockupUrl ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 p-2 rounded bg-card border">
-                        <CheckCircle size={14} className="text-emerald-500 shrink-0" />
-                        <a href={mockupUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline truncate flex-1">
-                          {mockupUrl}
-                        </a>
-                      </div>
-                      <Input
-                        value={mockupUrl}
-                        onChange={e => setMockupUrl(e.target.value)}
-                        placeholder="Alterar link do mockup..."
-                        className="text-xs"
-                      />
-                      <Button size="sm" variant="outline" className="w-full" onClick={async () => {
-                        await updateTask.mutateAsync({ id: task.id, mockup_url: mockupUrl } as any);
-                        await addHistory.mutateAsync({ task_id: task.id, action: 'Mockup atualizado', details: mockupUrl, user_id: user?.id });
-                        toast.success('Mockup atualizado!');
-                      }}>Salvar Mockup</Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <Input
-                        value={mockupUrl}
-                        onChange={e => setMockupUrl(e.target.value)}
-                        placeholder="https://drive.google.com/... ou link do mockup"
-                        className="text-xs"
-                      />
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={async () => {
-                          if (!mockupUrl) { toast.error('Cole o link do mockup'); return; }
-                          await updateTask.mutateAsync({ id: task.id, mockup_url: mockupUrl } as any);
-                          await addHistory.mutateAsync({ task_id: task.id, action: 'Mockup anexado', details: mockupUrl, user_id: user?.id });
-                          toast.success('Mockup anexado!');
-                        }}>
-                          <Upload size={12} /> Salvar Link
-                        </Button>
-                        <label className="flex-1">
-                          <input
-                            type="file"
-                            accept="image/*,.pdf"
-                            className="hidden"
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              setUploadingMockup(true);
-                              try {
-                                const fileName = `mockups/${task.client_id}/${Date.now()}_${file.name}`;
-                                const { data, error } = await supabase.storage.from('design-files').upload(fileName, file);
-                                if (error) throw error;
-                                const { data: { publicUrl } } = supabase.storage.from('design-files').getPublicUrl(data.path);
-                                setMockupUrl(publicUrl);
-                                await updateTask.mutateAsync({ id: task.id, mockup_url: publicUrl } as any);
-                                await addHistory.mutateAsync({ task_id: task.id, action: 'Mockup enviado', details: publicUrl, user_id: user?.id });
-                                toast.success('Mockup enviado!');
-                              } catch (err: any) {
-                                toast.error(err.message || 'Erro ao enviar mockup');
-                              } finally {
-                                setUploadingMockup(false);
-                              }
-                            }}
-                          />
-                          <Button size="sm" variant="secondary" className="w-full gap-1" asChild disabled={uploadingMockup}>
-                            <span>
-                              <Upload size={12} /> {uploadingMockup ? 'Enviando...' : 'Upload Arquivo'}
-                            </span>
-                          </Button>
-                        </label>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div>
-                <Label>Link da arte</Label>
-                <Input value={attachmentUrl} onChange={e => setAttachmentUrl(e.target.value)} placeholder="https://drive.google.com/..." />
+        {/* History */}
+        <div>
+          <Label className="text-xs text-muted-foreground flex items-center gap-1 mb-2"><History size={12} /> Histórico</Label>
+          <div className="space-y-2">
+            {history.data?.map((h: any) => (
+              <div key={h.id} className="text-xs border-l-2 border-muted pl-2 py-1">
+                <p className="font-medium">{h.action}</p>
+                {h.details && <p className="text-muted-foreground">{h.details}</p>}
+                <p className="text-muted-foreground">{new Date(h.created_at).toLocaleString('pt-BR')}</p>
               </div>
-              <div>
-                <Label>Arquivo editável (opcional)</Label>
-                <Input value={editableFileUrl} onChange={e => setEditableFileUrl(e.target.value)} placeholder="Link do arquivo editável" />
-              </div>
-              <div>
-                <Label>Observações</Label>
-                <Textarea value={observations} onChange={e => setObservations(e.target.value)} rows={2} />
-              </div>
-              <Button onClick={handleSendForReview} className="w-full"><Send size={16} className="mr-2" /> Enviar para Análise</Button>
-            </div>
-          )}
-
-          {task.kanban_column === 'em_analise' && isSocialMedia && (
-            <div className="space-y-3">
-              {(task as any).mockup_url && isReformulacaoOrIdentidade && (
-                <div className="p-2.5 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800">
-                  <Label className="text-[10px] font-semibold text-violet-700 dark:text-violet-300 flex items-center gap-1 mb-1">
-                    <Image size={11} /> Mockup do Perfil
-                  </Label>
-                  <a href={(task as any).mockup_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1 hover:underline">
-                    <ExternalLink size={12} /> Ver mockup
-                  </a>
-                </div>
-              )}
-              {task.attachment_url && (
-                <a href={task.attachment_url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary flex items-center gap-1 hover:underline">
-                  <ExternalLink size={14} /> Ver arte
-                </a>
-              )}
-              <div className="flex gap-2">
-                <Button onClick={handleApprove} className="flex-1"><CheckCircle size={16} className="mr-1" /> Aprovar</Button>
-                <Button variant="destructive" onClick={() => setAdjustmentNotes(' ')} className="flex-1"><RotateCcw size={16} className="mr-1" /> Ajustes</Button>
-              </div>
-              {adjustmentNotes !== '' && (
-                <div className="space-y-2">
-                  <Textarea value={adjustmentNotes} onChange={e => setAdjustmentNotes(e.target.value)} placeholder="Descreva os ajustes necessários..." rows={3} />
-                  <Button variant="destructive" onClick={handleRequestAdjustments} className="w-full">Solicitar Ajustes</Button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {task.kanban_column === 'enviar_cliente' && isSocialMedia && (
-            <div className="space-y-2">
-              <Button onClick={handleSendToClient} className="w-full"><Send size={16} className="mr-2" /> Enviar ao Cliente via WhatsApp</Button>
-              <Button variant="outline" onClick={handleClientApproval} className="w-full"><CheckCircle size={16} className="mr-2" /> Marcar como Aprovado</Button>
-            </div>
-          )}
-
-          <Separator />
-
-          {/* History */}
-          <div>
-            <Label className="text-xs text-muted-foreground flex items-center gap-1"><History size={12} /> Histórico</Label>
-            <div className="space-y-2 mt-2">
-              {history.data?.map((h: any) => (
-                <div key={h.id} className="text-xs border-l-2 border-muted pl-2 py-1">
-                  <p className="font-medium">{h.action}</p>
-                  {h.details && <p className="text-muted-foreground">{h.details}</p>}
-                  <p className="text-muted-foreground">{new Date(h.created_at).toLocaleString('pt-BR')}</p>
-                </div>
-              ))}
-              {(!history.data || history.data.length === 0) && (
-                <p className="text-xs text-muted-foreground">Nenhum registro ainda.</p>
-              )}
-            </div>
+            ))}
+            {(!history.data || history.data.length === 0) && (
+              <p className="text-xs text-muted-foreground">Nenhum registro ainda.</p>
+            )}
           </div>
         </div>
       </SheetContent>

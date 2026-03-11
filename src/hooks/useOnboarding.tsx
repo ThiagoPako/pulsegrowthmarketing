@@ -75,6 +75,15 @@ async function createDesignTaskForIdentity(clientId: string, client: any) {
     .limit(1);
 
   if (!existingDesign?.length) {
+    const identityChecklist = [
+      { id: crypto.randomUUID(), text: 'Criar logotipo / marca', done: false },
+      { id: crypto.randomUUID(), text: 'Criar paleta de cores', done: false },
+      { id: crypto.randomUUID(), text: 'Definir tipografia', done: false },
+      { id: crypto.randomUUID(), text: 'Criar aplicações da marca', done: false },
+      { id: crypto.randomUUID(), text: 'Criar papel timbrado', done: false },
+      { id: crypto.randomUUID(), text: 'Criar cartão de visita', done: false },
+      { id: crypto.randomUUID(), text: '⚠️ Subir mockup para aprovação do cliente', done: false },
+    ];
     await supabase.from('design_tasks').insert({
       client_id: clientId,
       title: `Identidade Visual - ${client?.company_name || 'Cliente'}`,
@@ -82,6 +91,7 @@ async function createDesignTaskForIdentity(clientId: string, client: any) {
       format_type: 'feed',
       priority: 'alta',
       kanban_column: 'nova_tarefa',
+      checklist: identityChecklist,
     } as any);
   }
 }

@@ -629,6 +629,11 @@ export default function SocialMediaDeliveries() {
           </Button>
         </div>
 
+        {/* Onboarding Tracker */}
+        {onboardingStatus[selectedClientId] && onboardingStatus[selectedClientId].completed < onboardingStatus[selectedClientId].total && (
+          <OnboardingTracker client={selectedClient} />
+        )}
+
         {/* Stats row */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[

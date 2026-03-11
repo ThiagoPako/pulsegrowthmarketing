@@ -469,6 +469,8 @@ export default function DesignerDashboard() {
       {selectedTask && (
         <DesignTaskDetailSheet task={selectedTask} open={!!selectedTask} onOpenChange={o => !o && setSelectedTaskId(null)} />
       )}
+
+      <DesignTaskCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }

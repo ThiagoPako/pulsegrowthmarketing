@@ -98,7 +98,7 @@ export default function DesignerKanban() {
                 <tr key={task.id} className="border-t hover:bg-muted/30 cursor-pointer" onClick={() => setSelectedTask(task)}>
                   <td className="p-3">
                     <div className="flex items-center gap-2">
-                      <ClientLogo name={task.clients?.company_name || ''} color={task.clients?.color || '217 91% 60%'} logoUrl={task.clients?.logo_url} size="sm" />
+                      <ClientLogo client={{ companyName: task.clients?.company_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="sm" />
                       <span className="text-xs font-medium">{task.clients?.company_name}</span>
                     </div>
                   </td>

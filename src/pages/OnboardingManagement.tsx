@@ -83,6 +83,7 @@ export default function OnboardingManagement() {
           clientType: c?.client_type || 'novo',
           tasks: [],
           currentStage: 'cliente_novo',
+          activeStages: [],
           allStages,
           completedStages: [],
         });

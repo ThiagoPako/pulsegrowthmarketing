@@ -42,6 +42,9 @@ import FinancialPartners from "@/pages/FinancialPartners";
 import NotFound from "@/pages/NotFound";
 import ClientOnboarding from "@/pages/ClientOnboarding";
 import DesignerKanban from "@/pages/DesignerKanban";
+import DesignerReports from "@/pages/DesignerReports";
+import OnboardingManagement from "@/pages/OnboardingManagement";
+import ClientBriefing from "@/pages/ClientBriefing";
 
 const queryClient = new QueryClient();
 

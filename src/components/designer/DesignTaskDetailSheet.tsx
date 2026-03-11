@@ -172,7 +172,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[95vw] sm:w-[900px] sm:max-w-[900px] p-0 overflow-hidden flex flex-col" aria-describedby={undefined}>
+      <SheetContent className="w-full sm:w-full sm:max-w-full h-full p-0 overflow-hidden flex flex-col" aria-describedby={undefined} side="right">
         <SheetTitle className="sr-only">{task.title}</SheetTitle>
         {/* Header */}
         <div className="border-b border-border px-5 py-4">

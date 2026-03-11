@@ -541,6 +541,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                   </motion.div>
                 )}
 
+                {task.kanban_column !== 'nova_tarefa' && (<>
                 {/* Arquivo section */}
                 <div className="space-y-3">
                   <h4 className="text-sm font-semibold">Arquivo</h4>
@@ -661,7 +662,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                   </div>
                 )}
 
-                {/* Adjustment form */}
+                </>)}
                 {showAdjustmentForm && (
                   <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
                     <Label className="text-xs font-semibold text-destructive">Descreva os ajustes</Label>

@@ -564,10 +564,22 @@ export default function SocialMediaDeliveries() {
         const stats = monthlyStats[c.id] || { reels: 0, criativo: 0, story: 0, arte: 0, total: 0, pendentes: 0, agendados: 0, postados: 0, revisao: 0 };
         const plan = getClientPlanGoals(c.id);
         const weeklyStories = weeklyStoriesMap[c.id] || 0;
-        return { client: c, stats, plan, weeklyStories };
+        const od = overdueByClient[c.id] || { overdue: 0, almostOverdue: 0 };
+        const onboarding = onboardingStatus[c.id];
+        const isOnboarding = onboarding && onboarding.completed < onboarding.total;
+        return { client: c, stats, plan, weeklyStories, overdue: od, isOnboarding: !!isOnboarding };
       })
-      .sort((a, b) => b.stats.pendentes - a.stats.pendentes || b.stats.total - a.stats.total);
-  }, [clients, deliveries, monthlyStats, clientPlans, plans, weeklyStoriesMap]);
+      .sort((a, b) => {
+        // 1st: overdue clients first
+        if (a.overdue.overdue !== b.overdue.overdue) return b.overdue.overdue - a.overdue.overdue;
+        // 2nd: almost overdue
+        if (a.overdue.almostOverdue !== b.overdue.almostOverdue) return b.overdue.almostOverdue - a.overdue.almostOverdue;
+        // 3rd: onboarding clients
+        if (a.isOnboarding !== b.isOnboarding) return a.isOnboarding ? -1 : 1;
+        // 4th: most pending
+        return b.stats.pendentes - a.stats.pendentes || b.stats.total - a.stats.total;
+      });
+  }, [clients, deliveries, monthlyStats, clientPlans, plans, weeklyStoriesMap, overdueByClient, onboardingStatus]);
 
   const selectedClient = clients.find(c => c.id === selectedClientId);
 

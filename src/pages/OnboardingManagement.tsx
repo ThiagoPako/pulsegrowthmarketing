@@ -331,9 +331,10 @@ function OnboardingDetailSheet({ group, open, onOpenChange }: { group: ClientGro
     }
   };
 
-  const handleStartStage = async () => {
-    if (!currentTask) return;
-    await updateOnboardingTask.mutateAsync({ id: currentTask.id, status: 'em_andamento' } as any);
+  const handleStartStage = async (taskId?: string) => {
+    const task = taskId ? activeTasks.find(t => t.id === taskId) : currentTask;
+    if (!task) return;
+    await updateOnboardingTask.mutateAsync({ id: task.id, status: 'em_andamento' } as any);
     toast.success('Etapa iniciada!');
   };
 

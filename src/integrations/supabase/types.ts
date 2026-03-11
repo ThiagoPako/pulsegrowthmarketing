@@ -202,6 +202,7 @@ export type Database = {
           city: string
           client_login: string | null
           client_password: string | null
+          client_type: string
           color: string
           company_name: string
           contract_start_date: string | null
@@ -209,6 +210,7 @@ export type Database = {
           drive_fotos: string | null
           drive_identidade_visual: string | null
           drive_link: string | null
+          editorial: string | null
           email: string
           extra_client_appears: boolean
           extra_content_types: string[]
@@ -242,6 +244,7 @@ export type Database = {
           city?: string
           client_login?: string | null
           client_password?: string | null
+          client_type?: string
           color?: string
           company_name: string
           contract_start_date?: string | null
@@ -249,6 +252,7 @@ export type Database = {
           drive_fotos?: string | null
           drive_identidade_visual?: string | null
           drive_link?: string | null
+          editorial?: string | null
           email?: string
           extra_client_appears?: boolean
           extra_content_types?: string[]
@@ -282,6 +286,7 @@ export type Database = {
           city?: string
           client_login?: string | null
           client_password?: string | null
+          client_type?: string
           color?: string
           company_name?: string
           contract_start_date?: string | null
@@ -289,6 +294,7 @@ export type Database = {
           drive_fotos?: string | null
           drive_identidade_visual?: string | null
           drive_link?: string | null
+          editorial?: string | null
           email?: string
           extra_client_appears?: boolean
           extra_content_types?: string[]
@@ -637,6 +643,7 @@ export type Database = {
           assigned_to: string | null
           attachment_url: string | null
           auto_approved: boolean
+          checklist: Json | null
           client_approved_at: string | null
           client_id: string
           completed_at: string | null
@@ -665,6 +672,7 @@ export type Database = {
           assigned_to?: string | null
           attachment_url?: string | null
           auto_approved?: boolean
+          checklist?: Json | null
           client_approved_at?: string | null
           client_id: string
           completed_at?: string | null
@@ -693,6 +701,7 @@ export type Database = {
           assigned_to?: string | null
           attachment_url?: string | null
           auto_approved?: boolean
+          checklist?: Json | null
           client_approved_at?: string | null
           client_id?: string
           completed_at?: string | null
@@ -1362,6 +1371,77 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      onboarding_tasks: {
+        Row: {
+          assigned_to: string | null
+          briefing_completed: boolean | null
+          briefing_data: Json | null
+          client_id: string
+          completed_at: string | null
+          contract_sent: boolean | null
+          contract_signed: boolean | null
+          contract_url: string | null
+          created_at: string
+          description: string | null
+          id: string
+          photo_warning_shown: boolean | null
+          stage: string
+          status: string
+          title: string
+          updated_at: string
+          use_real_photos: boolean | null
+          wants_new_identity: boolean | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          briefing_completed?: boolean | null
+          briefing_data?: Json | null
+          client_id: string
+          completed_at?: string | null
+          contract_sent?: boolean | null
+          contract_signed?: boolean | null
+          contract_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          photo_warning_shown?: boolean | null
+          stage?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          use_real_photos?: boolean | null
+          wants_new_identity?: boolean | null
+        }
+        Update: {
+          assigned_to?: string | null
+          briefing_completed?: boolean | null
+          briefing_data?: Json | null
+          client_id?: string
+          completed_at?: string | null
+          contract_sent?: boolean | null
+          contract_signed?: boolean | null
+          contract_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          photo_warning_shown?: boolean | null
+          stage?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          use_real_photos?: boolean | null
+          wants_new_identity?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       partners: {
         Row: {

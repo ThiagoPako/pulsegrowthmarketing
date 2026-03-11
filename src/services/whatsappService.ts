@@ -76,6 +76,9 @@ function rowToConfig(r: any): WhatsAppConfig {
     autoVideoApproval: r.auto_video_approval,
     autoVideoApproved: r.auto_video_approved,
     autoConfirmation: r.auto_confirmation,
+    autoTaskEditing: r.auto_task_editing ?? true,
+    autoTaskApproved: r.auto_task_approved ?? true,
+    autoApprovalExpired: r.auto_approval_expired ?? true,
     msgRecordingScheduled: r.msg_recording_scheduled || '',
     msgRecordingReminder: r.msg_recording_reminder || '',
     msgVideoApproval: r.msg_video_approval || '',
@@ -85,6 +88,9 @@ function rowToConfig(r: any): WhatsAppConfig {
     msgConfirmationCancelled: r.msg_confirmation_cancelled || '',
     msgBackupInvite: r.msg_backup_invite || '',
     msgBackupConfirmed: r.msg_backup_confirmed || '',
+    msgTaskEditing: r.msg_task_editing || '',
+    msgTaskApproved: r.msg_task_approved || '',
+    msgApprovalExpired: r.msg_approval_expired || '',
   };
 }
 

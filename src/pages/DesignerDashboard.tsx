@@ -170,6 +170,9 @@ export default function DesignerDashboard() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button onClick={() => setCreateOpen(true)} size="sm" className="gap-1.5 text-xs">
+            <Plus size={14} /> Nova Demanda
+          </Button>
           <Button onClick={() => navigate('/clientes')} variant="outline" size="sm" className="gap-1.5 text-xs">
             <Building2 size={14} /> Clientes
           </Button>

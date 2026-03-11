@@ -490,54 +490,72 @@ function OnboardingDetailSheet({ group, open, onOpenChange }: { group: ClientGro
                 <h3 className="text-sm font-bold text-emerald-700 dark:text-emerald-300">Cliente Integrado!</h3>
                 <p className="text-xs text-muted-foreground">Todas as etapas de onboarding foram concluídas.</p>
               </div>
-            ) : currentTask ? (
+            ) : activeTasks.length > 0 ? (
               <div className="space-y-4">
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1.5">
-                    <Sparkles size={12} /> Etapa Atual
-                  </h3>
-                  <div className="flex items-center gap-2">
-                    <Badge className="bg-primary/15 text-primary text-xs">
-                      {ONBOARDING_STAGES.find(s => s.key === currentTask.stage)?.icon}{' '}
-                      {ONBOARDING_STAGES.find(s => s.key === currentTask.stage)?.label}
-                    </Badge>
-                    <Badge className={STATUS_COLORS[currentTask.status]}>
-                      {currentTask.status === 'pendente' ? 'Pendente' : currentTask.status === 'em_andamento' ? 'Em Andamento' : 'Concluído'}
-                    </Badge>
+                {hasParallelStages && (
+                  <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                    <p className="text-[10px] text-blue-700 dark:text-blue-300 font-semibold">
+                      ⚡ Etapas simultâneas — Identidade Visual e Fotografia estão sendo executadas em paralelo.
+                    </p>
                   </div>
-                </div>
+                )}
 
-                <Separator />
+                {activeTasks.map(task => {
+                  const stage = ONBOARDING_STAGES.find(s => s.key === task.stage);
+                  return (
+                    <div key={task.id} className="space-y-3">
+                      <div>
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1.5">
+                          <Sparkles size={12} /> {hasParallelStages ? stage?.label : 'Etapa Atual'}
+                        </h3>
+                        <div className="flex items-center gap-2">
+                          <Badge className="bg-primary/15 text-primary text-xs">
+                            {stage?.icon} {stage?.label}
+                          </Badge>
+                          <Badge className={STATUS_COLORS[task.status]}>
+                            {task.status === 'pendente' ? 'Pendente' : task.status === 'em_andamento' ? 'Em Andamento' : 'Concluído'}
+                          </Badge>
+                        </div>
+                      </div>
 
-                {/* Stage-specific actions */}
-                {currentTask.stage === 'cliente_novo' && (
-                  <ClienteNovoActions group={group} task={currentTask} onAdvance={handleAdvance} onStart={handleStartStage} />
-                )}
-                {currentTask.stage === 'contrato' && (
-                  <ContratoActions
-                    task={currentTask}
-                    fileInputRef={fileInputRef}
-                    uploading={uploading}
-                    onUpload={handleContractUpload}
-                    onAdvance={handleAdvance}
-                    onStart={handleStartStage}
-                  />
-                )}
-                {currentTask.stage === 'identidade_visual' && (
-                  <IdentidadeVisualActions task={currentTask} onAdvance={handleAdvance} onStart={handleStartStage} />
-                )}
-                {currentTask.stage === 'fotografia' && (
-                  <FotografiaActions
-                    task={currentTask}
-                    driveLink={driveLink}
-                    setDriveLink={setDriveLink}
-                    onSaveDrive={handleSaveDriveLink}
-                    onAdvance={handleAdvance}
-                    onStart={handleStartStage}
-                  />
-                )}
-                {currentTask.stage === 'reformulacao_perfil' && (
-                  <ReformulacaoActions task={currentTask} onFinish={handleFinishReformulacao} onStart={handleStartStage} />
+                      <Separator />
+
+                      {task.stage === 'cliente_novo' && (
+                        <ClienteNovoActions group={group} task={task} onAdvance={() => handleAdvance()} onStart={handleStartStage} />
+                      )}
+                      {task.stage === 'contrato' && (
+                        <ContratoActions
+                          task={task}
+                          fileInputRef={fileInputRef}
+                          uploading={uploading}
+                          onUpload={handleContractUpload}
+                          onAdvance={() => handleAdvance()}
+                          onStart={handleStartStage}
+                        />
+                      )}
+                      {task.stage === 'identidade_visual' && (
+                        <IdentidadeVisualActions task={task} onAdvance={() => handleAdvance('identidade_visual')} onStart={handleStartStage} />
+                      )}
+                      {task.stage === 'fotografia' && (
+                        <FotografiaActions
+                          task={task}
+                          driveLink={driveLink}
+                          setDriveLink={setDriveLink}
+                          onSaveDrive={handleSaveDriveLink}
+                          onAdvance={() => handleAdvance('fotografia')}
+                          onStart={handleStartStage}
+                        />
+                      )}
+                      {task.stage === 'reformulacao_perfil' && (
+                        <ReformulacaoActions task={task} onFinish={handleFinishReformulacao} onStart={handleStartStage} />
+                      )}
+
+                      {hasParallelStages && task !== activeTasks[activeTasks.length - 1] && (
+                        <Separator className="my-2" />
+                      )}
+                    </div>
+                  );
+                })}
                 )}
               </div>
             ) : null}

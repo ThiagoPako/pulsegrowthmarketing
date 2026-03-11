@@ -41,6 +41,7 @@ import FinancialMovements from "@/pages/FinancialMovements";
 import FinancialPartners from "@/pages/FinancialPartners";
 import NotFound from "@/pages/NotFound";
 import ClientOnboarding from "@/pages/ClientOnboarding";
+import DesignerKanban from "@/pages/DesignerKanban";
 
 const queryClient = new QueryClient();
 

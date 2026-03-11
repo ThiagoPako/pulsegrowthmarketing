@@ -14,13 +14,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, Film, Palette, Image, Megaphone, Trash2, Edit, CheckCircle2, Clock, TrendingUp, CalendarClock, CalendarCheck, Send, Zap, ArrowLeft, Eye, MessageSquare, AlertTriangle, ExternalLink, Link2, Scissors, Flame } from 'lucide-react';
+import { Plus, Film, Palette, Image, Megaphone, Trash2, Edit, CheckCircle2, Clock, TrendingUp, CalendarClock, CalendarCheck, Send, Zap, ArrowLeft, Eye, MessageSquare, AlertTriangle, ExternalLink, Link2, Scissors, Flame, Calendar as CalendarIcon } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
 import { sendWhatsAppMessage, getWhatsAppConfig } from '@/services/whatsappService';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isToday, isPast, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import PostingCalendar from '@/components/social/PostingCalendar';
+import OnboardingTracker from '@/components/social/OnboardingTracker';
 
 interface SocialDelivery {
   id: string;
@@ -149,13 +151,16 @@ export default function SocialMediaDeliveries() {
   const [alterationImmediate, setAlterationImmediate] = useState(false);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
   const [taskDeadlines, setTaskDeadlines] = useState<Record<string, { review_deadline: string | null; alteration_deadline: string | null; approval_deadline: string | null; immediate_alteration: boolean }>>({});
+  const [onboardingStatus, setOnboardingStatus] = useState<Record<string, { total: number; completed: number }>>({});
+  const [mainTab, setMainTab] = useState<'clientes' | 'calendario'>('clientes');
 
   const fetchData = useCallback(async () => {
-    const [dRes, pRes, cRes, tRes] = await Promise.all([
+    const [dRes, pRes, cRes, tRes, oRes] = await Promise.all([
       supabase.from('social_media_deliveries').select('*').order('delivered_at', { ascending: false }),
       supabase.from('plans').select('id, name, reels_qty, creatives_qty, stories_qty, arts_qty'),
       supabase.from('clients').select('id, plan_id'),
       supabase.from('content_tasks').select('id, review_deadline, alteration_deadline, approval_deadline, immediate_alteration'),
+      supabase.from('onboarding_tasks').select('client_id, status'),
     ]);
     if (dRes.data) setDeliveries(dRes.data as SocialDelivery[]);
     if (pRes.data) setPlans(pRes.data as Plan[]);
@@ -168,6 +173,15 @@ export default function SocialMediaDeliveries() {
       const dlMap: Record<string, any> = {};
       (tRes.data as any[]).forEach(t => { dlMap[t.id] = t; });
       setTaskDeadlines(dlMap);
+    }
+    if (oRes.data) {
+      const oMap: Record<string, { total: number; completed: number }> = {};
+      (oRes.data as any[]).forEach(o => {
+        if (!oMap[o.client_id]) oMap[o.client_id] = { total: 0, completed: 0 };
+        oMap[o.client_id].total++;
+        if (o.status === 'concluido') oMap[o.client_id].completed++;
+      });
+      setOnboardingStatus(oMap);
     }
     setLoading(false);
   }, []);
@@ -614,6 +628,11 @@ export default function SocialMediaDeliveries() {
             <Plus size={16} /> Nova Entrega
           </Button>
         </div>
+
+        {/* Onboarding Tracker */}
+        {onboardingStatus[selectedClientId] && onboardingStatus[selectedClientId].completed < onboardingStatus[selectedClientId].total && (
+          <OnboardingTracker client={selectedClient} />
+        )}
 
         {/* Stats row */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1176,85 +1195,122 @@ export default function SocialMediaDeliveries() {
         ))}
       </div>
 
-      {/* Client Cards Grid */}
-      {clientsWithData.length === 0 ? (
-        <Card className="border-border">
-          <CardContent className="py-12 text-center text-muted-foreground">
-            Nenhum cliente com entregas ou plano cadastrado. Finalize gravações na agenda para que apareçam aqui.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {clientsWithData.map(({ client, stats, plan, weeklyStories: ws }) => {
-            const storyGoal = client.weeklyStories || 0;
-            const storyPct = storyGoal > 0 ? Math.min(Math.round((ws / storyGoal) * 100), 100) : 0;
+      {/* Main tabs: Clientes / Calendário */}
+      <Tabs value={mainTab} onValueChange={v => setMainTab(v as any)}>
+        <TabsList>
+          <TabsTrigger value="clientes" className="gap-1.5">
+            <Eye size={14} /> Clientes
+          </TabsTrigger>
+          <TabsTrigger value="calendario" className="gap-1.5">
+            <CalendarIcon size={14} /> Calendário de Postagens
+          </TabsTrigger>
+        </TabsList>
 
-            return (
-              <Card
-                key={client.id}
-                className="border-border hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group"
-                onClick={() => { setSelectedClientId(client.id); setActiveTab('pipeline'); }}
-              >
-                <CardContent className="p-5">
-                  <div className="flex items-start gap-3 mb-4">
-                    <ClientLogo client={client} size="md" />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
-                        {client.companyName}
-                      </h3>
-                      {plan && <Badge variant="outline" className="text-[10px] mt-0.5">{plan.name}</Badge>}
-                    </div>
-                    <Eye size={16} className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-1" />
-                  </div>
+        <TabsContent value="clientes" className="mt-4">
+          {/* Client Cards Grid */}
+          {clientsWithData.length === 0 ? (
+            <Card className="border-border">
+              <CardContent className="py-12 text-center text-muted-foreground">
+                Nenhum cliente com entregas ou plano cadastrado. Finalize gravações na agenda para que apareçam aqui.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {clientsWithData.map(({ client, stats, plan, weeklyStories: ws }) => {
+                const storyGoal = client.weeklyStories || 0;
+                const storyPct = storyGoal > 0 ? Math.min(Math.round((ws / storyGoal) * 100), 100) : 0;
+                const onboarding = onboardingStatus[client.id];
+                const isOnboarding = onboarding && onboarding.completed < onboarding.total;
 
-                  {/* Content counters */}
-                  <div className="grid grid-cols-4 gap-2 mb-3">
-                    {stats.revisao > 0 && (
-                      <div className="text-center p-2 rounded-md bg-orange-50 dark:bg-orange-900/10">
-                        <p className="text-lg font-bold text-orange-600">{stats.revisao}</p>
-                        <p className="text-[10px] text-muted-foreground">Revisão</p>
+                return (
+                  <Card
+                    key={client.id}
+                    className={`border-border hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group ${isOnboarding ? 'ring-1 ring-amber-400/40' : ''}`}
+                    onClick={() => { setSelectedClientId(client.id); setActiveTab('pipeline'); }}
+                  >
+                    <CardContent className="p-5">
+                      <div className="flex items-start gap-3 mb-4">
+                        <ClientLogo client={client} size="md" />
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
+                            {client.companyName}
+                          </h3>
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            {plan && <Badge variant="outline" className="text-[10px]">{plan.name}</Badge>}
+                            {isOnboarding && (
+                              <Badge className="bg-amber-500 text-white border-0 text-[9px] font-bold px-1.5 py-0 gap-0.5">
+                                🚀 Onboarding {Math.round((onboarding.completed / onboarding.total) * 100)}%
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <Eye size={16} className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-1" />
                       </div>
-                    )}
-                    <div className="text-center p-2 rounded-md bg-yellow-50 dark:bg-yellow-900/10">
-                      <p className="text-lg font-bold text-yellow-600">{stats.pendentes}</p>
-                      <p className="text-[10px] text-muted-foreground">Pendentes</p>
-                    </div>
-                    <div className="text-center p-2 rounded-md bg-blue-50 dark:bg-blue-900/10">
-                      <p className="text-lg font-bold text-blue-600">{stats.agendados}</p>
-                      <p className="text-[10px] text-muted-foreground">Agendados</p>
-                    </div>
-                    <div className="text-center p-2 rounded-md bg-green-50 dark:bg-green-900/10">
-                      <p className="text-lg font-bold text-green-600">{stats.postados}</p>
-                      <p className="text-[10px] text-muted-foreground">Postados</p>
-                    </div>
-                  </div>
 
-                  {/* Content type breakdown */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {stats.reels > 0 && <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-0 text-[10px] gap-1"><Film size={10} />{stats.reels}</Badge>}
-                    {stats.criativo > 0 && <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-0 text-[10px] gap-1"><Megaphone size={10} />{stats.criativo}</Badge>}
-                    {stats.story > 0 && <Badge className="bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400 border-0 text-[10px] gap-1"><Image size={10} />{stats.story}</Badge>}
-                    {stats.arte > 0 && <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0 text-[10px] gap-1"><Palette size={10} />{stats.arte}</Badge>}
-                    {stats.total === 0 && <span className="text-xs text-muted-foreground">Sem entregas este mês</span>}
-                  </div>
+                      {/* Onboarding mini-progress */}
+                      {isOnboarding && (
+                        <div className="mb-3 p-2 rounded-lg bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200/50 dark:border-amber-800/30">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-medium text-amber-700 dark:text-amber-400">Onboarding</span>
+                            <span className="text-[10px] font-semibold text-amber-600">{onboarding.completed}/{onboarding.total}</span>
+                          </div>
+                          <Progress value={Math.round((onboarding.completed / onboarding.total) * 100)} className="h-1.5" />
+                        </div>
+                      )}
 
-                  {/* Weekly stories progress */}
-                  {storyGoal > 0 && (
-                    <div className="mt-3 pt-3 border-t border-border">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] text-muted-foreground flex items-center gap-1"><Image size={10} className="text-pink-600" /> Stories/semana</span>
-                        <span className={`text-[10px] font-semibold ${ws >= storyGoal ? 'text-green-600' : 'text-muted-foreground'}`}>{ws}/{storyGoal}</span>
+                      {/* Content counters */}
+                      <div className="grid grid-cols-4 gap-2 mb-3">
+                        {stats.revisao > 0 && (
+                          <div className="text-center p-2 rounded-md bg-orange-50 dark:bg-orange-900/10">
+                            <p className="text-lg font-bold text-orange-600">{stats.revisao}</p>
+                            <p className="text-[10px] text-muted-foreground">Revisão</p>
+                          </div>
+                        )}
+                        <div className="text-center p-2 rounded-md bg-yellow-50 dark:bg-yellow-900/10">
+                          <p className="text-lg font-bold text-yellow-600">{stats.pendentes}</p>
+                          <p className="text-[10px] text-muted-foreground">Pendentes</p>
+                        </div>
+                        <div className="text-center p-2 rounded-md bg-blue-50 dark:bg-blue-900/10">
+                          <p className="text-lg font-bold text-blue-600">{stats.agendados}</p>
+                          <p className="text-[10px] text-muted-foreground">Agendados</p>
+                        </div>
+                        <div className="text-center p-2 rounded-md bg-green-50 dark:bg-green-900/10">
+                          <p className="text-lg font-bold text-green-600">{stats.postados}</p>
+                          <p className="text-[10px] text-muted-foreground">Postados</p>
+                        </div>
                       </div>
-                      <Progress value={storyPct} className="h-1.5" />
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
 
+                      {/* Content type breakdown */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {stats.reels > 0 && <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-0 text-[10px] gap-1"><Film size={10} />{stats.reels}</Badge>}
+                        {stats.criativo > 0 && <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-0 text-[10px] gap-1"><Megaphone size={10} />{stats.criativo}</Badge>}
+                        {stats.story > 0 && <Badge className="bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400 border-0 text-[10px] gap-1"><Image size={10} />{stats.story}</Badge>}
+                        {stats.arte > 0 && <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0 text-[10px] gap-1"><Palette size={10} />{stats.arte}</Badge>}
+                        {stats.total === 0 && !isOnboarding && <span className="text-xs text-muted-foreground">Sem entregas este mês</span>}
+                      </div>
+
+                      {/* Weekly stories progress */}
+                      {storyGoal > 0 && (
+                        <div className="mt-3 pt-3 border-t border-border">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] text-muted-foreground flex items-center gap-1"><Image size={10} className="text-pink-600" /> Stories/semana</span>
+                            <span className={`text-[10px] font-semibold ${ws >= storyGoal ? 'text-green-600' : 'text-muted-foreground'}`}>{ws}/{storyGoal}</span>
+                          </div>
+                          <Progress value={storyPct} className="h-1.5" />
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="calendario" className="mt-4">
+          <PostingCalendar deliveries={deliveries} clients={clients} />
+        </TabsContent>
+      </Tabs>
       {/* Dialogs also available from main view */}
       {renderScheduleDialog()}
       {renderEditDialog()}

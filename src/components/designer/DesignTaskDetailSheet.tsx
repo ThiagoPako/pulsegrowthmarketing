@@ -63,6 +63,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [checklist, setChecklist] = useState<ChecklistItem[]>((task as any).checklist || []);
   const [uploadingMockup, setUploadingMockup] = useState(false);
   const [showAdjustmentForm, setShowAdjustmentForm] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [movingAction, setMovingAction] = useState<string | null>(null);
 
   const taskCategory = getTaskCategory(task);
   const hasChecklist = taskCategory !== 'normal';

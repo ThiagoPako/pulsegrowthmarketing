@@ -67,12 +67,16 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [movingAction, setMovingAction] = useState<string | null>(null);
   const [stageAnimKey, setStageAnimKey] = useState(0);
-  const prevColumnRef = useState(task.kanban_column)[0];
+  const [showRocketFlyby, setShowRocketFlyby] = useState(false);
+  const prevColumnRef = useRef(task.kanban_column);
 
-  // Animate when column changes (task updated from query)
+  // Animate rocket flyby when column changes
   useEffect(() => {
-    if (task.kanban_column !== prevColumnRef) {
+    if (task.kanban_column !== prevColumnRef.current) {
+      prevColumnRef.current = task.kanban_column;
       setStageAnimKey(k => k + 1);
+      setShowRocketFlyby(true);
+      setTimeout(() => setShowRocketFlyby(false), 1200);
     }
   }, [task.kanban_column]);
 

@@ -88,7 +88,7 @@ async function createDesignTaskForIdentity(clientId: string, client: any) {
       client_id: clientId,
       title: `Identidade Visual - ${client?.company_name || 'Cliente'}`,
       description,
-      format_type: 'feed',
+      format_type: 'logomarca',
       priority: 'alta',
       kanban_column: 'nova_tarefa',
       checklist: identityChecklist,

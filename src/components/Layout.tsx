@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import UserAvatar from '@/components/UserAvatar';
 import ProfileDialog from '@/components/ProfileDialog';
 import {
-  LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors
+  LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 
@@ -33,6 +33,7 @@ const navCategories: NavCategory[] = [
     items: [
       { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media'] },
       { path: '/edicao', label: 'Edição', icon: Scissors, roles: ['admin', 'editor', 'social_media'] },
+      { path: '/designer', label: 'Designer', icon: Palette, roles: ['admin', 'social_media', 'fotografo'] },
       { path: '/entregas', label: 'Entregas', icon: ClipboardList, roles: ['admin', 'social_media'] },
       { path: '/desempenho', label: 'Desempenho', icon: Target, roles: ['admin', 'social_media'] },
     ],

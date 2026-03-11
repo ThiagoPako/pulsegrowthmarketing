@@ -522,7 +522,7 @@ function OnboardingDetailSheet({ group, open, onOpenChange }: { group: ClientGro
                       <Separator />
 
                       {task.stage === 'cliente_novo' && (
-                        <ClienteNovoActions group={group} task={task} onAdvance={() => handleAdvance()} onStart={handleStartStage} />
+                        <ClienteNovoActions group={group} task={task} onAdvance={() => handleAdvance()} onStart={() => handleStartStage(task.id)} />
                       )}
                       {task.stage === 'contrato' && (
                         <ContratoActions
@@ -531,11 +531,11 @@ function OnboardingDetailSheet({ group, open, onOpenChange }: { group: ClientGro
                           uploading={uploading}
                           onUpload={handleContractUpload}
                           onAdvance={() => handleAdvance()}
-                          onStart={handleStartStage}
+                          onStart={() => handleStartStage(task.id)}
                         />
                       )}
                       {task.stage === 'identidade_visual' && (
-                        <IdentidadeVisualActions task={task} onAdvance={() => handleAdvance('identidade_visual')} onStart={handleStartStage} />
+                        <IdentidadeVisualActions task={task} onAdvance={() => handleAdvance('identidade_visual')} onStart={() => handleStartStage(task.id)} />
                       )}
                       {task.stage === 'fotografia' && (
                         <FotografiaActions
@@ -544,11 +544,11 @@ function OnboardingDetailSheet({ group, open, onOpenChange }: { group: ClientGro
                           setDriveLink={setDriveLink}
                           onSaveDrive={handleSaveDriveLink}
                           onAdvance={() => handleAdvance('fotografia')}
-                          onStart={handleStartStage}
+                          onStart={() => handleStartStage(task.id)}
                         />
                       )}
                       {task.stage === 'reformulacao_perfil' && (
-                        <ReformulacaoActions task={task} onFinish={handleFinishReformulacao} onStart={handleStartStage} />
+                        <ReformulacaoActions task={task} onFinish={handleFinishReformulacao} onStart={() => handleStartStage(task.id)} />
                       )}
 
                       {hasParallelStages && task !== activeTasks[activeTasks.length - 1] && (

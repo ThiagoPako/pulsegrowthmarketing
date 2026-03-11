@@ -97,9 +97,9 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
           </div>
 
           {selectedClient?.niche && (
-            <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs">
-              <p className="font-medium text-amber-700 dark:text-amber-300">📅 Datas sazonais do nicho: {selectedClient.niche}</p>
-              <p className="text-amber-600 dark:text-amber-400 mt-1">Verifique as datas importantes do nicho ao criar a arte.</p>
+            <div className="p-2 rounded-lg bg-accent border border-border text-xs">
+              <p className="font-medium text-foreground">📅 Datas sazonais do nicho: {selectedClient.niche}</p>
+              <p className="text-muted-foreground mt-1">Verifique as datas importantes do nicho ao criar a arte.</p>
             </div>
           )}
 

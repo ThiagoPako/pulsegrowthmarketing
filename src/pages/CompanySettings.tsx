@@ -244,7 +244,7 @@ export default function CompanySettings() {
                 </div>
                 <div>
                   <h2 className="text-base font-semibold text-destructive">⚠️ ZONA DE PERIGO — Reset Total do Sistema</h2>
-                  <p className="text-xs text-destructive/80">Esta ação é IRREVERSÍVEL e apagará TODOS os dados do sistema.</p>
+                  <p className="text-xs text-destructive/80">Esta ação é IRREVERSÍVEL e apagará TODOS os dados do sistema. <strong>Planos e Equipe serão preservados.</strong></p>
                 </div>
               </div>
 

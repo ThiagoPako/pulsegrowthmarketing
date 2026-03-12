@@ -121,7 +121,7 @@ function ContentTile({ content, onDelete }: { content: ContentRow; onDelete: (id
               <ExternalLink size={14} />
             </Button>
           )}
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={e => { e.stopPropagation(); window.open(`/portal/${content.client_id}`, '_blank'); }}>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={e => { e.stopPropagation(); const name = (content as any).clients?.company_name || content.client_id; window.open(`/portal/${encodeURIComponent(name.replace(/\s+/g, '-').toLowerCase())}`, '_blank'); }}>
             <Eye size={14} />
           </Button>
           <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:bg-white/20" onClick={e => { e.stopPropagation(); onDelete(content.id); }}>

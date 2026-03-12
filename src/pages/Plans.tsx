@@ -257,7 +257,7 @@ export default function Plans() {
                 <Input type="number" min={0} value={form.arts_qty} onChange={e => setField('arts_qty', parseInt(e.target.value) || 0)} />
               </div>
               <div className="space-y-1">
-                <Label>Gravações presenciais</Label>
+                <Label>Gravações mensais</Label>
                 <Input type="number" min={0} value={form.recording_sessions} onChange={e => setField('recording_sessions', parseInt(e.target.value) || 0)} />
               </div>
               <div className="space-y-1">

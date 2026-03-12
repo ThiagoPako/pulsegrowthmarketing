@@ -137,6 +137,7 @@ function ContentTile({ content, onDelete }: { content: ContentRow; onDelete: (id
 
 export default function ContentManager() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [contents, setContents] = useState<ContentRow[]>([]);

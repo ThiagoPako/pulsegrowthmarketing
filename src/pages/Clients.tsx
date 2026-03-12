@@ -94,7 +94,7 @@ export default function Clients() {
   const [artDbClient, setArtDbClient] = useState<Client | null>(null);
   
   // Plan-related state
-  const [plans, setPlans] = useState<{ id: string; name: string; status: string; reels_qty: number; creatives_qty: number; stories_qty: number }[]>([]);
+  const [plans, setPlans] = useState<{ id: string; name: string; status: string; reels_qty: number; creatives_qty: number; stories_qty: number; recording_sessions: number }[]>([]);
   const [planId, setPlanId] = useState<string | null>(null);
   const [contractStartDate, setContractStartDate] = useState('');
   const [autoRenewal, setAutoRenewal] = useState(false);
@@ -109,7 +109,7 @@ export default function Clients() {
   const [existingSocialAccounts, setExistingSocialAccounts] = useState<any[]>([]);
 
   useEffect(() => {
-    supabase.from('plans').select('id, name, status, reels_qty, creatives_qty, stories_qty').eq('status', 'ativo').then(({ data }) => {
+    supabase.from('plans').select('id, name, status, reels_qty, creatives_qty, stories_qty, recording_sessions').eq('status', 'ativo').then(({ data }) => {
       if (data) setPlans(data as any[]);
     });
   }, []);
@@ -757,20 +757,24 @@ export default function Clients() {
         {/* Monthly recordings quantity */}
         <div className="space-y-2">
           <Label>Gravações por mês *</Label>
+          {planId && (
+            <p className="text-xs text-primary flex items-center gap-1"><Info size={12} /> Definido pelo plano selecionado</p>
+          )}
           <div className="grid grid-cols-4 gap-2">
             {[1, 2, 3, 4].map(n => (
               <button
                 key={n}
                 type="button"
-                onClick={() => setForm(prev => ({ ...prev, monthlyRecordings: n }))}
+                onClick={() => !planId && setForm(prev => ({ ...prev, monthlyRecordings: n }))}
+                disabled={!!planId}
                 className={`p-3 rounded-xl border-2 text-center transition-all ${
                   form.monthlyRecordings === n
                     ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
                     : 'border-border hover:border-primary/40 hover:bg-primary/5'
-                }`}
+                } ${planId ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
                 <span className="text-lg font-bold block">{n}x</span>
-                <span className="text-[10px] text-muted-foreground block">{n === 1 ? 'por mês' : 'por mês'}</span>
+                <span className="text-[10px] text-muted-foreground block">por mês</span>
               </button>
             ))}
           </div>
@@ -1088,6 +1092,7 @@ export default function Clients() {
               <p className="font-semibold">Metas calculadas automaticamente pelo plano</p>
               <p className="text-muted-foreground">
                 Entrega mínima do plano: {Math.ceil(sp.reels_qty / 4)} reels, {Math.ceil(sp.creatives_qty / 4)} criativos, {Math.ceil(sp.stories_qty / 4)} stories/semana.
+                Gravações mensais: <strong>{sp.recording_sessions || 4}x</strong>.
                 A meta semanal é sempre <strong>+1 a mais</strong> que o mínimo para adiantar conteúdos.
               </p>
             </div>
@@ -1131,7 +1136,8 @@ export default function Clients() {
                     const weeklyCreatives = Math.ceil(selectedPlan.creatives_qty / 4);
                     const weeklyStories = Math.ceil(selectedPlan.stories_qty / 4);
                     const weeklyGoal = weeklyReels + weeklyCreatives + weeklyStories + 1;
-                    setForm(prev => ({ ...prev, weeklyReels: weeklyReels + 1, weeklyCreatives: weeklyCreatives + 1, weeklyStories: weeklyStories + 1, weeklyGoal }));
+                    const monthlyRecordings = selectedPlan.recording_sessions || 4;
+                    setForm(prev => ({ ...prev, weeklyReels: weeklyReels + 1, weeklyCreatives: weeklyCreatives + 1, weeklyStories: weeklyStories + 1, weeklyGoal, monthlyRecordings }));
                   }
                 }
               }}>

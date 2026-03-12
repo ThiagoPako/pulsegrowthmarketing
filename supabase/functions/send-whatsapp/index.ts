@@ -43,6 +43,10 @@ Deno.serve(async (req) => {
 
     const body = await req.json()
     const { action, number, message, userId: apiUserId, queueId, sendSignature, closeTicket, clientId, triggerType, mediaUrl, mediaFileName } = body
+    const effectiveUserId = apiUserId || configData?.default_user_id || ''
+    const effectiveQueueId = queueId || configData?.default_queue_id || ''
+    const effectiveSignature = sendSignature !== undefined ? sendSignature : (configData?.send_signature || false)
+    const effectiveCloseTicket = closeTicket !== undefined ? closeTicket : (configData?.close_ticket || false)
 
     // Test connection mode
     if (action === 'test_connection') {

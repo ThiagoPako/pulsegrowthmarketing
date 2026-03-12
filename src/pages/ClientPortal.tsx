@@ -902,32 +902,14 @@ function ReelsCard({ content, clientColor, onSelect }: {
         {/* Gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
 
-        {/* Play icon (shown when NOT hovering) */}
-        {isVideo && !isHovering && (
+        {/* Play icon overlay for non-video content */}
+        {isVideo && !videoReady && (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="w-10 h-10 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center">
               <Play size={18} fill="white" className="ml-0.5" />
             </div>
           </div>
         )}
-
-        {/* "Reproduzindo prévia" indicator when hovering */}
-        {isVideo && isHovering && videoReady && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-            <div className="flex items-center gap-1">
-              {[0, 1, 2].map(i => (
-                <span
-                  key={i}
-                  className="w-[3px] bg-white rounded-full animate-pulse"
-                  style={{
-                    height: `${10 + Math.random() * 8}px`,
-                    animationDelay: `${i * 0.15}s`,
-                    animationDuration: '0.6s',
-                  }}
-                />
-              ))}
-            </div>
-          </div>
         )}
 
         {content.content_type === 'arte' && (

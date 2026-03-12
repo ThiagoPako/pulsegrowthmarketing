@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import {
   Play, Pause, Maximize, Check, MessageSquare, X, ChevronLeft, ChevronRight,
   BarChart3, Send, Clock, Film, Image, Palette, Video, Award, Bell, Volume2,
-  VolumeX, Eye, TrendingUp, Sparkles, ChevronDown, Loader2
+  VolumeX, Eye, TrendingUp, Sparkles, ChevronDown, Loader2, LogOut, Shield
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';
@@ -49,6 +50,8 @@ type TabView = 'library' | 'metrics' | 'criativa';
 
 export default function ClientPortal() {
   const { clientId: paramSlug } = useParams<{ clientId: string }>();
+  const navigate = useNavigate();
+  const { user, profile } = useAuth();
   const [client, setClient] = useState<ClientData | null>(null);
   const [contents, setContents] = useState<PortalContent[]>([]);
   const [selectedContent, setSelectedContent] = useState<PortalContent | null>(null);
@@ -64,6 +67,26 @@ export default function ClientPortal() {
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
   const commentsEndRef = useRef<HTMLDivElement>(null);
+
+  // Auth state: team member or client login
+  const isTeamMember = !!user && !!profile;
+  const isClientLoggedIn = !!sessionStorage.getItem('portal_client_id');
+  const isAuthenticated = isTeamMember || isClientLoggedIn;
+  
+  const getCommentAuthor = () => {
+    if (isTeamMember && profile) {
+      return { name: profile.display_name || profile.name, type: 'team', id: profile.id };
+    }
+    return { name: client?.company_name || 'Cliente', type: 'client', id: null };
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('portal_client_id');
+    sessionStorage.removeItem('portal_client_name');
+    sessionStorage.removeItem('portal_auth_type');
+    navigate(`/portal-login/${paramSlug}`);
+  };
+
 
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
@@ -137,9 +160,10 @@ export default function ClientPortal() {
 
   const handleRequestAdjustment = async () => {
     if (!selectedContent || !adjustmentNote.trim()) return;
+    const author = getCommentAuthor();
     await Promise.all([
       supabase.from('client_portal_contents').update({ status: 'ajuste_solicitado' }).eq('id', selectedContent.id),
-      supabase.from('client_portal_comments').insert({ content_id: selectedContent.id, author_name: client?.company_name || 'Cliente', author_type: 'client', message: `🔧 Ajuste solicitado: ${adjustmentNote}` }),
+      supabase.from('client_portal_comments').insert({ content_id: selectedContent.id, author_name: author.name, author_type: author.type, author_id: author.id, message: `🔧 Ajuste solicitado: ${adjustmentNote}` }),
     ]);
     setContents(prev => prev.map(c => c.id === selectedContent.id ? { ...c, status: 'ajuste_solicitado' } : c));
     setSelectedContent(prev => prev ? { ...prev, status: 'ajuste_solicitado' } : null);
@@ -151,7 +175,8 @@ export default function ClientPortal() {
 
   const handleSendComment = async () => {
     if (!selectedContent || !newComment.trim()) return;
-    await supabase.from('client_portal_comments').insert({ content_id: selectedContent.id, author_name: client?.company_name || 'Cliente', author_type: 'client', message: newComment });
+    const author = getCommentAuthor();
+    await supabase.from('client_portal_comments').insert({ content_id: selectedContent.id, author_name: author.name, author_type: author.type, author_id: author.id, message: newComment });
     setNewComment('');
     loadComments(selectedContent.id);
     setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 200);
@@ -342,7 +367,6 @@ export default function ClientPortal() {
                   setActiveTab('library');
                   handleSelectContent(found);
                 } else {
-                  // Fetch and open
                   supabase.from('client_portal_contents').select('*').eq('id', contentId).single().then(({ data }) => {
                     if (data) {
                       setActiveTab('library');
@@ -355,8 +379,23 @@ export default function ClientPortal() {
                 setActiveTab('criativa');
               }}
             />
+            {isTeamMember && (
+              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/15 border border-violet-500/20">
+                <Shield size={10} className="text-violet-400" />
+                <span className="text-[10px] font-semibold text-violet-300">{profile?.name?.split(' ')[0]}</span>
+              </div>
+            )}
+            {isClientLoggedIn && !isTeamMember && (
+              <button onClick={handleLogout} className="p-2 rounded-full hover:bg-white/10 transition-colors" title="Sair">
+                <LogOut size={14} className="text-white/50" />
+              </button>
+            )}
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: `hsl(${clientColor})` }}>
-              {client.company_name.charAt(0)}
+              {isTeamMember && profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+              ) : (
+                client.company_name.charAt(0)
+              )}
             </div>
           </div>
         </div>
@@ -485,7 +524,7 @@ export default function ClientPortal() {
             </div>
           </motion.div>
         ) : activeTab === 'criativa' ? (
-          <ZonaCriativa clientId={client.id} clientColor={clientColor} />
+          <ZonaCriativa clientId={client.id} clientColor={clientColor} isAuthenticated={isAuthenticated} />
         ) : (
           /* ── METRICS TAB ── */
           <motion.div key="metrics" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8 pb-20 space-y-8">

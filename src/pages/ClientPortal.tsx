@@ -15,6 +15,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import PortalNotifications from '@/components/portal/PortalNotifications';
 import ZonaCriativa from '@/components/portal/ZonaCriativa';
 import PortalTutorial from '@/components/portal/PortalTutorial';
+import { syncPortalApproval, syncPortalAdjustment, syncPortalComment } from '@/lib/portalSync';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
   reel: 'Reel', criativo: 'Criativo', institucional: 'Institucional', anuncio: 'Anúncio', arte: 'Arte',
@@ -166,15 +167,17 @@ export default function ClientPortal() {
   };
 
   const handleApprove = async () => {
-    if (!selectedContent) return;
+    if (!selectedContent || !client) return;
     await supabase.from('client_portal_contents').update({ status: 'aprovado', approved_at: new Date().toISOString() }).eq('id', selectedContent.id);
     setContents(prev => prev.map(c => c.id === selectedContent.id ? { ...c, status: 'aprovado', approved_at: new Date().toISOString() } : c));
     setSelectedContent(prev => prev ? { ...prev, status: 'aprovado' } : null);
     toast.success('Conteúdo aprovado com sucesso!');
+    // Sync with internal system
+    syncPortalApproval(selectedContent.id, client.id, selectedContent.title).catch(console.error);
   };
 
   const handleRequestAdjustment = async () => {
-    if (!selectedContent || !adjustmentNote.trim()) return;
+    if (!selectedContent || !adjustmentNote.trim() || !client) return;
     const author = getCommentAuthor();
     await Promise.all([
       supabase.from('client_portal_contents').update({ status: 'ajuste_solicitado' }).eq('id', selectedContent.id),
@@ -186,15 +189,20 @@ export default function ClientPortal() {
     setAdjustmentNote('');
     loadComments(selectedContent.id);
     toast.success('Ajuste solicitado com sucesso!');
+    // Sync with internal system
+    syncPortalAdjustment(selectedContent.id, client.id, selectedContent.title, adjustmentNote).catch(console.error);
   };
 
   const handleSendComment = async () => {
-    if (!selectedContent || !newComment.trim()) return;
+    if (!selectedContent || !newComment.trim() || !client) return;
     const author = getCommentAuthor();
     await supabase.from('client_portal_comments').insert({ content_id: selectedContent.id, author_name: author.name, author_type: author.type, author_id: author.id, message: newComment });
+    const commentText = newComment;
     setNewComment('');
     loadComments(selectedContent.id);
     setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 200);
+    // Sync comment notification
+    syncPortalComment(client.id, selectedContent.title, author.name, author.type, commentText).catch(console.error);
   };
 
   const togglePlay = () => {

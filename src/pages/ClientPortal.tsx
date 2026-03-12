@@ -160,9 +160,10 @@ export default function ClientPortal() {
 
   const handleRequestAdjustment = async () => {
     if (!selectedContent || !adjustmentNote.trim()) return;
+    const author = getCommentAuthor();
     await Promise.all([
       supabase.from('client_portal_contents').update({ status: 'ajuste_solicitado' }).eq('id', selectedContent.id),
-      supabase.from('client_portal_comments').insert({ content_id: selectedContent.id, author_name: client?.company_name || 'Cliente', author_type: 'client', message: `🔧 Ajuste solicitado: ${adjustmentNote}` }),
+      supabase.from('client_portal_comments').insert({ content_id: selectedContent.id, author_name: author.name, author_type: author.type, author_id: author.id, message: `🔧 Ajuste solicitado: ${adjustmentNote}` }),
     ]);
     setContents(prev => prev.map(c => c.id === selectedContent.id ? { ...c, status: 'ajuste_solicitado' } : c));
     setSelectedContent(prev => prev ? { ...prev, status: 'ajuste_solicitado' } : null);
@@ -174,7 +175,8 @@ export default function ClientPortal() {
 
   const handleSendComment = async () => {
     if (!selectedContent || !newComment.trim()) return;
-    await supabase.from('client_portal_comments').insert({ content_id: selectedContent.id, author_name: client?.company_name || 'Cliente', author_type: 'client', message: newComment });
+    const author = getCommentAuthor();
+    await supabase.from('client_portal_comments').insert({ content_id: selectedContent.id, author_name: author.name, author_type: author.type, author_id: author.id, message: newComment });
     setNewComment('');
     loadComments(selectedContent.id);
     setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 200);

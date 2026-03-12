@@ -109,7 +109,7 @@ export default function Clients() {
   const [existingSocialAccounts, setExistingSocialAccounts] = useState<any[]>([]);
 
   useEffect(() => {
-    supabase.from('plans').select('id, name, status, reels_qty, creatives_qty, stories_qty, recording_sessions').eq('status', 'ativo').then(({ data }) => {
+    supabase.from('plans').select('id, name, status, reels_qty, creatives_qty, stories_qty, recording_sessions, accepts_extra_content').eq('status', 'ativo').then(({ data }) => {
       if (data) setPlans(data as any[]);
     });
   }, []);

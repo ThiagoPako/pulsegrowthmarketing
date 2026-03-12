@@ -194,12 +194,15 @@ export default function ClientPortal() {
   };
 
   const handleSendComment = async () => {
-    if (!selectedContent || !newComment.trim()) return;
+    if (!selectedContent || !newComment.trim() || !client) return;
     const author = getCommentAuthor();
     await supabase.from('client_portal_comments').insert({ content_id: selectedContent.id, author_name: author.name, author_type: author.type, author_id: author.id, message: newComment });
+    const commentText = newComment;
     setNewComment('');
     loadComments(selectedContent.id);
     setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 200);
+    // Sync comment notification
+    syncPortalComment(client.id, selectedContent.title, author.name, author.type, commentText).catch(console.error);
   };
 
   const togglePlay = () => {

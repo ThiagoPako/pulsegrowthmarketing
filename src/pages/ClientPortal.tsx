@@ -821,63 +821,145 @@ function ContentRow({ label, items, clientColor, onSelect, delay = 0 }: {
       </div>
 
       <div ref={scrollRef} className="flex gap-3 overflow-x-auto pb-2 scrollbar-none snap-x snap-mandatory" onScroll={checkScroll}>
-        {items.map(content => {
-          const Icon = CONTENT_TYPE_ICONS[content.content_type] || Film;
-          const statusStyle = STATUS_COLORS[content.status];
-          return (
-            <button
-              key={content.id}
-              onClick={() => onSelect(content)}
-              className="group relative shrink-0 w-[160px] sm:w-[200px] snap-start rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.04] hover:ring-1 focus:outline-none bg-white/[0.03]"
-              style={{ '--tw-ring-color': `hsl(${clientColor} / 0.5)` } as any}
-            >
-              <div className="aspect-[9/16] sm:aspect-video relative overflow-hidden">
-                {content.thumbnail_url ? (
-                  <img src={content.thumbnail_url} alt={content.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                ) : content.content_type === 'arte' && content.file_url ? (
-                  <img src={content.file_url} alt={content.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-white/[0.04]">
-                    <Icon size={32} className="text-white/10" />
-                  </div>
-                )}
-                {/* Gradient overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                {/* Play overlay */}
-                {content.content_type !== 'arte' && (
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                      <Play size={18} fill="white" className="ml-0.5" />
-                    </div>
-                  </div>
-                )}
-                {content.content_type === 'arte' && (
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                      <Eye size={18} />
-                    </div>
-                  </div>
-                )}
-                {/* Duration */}
-                {content.duration_seconds > 0 && (
-                  <span className="absolute bottom-1.5 right-1.5 bg-black/80 text-[10px] px-1.5 py-0.5 rounded font-mono text-white/80">
-                    {Math.floor(content.duration_seconds / 60)}:{(content.duration_seconds % 60).toString().padStart(2, '0')}
-                  </span>
-                )}
-                {/* Status */}
-                <div className={`absolute top-1.5 left-1.5 flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold ${statusStyle?.bg} ${statusStyle?.text} backdrop-blur-sm`}>
-                  <span className={`w-1 h-1 rounded-full ${statusStyle?.dot}`} />
-                  {STATUS_LABELS[content.status]}
-                </div>
-              </div>
-              <div className="p-2.5">
-                <p className="text-xs font-medium truncate text-white/90">{content.title}</p>
-                <span className="text-[10px] text-white/30 mt-0.5 block">{CONTENT_TYPE_LABELS[content.content_type]}</span>
-              </div>
-            </button>
-          );
-        })}
+        {items.map(content => (
+          <ReelsCard key={content.id} content={content} clientColor={clientColor} onSelect={onSelect} />
+        ))}
       </div>
     </motion.section>
+  );
+}
+
+/* ── Reels Card with hover/touch video preview ── */
+function ReelsCard({ content, clientColor, onSelect }: {
+  content: PortalContent;
+  clientColor: string;
+  onSelect: (c: PortalContent) => void;
+}) {
+  const videoPreviewRef = useRef<HTMLVideoElement>(null);
+  const [isHovering, setIsHovering] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
+  const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isVideo = content.content_type !== 'arte' && !!content.file_url;
+  const Icon = CONTENT_TYPE_ICONS[content.content_type] || Film;
+  const statusStyle = STATUS_COLORS[content.status];
+
+  const startPreview = () => {
+    if (!isVideo) return;
+    hoverTimeout.current = setTimeout(() => {
+      setIsHovering(true);
+      if (videoPreviewRef.current) {
+        videoPreviewRef.current.currentTime = 0;
+        videoPreviewRef.current.play().catch(() => {});
+      }
+    }, 300);
+  };
+
+  const stopPreview = () => {
+    if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
+    setIsHovering(false);
+    if (videoPreviewRef.current) {
+      videoPreviewRef.current.pause();
+      videoPreviewRef.current.currentTime = 0;
+    }
+  };
+
+  return (
+    <button
+      onClick={() => onSelect(content)}
+      onMouseEnter={startPreview}
+      onMouseLeave={stopPreview}
+      onTouchStart={startPreview}
+      onTouchEnd={stopPreview}
+      className="group relative shrink-0 w-[140px] sm:w-[170px] snap-start rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.04] hover:ring-1 focus:outline-none bg-white/[0.03]"
+      style={{ '--tw-ring-color': `hsl(${clientColor} / 0.5)` } as any}
+    >
+      <div className="aspect-[9/16] relative overflow-hidden">
+        {/* Thumbnail layer */}
+        {content.thumbnail_url ? (
+          <img src={content.thumbnail_url} alt={content.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+        ) : content.file_url && content.content_type === 'arte' ? (
+          <img src={content.file_url} alt={content.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-white/[0.04]">
+            <Icon size={32} className="text-white/10" />
+          </div>
+        )}
+
+        {/* Video preview on hover - plays silently over thumbnail */}
+        {isVideo && (
+          <video
+            ref={videoPreviewRef}
+            src={content.file_url!}
+            muted
+            loop
+            playsInline
+            preload="none"
+            onCanPlay={() => setVideoReady(true)}
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+              isHovering && videoReady ? 'opacity-100' : 'opacity-0'
+            }`}
+          />
+        )}
+
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+
+        {/* Play icon (shown when NOT hovering) */}
+        {isVideo && !isHovering && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center">
+              <Play size={18} fill="white" className="ml-0.5" />
+            </div>
+          </div>
+        )}
+
+        {/* "Reproduzindo prévia" indicator when hovering */}
+        {isVideo && isHovering && videoReady && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+            <div className="flex items-center gap-1">
+              {[0, 1, 2].map(i => (
+                <span
+                  key={i}
+                  className="w-[3px] bg-white rounded-full animate-pulse"
+                  style={{
+                    height: `${10 + Math.random() * 8}px`,
+                    animationDelay: `${i * 0.15}s`,
+                    animationDuration: '0.6s',
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {content.content_type === 'arte' && (
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+              <Eye size={18} />
+            </div>
+          </div>
+        )}
+
+        {/* Duration */}
+        {content.duration_seconds > 0 && (
+          <span className="absolute bottom-8 right-1.5 bg-black/80 text-[10px] px-1.5 py-0.5 rounded font-mono text-white/80">
+            {Math.floor(content.duration_seconds / 60)}:{(content.duration_seconds % 60).toString().padStart(2, '0')}
+          </span>
+        )}
+
+        {/* Status */}
+        <div className={`absolute top-1.5 left-1.5 flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold ${statusStyle?.bg} ${statusStyle?.text} backdrop-blur-sm`}>
+          <span className={`w-1 h-1 rounded-full ${statusStyle?.dot}`} />
+          {STATUS_LABELS[content.status]}
+        </div>
+
+        {/* Title at bottom over gradient */}
+        <div className="absolute bottom-0 inset-x-0 p-2.5">
+          <p className="text-xs font-medium truncate text-white/90">{content.title}</p>
+          <span className="text-[10px] text-white/40 mt-0.5 block">{CONTENT_TYPE_LABELS[content.content_type]}</span>
+        </div>
+      </div>
+    </button>
   );
 }

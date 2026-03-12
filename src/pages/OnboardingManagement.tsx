@@ -644,7 +644,7 @@ function ContratoActions({ task, fileInputRef, uploading, onUpload, onAdvance, o
         >
           <Upload size={24} className="mx-auto text-muted-foreground mb-2" />
           <p className="text-xs font-medium">Clique para enviar o contrato</p>
-          <p className="text-[10px] text-muted-foreground mt-1">PDF, máx 10MB</p>
+          <p className="text-[10px] text-muted-foreground mt-1">Formato PDF</p>
           {uploading && <p className="text-[11px] text-primary mt-2 animate-pulse">Enviando...</p>}
         </div>
       )}

@@ -247,7 +247,7 @@ export default function Clients() {
   const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { toast.error('Logo deve ter no máximo 2MB'); return; }
+    
     setLogoFile(file);
     setLogoPreview(URL.createObjectURL(file));
   };
@@ -460,7 +460,7 @@ export default function Clients() {
           </div>
           <div className="text-xs text-muted-foreground">
             <p>Clique para adicionar o logo do cliente.</p>
-            <p>PNG, JPG ou SVG (máx. 2MB)</p>
+            <p>PNG, JPG ou SVG</p>
           </div>
           <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoSelect} />
         </div>

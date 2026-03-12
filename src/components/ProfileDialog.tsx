@@ -26,10 +26,6 @@ const ProfileDialog = forwardRef<HTMLDivElement, { children: React.ReactNode }>(
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      if (file.size > 2 * 1024 * 1024) {
-        toast.error('A imagem deve ter no máximo 2MB');
-        return;
-      }
       const reader = new FileReader();
       reader.onload = (ev) => {
         setAvatarUrl(ev.target?.result as string);

@@ -836,68 +836,65 @@ function ReelsCard({ content, clientColor, onSelect }: {
   onSelect: (c: PortalContent) => void;
 }) {
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
-  const [isHovering, setIsHovering] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
-  const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isVideo = content.content_type !== 'arte' && !!content.file_url;
   const Icon = CONTENT_TYPE_ICONS[content.content_type] || Film;
   const statusStyle = STATUS_COLORS[content.status];
 
-  const startPreview = () => {
-    if (!isVideo) return;
-    hoverTimeout.current = setTimeout(() => {
-      setIsHovering(true);
-      if (videoPreviewRef.current) {
-        videoPreviewRef.current.currentTime = 0;
-        videoPreviewRef.current.play().catch(() => {});
-      }
-    }, 300);
-  };
+  // Auto-play first 5s in loop
+  useEffect(() => {
+    const vid = videoPreviewRef.current;
+    if (!vid || !isVideo) return;
 
-  const stopPreview = () => {
-    if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
-    setIsHovering(false);
-    if (videoPreviewRef.current) {
-      videoPreviewRef.current.pause();
-      videoPreviewRef.current.currentTime = 0;
-    }
-  };
+    const handleTimeUpdate = () => {
+      if (vid.currentTime >= 5) {
+        vid.currentTime = 0;
+      }
+    };
+
+    const startAutoplay = () => {
+      setVideoReady(true);
+      vid.play().catch(() => {});
+    };
+
+    vid.addEventListener('timeupdate', handleTimeUpdate);
+    vid.addEventListener('canplay', startAutoplay, { once: true });
+
+    return () => {
+      vid.removeEventListener('timeupdate', handleTimeUpdate);
+      vid.removeEventListener('canplay', startAutoplay);
+    };
+  }, [isVideo]);
 
   return (
     <button
       onClick={() => onSelect(content)}
-      onMouseEnter={startPreview}
-      onMouseLeave={stopPreview}
-      onTouchStart={startPreview}
-      onTouchEnd={stopPreview}
       className="group relative shrink-0 w-[140px] sm:w-[170px] snap-start rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.04] hover:ring-1 focus:outline-none bg-white/[0.03]"
       style={{ '--tw-ring-color': `hsl(${clientColor} / 0.5)` } as any}
     >
       <div className="aspect-[9/16] relative overflow-hidden">
-        {/* Thumbnail layer */}
+        {/* Fallback thumbnail (behind video) */}
         {content.thumbnail_url ? (
-          <img src={content.thumbnail_url} alt={content.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+          <img src={content.thumbnail_url} alt={content.title} className="w-full h-full object-cover" />
         ) : content.file_url && content.content_type === 'arte' ? (
-          <img src={content.file_url} alt={content.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+          <img src={content.file_url} alt={content.title} className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-white/[0.04]">
             <Icon size={32} className="text-white/10" />
           </div>
         )}
 
-        {/* Video preview on hover - plays silently over thumbnail */}
+        {/* Auto-playing 5s loop video preview */}
         {isVideo && (
           <video
             ref={videoPreviewRef}
             src={content.file_url!}
             muted
-            loop
             playsInline
-            preload="none"
-            onCanPlay={() => setVideoReady(true)}
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
-              isHovering && videoReady ? 'opacity-100' : 'opacity-0'
+            preload="metadata"
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
+              videoReady ? 'opacity-100' : 'opacity-0'
             }`}
           />
         )}

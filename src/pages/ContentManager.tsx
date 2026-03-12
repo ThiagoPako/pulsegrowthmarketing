@@ -152,6 +152,7 @@ export default function ContentManager() {
   const [seasonYear, setSeasonYear] = useState(String(now.getFullYear()));
   const [file, setFile] = useState<File | null>(null);
   const [filterClient, setFilterClient] = useState('all');
+  const [showPortalSelector, setShowPortalSelector] = useState(false);
 
   useEffect(() => { loadData(); }, []);
 

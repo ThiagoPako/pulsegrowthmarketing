@@ -92,7 +92,7 @@ export default function ClientPortalLogin() {
                 {clientName?.charAt(0) || 'P'}
               </div>
             )}
-            <h1 className="text-lg font-bold text-white mt-4">{clientName || 'Portal do Cliente'}</h1>
+            <h1 className="text-lg font-bold text-white mt-4">{clientName || 'Pulse Club'}</h1>
             <p className="text-xs text-white/40 mt-1">Acesse seu conteúdo</p>
           </div>
 

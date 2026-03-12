@@ -322,7 +322,7 @@ export default function ClientPortal() {
             )}
             <div className="hidden sm:block">
               <h1 className="text-sm font-semibold tracking-tight leading-none">{client.company_name}</h1>
-              <p className="text-[11px] text-white/40 mt-0.5">Content Hub</p>
+              <p className="text-[11px] text-white/40 mt-0.5">Pulse Club</p>
             </div>
           </div>
 

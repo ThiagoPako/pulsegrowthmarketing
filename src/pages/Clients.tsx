@@ -247,7 +247,7 @@ export default function Clients() {
   const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { toast.error('Logo deve ter no máximo 2MB'); return; }
+    
     setLogoFile(file);
     setLogoPreview(URL.createObjectURL(file));
   };

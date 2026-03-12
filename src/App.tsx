@@ -50,6 +50,7 @@ import ClientBriefing from "@/pages/ClientBriefing";
 import ClientPortal from "@/pages/ClientPortal";
 import ContentManager from "@/pages/ContentManager";
 import ClientPortalLogin from "@/pages/ClientPortalLogin";
+import ClientPortalRegister from "@/pages/ClientPortalRegister";
 
 const queryClient = new QueryClient({
   defaultOptions: {

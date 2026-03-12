@@ -39,7 +39,9 @@ interface PortalContent {
 }
 interface PortalComment {
   id: string; content_id: string; author_name: string; author_type: string;
+  author_id: string | null;
   message: string; created_at: string;
+  avatar_url?: string | null;
 }
 interface ClientData {
   id: string; company_name: string; logo_url: string | null; color: string;

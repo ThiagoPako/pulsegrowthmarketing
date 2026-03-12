@@ -141,7 +141,19 @@ export default function ClientPortal() {
 
   const loadComments = async (contentId: string) => {
     const { data } = await supabase.from('client_portal_comments').select('*').eq('content_id', contentId).order('created_at', { ascending: true });
-    if (data) setComments(data as PortalComment[]);
+    if (data) {
+      // Fetch avatars for team comments
+      const teamComments = data.filter((c: any) => c.author_id);
+      const authorIds = [...new Set(teamComments.map((c: any) => c.author_id))];
+      let avatarMap: Record<string, string | null> = {};
+      if (authorIds.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('id, avatar_url').in('id', authorIds);
+        if (profiles) {
+          profiles.forEach((p: any) => { avatarMap[p.id] = p.avatar_url; });
+        }
+      }
+      setComments((data as any[]).map(c => ({ ...c, avatar_url: c.author_id ? avatarMap[c.author_id] : null })) as PortalComment[]);
+    }
   };
 
   const handleSelectContent = (content: PortalContent) => {

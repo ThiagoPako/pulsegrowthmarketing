@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
 
     // Use service role to read config (bypasses RLS)
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
-    const { data: configData } = await supabaseAdmin.from('whatsapp_config').select('api_token').limit(1).single()
+    const { data: configData } = await supabaseAdmin.from('whatsapp_config').select('api_token, default_user_id, default_queue_id, send_signature, close_ticket').limit(1).single()
     
     const WHATSAPP_TOKEN = configData?.api_token
     if (!WHATSAPP_TOKEN) {

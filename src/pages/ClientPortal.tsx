@@ -11,6 +11,8 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import PortalNotifications from '@/components/portal/PortalNotifications';
+import ZonaCriativa from '@/components/portal/ZonaCriativa';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
   reel: 'Reel', criativo: 'Criativo', institucional: 'Institucional', anuncio: 'Anúncio', arte: 'Arte',

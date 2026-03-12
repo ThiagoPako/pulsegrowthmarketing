@@ -204,14 +204,20 @@ export async function syncContentTaskColumnChange(
   }
 
   if (newColumn === 'envio') {
-    // Auto-send WhatsApp approval message
+    // Auto-send WhatsApp portal invite message
     try {
       const whatsConfig = await getWhatsAppConfig();
       if (whatsConfig?.integrationActive && whatsConfig?.autoVideoApproval && ctx.clientWhatsapp) {
+        const portalUrl = `https://pulsegrowthmarketing.lovable.app/portal/${ctx.clientId}`;
         let msg = whatsConfig.msgVideoApproval
           .replace('{nome_cliente}', ctx.clientName || '')
-          .replace('{link_video}', ctx.editedVideoLink || 'Link não disponível')
+          .replace('{link_video}', portalUrl)
           .replace('{titulo}', ctx.title);
+
+        // If template still has the old drive link pattern, override with portal message
+        if (!msg.includes('portal') && !msg.includes('Área do Cliente')) {
+          msg = `Olá, ${ctx.clientName || ''}! 😊\n\nSeu conteúdo "${ctx.title}" ficou pronto! 🎬\n\n📱 Acesse a Área do Cliente Pulse para assistir e aprovar:\n${portalUrl}\n\nEquipe Pulse Growth Marketing 🚀`;
+        }
 
         await sendWhatsAppMessage({
           number: ctx.clientWhatsapp,

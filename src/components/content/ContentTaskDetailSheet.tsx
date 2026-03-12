@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
@@ -17,7 +17,8 @@ import {
   Film, Megaphone, Image, Palette, Calendar, User, FileText, CheckCircle2,
   AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2,
   ArrowRight, Send, Eye, Zap, Flame, MessageSquare, CalendarClock, Trash2, Edit,
-  History, Lightbulb, Video, Scissors, ScanEye, Pencil, MailCheck, CalendarCheck, MonitorCheck
+  History, Lightbulb, Video, Scissors, ScanEye, Pencil, MailCheck, CalendarCheck, MonitorCheck,
+  Upload, Loader2
 } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
@@ -127,19 +128,15 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
   const activeIdx = getStageIndex(currentColumn);
   const isAlteracao = currentColumn === 'alteracao';
 
-  // Derive people and dates from task + history
   const createdBy = task.created_by ? users.find(u => u.id === task.created_by) : null;
   const linkedScript = task.script_id ? scripts.find(s => s.id === task.script_id) : null;
-  // Fallback: if task has no created_by, check if the linked script has a creator
   const scriptCreator = (!createdBy && linkedScript?.createdBy) ? users.find(u => u.id === linkedScript.createdBy) : null;
   const assignedEditor = task.assigned_to ? users.find(u => u.id === task.assigned_to) : null;
 
-  // Find user who moved task to specific columns from history
   const findHistoryEntry = (keywords: string[]) => {
     return history.find(h => keywords.some(k => h.action.toLowerCase().includes(k.toLowerCase())));
   };
 
-  // Get videomaker from linked recording
   const linkedRecording = task.recording_id ? recordings.find(r => r.id === task.recording_id) : null;
   const recordingVideomaker = linkedRecording ? users.find(u => u.id === linkedRecording.videomaker_id) : null;
 
@@ -156,7 +153,6 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
     return u ? { name: u.name, avatarUrl: u.avatarUrl } : null;
   };
 
-  // Build enriched stages
   const stages = [
     {
       ...JOURNEY_STAGES[0],
@@ -191,7 +187,7 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
     {
       ...JOURNEY_STAGES[5],
       person: agendamentoEntry ? getUserFromHistory(agendamentoEntry) : null,
-      detail: task.scheduled_recording_date && currentColumn === 'acompanhamento' ? `Agendado para ${format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}` : null,
+      detail: null,
       date: agendamentoEntry?.created_at || null,
     },
     {
@@ -204,7 +200,6 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
 
   return (
     <div className="space-y-3">
-      {/* Header */}
       <div className="flex items-center gap-2">
         <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
           <ArrowRight size={13} className="text-primary" />
@@ -268,7 +263,6 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
         </div>
       </div>
 
-      {/* Alteração badge */}
       {isAlteracao && (
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
@@ -282,7 +276,7 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
         </motion.div>
       )}
 
-      {/* Vertical detail cards — who did what & when */}
+      {/* Vertical detail cards */}
       <div className="relative ml-3 mt-1">
         <div className="absolute left-0 top-2 bottom-2 w-px bg-gradient-to-b from-primary/40 via-border to-transparent" />
 
@@ -302,7 +296,6 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
               transition={{ delay: 0.15 + idx * 0.08, duration: 0.35 }}
               className="relative pl-6 pb-3 last:pb-0"
             >
-              {/* Dot */}
               <div className={`absolute left-0 top-2.5 w-2.5 h-2.5 rounded-full -translate-x-[5px] ring-2 ring-card ${
                 isCurrent ? 'bg-primary shadow-sm shadow-primary/30' : 'bg-primary/60'
               }`} />
@@ -312,7 +305,6 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
                   ? 'bg-primary/5 border border-primary/15 shadow-sm'
                   : 'bg-muted/30 border border-border/40'
               }`}>
-                {/* Stage header */}
                 <div className="flex items-center gap-2 mb-1">
                   <StageIcon size={12} className={isCurrent ? 'text-primary' : 'text-muted-foreground'} />
                   <span className={`text-[11px] font-bold uppercase tracking-wide ${
@@ -327,7 +319,6 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
                   )}
                 </div>
 
-                {/* Person */}
                 {stage.person && (
                   <div className="flex items-center gap-2 mt-1.5">
                     <UserAvatar user={{ name: stage.person.name, avatarUrl: stage.person.avatarUrl || undefined }} size="sm" />
@@ -335,7 +326,6 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
                   </div>
                 )}
 
-                {/* Detail */}
                 {stage.detail && (
                   <p className="text-[10px] text-muted-foreground mt-1 leading-snug">{stage.detail}</p>
                 )}
@@ -392,6 +382,10 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
   const [showLinkForm, setShowLinkForm] = useState<'drive' | 'video' | null>(null);
   const [linkValue, setLinkValue] = useState('');
 
+  // Video upload state
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+
   // Fetch history
   useEffect(() => {
     if (!task?.id || !open) return;
@@ -419,7 +413,6 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
   const typeConfig = CONTENT_TYPES.find(t => t.value === task.content_type) || CONTENT_TYPES[0];
   const TypeIcon = typeConfig.icon;
   const colConfig = KANBAN_COLUMNS.find(c => c.id === task.kanban_column);
-  const clientColor = client?.color || '217 91% 60%';
 
   const syncTask = async (newColumn: string) => {
     const ctx = buildSyncContext(task as any, {
@@ -430,6 +423,85 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     await syncContentTaskColumnChange(newColumn, ctx);
   };
 
+  // ─── VIDEO UPLOAD ──────────────────────────────────────────
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingVideo(true);
+    try {
+      const ext = file.name.split('.').pop() || 'mp4';
+      const filePath = `${task.client_id}/${task.id}/video_${Date.now()}.${ext}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('client-content')
+        .upload(filePath, file, { upsert: true });
+      
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from('client-content')
+        .getPublicUrl(filePath);
+
+      const videoUrl = urlData.publicUrl;
+
+      await supabase.from('content_tasks').update({
+        edited_video_link: videoUrl,
+        updated_at: new Date().toISOString(),
+      } as any).eq('id', task.id);
+
+      toast.success('🎬 Vídeo enviado com sucesso!');
+      onRefresh();
+    } catch (err: any) {
+      toast.error(`Erro no upload: ${err.message}`);
+    } finally {
+      setUploadingVideo(false);
+      if (videoInputRef.current) videoInputRef.current.value = '';
+    }
+  };
+
+  // ─── ADD TO CLIENT PORTAL ──────────────────────────────────
+  const addToClientPortal = async () => {
+    if (!task.edited_video_link) return;
+    
+    const now = new Date();
+    const contentTypeMap: Record<string, string> = {
+      'reels': 'reel',
+      'criativo': 'criativo',
+      'story': 'story',
+      'arte': 'arte',
+    };
+
+    // Check if already exists in portal
+    const { data: existing } = await supabase
+      .from('client_portal_contents')
+      .select('id')
+      .eq('client_id', task.client_id)
+      .eq('title', task.title)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      // Update existing
+      await supabase.from('client_portal_contents').update({
+        file_url: task.edited_video_link,
+        status: 'pendente',
+        updated_at: now.toISOString(),
+      } as any).eq('id', existing[0].id);
+    } else {
+      // Create new
+      await supabase.from('client_portal_contents').insert({
+        client_id: task.client_id,
+        title: task.title,
+        content_type: contentTypeMap[task.content_type] || 'reel',
+        file_url: task.edited_video_link,
+        status: 'pendente',
+        season_month: now.getMonth() + 1,
+        season_year: now.getFullYear(),
+        uploaded_by: user?.id || null,
+      } as any);
+    }
+  };
+
   // ─── ACTIONS ──────────────────────────────────────────────
   const handleApprove = async () => {
     await supabase.from('content_tasks').update({
@@ -437,8 +509,12 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
       approved_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
+
+    // Add video to client portal
+    await addToClientPortal();
+
     await syncTask('envio');
-    toast.success('✅ Aprovado! Enviado para o cliente');
+    toast.success('✅ Aprovado! Vídeo adicionado ao Portal do Cliente');
     onRefresh();
     onOpenChange(false);
   };
@@ -461,8 +537,8 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     if (!client?.whatsapp) { toast.error('Cliente sem WhatsApp'); return; }
     setSendingWhatsApp(true);
     try {
-      const videoLink = task.edited_video_link || task.drive_link || '';
-      const msg = `Olá, ${client.responsiblePerson || client.companyName}! 😊\n\nSeu conteúdo "${task.title}" ficou pronto! 🎬\n\n${videoLink ? `📎 Acesse aqui: ${videoLink}\n\n` : ''}Por favor, avalie e nos diga se está aprovado ou se precisa de algum ajuste.\n\nEquipe Pulse Growth Marketing 🚀`;
+      const portalUrl = `${window.location.origin}/portal/${client.id}`;
+      const msg = `Olá, ${client.responsiblePerson || client.companyName}! 😊\n\nSeu conteúdo "${task.title}" ficou pronto e está disponível para aprovação! 🎬\n\n📱 Acesse a Área do Cliente Pulse para assistir e aprovar:\n${portalUrl}\n\nLá você pode assistir ao vídeo, aprovar ou solicitar ajustes diretamente.\n\nEquipe Pulse Growth Marketing 🚀`;
       const result = await sendWhatsAppMessage({
         number: client.whatsapp,
         message: msg,
@@ -486,10 +562,15 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
 
-    // Update social delivery too
     await supabase.from('social_media_deliveries').update({
       status: 'entregue',
     } as any).eq('content_task_id', task.id);
+
+    // Update portal content status to approved
+    await supabase.from('client_portal_contents').update({
+      status: 'aprovado',
+      approved_at: new Date().toISOString(),
+    } as any).eq('client_id', task.client_id).eq('title', task.title);
 
     await syncTask('agendamentos');
     toast.success('👍 Aprovado pelo cliente! Pronto para agendar');
@@ -506,7 +587,6 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
 
-    // Update social delivery
     await supabase.from('social_media_deliveries').update({
       status: 'agendado',
       posted_at: schedDate,
@@ -584,7 +664,6 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
   };
 
   const handleMoveToNext = async (targetColumn: string) => {
-    // Validations
     if (targetColumn === 'edicao' && !task.drive_link) {
       toast.error('Adicione o link dos materiais (Drive) primeiro');
       return;
@@ -609,7 +688,6 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     return users.find(u => u.id === userId)?.name || 'Usuário';
   };
 
-  // Deadline helper
   const renderDeadline = (deadline: string | null, label: string) => {
     if (!deadline) return null;
     const now = new Date();
@@ -636,7 +714,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col">
+      <SheetContent side="right" className="w-full sm:max-w-4xl p-0 flex flex-col">
         {/* Header */}
         <div className="px-5 pt-5 pb-4 border-b border-border space-y-3">
           <div className="flex items-center gap-3">
@@ -678,317 +756,356 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
         </div>
 
         <ScrollArea className="flex-1">
-          <div className="px-5 py-4 space-y-4">
-            {/* ─── JOURNEY TIMELINE ──────────────────────── */}
-            <JourneyTimeline currentColumn={task.kanban_column} task={task} users={users} scripts={scripts} history={history} recordings={recordings.map(r => ({ id: r.id, videomaker_id: r.videomakerId }))} />
+          <div className="px-5 py-4">
+            {/* ─── TWO COLUMN LAYOUT ──────────────────────── */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              {/* ─── LEFT COLUMN: Journey + History ──────── */}
+              <div className="space-y-4">
+                <JourneyTimeline currentColumn={task.kanban_column} task={task} users={users} scripts={scripts} history={history} recordings={recordings.map(r => ({ id: r.id, videomaker_id: r.videomakerId }))} />
 
-            {/* Deadlines */}
-            {task.kanban_column === 'edicao' && renderDeadline(task.editing_deadline, 'Prazo de Edição')}
-            {task.kanban_column === 'revisao' && renderDeadline(task.review_deadline, 'Prazo de Revisão')}
-            {task.kanban_column === 'alteracao' && !task.immediate_alteration && renderDeadline(task.alteration_deadline, 'Prazo de Alteração')}
-            {task.kanban_column === 'envio' && renderDeadline(task.approval_deadline, 'Prazo de Aprovação')}
+                <Separator />
 
-            {/* Assigned user */}
-            {assignedUser && (
-              <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary/5 border border-primary/15">
-                <UserAvatar user={{ name: assignedUser.name, avatarUrl: assignedUser.avatarUrl }} size="sm" />
-                <div className="min-w-0">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-primary/60 block">Responsável</span>
-                  <span className="text-sm font-bold text-foreground">{assignedUser.name}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Scheduled date */}
-            {task.scheduled_recording_date && (
-              <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted border border-border">
-                <Calendar size={16} className="text-muted-foreground shrink-0" />
-                <div>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
-                    {task.kanban_column === 'acompanhamento' ? 'Agendado para' : 'Data de gravação'}
-                  </span>
-                  <span className="text-sm font-bold text-foreground">
-                    {format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
-                    {task.scheduled_recording_time ? ` às ${task.scheduled_recording_time}` : ''}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Links */}
-            <div className="space-y-2">
-              {task.drive_link && (
-                <a href={task.drive_link} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/15 border border-blue-500/20 transition-colors">
-                  <Link2 size={14} className="text-blue-600 shrink-0" />
-                  <span className="text-sm font-medium text-blue-700 dark:text-blue-400 truncate flex-1">Materiais (Drive)</span>
-                  <ExternalLink size={12} className="text-blue-500/60 shrink-0" />
-                </a>
-              )}
-              {task.edited_video_link && (
-                <a href={task.edited_video_link} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/15 border border-teal-500/20 transition-colors">
-                  <Film size={14} className="text-teal-600 shrink-0" />
-                  <span className="text-sm font-medium text-teal-700 dark:text-teal-400 truncate flex-1">🎬 Assistir Vídeo Editado</span>
-                  <ExternalLink size={12} className="text-teal-500/60 shrink-0" />
-                </a>
-              )}
-            </div>
-
-            {/* Script */}
-            {linkedScript && (
-              <div className="px-3 py-2.5 rounded-lg bg-primary/5 border border-primary/15 space-y-1">
-                <div className="flex items-center gap-1.5">
-                  <FileText size={12} className="text-primary shrink-0" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-primary/60">Roteiro</span>
-                </div>
-                <p className="text-sm font-medium text-foreground">{linkedScript.title}</p>
-                {linkedScript.content && (
-                  <div className="mt-2 p-2.5 rounded bg-muted/50 border border-border/50 max-h-32 overflow-y-auto">
-                    <div className="prose prose-sm max-w-none text-foreground/80 text-xs" dangerouslySetInnerHTML={{ __html: linkedScript.content }} />
+                {/* Script */}
+                {linkedScript && (
+                  <div className="px-3 py-2.5 rounded-lg bg-primary/5 border border-primary/15 space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <FileText size={12} className="text-primary shrink-0" />
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-primary/60">Roteiro</span>
+                    </div>
+                    <p className="text-sm font-medium text-foreground">{linkedScript.title}</p>
+                    {linkedScript.content && (
+                      <div className="mt-2 p-2.5 rounded bg-muted/50 border border-border/50 max-h-32 overflow-y-auto">
+                        <div className="prose prose-sm max-w-none text-foreground/80 text-xs" dangerouslySetInnerHTML={{ __html: linkedScript.content }} />
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
-            )}
 
-            {/* Adjustment notes */}
-            {task.adjustment_notes && (
-              <div className="px-3 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 space-y-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600">Notas de Ajuste</span>
-                <p className="text-sm text-amber-700 dark:text-amber-400">{task.adjustment_notes}</p>
-              </div>
-            )}
-
-            <Separator />
-
-            {/* ─── ACTIONS ──────────────────────────────────── */}
-            <div className="space-y-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Ações</span>
-
-              {/* Add links */}
-              {(task.kanban_column === 'captacao' || task.kanban_column === 'edicao') && !task.drive_link && (
-                <Button variant="outline" size="sm" className="w-full gap-2 justify-start" onClick={() => { setShowLinkForm('drive'); setLinkValue(''); }}>
-                  <Link2 size={14} className="text-blue-600" /> Adicionar Link Drive
-                </Button>
-              )}
-              {(task.kanban_column === 'edicao' || task.kanban_column === 'alteracao') && !task.edited_video_link && (
-                <Button variant="outline" size="sm" className="w-full gap-2 justify-start" onClick={() => { setShowLinkForm('video'); setLinkValue(''); }}>
-                  <Film size={14} className="text-teal-600" /> Adicionar Link Vídeo
-                </Button>
-              )}
-
-              {/* Link form inline */}
-              {showLinkForm && (
-                <div className="p-3 rounded-lg bg-muted/50 border border-border space-y-2">
-                  <Label className="text-xs">{showLinkForm === 'drive' ? 'URL do Google Drive' : 'URL do vídeo editado'}</Label>
-                  <Input value={linkValue} onChange={e => setLinkValue(e.target.value)} placeholder="https://..." autoFocus className="h-9" />
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={handleSaveLink} className="flex-1">Salvar</Button>
-                    <Button size="sm" variant="outline" onClick={() => setShowLinkForm(null)}>Cancelar</Button>
+                {/* Adjustment notes */}
+                {task.adjustment_notes && (
+                  <div className="px-3 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 space-y-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600">Notas de Ajuste</span>
+                    <p className="text-sm text-amber-700 dark:text-amber-400">{task.adjustment_notes}</p>
                   </div>
-                </div>
-              )}
-
-              {/* Move to next column */}
-              {task.kanban_column === 'captacao' && task.drive_link && (
-                <Button variant="outline" size="sm" className="w-full gap-2 justify-start" onClick={() => handleMoveToNext('edicao')}>
-                  <ArrowRight size={14} className="text-primary" /> Mover para Edição
-                </Button>
-              )}
-
-              {/* Toggle priority (edição) */}
-              {task.kanban_column === 'edicao' && (
-                <Button
-                  variant={task.editing_priority ? 'default' : 'outline'}
-                  size="sm"
-                  className={`w-full gap-2 justify-start ${task.editing_priority ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}`}
-                  onClick={handleTogglePriority}
-                >
-                  <Zap size={14} /> {task.editing_priority ? '⚡ Prioritário' : 'Marcar Prioridade'}
-                </Button>
-              )}
-
-              {/* Revisão: Approve / Adjustments */}
-              {task.kanban_column === 'revisao' && (
-                <>
-                  <Button size="sm" className="w-full gap-2 justify-start bg-green-600 hover:bg-green-700" onClick={handleApprove}>
-                    <ThumbsUp size={14} /> Aprovar Revisão
-                  </Button>
-                  <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700" onClick={() => setShowAdjustmentForm(true)}>
-                    <MessageSquareWarning size={14} /> Solicitar Ajustes
-                  </Button>
-                </>
-              )}
-
-              {/* Alteração: Resubmit */}
-              {task.kanban_column === 'alteracao' && (
-                <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-teal-600 border-teal-300 hover:bg-teal-50 dark:text-teal-400 dark:border-teal-700" onClick={handleResubmitFromAlteracao}>
-                  <Send size={14} /> Reenviar para Revisão
-                </Button>
-              )}
-
-              {/* Envio: Client approved / Send WhatsApp / Request alteration */}
-              {task.kanban_column === 'envio' && (
-                <>
-                  <Button size="sm" className="w-full gap-2 justify-start bg-green-600 hover:bg-green-700" onClick={handleClientApproved}>
-                    <CheckCircle2 size={14} /> Cliente Aprovou
-                  </Button>
-                  <Button variant="outline" size="sm" className="w-full gap-2 justify-start" onClick={handleSendWhatsApp} disabled={sendingWhatsApp}>
-                    <MessageSquare size={14} className="text-green-600" /> {sendingWhatsApp ? 'Enviando...' : 'Enviar WhatsApp'}
-                  </Button>
-                  <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700" onClick={() => setShowAdjustmentForm(true)}>
-                    <MessageSquareWarning size={14} /> Solicitar Alteração
-                  </Button>
-                </>
-              )}
-
-              {/* Agendamentos: Schedule */}
-              {task.kanban_column === 'agendamentos' && (
-                <Button size="sm" className="w-full gap-2 justify-start" onClick={() => { setShowScheduleForm(true); setSchedDate(''); setSchedTime(''); setSchedPlatform(''); }}>
-                  <CalendarClock size={14} /> Agendar Postagem
-                </Button>
-              )}
-
-              {/* Acompanhamento: Confirm posted */}
-              {task.kanban_column === 'acompanhamento' && (
-                <Button size="sm" className="w-full gap-2 justify-start" onClick={handleConfirmPosted}>
-                  <CheckCircle2 size={14} /> Confirmar Postagem
-                </Button>
-              )}
-
-              {/* Adjustment form inline */}
-              {showAdjustmentForm && (
-                <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 space-y-3">
-                  <Label className="text-xs font-semibold text-amber-700">Descreva os ajustes necessários</Label>
-                  <Textarea
-                    value={adjustmentNotes}
-                    onChange={e => setAdjustmentNotes(e.target.value)}
-                    rows={3}
-                    placeholder="Ex: Ajustar corte no segundo 15..."
-                    autoFocus
-                  />
-                  <div className="flex items-center gap-3 p-2.5 rounded-lg bg-destructive/5 border border-destructive/20">
-                    <input
-                      type="checkbox"
-                      checked={adjustmentImmediate}
-                      onChange={e => setAdjustmentImmediate(e.target.checked)}
-                      className="h-4 w-4 rounded border-destructive/40"
-                      id="detail-immediate"
-                    />
-                    <label htmlFor="detail-immediate" className="text-xs cursor-pointer">
-                      <span className="font-semibold text-destructive">🚨 Alteração Imediata</span>
-                    </label>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" className="flex-1 bg-amber-500 hover:bg-amber-600 text-white" onClick={handleRequestAdjustments}>
-                      <MessageSquareWarning size={14} /> Enviar
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setShowAdjustmentForm(false)}>Cancelar</Button>
-                  </div>
-                </div>
-              )}
-
-              {/* Schedule form inline */}
-              {showScheduleForm && (
-                <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-xs">Data *</Label>
-                      <Input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)} className="h-9" />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Horário *</Label>
-                      <Input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)} className="h-9" />
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-xs">Plataforma</Label>
-                    <Select value={schedPlatform} onValueChange={setSchedPlatform}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent>
-                        {PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" className="flex-1" onClick={handleSchedulePost}>
-                      <Calendar size={14} /> Agendar
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setShowScheduleForm(false)}>Cancelar</Button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <Separator />
-
-            {/* History Timeline */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <History size={13} className="text-primary" />
-                </div>
-                <span className="text-xs font-bold uppercase tracking-wider text-foreground" style={{ fontFamily: 'var(--font-display)' }}>
-                  Histórico
-                </span>
-                {history.length > 0 && (
-                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4">{history.length}</Badge>
                 )}
-              </div>
-              {history.length === 0 ? (
-                <div className="flex flex-col items-center py-6 text-center">
-                  <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mb-2">
-                    <Clock size={16} className="text-muted-foreground/40" />
+
+                <Separator />
+
+                {/* History Timeline */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <History size={13} className="text-primary" />
+                    </div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-foreground" style={{ fontFamily: 'var(--font-display)' }}>
+                      Histórico
+                    </span>
+                    {history.length > 0 && (
+                      <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4">{history.length}</Badge>
+                    )}
                   </div>
-                  <p className="text-xs text-muted-foreground/60 italic">Nenhum registro ainda</p>
-                </div>
-              ) : (
-                <div className="relative ml-3">
-                  {/* Vertical line */}
-                  <div className="absolute left-0 top-2 bottom-2 w-px bg-gradient-to-b from-primary/30 via-border to-transparent" />
-                  
-                  <AnimatePresence>
-                    {history.map((h, idx) => {
-                      const actionIcon = getHistoryIcon(h.action);
-                      const actionColor = getHistoryColor(h.action);
-                      return (
-                        <motion.div
-                          key={h.id}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: idx * 0.05, duration: 0.3 }}
-                          className="relative pl-6 pb-4 last:pb-0 group"
-                        >
-                          {/* Dot */}
-                          <div className={`absolute left-0 top-1 w-2 h-2 rounded-full -translate-x-[3.5px] ring-2 ring-card transition-all duration-200 group-hover:scale-125 ${
-                            idx === 0 ? `${actionColor} shadow-sm` : 'bg-border'
-                          }`} />
-                          
-                          <div className={`rounded-lg px-3 py-2 transition-all duration-200 ${
-                            idx === 0 ? 'bg-primary/5 border border-primary/10' : 'hover:bg-muted/50'
-                          }`}>
-                            <div className="flex items-start gap-2">
-                              <span className="text-sm leading-none mt-0.5">{actionIcon}</span>
-                              <div className="min-w-0 flex-1">
-                                <span className={`text-xs leading-snug block ${idx === 0 ? 'text-foreground font-medium' : 'text-foreground/70'}`}>
-                                  {h.action}
-                                </span>
-                                <div className="flex items-center gap-1.5 mt-1">
-                                  <span className="text-[10px] font-medium text-primary/70">{getUserName(h.user_id)}</span>
-                                  <span className="text-[10px] text-muted-foreground/40">·</span>
-                                  <span className="text-[10px] text-muted-foreground/50">
-                                    {formatDistanceToNow(new Date(h.created_at), { addSuffix: true, locale: ptBR })}
-                                  </span>
+                  {history.length === 0 ? (
+                    <div className="flex flex-col items-center py-6 text-center">
+                      <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mb-2">
+                        <Clock size={16} className="text-muted-foreground/40" />
+                      </div>
+                      <p className="text-xs text-muted-foreground/60 italic">Nenhum registro ainda</p>
+                    </div>
+                  ) : (
+                    <div className="relative ml-3">
+                      <div className="absolute left-0 top-2 bottom-2 w-px bg-gradient-to-b from-primary/30 via-border to-transparent" />
+                      <AnimatePresence>
+                        {history.map((h, idx) => {
+                          const actionIcon = getHistoryIcon(h.action);
+                          const actionColor = getHistoryColor(h.action);
+                          return (
+                            <motion.div
+                              key={h.id}
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: idx * 0.05, duration: 0.3 }}
+                              className="relative pl-6 pb-4 last:pb-0 group"
+                            >
+                              <div className={`absolute left-0 top-1 w-2 h-2 rounded-full -translate-x-[3.5px] ring-2 ring-card transition-all duration-200 group-hover:scale-125 ${
+                                idx === 0 ? `${actionColor} shadow-sm` : 'bg-border'
+                              }`} />
+                              <div className={`rounded-lg px-3 py-2 transition-all duration-200 ${
+                                idx === 0 ? 'bg-primary/5 border border-primary/10' : 'hover:bg-muted/50'
+                              }`}>
+                                <div className="flex items-start gap-2">
+                                  <span className="text-sm leading-none mt-0.5">{actionIcon}</span>
+                                  <div className="min-w-0 flex-1">
+                                    <span className={`text-xs leading-snug block ${idx === 0 ? 'text-foreground font-medium' : 'text-foreground/70'}`}>
+                                      {h.action}
+                                    </span>
+                                    <div className="flex items-center gap-1.5 mt-1">
+                                      <span className="text-[10px] font-medium text-primary/70">{getUserName(h.user_id)}</span>
+                                      <span className="text-[10px] text-muted-foreground/40">·</span>
+                                      <span className="text-[10px] text-muted-foreground/50">
+                                        {formatDistanceToNow(new Date(h.created_at), { addSuffix: true, locale: ptBR })}
+                                      </span>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-                  </AnimatePresence>
+                            </motion.div>
+                          );
+                        })}
+                      </AnimatePresence>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
+
+              {/* ─── RIGHT COLUMN: Details + Actions ──────── */}
+              <div className="space-y-4">
+                {/* Deadlines */}
+                {task.kanban_column === 'edicao' && renderDeadline(task.editing_deadline, 'Prazo de Edição')}
+                {task.kanban_column === 'revisao' && renderDeadline(task.review_deadline, 'Prazo de Revisão')}
+                {task.kanban_column === 'alteracao' && !task.immediate_alteration && renderDeadline(task.alteration_deadline, 'Prazo de Alteração')}
+                {task.kanban_column === 'envio' && renderDeadline(task.approval_deadline, 'Prazo de Aprovação')}
+
+                {/* Assigned user */}
+                {assignedUser && (
+                  <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary/5 border border-primary/15">
+                    <UserAvatar user={{ name: assignedUser.name, avatarUrl: assignedUser.avatarUrl }} size="sm" />
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-primary/60 block">Responsável</span>
+                      <span className="text-sm font-bold text-foreground">{assignedUser.name}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Scheduled date */}
+                {task.scheduled_recording_date && (
+                  <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted border border-border">
+                    <Calendar size={16} className="text-muted-foreground shrink-0" />
+                    <div>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
+                        {task.kanban_column === 'acompanhamento' ? 'Agendado para' : 'Data de gravação'}
+                      </span>
+                      <span className="text-sm font-bold text-foreground">
+                        {format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
+                        {task.scheduled_recording_time ? ` às ${task.scheduled_recording_time}` : ''}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Links */}
+                <div className="space-y-2">
+                  {task.drive_link && (
+                    <a href={task.drive_link} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/15 border border-blue-500/20 transition-colors">
+                      <Link2 size={14} className="text-blue-600 shrink-0" />
+                      <span className="text-sm font-medium text-blue-700 dark:text-blue-400 truncate flex-1">Materiais (Drive)</span>
+                      <ExternalLink size={12} className="text-blue-500/60 shrink-0" />
+                    </a>
+                  )}
+                  {task.edited_video_link && (
+                    <a href={task.edited_video_link} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/15 border border-teal-500/20 transition-colors">
+                      <Film size={14} className="text-teal-600 shrink-0" />
+                      <span className="text-sm font-medium text-teal-700 dark:text-teal-400 truncate flex-1">🎬 Assistir Vídeo Editado</span>
+                      <ExternalLink size={12} className="text-teal-500/60 shrink-0" />
+                    </a>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* ─── AÇÕES DA ETAPA ──────────────────────── */}
+                <div className="space-y-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-2" style={{ fontFamily: 'var(--font-display)' }}>
+                    <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Zap size={13} className="text-primary" />
+                    </div>
+                    Ações da Etapa
+                  </span>
+
+                  {/* Add links */}
+                  {(task.kanban_column === 'captacao' || task.kanban_column === 'edicao') && !task.drive_link && (
+                    <Button variant="outline" size="sm" className="w-full gap-2 justify-start" onClick={() => { setShowLinkForm('drive'); setLinkValue(''); }}>
+                      <Link2 size={14} className="text-blue-600" /> Adicionar Link Drive
+                    </Button>
+                  )}
+                  
+                  {/* Video: Upload file OR paste link */}
+                  {(task.kanban_column === 'edicao' || task.kanban_column === 'alteracao') && !task.edited_video_link && (
+                    <div className="space-y-2">
+                      <input
+                        ref={videoInputRef}
+                        type="file"
+                        accept="video/*"
+                        className="hidden"
+                        onChange={handleVideoUpload}
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full gap-2 justify-start border-teal-300 text-teal-700 hover:bg-teal-50 dark:text-teal-400 dark:border-teal-700"
+                        onClick={() => videoInputRef.current?.click()}
+                        disabled={uploadingVideo}
+                      >
+                        {uploadingVideo ? (
+                          <><Loader2 size={14} className="animate-spin" /> Enviando vídeo...</>
+                        ) : (
+                          <><Upload size={14} /> Enviar Arquivo de Vídeo</>
+                        )}
+                      </Button>
+                      <Button variant="outline" size="sm" className="w-full gap-2 justify-start" onClick={() => { setShowLinkForm('video'); setLinkValue(''); }}>
+                        <Film size={14} className="text-teal-600" /> Colar Link do Vídeo
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Link form inline */}
+                  {showLinkForm && (
+                    <div className="p-3 rounded-lg bg-muted/50 border border-border space-y-2">
+                      <Label className="text-xs">{showLinkForm === 'drive' ? 'URL do Google Drive' : 'URL do vídeo editado'}</Label>
+                      <Input value={linkValue} onChange={e => setLinkValue(e.target.value)} placeholder="https://..." autoFocus className="h-9" />
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={handleSaveLink} className="flex-1">Salvar</Button>
+                        <Button size="sm" variant="outline" onClick={() => setShowLinkForm(null)}>Cancelar</Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Move to next column */}
+                  {task.kanban_column === 'captacao' && task.drive_link && (
+                    <Button variant="outline" size="sm" className="w-full gap-2 justify-start" onClick={() => handleMoveToNext('edicao')}>
+                      <ArrowRight size={14} className="text-primary" /> Mover para Edição
+                    </Button>
+                  )}
+
+                  {/* Toggle priority (edição) */}
+                  {task.kanban_column === 'edicao' && (
+                    <Button
+                      variant={task.editing_priority ? 'default' : 'outline'}
+                      size="sm"
+                      className={`w-full gap-2 justify-start ${task.editing_priority ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}`}
+                      onClick={handleTogglePriority}
+                    >
+                      <Zap size={14} /> {task.editing_priority ? '⚡ Prioritário' : 'Marcar Prioridade'}
+                    </Button>
+                  )}
+
+                  {/* Revisão: Approve / Adjustments */}
+                  {task.kanban_column === 'revisao' && (
+                    <>
+                      <Button size="sm" className="w-full gap-2 justify-start bg-green-600 hover:bg-green-700" onClick={handleApprove}>
+                        <ThumbsUp size={14} /> Aprovar e Enviar ao Portal
+                      </Button>
+                      <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700" onClick={() => setShowAdjustmentForm(true)}>
+                        <MessageSquareWarning size={14} /> Solicitar Ajustes
+                      </Button>
+                    </>
+                  )}
+
+                  {/* Alteração: Resubmit */}
+                  {task.kanban_column === 'alteracao' && (
+                    <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-teal-600 border-teal-300 hover:bg-teal-50 dark:text-teal-400 dark:border-teal-700" onClick={handleResubmitFromAlteracao}>
+                      <Send size={14} /> Reenviar para Revisão
+                    </Button>
+                  )}
+
+                  {/* Envio: Client approved / Send WhatsApp / Request alteration */}
+                  {task.kanban_column === 'envio' && (
+                    <>
+                      <Button size="sm" className="w-full gap-2 justify-start bg-green-600 hover:bg-green-700" onClick={handleClientApproved}>
+                        <CheckCircle2 size={14} /> Cliente Aprovou
+                      </Button>
+                      <Button variant="outline" size="sm" className="w-full gap-2 justify-start" onClick={handleSendWhatsApp} disabled={sendingWhatsApp}>
+                        <MessageSquare size={14} className="text-green-600" /> {sendingWhatsApp ? 'Enviando...' : 'Convidar via WhatsApp'}
+                      </Button>
+                      <p className="text-[10px] text-muted-foreground/60 px-1">
+                        💡 A mensagem convida o cliente a visitar a Área do Cliente Pulse para aprovar o vídeo
+                      </p>
+                      <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700" onClick={() => setShowAdjustmentForm(true)}>
+                        <MessageSquareWarning size={14} /> Solicitar Alteração
+                      </Button>
+                    </>
+                  )}
+
+                  {/* Agendamentos: Schedule */}
+                  {task.kanban_column === 'agendamentos' && (
+                    <Button size="sm" className="w-full gap-2 justify-start" onClick={() => { setShowScheduleForm(true); setSchedDate(''); setSchedTime(''); setSchedPlatform(''); }}>
+                      <CalendarClock size={14} /> Agendar Postagem
+                    </Button>
+                  )}
+
+                  {/* Acompanhamento: Confirm posted */}
+                  {task.kanban_column === 'acompanhamento' && (
+                    <Button size="sm" className="w-full gap-2 justify-start" onClick={handleConfirmPosted}>
+                      <CheckCircle2 size={14} /> Confirmar Postagem
+                    </Button>
+                  )}
+
+                  {/* Adjustment form inline */}
+                  {showAdjustmentForm && (
+                    <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 space-y-3">
+                      <Label className="text-xs font-semibold text-amber-700">Descreva os ajustes necessários</Label>
+                      <Textarea
+                        value={adjustmentNotes}
+                        onChange={e => setAdjustmentNotes(e.target.value)}
+                        rows={3}
+                        placeholder="Ex: Ajustar corte no segundo 15..."
+                        autoFocus
+                      />
+                      <div className="flex items-center gap-3 p-2.5 rounded-lg bg-destructive/5 border border-destructive/20">
+                        <input
+                          type="checkbox"
+                          checked={adjustmentImmediate}
+                          onChange={e => setAdjustmentImmediate(e.target.checked)}
+                          className="h-4 w-4 rounded border-destructive/40"
+                          id="detail-immediate"
+                        />
+                        <label htmlFor="detail-immediate" className="text-xs cursor-pointer">
+                          <span className="font-semibold text-destructive">🚨 Alteração Imediata</span>
+                        </label>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" className="flex-1 bg-amber-500 hover:bg-amber-600 text-white" onClick={handleRequestAdjustments}>
+                          <MessageSquareWarning size={14} /> Enviar
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setShowAdjustmentForm(false)}>Cancelar</Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Schedule form inline */}
+                  {showScheduleForm && (
+                    <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs">Data *</Label>
+                          <Input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)} className="h-9" />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Horário *</Label>
+                          <Input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)} className="h-9" />
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Plataforma</Label>
+                        <Select value={schedPlatform} onValueChange={setSchedPlatform}>
+                          <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                          <SelectContent>
+                            {PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" className="flex-1" onClick={handleSchedulePost}>
+                          <Calendar size={14} /> Agendar
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setShowScheduleForm(false)}>Cancelar</Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </ScrollArea>

@@ -46,7 +46,7 @@ interface ClientData {
 type TabView = 'library' | 'metrics';
 
 export default function ClientPortal() {
-  const { clientId } = useParams<{ clientId: string }>();
+  const { clientId: paramSlug } = useParams<{ clientId: string }>();
   const [client, setClient] = useState<ClientData | null>(null);
   const [contents, setContents] = useState<PortalContent[]>([]);
   const [selectedContent, setSelectedContent] = useState<PortalContent | null>(null);
@@ -68,19 +68,46 @@ export default function ClientPortal() {
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
 
   useEffect(() => {
-    if (!clientId) return;
+    if (!paramSlug) return;
     loadData();
-  }, [clientId]);
+  }, [paramSlug]);
 
   const loadData = async () => {
-    if (!clientId) return;
+    if (!paramSlug) return;
     setLoading(true);
+
+    // Support both UUID and slug (company name)
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(paramSlug);
+    const slug = decodeURIComponent(paramSlug);
+
+    let clientQuery;
+    if (isUUID) {
+      clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id').eq('id', slug).single();
+    } else {
+      // Match by slug (lowercase, hyphens → spaces)
+      const companySearch = slug.replace(/-/g, ' ');
+      clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id').ilike('company_name', companySearch).single();
+    }
+
     const [clientRes, contentsRes] = await Promise.all([
-      supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id').eq('id', clientId).single(),
-      supabase.from('client_portal_contents').select('*').eq('client_id', clientId).order('created_at', { ascending: false }),
+      clientQuery,
+      // If UUID, fetch contents directly; otherwise we'll re-fetch after resolving client
+      isUUID
+        ? supabase.from('client_portal_contents').select('*').eq('client_id', slug).order('created_at', { ascending: false })
+        : Promise.resolve({ data: null }),
     ]);
-    if (clientRes.data) setClient(clientRes.data as ClientData);
-    if (contentsRes.data) setContents(contentsRes.data as PortalContent[]);
+
+    if (clientRes.data) {
+      const clientData = clientRes.data as ClientData;
+      setClient(clientData);
+      // If we used slug, now fetch contents with resolved ID
+      if (!isUUID) {
+        const { data: contData } = await supabase.from('client_portal_contents').select('*').eq('client_id', clientData.id).order('created_at', { ascending: false });
+        if (contData) setContents(contData as PortalContent[]);
+      } else if (contentsRes.data) {
+        setContents(contentsRes.data as PortalContent[]);
+      }
+    }
     setLoading(false);
   };
 

@@ -974,25 +974,15 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
 
                   {/* Finalizar Etapa buttons */}
                   {task.kanban_column === 'ideias' && (
-                    <Button size="sm" className="w-full gap-2 justify-start bg-primary hover:bg-primary/90" onClick={() => handleMoveToNext('captacao')}>
-                      <ArrowRight size={14} /> Finalizar Etapa → Captação
-                    </Button>
+                    <RocketLaunchButton label="Captação" onClick={() => handleMoveToNext('captacao')} />
                   )}
 
                   {task.kanban_column === 'captacao' && (
-                    <Button size="sm" className={`w-full gap-2 justify-start ${task.drive_link ? 'bg-primary hover:bg-primary/90' : ''}`}
-                      variant={task.drive_link ? 'default' : 'outline'}
-                      onClick={() => handleMoveToNext('edicao')}
-                      disabled={!task.drive_link}
-                    >
-                      <ArrowRight size={14} /> Finalizar Etapa → Edição
-                    </Button>
+                    <RocketLaunchButton label="Edição" onClick={() => handleMoveToNext('edicao')} disabled={!task.drive_link} />
                   )}
 
                   {task.kanban_column === 'edicao' && task.edited_video_link && (
-                    <Button size="sm" className="w-full gap-2 justify-start bg-primary hover:bg-primary/90" onClick={() => handleMoveToNext('revisao')}>
-                      <ArrowRight size={14} /> Finalizar Etapa → Revisão
-                    </Button>
+                    <RocketLaunchButton label="Revisão" onClick={() => handleMoveToNext('revisao')} />
                   )}
 
                   {/* Toggle priority (edição) */}

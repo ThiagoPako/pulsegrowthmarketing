@@ -229,6 +229,28 @@ export async function syncContentTaskColumnChange(
     } catch (err) {
       console.error('WhatsApp auto-send error:', err);
     }
+
+    // Create portal notification for the client
+    try {
+      // Find the matching portal content if it exists
+      const { data: portalContent } = await supabase
+        .from('client_portal_contents')
+        .select('id')
+        .eq('client_id', ctx.clientId)
+        .eq('title', ctx.title)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      await supabase.from('client_portal_notifications').insert({
+        client_id: ctx.clientId,
+        title: '🎬 Novo vídeo para aprovação',
+        message: `"${ctx.title}" está pronto para sua análise e aprovação.`,
+        type: 'video_approval',
+        link_content_id: portalContent?.[0]?.id || null,
+      } as any);
+    } catch (err) {
+      console.error('Portal notification error:', err);
+    }
   }
 
   // 5. Log to task_history

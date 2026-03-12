@@ -22,7 +22,8 @@ const RESET_TABLES = [
   'endomarketing_packages', 'endomarketing_partner_tasks', 'endomarketing_profissionais',
   'financial_activity_log', 'financial_contracts', 'goals', 'integration_logs',
   'kanban_tasks', 'notifications', 'onboarding_tasks', 'revenues', 'expenses',
-  'recordings', 'scripts', 'social_media_deliveries', 'social_accounts', 'clients', 'partners',
+  'recordings', 'scripts', 'social_media_deliveries', 'social_accounts', 'clients',
+  // 'plans' e equipe (profiles, user_roles, partners) são preservados
 ] as const;
 
 export default function CompanySettings() {

@@ -1929,6 +1929,7 @@ export type Database = {
       scripts: {
         Row: {
           client_id: string
+          client_priority: string
           content: string
           content_format: string
           created_at: string
@@ -1945,6 +1946,7 @@ export type Database = {
         }
         Insert: {
           client_id: string
+          client_priority?: string
           content?: string
           content_format?: string
           created_at?: string
@@ -1961,6 +1963,7 @@ export type Database = {
         }
         Update: {
           client_id?: string
+          client_priority?: string
           content?: string
           content_format?: string
           created_at?: string

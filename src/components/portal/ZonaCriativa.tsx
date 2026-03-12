@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { FileText, Film, Palette, Video, Image, Sparkles, User, Tag } from 'lucide-react';
+import { FileText, Film, Palette, Video, Image, Sparkles, User, Tag, AlertTriangle, Flame } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { toast } from 'sonner';
 
 interface Script {
   id: string;
@@ -15,6 +16,7 @@ interface Script {
   created_at: string;
   created_by: string | null;
   priority: string;
+  client_priority: string;
 }
 
 interface Author {
@@ -28,9 +30,9 @@ interface Author {
 interface Props {
   clientId: string;
   clientColor: string;
+  isAuthenticated?: boolean;
 }
 
-// Video type tags with colors
 const VIDEO_TYPE_TAGS: Record<string, { label: string; bg: string; text: string; border: string }> = {
   vendas: { label: 'Vendas', bg: 'bg-blue-500/15', text: 'text-blue-400', border: 'border-blue-500/20' },
   institucional: { label: 'Institucional', bg: 'bg-purple-500/15', text: 'text-purple-400', border: 'border-purple-500/20' },
@@ -41,88 +43,58 @@ const VIDEO_TYPE_TAGS: Record<string, { label: string; bg: string; text: string;
   lancamento: { label: 'Lançamento', bg: 'bg-cyan-500/15', text: 'text-cyan-400', border: 'border-cyan-500/20' },
 };
 
-// Content format configs for covers
 const FORMAT_CONFIG: Record<string, { label: string; icon: any; gradient: string; pattern: string }> = {
   reels: {
-    label: 'Reels',
-    icon: Film,
+    label: 'Reels', icon: Film,
     gradient: 'from-rose-500/30 via-pink-600/20 to-purple-700/30',
     pattern: 'radial-gradient(circle at 20% 80%, rgba(244,63,94,0.15) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(168,85,247,0.15) 0%, transparent 50%)',
   },
   story: {
-    label: 'Story',
-    icon: Sparkles,
+    label: 'Story', icon: Sparkles,
     gradient: 'from-amber-500/30 via-orange-500/20 to-red-600/30',
     pattern: 'radial-gradient(circle at 30% 70%, rgba(245,158,11,0.15) 0%, transparent 50%), radial-gradient(circle at 70% 30%, rgba(239,68,68,0.15) 0%, transparent 50%)',
   },
   criativo: {
-    label: 'Criativo',
-    icon: Palette,
+    label: 'Criativo', icon: Palette,
     gradient: 'from-cyan-500/30 via-blue-500/20 to-indigo-600/30',
     pattern: 'radial-gradient(circle at 25% 75%, rgba(6,182,212,0.15) 0%, transparent 50%), radial-gradient(circle at 75% 25%, rgba(99,102,241,0.15) 0%, transparent 50%)',
   },
 };
 
-// Video type specific cover overrides
 const VIDEO_TYPE_COVERS: Record<string, { gradient: string; pattern: string }> = {
-  vendas: {
-    gradient: 'from-blue-500/30 via-indigo-500/20 to-blue-700/30',
-    pattern: 'radial-gradient(circle at 20% 80%, rgba(59,130,246,0.2) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(99,102,241,0.15) 0%, transparent 50%)',
-  },
-  institucional: {
-    gradient: 'from-purple-500/30 via-violet-500/20 to-purple-700/30',
-    pattern: 'radial-gradient(circle at 20% 80%, rgba(168,85,247,0.2) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(139,92,246,0.15) 0%, transparent 50%)',
-  },
-  reconhecimento: {
-    gradient: 'from-amber-500/30 via-yellow-500/20 to-amber-700/30',
-    pattern: 'radial-gradient(circle at 20% 80%, rgba(245,158,11,0.2) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(234,179,8,0.15) 0%, transparent 50%)',
-  },
-  educacional: {
-    gradient: 'from-emerald-500/30 via-green-500/20 to-emerald-700/30',
-    pattern: 'radial-gradient(circle at 20% 80%, rgba(16,185,129,0.2) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(34,197,94,0.15) 0%, transparent 50%)',
-  },
-  bastidores: {
-    gradient: 'from-orange-500/30 via-amber-500/20 to-orange-700/30',
-    pattern: 'radial-gradient(circle at 20% 80%, rgba(249,115,22,0.2) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(245,158,11,0.15) 0%, transparent 50%)',
-  },
-  depoimento: {
-    gradient: 'from-rose-500/30 via-pink-500/20 to-rose-700/30',
-    pattern: 'radial-gradient(circle at 20% 80%, rgba(244,63,94,0.2) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(236,72,153,0.15) 0%, transparent 50%)',
-  },
-  lancamento: {
-    gradient: 'from-cyan-500/30 via-teal-500/20 to-cyan-700/30',
-    pattern: 'radial-gradient(circle at 20% 80%, rgba(6,182,212,0.2) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(20,184,166,0.15) 0%, transparent 50%)',
-  },
+  vendas: { gradient: 'from-blue-500/30 via-indigo-500/20 to-blue-700/30', pattern: 'radial-gradient(circle at 20% 80%, rgba(59,130,246,0.2) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(99,102,241,0.15) 0%, transparent 50%)' },
+  institucional: { gradient: 'from-purple-500/30 via-violet-500/20 to-purple-700/30', pattern: 'radial-gradient(circle at 20% 80%, rgba(168,85,247,0.2) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(139,92,246,0.15) 0%, transparent 50%)' },
+  reconhecimento: { gradient: 'from-amber-500/30 via-yellow-500/20 to-amber-700/30', pattern: 'radial-gradient(circle at 20% 80%, rgba(245,158,11,0.2) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(234,179,8,0.15) 0%, transparent 50%)' },
+  educacional: { gradient: 'from-emerald-500/30 via-green-500/20 to-emerald-700/30', pattern: 'radial-gradient(circle at 20% 80%, rgba(16,185,129,0.2) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(34,197,94,0.15) 0%, transparent 50%)' },
+  bastidores: { gradient: 'from-orange-500/30 via-amber-500/20 to-orange-700/30', pattern: 'radial-gradient(circle at 20% 80%, rgba(249,115,22,0.2) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(245,158,11,0.15) 0%, transparent 50%)' },
+  depoimento: { gradient: 'from-rose-500/30 via-pink-500/20 to-rose-700/30', pattern: 'radial-gradient(circle at 20% 80%, rgba(244,63,94,0.2) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(236,72,153,0.15) 0%, transparent 50%)' },
+  lancamento: { gradient: 'from-cyan-500/30 via-teal-500/20 to-cyan-700/30', pattern: 'radial-gradient(circle at 20% 80%, rgba(6,182,212,0.2) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(20,184,166,0.15) 0%, transparent 50%)' },
 };
 
 const DEFAULT_FORMAT = {
-  label: 'Conteúdo',
-  icon: FileText,
+  label: 'Conteúdo', icon: FileText,
   gradient: 'from-slate-500/30 via-gray-500/20 to-zinc-600/30',
   pattern: 'radial-gradient(circle at 50% 50%, rgba(148,163,184,0.1) 0%, transparent 50%)',
 };
 
-export default function ZonaCriativa({ clientId, clientColor }: Props) {
+const CLIENT_PRIORITY_CONFIG: Record<string, { label: string; color: string; bg: string; border: string; icon: any }> = {
+  priority: { label: 'Prioridade', color: 'text-amber-300', bg: 'bg-amber-500/20', border: 'border-amber-500/30', icon: AlertTriangle },
+  urgent: { label: 'Urgente', color: 'text-red-300', bg: 'bg-red-500/20', border: 'border-red-500/30', icon: Flame },
+};
+
+export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }: Props) {
   const [scripts, setScripts] = useState<Script[]>([]);
   const [authors, setAuthors] = useState<Record<string, Author>>({});
   const [selectedScript, setSelectedScript] = useState<Script | null>(null);
   const [filterType, setFilterType] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadScripts();
-  }, [clientId]);
+  useEffect(() => { loadScripts(); }, [clientId]);
 
-  // Realtime sync for new scripts
   useEffect(() => {
     const channel = supabase
       .channel(`scripts_portal_${clientId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'scripts',
-        filter: `client_id=eq.${clientId}`,
-      }, () => loadScripts())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'scripts', filter: `client_id=eq.${clientId}` }, () => loadScripts())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [clientId]);
@@ -131,16 +103,12 @@ export default function ZonaCriativa({ clientId, clientColor }: Props) {
     setLoading(true);
     const { data, error } = await supabase
       .from('scripts')
-      .select('id, title, content, content_format, video_type, created_at, created_by, priority')
+      .select('id, title, content, content_format, video_type, created_at, created_by, priority, client_priority')
       .eq('client_id', clientId)
       .eq('is_endomarketing', false)
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error loading scripts for portal:', error);
-      setLoading(false);
-      return;
-    }
+    if (error) { console.error('Error loading scripts for portal:', error); setLoading(false); return; }
 
     if (data) {
       setScripts(data as Script[]);
@@ -160,16 +128,22 @@ export default function ZonaCriativa({ clientId, clientColor }: Props) {
     setLoading(false);
   };
 
+  const handleSetClientPriority = async (scriptId: string, newPriority: string) => {
+    const current = scripts.find(s => s.id === scriptId);
+    const finalPriority = current?.client_priority === newPriority ? 'normal' : newPriority;
+    
+    await supabase.from('scripts').update({ client_priority: finalPriority } as any).eq('id', scriptId);
+    setScripts(prev => prev.map(s => s.id === scriptId ? { ...s, client_priority: finalPriority } : s));
+    if (selectedScript?.id === scriptId) {
+      setSelectedScript(prev => prev ? { ...prev, client_priority: finalPriority } : null);
+    }
+    toast.success(finalPriority === 'normal' ? 'Prioridade removida' : `Marcado como ${finalPriority === 'urgent' ? 'Urgente' : 'Prioridade'}`);
+  };
+
   const getCoverConfig = (script: Script) => {
-    // Priority: video_type cover > content_format cover > default
     const vtCover = VIDEO_TYPE_COVERS[script.video_type];
     const fmtConfig = FORMAT_CONFIG[script.content_format] || DEFAULT_FORMAT;
-    return {
-      icon: fmtConfig.icon,
-      label: fmtConfig.label,
-      gradient: vtCover?.gradient || fmtConfig.gradient,
-      pattern: vtCover?.pattern || fmtConfig.pattern,
-    };
+    return { icon: fmtConfig.icon, label: fmtConfig.label, gradient: vtCover?.gradient || fmtConfig.gradient, pattern: vtCover?.pattern || fmtConfig.pattern };
   };
 
   const getTag = (videoType: string) => VIDEO_TYPE_TAGS[videoType] || { label: videoType, bg: 'bg-white/10', text: 'text-white/60', border: 'border-white/10' };
@@ -180,9 +154,13 @@ export default function ZonaCriativa({ clientId, clientColor }: Props) {
     return tmp.textContent || tmp.innerText || '';
   };
 
-  // Get unique video types for filter
   const videoTypes = [...new Set(scripts.map(s => s.video_type))];
-  const filteredScripts = filterType ? scripts.filter(s => s.video_type === filterType) : scripts;
+  
+  // Sort: urgent first, then priority, then normal
+  const sortedScripts = [...(filterType ? scripts.filter(s => s.video_type === filterType) : scripts)].sort((a, b) => {
+    const order: Record<string, number> = { urgent: 0, priority: 1, normal: 2 };
+    return (order[a.client_priority] ?? 2) - (order[b.client_priority] ?? 2);
+  });
 
   if (loading) {
     return (
@@ -207,6 +185,7 @@ export default function ZonaCriativa({ clientId, clientColor }: Props) {
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">Roteiros & Ideias</h2>
             <p className="text-white/50 mt-2 text-sm sm:text-base max-w-md">
               Acompanhe os roteiros criados pela nossa equipe para o seu conteúdo.
+              {isAuthenticated && <span className="block text-white/30 text-xs mt-1">Você pode marcar roteiros como prioridade ou urgente.</span>}
             </p>
             <div className="flex gap-4 mt-6">
               <div className="text-center">
@@ -262,7 +241,7 @@ export default function ZonaCriativa({ clientId, clientColor }: Props) {
 
       {/* Scripts Grid */}
       <div className="max-w-[1400px] mx-auto px-4 sm:px-8 pb-20">
-        {filteredScripts.length === 0 ? (
+        {sortedScripts.length === 0 ? (
           <div className="text-center py-24">
             <FileText size={48} className="mx-auto mb-4 text-white/10" />
             <p className="text-lg text-white/30 font-medium">
@@ -272,100 +251,98 @@ export default function ZonaCriativa({ clientId, clientColor }: Props) {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredScripts.map((script, idx) => {
+            {sortedScripts.map((script, idx) => {
               const cover = getCoverConfig(script);
               const Icon = cover.icon;
               const tag = getTag(script.video_type);
               const author = script.created_by ? authors[script.created_by] : null;
               const plainContent = stripHtml(script.content);
               const excerpt = plainContent.length > 120 ? plainContent.slice(0, 120) + '...' : plainContent;
+              const cp = CLIENT_PRIORITY_CONFIG[script.client_priority];
 
               return (
-                <motion.button
+                <motion.div
                   key={script.id}
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.03 }}
-                  onClick={() => setSelectedScript(script)}
-                  className="group text-left rounded-2xl overflow-hidden border border-white/[0.06] hover:border-white/[0.12] transition-all duration-300 hover:scale-[1.02] hover:shadow-xl bg-white/[0.02]"
+                  className={`group text-left rounded-2xl overflow-hidden border transition-all duration-300 hover:scale-[1.02] hover:shadow-xl bg-white/[0.02] ${
+                    cp ? `${cp.border} ring-1 ring-inset ${cp.border}` : 'border-white/[0.06] hover:border-white/[0.12]'
+                  }`}
                 >
-                  {/* Cover */}
-                  <div
-                    className={`relative h-32 sm:h-36 bg-gradient-to-br ${cover.gradient} overflow-hidden`}
-                    style={{ backgroundImage: cover.pattern }}
-                  >
-                    {/* Decorative elements */}
-                    <div className="absolute inset-0 opacity-30">
-                      <div className="absolute top-4 right-4 w-20 h-20 rounded-full border border-white/10" />
-                      <div className="absolute bottom-4 left-4 w-12 h-12 rounded-lg border border-white/10 rotate-12" />
-                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-                        <Icon size={48} className="text-white/10" />
-                      </div>
-                    </div>
-
-                    {/* Format badge */}
-                    <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/30 backdrop-blur-sm text-[10px] font-semibold text-white/90">
-                      <Icon size={10} />
-                      {cover.label}
-                    </div>
-
-                    {/* Video type tag */}
-                    <div className={`absolute top-3 right-3 flex items-center gap-1 px-2 py-0.5 rounded-full ${tag.bg} ${tag.text} border ${tag.border} backdrop-blur-sm text-[9px] font-bold`}>
-                      <Tag size={8} />
-                      {tag.label}
-                    </div>
-
-                    {/* Priority */}
-                    {script.priority === 'alta' && (
-                      <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-full bg-red-500/30 backdrop-blur-sm text-[9px] font-bold text-red-300">
-                        PRIORIDADE
-                      </div>
-                    )}
-
-                    {/* Date */}
-                    <div className="absolute bottom-3 right-3 text-[10px] text-white/50 font-medium">
-                      {format(new Date(script.created_at), "dd MMM", { locale: pt })}
-                    </div>
-                  </div>
-
-                  {/* Content */}
-                  <div className="p-4 space-y-3">
-                    <h4 className="text-sm font-semibold text-white/90 line-clamp-2 group-hover:text-white transition-colors">
-                      {script.title}
-                    </h4>
-                    <p className="text-[11px] text-white/35 line-clamp-3 leading-relaxed">
-                      {excerpt || 'Sem descrição'}
-                    </p>
-
-                    {/* Author */}
-                    {author && (
-                      <div className="flex items-center gap-2 pt-2 border-t border-white/[0.04]">
-                        {author.avatar_url ? (
-                          <img
-                            src={author.avatar_url}
-                            alt={author.display_name || author.name}
-                            className="w-6 h-6 rounded-full object-cover ring-1 ring-white/10"
-                          />
-                        ) : (
-                          <div
-                            className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
-                            style={{ background: `hsl(${clientColor})` }}
-                          >
-                            {(author.display_name || author.name).charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-medium text-white/60 truncate">
-                            {author.display_name || author.name}
-                          </p>
-                          {author.job_title && (
-                            <p className="text-[9px] text-white/30 truncate">{author.job_title}</p>
-                          )}
+                  <button onClick={() => setSelectedScript(script)} className="w-full text-left">
+                    {/* Cover */}
+                    <div className={`relative h-32 sm:h-36 bg-gradient-to-br ${cover.gradient} overflow-hidden`} style={{ backgroundImage: cover.pattern }}>
+                      <div className="absolute inset-0 opacity-30">
+                        <div className="absolute top-4 right-4 w-20 h-20 rounded-full border border-white/10" />
+                        <div className="absolute bottom-4 left-4 w-12 h-12 rounded-lg border border-white/10 rotate-12" />
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                          <Icon size={48} className="text-white/10" />
                         </div>
                       </div>
-                    )}
-                  </div>
-                </motion.button>
+                      <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/30 backdrop-blur-sm text-[10px] font-semibold text-white/90">
+                        <Icon size={10} /> {cover.label}
+                      </div>
+                      <div className={`absolute top-3 right-3 flex items-center gap-1 px-2 py-0.5 rounded-full ${tag.bg} ${tag.text} border ${tag.border} backdrop-blur-sm text-[9px] font-bold`}>
+                        <Tag size={8} /> {tag.label}
+                      </div>
+                      {cp && (
+                        <div className={`absolute bottom-3 left-3 flex items-center gap-1 px-2 py-0.5 rounded-full ${cp.bg} backdrop-blur-sm text-[9px] font-bold ${cp.color} border ${cp.border} animate-pulse`}>
+                          <cp.icon size={9} /> {cp.label}
+                        </div>
+                      )}
+                      <div className="absolute bottom-3 right-3 text-[10px] text-white/50 font-medium">
+                        {format(new Date(script.created_at), "dd MMM", { locale: pt })}
+                      </div>
+                    </div>
+                    {/* Content */}
+                    <div className="p-4 space-y-3">
+                      <h4 className="text-sm font-semibold text-white/90 line-clamp-2 group-hover:text-white transition-colors">{script.title}</h4>
+                      <p className="text-[11px] text-white/35 line-clamp-3 leading-relaxed">{excerpt || 'Sem descrição'}</p>
+                      {author && (
+                        <div className="flex items-center gap-2 pt-2 border-t border-white/[0.04]">
+                          {author.avatar_url ? (
+                            <img src={author.avatar_url} alt={author.display_name || author.name} className="w-6 h-6 rounded-full object-cover ring-1 ring-white/10" />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white" style={{ background: `hsl(${clientColor})` }}>
+                              {(author.display_name || author.name).charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-medium text-white/60 truncate">{author.display_name || author.name}</p>
+                            {author.job_title && <p className="text-[9px] text-white/30 truncate">{author.job_title}</p>}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Priority buttons (only for authenticated clients) */}
+                  {isAuthenticated && (
+                    <div className="px-4 pb-3 flex gap-2">
+                      <button
+                        onClick={() => handleSetClientPriority(script.id, 'priority')}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all border ${
+                          script.client_priority === 'priority'
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                            : 'bg-white/[0.04] text-white/40 border-white/[0.06] hover:bg-amber-500/10 hover:text-amber-300'
+                        }`}
+                      >
+                        <AlertTriangle size={10} /> Prioridade
+                      </button>
+                      <button
+                        onClick={() => handleSetClientPriority(script.id, 'urgent')}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all border ${
+                          script.client_priority === 'urgent'
+                            ? 'bg-red-500/20 text-red-300 border-red-500/30'
+                            : 'bg-white/[0.04] text-white/40 border-white/[0.06] hover:bg-red-500/10 hover:text-red-300'
+                        }`}
+                      >
+                        <Flame size={10} /> Urgente
+                      </button>
+                    </div>
+                  )}
+                </motion.div>
               );
             })}
           </div>
@@ -376,16 +353,12 @@ export default function ZonaCriativa({ clientId, clientColor }: Props) {
       <AnimatePresence>
         {selectedScript && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm overflow-y-auto"
             onClick={() => setSelectedScript(null)}
           >
             <motion.div
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 40 }}
+              initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               className="max-w-2xl mx-auto my-8 sm:my-16"
               onClick={e => e.stopPropagation()}
@@ -396,28 +369,26 @@ export default function ZonaCriativa({ clientId, clientColor }: Props) {
                   const cover = getCoverConfig(selectedScript);
                   const Icon = cover.icon;
                   const tag = getTag(selectedScript.video_type);
+                  const cp = CLIENT_PRIORITY_CONFIG[selectedScript.client_priority];
                   return (
-                    <div
-                      className={`relative h-28 bg-gradient-to-br ${cover.gradient}`}
-                      style={{ backgroundImage: cover.pattern }}
-                    >
+                    <div className={`relative h-28 bg-gradient-to-br ${cover.gradient}`} style={{ backgroundImage: cover.pattern }}>
                       <div className="absolute inset-0 flex items-center justify-center">
                         <Icon size={40} className="text-white/10" />
                       </div>
                       <div className="absolute top-3 left-3 flex items-center gap-2">
                         <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/30 backdrop-blur-sm text-xs font-semibold text-white/90">
-                          <Icon size={12} />
-                          {cover.label}
+                          <Icon size={12} /> {cover.label}
                         </span>
                         <span className={`flex items-center gap-1 px-2 py-1 rounded-full ${tag.bg} ${tag.text} border ${tag.border} backdrop-blur-sm text-[10px] font-bold`}>
-                          <Tag size={9} />
-                          {tag.label}
+                          <Tag size={9} /> {tag.label}
                         </span>
+                        {cp && (
+                          <span className={`flex items-center gap-1 px-2 py-1 rounded-full ${cp.bg} ${cp.color} border ${cp.border} backdrop-blur-sm text-[10px] font-bold animate-pulse`}>
+                            <cp.icon size={9} /> {cp.label}
+                          </span>
+                        )}
                       </div>
-                      <button
-                        onClick={() => setSelectedScript(null)}
-                        className="absolute top-3 right-3 p-1.5 rounded-full bg-black/30 backdrop-blur-sm hover:bg-black/50 transition-colors"
-                      >
+                      <button onClick={() => setSelectedScript(null)} className="absolute top-3 right-3 p-1.5 rounded-full bg-black/30 backdrop-blur-sm hover:bg-black/50 transition-colors">
                         <span className="text-white/70 text-sm">✕</span>
                       </button>
                     </div>
@@ -431,6 +402,32 @@ export default function ZonaCriativa({ clientId, clientColor }: Props) {
                       {format(new Date(selectedScript.created_at), "dd 'de' MMMM 'de' yyyy", { locale: pt })}
                     </p>
                   </div>
+
+                  {/* Priority actions in modal */}
+                  {isAuthenticated && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleSetClientPriority(selectedScript.id, 'priority')}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all border ${
+                          selectedScript.client_priority === 'priority'
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                            : 'bg-white/[0.04] text-white/40 border-white/[0.06] hover:bg-amber-500/10 hover:text-amber-300'
+                        }`}
+                      >
+                        <AlertTriangle size={12} /> Quero gravar primeiro
+                      </button>
+                      <button
+                        onClick={() => handleSetClientPriority(selectedScript.id, 'urgent')}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all border ${
+                          selectedScript.client_priority === 'urgent'
+                            ? 'bg-red-500/20 text-red-300 border-red-500/30'
+                            : 'bg-white/[0.04] text-white/40 border-white/[0.06] hover:bg-red-500/10 hover:text-red-300'
+                        }`}
+                      >
+                        <Flame size={12} /> Urgente
+                      </button>
+                    </div>
+                  )}
 
                   {/* Author */}
                   {selectedScript.created_by && authors[selectedScript.created_by] && (() => {

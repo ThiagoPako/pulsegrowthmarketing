@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Upload, Film, Image, Palette, Video, Trash2, ExternalLink, Eye, Loader2 } from 'lucide-react';
+import { Upload, Film, Image, Palette, Video, Trash2, ExternalLink, Eye, Loader2, Play, Grid3X3 } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 
@@ -32,6 +32,107 @@ interface ContentRow {
   created_at: string; clients?: { company_name: string } | null;
 }
 
+/* ── Instagram-style grid tile with hover video preview ── */
+function ContentTile({ content, onDelete }: { content: ContentRow; onDelete: (id: string) => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [hovering, setHovering] = useState(false);
+
+  const isVideo = !!(content.file_url?.match(/\.(mp4|mov|webm|avi)(\?|$)/i) ||
+    ['reel', 'institucional', 'anuncio'].includes(content.content_type));
+
+  const startPreview = useCallback(() => {
+    setHovering(true);
+    const vid = videoRef.current;
+    if (vid) {
+      vid.currentTime = 0;
+      vid.play().catch(() => {});
+    }
+  }, []);
+
+  const stopPreview = useCallback(() => {
+    setHovering(false);
+    const vid = videoRef.current;
+    if (vid) {
+      vid.pause();
+      vid.currentTime = 0;
+    }
+  }, []);
+
+  const statusColor = (s: string) =>
+    s === 'aprovado' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
+    s === 'ajuste_solicitado' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
+    'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+  const statusLabel = (s: string) =>
+    s === 'aprovado' ? 'Aprovado' : s === 'ajuste_solicitado' ? 'Ajuste' : 'Pendente';
+
+  return (
+    <div
+      className="relative aspect-square bg-muted overflow-hidden cursor-pointer group"
+      onMouseEnter={startPreview}
+      onMouseLeave={stopPreview}
+      onTouchStart={startPreview}
+      onTouchEnd={stopPreview}
+    >
+      {/* Thumbnail / image layer */}
+      {content.thumbnail_url ? (
+        <img src={content.thumbnail_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+      ) : content.content_type === 'arte' && content.file_url ? (
+        <img src={content.file_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+          <Film size={36} />
+        </div>
+      )}
+
+      {/* Video preview layer (hidden until hover) */}
+      {isVideo && content.file_url && (
+        <video
+          ref={videoRef}
+          src={content.file_url}
+          muted
+          playsInline
+          preload="metadata"
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${hovering ? 'opacity-100' : 'opacity-0'}`}
+        />
+      )}
+
+      {/* Play icon for videos (when not hovering) */}
+      {isVideo && !hovering && (
+        <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm rounded-full p-1">
+          <Play size={14} className="text-white fill-white" />
+        </div>
+      )}
+
+      {/* Duration badge */}
+      {content.duration_seconds > 0 && (
+        <span className="absolute bottom-2 right-2 bg-black/80 text-white text-[10px] px-1.5 py-0.5 rounded font-mono z-10">
+          {Math.floor(content.duration_seconds / 60)}:{(content.duration_seconds % 60).toString().padStart(2, '0')}
+        </span>
+      )}
+
+      {/* Hover overlay with info */}
+      <div className={`absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-2 transition-opacity duration-200 ${hovering ? 'opacity-100' : 'opacity-0'}`}>
+        <p className="text-white text-sm font-semibold text-center px-3 line-clamp-2">{content.title}</p>
+        <p className="text-white/70 text-xs">{(content as any).clients?.company_name}</p>
+        <Badge className={`text-[10px] ${statusColor(content.status)}`}>{statusLabel(content.status)}</Badge>
+        <div className="flex items-center gap-1 mt-1">
+          {content.file_url && (
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={e => { e.stopPropagation(); window.open(content.file_url!, '_blank'); }}>
+              <ExternalLink size={14} />
+            </Button>
+          )}
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={e => { e.stopPropagation(); window.open(`/portal/${content.client_id}`, '_blank'); }}>
+            <Eye size={14} />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:bg-white/20" onClick={e => { e.stopPropagation(); onDelete(content.id); }}>
+            <Trash2 size={14} />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ContentManager() {
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -40,7 +141,6 @@ export default function ContentManager() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
 
-  // Form state
   const now = new Date();
   const [title, setTitle] = useState('');
   const [clientId, setClientId] = useState('');
@@ -48,8 +148,6 @@ export default function ContentManager() {
   const [seasonMonth, setSeasonMonth] = useState(String(now.getMonth() + 1));
   const [seasonYear, setSeasonYear] = useState(String(now.getFullYear()));
   const [file, setFile] = useState<File | null>(null);
-
-  // Filter
   const [filterClient, setFilterClient] = useState('all');
 
   useEffect(() => { loadData(); }, []);
@@ -82,7 +180,6 @@ export default function ContentManager() {
       const { data: urlData } = supabase.storage.from('client-content').getPublicUrl(filePath);
       const fileUrl = urlData.publicUrl;
 
-      // Generate thumbnail for videos via canvas (best effort)
       let thumbnailUrl: string | null = null;
       let durationSeconds = 0;
 
@@ -99,10 +196,13 @@ export default function ContentManager() {
             videoEl.onseeked = () => {
               const canvas = document.createElement('canvas');
               canvas.width = 480;
-              canvas.height = 270;
+              canvas.height = 480;
               const ctx = canvas.getContext('2d');
               if (ctx) {
-                ctx.drawImage(videoEl, 0, 0, 480, 270);
+                const size = Math.min(videoEl.videoWidth, videoEl.videoHeight);
+                const sx = (videoEl.videoWidth - size) / 2;
+                const sy = (videoEl.videoHeight - size) / 2;
+                ctx.drawImage(videoEl, sx, sy, size, size, 0, 0, 480, 480);
                 thumbnailUrl = canvas.toDataURL('image/jpeg', 0.7);
               }
               URL.revokeObjectURL(videoEl.src);
@@ -111,7 +211,6 @@ export default function ContentManager() {
             videoEl.onerror = () => resolve();
           });
 
-          // Upload thumbnail if generated
           if (thumbnailUrl) {
             const thumbBlob = await fetch(thumbnailUrl).then(r => r.blob());
             const thumbPath = `${clientId}/thumbs/${Date.now()}.jpg`;
@@ -156,9 +255,6 @@ export default function ContentManager() {
   };
 
   const filteredContents = filterClient === 'all' ? contents : contents.filter(c => c.client_id === filterClient);
-
-  const statusColor = (s: string) => s === 'aprovado' ? 'bg-green-500/20 text-green-400' : s === 'ajuste_solicitado' ? 'bg-orange-500/20 text-orange-400' : 'bg-yellow-500/20 text-yellow-400';
-  const statusLabel = (s: string) => s === 'aprovado' ? 'Aprovado' : s === 'ajuste_solicitado' ? 'Ajuste' : 'Pendente';
 
   return (
     <div className="space-y-6">
@@ -225,11 +321,14 @@ export default function ContentManager() {
         </CardContent>
       </Card>
 
-      {/* Content list */}
+      {/* Instagram-style grid */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Conteúdos Enviados ({filteredContents.length})</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Grid3X3 size={18} />
+              Conteúdos Enviados ({filteredContents.length})
+            </CardTitle>
             <Select value={filterClient} onValueChange={setFilterClient}>
               <SelectTrigger className="w-[200px]"><SelectValue placeholder="Filtrar por cliente" /></SelectTrigger>
               <SelectContent>
@@ -239,60 +338,15 @@ export default function ContentManager() {
             </Select>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {loading ? (
             <div className="flex items-center justify-center py-8"><Loader2 className="animate-spin text-muted-foreground" /></div>
           ) : filteredContents.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">Nenhum conteúdo encontrado.</p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-px bg-border">
               {filteredContents.map(content => (
-                <div key={content.id} className="border border-border rounded-xl overflow-hidden bg-card hover:shadow-md transition-shadow">
-                  {/* Thumbnail */}
-                  <div className="aspect-video bg-muted relative">
-                    {content.thumbnail_url ? (
-                      <img src={content.thumbnail_url} alt="" className="w-full h-full object-cover" />
-                    ) : content.content_type === 'arte' && content.file_url ? (
-                      <img src={content.file_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                        <Film size={32} />
-                      </div>
-                    )}
-                    {content.duration_seconds > 0 && (
-                      <span className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-1.5 py-0.5 rounded font-mono">
-                        {Math.floor(content.duration_seconds / 60)}:{(content.duration_seconds % 60).toString().padStart(2, '0')}
-                      </span>
-                    )}
-                  </div>
-                  <div className="p-3 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-medium truncate">{content.title}</p>
-                        <p className="text-xs text-muted-foreground">{(content as any).clients?.company_name}</p>
-                      </div>
-                      <Badge className={`text-[10px] shrink-0 ${statusColor(content.status)}`}>{statusLabel(content.status)}</Badge>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span className="capitalize">{CONTENT_TYPES.find(t => t.value === content.content_type)?.label}</span>
-                      <span>•</span>
-                      <span className="capitalize">{format(new Date(2026, content.season_month - 1), 'MMM yyyy', { locale: pt })}</span>
-                    </div>
-                    <div className="flex items-center gap-1 pt-1">
-                      {content.file_url && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => window.open(content.file_url!, '_blank')}>
-                          <ExternalLink size={14} />
-                        </Button>
-                      )}
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => window.open(`/portal/${content.client_id}`, '_blank')}>
-                        <Eye size={14} />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(content.id)}>
-                        <Trash2 size={14} />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+                <ContentTile key={content.id} content={content} onDelete={handleDelete} />
               ))}
             </div>
           )}

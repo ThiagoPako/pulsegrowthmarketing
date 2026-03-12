@@ -139,6 +139,13 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
       setSelectedScript(prev => prev ? { ...prev, client_priority: finalPriority } : null);
     }
     toast.success(finalPriority === 'normal' ? 'Prioridade removida' : `Marcado como ${finalPriority === 'urgent' ? 'Urgente' : 'Prioridade'}`);
+    
+    // Sync priority change to internal system
+    if (current) {
+      // Get client name for notification
+      const { data: clientData } = await supabase.from('clients').select('company_name').eq('id', clientId).single();
+      syncPortalScriptPriority(clientId, current.title, finalPriority, clientData?.company_name || '').catch(console.error);
+    }
   };
 
   const getCoverConfig = (script: Script) => {

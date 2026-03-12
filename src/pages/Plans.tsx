@@ -31,6 +31,7 @@ interface Plan {
   recording_sessions: number;
   recording_hours: number;
   extra_content_allowed: number;
+  accepts_extra_content: boolean;
   price: number;
   periodicity: string;
   status: string;

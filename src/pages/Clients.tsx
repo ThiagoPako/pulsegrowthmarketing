@@ -1144,7 +1144,7 @@ export default function Clients() {
                     const weeklyStories = Math.ceil(selectedPlan.stories_qty / 4);
                     const weeklyGoal = weeklyReels + weeklyCreatives + weeklyStories + 1;
                     const monthlyRecordings = selectedPlan.recording_sessions || 4;
-                    setForm(prev => ({ ...prev, weeklyReels: weeklyReels + 1, weeklyCreatives: weeklyCreatives + 1, weeklyStories: weeklyStories + 1, weeklyGoal, monthlyRecordings }));
+                    setForm(prev => ({ ...prev, weeklyReels: weeklyReels + 1, weeklyCreatives: weeklyCreatives + 1, weeklyStories: weeklyStories + 1, weeklyGoal, monthlyRecordings, acceptsExtra: selectedPlan.accepts_extra_content }));
                   }
                 }
               }}>

@@ -117,10 +117,10 @@ Deno.serve(async (req) => {
       const apiBody = {
         number: cleanNumber,
         body: message,
-        userId: apiUserId || '',
-        queueId: queueId || '',
-        sendSignature: sendSignature || false,
-        closeTicket: closeTicket || false,
+        userId: effectiveUserId,
+        queueId: effectiveQueueId,
+        sendSignature: effectiveSignature,
+        closeTicket: effectiveCloseTicket,
       }
 
       apiResponse = await fetch(WHATSAPP_API_URL, {

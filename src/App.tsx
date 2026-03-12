@@ -49,6 +49,7 @@ import OnboardingManagement from "@/pages/OnboardingManagement";
 import ClientBriefing from "@/pages/ClientBriefing";
 import ClientPortal from "@/pages/ClientPortal";
 import ContentManager from "@/pages/ContentManager";
+import ClientPortalLogin from "@/pages/ClientPortalLogin";
 
 const queryClient = new QueryClient({
   defaultOptions: {

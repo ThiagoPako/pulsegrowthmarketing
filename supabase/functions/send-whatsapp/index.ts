@@ -96,10 +96,10 @@ Deno.serve(async (req) => {
       const formData = new FormData()
       formData.append('number', cleanNumber)
       formData.append('body', message)
-      formData.append('userId', apiUserId || '')
-      formData.append('queueId', queueId || '')
-      formData.append('sendSignature', String(sendSignature || false))
-      formData.append('closeTicket', String(closeTicket || false))
+      formData.append('userId', effectiveUserId)
+      formData.append('queueId', effectiveQueueId)
+      formData.append('sendSignature', String(effectiveSignature))
+      formData.append('closeTicket', String(effectiveCloseTicket))
       formData.append('medias', fileBlob, fileName)
 
       apiResponse = await fetch(WHATSAPP_API_URL, {

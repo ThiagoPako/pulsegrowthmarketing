@@ -7,14 +7,49 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Clock, Timer, CalendarClock } from 'lucide-react';
+import { Clock, CalendarClock, AlertTriangle, Trash2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const ALL_DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 
+const RESET_TABLES = [
+  'active_recordings', 'billing_messages', 'cash_reserve_movements',
+  'client_endomarketing_contracts', 'client_portal_comments', 'client_portal_contents',
+  'content_tasks', 'delivery_records', 'design_task_history', 'design_tasks',
+  'endomarketing_agendamentos', 'endomarketing_clientes', 'endomarketing_logs',
+  'endomarketing_packages', 'endomarketing_partner_tasks', 'endomarketing_profissionais',
+  'financial_activity_log', 'financial_contracts', 'goals', 'integration_logs',
+  'kanban_tasks', 'notifications', 'onboarding_tasks', 'revenues', 'expenses',
+  'recordings', 'scripts', 'social_media_deliveries', 'social_accounts', 'clients', 'plans', 'partners',
+] as const;
+
 export default function CompanySettings() {
-  const { settings, updateSettings } = useApp();
+  const { settings, updateSettings, currentUser } = useApp();
   const [form, setForm] = useState(settings);
+  const [confirmText, setConfirmText] = useState('');
+  const [resetting, setResetting] = useState(false);
+
+  const isAdmin = currentUser?.role === 'admin';
+
+  const handleSystemReset = async () => {
+    if (confirmText !== 'RESETAR TUDO') return;
+    setResetting(true);
+    try {
+      for (const table of RESET_TABLES) {
+        const { error } = await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (error) console.error(`Erro ao limpar ${table}:`, error.message);
+      }
+      toast.success('Sistema resetado com sucesso. Todos os dados foram removidos.');
+      setConfirmText('');
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err) {
+      toast.error('Erro ao resetar o sistema.');
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const toggleDay = (day: DayOfWeek) => {
     const days = form.workDays.includes(day) ? form.workDays.filter(d => d !== day) : [...form.workDays, day];
@@ -186,6 +221,78 @@ export default function CompanySettings() {
       </div>
 
       <Button onClick={handleSave} className="w-full">Salvar Configurações</Button>
+
+      {/* Reset do Sistema — Admin Only */}
+      {isAdmin && (
+        <div className="glass-card p-6 space-y-4 border-2 border-destructive/40 bg-destructive/5">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-destructive/10">
+              <AlertTriangle size={24} className="text-destructive" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-destructive">⚠️ ZONA DE PERIGO — Reset Total do Sistema</h2>
+              <p className="text-xs text-destructive/80">Esta ação é IRREVERSÍVEL e apagará TODOS os dados do sistema.</p>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 space-y-2">
+            <p className="text-sm font-semibold text-destructive">O que será apagado:</p>
+            <ul className="text-xs text-destructive/90 space-y-1 list-disc list-inside">
+              <li>Todos os clientes, gravações, roteiros e tarefas</li>
+              <li>Todo o conteúdo do portal do cliente</li>
+              <li>Todos os contratos e dados financeiros</li>
+              <li>Todas as entregas, metas e relatórios</li>
+              <li>Todos os dados de endomarketing</li>
+              <li>Todas as notificações e logs</li>
+              <li>Todos os planos e parceiros</li>
+            </ul>
+            <p className="text-xs font-bold text-destructive mt-2">
+              ⚡ Use APENAS se deseja limpar completamente o sistema e começar do zero.
+            </p>
+          </div>
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" className="w-full gap-2 font-bold text-sm" size="lg">
+                <Trash2 size={18} />
+                RESETAR TODO O SISTEMA (WIPE COMPLETO)
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle size={20} />
+                  Confirmação de Reset Total
+                </AlertDialogTitle>
+                <AlertDialogDescription className="space-y-3">
+                  <span className="block font-semibold text-destructive">
+                    Esta ação apagará PERMANENTEMENTE todos os dados do sistema. Não será possível recuperar nenhuma informação após esta operação.
+                  </span>
+                  <span className="block text-sm">
+                    Para confirmar, digite <strong className="text-destructive">RESETAR TUDO</strong> no campo abaixo:
+                  </span>
+                  <Input
+                    value={confirmText}
+                    onChange={e => setConfirmText(e.target.value)}
+                    placeholder="Digite RESETAR TUDO"
+                    className="border-destructive/50 focus:border-destructive"
+                  />
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setConfirmText('')}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleSystemReset}
+                  disabled={confirmText !== 'RESETAR TUDO' || resetting}
+                  className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                >
+                  {resetting ? 'Resetando...' : 'CONFIRMAR RESET'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      )}
     </div>
   );
 }

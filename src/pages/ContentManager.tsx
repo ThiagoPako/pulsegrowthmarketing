@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -7,9 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Upload, Film, Image, Palette, Video, Trash2, ExternalLink, Eye, Loader2, Play, Grid3X3 } from 'lucide-react';
+import { Upload, Film, Image, Palette, Video, Trash2, ExternalLink, Eye, Loader2, Play, Grid3X3, Sparkles, Copy, KeyRound } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
+import { motion } from 'framer-motion';
 
 const CONTENT_TYPES = [
   { value: 'reel', label: 'Reel', icon: Film },

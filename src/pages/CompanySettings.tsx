@@ -257,7 +257,7 @@ export default function CompanySettings() {
                   <li>Todas as entregas, metas e relatórios</li>
                   <li>Todos os dados de endomarketing</li>
                   <li>Todas as notificações e logs</li>
-                  <li>Todos os planos e parceiros</li>
+                  <li className="text-green-600">✅ Planos e Equipe serão <strong>preservados</strong></li>
                 </ul>
                 <p className="text-xs font-bold text-destructive mt-2">
                   ⚡ Use APENAS se deseja limpar completamente o sistema e começar do zero.

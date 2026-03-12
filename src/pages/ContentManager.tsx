@@ -67,7 +67,7 @@ function ContentTile({ content, onDelete }: { content: ContentRow; onDelete: (id
 
   return (
     <div
-      className="relative aspect-square bg-muted overflow-hidden cursor-pointer group"
+      className="relative aspect-[9/16] bg-muted overflow-hidden cursor-pointer group"
       onMouseEnter={startPreview}
       onMouseLeave={stopPreview}
       onTouchStart={startPreview}

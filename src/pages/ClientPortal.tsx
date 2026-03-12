@@ -45,7 +45,7 @@ interface ClientData {
   monthly_recordings: number; plan_id: string | null;
 }
 
-type TabView = 'library' | 'metrics';
+type TabView = 'library' | 'metrics' | 'criativa';
 
 export default function ClientPortal() {
   const { clientId: paramSlug } = useParams<{ clientId: string }>();

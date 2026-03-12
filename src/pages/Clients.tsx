@@ -301,10 +301,17 @@ export default function Clients() {
       const clientId = crypto.randomUUID();
       const logoUrl = await uploadLogo(clientId);
       const newClient = { ...form, id: clientId, logoUrl: logoUrl || undefined } as Client;
+      // Auto-generate login credentials if empty
+      if (!newClient.clientLogin) {
+        newClient.clientLogin = form.companyName!.toLowerCase().replace(/\s+/g, '.').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      }
+      if (!newClient.clientPassword) {
+        newClient.clientPassword = Math.random().toString(36).slice(-8);
+      }
       const ok = addClient(newClient);
       if (!ok) { toast.error('Empresa já cadastrada'); return; }
       // Update plan fields after insert
-      await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, client_type: clientType } as any).eq('id', clientId);
+      await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, client_type: clientType, client_login: newClient.clientLogin, client_password: newClient.clientPassword } as any).eq('id', clientId);
       // Create financial contract
       await supabase.from('financial_contracts').insert({
         client_id: clientId,

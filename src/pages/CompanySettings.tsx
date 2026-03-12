@@ -7,14 +7,49 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Clock, Timer, CalendarClock } from 'lucide-react';
+import { Clock, CalendarClock, AlertTriangle, Trash2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const ALL_DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 
+const RESET_TABLES = [
+  'active_recordings', 'billing_messages', 'cash_reserve_movements',
+  'client_endomarketing_contracts', 'client_portal_comments', 'client_portal_contents',
+  'content_tasks', 'delivery_records', 'design_task_history', 'design_tasks',
+  'endomarketing_agendamentos', 'endomarketing_clientes', 'endomarketing_logs',
+  'endomarketing_packages', 'endomarketing_partner_tasks', 'endomarketing_profissionais',
+  'financial_activity_log', 'financial_contracts', 'goals', 'integration_logs',
+  'kanban_tasks', 'notifications', 'onboarding_tasks', 'revenues', 'expenses',
+  'recordings', 'scripts', 'social_media_deliveries', 'social_accounts', 'clients', 'plans', 'partners',
+] as const;
+
 export default function CompanySettings() {
-  const { settings, updateSettings } = useApp();
+  const { settings, updateSettings, currentUser } = useApp();
   const [form, setForm] = useState(settings);
+  const [confirmText, setConfirmText] = useState('');
+  const [resetting, setResetting] = useState(false);
+
+  const isAdmin = currentUser?.role === 'admin';
+
+  const handleSystemReset = async () => {
+    if (confirmText !== 'RESETAR TUDO') return;
+    setResetting(true);
+    try {
+      for (const table of RESET_TABLES) {
+        const { error } = await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (error) console.error(`Erro ao limpar ${table}:`, error.message);
+      }
+      toast.success('Sistema resetado com sucesso. Todos os dados foram removidos.');
+      setConfirmText('');
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err) {
+      toast.error('Erro ao resetar o sistema.');
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const toggleDay = (day: DayOfWeek) => {
     const days = form.workDays.includes(day) ? form.workDays.filter(d => d !== day) : [...form.workDays, day];

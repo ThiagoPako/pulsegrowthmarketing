@@ -30,6 +30,7 @@ export default function CompanySettings() {
   const [form, setForm] = useState(settings);
   const [confirmText, setConfirmText] = useState('');
   const [resetting, setResetting] = useState(false);
+  const [showDangerZone, setShowDangerZone] = useState(false);
 
   const isAdmin = currentUser?.role === 'admin';
 

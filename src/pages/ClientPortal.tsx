@@ -367,7 +367,6 @@ export default function ClientPortal() {
                   setActiveTab('library');
                   handleSelectContent(found);
                 } else {
-                  // Fetch and open
                   supabase.from('client_portal_contents').select('*').eq('id', contentId).single().then(({ data }) => {
                     if (data) {
                       setActiveTab('library');
@@ -380,8 +379,23 @@ export default function ClientPortal() {
                 setActiveTab('criativa');
               }}
             />
+            {isTeamMember && (
+              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/15 border border-violet-500/20">
+                <Shield size={10} className="text-violet-400" />
+                <span className="text-[10px] font-semibold text-violet-300">{profile?.name?.split(' ')[0]}</span>
+              </div>
+            )}
+            {isClientLoggedIn && !isTeamMember && (
+              <button onClick={handleLogout} className="p-2 rounded-full hover:bg-white/10 transition-colors" title="Sair">
+                <LogOut size={14} className="text-white/50" />
+              </button>
+            )}
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: `hsl(${clientColor})` }}>
-              {client.company_name.charAt(0)}
+              {isTeamMember && profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+              ) : (
+                client.company_name.charAt(0)
+              )}
             </div>
           </div>
         </div>

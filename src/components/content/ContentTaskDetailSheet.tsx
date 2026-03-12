@@ -18,7 +18,7 @@ import {
   AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2,
   ArrowRight, Send, Eye, Zap, Flame, MessageSquare, CalendarClock, Trash2, Edit,
   History, Lightbulb, Video, Scissors, ScanEye, Pencil, MailCheck, CalendarCheck, MonitorCheck,
-  Upload, Loader2
+  Upload, Loader2, Rocket
 } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -7,9 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Upload, Film, Image, Palette, Video, Trash2, ExternalLink, Eye, Loader2, Play, Grid3X3 } from 'lucide-react';
+import { Upload, Film, Image, Palette, Video, Trash2, ExternalLink, Eye, Loader2, Play, Grid3X3, Sparkles, Copy, KeyRound } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
+import { motion } from 'framer-motion';
 
 const CONTENT_TYPES = [
   { value: 'reel', label: 'Reel', icon: Film },
@@ -135,6 +137,7 @@ function ContentTile({ content, onDelete }: { content: ContentRow; onDelete: (id
 
 export default function ContentManager() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [contents, setContents] = useState<ContentRow[]>([]);
@@ -149,6 +152,7 @@ export default function ContentManager() {
   const [seasonYear, setSeasonYear] = useState(String(now.getFullYear()));
   const [file, setFile] = useState<File | null>(null);
   const [filterClient, setFilterClient] = useState('all');
+  const [showPortalSelector, setShowPortalSelector] = useState(false);
 
   useEffect(() => { loadData(); }, []);
 
@@ -258,10 +262,112 @@ export default function ContentManager() {
 
   return (
     <div className="space-y-6">
+      {/* Pulse Club Netflix-style portal access */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-r from-violet-600/20 via-purple-600/15 to-fuchsia-600/20 p-6 cursor-pointer group"
+        onClick={() => {
+          // Show client selector
+          setShowPortalSelector(true);
+        }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-r from-violet-600/5 to-fuchsia-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+        <div className="relative flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
+              <Sparkles size={24} className="text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-foreground tracking-tight">Pulse Club</h2>
+              <p className="text-sm text-muted-foreground">Acessar portal do cliente para gerenciar conteúdos e comentar</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={e => {
+                e.stopPropagation();
+                setShowPortalSelector(true);
+              }}
+            >
+              <Play size={14} className="fill-current" /> Acessar Portal
+            </Button>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Portal Client Selector Dialog */}
+      {showPortalSelector && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowPortalSelector(false)}>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-card border border-border rounded-2xl w-full max-w-md max-h-[70vh] overflow-hidden shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="p-5 border-b border-border">
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <Sparkles size={18} className="text-violet-400" />
+                Pulse Club — Selecionar Cliente
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Escolha o portal do cliente que deseja acessar</p>
+            </div>
+            <div className="p-3 max-h-[50vh] overflow-y-auto space-y-1">
+              {clients.map(c => (
+                <button
+                  key={c.id}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-accent/50 transition-colors text-left group"
+                  onClick={() => {
+                    setShowPortalSelector(false);
+                    const slug = encodeURIComponent(c.company_name.replace(/\s+/g, '-').toLowerCase());
+                    navigate(`/portal/${slug}`);
+                  }}
+                >
+                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
+                    {c.company_name.charAt(0)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{c.company_name}</p>
+                  </div>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground"
+                      title="Copiar link de login"
+                      onClick={e => {
+                        e.stopPropagation();
+                        const slug = encodeURIComponent(c.company_name.replace(/\s+/g, '-').toLowerCase());
+                        navigator.clipboard.writeText(`${window.location.origin}/portal-login/${slug}`);
+                        toast.success('Link de login copiado!');
+                      }}
+                    >
+                      <Copy size={14} />
+                    </button>
+                    <button
+                      className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground"
+                      title="Copiar link de registro"
+                      onClick={e => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(`${window.location.origin}/portal-registro/${c.id}`);
+                        toast.success('Link de registro copiado!');
+                      }}
+                    >
+                      <KeyRound size={14} />
+                    </button>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Gerenciador de Conteúdos</h1>
-          <p className="text-sm text-muted-foreground">Envie conteúdos para a área do cliente</p>
+          <p className="text-sm text-muted-foreground">Envie conteúdos para o Pulse Club</p>
         </div>
       </div>
 

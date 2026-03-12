@@ -1359,12 +1359,20 @@ export default function Clients() {
                 <Button variant="ghost" size="icon" className="h-8 w-8" title="Banco de Dados" onClick={() => setArtDbClient(c)}>
                   <Database size={14} />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" title="Portal do Cliente" onClick={() => window.open(`/portal/${encodeURIComponent(c.companyName.replace(/\s+/g, '-').toLowerCase())}`, '_blank')}>
+                <Button variant="ghost" size="icon" className="h-8 w-8" title="Pulse Club" onClick={() => window.open(`/portal/${encodeURIComponent(c.companyName.replace(/\s+/g, '-').toLowerCase())}`, '_blank')}>
                   <MonitorPlay size={14} />
                 </Button>
                 {/* Full actions only for non-designers */}
                 {!isDesignerOnly && (
                   <>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Copiar link de registro do portal"
+                      onClick={() => {
+                        const link = `${window.location.origin}/portal-registro/${c.id}`;
+                        navigator.clipboard.writeText(link);
+                        toast.success('Link de registro do portal copiado!');
+                      }}>
+                      <KeyRound size={14} />
+                    </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" title="Copiar link de onboarding"
                       onClick={() => {
                         const link = `${window.location.origin}/onboarding/${c.id}`;

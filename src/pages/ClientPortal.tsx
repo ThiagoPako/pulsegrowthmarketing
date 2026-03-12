@@ -39,7 +39,9 @@ interface PortalContent {
 }
 interface PortalComment {
   id: string; content_id: string; author_name: string; author_type: string;
+  author_id: string | null;
   message: string; created_at: string;
+  avatar_url?: string | null;
 }
 interface ClientData {
   id: string; company_name: string; logo_url: string | null; color: string;
@@ -139,7 +141,19 @@ export default function ClientPortal() {
 
   const loadComments = async (contentId: string) => {
     const { data } = await supabase.from('client_portal_comments').select('*').eq('content_id', contentId).order('created_at', { ascending: true });
-    if (data) setComments(data as PortalComment[]);
+    if (data) {
+      // Fetch avatars for team comments
+      const teamComments = data.filter((c: any) => c.author_id);
+      const authorIds = [...new Set(teamComments.map((c: any) => c.author_id))];
+      let avatarMap: Record<string, string | null> = {};
+      if (authorIds.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('id, avatar_url').in('id', authorIds);
+        if (profiles) {
+          profiles.forEach((p: any) => { avatarMap[p.id] = p.avatar_url; });
+        }
+      }
+      setComments((data as any[]).map(c => ({ ...c, avatar_url: c.author_id ? avatarMap[c.author_id] : null })) as PortalComment[]);
+    }
   };
 
   const handleSelectContent = (content: PortalContent) => {
@@ -322,7 +336,7 @@ export default function ClientPortal() {
             )}
             <div className="hidden sm:block">
               <h1 className="text-sm font-semibold tracking-tight leading-none">{client.company_name}</h1>
-              <p className="text-[11px] text-white/40 mt-0.5">Content Hub</p>
+              <p className="text-[11px] text-white/40 mt-0.5">Pulse Club</p>
             </div>
           </div>
 
@@ -814,9 +828,20 @@ export default function ClientPortal() {
                         key={comment.id}
                         initial={{ opacity: 0, y: 5 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className={`flex ${comment.author_type === 'client' ? 'justify-end' : 'justify-start'}`}
+                        className={`flex gap-2.5 ${comment.author_type === 'client' ? 'justify-end' : 'justify-start'}`}
                       >
-                        <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${
+                        {comment.author_type === 'team' && (
+                          <div className="shrink-0 mt-1">
+                            {comment.avatar_url ? (
+                              <img src={comment.avatar_url} alt={comment.author_name} className="w-7 h-7 rounded-full object-cover ring-1 ring-white/10" />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ background: `hsl(${clientColor})` }}>
+                                {comment.author_name.charAt(0)}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        <div className={`max-w-[75%] p-3 rounded-2xl text-sm ${
                           comment.author_type === 'client'
                             ? 'bg-white/[0.08] rounded-br-md'
                             : 'rounded-bl-md'
@@ -829,6 +854,13 @@ export default function ClientPortal() {
                           </div>
                           <p className="text-white/80 leading-relaxed">{comment.message}</p>
                         </div>
+                        {comment.author_type === 'client' && (
+                          <div className="shrink-0 mt-1">
+                            <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-white/[0.1]">
+                              {comment.author_name.charAt(0)}
+                            </div>
+                          </div>
+                        )}
                       </motion.div>
                     ))}
                     <div ref={commentsEndRef} />

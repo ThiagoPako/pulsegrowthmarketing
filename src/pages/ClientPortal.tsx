@@ -50,6 +50,8 @@ type TabView = 'library' | 'metrics' | 'criativa';
 
 export default function ClientPortal() {
   const { clientId: paramSlug } = useParams<{ clientId: string }>();
+  const navigate = useNavigate();
+  const { user, profile } = useAuth();
   const [client, setClient] = useState<ClientData | null>(null);
   const [contents, setContents] = useState<PortalContent[]>([]);
   const [selectedContent, setSelectedContent] = useState<PortalContent | null>(null);
@@ -65,6 +67,26 @@ export default function ClientPortal() {
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
   const commentsEndRef = useRef<HTMLDivElement>(null);
+
+  // Auth state: team member or client login
+  const isTeamMember = !!user && !!profile;
+  const isClientLoggedIn = !!sessionStorage.getItem('portal_client_id');
+  const isAuthenticated = isTeamMember || isClientLoggedIn;
+  
+  const getCommentAuthor = () => {
+    if (isTeamMember && profile) {
+      return { name: profile.display_name || profile.name, type: 'team', id: profile.id };
+    }
+    return { name: client?.company_name || 'Cliente', type: 'client', id: null };
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('portal_client_id');
+    sessionStorage.removeItem('portal_client_name');
+    sessionStorage.removeItem('portal_auth_type');
+    navigate(`/portal-login/${paramSlug}`);
+  };
+
 
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);

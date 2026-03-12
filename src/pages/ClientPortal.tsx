@@ -321,20 +321,40 @@ export default function ClientPortal() {
                 Biblioteca
               </button>
               <button
+                onClick={() => setActiveTab('criativa')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'criativa' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+              >
+                Zona Criativa
+              </button>
+              <button
                 onClick={() => setActiveTab('metrics')}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'metrics' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
               >
                 Métricas
               </button>
             </div>
-            <button className="p-2 rounded-full hover:bg-white/10 transition-colors relative">
-              <Bell size={16} className="text-white/60" />
-              {pendingCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center" style={{ background: `hsl(${clientColor})` }}>
-                  {pendingCount}
-                </span>
-              )}
-            </button>
+            <PortalNotifications
+              clientId={client.id}
+              clientColor={clientColor}
+              onSelectContent={(contentId) => {
+                const found = contents.find(c => c.id === contentId);
+                if (found) {
+                  setActiveTab('library');
+                  handleSelectContent(found);
+                } else {
+                  // Fetch and open
+                  supabase.from('client_portal_contents').select('*').eq('id', contentId).single().then(({ data }) => {
+                    if (data) {
+                      setActiveTab('library');
+                      handleSelectContent(data as PortalContent);
+                    }
+                  });
+                }
+              }}
+              onOpenScript={() => {
+                setActiveTab('criativa');
+              }}
+            />
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: `hsl(${clientColor})` }}>
               {client.company_name.charAt(0)}
             </div>

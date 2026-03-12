@@ -757,20 +757,24 @@ export default function Clients() {
         {/* Monthly recordings quantity */}
         <div className="space-y-2">
           <Label>Gravações por mês *</Label>
+          {planId && (
+            <p className="text-xs text-primary flex items-center gap-1"><Info size={12} /> Definido pelo plano selecionado</p>
+          )}
           <div className="grid grid-cols-4 gap-2">
             {[1, 2, 3, 4].map(n => (
               <button
                 key={n}
                 type="button"
-                onClick={() => setForm(prev => ({ ...prev, monthlyRecordings: n }))}
+                onClick={() => !planId && setForm(prev => ({ ...prev, monthlyRecordings: n }))}
+                disabled={!!planId}
                 className={`p-3 rounded-xl border-2 text-center transition-all ${
                   form.monthlyRecordings === n
                     ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
                     : 'border-border hover:border-primary/40 hover:bg-primary/5'
-                }`}
+                } ${planId ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
                 <span className="text-lg font-bold block">{n}x</span>
-                <span className="text-[10px] text-muted-foreground block">{n === 1 ? 'por mês' : 'por mês'}</span>
+                <span className="text-[10px] text-muted-foreground block">por mês</span>
               </button>
             ))}
           </div>

@@ -48,6 +48,82 @@ const KANBAN_COLUMNS = [
 
 const PLATFORMS = ['Instagram', 'TikTok', 'YouTube', 'Facebook', 'LinkedIn'];
 
+// Rocket Launch Button with floating animation
+const RocketLaunchButton = ({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) => {
+  const [rockets, setRockets] = useState<{ id: number; x: number; y: number }[]>([]);
+
+  const handleClick = () => {
+    if (disabled) return;
+    const newRockets = Array.from({ length: 6 }, (_, i) => ({
+      id: Date.now() + i,
+      x: Math.random() * 80 + 10,
+      y: Math.random() * 20 + 40,
+    }));
+    setRockets(prev => [...prev, ...newRockets]);
+    setTimeout(() => {
+      setRockets(prev => prev.filter(r => !newRockets.find(nr => nr.id === r.id)));
+    }, 1800);
+    onClick();
+  };
+
+  return (
+    <>
+      <AnimatePresence>
+        {rockets.map(r => (
+          <motion.div
+            key={r.id}
+            initial={{ opacity: 1, left: `${r.x}%`, top: `${r.y}%`, scale: 1, rotate: -15 }}
+            animate={{
+              opacity: [1, 1, 0],
+              top: '-10%',
+              left: `${r.x + (Math.random() - 0.5) * 30}%`,
+              scale: [1, 1.4, 0.5],
+              rotate: [-15, -30 + Math.random() * 20, -45],
+            }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1.5 + Math.random() * 0.5, ease: 'easeOut' }}
+            className="fixed z-[9999] pointer-events-none text-3xl"
+          >
+            🚀
+          </motion.div>
+        ))}
+      </AnimatePresence>
+
+      <motion.button
+        whileHover={disabled ? {} : { scale: 1.03, boxShadow: '0 0 20px hsl(var(--primary) / 0.4)' }}
+        whileTap={disabled ? {} : { scale: 0.97 }}
+        onClick={handleClick}
+        disabled={disabled}
+        className={`
+          w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm
+          transition-all duration-300 relative overflow-hidden group
+          ${disabled
+            ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-60'
+            : 'bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl cursor-pointer'
+          }
+        `}
+      >
+        {!disabled && (
+          <motion.div
+            className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12"
+            animate={{ x: ['-200%', '200%'] }}
+            transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+          />
+        )}
+        <motion.span
+          animate={disabled ? {} : { y: [0, -3, 0], rotate: [0, -10, 0] }}
+          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+          className="text-lg relative z-10"
+        >
+          🚀
+        </motion.span>
+        <span className="relative z-10">Finalizar Etapa → {label}</span>
+        <ArrowRight size={16} className="ml-auto relative z-10 group-hover:translate-x-1 transition-transform" />
+      </motion.button>
+    </>
+  );
+};
+
 interface ContentTask {
   id: string;
   client_id: string;

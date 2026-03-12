@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
 
     // Use service role to read config (bypasses RLS)
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
-    const { data: configData } = await supabaseAdmin.from('whatsapp_config').select('api_token').limit(1).single()
+    const { data: configData } = await supabaseAdmin.from('whatsapp_config').select('api_token, default_user_id, default_queue_id, send_signature, close_ticket').limit(1).single()
     
     const WHATSAPP_TOKEN = configData?.api_token
     if (!WHATSAPP_TOKEN) {
@@ -43,6 +43,10 @@ Deno.serve(async (req) => {
 
     const body = await req.json()
     const { action, number, message, userId: apiUserId, queueId, sendSignature, closeTicket, clientId, triggerType, mediaUrl, mediaFileName } = body
+    const effectiveUserId = apiUserId || configData?.default_user_id || ''
+    const effectiveQueueId = queueId || configData?.default_queue_id || ''
+    const effectiveSignature = sendSignature !== undefined ? sendSignature : (configData?.send_signature || false)
+    const effectiveCloseTicket = closeTicket !== undefined ? closeTicket : (configData?.close_ticket || false)
 
     // Test connection mode
     if (action === 'test_connection') {
@@ -92,10 +96,10 @@ Deno.serve(async (req) => {
       const formData = new FormData()
       formData.append('number', cleanNumber)
       formData.append('body', message)
-      formData.append('userId', apiUserId || '')
-      formData.append('queueId', queueId || '')
-      formData.append('sendSignature', String(sendSignature || false))
-      formData.append('closeTicket', String(closeTicket || false))
+      formData.append('userId', effectiveUserId)
+      formData.append('queueId', effectiveQueueId)
+      formData.append('sendSignature', String(effectiveSignature))
+      formData.append('closeTicket', String(effectiveCloseTicket))
       formData.append('medias', fileBlob, fileName)
 
       apiResponse = await fetch(WHATSAPP_API_URL, {
@@ -113,10 +117,10 @@ Deno.serve(async (req) => {
       const apiBody = {
         number: cleanNumber,
         body: message,
-        userId: apiUserId || '',
-        queueId: queueId || '',
-        sendSignature: sendSignature || false,
-        closeTicket: closeTicket || false,
+        userId: effectiveUserId,
+        queueId: effectiveQueueId,
+        sendSignature: effectiveSignature,
+        closeTicket: effectiveCloseTicket,
       }
 
       apiResponse = await fetch(WHATSAPP_API_URL, {

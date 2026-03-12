@@ -613,7 +613,8 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     if (!client?.whatsapp) { toast.error('Cliente sem WhatsApp'); return; }
     setSendingWhatsApp(true);
     try {
-      const portalUrl = `${window.location.origin}/portal/${client.id}`;
+      const portalSlug = encodeURIComponent(client.companyName.replace(/\s+/g, '-').toLowerCase());
+      const portalUrl = `${window.location.origin}/portal/${portalSlug}`;
       const msg = `Olá, ${client.responsiblePerson || client.companyName}! 😊\n\nSeu conteúdo "${task.title}" ficou pronto e está disponível para aprovação! 🎬\n\n📱 Acesse a Área do Cliente Pulse para assistir e aprovar:\n${portalUrl}\n\nLá você pode assistir ao vídeo, aprovar ou solicitar ajustes diretamente.\n\nEquipe Pulse Growth Marketing 🚀`;
       const result = await sendWhatsAppMessage({
         number: client.whatsapp,

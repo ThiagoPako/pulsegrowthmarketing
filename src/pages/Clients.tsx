@@ -1352,7 +1352,7 @@ export default function Clients() {
                 <Button variant="ghost" size="icon" className="h-8 w-8" title="Banco de Dados" onClick={() => setArtDbClient(c)}>
                   <Database size={14} />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" title="Portal do Cliente" onClick={() => window.open(`/portal/${c.id}`, '_blank')}>
+                <Button variant="ghost" size="icon" className="h-8 w-8" title="Portal do Cliente" onClick={() => window.open(`/portal/${encodeURIComponent(c.companyName.replace(/\s+/g, '-').toLowerCase())}`, '_blank')}>
                   <MonitorPlay size={14} />
                 </Button>
                 {/* Full actions only for non-designers */}

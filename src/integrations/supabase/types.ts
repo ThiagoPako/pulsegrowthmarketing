@@ -1713,6 +1713,7 @@ export type Database = {
       }
       plans: {
         Row: {
+          accepts_extra_content: boolean
           arts_qty: number
           created_at: string
           creatives_qty: number
@@ -1733,6 +1734,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          accepts_extra_content?: boolean
           arts_qty?: number
           created_at?: string
           creatives_qty?: number
@@ -1753,6 +1755,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          accepts_extra_content?: boolean
           arts_qty?: number
           created_at?: string
           creatives_qty?: number

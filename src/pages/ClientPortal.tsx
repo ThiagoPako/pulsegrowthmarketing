@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import PortalNotifications from '@/components/portal/PortalNotifications';
 import ZonaCriativa from '@/components/portal/ZonaCriativa';
+import PortalTutorial from '@/components/portal/PortalTutorial';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
   reel: 'Reel', criativo: 'Criativo', institucional: 'Institucional', anuncio: 'Anúncio', arte: 'Arte',
@@ -379,6 +380,7 @@ export default function ClientPortal() {
                 setActiveTab('criativa');
               }}
             />
+            <PortalTutorial clientColor={clientColor} />
             {isTeamMember && (
               <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/15 border border-violet-500/20">
                 <Shield size={10} className="text-violet-400" />

@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
     if (client.plan_id) {
       const { data: planData } = await supabase
         .from('plans')
-        .select('id, name, recording_sessions')
+        .select('id, name, recording_sessions, accepts_extra_content')
         .eq('id', client.plan_id)
         .single()
       plan = planData

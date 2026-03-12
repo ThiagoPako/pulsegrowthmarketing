@@ -73,7 +73,7 @@ export default function ClientOnboarding() {
   const [videomakers, setVideomakers] = useState<Videomaker[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [existingClients, setExistingClients] = useState<ExistingClient[]>([]);
-  const [plan, setPlan] = useState<{ id: string; name: string; recording_sessions: number } | null>(null);
+  const [plan, setPlan] = useState<{ id: string; name: string; recording_sessions: number; accepts_extra_content?: boolean } | null>(null);
 
   // Form state
   const [selectedVm, setSelectedVm] = useState('');
@@ -152,7 +152,12 @@ export default function ClientOnboarding() {
         if (data.client.fixed_time) setFixedTime(data.client.fixed_time);
         if (data.client.backup_day) setBackupDay(data.client.backup_day);
         if (data.client.backup_time) setBackupTime(data.client.backup_time);
-        if (data.client.accepts_extra) setAcceptsExtra(data.client.accepts_extra);
+        // Sync accepts_extra from plan if available
+        if (data.plan?.accepts_extra_content !== undefined) {
+          setAcceptsExtra(data.plan.accepts_extra_content);
+        } else if (data.client.accepts_extra) {
+          setAcceptsExtra(data.client.accepts_extra);
+        }
         if (data.client.extra_content_types?.length) setExtraTypes(data.client.extra_content_types);
         if (data.client.extra_client_appears) setExtraAppears(data.client.extra_client_appears);
       } catch (err) {

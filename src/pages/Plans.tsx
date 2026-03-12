@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Package, Film, Image, BookImage, Palette, Handshake } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Film, Image, BookImage, Palette, Handshake, Sparkles } from 'lucide-react';
 
 interface Partner {
   id: string;
@@ -31,6 +31,7 @@ interface Plan {
   recording_sessions: number;
   recording_hours: number;
   extra_content_allowed: number;
+  accepts_extra_content: boolean;
   price: number;
   periodicity: string;
   status: string;
@@ -48,8 +49,8 @@ const PERIODICITY_LABELS: Record<string, string> = {
 
 const emptyPlan = (): Partial<Plan> => ({
   name: '', description: '', reels_qty: 0, creatives_qty: 0, stories_qty: 0, arts_qty: 0,
-  recording_sessions: 0, recording_hours: 0, extra_content_allowed: 0, price: 0,
-  periodicity: 'mensal', status: 'ativo', is_partner_plan: false, partner_id: null, partner_cost: 0,
+  recording_sessions: 0, recording_hours: 0, extra_content_allowed: 0, accepts_extra_content: false,
+  price: 0, periodicity: 'mensal', status: 'ativo', is_partner_plan: false, partner_id: null, partner_cost: 0,
 });
 
 export default function Plans() {
@@ -103,7 +104,9 @@ export default function Plans() {
       name: form.name, description: form.description, reels_qty: form.reels_qty,
       creatives_qty: form.creatives_qty, stories_qty: form.stories_qty, arts_qty: form.arts_qty,
       recording_sessions: form.recording_sessions, recording_hours: form.recording_hours,
-      extra_content_allowed: form.extra_content_allowed, price: form.price,
+      extra_content_allowed: form.extra_content_allowed,
+      accepts_extra_content: form.accepts_extra_content || false,
+      price: form.price,
       periodicity: form.periodicity, status: form.status,
       is_partner_plan: form.is_partner_plan || false,
       partner_id: form.is_partner_plan ? form.partner_id : null,
@@ -216,7 +219,12 @@ export default function Plans() {
                   {plan.arts_qty > 0 && <div className="flex items-center gap-1.5"><Palette size={12} className="text-primary" /><span>{plan.arts_qty} Artes</span></div>}
                   <div className="flex items-center gap-1.5"><Film size={12} className="text-primary" /><span>{plan.recording_sessions} gravações/mês</span></div>
                   <div className="flex items-center gap-1.5"><span className="text-muted-foreground">{plan.recording_hours}h gravação</span></div>
-                  {plan.extra_content_allowed > 0 && <div className="col-span-2 text-muted-foreground">+{plan.extra_content_allowed} extras permitidos</div>}
+                   {plan.extra_content_allowed > 0 && <div className="col-span-2 text-muted-foreground">+{plan.extra_content_allowed} extras permitidos</div>}
+                   {plan.accepts_extra_content && (
+                     <div className="col-span-2 flex items-center gap-1.5 text-emerald-600 font-medium">
+                       <Sparkles size={12} /> Conteúdo extra incluso
+                     </div>
+                   )}
                 </div>
               </CardContent>
             </Card>
@@ -264,6 +272,7 @@ export default function Plans() {
                 <Label>Horas de gravação</Label>
                 <Input type="number" min={0} step={0.5} value={form.recording_hours} onChange={e => setField('recording_hours', parseFloat(e.target.value) || 0)} />
               </div>
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Extras permitidos</Label>
                 <Input type="number" min={0} value={form.extra_content_allowed} onChange={e => setField('extra_content_allowed', parseInt(e.target.value) || 0)} />
@@ -272,6 +281,15 @@ export default function Plans() {
                 <Label>Valor do Plano (R$)</Label>
                 <Input type="number" min={0} step={0.01} value={form.price} onChange={e => setField('price', parseFloat(e.target.value) || 0)} />
               </div>
+            </div>
+
+            <div className="flex items-center gap-3 p-3 rounded-xl border border-border">
+              <Switch checked={form.accepts_extra_content || false} onCheckedChange={v => setField('accepts_extra_content', v)} />
+              <div>
+                <Label className="font-medium flex items-center gap-2"><Sparkles size={14} className="text-primary" /> Cliente aceita conteúdo extra</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">Permite envio de videomaker extra em horários vagos</p>
+              </div>
+            </div>
             </div>
 
             {/* Partner section */}

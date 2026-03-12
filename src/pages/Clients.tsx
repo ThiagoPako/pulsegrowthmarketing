@@ -94,7 +94,7 @@ export default function Clients() {
   const [artDbClient, setArtDbClient] = useState<Client | null>(null);
   
   // Plan-related state
-  const [plans, setPlans] = useState<{ id: string; name: string; status: string; reels_qty: number; creatives_qty: number; stories_qty: number; recording_sessions: number }[]>([]);
+  const [plans, setPlans] = useState<{ id: string; name: string; status: string; reels_qty: number; creatives_qty: number; stories_qty: number; recording_sessions: number; accepts_extra_content: boolean }[]>([]);
   const [planId, setPlanId] = useState<string | null>(null);
   const [contractStartDate, setContractStartDate] = useState('');
   const [autoRenewal, setAutoRenewal] = useState(false);
@@ -109,7 +109,7 @@ export default function Clients() {
   const [existingSocialAccounts, setExistingSocialAccounts] = useState<any[]>([]);
 
   useEffect(() => {
-    supabase.from('plans').select('id, name, status, reels_qty, creatives_qty, stories_qty, recording_sessions').eq('status', 'ativo').then(({ data }) => {
+    supabase.from('plans').select('id, name, status, reels_qty, creatives_qty, stories_qty, recording_sessions, accepts_extra_content').eq('status', 'ativo').then(({ data }) => {
       if (data) setPlans(data as any[]);
     });
   }, []);
@@ -1144,7 +1144,7 @@ export default function Clients() {
                     const weeklyStories = Math.ceil(selectedPlan.stories_qty / 4);
                     const weeklyGoal = weeklyReels + weeklyCreatives + weeklyStories + 1;
                     const monthlyRecordings = selectedPlan.recording_sessions || 4;
-                    setForm(prev => ({ ...prev, weeklyReels: weeklyReels + 1, weeklyCreatives: weeklyCreatives + 1, weeklyStories: weeklyStories + 1, weeklyGoal, monthlyRecordings }));
+                    setForm(prev => ({ ...prev, weeklyReels: weeklyReels + 1, weeklyCreatives: weeklyCreatives + 1, weeklyStories: weeklyStories + 1, weeklyGoal, monthlyRecordings, acceptsExtra: selectedPlan.accepts_extra_content }));
                   }
                 }
               }}>

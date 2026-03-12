@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Package, Film, Image, BookImage, Palette, Handshake } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Film, Image, BookImage, Palette, Handshake, Sparkles } from 'lucide-react';
 
 interface Partner {
   id: string;

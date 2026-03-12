@@ -272,6 +272,7 @@ export default function Plans() {
                 <Label>Horas de gravação</Label>
                 <Input type="number" min={0} step={0.5} value={form.recording_hours} onChange={e => setField('recording_hours', parseFloat(e.target.value) || 0)} />
               </div>
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Extras permitidos</Label>
                 <Input type="number" min={0} value={form.extra_content_allowed} onChange={e => setField('extra_content_allowed', parseInt(e.target.value) || 0)} />
@@ -280,6 +281,15 @@ export default function Plans() {
                 <Label>Valor do Plano (R$)</Label>
                 <Input type="number" min={0} step={0.01} value={form.price} onChange={e => setField('price', parseFloat(e.target.value) || 0)} />
               </div>
+            </div>
+
+            <div className="flex items-center gap-3 p-3 rounded-xl border border-border">
+              <Switch checked={form.accepts_extra_content || false} onCheckedChange={v => setField('accepts_extra_content', v)} />
+              <div>
+                <Label className="font-medium flex items-center gap-2"><Sparkles size={14} className="text-primary" /> Cliente aceita conteúdo extra</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">Permite envio de videomaker extra em horários vagos</p>
+              </div>
+            </div>
             </div>
 
             {/* Partner section */}

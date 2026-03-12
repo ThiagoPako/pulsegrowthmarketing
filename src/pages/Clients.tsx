@@ -1092,6 +1092,7 @@ export default function Clients() {
               <p className="font-semibold">Metas calculadas automaticamente pelo plano</p>
               <p className="text-muted-foreground">
                 Entrega mínima do plano: {Math.ceil(sp.reels_qty / 4)} reels, {Math.ceil(sp.creatives_qty / 4)} criativos, {Math.ceil(sp.stories_qty / 4)} stories/semana.
+                Gravações mensais: <strong>{sp.recording_sessions || 4}x</strong>.
                 A meta semanal é sempre <strong>+1 a mais</strong> que o mínimo para adiantar conteúdos.
               </p>
             </div>

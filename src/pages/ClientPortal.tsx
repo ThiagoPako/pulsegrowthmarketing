@@ -11,6 +11,8 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import PortalNotifications from '@/components/portal/PortalNotifications';
+import ZonaCriativa from '@/components/portal/ZonaCriativa';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
   reel: 'Reel', criativo: 'Criativo', institucional: 'Institucional', anuncio: 'Anúncio', arte: 'Arte',
@@ -43,7 +45,7 @@ interface ClientData {
   monthly_recordings: number; plan_id: string | null;
 }
 
-type TabView = 'library' | 'metrics';
+type TabView = 'library' | 'metrics' | 'criativa';
 
 export default function ClientPortal() {
   const { clientId: paramSlug } = useParams<{ clientId: string }>();
@@ -319,20 +321,40 @@ export default function ClientPortal() {
                 Biblioteca
               </button>
               <button
+                onClick={() => setActiveTab('criativa')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'criativa' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+              >
+                Zona Criativa
+              </button>
+              <button
                 onClick={() => setActiveTab('metrics')}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'metrics' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
               >
                 Métricas
               </button>
             </div>
-            <button className="p-2 rounded-full hover:bg-white/10 transition-colors relative">
-              <Bell size={16} className="text-white/60" />
-              {pendingCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center" style={{ background: `hsl(${clientColor})` }}>
-                  {pendingCount}
-                </span>
-              )}
-            </button>
+            <PortalNotifications
+              clientId={client.id}
+              clientColor={clientColor}
+              onSelectContent={(contentId) => {
+                const found = contents.find(c => c.id === contentId);
+                if (found) {
+                  setActiveTab('library');
+                  handleSelectContent(found);
+                } else {
+                  // Fetch and open
+                  supabase.from('client_portal_contents').select('*').eq('id', contentId).single().then(({ data }) => {
+                    if (data) {
+                      setActiveTab('library');
+                      handleSelectContent(data as PortalContent);
+                    }
+                  });
+                }
+              }}
+              onOpenScript={() => {
+                setActiveTab('criativa');
+              }}
+            />
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: `hsl(${clientColor})` }}>
               {client.company_name.charAt(0)}
             </div>
@@ -344,6 +366,9 @@ export default function ClientPortal() {
       <div className="sm:hidden flex border-b border-white/[0.06]">
         <button onClick={() => setActiveTab('library')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'library' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'library' ? { borderColor: `hsl(${clientColor})` } : {}}>
           Biblioteca
+        </button>
+        <button onClick={() => setActiveTab('criativa')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'criativa' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'criativa' ? { borderColor: `hsl(${clientColor})` } : {}}>
+          Zona Criativa
         </button>
         <button onClick={() => setActiveTab('metrics')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'metrics' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'metrics' ? { borderColor: `hsl(${clientColor})` } : {}}>
           Métricas
@@ -459,6 +484,8 @@ export default function ClientPortal() {
               )}
             </div>
           </motion.div>
+        ) : activeTab === 'criativa' ? (
+          <ZonaCriativa clientId={client.id} clientColor={clientColor} />
         ) : (
           /* ── METRICS TAB ── */
           <motion.div key="metrics" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8 pb-20 space-y-8">

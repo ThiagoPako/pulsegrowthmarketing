@@ -405,6 +405,19 @@ export function useSupabaseData() {
   const addScript = useCallback(async (script: Script) => {
     await supabase.from('scripts').insert(scriptToRow(script) as any);
     setScripts(prev => [...prev, script]);
+
+    // Create portal notification for the client
+    try {
+      await supabase.from('client_portal_notifications').insert({
+        client_id: script.clientId,
+        title: '📝 Novo roteiro criado',
+        message: `O roteiro "${script.title}" foi criado. Confira na Zona Criativa!`,
+        type: 'new_script',
+        link_script_id: script.id,
+      } as any);
+    } catch (err) {
+      console.error('Portal script notification error:', err);
+    }
   }, []);
 
   const updateScript = useCallback(async (script: Script) => {

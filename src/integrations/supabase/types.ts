@@ -304,6 +304,64 @@ export type Database = {
           },
         ]
       }
+      client_portal_notifications: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          link_content_id: string | null
+          link_script_id: string | null
+          message: string
+          read: boolean
+          title: string
+          type: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          link_content_id?: string | null
+          link_script_id?: string | null
+          message?: string
+          read?: boolean
+          title?: string
+          type?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          link_content_id?: string | null
+          link_script_id?: string | null
+          message?: string
+          read?: boolean
+          title?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_portal_notifications_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_portal_notifications_link_content_id_fkey"
+            columns: ["link_content_id"]
+            isOneToOne: false
+            referencedRelation: "client_portal_contents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_portal_notifications_link_script_id_fkey"
+            columns: ["link_script_id"]
+            isOneToOne: false
+            referencedRelation: "scripts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           accepts_extra: boolean

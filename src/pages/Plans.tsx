@@ -219,7 +219,12 @@ export default function Plans() {
                   {plan.arts_qty > 0 && <div className="flex items-center gap-1.5"><Palette size={12} className="text-primary" /><span>{plan.arts_qty} Artes</span></div>}
                   <div className="flex items-center gap-1.5"><Film size={12} className="text-primary" /><span>{plan.recording_sessions} gravações/mês</span></div>
                   <div className="flex items-center gap-1.5"><span className="text-muted-foreground">{plan.recording_hours}h gravação</span></div>
-                  {plan.extra_content_allowed > 0 && <div className="col-span-2 text-muted-foreground">+{plan.extra_content_allowed} extras permitidos</div>}
+                   {plan.extra_content_allowed > 0 && <div className="col-span-2 text-muted-foreground">+{plan.extra_content_allowed} extras permitidos</div>}
+                   {plan.accepts_extra_content && (
+                     <div className="col-span-2 flex items-center gap-1.5 text-emerald-600 font-medium">
+                       <Sparkles size={12} /> Conteúdo extra incluso
+                     </div>
+                   )}
                 </div>
               </CardContent>
             </Card>

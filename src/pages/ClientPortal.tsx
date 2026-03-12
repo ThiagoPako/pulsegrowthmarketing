@@ -177,7 +177,7 @@ export default function ClientPortal() {
   };
 
   const handleRequestAdjustment = async () => {
-    if (!selectedContent || !adjustmentNote.trim()) return;
+    if (!selectedContent || !adjustmentNote.trim() || !client) return;
     const author = getCommentAuthor();
     await Promise.all([
       supabase.from('client_portal_contents').update({ status: 'ajuste_solicitado' }).eq('id', selectedContent.id),
@@ -189,6 +189,8 @@ export default function ClientPortal() {
     setAdjustmentNote('');
     loadComments(selectedContent.id);
     toast.success('Ajuste solicitado com sucesso!');
+    // Sync with internal system
+    syncPortalAdjustment(selectedContent.id, client.id, selectedContent.title, adjustmentNote).catch(console.error);
   };
 
   const handleSendComment = async () => {

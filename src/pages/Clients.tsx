@@ -460,7 +460,7 @@ export default function Clients() {
           </div>
           <div className="text-xs text-muted-foreground">
             <p>Clique para adicionar o logo do cliente.</p>
-            <p>PNG, JPG ou SVG (máx. 2MB)</p>
+            <p>PNG, JPG ou SVG</p>
           </div>
           <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoSelect} />
         </div>

@@ -380,6 +380,7 @@ export default function ClientPortal() {
                 setActiveTab('criativa');
               }}
             />
+            <PortalTutorial clientColor={clientColor} />
             {isTeamMember && (
               <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/15 border border-violet-500/20">
                 <Shield size={10} className="text-violet-400" />

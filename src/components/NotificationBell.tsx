@@ -60,14 +60,14 @@ export default function NotificationBell() {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const handleClick = async (n: Notification) => {
+  const handleClick = (n: Notification) => {
     if (!n.read) {
-      await supabase.from('notifications').update({ read: true } as any).eq('id', n.id);
       setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x));
+      supabase.from('notifications').update({ read: true } as any).eq('id', n.id).then();
     }
+    setOpen(false);
     if (n.link) {
-      setOpen(false);
-      navigate(n.link);
+      setTimeout(() => navigate(n.link!), 100);
     }
   };
 

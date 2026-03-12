@@ -214,7 +214,7 @@ export default function Plans() {
                   <div className="flex items-center gap-1.5"><Image size={12} className="text-primary" /><span>{plan.creatives_qty} Criativos</span></div>
                   {plan.stories_qty > 0 && <div className="flex items-center gap-1.5"><BookImage size={12} className="text-primary" /><span>{plan.stories_qty} Stories</span></div>}
                   {plan.arts_qty > 0 && <div className="flex items-center gap-1.5"><Palette size={12} className="text-primary" /><span>{plan.arts_qty} Artes</span></div>}
-                  <div className="flex items-center gap-1.5"><span className="text-muted-foreground">{plan.recording_sessions} gravações</span></div>
+                  <div className="flex items-center gap-1.5"><Film size={12} className="text-primary" /><span>{plan.recording_sessions} gravações/mês</span></div>
                   <div className="flex items-center gap-1.5"><span className="text-muted-foreground">{plan.recording_hours}h gravação</span></div>
                   {plan.extra_content_allowed > 0 && <div className="col-span-2 text-muted-foreground">+{plan.extra_content_allowed} extras permitidos</div>}
                 </div>

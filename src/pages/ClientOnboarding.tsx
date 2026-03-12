@@ -73,7 +73,7 @@ export default function ClientOnboarding() {
   const [videomakers, setVideomakers] = useState<Videomaker[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [existingClients, setExistingClients] = useState<ExistingClient[]>([]);
-  const [plan, setPlan] = useState<{ id: string; name: string; recording_sessions: number } | null>(null);
+  const [plan, setPlan] = useState<{ id: string; name: string; recording_sessions: number; accepts_extra_content?: boolean } | null>(null);
 
   // Form state
   const [selectedVm, setSelectedVm] = useState('');

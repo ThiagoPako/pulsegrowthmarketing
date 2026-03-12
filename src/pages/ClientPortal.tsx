@@ -167,11 +167,13 @@ export default function ClientPortal() {
   };
 
   const handleApprove = async () => {
-    if (!selectedContent) return;
+    if (!selectedContent || !client) return;
     await supabase.from('client_portal_contents').update({ status: 'aprovado', approved_at: new Date().toISOString() }).eq('id', selectedContent.id);
     setContents(prev => prev.map(c => c.id === selectedContent.id ? { ...c, status: 'aprovado', approved_at: new Date().toISOString() } : c));
     setSelectedContent(prev => prev ? { ...prev, status: 'aprovado' } : null);
     toast.success('Conteúdo aprovado com sucesso!');
+    // Sync with internal system
+    syncPortalApproval(selectedContent.id, client.id, selectedContent.title).catch(console.error);
   };
 
   const handleRequestAdjustment = async () => {

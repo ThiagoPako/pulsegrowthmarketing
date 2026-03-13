@@ -198,11 +198,12 @@ export default function Clients() {
       setForm(client);
       setLogoPreview(client.logoUrl || null);
       // Load plan data for editing
-      supabase.from('clients').select('plan_id, contract_start_date, auto_renewal').eq('id', client.id).single().then(({ data }) => {
+      supabase.from('clients').select('plan_id, contract_start_date, auto_renewal, contract_duration_months').eq('id', client.id).single().then(({ data }) => {
         if (data) {
           setPlanId((data as any).plan_id || null);
           setContractStartDate((data as any).contract_start_date || '');
           setAutoRenewal((data as any).auto_renewal || false);
+          setContractDurationMonths((data as any).contract_duration_months || 12);
         }
       });
       // Load financial contract for editing

@@ -314,7 +314,7 @@ export default function Clients() {
       const ok = addClient(newClient);
       if (!ok) { toast.error('Empresa já cadastrada'); return; }
       // Update plan fields after insert
-      await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, client_type: clientType, client_login: newClient.clientLogin, client_password: newClient.clientPassword } as any).eq('id', clientId);
+      await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, contract_duration_months: contractDurationMonths, client_type: clientType, client_login: newClient.clientLogin, client_password: newClient.clientPassword } as any).eq('id', clientId);
       // Create financial contract
       await supabase.from('financial_contracts').insert({
         client_id: clientId,

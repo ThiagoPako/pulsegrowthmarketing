@@ -42,10 +42,34 @@ export default function Dashboard() {
   const [deliveryRecords, setDeliveryRecords] = useState<any[]>([]);
   const [liveEditorTasks, setLiveEditorTasks] = useState<LiveEditorTask[]>([]);
   const [endoMetrics, setEndoMetrics] = useState({ totalClients: 0, revenue: 0, costs: 0, profit: 0, margin: 0, topClients: [] as { name: string; profit: number }[] });
+  const [contractAlerts, setContractAlerts] = useState<{ clientName: string; daysLeft: number; endDate: string }[]>([]);
 
   useEffect(() => { getMessageStats().then(setWaStats); }, []);
   useEffect(() => {
     supabase.from('delivery_records').select('*').then(({ data }) => { if (data) setDeliveryRecords(data); });
+  }, []);
+
+  // Fetch contract expiration alerts (60 and 30 days)
+  useEffect(() => {
+    const fetchContractAlerts = async () => {
+      const { data } = await supabase.from('clients').select('company_name, contract_start_date, contract_duration_months').not('contract_start_date', 'is', null);
+      if (!data) return;
+      const now = new Date();
+      const alerts: { clientName: string; daysLeft: number; endDate: string }[] = [];
+      for (const c of data) {
+        if (!c.contract_start_date || !(c as any).contract_duration_months) continue;
+        const start = new Date(c.contract_start_date);
+        const endDate = new Date(start);
+        endDate.setMonth(endDate.getMonth() + (c as any).contract_duration_months);
+        const diffMs = endDate.getTime() - now.getTime();
+        const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        if (daysLeft <= 60 && daysLeft > 0) {
+          alerts.push({ clientName: c.company_name, daysLeft, endDate: format(endDate, 'dd/MM/yyyy') });
+        }
+      }
+      setContractAlerts(alerts.sort((a, b) => a.daysLeft - b.daysLeft));
+    };
+    fetchContractAlerts();
   }, []);
 
   // Fetch editor tasks in active editing

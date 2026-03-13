@@ -1,0 +1,1 @@
+ALTER TABLE public.clients ADD COLUMN contract_duration_months integer NOT NULL DEFAULT 12;

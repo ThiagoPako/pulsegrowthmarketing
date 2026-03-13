@@ -376,6 +376,7 @@ export type Database = {
           client_type: string
           color: string
           company_name: string
+          contract_duration_months: number
           contract_start_date: string | null
           created_at: string
           drive_fotos: string | null
@@ -422,6 +423,7 @@ export type Database = {
           client_type?: string
           color?: string
           company_name: string
+          contract_duration_months?: number
           contract_start_date?: string | null
           created_at?: string
           drive_fotos?: string | null
@@ -468,6 +470,7 @@ export type Database = {
           client_type?: string
           color?: string
           company_name?: string
+          contract_duration_months?: number
           contract_start_date?: string | null
           created_at?: string
           drive_fotos?: string | null

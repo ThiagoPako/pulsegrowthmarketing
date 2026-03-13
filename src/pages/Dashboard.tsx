@@ -42,10 +42,34 @@ export default function Dashboard() {
   const [deliveryRecords, setDeliveryRecords] = useState<any[]>([]);
   const [liveEditorTasks, setLiveEditorTasks] = useState<LiveEditorTask[]>([]);
   const [endoMetrics, setEndoMetrics] = useState({ totalClients: 0, revenue: 0, costs: 0, profit: 0, margin: 0, topClients: [] as { name: string; profit: number }[] });
+  const [contractAlerts, setContractAlerts] = useState<{ clientName: string; daysLeft: number; endDate: string }[]>([]);
 
   useEffect(() => { getMessageStats().then(setWaStats); }, []);
   useEffect(() => {
     supabase.from('delivery_records').select('*').then(({ data }) => { if (data) setDeliveryRecords(data); });
+  }, []);
+
+  // Fetch contract expiration alerts (60 and 30 days)
+  useEffect(() => {
+    const fetchContractAlerts = async () => {
+      const { data } = await supabase.from('clients').select('company_name, contract_start_date, contract_duration_months').not('contract_start_date', 'is', null);
+      if (!data) return;
+      const now = new Date();
+      const alerts: { clientName: string; daysLeft: number; endDate: string }[] = [];
+      for (const c of data) {
+        if (!c.contract_start_date || !(c as any).contract_duration_months) continue;
+        const start = new Date(c.contract_start_date);
+        const endDate = new Date(start);
+        endDate.setMonth(endDate.getMonth() + (c as any).contract_duration_months);
+        const diffMs = endDate.getTime() - now.getTime();
+        const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        if (daysLeft <= 60 && daysLeft > 0) {
+          alerts.push({ clientName: c.company_name, daysLeft, endDate: format(endDate, 'dd/MM/yyyy') });
+        }
+      }
+      setContractAlerts(alerts.sort((a, b) => a.daysLeft - b.daysLeft));
+    };
+    fetchContractAlerts();
   }, []);
 
   // Fetch editor tasks in active editing
@@ -216,6 +240,30 @@ export default function Dashboard() {
           </motion.div>
         ))}
       </div>
+
+      {/* ── CONTRACT EXPIRATION ALERTS ── */}
+      {contractAlerts.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-4 border-warning/30 bg-warning/5">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle size={16} className="text-warning" />
+            <h3 className="font-display font-semibold text-sm">Contratos Próximos do Vencimento</h3>
+            <Badge variant="outline" className="text-[10px] h-5 px-1.5 border-warning/50 text-warning">{contractAlerts.length}</Badge>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {contractAlerts.map((alert, i) => (
+              <div key={i} className={`flex items-center justify-between p-3 rounded-lg border ${alert.daysLeft <= 30 ? 'bg-destructive/10 border-destructive/30' : 'bg-warning/10 border-warning/30'}`}>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{alert.clientName}</p>
+                  <p className="text-xs text-muted-foreground">Vence em {alert.endDate}</p>
+                </div>
+                <Badge variant={alert.daysLeft <= 30 ? 'destructive' : 'outline'} className="text-xs shrink-0 ml-2">
+                  {alert.daysLeft}d
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {/* ── LIVE ACTIVITY: Videomakers Gravando + Editores Editando ── */}
       {(activeRecordings.length > 0 || liveEditorTasks.length > 0) && (

@@ -98,6 +98,7 @@ export default function Clients() {
   const [planId, setPlanId] = useState<string | null>(null);
   const [contractStartDate, setContractStartDate] = useState('');
   const [autoRenewal, setAutoRenewal] = useState(false);
+  const [contractDurationMonths, setContractDurationMonths] = useState(12);
   
   // Financial contract state
   const [contractValue, setContractValue] = useState(0);
@@ -197,11 +198,12 @@ export default function Clients() {
       setForm(client);
       setLogoPreview(client.logoUrl || null);
       // Load plan data for editing
-      supabase.from('clients').select('plan_id, contract_start_date, auto_renewal').eq('id', client.id).single().then(({ data }) => {
+      supabase.from('clients').select('plan_id, contract_start_date, auto_renewal, contract_duration_months').eq('id', client.id).single().then(({ data }) => {
         if (data) {
           setPlanId((data as any).plan_id || null);
           setContractStartDate((data as any).contract_start_date || '');
           setAutoRenewal((data as any).auto_renewal || false);
+          setContractDurationMonths((data as any).contract_duration_months || 12);
         }
       });
       // Load financial contract for editing
@@ -232,6 +234,7 @@ export default function Clients() {
       setPlanId(null);
       setContractStartDate('');
       setAutoRenewal(false);
+      setContractDurationMonths(12);
       setPreferredShift('ambos');
       setContractValue(0);
       setDueDay(10);
@@ -283,7 +286,7 @@ export default function Clients() {
       const logoUrl = await uploadLogo(editing.id);
       updateClient({ ...editing, ...form, logoUrl: logoUrl || undefined } as Client);
       // Update plan fields
-      await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal } as any).eq('id', editing.id);
+      await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, contract_duration_months: contractDurationMonths } as any).eq('id', editing.id);
       // Upsert financial contract
       await supabase.from('financial_contracts').upsert({
         client_id: editing.id,
@@ -311,7 +314,7 @@ export default function Clients() {
       const ok = addClient(newClient);
       if (!ok) { toast.error('Empresa já cadastrada'); return; }
       // Update plan fields after insert
-      await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, client_type: clientType, client_login: newClient.clientLogin, client_password: newClient.clientPassword } as any).eq('id', clientId);
+      await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, contract_duration_months: contractDurationMonths, client_type: clientType, client_login: newClient.clientLogin, client_password: newClient.clientPassword } as any).eq('id', clientId);
       // Create financial contract
       await supabase.from('financial_contracts').insert({
         client_id: clientId,
@@ -1159,6 +1162,17 @@ export default function Clients() {
             <Label>Início do contrato</Label>
             <Input type="date" value={contractStartDate} onChange={e => setContractStartDate(e.target.value)} />
           </div>
+        </div>
+        <div className="space-y-1">
+          <Label>Duração do Contrato</Label>
+          <Select value={String(contractDurationMonths)} onValueChange={v => setContractDurationMonths(Number(v))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="3">3 meses</SelectItem>
+              <SelectItem value="6">6 meses</SelectItem>
+              <SelectItem value="12">12 meses</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div className="flex items-center gap-3">
           <Switch checked={autoRenewal} onCheckedChange={setAutoRenewal} />

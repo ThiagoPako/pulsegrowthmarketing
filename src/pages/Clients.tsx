@@ -1315,84 +1315,85 @@ export default function Clients() {
           <p>Nenhum cliente cadastrado</p>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {clients.map(c => (
-            <div key={c.id} className="glass-card p-4 flex items-center justify-between"
+            <div key={c.id} className="glass-card overflow-hidden"
               style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${c.color || '220 10% 50%'})` }}>
-              <div className="flex items-center gap-3 min-w-0">
+              {/* Header row */}
+              <div className="p-4 pb-3 flex items-start gap-3">
                 {c.logoUrl ? (
-                  <img src={c.logoUrl} alt={c.companyName} className="w-10 h-10 rounded-lg object-cover shrink-0 border border-border" />
+                  <img src={c.logoUrl} alt={c.companyName} className="w-12 h-12 rounded-xl object-cover shrink-0 border border-border" />
                 ) : (
-                  <div className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm shrink-0"
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-sm shrink-0"
                     style={{ backgroundColor: `hsl(${c.color || '220 10% 50%'} / 0.15)`, color: `hsl(${c.color || '220 10% 50%'})` }}>
                     {c.companyName.substring(0, 2).toUpperCase()}
                   </div>
                 )}
-                <div className="min-w-0">
-                  <p className="font-medium text-sm truncate">{c.companyName}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-base leading-tight truncate">{c.companyName}</p>
                   {!isDesignerOnly && (
-                    <p className="text-[11px] text-muted-foreground truncate">
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       {DAY_LABELS[c.fixedDay]} · {c.fixedTime} · {users.find(u => u.id === c.videomaker)?.name || '—'}
                     </p>
                   )}
-                  <div className="flex gap-1 mt-1 flex-wrap">
+                  <div className="flex gap-1.5 mt-2 flex-wrap">
                     {c.niche && c.niche !== 'outro' && (
-                      <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">
                         {NICHE_OPTIONS.find(n => n.value === c.niche)?.label || c.niche}
                       </Badge>
                     )}
                     {!isDesignerOnly && (
                       <>
-                        {(c.weeklyReels ?? 0) > 0 && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{c.weeklyReels} reels</Badge>}
-                        {(c.weeklyCreatives ?? 0) > 0 && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{c.weeklyCreatives} criativos</Badge>}
-                        {c.acceptsExtra && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">Extra{c.extraClientAppears ? ' · Aparece' : ''}</Badge>}
+                        {(c.weeklyReels ?? 0) > 0 && <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">{c.weeklyReels} reels</Badge>}
+                        {(c.weeklyCreatives ?? 0) > 0 && <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">{c.weeklyCreatives} criativos</Badge>}
+                        {c.acceptsExtra && <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">Extra{c.extraClientAppears ? ' · Aparece' : ''}</Badge>}
                       </>
                     )}
                   </div>
                 </div>
               </div>
-              <div className="flex gap-1 shrink-0">
-                {/* Designer-only: Briefing + Art Database */}
+              {/* Action buttons row */}
+              <div className="px-3 pb-3 flex items-center gap-0.5 flex-wrap border-t border-border/50 pt-2">
                 <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver Briefing" onClick={() => setBriefingClient(c)}>
-                  <FileTextIcon size={14} />
+                  <FileTextIcon size={15} />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" title="Banco de Dados" onClick={() => setArtDbClient(c)}>
-                  <Database size={14} />
+                <Button variant="ghost" size="icon" className="h-8 w-8" title="Banco de Artes" onClick={() => setArtDbClient(c)}>
+                  <Database size={15} />
                 </Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8" title="Pulse Club" onClick={() => window.open(`/portal/${encodeURIComponent(c.companyName.replace(/\s+/g, '-').toLowerCase())}`, '_blank')}>
-                  <MonitorPlay size={14} />
+                  <MonitorPlay size={15} />
                 </Button>
-                {/* Full actions only for non-designers */}
                 {!isDesignerOnly && (
                   <>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Copiar link de registro do portal"
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Link do portal"
                       onClick={() => {
                         const link = `${window.location.origin}/portal-registro/${c.id}`;
                         navigator.clipboard.writeText(link);
                         toast.success('Link de registro do portal copiado!');
                       }}>
-                      <KeyRound size={14} />
+                      <KeyRound size={15} />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Copiar link de onboarding"
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Link de onboarding"
                       onClick={() => {
                         const link = `${window.location.origin}/onboarding/${c.id}`;
                         navigator.clipboard.writeText(link);
                         toast.success('Link de onboarding copiado!');
                       }}>
-                      <Copy size={14} />
+                      <Copy size={15} />
                     </Button>
                     {c.whatsapp && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => {
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-success" title="WhatsApp" onClick={() => {
                         setSendWaClient(c);
                         setSendWaOpen(true);
-                      }}><MessageSquare size={14} /></Button>
+                      }}><MessageSquare size={15} /></Button>
                     )}
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                    <div className="flex-1" />
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Ficha PDF" onClick={() => {
                       const vmName = users.find(u => u.id === c.videomaker)?.name || '—';
                       generateClientCardPdf(c, vmName);
-                    }}><Printer size={14} /></Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpen(c)}><Pencil size={14} /></Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(c.id)}><Trash2 size={14} /></Button>
+                    }}><Printer size={15} /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => handleOpen(c)}><Pencil size={15} /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Excluir" onClick={() => handleDelete(c.id)}><Trash2 size={15} /></Button>
                   </>
                 )}
               </div>

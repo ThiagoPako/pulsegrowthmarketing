@@ -241,6 +241,30 @@ export default function Dashboard() {
         ))}
       </div>
 
+      {/* ── CONTRACT EXPIRATION ALERTS ── */}
+      {contractAlerts.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-4 border-warning/30 bg-warning/5">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle size={16} className="text-warning" />
+            <h3 className="font-display font-semibold text-sm">Contratos Próximos do Vencimento</h3>
+            <Badge variant="outline" className="text-[10px] h-5 px-1.5 border-warning/50 text-warning">{contractAlerts.length}</Badge>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {contractAlerts.map((alert, i) => (
+              <div key={i} className={`flex items-center justify-between p-3 rounded-lg border ${alert.daysLeft <= 30 ? 'bg-destructive/10 border-destructive/30' : 'bg-warning/10 border-warning/30'}`}>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{alert.clientName}</p>
+                  <p className="text-xs text-muted-foreground">Vence em {alert.endDate}</p>
+                </div>
+                <Badge variant={alert.daysLeft <= 30 ? 'destructive' : 'outline'} className="text-xs shrink-0 ml-2">
+                  {alert.daysLeft}d
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
       {/* ── LIVE ACTIVITY: Videomakers Gravando + Editores Editando ── */}
       {(activeRecordings.length > 0 || liveEditorTasks.length > 0) && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-5 border-primary/20">

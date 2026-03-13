@@ -133,7 +133,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     {sidebarExpanded ? (
                       <span className="text-[13px] font-medium whitespace-nowrap overflow-hidden">{item.label}</span>
                     ) : (
-                      <span className="text-[8px] font-medium leading-none">{item.label}</span>
+                      <span className="text-[10px] font-medium leading-none">{item.label}</span>
                     )}
                   </button>
                 );

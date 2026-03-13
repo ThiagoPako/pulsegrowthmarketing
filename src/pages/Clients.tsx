@@ -1163,6 +1163,17 @@ export default function Clients() {
             <Input type="date" value={contractStartDate} onChange={e => setContractStartDate(e.target.value)} />
           </div>
         </div>
+        <div className="space-y-1">
+          <Label>Duração do Contrato</Label>
+          <Select value={String(contractDurationMonths)} onValueChange={v => setContractDurationMonths(Number(v))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="3">3 meses</SelectItem>
+              <SelectItem value="6">6 meses</SelectItem>
+              <SelectItem value="12">12 meses</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="flex items-center gap-3">
           <Switch checked={autoRenewal} onCheckedChange={setAutoRenewal} />
           <Label>Renovação automática</Label>

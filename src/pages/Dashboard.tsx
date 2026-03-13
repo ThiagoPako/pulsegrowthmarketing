@@ -212,7 +212,7 @@ export default function Dashboard() {
               <s.icon size={16} />
             </div>
             <p className="text-xl font-display font-bold">{s.value}</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">{s.label}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
           </motion.div>
         ))}
       </div>

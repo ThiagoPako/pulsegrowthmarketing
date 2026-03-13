@@ -114,7 +114,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <div className="my-1.5 mx-2 h-px bg-sidebar-border" />
               )}
               {sidebarExpanded && (
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold px-3 mb-1 block whitespace-nowrap overflow-hidden">
+                <span className="text-[11px] uppercase tracking-wider text-muted-foreground/60 font-semibold px-3 mb-1 block whitespace-nowrap overflow-hidden">
                   {cat.label}
                 </span>
               )}

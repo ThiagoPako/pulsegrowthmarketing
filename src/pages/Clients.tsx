@@ -286,7 +286,7 @@ export default function Clients() {
       const logoUrl = await uploadLogo(editing.id);
       updateClient({ ...editing, ...form, logoUrl: logoUrl || undefined } as Client);
       // Update plan fields
-      await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal } as any).eq('id', editing.id);
+      await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, contract_duration_months: contractDurationMonths } as any).eq('id', editing.id);
       // Upsert financial contract
       await supabase.from('financial_contracts').upsert({
         client_id: editing.id,

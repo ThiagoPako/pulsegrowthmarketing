@@ -37,6 +37,7 @@ interface PortalContent {
   season_month: number; season_year: number; file_url: string | null;
   thumbnail_url: string | null; duration_seconds: number; status: string;
   approved_at: string | null; created_at: string;
+  caption?: string | null; schedule_time?: string | null; platform?: string | null;
 }
 interface PortalComment {
   id: string; content_id: string; author_name: string; author_type: string;
@@ -764,6 +765,35 @@ export default function ClientPortal() {
                     {STATUS_LABELS[selectedContent.status]}
                   </div>
                 </div>
+
+                {/* Combo (Caption + Schedule) */}
+                {(selectedContent.caption || selectedContent.schedule_time || selectedContent.platform) && (
+                  <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-4 mt-4 space-y-4">
+                    <h4 className="text-sm font-semibold text-white/90">Detalhes da Postagem</h4>
+                    {selectedContent.caption && (
+                      <div className="space-y-1.5">
+                        <span className="text-xs text-white/50 block font-medium">Legenda (Caption)</span>
+                        <div className="text-sm text-white/80 whitespace-pre-wrap bg-white/[0.02] p-3 rounded-xl border border-white/[0.04]">
+                          {selectedContent.caption}
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-4">
+                      {selectedContent.schedule_time && (
+                        <div>
+                          <span className="text-xs text-white/50 block font-medium">Horário</span>
+                          <span className="text-sm text-white/90 font-mono">{selectedContent.schedule_time}</span>
+                        </div>
+                      )}
+                      {selectedContent.platform && (
+                        <div>
+                          <span className="text-xs text-white/50 block font-medium">Plataforma</span>
+                          <span className="text-sm text-white/90 px-2 py-0.5 rounded-md bg-white/[0.06] border border-white/[0.08]">{selectedContent.platform}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Actions */}
                 {selectedContent.status !== 'aprovado' && (

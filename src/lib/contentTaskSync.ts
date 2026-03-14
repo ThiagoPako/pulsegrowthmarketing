@@ -23,6 +23,7 @@ interface SyncContext {
   userId?: string | null;
   clientName?: string;
   clientWhatsapp?: string;
+  caption?: string | null;
 }
 
 // Map kanban columns → social_media_deliveries statuses
@@ -167,10 +168,14 @@ export async function syncContentTaskColumnChange(
         script_id: ctx.scriptId || null,
         created_by: ctx.userId || null,
         content_task_id: ctx.taskId,
+        caption: ctx.caption || null,
+        media_url: ctx.editedVideoLink || null,
       } as any);
     } else {
       await supabase.from('social_media_deliveries').update({
         status: socialStatus,
+        caption: ctx.caption || null,
+        media_url: ctx.editedVideoLink || null,
       } as any).eq('content_task_id', ctx.taskId);
     }
   }
@@ -278,7 +283,7 @@ export async function syncContentTaskColumnChange(
  * Build SyncContext from a content_task row and optional client data.
  */
 export function buildSyncContext(
-  task: { id: string; client_id: string; title: string; content_type: string; description: string | null; script_id: string | null; recording_id: string | null; assigned_to: string | null; edited_video_link: string | null; immediate_alteration?: boolean; approved_at?: string | null },
+  task: { id: string; client_id: string; title: string; content_type: string; description: string | null; script_id: string | null; recording_id: string | null; assigned_to: string | null; edited_video_link: string | null; immediate_alteration?: boolean; approved_at?: string | null; caption?: string | null },
   opts?: { userId?: string; clientName?: string; clientWhatsapp?: string }
 ): SyncContext {
   return {
@@ -293,6 +298,7 @@ export function buildSyncContext(
     editedVideoLink: task.edited_video_link,
     immediateAlteration: task.immediate_alteration,
     approvedAt: task.approved_at,
+    caption: task.caption,
     userId: opts?.userId,
     clientName: opts?.clientName,
     clientWhatsapp: opts?.clientWhatsapp,

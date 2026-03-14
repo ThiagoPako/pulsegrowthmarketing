@@ -64,6 +64,7 @@ const navCategories: NavCategory[] = [
     label: 'Sistema',
     items: [
       { path: '/financeiro', label: 'Financeiro', icon: DollarSign, roles: ['admin'] },
+      { path: '/integracoes', label: 'Integrações', icon: Settings, roles: ['admin', 'social_media'] },
       { path: '/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin', 'social_media'] },
       { path: '/whatsapp', label: 'WhatsApp', icon: MessageSquare, roles: ['admin', 'social_media'] },
       { path: '/configuracoes', label: 'Config', icon: Settings, roles: ['admin', 'social_media'] },

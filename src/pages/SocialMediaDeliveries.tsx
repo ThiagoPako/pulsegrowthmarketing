@@ -30,8 +30,8 @@ interface SocialDelivery {
   content_type: string;
   title: string;
   description: string | null;
-  delivered_at: string;
-  posted_at: string | null;
+  delivered_at: string; // The selected day in the calendar
+  posted_at: string | null; // Equivalent to 'scheduled_date'
   scheduled_time: string | null;
   platform: string | null;
   status: string;
@@ -39,7 +39,9 @@ interface SocialDelivery {
   recording_id: string | null;
   created_by: string | null;
   created_at: string;
-  content_task_id: string | null;
+  content_task_id?: string | null;
+  media_url?: string | null;
+  caption?: string | null;
 }
 
 interface Plan {
@@ -133,6 +135,8 @@ export default function SocialMediaDeliveries() {
   const [formScheduledTime, setFormScheduledTime] = useState('');
   const [formPlatform, setFormPlatform] = useState('');
   const [formStatus, setFormStatus] = useState('entregue');
+  const [formMediaUrl, setFormMediaUrl] = useState('');
+  const [formCaption, setFormCaption] = useState('');
 
   // Schedule form
   const [schedDate, setSchedDate] = useState('');
@@ -274,6 +278,7 @@ export default function SocialMediaDeliveries() {
     setFormClientId(''); setFormType('reels'); setFormTitle(''); setFormDescription('');
     setFormDeliveredAt(format(new Date(), 'yyyy-MM-dd')); setFormPostedAt('');
     setFormScheduledTime(''); setFormPlatform(''); setFormStatus('entregue'); setEditingId(null);
+    setFormMediaUrl(''); setFormCaption('');
   };
 
   const openNew = (clientId?: string) => {
@@ -287,7 +292,7 @@ export default function SocialMediaDeliveries() {
     setFormTitle(d.title); setFormDescription(d.description || '');
     setFormDeliveredAt(d.delivered_at); setFormPostedAt(d.posted_at || '');
     setFormScheduledTime(d.scheduled_time || ''); setFormPlatform(d.platform || '');
-    setFormStatus(d.status); setDialogOpen(true);
+    setFormStatus(d.status); setFormMediaUrl(d.media_url || ''); setFormCaption(d.caption || ''); setDialogOpen(true);
   };
 
   const openSchedule = (d: SocialDelivery) => {
@@ -341,6 +346,7 @@ export default function SocialMediaDeliveries() {
       description: formDescription || null, delivered_at: formDeliveredAt,
       posted_at: formPostedAt || null, scheduled_time: formScheduledTime || null,
       platform: formPlatform || null, status: formStatus, created_by: user?.id || null,
+      media_url: formMediaUrl || null, caption: formCaption || null,
     };
     if (editingId) {
       const { error } = await supabase.from('social_media_deliveries').update(payload as any).eq('id', editingId);
@@ -1377,7 +1383,15 @@ export default function SocialMediaDeliveries() {
         </TabsContent>
 
         <TabsContent value="calendario" className="mt-4">
-          <PostingCalendar deliveries={deliveries} clients={clients} />
+          <PostingCalendar
+            deliveries={deliveries}
+            clients={clients}
+            onDayClick={(date) => {
+              openNew();
+              setFormDeliveredAt(format(date, 'yyyy-MM-dd'));
+            }}
+            onPostClick={openEdit}
+          />
         </TabsContent>
       </Tabs>
       {/* Dialogs also available from main view */}
@@ -1456,16 +1470,26 @@ export default function SocialMediaDeliveries() {
             <div><Label>Título *</Label><Input value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="Ex: Reels lançamento produto X" /></div>
             <div><Label>Descrição</Label><Textarea value={formDescription} onChange={e => setFormDescription(e.target.value)} placeholder="Detalhes da entrega..." rows={2} /></div>
             <div className="grid grid-cols-3 gap-3">
-              <div><Label>Data de entrega</Label><Input type="date" value={formDeliveredAt} onChange={e => setFormDeliveredAt(e.target.value)} /></div>
-              <div><Label>Data de postagem</Label><Input type="date" value={formPostedAt} onChange={e => setFormPostedAt(e.target.value)} /></div>
+              <div><Label>Data de exibição (Calendário)</Label><Input type="date" value={formDeliveredAt} onChange={e => setFormDeliveredAt(e.target.value)} /></div>
+              <div><Label>Data de postagem real</Label><Input type="date" value={formPostedAt} onChange={e => setFormPostedAt(e.target.value)} /></div>
               <div><Label>Horário</Label><Input type="time" value={formScheduledTime} onChange={e => setFormScheduledTime(e.target.value)} /></div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Plataforma</Label>
+                <Select value={formPlatform} onValueChange={setFormPlatform}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>{PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Mídia (URL da imagem/vídeo)</Label>
+                <Input value={formMediaUrl} onChange={e => setFormMediaUrl(e.target.value)} placeholder="https://..." />
+              </div>
+            </div>
             <div>
-              <Label>Plataforma</Label>
-              <Select value={formPlatform} onValueChange={setFormPlatform}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>{PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-              </Select>
+              <Label>Legenda (Caption)</Label>
+              <Textarea value={formCaption} onChange={e => setFormCaption(e.target.value)} placeholder="Escreva a legenda do post..." rows={4} />
             </div>
           </div>
           <DialogFooter>

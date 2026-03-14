@@ -19,11 +19,15 @@ interface SocialDelivery {
   platform: string | null;
   status: string;
   delivered_at: string;
+  media_url?: string | null;
+  caption?: string | null;
 }
 
 interface PostingCalendarProps {
   deliveries: SocialDelivery[];
   clients: Client[];
+  onDayClick: (date: Date) => void;
+  onPostClick: (delivery: SocialDelivery) => void;
 }
 
 const TYPE_CONFIG: Record<string, { icon: typeof Film; label: string; color: string; dotColor: string; bgClass: string }> = {
@@ -41,7 +45,7 @@ const STATUS_CONFIG: Record<string, { label: string; icon: typeof Clock; color: 
 
 const WEEKDAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
-export default function PostingCalendar({ deliveries, clients }: PostingCalendarProps) {
+export default function PostingCalendar({ deliveries, clients, onDayClick, onPostClick }: PostingCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedClientId, setSelectedClientId] = useState<string>('all');
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
@@ -162,7 +166,11 @@ export default function PostingCalendar({ deliveries, clients }: PostingCalendar
                 return (
                   <button
                     key={key}
-                    onClick={() => setSelectedDay(day)}
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest('.post-thumb')) return;
+                      onDayClick(day);
+                      setSelectedDay(day);
+                    }}
                     className={`
                       min-h-[90px] rounded-lg p-1 flex flex-col items-stretch transition-all text-sm border
                       hover:shadow-md hover:border-primary/30 relative group
@@ -194,9 +202,13 @@ export default function PostingCalendar({ deliveries, clients }: PostingCalendar
                           <div
                             key={d.id}
                             className={`
-                              flex items-center gap-1 rounded px-1 py-[2px] text-[9px] font-medium truncate border-l-2 transition-opacity
+                              post-thumb flex items-center gap-1 rounded px-1 py-[2px] text-[9px] font-medium truncate border-l-2 transition-opacity hover:opacity-80 cursor-pointer
                               ${isPosted ? 'opacity-70' : ''}
                             `}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onPostClick(d);
+                            }}
                             style={{
                               backgroundColor: `hsl(${clientColor} / 0.12)`,
                               borderLeftColor: `hsl(${clientColor})`,
@@ -217,7 +229,11 @@ export default function PostingCalendar({ deliveries, clients }: PostingCalendar
                                 {(client?.companyName || '?').substring(0, 1).toUpperCase()}
                               </span>
                             )}
-                            <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${typeConf.dotColor}`} />
+                            {d.media_url ? (
+                              <img src={d.media_url} alt="" className="h-4 w-4 rounded-sm object-cover shrink-0" />
+                            ) : (
+                              <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${typeConf.dotColor}`} />
+                            )}
                             <span className="truncate text-foreground/80">{d.title}</span>
                             {isPosted && <CheckCircle2 size={8} className="shrink-0 text-green-500 ml-auto" />}
                           </div>
@@ -266,7 +282,8 @@ export default function PostingCalendar({ deliveries, clients }: PostingCalendar
                       return (
                         <div
                           key={d.id}
-                          className="rounded-xl border border-border overflow-hidden hover:shadow-md transition-shadow"
+                          className="rounded-xl border border-border overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                          onClick={() => onPostClick(d)}
                         >
                           {/* Client color banner header */}
                           <div
@@ -285,6 +302,11 @@ export default function PostingCalendar({ deliveries, clients }: PostingCalendar
 
                           {/* Content area */}
                           <div className="px-3 py-2 bg-card space-y-1.5">
+                            {d.media_url && (
+                              <div className="mb-2">
+                                <img src={d.media_url} alt="Thumbnail" className="w-full h-24 object-cover rounded-md border border-border" />
+                              </div>
+                            )}
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <Badge className={`${typeConf.color} border-0 text-[10px] gap-1 px-1.5 py-0`}>
                                 <TypeIcon size={10} /> {typeConf.label}

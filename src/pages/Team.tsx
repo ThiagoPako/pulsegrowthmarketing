@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, KeyRound, Users, Handshake, Trash2 } from 'lucide-react';
+import { Plus, KeyRound, Users, Handshake, Trash2, CheckCircle } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 
 const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'fotografo', 'designer'];
@@ -33,6 +33,7 @@ interface TeamMember {
   displayName?: string;
   jobTitle?: string;
   bio?: string;
+  status?: string;
 }
 
 interface PartnerInfo {
@@ -77,6 +78,7 @@ export default function Team() {
         displayName: p.display_name,
         jobTitle: p.job_title,
         bio: p.bio,
+        status: p.status,
       })));
     }
     setLoading(false);
@@ -93,7 +95,7 @@ export default function Team() {
     if (!form.name || !form.email || !form.password) { toast.error('Preencha todos os campos'); return; }
     if (form.password.length < 6) { toast.error('Senha deve ter no mínimo 6 caracteres'); return; }
 
-    const { error } = await signUp(form.email, form.password, form.name, form.role as AppRole);
+    const { error } = await signUp(form.email, form.password, form.name, form.role as AppRole, 'approved');
     if (error) {
       toast.error(error);
       return;
@@ -167,7 +169,7 @@ export default function Team() {
     if (partnerCreateForm.password.length < 6) { toast.error('Senha deve ter no mínimo 6 caracteres'); return; }
 
     // Register with 'parceiro' role so they appear in the partners list
-    const { error } = await signUp(partnerCreateForm.email, partnerCreateForm.password, partnerCreateForm.name, 'parceiro' as AppRole);
+    const { error } = await signUp(partnerCreateForm.email, partnerCreateForm.password, partnerCreateForm.name, 'parceiro' as AppRole, 'approved');
     if (error) { toast.error(error); return; }
 
     // Create partner record after profile is created by trigger
@@ -190,6 +192,17 @@ export default function Team() {
     toast.success('Parceiro cadastrado com sucesso!');
     setPartnerOpen(false);
     setPartnerCreateForm({ name: '', email: '', password: '', serviceFunction: 'fotografo', companyName: '', fixedRate: 0, phone: '', notes: '' });
+  };
+
+  const handleApproveMember = async (member: TeamMember) => {
+    try {
+      const { error } = await supabase.from('profiles').update({ status: 'approved' }).eq('id', member.id);
+      if (error) throw error;
+      toast.success(`${member.displayName || member.name} foi aprovado(a)!`);
+      fetchMembers();
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao aprovar membro');
+    }
   };
 
   const roleColors: Record<UserRole, string> = {
@@ -361,9 +374,17 @@ export default function Team() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
+                  {u.status === 'pending' && (
+                    <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full font-medium">Pendente</span>
+                  )}
                   <span className={`text-xs px-2 py-1 rounded-full font-medium ${roleColors[u.role]}`}>{ROLE_LABELS[u.role]}</span>
                   {currentUser?.role === 'admin' && (
                     <>
+                      {u.status === 'pending' && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-success" title="Aprovar usuário" onClick={() => handleApproveMember(u)}>
+                          <CheckCircle size={16} />
+                        </Button>
+                      )}
                       <Button variant="ghost" size="icon" className="h-8 w-8" title="Redefinir senha" onClick={() => { setResetTarget(u); setResetOpen(true); }}>
                         <KeyRound size={16} />
                       </Button>

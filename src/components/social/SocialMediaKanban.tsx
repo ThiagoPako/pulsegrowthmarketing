@@ -400,8 +400,9 @@ function DeliveryCard({
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9, x: 50 }}
       transition={{ delay: index * 0.03, duration: 0.2 }}
+      whileHover={{ y: -2 }}
     >
-      <Card className="border border-border shadow-sm hover:shadow-md transition-all group">
+      <Card className="border border-border shadow-sm hover:shadow-md transition-all group hover:border-primary/30">
         <CardContent className="p-3 space-y-2">
           {/* Title */}
           <p className="text-sm font-medium text-foreground leading-tight line-clamp-2">{d.title}</p>

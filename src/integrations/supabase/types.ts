@@ -132,41 +132,6 @@ export type Database = {
         }
         Relationships: []
       }
-      integration_settings: {
-        Row: {
-          id: string
-          client_id: string
-          meta_access_token: string | null
-          instagram_business_id: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          client_id: string
-          meta_access_token?: string | null
-          instagram_business_id?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          client_id?: string
-          meta_access_token?: string | null
-          instagram_business_id?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "integration_settings_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: true
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
       client_endomarketing_contracts: {
         Row: {
           client_id: string
@@ -279,9 +244,7 @@ export type Database = {
           client_id: string
           content_type: string
           created_at: string
-          duration_seconds: number
-          file_path: string | null
-          file_size: number | null
+          duration_seconds: number | null
           file_url: string | null
           id: string
           season_month: number
@@ -291,9 +254,6 @@ export type Database = {
           title: string
           updated_at: string
           uploaded_by: string | null
-          caption: string | null
-          schedule_time: string | null
-          platform: string | null
         }
         Insert: {
           approved_at?: string | null
@@ -301,8 +261,6 @@ export type Database = {
           content_type?: string
           created_at?: string
           duration_seconds?: number | null
-          file_path?: string | null
-          file_size?: number | null
           file_url?: string | null
           id?: string
           season_month: number
@@ -312,9 +270,6 @@ export type Database = {
           title?: string
           updated_at?: string
           uploaded_by?: string | null
-          caption?: string | null
-          schedule_time?: string | null
-          platform?: string | null
         }
         Update: {
           approved_at?: string | null
@@ -322,8 +277,6 @@ export type Database = {
           content_type?: string
           created_at?: string
           duration_seconds?: number | null
-          file_path?: string | null
-          file_size?: number | null
           file_url?: string | null
           id?: string
           season_month?: number
@@ -333,9 +286,6 @@ export type Database = {
           title?: string
           updated_at?: string
           uploaded_by?: string | null
-          caption?: string | null
-          schedule_time?: string | null
-          platform?: string | null
         }
         Relationships: [
           {
@@ -2106,8 +2056,6 @@ export type Database = {
           client_id: string
           content_task_id: string | null
           content_type: string
-          caption: string | null
-          media_url: string | null
           created_at: string
           created_by: string | null
           delivered_at: string
@@ -2126,8 +2074,6 @@ export type Database = {
           client_id: string
           content_task_id?: string | null
           content_type?: string
-          caption?: string | null
-          media_url?: string | null
           created_at?: string
           created_by?: string | null
           delivered_at?: string
@@ -2146,8 +2092,6 @@ export type Database = {
           client_id?: string
           content_task_id?: string | null
           content_type?: string
-          caption?: string | null
-          media_url?: string | null
           created_at?: string
           created_by?: string | null
           delivered_at?: string

@@ -152,7 +152,6 @@ interface ContentTask {
   editing_deadline: string | null;
   created_at: string;
   updated_at: string;
-  caption?: string | null;
 }
 
 interface TaskHistory {
@@ -463,13 +462,6 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
-  // Send to Portal Combo state
-  const [showPortalForm, setShowPortalForm] = useState(false);
-  const [portalCaption, setPortalCaption] = useState(task?.caption || '');
-  const [portalSchedDate, setPortalSchedDate] = useState('');
-  const [portalSchedTime, setPortalSchedTime] = useState('');
-  const [portalPlatform, setPortalPlatform] = useState('');
-
   // Fetch history
   useEffect(() => {
     if (!task?.id || !open) return;
@@ -485,11 +477,9 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     setShowAdjustmentForm(false);
     setShowScheduleForm(false);
     setShowLinkForm(null);
-    setShowPortalForm(false);
     setAdjustmentNotes('');
     setAdjustmentImmediate(false);
-    setPortalCaption(task?.caption || '');
-  }, [task?.id, task?.caption]);
+  }, [task?.id]);
 
   if (!task) return null;
 
@@ -572,9 +562,6 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
         file_url: task.edited_video_link,
         status: 'pendente',
         updated_at: now.toISOString(),
-        caption: portalCaption || null,
-        schedule_time: portalSchedTime ? `${portalSchedDate} ${portalSchedTime}` : null,
-        platform: portalPlatform || null,
       } as any).eq('id', existing[0].id);
     } else {
       // Create new
@@ -587,21 +574,16 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
         season_month: now.getMonth() + 1,
         season_year: now.getFullYear(),
         uploaded_by: user?.id || null,
-        caption: portalCaption || null,
-        schedule_time: portalSchedTime ? `${portalSchedDate} ${portalSchedTime}` : null,
-        platform: portalPlatform || null,
       } as any);
     }
   };
 
   // ─── ACTIONS ──────────────────────────────────────────────
   const handleApprove = async () => {
-    // Save the caption to the task as well (we can update content_tasks directly for convenience)
     await supabase.from('content_tasks').update({
       kanban_column: 'envio',
       approved_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      caption: portalCaption || null,
     } as any).eq('id', task.id);
 
     // Add video to client portal
@@ -1095,7 +1077,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                   {/* Revisão: Approve / Adjustments */}
                   {task.kanban_column === 'revisao' && (
                     <>
-                      <Button size="sm" className="w-full gap-2 justify-start bg-green-600 hover:bg-green-700" onClick={() => setShowPortalForm(true)}>
+                      <Button size="sm" className="w-full gap-2 justify-start bg-green-600 hover:bg-green-700" onClick={handleApprove}>
                         <ThumbsUp size={14} /> Aprovar e Enviar ao Portal
                       </Button>
                       <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700" onClick={() => setShowAdjustmentForm(true)}>
@@ -1177,69 +1159,31 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
 
                   {/* Schedule form inline */}
                   {showScheduleForm && (
-                     <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-3">
-                       <div className="grid grid-cols-2 gap-2">
-                         <div>
-                           <Label className="text-xs">Data *</Label>
-                           <Input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)} className="h-9" />
-                         </div>
-                         <div>
-                           <Label className="text-xs">Horário *</Label>
-                           <Input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)} className="h-9" />
-                         </div>
-                       </div>
-                       <div>
-                         <Label className="text-xs">Plataforma</Label>
-                         <Select value={schedPlatform} onValueChange={setSchedPlatform}>
-                           <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                           <SelectContent>
-                             {PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                           </SelectContent>
-                         </Select>
-                       </div>
-                       <div className="flex gap-2">
-                         <Button size="sm" className="flex-1" onClick={handleSchedulePost}>
-                           <Calendar size={14} /> Agendar
-                         </Button>
-                         <Button size="sm" variant="outline" onClick={() => setShowScheduleForm(false)}>Cancelar</Button>
-                       </div>
-                     </div>
-                   )}
-
-                  {/* Portal Combo form inline */}
-                  {showPortalForm && (
-                    <div className="p-3 rounded-lg bg-green-500/5 border border-green-500/20 space-y-3">
-                      <Label className="text-xs font-semibold text-green-700 dark:text-green-400">Combo de Postagem (Portal do Cliente)</Label>
-                      <Textarea 
-                         placeholder="Escreva a legenda provisória para o cliente aprovar..." 
-                         value={portalCaption} 
-                         onChange={e => setPortalCaption(e.target.value)}
-                         rows={3} 
-                      />
+                    <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-3">
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <Label className="text-xs">Data exibição</Label>
-                          <Input type="date" value={portalSchedDate} onChange={e => setPortalSchedDate(e.target.value)} className="h-9" />
+                          <Label className="text-xs">Data *</Label>
+                          <Input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)} className="h-9" />
                         </div>
                         <div>
-                          <Label className="text-xs">Horário exibição</Label>
-                          <Input type="time" value={portalSchedTime} onChange={e => setPortalSchedTime(e.target.value)} className="h-9" />
+                          <Label className="text-xs">Horário *</Label>
+                          <Input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)} className="h-9" />
                         </div>
                       </div>
                       <div>
-                        <Label className="text-xs">Rede Social (opcional)</Label>
-                        <Select value={portalPlatform} onValueChange={setPortalPlatform}>
-                           <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                           <SelectContent>
-                             {PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                           </SelectContent>
+                        <Label className="text-xs">Plataforma</Label>
+                        <Select value={schedPlatform} onValueChange={setSchedPlatform}>
+                          <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                          <SelectContent>
+                            {PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                          </SelectContent>
                         </Select>
                       </div>
                       <div className="flex gap-2">
-                        <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700" onClick={handleApprove}>
-                           <ThumbsUp size={14} className="mr-2" /> Confirmar e Enviar
+                        <Button size="sm" className="flex-1" onClick={handleSchedulePost}>
+                          <Calendar size={14} /> Agendar
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => setShowPortalForm(false)}>Cancelar</Button>
+                        <Button size="sm" variant="outline" onClick={() => setShowScheduleForm(false)}>Cancelar</Button>
                       </div>
                     </div>
                   )}

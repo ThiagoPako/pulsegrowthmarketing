@@ -353,6 +353,6 @@ function TaskCard({ task, isDragging, onClick, onDragStart, onDragEnd }: TaskCar
           <Badge variant="secondary" className="text-[10px] gap-0.5 animate-pulse"><Clock size={10} /> Em andamento</Badge>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }

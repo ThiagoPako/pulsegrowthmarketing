@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, DragEvent } from 'react';
+import { useState, useMemo, useCallback, useRef, DragEvent } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn } from '@/hooks/useDesignTasks';
 import { useApp } from '@/contexts/AppContext';
@@ -6,13 +6,14 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Kanban, List, Clock, GripVertical } from 'lucide-react';
+import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DesignTaskCreateDialog from '@/components/designer/DesignTaskCreateDialog';
 import DesignTaskDetailSheet from '@/components/designer/DesignTaskDetailSheet';
 import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'framer-motion';
 
-const PRIORITY_CONFIG: Record<string, { label: string; color: string; icon?: any }> = {
+const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
   baixa: { label: 'Baixa', color: 'bg-muted text-muted-foreground' },
   media: { label: 'Média', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
   alta: { label: 'Alta', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
@@ -25,6 +26,54 @@ const FORMAT_LABELS: Record<string, string> = {
   logomarca: 'Logomarca',
   midia_fisica: 'Mídia Física',
 };
+
+const COLUMN_CONFIG: Record<string, { icon: React.ReactNode; gradient: string }> = {
+  nova_tarefa: { icon: <Sparkles size={15} />, gradient: 'from-blue-500/20 to-blue-600/10 dark:from-blue-500/30 dark:to-blue-600/10' },
+  executando: { icon: <Zap size={15} />, gradient: 'from-amber-500/20 to-yellow-500/10 dark:from-amber-500/30 dark:to-yellow-500/10' },
+  em_analise: { icon: <Eye size={15} />, gradient: 'from-purple-500/20 to-violet-500/10 dark:from-purple-500/30 dark:to-violet-500/10' },
+  enviar_cliente: { icon: <Send size={15} />, gradient: 'from-cyan-500/20 to-teal-500/10 dark:from-cyan-500/30 dark:to-teal-500/10' },
+  aprovado: { icon: <CheckCircle2 size={15} />, gradient: 'from-emerald-500/20 to-green-500/10 dark:from-emerald-500/30 dark:to-green-500/10' },
+  ajustes: { icon: <RotateCcw size={15} />, gradient: 'from-red-500/20 to-rose-500/10 dark:from-red-500/30 dark:to-rose-500/10' },
+};
+
+/* ── Drag-to-scroll container ── */
+function DragScrollContainer({ children, className }: { children: React.ReactNode; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+  const startX = useRef(0);
+  const scrollLeftRef = useRef(0);
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button, a, input, [draggable="true"], [role="button"]')) return;
+    isDragging.current = true;
+    startX.current = e.pageX - (ref.current?.offsetLeft || 0);
+    scrollLeftRef.current = ref.current?.scrollLeft || 0;
+  };
+
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging.current || !ref.current) return;
+    e.preventDefault();
+    const x = e.pageX - ref.current.offsetLeft;
+    const walk = (x - startX.current) * 1.5;
+    ref.current.scrollLeft = scrollLeftRef.current - walk;
+  };
+
+  const onMouseUp = () => { isDragging.current = false; };
+
+  return (
+    <div
+      ref={ref}
+      className={`overflow-x-auto ${isDragging.current ? 'cursor-grabbing select-none' : 'cursor-grab'} ${className || ''}`}
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+      onMouseLeave={onMouseUp}
+    >
+      {children}
+    </div>
+  );
+}
 
 export default function DesignerKanban() {
   const { tasksQuery, updateTask, addHistory } = useDesignTasks();
@@ -60,9 +109,7 @@ export default function DesignerKanban() {
     setDragOverColumn(colKey);
   }, []);
 
-  const handleDragLeave = useCallback(() => {
-    setDragOverColumn(null);
-  }, []);
+  const handleDragLeave = useCallback(() => { setDragOverColumn(null); }, []);
 
   const handleDrop = useCallback(async (e: DragEvent, targetColumn: DesignTaskColumn) => {
     e.preventDefault();
@@ -74,21 +121,13 @@ export default function DesignerKanban() {
     if (!task || task.kanban_column === targetColumn) return;
 
     const targetLabel = DESIGN_COLUMNS.find(c => c.key === targetColumn)?.label || targetColumn;
-
-    // Build extra fields based on target column
     const extraFields: Record<string, any> = {};
 
-    // Moving TO executando: set started_at and assigned_to
     if (targetColumn === 'executando') {
-      if (!task.started_at) {
-        extraFields.started_at = new Date().toISOString();
-      }
-      if (!task.assigned_to && user?.id) {
-        extraFields.assigned_to = user.id;
-      }
+      if (!task.started_at) extraFields.started_at = new Date().toISOString();
+      if (!task.assigned_to && user?.id) extraFields.assigned_to = user.id;
     }
 
-    // Moving TO em_analise: validate attachment
     if (targetColumn === 'em_analise') {
       const hasAttachment = task.attachment_url || (task as any).mockup_url;
       if (!hasAttachment) {
@@ -97,12 +136,9 @@ export default function DesignerKanban() {
       }
     }
 
-    // Moving TO aprovado: set completed_at and client_approved_at
     if (targetColumn === 'aprovado') {
       extraFields.completed_at = new Date().toISOString();
       extraFields.client_approved_at = new Date().toISOString();
-
-      // Auto-fill client drive_identidade_visual when logomarca is approved
       if (task.format_type === 'logomarca' && task.client_id) {
         const fileUrl = task.attachment_url || (task as any).mockup_url;
         if (fileUrl) {
@@ -112,26 +148,13 @@ export default function DesignerKanban() {
       }
     }
 
-    // Moving TO enviar_cliente: mark as sent
     if (targetColumn === 'enviar_cliente') {
-      if (!task.sent_to_client_at) {
-        extraFields.sent_to_client_at = new Date().toISOString();
-      }
+      if (!task.sent_to_client_at) extraFields.sent_to_client_at = new Date().toISOString();
     }
 
     try {
-      await updateTask.mutateAsync({
-        id: taskId,
-        kanban_column: targetColumn,
-        ...extraFields,
-      } as any);
-
-      await addHistory.mutateAsync({
-        task_id: taskId,
-        action: `Movido para ${targetLabel}`,
-        user_id: user?.id,
-      });
-
+      await updateTask.mutateAsync({ id: taskId, kanban_column: targetColumn, ...extraFields } as any);
+      await addHistory.mutateAsync({ task_id: taskId, action: `Movido para ${targetLabel}`, user_id: user?.id });
       toast.success(`Tarefa movida para "${targetLabel}"`);
     } catch (err: any) {
       toast.error(err.message || 'Erro ao mover tarefa');
@@ -166,39 +189,94 @@ export default function DesignerKanban() {
       </div>
 
       {view === 'kanban' ? (
-        <div className="flex gap-3 overflow-x-auto pb-4">
-          {DESIGN_COLUMNS.map(col => (
-            <div
-              key={col.key}
-              className={`min-w-[260px] w-[260px] flex-shrink-0 rounded-lg transition-colors ${
-                dragOverColumn === col.key
-                  ? 'bg-primary/10 ring-2 ring-primary/30'
-                  : ''
-              }`}
-              onDragOver={e => handleDragOver(e, col.key)}
-              onDragLeave={handleDragLeave}
-              onDrop={e => handleDrop(e, col.key)}
-            >
-              <div className="flex items-center gap-2 mb-2 px-1">
-                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: `hsl(${col.color})` }} />
-                <span className="text-xs font-semibold uppercase tracking-wide">{col.label}</span>
-                <Badge variant="secondary" className="text-[10px] h-5">{tasksByColumn[col.key]?.length || 0}</Badge>
-              </div>
-              <div className="space-y-2 min-h-[60px] p-1">
-                {tasksByColumn[col.key]?.map(task => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    isDragging={draggingTaskId === task.id}
-                    onClick={() => setSelectedTaskId(task.id)}
-                    onDragStart={e => handleDragStart(e, task)}
-                    onDragEnd={handleDragEnd}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+        <DragScrollContainer className="pb-4">
+          <div className="flex gap-3 min-w-max">
+            {DESIGN_COLUMNS.map((col, colIdx) => {
+              const cfg = COLUMN_CONFIG[col.key];
+              const colTasks = tasksByColumn[col.key] || [];
+              return (
+                <motion.div
+                  key={col.key}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: colIdx * 0.07, duration: 0.35 }}
+                  className={`min-w-[270px] w-[270px] flex-shrink-0 rounded-xl transition-all duration-200 ${
+                    dragOverColumn === col.key ? 'ring-2 ring-primary/40 bg-primary/5 scale-[1.01]' : ''
+                  }`}
+                  onDragOver={e => handleDragOver(e, col.key)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={e => handleDrop(e, col.key)}
+                >
+                  {/* Column header */}
+                  <motion.div
+                    className={`relative overflow-hidden rounded-xl p-3 mb-3 bg-gradient-to-r ${cfg.gradient} border border-border/50`}
+                    whileHover={{ scale: 1.01 }}
+                    transition={{ type: 'spring', stiffness: 400 }}
+                  >
+                    {/* Shimmer */}
+                    <div className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
+                      <div className="absolute inset-0 -translate-x-full animate-[shimmer_3s_infinite] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                    </div>
+                    <div className="flex items-center gap-2 relative z-10">
+                      <motion.span
+                        className="text-foreground/80"
+                        animate={{ rotate: [0, -6, 6, 0] }}
+                        transition={{ duration: 2, repeat: Infinity, repeatDelay: 5, ease: 'easeInOut' }}
+                      >
+                        {cfg.icon}
+                      </motion.span>
+                      <span className="text-xs font-bold uppercase tracking-wider text-foreground/90">{col.label}</span>
+                      <motion.div
+                        key={colTasks.length}
+                        initial={{ scale: 1.4 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: 'spring', stiffness: 500 }}
+                      >
+                        <Badge variant="secondary" className="text-[10px] h-5 ml-auto">{colTasks.length}</Badge>
+                      </motion.div>
+                    </div>
+                  </motion.div>
+
+                  {/* Cards */}
+                  <div className="space-y-2 min-h-[60px] px-1">
+                    <AnimatePresence mode="popLayout">
+                      {colTasks.map((task, i) => (
+                        <motion.div
+                          key={task.id}
+                          layout
+                          initial={{ opacity: 0, scale: 0.92, y: 12 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.9, y: -8 }}
+                          transition={{ delay: i * 0.03, type: 'spring', stiffness: 400, damping: 25 }}
+                        >
+                          <TaskCard
+                            task={task}
+                            isDragging={draggingTaskId === task.id}
+                            onClick={() => setSelectedTaskId(task.id)}
+                            onDragStart={e => handleDragStart(e, task)}
+                            onDragEnd={handleDragEnd}
+                          />
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                    {colTasks.length === 0 && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="flex flex-col items-center justify-center py-8 text-muted-foreground/40"
+                      >
+                        <motion.div animate={{ y: [0, -4, 0] }} transition={{ duration: 2, repeat: Infinity }}>
+                          {cfg.icon}
+                        </motion.div>
+                        <span className="text-[10px] mt-2">Nenhuma tarefa</span>
+                      </motion.div>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </DragScrollContainer>
       ) : (
         <div className="border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
@@ -241,6 +319,7 @@ export default function DesignerKanban() {
   );
 }
 
+/* ── Enhanced Task Card ── */
 interface TaskCardProps {
   task: DesignTask;
   isDragging: boolean;
@@ -252,28 +331,30 @@ interface TaskCardProps {
 function TaskCard({ task, isDragging, onClick, onDragStart, onDragEnd }: TaskCardProps) {
   const priorityCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.media;
   return (
-    <div
+    <motion.div
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onClick}
-      className={`bg-card border rounded-xl p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-all space-y-2 ${
+      whileHover={{ y: -3, boxShadow: '0 8px 25px -5px hsl(var(--primary) / 0.15)' }}
+      whileTap={{ scale: 0.97 }}
+      className={`bg-card border border-border/60 rounded-xl p-3 cursor-grab active:cursor-grabbing transition-colors space-y-2.5 group ${
         isDragging ? 'opacity-40 scale-95 ring-2 ring-primary/40' : ''
       }`}
     >
       <div className="flex items-center gap-2">
-        <GripVertical size={12} className="text-muted-foreground/40 shrink-0" />
+        <GripVertical size={12} className="text-muted-foreground/30 shrink-0 group-hover:text-muted-foreground/60 transition-colors" />
         <ClientLogo client={{ companyName: task.clients?.company_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="sm" />
         <span className="text-[11px] text-muted-foreground truncate">{task.clients?.company_name}</span>
       </div>
-      <p className="text-sm font-medium line-clamp-2">{task.title}</p>
+      <p className="text-sm font-medium line-clamp-2 group-hover:text-primary/90 transition-colors">{task.title}</p>
       <div className="flex items-center gap-1.5 flex-wrap">
         <Badge variant="outline" className="text-[10px]">{FORMAT_LABELS[task.format_type] || task.format_type}</Badge>
         <Badge className={`text-[10px] ${priorityCfg.color}`}>{priorityCfg.label}</Badge>
         {task.timer_running && (
-          <Badge variant="secondary" className="text-[10px] gap-0.5"><Clock size={10} /> Em andamento</Badge>
+          <Badge variant="secondary" className="text-[10px] gap-0.5 animate-pulse"><Clock size={10} /> Em andamento</Badge>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }

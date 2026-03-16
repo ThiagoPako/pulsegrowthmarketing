@@ -21,7 +21,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History,
   Upload, Image, FileText, Palette, Info, User, Calendar, ArrowRight, X,
-  ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip, ZoomIn, Loader2
+  ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip, ZoomIn, Loader2, Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -53,7 +53,7 @@ function getTaskCategory(task: DesignTask): 'identidade_visual' | 'reformulacao'
 }
 
 export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Props) {
-  const { updateTask, addHistory, historyQuery } = useDesignTasks();
+  const { updateTask, addHistory, historyQuery, deleteTask } = useDesignTasks();
   const { currentUser } = useApp();
   const { user } = useAuth();
   const [observations, setObservations] = useState(task.observations || '');
@@ -260,6 +260,20 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
               >
                 {currentCol?.label}
               </Badge>
+              {currentUser?.role === 'admin' && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-7 px-2 text-xs gap-1"
+                  onClick={() => {
+                    if (window.confirm('Tem certeza que deseja excluir esta tarefa? Esta ação não pode ser desfeita.')) {
+                      deleteTask.mutateAsync(task.id).then(() => onOpenChange(false));
+                    }
+                  }}
+                >
+                  <Trash2 size={13} /> Excluir
+                </Button>
+              )}
             </div>
           </div>
         </div>

@@ -291,10 +291,22 @@ export default function ContentKanban() {
     fetchTasks();
   };
 
-  const handleDelete = async (id: string) => {
-    const { error } = await supabase.from('content_tasks').delete().eq('id', id);
+  const openDeleteConfirm = (task: ContentTask) => {
+    setDeleteTaskId(task.id);
+    setDeleteTaskTitle(task.title);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirmed = async () => {
+    if (!deleteTaskId) return;
+    // Cascade delete related records
+    await supabase.from('task_history').delete().eq('task_id', deleteTaskId);
+    await supabase.from('social_media_deliveries').delete().eq('content_task_id', deleteTaskId);
+    const { error } = await supabase.from('content_tasks').delete().eq('id', deleteTaskId);
     if (error) { toast.error('Erro ao excluir'); return; }
-    toast.success('Cartão excluído');
+    toast.success('Tarefa excluída com sucesso');
+    setDeleteDialogOpen(false);
+    setDeleteTaskId(null);
     fetchTasks();
   };
 

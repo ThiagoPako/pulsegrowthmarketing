@@ -237,7 +237,7 @@ export default function SocialMediaKanban({
         {showRocket && <RocketBurst onComplete={() => setShowRocket(false)} />}
       </AnimatePresence>
 
-      <ScrollArea className="w-full">
+      <DragScrollContainer className="w-full">
         <div className="flex gap-4 pb-4 min-w-max">
           {columns.map((col, colIdx) => {
             const isEditing = col.id === 'edicao';
@@ -314,8 +314,7 @@ export default function SocialMediaKanban({
             );
           })}
         </div>
-        <ScrollBar orientation="horizontal" />
-      </ScrollArea>
+      </DragScrollContainer>
     </>
   );
 }

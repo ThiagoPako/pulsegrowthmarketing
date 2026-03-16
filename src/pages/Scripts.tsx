@@ -130,6 +130,7 @@ export default function Scripts() {
   const [filterType, setFilterType] = useState('all');
   const [filterEndo, setFilterEndo] = useState<'all' | 'video' | 'endo'>('all');
   const [showRecorded, setShowRecorded] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const [form, setForm] = useState({
     clientId: '',

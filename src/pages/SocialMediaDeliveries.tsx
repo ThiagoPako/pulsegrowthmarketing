@@ -831,24 +831,32 @@ export default function SocialMediaDeliveries() {
           <h1 className="text-2xl font-bold text-foreground">Entregas Social Media</h1>
           <p className="text-sm text-muted-foreground">Selecione um cliente para gerenciar suas entregas</p>
         </div>
-        <div className="flex items-center gap-2">
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
-            <Button variant="outline" className="gap-2 rounded-xl border-primary/20 hover:border-primary/40 hover:bg-primary/5 shadow-sm transition-all duration-200" onClick={() => setMainTab('calendario')}>
-              <motion.div animate={{ rotate: [0, -10, 10, 0] }} transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}>
-                <CalendarIcon size={16} className="text-primary" />
-              </motion.div>
-              Calendário
-            </Button>
-          </motion.div>
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
-            <Button onClick={() => openNew()} className="gap-2 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-md hover:shadow-lg transition-all duration-200">
-              <motion.div animate={{ rotate: [0, 90, 0] }} transition={{ duration: 0.4, ease: 'easeInOut' }} key="plus-icon-main">
-                <Plus size={16} />
-              </motion.div>
-              Nova Entrega
-            </Button>
-          </motion.div>
-        </div>
+        <motion.div
+          whileHover={{ scale: 1.08, y: -2 }}
+          whileTap={{ scale: 0.93 }}
+          initial={{ opacity: 0, x: 30 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.2 }}
+          className="relative"
+        >
+          <Button
+            className="gap-2.5 rounded-2xl bg-gradient-to-r from-primary via-primary/90 to-primary/70 hover:from-primary/90 hover:via-primary/80 hover:to-primary/60 shadow-lg hover:shadow-xl text-primary-foreground px-6 py-2.5 text-sm font-semibold transition-all duration-300"
+            onClick={() => setMainTab('calendario')}
+          >
+            <motion.div
+              animate={{ rotate: [0, -15, 15, -10, 10, 0] }}
+              transition={{ duration: 1.5, repeat: Infinity, repeatDelay: 4, ease: 'easeInOut' }}
+            >
+              <CalendarIcon size={18} />
+            </motion.div>
+            <span>Calendário</span>
+            <motion.div
+              className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-accent"
+              animate={{ scale: [1, 1.4, 1], opacity: [0.7, 1, 0.7] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            />
+          </Button>
+        </motion.div>
       </div>
 
       {/* Global summary */}

@@ -122,7 +122,7 @@ export default function SocialMediaDeliveries() {
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [schedulingItem, setSchedulingItem] = useState<SocialDelivery | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('pipeline');
+  const [activeTab, setActiveTab] = useState('kanban');
 
   // Form state
   const [formClientId, setFormClientId] = useState('');

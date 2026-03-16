@@ -922,7 +922,11 @@ export default function SocialMediaDeliveries() {
                             )}
                           </div>
                         </div>
-                        <Eye size={16} className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-1" />
+                        <CatStatusIndicator
+                          status={getCatStatus({ hasOverdue, isOnboarding })}
+                          size="sm"
+                          showMessage={true}
+                        />
                       </div>
 
                       {/* Overdue alert banner */}

@@ -1314,7 +1314,32 @@ export default function SocialMediaDeliveries() {
     );
   }
 
-  function renderAlterationDialog() {
+  function renderBatchContentDialog(fallbackClientId: string) {
+    const label = CONTENT_TYPE_LABELS[batchType] || batchType;
+    const iconColors: Record<string, string> = { reels: 'text-blue-600', criativo: 'text-purple-600', arte: 'text-amber-600' };
+    return (
+      <Dialog open={batchDialogOpen} onOpenChange={setBatchDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Zap size={18} className={iconColors[batchType] || 'text-primary'} /> Registrar {label} em Lote</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Quantidade</Label><Input type="number" min={1} max={50} value={batchCount} onChange={e => setBatchCount(Number(e.target.value))} /></div>
+              <div><Label>Data</Label><Input type="date" value={batchDate} onChange={e => setBatchDate(e.target.value)} /></div>
+            </div>
+            <p className="text-xs text-muted-foreground">Serão criados {batchCount} registros de {label} como "Postado".</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={() => handleContentBatch(selectedClientId || fallbackClientId)} className="gap-1.5"><Zap size={14} /> Registrar {batchCount} {label}(s)</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+
     return (
       <Dialog open={alterationDialogOpen} onOpenChange={setAlterationDialogOpen}>
         <DialogContent className="max-w-md">

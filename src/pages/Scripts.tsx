@@ -60,6 +60,13 @@ function RichEditor({ content, onChange }: { content: string; onChange: (html: s
     },
   });
 
+  // Sync external content changes into the editor (e.g. AI generation)
+  useEffect(() => {
+    if (editor && content && editor.getHTML() !== content) {
+      editor.commands.setContent(content);
+    }
+  }, [content, editor]);
+
   if (!editor) return null;
 
   const btnClass = (active: boolean) =>

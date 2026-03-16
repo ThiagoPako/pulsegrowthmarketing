@@ -304,6 +304,24 @@ export default function Scripts() {
     const client = clients.find(c => c.id === form.clientId);
     if (!client) return;
     
+    // Collect existing scripts as examples for the AI to learn style/format
+    const exampleScripts = scripts
+      .filter(s => s.content && s.content.length > 50 && !s.recorded !== undefined)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, 5)
+      .map(s => ({
+        title: s.title,
+        videoType: s.videoType,
+        contentFormat: s.contentFormat || 'reels',
+        clientName: clients.find(c => c.id === s.clientId)?.companyName || '',
+        content: s.content.replace(/<[^>]*>/g, '').substring(0, 800),
+      }));
+
+    // Prioritize same video type examples
+    const sameTypeExamples = exampleScripts.filter(e => e.videoType === form.videoType);
+    const otherExamples = exampleScripts.filter(e => e.videoType !== form.videoType);
+    const orderedExamples = [...sameTypeExamples, ...otherExamples].slice(0, 3);
+
     setGenerating(true);
     try {
       const { data, error } = await supabase.functions.invoke('generate-script', {
@@ -313,6 +331,7 @@ export default function Scripts() {
           contentFormat: form.contentFormat,
           clientName: client.companyName,
           niche: client.niche || '',
+          exampleScripts: orderedExamples,
         },
       });
       if (error) throw error;

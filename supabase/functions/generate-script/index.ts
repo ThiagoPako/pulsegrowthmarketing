@@ -50,13 +50,48 @@ const FORMAT_CONTEXT: Record<string, string> = {
   criativo: "Formato: Criativo/Arte (peça visual estática ou carrossel para feed, foco em copy persuasiva)",
 };
 
+interface ExampleScript {
+  title: string;
+  videoType: string;
+  contentFormat: string;
+  clientName: string;
+  content: string;
+}
+
+function buildExamplesBlock(examples: ExampleScript[]): string {
+  if (!examples || examples.length === 0) return '';
+
+  const blocks = examples.map((ex, i) => 
+    `--- EXEMPLO ${i + 1} ---
+Título: ${ex.title}
+Tipo: ${ex.videoType} | Formato: ${ex.contentFormat} | Cliente: ${ex.clientName}
+Conteúdo:
+${ex.content}
+--- FIM EXEMPLO ${i + 1} ---`
+  ).join('\n\n');
+
+  return `
+
+ROTEIROS DE REFERÊNCIA DA EQUIPE (use como base para entender o estilo, tom, estrutura e formato que a equipe utiliza — adapte ao contexto do novo roteiro):
+
+${blocks}
+
+IMPORTANTE: Analise os exemplos acima para entender:
+- A estrutura e formatação que a equipe prefere
+- O tom de voz e linguagem utilizados
+- Como os ganchos são construídos
+- Como os CTAs são formulados
+- O nível de detalhe nas descrições de cena
+Replique esse padrão no novo roteiro, adaptando ao cliente e tipo de vídeo solicitado.`;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { editorial, videoType, contentFormat, clientName, niche } = await req.json();
+    const { editorial, videoType, contentFormat, clientName, niche, exampleScripts } = await req.json();
 
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!apiKey) {
@@ -68,6 +103,7 @@ serve(async (req) => {
 
     const structure = VIDEO_TYPE_STRUCTURES[videoType] || VIDEO_TYPE_STRUCTURES.vendas;
     const format = FORMAT_CONTEXT[contentFormat] || FORMAT_CONTEXT.reels;
+    const examplesBlock = buildExamplesBlock(exampleScripts || []);
 
     const systemPrompt = `Você é um redator profissional de conteúdo para redes sociais de uma agência de marketing digital brasileira chamada Pulse.
 
@@ -79,7 +115,8 @@ Regras fundamentais:
 - Escreva em português brasileiro, natural e conversacional
 - Use emojis com moderação
 - Indique entre aspas ("") as falas que devem ser ditas no vídeo
-- Use colchetes [descrição] para indicar cenas/ações visuais`;
+- Use colchetes [descrição] para indicar cenas/ações visuais
+- IMPORTANTE: Se roteiros de referência forem fornecidos, analise-os cuidadosamente e replique o estilo, formato, tom e estrutura da equipe. A equipe quer consistência nos roteiros.`;
 
     const userPrompt = `Crie um roteiro completo para o seguinte cliente:
 
@@ -91,6 +128,7 @@ ${format}
 
 ESTRUTURA A SEGUIR:
 ${structure}
+${examplesBlock}
 
 Gere o roteiro completo seguindo a estrutura indicada. Seja criativo mas fiel ao posicionamento do cliente. O roteiro deve estar pronto para ser usado pela equipe de gravação.`;
 
@@ -113,7 +151,19 @@ Gere o roteiro completo seguindo a estrutura indicada. Seja criativo mas fiel ao
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("AI API error:", errText);
+      console.error("AI API error:", response.status, errText);
+      if (response.status === 429) {
+        return new Response(JSON.stringify({ error: "Limite de requisições atingido. Tente novamente em alguns segundos." }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (response.status === 402) {
+        return new Response(JSON.stringify({ error: "Créditos de IA insuficientes." }), {
+          status: 402,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       return new Response(JSON.stringify({ error: "Failed to generate script" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

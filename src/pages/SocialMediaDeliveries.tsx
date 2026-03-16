@@ -691,16 +691,24 @@ export default function SocialMediaDeliveries() {
             { label: 'Agendados', value: stats.agendados, icon: CalendarClock, color: 'text-blue-600' },
             { label: 'Postados', value: stats.postados, icon: CheckCircle2, color: 'text-green-600' },
             { label: 'Total Mês', value: stats.total, icon: TrendingUp, color: 'text-foreground' },
-          ].map(card => (
-            <Card key={card.label} className="border-border">
-              <CardContent className="p-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <card.icon size={14} className={card.color} />
-                  <span className="text-xs text-muted-foreground">{card.label}</span>
-                </div>
-                <p className={`text-xl font-bold ${card.color}`}>{card.value}</p>
-              </CardContent>
-            </Card>
+          ].map((card, i) => (
+            <motion.div
+              key={card.label}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.07, duration: 0.3, ease: 'easeOut' }}
+              whileHover={{ scale: 1.03, y: -2 }}
+            >
+              <Card className="border-border hover:shadow-md transition-shadow">
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <card.icon size={14} className={card.color} />
+                    <span className="text-xs text-muted-foreground">{card.label}</span>
+                  </div>
+                  <p className={`text-xl font-bold ${card.color}`}>{card.value}</p>
+                </CardContent>
+              </Card>
+            </motion.div>
           ))}
         </div>
 

@@ -9,7 +9,6 @@ export interface Profile {
   name: string;
   email: string;
   role: AppRole;
-  status?: 'pending' | 'approved' | 'rejected';
   avatar_url?: string;
   display_name?: string;
   job_title?: string;
@@ -22,7 +21,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, name: string, role: AppRole, status?: 'pending' | 'approved') => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, name: string, role: AppRole) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -73,30 +72,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fetchProfile]);
 
   const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    
-    if (data?.user && !error) {
-      // Check profile status
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('status')
-        .eq('id', data.user.id)
-        .single();
-        
-      if (profile && profile.status !== 'approved') {
-        await supabase.auth.signOut();
-        return { error: 'Your account is pending administrator approval.' };
-      }
-    }
-    
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error?.message ?? null };
   };
 
-  const signUp = async (email: string, password: string, name: string, role: AppRole, status: 'pending' | 'approved' = 'pending') => {
+  const signUp = async (email: string, password: string, name: string, role: AppRole) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { name, role, status } },
+      options: { data: { name, role } },
     });
     return { error: error?.message ?? null };
   };

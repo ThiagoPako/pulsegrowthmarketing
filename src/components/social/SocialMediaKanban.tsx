@@ -331,8 +331,9 @@ function EditingCard({ task, index, onTogglePriority }: { task: any; index: numb
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
       transition={{ delay: index * 0.03, duration: 0.2 }}
+      whileHover={{ y: -2 }}
     >
-      <Card className={`border shadow-sm hover:shadow-md transition-all ${task.editing_priority ? 'ring-1 ring-amber-400/60 border-amber-300' : 'border-border'}`}>
+      <Card className={`border shadow-sm hover:shadow-md transition-all hover:border-primary/30 ${task.editing_priority ? 'ring-1 ring-amber-400/60 border-amber-300' : 'border-border'}`}>
         <CardContent className="p-3 space-y-2">
           {task.editing_priority && (
             <div className="flex items-center gap-1 text-[9px] font-bold text-amber-600">
@@ -400,8 +401,9 @@ function DeliveryCard({
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9, x: 50 }}
       transition={{ delay: index * 0.03, duration: 0.2 }}
+      whileHover={{ y: -2 }}
     >
-      <Card className="border border-border shadow-sm hover:shadow-md transition-all group">
+      <Card className="border border-border shadow-sm hover:shadow-md transition-all group hover:border-primary/30">
         <CardContent className="p-3 space-y-2">
           {/* Title */}
           <p className="text-sm font-medium text-foreground leading-tight line-clamp-2">{d.title}</p>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -690,16 +691,24 @@ export default function SocialMediaDeliveries() {
             { label: 'Agendados', value: stats.agendados, icon: CalendarClock, color: 'text-blue-600' },
             { label: 'Postados', value: stats.postados, icon: CheckCircle2, color: 'text-green-600' },
             { label: 'Total Mês', value: stats.total, icon: TrendingUp, color: 'text-foreground' },
-          ].map(card => (
-            <Card key={card.label} className="border-border">
-              <CardContent className="p-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <card.icon size={14} className={card.color} />
-                  <span className="text-xs text-muted-foreground">{card.label}</span>
-                </div>
-                <p className={`text-xl font-bold ${card.color}`}>{card.value}</p>
-              </CardContent>
-            </Card>
+          ].map((card, i) => (
+            <motion.div
+              key={card.label}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.07, duration: 0.3, ease: 'easeOut' }}
+              whileHover={{ scale: 1.03, y: -2 }}
+            >
+              <Card className="border-border hover:shadow-md transition-shadow">
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <card.icon size={14} className={card.color} />
+                    <span className="text-xs text-muted-foreground">{card.label}</span>
+                  </div>
+                  <p className={`text-xl font-bold ${card.color}`}>{card.value}</p>
+                </CardContent>
+              </Card>
+            </motion.div>
           ))}
         </div>
 
@@ -822,16 +831,24 @@ export default function SocialMediaDeliveries() {
           { label: 'Pendentes', value: totalThisMonth.pendentes, icon: Clock, color: 'text-yellow-600' },
           { label: 'Agendados', value: totalThisMonth.agendados, icon: CalendarClock, color: 'text-blue-600' },
           { label: 'Postados', value: totalThisMonth.postados, icon: CheckCircle2, color: 'text-green-600' },
-        ].map(card => (
-          <Card key={card.label} className="border-border">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <card.icon size={14} className={card.color} />
-                <span className="text-xs text-muted-foreground">{card.label}</span>
-              </div>
-              <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
-            </CardContent>
-          </Card>
+        ].map((card, i) => (
+          <motion.div
+            key={card.label}
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.06, duration: 0.35, ease: 'easeOut' }}
+            whileHover={{ scale: 1.04, y: -3 }}
+          >
+            <Card className="border-border hover:shadow-md transition-shadow">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <card.icon size={14} className={card.color} />
+                  <span className="text-xs text-muted-foreground">{card.label}</span>
+                </div>
+                <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
+              </CardContent>
+            </Card>
+          </motion.div>
         ))}
       </div>
 
@@ -864,9 +881,15 @@ export default function SocialMediaDeliveries() {
                 const hasAlmostOverdue = overdue.almostOverdue > 0;
 
                 return (
-                  <Card
+                  <motion.div
                     key={client.id}
-                    className={`border-border hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.05 * clientsWithData.indexOf(clientsWithData.find(c => c.client.id === client.id)!), duration: 0.3 }}
+                    whileHover={{ y: -4 }}
+                  >
+                  <Card
+                    className={`border-border hover:border-primary/40 hover:shadow-lg transition-all cursor-pointer group 
                       ${isOnboarding ? 'animate-[pulse_3s_ease-in-out_infinite] ring-2 ring-amber-400/50 shadow-amber-200/30 shadow-lg' : ''} 
                       ${hasOverdue ? 'ring-2 ring-red-500/60 border-red-400/50 shadow-red-200/30 shadow-lg animate-[pulse_2s_ease-in-out_infinite]' : ''} 
                       ${!hasOverdue && hasAlmostOverdue ? 'ring-1 ring-orange-400/50 border-orange-300/50' : ''}`}
@@ -965,6 +988,7 @@ export default function SocialMediaDeliveries() {
                       )}
                     </CardContent>
                   </Card>
+                  </motion.div>
                 );
               })}
             </div>

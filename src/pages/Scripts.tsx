@@ -292,6 +292,47 @@ export default function Scripts() {
     toast.success(count > 0 ? `${count} roteiro(s) limpo(s)` : 'Nenhum roteiro precisava de limpeza');
   };
 
+  const handleGenerateScript = async () => {
+    if (!form.clientId) { toast.error('Selecione um cliente primeiro'); return; }
+    const client = clients.find(c => c.id === form.clientId);
+    if (!client) return;
+    
+    setGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-script', {
+        body: {
+          editorial: client.editorial || '',
+          videoType: form.videoType,
+          contentFormat: form.contentFormat,
+          clientName: client.companyName,
+          niche: client.niche || '',
+        },
+      });
+      if (error) throw error;
+      if (data?.content) {
+        // Convert markdown-like content to basic HTML
+        const htmlContent = data.content
+          .replace(/\n\n/g, '</p><p>')
+          .replace(/\n/g, '<br/>')
+          .replace(/^/, '<p>')
+          .replace(/$/, '</p>')
+          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*(.*?)\*/g, '<em>$1</em>');
+        setForm(prev => ({ ...prev, content: htmlContent }));
+        if (!form.title) {
+          const autoTitle = `${SCRIPT_VIDEO_TYPE_LABELS[form.videoType]} - ${client.companyName}`;
+          setForm(prev => ({ ...prev, title: autoTitle }));
+        }
+        toast.success('Roteiro gerado com sucesso!');
+      }
+    } catch (err) {
+      console.error('Generate script error:', err);
+      toast.error('Erro ao gerar roteiro. Tente novamente.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || '—';
   const getClientColor = (id: string) => clients.find(c => c.id === id)?.color || '220 10% 50%';
 

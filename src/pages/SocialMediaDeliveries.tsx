@@ -988,6 +988,7 @@ export default function SocialMediaDeliveries() {
                       )}
                     </CardContent>
                   </Card>
+                  </motion.div>
                 );
               })}
             </div>

@@ -25,6 +25,7 @@ import { ptBR } from 'date-fns/locale';
 import PostingCalendar from '@/components/social/PostingCalendar';
 import OnboardingTracker from '@/components/social/OnboardingTracker';
 import SocialMediaKanban from '@/components/social/SocialMediaKanban';
+import CatStatusIndicator, { getCatStatus } from '@/components/social/CatStatusIndicator';
 
 interface SocialDelivery {
   id: string;
@@ -921,7 +922,11 @@ export default function SocialMediaDeliveries() {
                             )}
                           </div>
                         </div>
-                        <Eye size={16} className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-1" />
+                        <CatStatusIndicator
+                          status={getCatStatus({ hasOverdue, isOnboarding })}
+                          size="sm"
+                          showMessage={true}
+                        />
                       </div>
 
                       {/* Overdue alert banner */}

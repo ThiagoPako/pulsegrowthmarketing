@@ -74,6 +74,7 @@ function clientToRow(c: Client) {
     drive_link: c.driveLink || '',
     drive_fotos: c.driveFotos || '',
     drive_identidade_visual: c.driveIdentidadeVisual || '',
+    editorial: c.editorial || '',
   };
 }
 

@@ -73,6 +73,7 @@ export interface Client {
   driveLink?: string;
   driveFotos?: string;
   driveIdentidadeVisual?: string;
+  editorial?: string;
 }
 
 export interface SocialAccount {

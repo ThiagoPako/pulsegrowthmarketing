@@ -115,6 +115,11 @@ export default function ContentKanban() {
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
 
+  // Delete confirmation
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
+  const [deleteTaskTitle, setDeleteTaskTitle] = useState('');
+
   // Detail sheet
   const [detailTask, setDetailTask] = useState<ContentTask | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);

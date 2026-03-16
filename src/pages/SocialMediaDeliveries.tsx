@@ -642,11 +642,7 @@ export default function SocialMediaDeliveries() {
     const weekStories = weeklyStoriesMap[selectedClientId] || 0;
     const storyGoal = selectedClient.weeklyStories || 0;
 
-    const currentFiltered = activeTab === 'revisao' ? clientDeliveries.review
-      : activeTab === 'alteracao' ? clientDeliveries.alteration
-      : activeTab === 'envio' ? clientDeliveries.approval
-      : activeTab === 'agendados' ? [...clientDeliveries.pending, ...clientDeliveries.scheduled]
-      : clientDeliveries.posted;
+    // All data now rendered via Kanban component
 
     return (
       <div className="space-y-5">

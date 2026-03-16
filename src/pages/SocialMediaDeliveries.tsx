@@ -671,12 +671,22 @@ export default function SocialMediaDeliveries() {
             <p className="text-sm text-muted-foreground">Gestão de entregas social media</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" className="gap-2" onClick={() => { setSelectedClientId(null); setMainTab('calendario'); }}>
-              <CalendarIcon size={16} /> Calendário
-            </Button>
-            <Button onClick={() => openNew(selectedClientId)} className="gap-2">
-              <Plus size={16} /> Nova Entrega
-            </Button>
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button variant="outline" className="gap-2 rounded-xl border-primary/20 hover:border-primary/40 hover:bg-primary/5 shadow-sm transition-all duration-200" onClick={() => { setSelectedClientId(null); setMainTab('calendario'); }}>
+                <motion.div animate={{ rotate: [0, -10, 10, 0] }} transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}>
+                  <CalendarIcon size={16} className="text-primary" />
+                </motion.div>
+                Calendário
+              </Button>
+            </motion.div>
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button onClick={() => openNew(selectedClientId)} className="gap-2 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-md hover:shadow-lg transition-all duration-200">
+                <motion.div animate={{ rotate: [0, 90, 0] }} transition={{ duration: 0.4, ease: 'easeInOut' }} key="plus-icon">
+                  <Plus size={16} />
+                </motion.div>
+                Nova Entrega
+              </Button>
+            </motion.div>
           </div>
         </div>
 

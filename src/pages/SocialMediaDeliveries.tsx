@@ -1341,7 +1341,7 @@ export default function SocialMediaDeliveries() {
     );
   }
 
-
+  function renderAlterationDialog() {
     return (
       <Dialog open={alterationDialogOpen} onOpenChange={setAlterationDialogOpen}>
         <DialogContent className="max-w-md">

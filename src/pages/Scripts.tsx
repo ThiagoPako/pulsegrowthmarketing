@@ -130,6 +130,7 @@ export default function Scripts() {
   const [filterType, setFilterType] = useState('all');
   const [filterEndo, setFilterEndo] = useState<'all' | 'video' | 'endo'>('all');
   const [showRecorded, setShowRecorded] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const [form, setForm] = useState({
     clientId: '',
@@ -289,6 +290,47 @@ export default function Scripts() {
       }
     });
     toast.success(count > 0 ? `${count} roteiro(s) limpo(s)` : 'Nenhum roteiro precisava de limpeza');
+  };
+
+  const handleGenerateScript = async () => {
+    if (!form.clientId) { toast.error('Selecione um cliente primeiro'); return; }
+    const client = clients.find(c => c.id === form.clientId);
+    if (!client) return;
+    
+    setGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-script', {
+        body: {
+          editorial: client.editorial || '',
+          videoType: form.videoType,
+          contentFormat: form.contentFormat,
+          clientName: client.companyName,
+          niche: client.niche || '',
+        },
+      });
+      if (error) throw error;
+      if (data?.content) {
+        // Convert markdown-like content to basic HTML
+        const htmlContent = data.content
+          .replace(/\n\n/g, '</p><p>')
+          .replace(/\n/g, '<br/>')
+          .replace(/^/, '<p>')
+          .replace(/$/, '</p>')
+          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*(.*?)\*/g, '<em>$1</em>');
+        setForm(prev => ({ ...prev, content: htmlContent }));
+        if (!form.title) {
+          const autoTitle = `${SCRIPT_VIDEO_TYPE_LABELS[form.videoType]} - ${client.companyName}`;
+          setForm(prev => ({ ...prev, title: autoTitle }));
+        }
+        toast.success('Roteiro gerado com sucesso!');
+      }
+    } catch (err) {
+      console.error('Generate script error:', err);
+      toast.error('Erro ao gerar roteiro. Tente novamente.');
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || '—';
@@ -460,6 +502,42 @@ export default function Scripts() {
                 </Select>
               </div>
             </div>
+
+            {/* Client editorial context + Generate button */}
+            {form.clientId && (() => {
+              const selectedClient = clients.find(c => c.id === form.clientId);
+              if (!selectedClient) return null;
+              return (
+                <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
+                      <FileText size={14} /> Contexto do Cliente
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleGenerateScript}
+                      disabled={generating}
+                      className="gap-1.5 bg-gradient-to-r from-primary to-primary/80"
+                    >
+                      <Sparkles size={14} className={generating ? 'animate-spin' : ''} />
+                      {generating ? 'Gerando...' : 'Gerar Roteiro com IA'}
+                    </Button>
+                  </div>
+                  {selectedClient.editorial ? (
+                    <div className="text-xs text-muted-foreground bg-background/60 rounded-lg p-3 max-h-24 overflow-y-auto border border-border/50">
+                      <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">Linha Editorial</p>
+                      {selectedClient.editorial}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground italic">
+                      ⚠️ Este cliente não possui linha editorial cadastrada. O roteiro será gerado com base no nicho e tipo de vídeo. 
+                      Para melhores resultados, cadastre a linha editorial no perfil do cliente.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Seasonal dates alert */}
             {(() => {

@@ -973,6 +973,7 @@ export default function SocialMediaDeliveries() {
         {renderScheduleDialog()}
         {renderEditDialog()}
         {renderStoriesDialog(selectedClientId)}
+        {renderBatchContentDialog(selectedClientId)}
         {renderAlterationDialog()}
       </div>
     );

@@ -147,6 +147,12 @@ export default function SocialMediaDeliveries() {
   const [storiesCount, setStoriesCount] = useState(5);
   const [storiesDate, setStoriesDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
+  // Generic content batch (reels, criativo, arte)
+  const [batchDialogOpen, setBatchDialogOpen] = useState(false);
+  const [batchType, setBatchType] = useState<'reels' | 'criativo' | 'arte'>('reels');
+  const [batchCount, setBatchCount] = useState(1);
+  const [batchDate, setBatchDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+
   // Alteration dialog
   const [alterationDialogOpen, setAlterationDialogOpen] = useState(false);
   const [alterationNotes, setAlterationNotes] = useState('');
@@ -402,6 +408,53 @@ export default function SocialMediaDeliveries() {
     if (!data?.length) { toast.error('Nenhum story para remover'); return; }
     await supabase.from('social_media_deliveries').delete().eq('id', data[0].id);
     toast.success('Story removido'); fetchData();
+  };
+
+  const CONTENT_TYPE_LABELS: Record<string, string> = { reels: 'Reel', criativo: 'Criativo', arte: 'Arte', story: 'Story' };
+
+  const handleSingleContent = async (clientId: string, contentType: string) => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const label = CONTENT_TYPE_LABELS[contentType] || contentType;
+    const { error } = await supabase.from('social_media_deliveries').insert({
+      client_id: clientId, content_type: contentType,
+      title: `${label} - ${format(new Date(), 'dd/MM', { locale: ptBR })}`,
+      status: 'postado', delivered_at: today, posted_at: today,
+      platform: 'Instagram', created_by: user?.id || null,
+    } as any);
+    if (error) { toast.error('Erro'); return; }
+    toast.success(`${label} registrado`); fetchData();
+  };
+
+  const handleRemoveLastContent = async (clientId: string, contentType: string) => {
+    const label = CONTENT_TYPE_LABELS[contentType] || contentType;
+    const { data } = await supabase.from('social_media_deliveries')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('content_type', contentType)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (!data?.length) { toast.error(`Nenhum ${label} para remover`); return; }
+    await supabase.from('social_media_deliveries').delete().eq('id', data[0].id);
+    toast.success(`${label} removido`); fetchData();
+  };
+
+  const handleContentBatch = async (clientId: string) => {
+    const label = CONTENT_TYPE_LABELS[batchType] || batchType;
+    const rows = Array.from({ length: batchCount }, (_, i) => ({
+      client_id: clientId,
+      content_type: batchType,
+      title: `${label} ${i + 1} - ${format(new Date(batchDate + 'T12:00:00'), 'dd/MM', { locale: ptBR })}`,
+      status: 'postado',
+      delivered_at: batchDate,
+      posted_at: batchDate,
+      platform: 'Instagram',
+      created_by: user?.id || null,
+    }));
+    const { error } = await supabase.from('social_media_deliveries').insert(rows as any);
+    if (error) { toast.error(`Erro ao registrar ${label}`); return; }
+    const clientName = clients.find(c => c.id === clientId)?.companyName || '';
+    toast.success(`${batchCount} ${label}(s) registrados para ${clientName}`);
+    setBatchDialogOpen(false); fetchData();
   };
 
   const getTypeConfig = (type: string) => CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];
@@ -761,42 +814,144 @@ export default function SocialMediaDeliveries() {
           </Card>
         )}
 
-        {/* Weekly Stories */}
-        {storyGoal > 0 && (
-          <Card className="border-border">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 flex-1">
-                  <Image size={16} className="text-pink-600 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-semibold text-foreground">Stories Semanal</span>
-                      <span className={`text-xs font-semibold ${weekStories >= storyGoal ? 'text-green-600' : 'text-muted-foreground'}`}>
-                        {weekStories}/{storyGoal}
-                      </span>
+        {/* Manual Content Controls */}
+        <Card className="border-border">
+          <CardContent className="p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Plus size={14} className="text-primary" /> Registro Manual de Conteúdo
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Stories Semanal */}
+              {storyGoal > 0 && (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <Image size={14} className="text-pink-600 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold text-foreground">Stories Semanal</span>
+                        <span className={`text-[10px] font-bold ${weekStories >= storyGoal ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          {weekStories}/{storyGoal}
+                        </span>
+                      </div>
+                      <Progress value={Math.min(Math.round((weekStories / storyGoal) * 100), 100)} className="h-1.5" />
                     </div>
-                    <Progress value={Math.min(Math.round((weekStories / storyGoal) * 100), 100)} className="h-2" />
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRemoveLastStory(selectedClientId)}>
+                      <Trash2 size={12} /> -1
+                    </Button>
+                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => handleSingleStory(selectedClientId)}>
+                      <Plus size={12} /> +1
+                    </Button>
+                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => {
+                      setStoriesCount(storyGoal - weekStories > 0 ? storyGoal - weekStories : 5);
+                      setStoriesDate(format(new Date(), 'yyyy-MM-dd'));
+                      setStoriesDialogOpen(true);
+                    }}>
+                      <Zap size={12} /> Lote
+                    </Button>
                   </div>
                 </div>
-                <div className="flex gap-2 ml-4 shrink-0">
-                  <Button size="sm" variant="outline" className="gap-1 h-8 text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRemoveLastStory(selectedClientId)}>
-                    <Trash2 size={14} /> -1
-                  </Button>
-                  <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => handleSingleStory(selectedClientId)}>
-                    <Plus size={14} /> +1
-                  </Button>
-                  <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => {
-                    setStoriesCount(storyGoal - weekStories > 0 ? storyGoal - weekStories : 5);
-                    setStoriesDate(format(new Date(), 'yyyy-MM-dd'));
-                    setStoriesDialogOpen(true);
-                  }}>
-                    <Zap size={14} /> Lote
-                  </Button>
+              )}
+
+              {/* Reels Mensal */}
+              {plan && plan.reels_qty > 0 && (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <Film size={14} className="text-blue-600 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold text-foreground">Reels Mensal</span>
+                        <span className={`text-[10px] font-bold ${stats.reels >= plan.reels_qty ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          {stats.reels}/{plan.reels_qty}
+                        </span>
+                      </div>
+                      <Progress value={Math.min(Math.round((stats.reels / plan.reels_qty) * 100), 100)} className="h-1.5" />
+                    </div>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRemoveLastContent(selectedClientId, 'reels')}>
+                      <Trash2 size={12} /> -1
+                    </Button>
+                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => handleSingleContent(selectedClientId, 'reels')}>
+                      <Plus size={12} /> +1
+                    </Button>
+                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => {
+                      setBatchType('reels'); setBatchCount(plan.reels_qty - stats.reels > 0 ? plan.reels_qty - stats.reels : 1);
+                      setBatchDate(format(new Date(), 'yyyy-MM-dd')); setBatchDialogOpen(true);
+                    }}>
+                      <Zap size={12} /> Lote
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+              )}
+
+              {/* Criativos Mensal */}
+              {plan && plan.creatives_qty > 0 && (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <Megaphone size={14} className="text-purple-600 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold text-foreground">Criativos Mensal</span>
+                        <span className={`text-[10px] font-bold ${stats.criativo >= plan.creatives_qty ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          {stats.criativo}/{plan.creatives_qty}
+                        </span>
+                      </div>
+                      <Progress value={Math.min(Math.round((stats.criativo / plan.creatives_qty) * 100), 100)} className="h-1.5" />
+                    </div>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRemoveLastContent(selectedClientId, 'criativo')}>
+                      <Trash2 size={12} /> -1
+                    </Button>
+                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => handleSingleContent(selectedClientId, 'criativo')}>
+                      <Plus size={12} /> +1
+                    </Button>
+                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => {
+                      setBatchType('criativo'); setBatchCount(plan.creatives_qty - stats.criativo > 0 ? plan.creatives_qty - stats.criativo : 1);
+                      setBatchDate(format(new Date(), 'yyyy-MM-dd')); setBatchDialogOpen(true);
+                    }}>
+                      <Zap size={12} /> Lote
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Artes Mensal */}
+              {plan && plan.arts_qty > 0 && (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <Palette size={14} className="text-amber-600 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold text-foreground">Artes Mensal</span>
+                        <span className={`text-[10px] font-bold ${stats.arte >= plan.arts_qty ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          {stats.arte}/{plan.arts_qty}
+                        </span>
+                      </div>
+                      <Progress value={Math.min(Math.round((stats.arte / plan.arts_qty) * 100), 100)} className="h-1.5" />
+                    </div>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRemoveLastContent(selectedClientId, 'arte')}>
+                      <Trash2 size={12} /> -1
+                    </Button>
+                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => handleSingleContent(selectedClientId, 'arte')}>
+                      <Plus size={12} /> +1
+                    </Button>
+                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => {
+                      setBatchType('arte'); setBatchCount(plan.arts_qty - stats.arte > 0 ? plan.arts_qty - stats.arte : 1);
+                      setBatchDate(format(new Date(), 'yyyy-MM-dd')); setBatchDialogOpen(true);
+                    }}>
+                      <Zap size={12} /> Lote
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Kanban Board */}
         <SocialMediaKanban
@@ -818,6 +973,7 @@ export default function SocialMediaDeliveries() {
         {renderScheduleDialog()}
         {renderEditDialog()}
         {renderStoriesDialog(selectedClientId)}
+        {renderBatchContentDialog(selectedClientId)}
         {renderAlterationDialog()}
       </div>
     );
@@ -1043,6 +1199,7 @@ export default function SocialMediaDeliveries() {
       {renderScheduleDialog()}
       {renderEditDialog()}
       {renderStoriesDialog('')}
+      {renderBatchContentDialog('')}
       {renderAlterationDialog()}
     </div>
   );
@@ -1153,6 +1310,31 @@ export default function SocialMediaDeliveries() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setStoriesDialogOpen(false)}>Cancelar</Button>
             <Button onClick={() => handleStoriesBatch(selectedClientId || fallbackClientId)} className="gap-1.5"><Zap size={14} /> Registrar {storiesCount} Stories</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  function renderBatchContentDialog(fallbackClientId: string) {
+    const label = CONTENT_TYPE_LABELS[batchType] || batchType;
+    const iconColors: Record<string, string> = { reels: 'text-blue-600', criativo: 'text-purple-600', arte: 'text-amber-600' };
+    return (
+      <Dialog open={batchDialogOpen} onOpenChange={setBatchDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Zap size={18} className={iconColors[batchType] || 'text-primary'} /> Registrar {label} em Lote</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Quantidade</Label><Input type="number" min={1} max={50} value={batchCount} onChange={e => setBatchCount(Number(e.target.value))} /></div>
+              <div><Label>Data</Label><Input type="date" value={batchDate} onChange={e => setBatchDate(e.target.value)} /></div>
+            </div>
+            <p className="text-xs text-muted-foreground">Serão criados {batchCount} registros de {label} como "Postado".</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={() => handleContentBatch(selectedClientId || fallbackClientId)} className="gap-1.5"><Zap size={14} /> Registrar {batchCount} {label}(s)</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

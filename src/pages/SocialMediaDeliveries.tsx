@@ -390,6 +390,18 @@ export default function SocialMediaDeliveries() {
     toast.success('Story registrado'); fetchData();
   };
 
+  const handleRemoveLastStory = async (clientId: string) => {
+    const { data } = await supabase.from('social_media_deliveries')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('content_type', 'story')
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (!data?.length) { toast.error('Nenhum story para remover'); return; }
+    await supabase.from('social_media_deliveries').delete().eq('id', data[0].id);
+    toast.success('Story removido'); fetchData();
+  };
+
   const getTypeConfig = (type: string) => CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];
 
   const getClientPlanGoals = (clientId: string) => {
@@ -740,6 +752,9 @@ export default function SocialMediaDeliveries() {
                   </div>
                 </div>
                 <div className="flex gap-2 ml-4 shrink-0">
+                  <Button size="sm" variant="outline" className="gap-1 h-8 text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRemoveLastStory(selectedClientId)}>
+                    <Trash2 size={14} /> -1
+                  </Button>
                   <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => handleSingleStory(selectedClientId)}>
                     <Plus size={14} /> +1
                   </Button>

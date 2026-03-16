@@ -1,0 +1,1 @@
+CREATE POLICY "Admin can delete task history" ON public.task_history FOR DELETE TO authenticated USING (public.has_role(auth.uid(), 'admin'::app_role));

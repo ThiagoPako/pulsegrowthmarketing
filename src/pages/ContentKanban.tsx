@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, Send, Eye, Maximize2 } from 'lucide-react';
@@ -113,6 +114,11 @@ export default function ContentKanban() {
   const [scheduleDialogTask, setScheduleDialogTask] = useState<ContentTask | null>(null);
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
+
+  // Delete confirmation
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
+  const [deleteTaskTitle, setDeleteTaskTitle] = useState('');
 
   // Detail sheet
   const [detailTask, setDetailTask] = useState<ContentTask | null>(null);
@@ -285,10 +291,22 @@ export default function ContentKanban() {
     fetchTasks();
   };
 
-  const handleDelete = async (id: string) => {
-    const { error } = await supabase.from('content_tasks').delete().eq('id', id);
+  const openDeleteConfirm = (task: ContentTask) => {
+    setDeleteTaskId(task.id);
+    setDeleteTaskTitle(task.title);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirmed = async () => {
+    if (!deleteTaskId) return;
+    // Cascade delete related records
+    await supabase.from('task_history').delete().eq('task_id', deleteTaskId);
+    await supabase.from('social_media_deliveries').delete().eq('content_task_id', deleteTaskId);
+    const { error } = await supabase.from('content_tasks').delete().eq('id', deleteTaskId);
     if (error) { toast.error('Erro ao excluir'); return; }
-    toast.success('Cartão excluído');
+    toast.success('Tarefa excluída com sucesso');
+    setDeleteDialogOpen(false);
+    setDeleteTaskId(null);
     fetchTasks();
   };
 
@@ -625,7 +643,7 @@ export default function ContentKanban() {
                         isDragging={draggedTask?.id === task.id}
                         onDragStart={e => handleDragStart(e, task)}
                         onEdit={() => openEdit(task)}
-                        onDelete={() => handleDelete(task.id)}
+                        onDelete={user?.role === 'admin' ? () => openDeleteConfirm(task) : undefined}
                         onCardClick={() => { setDetailTask(task); setDetailOpen(true); }}
                         onConfirmPosted={task.kanban_column === 'acompanhamento' ? () => handleConfirmPosted(task) : undefined}
                         onApprove={task.kanban_column === 'revisao' ? () => handleApproveTask(task) : undefined}
@@ -923,6 +941,24 @@ export default function ContentKanban() {
         onOpenChange={setDetailOpen}
         onRefresh={fetchTasks}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir tarefa</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir a tarefa <strong>"{deleteTaskTitle}"</strong>? Esta ação é irreversível e removerá também o histórico e entregas associadas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirmed} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -938,7 +974,7 @@ interface TaskCardProps {
   isDragging: boolean;
   onDragStart: (e: React.DragEvent) => void;
   onEdit: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
   onCardClick?: () => void;
   onConfirmPosted?: () => void;
   onApprove?: () => void;
@@ -1008,9 +1044,11 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
           <button onClick={e => { e.stopPropagation(); onEdit(); }} className="w-6 h-6 rounded-lg flex items-center justify-center bg-card/90 backdrop-blur text-muted-foreground hover:text-foreground hover:bg-accent border border-border/60 shadow-sm transition-colors">
             <Edit size={11} />
           </button>
-          <button onClick={e => { e.stopPropagation(); onDelete(); }} className="w-6 h-6 rounded-lg flex items-center justify-center bg-card/90 backdrop-blur text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border/60 shadow-sm transition-colors">
-            <Trash2 size={11} />
-          </button>
+          {onDelete && (
+            <button onClick={e => { e.stopPropagation(); onDelete(); }} className="w-6 h-6 rounded-lg flex items-center justify-center bg-card/90 backdrop-blur text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border/60 shadow-sm transition-colors">
+              <Trash2 size={11} />
+            </button>
+          )}
         </div>
 
         <div className="p-3 space-y-2.5">

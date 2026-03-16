@@ -654,15 +654,18 @@ export default function ContentKanban() {
       </div>
 
       {/* Kanban Board */}
-      <div className="flex-1 overflow-x-auto">
+      <DragScrollContainer className="flex-1">
         <div className="flex gap-3 h-full min-w-max pb-2">
-          {KANBAN_COLUMNS.map(col => {
+          {KANBAN_COLUMNS.map((col, colIdx) => {
             const colTasks = tasksByColumn[col.id] || [];
             const isDragOver = dragOverColumn === col.id;
 
             return (
-              <div
+              <motion.div
                 key={col.id}
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: colIdx * 0.06, duration: 0.4, ease: 'easeOut' }}
                 className={`flex flex-col w-[270px] shrink-0 rounded-2xl transition-all duration-200 ${
                   isDragOver ? 'ring-2 ring-primary/40 bg-accent/20 scale-[1.01]' : 'bg-muted/10'
                 }`}
@@ -671,70 +674,117 @@ export default function ContentKanban() {
                 onDrop={e => handleDrop(e, col.id)}
               >
                 {/* Column header - gradient bar */}
-                <div className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-t-2xl bg-gradient-to-r ${col.gradient}`}>
-                  <span className="text-base leading-none">{col.icon}</span>
-                  <span className="text-[13px] font-bold text-white flex-1 truncate font-[var(--font-display)]" style={{ fontFamily: 'var(--font-display)' }}>{col.label}</span>
-                  <span className="text-[11px] font-bold text-white/90 bg-white/25 backdrop-blur-sm rounded-full px-2.5 py-0.5 min-w-[26px] text-center shadow-sm">
+                <motion.div
+                  className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-t-2xl bg-gradient-to-r ${col.gradient} relative overflow-hidden`}
+                  whileHover={{ scale: 1.01 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <motion.span
+                    className="text-base leading-none"
+                    animate={{ rotate: [0, -8, 8, 0] }}
+                    transition={{ duration: 2, repeat: Infinity, repeatDelay: 5 + colIdx, ease: 'easeInOut' }}
+                  >
+                    {col.icon}
+                  </motion.span>
+                  <span className="text-[13px] font-bold text-white flex-1 truncate" style={{ fontFamily: 'var(--font-display)' }}>{col.label}</span>
+                  <motion.span
+                    className="text-[11px] font-bold text-white/90 bg-white/25 backdrop-blur-sm rounded-full px-2.5 py-0.5 min-w-[26px] text-center shadow-sm"
+                    key={colTasks.length}
+                    initial={{ scale: 1.3 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                  >
                     {colTasks.length}
-                  </span>
-                </div>
+                  </motion.span>
+                  {/* Animated shimmer effect */}
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+                    initial={{ x: '-100%' }}
+                    animate={{ x: '200%' }}
+                    transition={{ duration: 3, repeat: Infinity, repeatDelay: 8 + colIdx * 2, ease: 'linear' }}
+                  />
+                </motion.div>
 
                 {/* Cards */}
-                <ScrollArea className="flex-1 px-2 py-2">
-                  <div className="space-y-2.5">
-                    {colTasks.map(task => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        client={getClient(task.client_id)}
-                        assignedUser={getUser(task.assigned_to)}
-                        linkedScript={task.script_id ? scripts.find(s => s.id === task.script_id) : undefined}
-                        isDragging={draggedTask?.id === task.id}
-                        onDragStart={e => handleDragStart(e, task)}
-                        onEdit={() => openEdit(task)}
-                        onDelete={profile?.role === 'admin' ? () => openDeleteConfirm(task) : undefined}
-                        onCardClick={() => { setDetailTask(task); setDetailOpen(true); }}
-                        onConfirmPosted={task.kanban_column === 'acompanhamento' ? () => handleConfirmPosted(task) : undefined}
-                        onApprove={task.kanban_column === 'revisao' ? () => handleApproveTask(task) : undefined}
-                        onRequestAdjustments={task.kanban_column === 'revisao' ? () => openAdjustmentDialog(task) : undefined}
-                        onAddDriveLink={task.kanban_column === 'captacao' || task.kanban_column === 'edicao' ? () => openLinkDialog(task, 'drive') : undefined}
-                        onAddVideoLink={task.kanban_column === 'edicao' || task.kanban_column === 'alteracao' ? () => openLinkDialog(task, 'video') : undefined}
-                        onMoveToNext={
-                          task.kanban_column === 'captacao' && task.drive_link ? () => handleMoveToNext(task, 'edicao') :
-                          task.kanban_column === 'envio' ? () => handleMoveToNext(task, 'agendamentos') :
-                          undefined
-                        }
-                        nextColumnLabel={
-                          task.kanban_column === 'captacao' ? 'Edição' :
-                          task.kanban_column === 'envio' ? 'Agendamentos' :
-                          undefined
-                        }
-                        onSchedule={task.kanban_column === 'agendamentos' ? () => openScheduleDialog(task) : undefined}
-                        onResubmit={task.kanban_column === 'alteracao' ? () => handleResubmitFromAlteracao(task) : undefined}
-                      />
-                    ))}
-                    {colTasks.length === 0 && (
-                      <div className="text-center py-12 text-xs text-muted-foreground/50 italic">
-                        {col.id === 'alteracao' ? 'Etapa para a alteração do conteúdo' :
-                         col.id === 'revisao' ? 'Etapa para a revisão do conteúdo criado' :
-                         'Arraste cartões para cá'}
-                      </div>
-                    )}
-                  </div>
-                </ScrollArea>
+                <div className="flex-1 px-2 py-2 overflow-y-auto max-h-[calc(100vh-18rem)]">
+                  <AnimatePresence mode="popLayout">
+                    <div className="space-y-2.5">
+                      {colTasks.map((task, taskIdx) => (
+                        <motion.div
+                          key={task.id}
+                          layout
+                          initial={{ opacity: 0, scale: 0.92, y: 10 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.9, x: 40 }}
+                          transition={{ delay: taskIdx * 0.03, duration: 0.25, ease: 'easeOut' }}
+                          whileHover={{ y: -3, transition: { duration: 0.15 } }}
+                        >
+                          <TaskCard
+                            task={task}
+                            client={getClient(task.client_id)}
+                            assignedUser={getUser(task.assigned_to)}
+                            linkedScript={task.script_id ? scripts.find(s => s.id === task.script_id) : undefined}
+                            isDragging={draggedTask?.id === task.id}
+                            onDragStart={e => handleDragStart(e, task)}
+                            onEdit={() => openEdit(task)}
+                            onDelete={profile?.role === 'admin' ? () => openDeleteConfirm(task) : undefined}
+                            onCardClick={() => { setDetailTask(task); setDetailOpen(true); }}
+                            onConfirmPosted={task.kanban_column === 'acompanhamento' ? () => handleConfirmPosted(task) : undefined}
+                            onApprove={task.kanban_column === 'revisao' ? () => handleApproveTask(task) : undefined}
+                            onRequestAdjustments={task.kanban_column === 'revisao' ? () => openAdjustmentDialog(task) : undefined}
+                            onAddDriveLink={task.kanban_column === 'captacao' || task.kanban_column === 'edicao' ? () => openLinkDialog(task, 'drive') : undefined}
+                            onAddVideoLink={task.kanban_column === 'edicao' || task.kanban_column === 'alteracao' ? () => openLinkDialog(task, 'video') : undefined}
+                            onMoveToNext={
+                              task.kanban_column === 'captacao' && task.drive_link ? () => handleMoveToNext(task, 'edicao') :
+                              task.kanban_column === 'envio' ? () => handleMoveToNext(task, 'agendamentos') :
+                              undefined
+                            }
+                            nextColumnLabel={
+                              task.kanban_column === 'captacao' ? 'Edição' :
+                              task.kanban_column === 'envio' ? 'Agendamentos' :
+                              undefined
+                            }
+                            onSchedule={task.kanban_column === 'agendamentos' ? () => openScheduleDialog(task) : undefined}
+                            onResubmit={task.kanban_column === 'alteracao' ? () => handleResubmitFromAlteracao(task) : undefined}
+                          />
+                        </motion.div>
+                      ))}
+                      {colTasks.length === 0 && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="text-center py-12 text-xs text-muted-foreground/50 italic flex flex-col items-center gap-2"
+                        >
+                          <motion.span
+                            className="text-2xl"
+                            animate={{ y: [0, -4, 0] }}
+                            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                          >
+                            {col.icon}
+                          </motion.span>
+                          {col.id === 'alteracao' ? 'Etapa para a alteração do conteúdo' :
+                           col.id === 'revisao' ? 'Etapa para a revisão do conteúdo criado' :
+                           'Arraste cartões para cá'}
+                        </motion.div>
+                      )}
+                    </div>
+                  </AnimatePresence>
+                </div>
 
                 {/* Add button at bottom */}
-                <button
+                <motion.button
                   onClick={() => openNew(col.id)}
                   className="mx-2 mb-2 py-2 rounded-xl border border-dashed border-border/60 text-xs text-muted-foreground/70 hover:text-foreground hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 flex items-center justify-center gap-1.5 font-medium"
+                  whileHover={{ scale: 1.02, borderColor: 'hsl(var(--primary))' }}
+                  whileTap={{ scale: 0.97 }}
                 >
                   <Plus size={12} /> Adicionar
-                </button>
-              </div>
+                </motion.button>
+              </motion.div>
             );
           })}
         </div>
-      </div>
+      </DragScrollContainer>
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={v => { if (!v) { setDialogOpen(false); resetForm(); } }}>

@@ -147,6 +147,12 @@ export default function SocialMediaDeliveries() {
   const [storiesCount, setStoriesCount] = useState(5);
   const [storiesDate, setStoriesDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
+  // Generic content batch (reels, criativo, arte)
+  const [batchDialogOpen, setBatchDialogOpen] = useState(false);
+  const [batchType, setBatchType] = useState<'reels' | 'criativo' | 'arte'>('reels');
+  const [batchCount, setBatchCount] = useState(1);
+  const [batchDate, setBatchDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+
   // Alteration dialog
   const [alterationDialogOpen, setAlterationDialogOpen] = useState(false);
   const [alterationNotes, setAlterationNotes] = useState('');

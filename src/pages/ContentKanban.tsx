@@ -76,7 +76,7 @@ interface ContentTask {
 
 export default function ContentKanban() {
   const { clients, recordings, scripts, users } = useApp();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [tasks, setTasks] = useState<ContentTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -643,7 +643,7 @@ export default function ContentKanban() {
                         isDragging={draggedTask?.id === task.id}
                         onDragStart={e => handleDragStart(e, task)}
                         onEdit={() => openEdit(task)}
-                        onDelete={user?.role === 'admin' ? () => openDeleteConfirm(task) : undefined}
+                        onDelete={profile?.role === 'admin' ? () => openDeleteConfirm(task) : undefined}
                         onCardClick={() => { setDetailTask(task); setDetailOpen(true); }}
                         onConfirmPosted={task.kanban_column === 'acompanhamento' ? () => handleConfirmPosted(task) : undefined}
                         onApprove={task.kanban_column === 'revisao' ? () => handleApproveTask(task) : undefined}

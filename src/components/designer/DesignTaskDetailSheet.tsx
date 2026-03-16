@@ -260,6 +260,20 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
               >
                 {currentCol?.label}
               </Badge>
+              {currentUser?.role === 'admin' && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-7 px-2 text-xs gap-1"
+                  onClick={() => {
+                    if (window.confirm('Tem certeza que deseja excluir esta tarefa? Esta ação não pode ser desfeita.')) {
+                      deleteTask.mutateAsync(task.id).then(() => onOpenChange(false));
+                    }
+                  }}
+                >
+                  <Trash2 size={13} /> Excluir
+                </Button>
+              )}
             </div>
           </div>
         </div>

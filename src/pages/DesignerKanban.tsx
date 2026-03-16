@@ -331,14 +331,12 @@ interface TaskCardProps {
 function TaskCard({ task, isDragging, onClick, onDragStart, onDragEnd }: TaskCardProps) {
   const priorityCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.media;
   return (
-    <motion.div
+    <div
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onClick}
-      whileHover={{ y: -3, boxShadow: '0 8px 25px -5px hsl(var(--primary) / 0.15)' }}
-      whileTap={{ scale: 0.97 }}
-      className={`bg-card border border-border/60 rounded-xl p-3 cursor-grab active:cursor-grabbing transition-colors space-y-2.5 group ${
+      className={`bg-card border border-border/60 rounded-xl p-3 cursor-grab active:cursor-grabbing hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200 space-y-2.5 group ${
         isDragging ? 'opacity-40 scale-95 ring-2 ring-primary/40' : ''
       }`}
     >

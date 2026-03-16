@@ -410,6 +410,53 @@ export default function SocialMediaDeliveries() {
     toast.success('Story removido'); fetchData();
   };
 
+  const CONTENT_TYPE_LABELS: Record<string, string> = { reels: 'Reel', criativo: 'Criativo', arte: 'Arte', story: 'Story' };
+
+  const handleSingleContent = async (clientId: string, contentType: string) => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const label = CONTENT_TYPE_LABELS[contentType] || contentType;
+    const { error } = await supabase.from('social_media_deliveries').insert({
+      client_id: clientId, content_type: contentType,
+      title: `${label} - ${format(new Date(), 'dd/MM', { locale: ptBR })}`,
+      status: 'postado', delivered_at: today, posted_at: today,
+      platform: 'Instagram', created_by: user?.id || null,
+    } as any);
+    if (error) { toast.error('Erro'); return; }
+    toast.success(`${label} registrado`); fetchData();
+  };
+
+  const handleRemoveLastContent = async (clientId: string, contentType: string) => {
+    const label = CONTENT_TYPE_LABELS[contentType] || contentType;
+    const { data } = await supabase.from('social_media_deliveries')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('content_type', contentType)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (!data?.length) { toast.error(`Nenhum ${label} para remover`); return; }
+    await supabase.from('social_media_deliveries').delete().eq('id', data[0].id);
+    toast.success(`${label} removido`); fetchData();
+  };
+
+  const handleContentBatch = async (clientId: string) => {
+    const label = CONTENT_TYPE_LABELS[batchType] || batchType;
+    const rows = Array.from({ length: batchCount }, (_, i) => ({
+      client_id: clientId,
+      content_type: batchType,
+      title: `${label} ${i + 1} - ${format(new Date(batchDate + 'T12:00:00'), 'dd/MM', { locale: ptBR })}`,
+      status: 'postado',
+      delivered_at: batchDate,
+      posted_at: batchDate,
+      platform: 'Instagram',
+      created_by: user?.id || null,
+    }));
+    const { error } = await supabase.from('social_media_deliveries').insert(rows as any);
+    if (error) { toast.error(`Erro ao registrar ${label}`); return; }
+    const clientName = clients.find(c => c.id === clientId)?.companyName || '';
+    toast.success(`${batchCount} ${label}(s) registrados para ${clientName}`);
+    setBatchDialogOpen(false); fetchData();
+  };
+
   const getTypeConfig = (type: string) => CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];
 
   const getClientPlanGoals = (clientId: string) => {

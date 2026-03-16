@@ -1199,6 +1199,7 @@ export default function SocialMediaDeliveries() {
       {renderScheduleDialog()}
       {renderEditDialog()}
       {renderStoriesDialog('')}
+      {renderBatchContentDialog('')}
       {renderAlterationDialog()}
     </div>
   );

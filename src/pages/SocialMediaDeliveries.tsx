@@ -740,6 +740,9 @@ export default function SocialMediaDeliveries() {
                   </div>
                 </div>
                 <div className="flex gap-2 ml-4 shrink-0">
+                  <Button size="sm" variant="outline" className="gap-1 h-8 text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRemoveLastStory(selectedClientId)}>
+                    <Trash2 size={14} /> -1
+                  </Button>
                   <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => handleSingleStory(selectedClientId)}>
                     <Plus size={14} /> +1
                   </Button>

@@ -643,7 +643,7 @@ export default function ContentKanban() {
                         isDragging={draggedTask?.id === task.id}
                         onDragStart={e => handleDragStart(e, task)}
                         onEdit={() => openEdit(task)}
-                        onDelete={() => handleDelete(task.id)}
+                        onDelete={user?.role === 'admin' ? () => openDeleteConfirm(task) : undefined}
                         onCardClick={() => { setDetailTask(task); setDetailOpen(true); }}
                         onConfirmPosted={task.kanban_column === 'acompanhamento' ? () => handleConfirmPosted(task) : undefined}
                         onApprove={task.kanban_column === 'revisao' ? () => handleApproveTask(task) : undefined}

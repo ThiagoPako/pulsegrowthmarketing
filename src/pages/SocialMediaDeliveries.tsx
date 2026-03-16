@@ -25,6 +25,7 @@ import { ptBR } from 'date-fns/locale';
 import PostingCalendar from '@/components/social/PostingCalendar';
 import OnboardingTracker from '@/components/social/OnboardingTracker';
 import SocialMediaKanban from '@/components/social/SocialMediaKanban';
+import CatStatusIndicator, { getCatStatus } from '@/components/social/CatStatusIndicator';
 
 interface SocialDelivery {
   id: string;

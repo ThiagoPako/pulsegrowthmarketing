@@ -941,6 +941,24 @@ export default function ContentKanban() {
         onOpenChange={setDetailOpen}
         onRefresh={fetchTasks}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir tarefa</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir a tarefa <strong>"{deleteTaskTitle}"</strong>? Esta ação é irreversível e removerá também o histórico e entregas associadas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirmed} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

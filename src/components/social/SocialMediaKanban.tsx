@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import {
 import {
   Film, Palette, Image, Megaphone, CheckCircle2, Clock, CalendarClock,
   Send, Zap, Eye, MessageSquare, AlertTriangle, ExternalLink, Link2,

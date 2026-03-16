@@ -581,6 +581,22 @@ export default function Clients() {
         );
       })()}
 
+      {/* Editorial / Linha Editorial */}
+      <div className="space-y-2">
+        <Label className="flex items-center gap-1.5">
+          <FileTextIcon size={14} className="text-primary" /> Linha Editorial
+        </Label>
+        <Textarea
+          value={(form as any).editorial || ''}
+          onChange={e => setForm({ ...form, editorial: e.target.value } as any)}
+          placeholder="Descreva o posicionamento, tom de voz, público-alvo, diferenciais e estilo de comunicação do cliente. Essa informação será usada como base para geração de roteiros."
+          className="min-h-[120px] text-sm"
+        />
+        <p className="text-[10px] text-muted-foreground">
+          A linha editorial será utilizada como referência na criação automática de roteiros para este cliente.
+        </p>
+      </div>
+
       {/* Access & Drive links */}
       <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
         <p className="text-sm font-semibold flex items-center gap-2">

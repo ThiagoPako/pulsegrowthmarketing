@@ -23,6 +23,7 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isToday, isPa
 import { ptBR } from 'date-fns/locale';
 import PostingCalendar from '@/components/social/PostingCalendar';
 import OnboardingTracker from '@/components/social/OnboardingTracker';
+import SocialMediaKanban from '@/components/social/SocialMediaKanban';
 
 interface SocialDelivery {
   id: string;

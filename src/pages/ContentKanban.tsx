@@ -956,7 +956,7 @@ interface TaskCardProps {
   isDragging: boolean;
   onDragStart: (e: React.DragEvent) => void;
   onEdit: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
   onCardClick?: () => void;
   onConfirmPosted?: () => void;
   onApprove?: () => void;

@@ -881,9 +881,15 @@ export default function SocialMediaDeliveries() {
                 const hasAlmostOverdue = overdue.almostOverdue > 0;
 
                 return (
-                  <Card
+                  <motion.div
                     key={client.id}
-                    className={`border-border hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.05 * clientsWithData.indexOf(clientsWithData.find(c => c.client.id === client.id)!), duration: 0.3 }}
+                    whileHover={{ y: -4 }}
+                  >
+                  <Card
+                    className={`border-border hover:border-primary/40 hover:shadow-lg transition-all cursor-pointer group 
                       ${isOnboarding ? 'animate-[pulse_3s_ease-in-out_infinite] ring-2 ring-amber-400/50 shadow-amber-200/30 shadow-lg' : ''} 
                       ${hasOverdue ? 'ring-2 ring-red-500/60 border-red-400/50 shadow-red-200/30 shadow-lg animate-[pulse_2s_ease-in-out_infinite]' : ''} 
                       ${!hasOverdue && hasAlmostOverdue ? 'ring-1 ring-orange-400/50 border-orange-300/50' : ''}`}

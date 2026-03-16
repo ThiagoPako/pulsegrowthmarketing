@@ -37,6 +37,7 @@ function rowToClient(r: any): Client {
     driveLink: r.drive_link || '',
     driveFotos: r.drive_fotos || '',
     driveIdentidadeVisual: r.drive_identidade_visual || '',
+    editorial: r.editorial || '',
   };
 }
 

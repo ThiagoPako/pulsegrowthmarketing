@@ -76,7 +76,7 @@ interface ContentTask {
 
 export default function ContentKanban() {
   const { clients, recordings, scripts, users } = useApp();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [tasks, setTasks] = useState<ContentTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);

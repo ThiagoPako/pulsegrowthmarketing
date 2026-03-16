@@ -118,5 +118,19 @@ export function useDesignTasks() {
     },
   });
 
-  return { tasksQuery, historyQuery, createTask, updateTask, addHistory };
+  const deleteTask = useMutation({
+    mutationFn: async (taskId: string) => {
+      // Delete history first
+      await supabase.from('design_task_history').delete().eq('task_id', taskId);
+      const { error } = await supabase.from('design_tasks').delete().eq('id', taskId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['design-tasks'] });
+      toast.success('Tarefa excluída com sucesso!');
+    },
+    onError: (e: any) => toast.error(e.message || 'Erro ao excluir tarefa'),
+  });
+
+  return { tasksQuery, historyQuery, createTask, updateTask, addHistory, deleteTask };
 }

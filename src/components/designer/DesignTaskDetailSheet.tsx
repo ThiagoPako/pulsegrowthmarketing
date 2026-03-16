@@ -53,7 +53,7 @@ function getTaskCategory(task: DesignTask): 'identidade_visual' | 'reformulacao'
 }
 
 export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Props) {
-  const { updateTask, addHistory, historyQuery } = useDesignTasks();
+  const { updateTask, addHistory, historyQuery, deleteTask } = useDesignTasks();
   const { currentUser } = useApp();
   const { user } = useAuth();
   const [observations, setObservations] = useState(task.observations || '');

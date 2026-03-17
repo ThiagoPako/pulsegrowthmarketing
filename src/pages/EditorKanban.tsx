@@ -167,7 +167,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
 
         {/* Edited video link */}
         {hasVideoLink && (
-          <a href={`/portal/${task.client_id}`} target="_blank" rel="noopener noreferrer"
+          <a href={`/portal/${task.client_id}`}
             className="flex items-center gap-1.5 text-[11px] font-medium text-green-600 dark:text-green-400 hover:underline bg-green-50 dark:bg-green-900/20 rounded-md px-2 py-1.5">
             <Eye size={12} />🎬 Assistir no Portal
           </a>

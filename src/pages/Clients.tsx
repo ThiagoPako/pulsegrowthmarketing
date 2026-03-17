@@ -94,6 +94,7 @@ export default function Clients() {
   const [sendWaMsg, setSendWaMsg] = useState('');
   const [sendWaLoading, setSendWaLoading] = useState(false);
   const [artDbClient, setArtDbClient] = useState<Client | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   
   // Plan-related state
   const [plans, setPlans] = useState<{ id: string; name: string; status: string; reels_qty: number; creatives_qty: number; stories_qty: number; recording_sessions: number; accepts_extra_content: boolean }[]>([]);
@@ -1456,14 +1457,28 @@ export default function Clients() {
         )}
       </div>
 
-      {clients.length === 0 ? (
-        <div className="glass-card p-12 text-center text-muted-foreground">
-          <Building2 size={40} className="mx-auto mb-3 opacity-50" />
-          <p>Nenhum cliente cadastrado</p>
-        </div>
-      ) : (
+      {/* Search filter */}
+      <div className="w-full max-w-sm">
+        <Input
+          placeholder="Buscar cliente pelo nome..."
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+          className="h-10"
+        />
+      </div>
+
+      {(() => {
+        const filtered = clients.filter(c =>
+          c.companyName.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+        return filtered.length === 0 ? (
+          <div className="glass-card p-12 text-center text-muted-foreground">
+            <Building2 size={40} className="mx-auto mb-3 opacity-50" />
+            <p>{searchTerm ? 'Nenhum cliente encontrado' : 'Nenhum cliente cadastrado'}</p>
+          </div>
+        ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {clients.map(c => (
+          {filtered.map(c => (
             <div key={c.id} className="glass-card overflow-hidden"
               style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${c.color || '220 10% 50%'})` }}>
               {/* Header row */}
@@ -1547,7 +1562,8 @@ export default function Clients() {
             </div>
           ))}
         </div>
-      )}
+        );
+      })()}
 
       {/* WhatsApp Send Dialog */}
       <Dialog open={sendWaOpen} onOpenChange={setSendWaOpen}>

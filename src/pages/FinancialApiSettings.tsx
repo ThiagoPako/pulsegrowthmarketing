@@ -131,10 +131,14 @@ export default function FinancialApiSettings() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [aiConfig, setAiConfig] = useState({
-    model: 'google/gemini-2.5-flash-lite',
+    provider: 'gemini',
+    model: 'gemini-2.5-flash-lite',
     active: false,
     integrationId: null as string | null,
+    apiKeySet: false,
   });
+  const [aiApiKey, setAiApiKey] = useState('');
+  const [savingAi, setSavingAi] = useState(false);
 
   const [form, setForm] = useState({
     name: '',

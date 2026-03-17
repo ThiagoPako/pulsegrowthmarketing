@@ -273,7 +273,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                     ${isPast ? 'text-white/25' : 'text-white/80 hover:bg-white/[0.08]'}
                     ${hasRecording && !isPast ? 'font-semibold' : ''}
                   `}
-                  style={isSelected ? { background: `hsl(${clientColor} / 0.2)`, ringColor: `hsl(${clientColor})` } : {}}
+                  style={isSelected ? { background: `hsl(${clientColor} / 0.2)`, boxShadow: `0 0 0 2px hsl(${clientColor})` } : {}}
                 >
                   <span>{format(day, 'd')}</span>
                   {hasRecording && (

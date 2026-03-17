@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Upload, Film, Image, Palette, Video, Trash2, ExternalLink, Eye, Loader2, Play, Grid3X3, Sparkles, Copy, KeyRound, X } from 'lucide-react';
+import { Upload, Film, Image, Palette, Video, Trash2, ExternalLink, Eye, Loader2, Play, Grid3X3, Sparkles, Copy, KeyRound, X, CheckCircle, FileUp } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { motion } from 'framer-motion';
@@ -196,6 +196,7 @@ export default function ContentManager() {
   const [filterClient, setFilterClient] = useState('all');
   const [showPortalSelector, setShowPortalSelector] = useState(false);
   const [playingContent, setPlayingContent] = useState<ContentRow | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
 
   useEffect(() => { loadData(); }, []);
 
@@ -273,6 +274,8 @@ export default function ContentManager() {
       if (insertError) throw insertError;
 
       toast.success('Conteúdo enviado com sucesso!');
+      setUploadSuccess(true);
+      setTimeout(() => setUploadSuccess(false), 3000);
       setTitle('');
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -449,14 +452,47 @@ export default function ContentManager() {
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">Arquivo</label>
-              <Input ref={fileInputRef} type="file" accept="video/*,image/*,.pdf" onChange={e => setFile(e.target.files?.[0] || null)} />
+              <input ref={fileInputRef} type="file" accept="video/*,image/*,.pdf" onChange={e => setFile(e.target.files?.[0] || null)} className="hidden" id="content-file-input" />
+              <label
+                htmlFor="content-file-input"
+                className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-4 cursor-pointer transition-all duration-200
+                  ${file
+                    ? 'border-primary bg-primary/5 text-primary'
+                    : 'border-muted-foreground/30 hover:border-primary hover:bg-accent text-muted-foreground hover:text-foreground'
+                  }`}
+              >
+                <FileUp size={24} />
+                <span className="text-sm font-medium text-center">
+                  {file ? file.name : 'Clique para selecionar arquivo'}
+                </span>
+                {file && <span className="text-xs text-muted-foreground">({(file.size / 1024 / 1024).toFixed(1)} MB)</span>}
+              </label>
             </div>
           </div>
+
+          {/* Success animation */}
+          {uploadSuccess && (
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0 }}
+              className="mt-4 flex items-center gap-2 rounded-lg bg-primary/10 border border-primary/30 px-4 py-3 text-primary"
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: [0, 1.3, 1] }}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
+              >
+                <CheckCircle size={20} />
+              </motion.div>
+              <span className="text-sm font-medium">Upload concluído com sucesso!</span>
+            </motion.div>
+          )}
+
           <div className="mt-4 flex items-center gap-3">
-            <Button onClick={handleUpload} disabled={uploading || !title || !clientId || !file}>
+            <Button onClick={handleUpload} disabled={uploading || !title || !clientId || !file} className="gap-2">
               {uploading ? <><Loader2 size={16} className="animate-spin" /> Enviando...</> : <><Upload size={16} /> Enviar Conteúdo</>}
             </Button>
-            {file && <span className="text-sm text-muted-foreground">{file.name} ({(file.size / 1024 / 1024).toFixed(1)} MB)</span>}
           </div>
         </CardContent>
       </Card>

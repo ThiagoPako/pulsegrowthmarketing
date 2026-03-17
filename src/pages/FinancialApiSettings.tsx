@@ -270,9 +270,6 @@ export default function FinancialApiSettings() {
       notes: integration.config?.notes || '',
       metaAppId: integration.config?.meta_app_id || '',
       metaAppSecret: '',
-      metaPageToken: '',
-      metaIgBusinessId: integration.config?.meta_ig_business_id || '',
-      metaPageId: integration.config?.meta_page_id || '',
     });
     setShowDialog(true);
   };
@@ -284,7 +281,7 @@ export default function FinancialApiSettings() {
   };
 
   const resetForm = () => {
-    setForm({ name: '', provider: 'meta_ads', api_type: 'rest', endpoint_url: '', notes: '', metaAppId: '', metaAppSecret: '', metaPageToken: '', metaIgBusinessId: '', metaPageId: '' });
+    setForm({ name: '', provider: 'meta_ads', api_type: 'rest', endpoint_url: '', notes: '', metaAppId: '', metaAppSecret: '' });
     setEditingId(null);
   };
 

@@ -145,6 +145,7 @@ export default function Scripts() {
     videoType: 'vendas' as ScriptVideoType,
     contentFormat: 'reels' as ScriptContentFormat,
     content: '',
+    caption: '',
     priority: 'normal' as ScriptPriority,
     isEndomarketing: false,
     endoClientId: '' as string,

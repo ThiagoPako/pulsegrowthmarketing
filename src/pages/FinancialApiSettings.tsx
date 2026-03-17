@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Settings, Plus, Plug, PlugZap, Trash2, RefreshCw, Eye, EyeOff, Clock, AlertCircle,
-  CheckCircle, XCircle, Loader2, History, Zap
+  CheckCircle, XCircle, Loader2, History, Zap, Info
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';

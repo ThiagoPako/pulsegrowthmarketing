@@ -8,11 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, KeyRound, Users, Handshake, Trash2, Shield } from 'lucide-react';
+import { Plus, KeyRound, Users, Handshake, Trash2, Shield, Lock } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
+import { useUserPermissions, AVAILABLE_MODULES } from '@/hooks/useUserPermissions';
 
 const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'fotografo', 'designer'];
 
@@ -65,6 +67,10 @@ export default function Team() {
   const [partnerOpen, setPartnerOpen] = useState(false);
   const [partnerCreateForm, setPartnerCreateForm] = useState({ name: '', email: '', password: '', serviceFunction: 'fotografo', companyName: '', fixedRate: 0, phone: '', notes: '' });
 
+  const [permTarget, setPermTarget] = useState<TeamMember | null>(null);
+  const [permModules, setPermModules] = useState<string[]>([]);
+  const { permissionsQuery, setPermissions } = useUserPermissions(permTarget?.id);
+
   const fetchMembers = async () => {
     const { data } = await supabase.from('profiles').select('*');
     if (data) {
@@ -88,6 +94,30 @@ export default function Team() {
   };
 
   useEffect(() => { fetchMembers(); fetchPartners(); }, []);
+
+  // Sync permissions when target changes
+  useEffect(() => {
+    if (permTarget && permissionsQuery.data) {
+      setPermModules(permissionsQuery.data);
+    }
+  }, [permTarget, permissionsQuery.data]);
+
+  const handleOpenPermissions = (member: TeamMember) => {
+    setPermTarget(member);
+  };
+
+  const handleSavePermissions = async () => {
+    if (!permTarget) return;
+    await setPermissions.mutateAsync({ userId: permTarget.id, modules: permModules });
+    setPermTarget(null);
+  };
+
+  const toggleModule = (key: string) => {
+    setPermModules(prev => prev.includes(key) ? prev.filter(m => m !== key) : [...prev, key]);
+  };
+
+  const selectAllModules = () => setPermModules(AVAILABLE_MODULES.map(m => m.key));
+  const clearAllModules = () => setPermModules([]);
 
   const handleSave = async () => {
     if (!form.name || !form.email || !form.password) { toast.error('Preencha todos os campos'); return; }
@@ -363,6 +393,62 @@ export default function Team() {
         </DialogContent>
       </Dialog>
 
+      {/* Permissions Dialog */}
+      <Dialog open={!!permTarget} onOpenChange={v => { if (!v) setPermTarget(null); }}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock size={18} /> Permissões de Módulos
+            </DialogTitle>
+          </DialogHeader>
+          {permTarget && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                <UserAvatar user={permTarget} size="md" />
+                <div>
+                  <p className="font-medium text-sm">{permTarget.displayName || permTarget.name}</p>
+                  <p className="text-xs text-muted-foreground">{permTarget.email} · {ROLE_LABELS[permTarget.role]}</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Selecione os módulos que este membro pode acessar. Se nenhum for selecionado, o acesso padrão da função será usado.
+              </p>
+
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={selectAllModules} className="text-xs">Marcar Todos</Button>
+                <Button size="sm" variant="outline" onClick={clearAllModules} className="text-xs">Desmarcar Todos</Button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-1.5 max-h-[400px] overflow-y-auto pr-1">
+                {AVAILABLE_MODULES.map(mod => (
+                  <label
+                    key={mod.key}
+                    className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                      permModules.includes(mod.key) ? 'bg-primary/5 border-primary/30' : 'bg-card border-border hover:bg-muted/50'
+                    }`}
+                  >
+                    <Checkbox
+                      checked={permModules.includes(mod.key)}
+                      onCheckedChange={() => toggleModule(mod.key)}
+                    />
+                    <span className="text-lg">{mod.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{mod.label}</p>
+                      <p className="text-[11px] text-muted-foreground">{mod.description}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              <Button onClick={handleSavePermissions} className="w-full" disabled={setPermissions.isPending}>
+                {setPermissions.isPending ? 'Salvando...' : 'Salvar Permissões'}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {loading ? (
         <div className="glass-card p-12 text-center text-muted-foreground">
           <p>Carregando equipe...</p>
@@ -406,6 +492,11 @@ export default function Team() {
                   )}
                   {currentUser?.role === 'admin' && (
                     <>
+                      {u.id !== currentUser?.id && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Permissões de módulos" onClick={() => handleOpenPermissions(u)}>
+                          <Lock size={16} />
+                        </Button>
+                      )}
                       <Button variant="ghost" size="icon" className="h-8 w-8" title="Redefinir senha" onClick={() => { setResetTarget(u); setResetOpen(true); }}>
                         <KeyRound size={16} />
                       </Button>

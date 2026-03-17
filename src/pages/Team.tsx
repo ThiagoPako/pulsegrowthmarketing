@@ -270,6 +270,9 @@ export default function Team() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-display font-bold">Equipe</h1>
+
+      {/* Birthday Countdown Widget */}
+      <BirthdayCountdown />
         {currentUser?.role === 'admin' && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>

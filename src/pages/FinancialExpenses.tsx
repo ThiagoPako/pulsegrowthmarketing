@@ -184,7 +184,8 @@ export default function FinancialExpenses() {
         </Card>
       </motion.div>
 
-      <Card>
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.3 }}>
+      <Card className="shadow-sm">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -199,32 +200,45 @@ export default function FinancialExpenses() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map(e => {
+              {filtered.map((e, i) => {
                 const cat = categories.find(c => c.id === e.category_id);
                 return (
-                  <TableRow key={e.id}>
+                  <motion.tr
+                    key={e.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.03, duration: 0.2 }}
+                    className="border-b transition-colors hover:bg-muted/50"
+                  >
                     <TableCell>{e.date}</TableCell>
-                    <TableCell><Badge variant="outline">{cat?.name || '—'}</Badge></TableCell>
+                    <TableCell><Badge variant="outline" className="font-normal">{cat?.name || '—'}</Badge></TableCell>
                     <TableCell>{e.description || '—'}</TableCell>
-                    <TableCell className="capitalize">{e.expense_type}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="text-xs capitalize">{e.expense_type}</Badge>
+                    </TableCell>
                     <TableCell>{e.responsible || '—'}</TableCell>
-                    <TableCell className="font-medium text-red-600">{fmt(Number(e.amount))}</TableCell>
+                    <TableCell className="font-semibold text-rose-600">{fmt(Number(e.amount))}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(e)}><Pencil size={14} /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteExpense(e.id)}><Trash2 size={14} /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-primary/10" onClick={() => handleEdit(e)}><Pencil size={13} /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-destructive/10 text-destructive" onClick={() => handleDeleteExpense(e.id)}><Trash2 size={13} /></Button>
                       </div>
                     </TableCell>
-                  </TableRow>
+                  </motion.tr>
                 );
               })}
               {filtered.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhuma despesa neste mês</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-12">
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
+                    💸 Nenhuma despesa neste mês
+                  </motion.div>
+                </TableCell></TableRow>
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+      </motion.div>
     </div>
   );
 }

@@ -67,6 +67,10 @@ export default function Team() {
   const [partnerOpen, setPartnerOpen] = useState(false);
   const [partnerCreateForm, setPartnerCreateForm] = useState({ name: '', email: '', password: '', serviceFunction: 'fotografo', companyName: '', fixedRate: 0, phone: '', notes: '' });
 
+  const [permTarget, setPermTarget] = useState<TeamMember | null>(null);
+  const [permModules, setPermModules] = useState<string[]>([]);
+  const { permissionsQuery, setPermissions } = useUserPermissions(permTarget?.id);
+
   const fetchMembers = async () => {
     const { data } = await supabase.from('profiles').select('*');
     if (data) {

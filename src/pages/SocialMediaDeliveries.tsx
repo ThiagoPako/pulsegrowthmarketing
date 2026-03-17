@@ -72,25 +72,22 @@ const STATUS_OPTIONS = [
 
 const PLATFORMS = ['Instagram', 'Facebook'];
 
-function ReviewVideoLink({ contentTaskId }: { contentTaskId: string | null }) {
-  const [link, setLink] = useState<string | null>(null);
+function ReviewVideoLink({ contentTaskId, clientId }: { contentTaskId: string | null; clientId: string }) {
   const [isAltered, setIsAltered] = useState(false);
+  const [hasVideo, setHasVideo] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [showPlayer, setShowPlayer] = useState(false);
 
   useEffect(() => {
     if (!contentTaskId) { setLoading(false); return; }
     supabase.from('content_tasks').select('edited_video_link, drive_link, adjustment_notes').eq('id', contentTaskId).single()
       .then(({ data }) => {
-        setLink(data?.edited_video_link || data?.drive_link || null);
+        setHasVideo(!!(data?.edited_video_link || data?.drive_link));
         setIsAltered(!!data?.adjustment_notes);
         setLoading(false);
       });
   }, [contentTaskId]);
 
   if (loading) return null;
-
-  const isDirectVideo = link && /\.(mp4|mov|webm|avi)(\?|$)/i.test(link);
 
   return (
     <div className="space-y-1.5">
@@ -101,36 +98,13 @@ function ReviewVideoLink({ contentTaskId }: { contentTaskId: string | null }) {
           </Badge>
         </div>
       )}
-      {link && (
-        <>
-          {isDirectVideo ? (
-            <button
-              onClick={() => setShowPlayer(!showPlayer)}
-              className="flex items-center gap-2 text-sm font-medium text-primary hover:underline bg-primary/5 border border-primary/20 rounded-lg px-3 py-2.5 transition-colors hover:bg-primary/10 w-full text-left"
-            >
-              <Eye size={16} className="shrink-0" />
-              <span className="truncate">🎬 {showPlayer ? 'Ocultar vídeo' : 'Assistir vídeo para revisão'}</span>
-            </button>
-          ) : (
-            <a href={link} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-2 text-sm font-medium text-primary hover:underline bg-primary/5 border border-primary/20 rounded-lg px-3 py-2.5 transition-colors hover:bg-primary/10">
-              <Link2 size={16} className="shrink-0" />
-              <span className="truncate">🎬 Abrir vídeo para revisão</span>
-              <ExternalLink size={14} className="shrink-0 ml-auto" />
-            </a>
-          )}
-          {showPlayer && isDirectVideo && (
-            <div className="rounded-lg overflow-hidden border border-border bg-black aspect-video">
-              <video
-                src={link}
-                controls
-                autoPlay
-                className="w-full h-full"
-                playsInline
-              />
-            </div>
-          )}
-        </>
+      {hasVideo && (
+        <a href={`/portal/${clientId}`} target="_blank" rel="noopener noreferrer"
+          className="flex items-center gap-2 text-sm font-medium text-primary hover:underline bg-primary/5 border border-primary/20 rounded-lg px-3 py-2.5 transition-colors hover:bg-primary/10">
+          <Eye size={16} className="shrink-0" />
+          <span className="truncate">🎬 Assistir no Portal do Cliente</span>
+          <ExternalLink size={14} className="shrink-0 ml-auto" />
+        </a>
       )}
     </div>
   );

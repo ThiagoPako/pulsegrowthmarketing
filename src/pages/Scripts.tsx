@@ -213,6 +213,8 @@ export default function Scripts() {
     };
     if (editing) {
       updateScript({ ...editing, ...scriptData, updatedAt: now });
+      // Save caption separately since it's not in the Script type
+      await supabase.from('scripts').update({ caption: form.caption } as any).eq('id', editing.id);
       toast.success('Roteiro atualizado');
     } else {
       const scriptId = crypto.randomUUID();

@@ -78,6 +78,9 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   const [newComment, setNewComment] = useState('');
   const [videoLink, setVideoLink] = useState(task.edited_video_link || '');
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [videomakerName, setVideomakerName] = useState<string | null>(null);
   const [videomakerAvatar, setVideomakerAvatar] = useState<string | null>(null);
   const [fetchedScript, setFetchedScript] = useState<any>(null);

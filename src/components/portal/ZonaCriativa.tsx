@@ -12,6 +12,7 @@ interface Script {
   id: string;
   title: string;
   content: string;
+  caption: string;
   content_format: string;
   video_type: string;
   created_at: string;
@@ -104,7 +105,7 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
     setLoading(true);
     const { data, error } = await supabase
       .from('scripts')
-      .select('id, title, content, content_format, video_type, created_at, created_by, priority, client_priority')
+      .select('id, title, content, caption, content_format, video_type, created_at, created_by, priority, client_priority')
       .eq('client_id', clientId)
       .eq('is_endomarketing', false)
       .order('created_at', { ascending: false });
@@ -459,6 +460,14 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                       </div>
                     );
                   })()}
+
+                  {/* Caption */}
+                  {selectedScript.caption && (
+                    <div className="p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
+                      <p className="text-[10px] uppercase tracking-wider font-semibold text-white/40 mb-1.5">📝 Legenda</p>
+                      <p className="text-sm text-white/70 leading-relaxed">{selectedScript.caption}</p>
+                    </div>
+                  )}
 
                   {/* Script content */}
                   <ScrollArea className="max-h-[50vh]">

@@ -1934,6 +1934,7 @@ export type Database = {
       }
       scripts: {
         Row: {
+          caption: string | null
           client_id: string
           client_priority: string
           content: string
@@ -1951,6 +1952,7 @@ export type Database = {
           video_type: string
         }
         Insert: {
+          caption?: string | null
           client_id: string
           client_priority?: string
           content?: string
@@ -1968,6 +1970,7 @@ export type Database = {
           video_type?: string
         }
         Update: {
+          caption?: string | null
           client_id?: string
           client_priority?: string
           content?: string
@@ -2197,6 +2200,79 @@ export type Database = {
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "content_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      traffic_campaigns: {
+        Row: {
+          budget: number | null
+          campaign_end_date: string | null
+          campaign_start_date: string | null
+          client_id: string
+          content_task_id: string | null
+          content_type: string
+          created_at: string
+          created_by: string | null
+          design_task_id: string | null
+          id: string
+          notes: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          budget?: number | null
+          campaign_end_date?: string | null
+          campaign_start_date?: string | null
+          client_id: string
+          content_task_id?: string | null
+          content_type?: string
+          created_at?: string
+          created_by?: string | null
+          design_task_id?: string | null
+          id?: string
+          notes?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          budget?: number | null
+          campaign_end_date?: string | null
+          campaign_start_date?: string | null
+          client_id?: string
+          content_task_id?: string | null
+          content_type?: string
+          created_at?: string
+          created_by?: string | null
+          design_task_id?: string | null
+          id?: string
+          notes?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "traffic_campaigns_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "traffic_campaigns_content_task_id_fkey"
+            columns: ["content_task_id"]
+            isOneToOne: false
+            referencedRelation: "content_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "traffic_campaigns_design_task_id_fkey"
+            columns: ["design_task_id"]
+            isOneToOne: false
+            referencedRelation: "design_tasks"
             referencedColumns: ["id"]
           },
         ]

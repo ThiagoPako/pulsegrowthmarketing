@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { Textarea } from '@/components/ui/textarea';
 import { getUpcomingSeasonalDates, NICHE_OPTIONS } from '@/lib/seasonalDates';
 import { highlightQuotes, highlightQuotesForPdf, cleanHtml } from '@/lib/highlightQuotes';
 import { supabase } from '@/integrations/supabase/client';
@@ -145,6 +146,7 @@ export default function Scripts() {
     videoType: 'vendas' as ScriptVideoType,
     contentFormat: 'reels' as ScriptContentFormat,
     content: '',
+    caption: '',
     priority: 'normal' as ScriptPriority,
     isEndomarketing: false,
     endoClientId: '' as string,
@@ -178,17 +180,21 @@ export default function Scripts() {
   const handleOpen = (script?: Script) => {
     if (script) {
       setEditing(script);
-      setForm({
-        clientId: script.clientId, title: script.title, videoType: script.videoType,
-        contentFormat: script.contentFormat || 'reels',
-        content: script.content, priority: script.priority || 'normal',
-        isEndomarketing: script.isEndomarketing || false,
-        endoClientId: script.endoClientId || '',
-        scheduledDate: script.scheduledDate || '',
+      // Load caption from DB
+      supabase.from('scripts').select('caption').eq('id', script.id).single().then(({ data }) => {
+        setForm({
+          clientId: script.clientId, title: script.title, videoType: script.videoType,
+          contentFormat: script.contentFormat || 'reels',
+          content: script.content, caption: (data as any)?.caption || '',
+          priority: script.priority || 'normal',
+          isEndomarketing: script.isEndomarketing || false,
+          endoClientId: script.endoClientId || '',
+          scheduledDate: script.scheduledDate || '',
+        });
       });
     } else {
       setEditing(null);
-      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '' });
+      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '' });
     }
     setOpen(true);
   };
@@ -208,6 +214,8 @@ export default function Scripts() {
     };
     if (editing) {
       updateScript({ ...editing, ...scriptData, updatedAt: now });
+      // Save caption separately since it's not in the Script type
+      await supabase.from('scripts').update({ caption: form.caption } as any).eq('id', editing.id);
       toast.success('Roteiro atualizado');
     } else {
       const scriptId = crypto.randomUUID();
@@ -215,6 +223,10 @@ export default function Scripts() {
       
       // Await script insert to ensure FK is satisfied before creating content_task
       await addScript(scriptObj);
+      // Save caption
+      if (form.caption) {
+        await supabase.from('scripts').update({ caption: form.caption } as any).eq('id', scriptId);
+      }
       
       const { error } = await supabase.from('content_tasks').insert({
         client_id: form.clientId,
@@ -344,7 +356,7 @@ export default function Scripts() {
           .replace(/$/, '</p>')
           .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
           .replace(/\*(.*?)\*/g, '<em>$1</em>');
-        setForm(prev => ({ ...prev, content: htmlContent }));
+        setForm(prev => ({ ...prev, content: htmlContent, caption: data.caption || prev.caption }));
         if (!form.title) {
           const autoTitle = `${SCRIPT_VIDEO_TYPE_LABELS[form.videoType]} - ${client.companyName}`;
           setForm(prev => ({ ...prev, title: autoTitle }));
@@ -637,6 +649,21 @@ export default function Scripts() {
             <div className="space-y-1">
               <Label>Conteúdo do Roteiro</Label>
               <RichEditor key={editing?.id || 'new'} content={form.content} onChange={html => setForm(prev => ({ ...prev, content: html }))} />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="flex items-center gap-1.5">
+                📝 Legenda para Instagram
+                {form.caption && <Badge variant="outline" className="text-[9px]">{form.caption.length}/200</Badge>}
+              </Label>
+              <Textarea 
+                value={form.caption} 
+                onChange={e => setForm(prev => ({ ...prev, caption: e.target.value.slice(0, 200) }))} 
+                placeholder="Legenda curta com CTA para a postagem..." 
+                rows={2}
+                maxLength={200}
+              />
+              <p className="text-[10px] text-muted-foreground">Gerada automaticamente pela IA junto com o roteiro. Você pode editar manualmente.</p>
             </div>
 
             <Button onClick={handleSave} className="w-full">{editing ? 'Salvar Alterações' : 'Criar Roteiro'}</Button>

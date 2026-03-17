@@ -240,7 +240,7 @@ export default function FinancialApiSettings() {
       .from('api_integrations')
       .select('*')
       .order('created_at', { ascending: false });
-    if (data) setIntegrations((data as ApiIntegration[]).filter(i => i.provider !== 'lovable_ai'));
+    if (data) setIntegrations((data as ApiIntegration[]).filter(i => !i.provider.startsWith('ai_') && i.provider !== 'lovable_ai'));
     setLoading(false);
   };
 

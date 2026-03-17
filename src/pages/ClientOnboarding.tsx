@@ -550,7 +550,12 @@ export default function ClientOnboarding() {
                     >
                       <span className="text-sm font-semibold block">{DAY_LABELS[bd.day]}</span>
                       <span className="text-xs text-muted-foreground">{bd.count} vagas livres</span>
-                      <Badge variant="secondary" className="mt-1 text-[10px]">{i === 0 ? 'Melhor opção' : '2ª opção'}</Badge>
+                      {monthlyRecordings > 1 && bd.count >= monthlyRecordings && (
+                        <Badge variant="secondary" className="mt-1 text-[10px] bg-primary/15 text-primary border-0">
+                          Cabe {monthlyRecordings} gravações
+                        </Badge>
+                      )}
+                      {monthlyRecordings <= 1 && <Badge variant="secondary" className="mt-1 text-[10px]">{i === 0 ? 'Melhor opção' : '2ª opção'}</Badge>}
                     </button>
                   ))}
                 </div>

@@ -668,7 +668,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
       status: 'agendado',
       posted_at: schedDate,
       scheduled_time: schedTime,
-      platform: schedPlatform || null,
+      platform: 'Instagram, Facebook',
     } as any).eq('content_task_id', task.id);
 
     await syncTask('acompanhamento');

@@ -349,7 +349,7 @@ export default function SocialMediaDeliveries() {
       client_id: formClientId, content_type: formType, title: formTitle,
       description: formDescription || null, delivered_at: formDeliveredAt,
       posted_at: formPostedAt || null, scheduled_time: formScheduledTime || null,
-      platform: formPlatform || null, status: formStatus, created_by: user?.id || null,
+      platform: 'Instagram, Facebook', status: formStatus, created_by: user?.id || null,
     };
     if (editingId) {
       const { error } = await supabase.from('social_media_deliveries').update(payload as any).eq('id', editingId);

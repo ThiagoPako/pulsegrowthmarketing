@@ -52,7 +52,7 @@ function withCacheBust(url: string, attempt: number) {
 }
 
 /**
- * Verify a URL is accessible via a lightweight HEAD/GET check.
+ * Verify a URL is accessible via a lightweight HEAD check.
  * Works for any file type (images, videos, documents).
  */
 async function verifyUrlAccessible(url: string): Promise<void> {
@@ -60,6 +60,25 @@ async function verifyUrlAccessible(url: string): Promise<void> {
   if (!response.ok) {
     throw new Error(`Arquivo não acessível publicamente (HTTP ${response.status}).`);
   }
+}
+
+async function verifyWithRetry(url: string, verifier: (url: string) => Promise<void>): Promise<void> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= VERIFY_UPLOAD_ATTEMPTS; attempt += 1) {
+    try {
+      await verifier(withCacheBust(url, attempt));
+      return;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error('Falha ao validar arquivo enviado.');
+
+      if (attempt < VERIFY_UPLOAD_ATTEMPTS) {
+        await wait(VERIFY_UPLOAD_DELAY_MS * attempt);
+      }
+    }
+  }
+
+  throw lastError ?? new Error('Falha ao validar arquivo enviado.');
 }
 
 async function verifyUploadedFile(url: string, _file: File): Promise<void> {

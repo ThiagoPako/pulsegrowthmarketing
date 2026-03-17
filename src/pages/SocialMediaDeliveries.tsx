@@ -76,6 +76,7 @@ function ReviewVideoLink({ contentTaskId }: { contentTaskId: string | null }) {
   const [link, setLink] = useState<string | null>(null);
   const [isAltered, setIsAltered] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showPlayer, setShowPlayer] = useState(false);
 
   useEffect(() => {
     if (!contentTaskId) { setLoading(false); return; }
@@ -89,6 +90,8 @@ function ReviewVideoLink({ contentTaskId }: { contentTaskId: string | null }) {
 
   if (loading) return null;
 
+  const isDirectVideo = link && /\.(mp4|mov|webm|avi)(\?|$)/i.test(link);
+
   return (
     <div className="space-y-1.5">
       {isAltered && (
@@ -99,12 +102,35 @@ function ReviewVideoLink({ contentTaskId }: { contentTaskId: string | null }) {
         </div>
       )}
       {link && (
-        <a href={link} target="_blank" rel="noopener noreferrer"
-          className="flex items-center gap-2 text-sm font-medium text-primary hover:underline bg-primary/5 border border-primary/20 rounded-lg px-3 py-2.5 transition-colors hover:bg-primary/10">
-          <Link2 size={16} className="shrink-0" />
-          <span className="truncate">🎬 Assistir vídeo para revisão</span>
-          <ExternalLink size={14} className="shrink-0 ml-auto" />
-        </a>
+        <>
+          {isDirectVideo ? (
+            <button
+              onClick={() => setShowPlayer(!showPlayer)}
+              className="flex items-center gap-2 text-sm font-medium text-primary hover:underline bg-primary/5 border border-primary/20 rounded-lg px-3 py-2.5 transition-colors hover:bg-primary/10 w-full text-left"
+            >
+              <Eye size={16} className="shrink-0" />
+              <span className="truncate">🎬 {showPlayer ? 'Ocultar vídeo' : 'Assistir vídeo para revisão'}</span>
+            </button>
+          ) : (
+            <a href={link} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-2 text-sm font-medium text-primary hover:underline bg-primary/5 border border-primary/20 rounded-lg px-3 py-2.5 transition-colors hover:bg-primary/10">
+              <Link2 size={16} className="shrink-0" />
+              <span className="truncate">🎬 Abrir vídeo para revisão</span>
+              <ExternalLink size={14} className="shrink-0 ml-auto" />
+            </a>
+          )}
+          {showPlayer && isDirectVideo && (
+            <div className="rounded-lg overflow-hidden border border-border bg-black aspect-video">
+              <video
+                src={link}
+                controls
+                autoPlay
+                className="w-full h-full"
+                playsInline
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

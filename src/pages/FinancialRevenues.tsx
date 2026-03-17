@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useFinancialData } from '@/hooks/useFinancialData';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,7 +14,93 @@ import { ptBR } from 'date-fns/locale';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
 import { generateDeliveryReport, resolvePaymentInfo } from '@/lib/billingReport';
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
+
+/* ── Rocket Animation Overlay ── */
+function RocketOverlay({ onComplete }: { onComplete: () => void }) {
+  const moneyEmojis = ['💵', '💰', '💸', '🤑', '💲'];
+  const particles = useMemo(() =>
+    Array.from({ length: 28 }, (_, i) => ({
+      id: i,
+      emoji: moneyEmojis[i % moneyEmojis.length],
+      x: (Math.random() - 0.5) * 500,
+      y: Math.random() * 300 + 100,
+      rotate: Math.random() * 720 - 360,
+      scale: Math.random() * 0.6 + 0.5,
+      delay: Math.random() * 0.6,
+    }))
+  , []);
+
+  useEffect(() => {
+    const timer = setTimeout(onComplete, 3200);
+    return () => clearTimeout(timer);
+  }, [onComplete]);
+
+  return createPortal(
+    <motion.div
+      className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <motion.div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+      />
+      <motion.img
+        src={cobrarTodosImg}
+        alt="Cobrar Todos"
+        className="absolute w-40 h-40 rounded-3xl object-cover shadow-2xl z-10"
+        initial={{ scale: 0, rotate: -30 }}
+        animate={{
+          scale: [0, 1.8, 1.4, 0],
+          rotate: [-30, 0, 0, 10],
+          y: [0, 0, 0, -600],
+        }}
+        transition={{ duration: 2.5, times: [0, 0.3, 0.5, 1], ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="absolute z-20 text-7xl"
+        initial={{ y: 200, scale: 0 }}
+        animate={{ y: [200, 0, -800], scale: [0, 1.3, 1], rotate: [0, 0, -5] }}
+        transition={{ duration: 2.5, times: [0, 0.35, 1], ease: 'easeIn' }}
+      >
+        🚀
+      </motion.div>
+      <motion.div
+        className="absolute z-10 text-5xl"
+        initial={{ y: 280, opacity: 0 }}
+        animate={{ y: [280, 80, -700], opacity: [0, 1, 0], scale: [0.5, 1.5, 0.3] }}
+        transition={{ duration: 2.5, times: [0, 0.35, 1], ease: 'easeIn' }}
+      >
+        🔥
+      </motion.div>
+      {particles.map(p => (
+        <motion.span
+          key={p.id}
+          className="absolute z-20"
+          style={{ fontSize: `${p.scale * 2}rem` }}
+          initial={{ y: 100, x: 0, opacity: 0, scale: 0, rotate: 0 }}
+          animate={{
+            y: [100, -p.y, -(p.y + 400)],
+            x: [0, p.x * 0.5, p.x],
+            opacity: [0, 1, 0],
+            scale: [0, p.scale, 0],
+            rotate: [0, p.rotate / 2, p.rotate],
+          }}
+          transition={{ duration: 2.2, delay: 0.4 + p.delay, ease: 'easeOut' }}
+        >
+          {p.emoji}
+        </motion.span>
+      ))}
+    </motion.div>,
+    document.body
+  );
+}
 
 const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'destructive' | 'secondary' }> = {
   prevista: { label: 'Prevista', variant: 'secondary' },

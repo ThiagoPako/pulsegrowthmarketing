@@ -385,7 +385,25 @@ export default function Team() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${roleColors[u.role]}`}>{ROLE_LABELS[u.role]}</span>
+                  {currentUser?.role === 'admin' && u.id !== currentUser?.id ? (
+                    <Select value={u.role} onValueChange={v => handleChangeRole(u, v as UserRole)}>
+                      <SelectTrigger className="h-7 w-auto min-w-[130px] text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <Shield size={12} />
+                          <SelectValue />
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ROLES.map(r => (
+                          <SelectItem key={r} value={r}>
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${roleColors[r]}`}>{ROLE_LABELS[r]}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${roleColors[u.role]}`}>{ROLE_LABELS[u.role]}</span>
+                  )}
                   {currentUser?.role === 'admin' && (
                     <>
                       <Button variant="ghost" size="icon" className="h-8 w-8" title="Redefinir senha" onClick={() => { setResetTarget(u); setResetOpen(true); }}>

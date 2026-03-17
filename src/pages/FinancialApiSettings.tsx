@@ -47,7 +47,15 @@ const PROVIDERS = [
   { value: 'google_ads', label: 'Google Ads', icon: '🔍' },
   { value: 'google_analytics', label: 'Google Analytics', icon: '📈' },
   { value: 'stripe', label: 'Stripe', icon: '💳' },
+  { value: 'lovable_ai', label: 'Lovable AI (Gemini)', icon: '🤖' },
   { value: 'custom', label: 'API Personalizada', icon: '🔧' },
+];
+
+const AI_MODELS = [
+  { value: 'google/gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', desc: 'Mais rápido e econômico. Ideal para tarefas simples.' },
+  { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash', desc: 'Equilíbrio entre velocidade e qualidade.' },
+  { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro', desc: 'Máxima qualidade. Melhor raciocínio e precisão.' },
+  { value: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash (Preview)', desc: 'Última geração. Rápido e capaz.' },
 ];
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: any }> = {
@@ -67,6 +75,12 @@ export default function FinancialApiSettings() {
   const [selectedIntegration, setSelectedIntegration] = useState<ApiIntegration | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  const [aiConfig, setAiConfig] = useState({
+    model: 'google/gemini-2.5-flash-lite',
+    active: false,
+    integrationId: null as string | null,
+  });
+
   const [form, setForm] = useState({
     name: '',
     provider: 'meta_ads',
@@ -77,7 +91,46 @@ export default function FinancialApiSettings() {
     metaAppSecret: '',
   });
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); loadAiConfig(); }, []);
+
+  const loadAiConfig = async () => {
+    const { data } = await supabase
+      .from('api_integrations')
+      .select('*')
+      .eq('provider', 'lovable_ai')
+      .limit(1)
+      .single();
+    if (data) {
+      const d = data as any;
+      setAiConfig({
+        model: d.config?.ai_model || 'google/gemini-2.5-flash-lite',
+        active: d.status === 'ativo',
+        integrationId: d.id,
+      });
+    }
+  };
+
+  const handleSaveAiConfig = async (model: string) => {
+    const payload: any = {
+      name: 'Lovable AI',
+      provider: 'lovable_ai',
+      api_type: 'ai_gateway',
+      endpoint_url: 'https://ai.gateway.lovable.dev/v1/chat/completions',
+      config: { ai_model: model },
+      status: 'ativo',
+      updated_at: new Date().toISOString(),
+    };
+
+    if (aiConfig.integrationId) {
+      await supabase.from('api_integrations').update(payload).eq('id', aiConfig.integrationId);
+    } else {
+      payload.created_by = user?.id;
+      const { data } = await supabase.from('api_integrations').insert(payload).select().single();
+      if (data) setAiConfig(prev => ({ ...prev, integrationId: (data as any).id }));
+    }
+    setAiConfig(prev => ({ ...prev, model, active: true }));
+    toast.success(`Modelo IA atualizado: ${AI_MODELS.find(m => m.value === model)?.label}`);
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -85,7 +138,7 @@ export default function FinancialApiSettings() {
       .from('api_integrations')
       .select('*')
       .order('created_at', { ascending: false });
-    if (data) setIntegrations(data as ApiIntegration[]);
+    if (data) setIntegrations((data as ApiIntegration[]).filter(i => i.provider !== 'lovable_ai'));
     setLoading(false);
   };
 
@@ -299,7 +352,44 @@ export default function FinancialApiSettings() {
         </Button>
       </div>
 
-      {/* Stats */}
+      {/* AI Model Configuration */}
+      <div className="glass-card p-5 border border-primary/20">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-xl">🤖</div>
+            <div>
+              <h3 className="font-semibold text-sm">Inteligência Artificial (Lovable AI)</h3>
+              <p className="text-[11px] text-muted-foreground">Modelo usado para gerar roteiros, legendas e chat financeiro</p>
+            </div>
+          </div>
+          <Badge variant="outline" className={aiConfig.active ? 'text-emerald-500' : 'text-muted-foreground'}>
+            {aiConfig.active ? '● Ativo' : '○ Inativo'}
+          </Badge>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {AI_MODELS.map(model => (
+            <button
+              key={model.value}
+              onClick={() => handleSaveAiConfig(model.value)}
+              className={`p-3 rounded-lg border text-left transition-all ${
+                aiConfig.model === model.value
+                  ? 'border-primary bg-primary/10 ring-1 ring-primary'
+                  : 'border-border hover:border-primary/40'
+              }`}
+            >
+              <p className="text-sm font-medium">{model.label}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{model.desc}</p>
+              {aiConfig.model === model.value && (
+                <Badge className="mt-2 text-[10px]" variant="default">Selecionado</Badge>
+              )}
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-3 flex items-center gap-1">
+          <Info size={11} /> O modelo selecionado será usado automaticamente em todas as funcionalidades de IA do sistema.
+        </p>
+      </div>
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="glass-card p-4 text-center">
           <p className="text-2xl font-bold text-primary">{integrations.length}</p>

@@ -91,7 +91,7 @@ serve(async (req) => {
   }
 
   try {
-    const { editorial, videoType, contentFormat, clientName, niche, exampleScripts } = await req.json();
+    const { editorial, videoType, contentFormat, clientName, niche, exampleScripts, aiModel } = await req.json();
 
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!apiKey) {
@@ -100,6 +100,8 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const selectedModel = aiModel || "google/gemini-2.5-flash-lite";
 
     const structure = VIDEO_TYPE_STRUCTURES[videoType] || VIDEO_TYPE_STRUCTURES.vendas;
     const format = FORMAT_CONTEXT[contentFormat] || FORMAT_CONTEXT.reels;
@@ -149,7 +151,7 @@ Além do roteiro, gere uma LEGENDA para postagem no Instagram. A legenda deve:
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: selectedModel,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },

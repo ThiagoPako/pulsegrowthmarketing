@@ -20,3 +20,12 @@ verify_jwt = false
 
 [functions.generate-script]
 verify_jwt = false
+
+[functions.meta-publish]
+verify_jwt = false
+
+[functions.meta-token-refresh]
+verify_jwt = false
+
+[functions.meta-store-credentials]
+verify_jwt = false

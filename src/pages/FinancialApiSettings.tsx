@@ -73,6 +73,11 @@ export default function FinancialApiSettings() {
     api_type: 'rest',
     endpoint_url: '',
     notes: '',
+    metaAppId: '',
+    metaAppSecret: '',
+    metaPageToken: '',
+    metaIgBusinessId: '',
+    metaPageId: '',
   });
 
   useEffect(() => { loadData(); }, []);
@@ -102,12 +107,26 @@ export default function FinancialApiSettings() {
       toast.error('Preencha nome e provedor');
       return;
     }
+    if (form.provider === 'meta_ads' && !editingId) {
+      if (!form.metaAppId || !form.metaAppSecret || !form.metaPageToken || !form.metaIgBusinessId || !form.metaPageId) {
+        toast.error('Preencha todos os campos do Meta');
+        return;
+      }
+    }
+    const configData: any = { notes: form.notes };
+    if (form.provider === 'meta_ads') {
+      configData.meta_app_id = form.metaAppId;
+      configData.meta_app_secret = form.metaAppSecret ? '••••' + form.metaAppSecret.slice(-4) : '';
+      configData.meta_page_token = form.metaPageToken ? '••••' + form.metaPageToken.slice(-4) : '';
+      configData.meta_ig_business_id = form.metaIgBusinessId;
+      configData.meta_page_id = form.metaPageId;
+    }
     const payload: any = {
       name: form.name,
       provider: form.provider,
       api_type: form.api_type,
-      endpoint_url: form.endpoint_url,
-      config: { notes: form.notes },
+      endpoint_url: form.provider === 'meta_ads' ? 'https://graph.facebook.com/v21.0' : form.endpoint_url,
+      config: configData,
       updated_at: new Date().toISOString(),
     };
 
@@ -176,6 +195,11 @@ export default function FinancialApiSettings() {
       api_type: integration.api_type,
       endpoint_url: integration.endpoint_url || '',
       notes: integration.config?.notes || '',
+      metaAppId: integration.config?.meta_app_id || '',
+      metaAppSecret: '',
+      metaPageToken: '',
+      metaIgBusinessId: integration.config?.meta_ig_business_id || '',
+      metaPageId: integration.config?.meta_page_id || '',
     });
     setShowDialog(true);
   };
@@ -187,7 +211,7 @@ export default function FinancialApiSettings() {
   };
 
   const resetForm = () => {
-    setForm({ name: '', provider: 'meta_ads', api_type: 'rest', endpoint_url: '', notes: '' });
+    setForm({ name: '', provider: 'meta_ads', api_type: 'rest', endpoint_url: '', notes: '', metaAppId: '', metaAppSecret: '', metaPageToken: '', metaIgBusinessId: '', metaPageId: '' });
     setEditingId(null);
   };
 
@@ -306,28 +330,72 @@ export default function FinancialApiSettings() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Tipo de API</Label>
-              <Select value={form.api_type} onValueChange={v => setForm({ ...form, api_type: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="rest">REST API</SelectItem>
-                  <SelectItem value="graphql">GraphQL</SelectItem>
-                  <SelectItem value="webhook">Webhook</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Endpoint URL</Label>
-              <Input value={form.endpoint_url} onChange={e => setForm({ ...form, endpoint_url: e.target.value })} placeholder="https://..." />
-            </div>
+
+            {/* Meta-specific fields */}
+            {form.provider === 'meta_ads' && (
+              <>
+                <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                  <p className="text-xs font-medium text-primary mb-3">📊 Credenciais Meta (Facebook/Instagram)</p>
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="text-xs">App ID *</Label>
+                      <Input value={form.metaAppId} onChange={e => setForm({ ...form, metaAppId: e.target.value })} placeholder="Ex: 1234567890" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">App Secret *</Label>
+                      <Input type="password" value={form.metaAppSecret} onChange={e => setForm({ ...form, metaAppSecret: e.target.value })} placeholder={editingId ? 'Deixe em branco para manter' : 'Ex: abc123def456...'} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Page Access Token (longa duração) *</Label>
+                      <Input type="password" value={form.metaPageToken} onChange={e => setForm({ ...form, metaPageToken: e.target.value })} placeholder={editingId ? 'Deixe em branco para manter' : 'Token gerado no Graph API Explorer'} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs">Facebook Page ID *</Label>
+                        <Input value={form.metaPageId} onChange={e => setForm({ ...form, metaPageId: e.target.value })} placeholder="Ex: 987654321" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Instagram Business ID *</Label>
+                        <Input value={form.metaIgBusinessId} onChange={e => setForm({ ...form, metaIgBusinessId: e.target.value })} placeholder="Ex: 17841400..." />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
+                  <AlertCircle size={12} className="inline mr-1" />
+                  Os tokens sensíveis (App Secret e Page Token) serão armazenados de forma segura no backend. Apenas os últimos 4 caracteres ficam visíveis.
+                </div>
+              </>
+            )}
+
+            {/* Generic fields for other providers */}
+            {form.provider !== 'meta_ads' && (
+              <>
+                <div>
+                  <Label>Tipo de API</Label>
+                  <Select value={form.api_type} onValueChange={v => setForm({ ...form, api_type: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="rest">REST API</SelectItem>
+                      <SelectItem value="graphql">GraphQL</SelectItem>
+                      <SelectItem value="webhook">Webhook</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Endpoint URL</Label>
+                  <Input value={form.endpoint_url} onChange={e => setForm({ ...form, endpoint_url: e.target.value })} placeholder="https://..." />
+                </div>
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
+                  <AlertCircle size={12} className="inline mr-1" />
+                  Chaves de API e tokens são armazenados de forma segura no backend.
+                </div>
+              </>
+            )}
+
             <div>
               <Label>Observações</Label>
               <Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Informações adicionais..." rows={2} />
-            </div>
-            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
-              <AlertCircle size={12} className="inline mr-1" />
-              Chaves de API e tokens são armazenados de forma segura no backend. Configure-os na seção de segredos do sistema.
             </div>
           </div>
           <DialogFooter>

@@ -485,7 +485,7 @@ function DeliveryCard({
 
           {/* Video link */}
           {(columnId === 'revisao' || columnId === 'envio') && (
-            <ReviewVideoLink contentTaskId={d.content_task_id} />
+            <ReviewVideoLink contentTaskId={d.content_task_id} clientId={d.client_id} />
           )}
 
           {/* Actions */}

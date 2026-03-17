@@ -375,6 +375,12 @@ export default function ClientPortal() {
               >
                 Zona Criativa
               </button>
+              <button
+                onClick={() => setActiveTab('agenda')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'agenda' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+              >
+                Agenda
+              </button>
               {(client.show_metrics || isTeamMember) && (
                 <button
                   onClick={() => setActiveTab('metrics')}

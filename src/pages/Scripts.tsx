@@ -222,6 +222,10 @@ export default function Scripts() {
       
       // Await script insert to ensure FK is satisfied before creating content_task
       await addScript(scriptObj);
+      // Save caption
+      if (form.caption) {
+        await supabase.from('scripts').update({ caption: form.caption } as any).eq('id', scriptId);
+      }
       
       const { error } = await supabase.from('content_tasks').insert({
         client_id: form.clientId,

@@ -148,11 +148,18 @@ const NICHE_DATES: Record<string, SeasonalDate[]> = {
   ],
   alimentacao: [
     { month: 1, day: 6, label: 'Dia de Reis', daysBeforeAlert: 20 },
+    { month: 2, day: 14, label: 'Carnaval (cardápio especial)', daysBeforeAlert: 30 },
     { month: 3, day: 2, label: 'Dia do Cozinheiro', daysBeforeAlert: 20 },
+    { month: 3, day: 31, label: 'Dia da Saúde e Nutrição', daysBeforeAlert: 25 },
     { month: 5, day: 13, label: 'Dia do Churrasco', daysBeforeAlert: 20 },
+    { month: 5, day: 25, label: 'Dia da Indústria Alimentícia', daysBeforeAlert: 20 },
     { month: 7, day: 25, label: 'Dia do Escritor (storytelling gastro)', daysBeforeAlert: 20 },
     { month: 8, day: 12, label: 'Dia da Pizza', daysBeforeAlert: 20 },
+    { month: 9, day: 1, label: 'Dia do Garçom', daysBeforeAlert: 20 },
     { month: 10, day: 16, label: 'Dia Mundial da Alimentação', daysBeforeAlert: 30 },
+    { month: 11, day: 25, label: 'Jantar de Black Friday', daysBeforeAlert: 30 },
+    { month: 12, day: 24, label: 'Ceia de Natal (encomendas)', daysBeforeAlert: 45 },
+    { month: 12, day: 31, label: 'Ceia de Réveillon', daysBeforeAlert: 40 },
   ],
   beleza: [
     { month: 1, day: 20, label: 'Dia do Cabeleireiro', daysBeforeAlert: 20 },

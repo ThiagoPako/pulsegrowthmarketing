@@ -70,7 +70,7 @@ const STATUS_OPTIONS = [
   { value: 'postado', label: 'Acompanhamento', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
 ];
 
-const PLATFORMS = ['Instagram', 'TikTok', 'YouTube', 'Facebook', 'LinkedIn'];
+const PLATFORMS = ['Instagram', 'Facebook'];
 
 function ReviewVideoLink({ contentTaskId }: { contentTaskId: string | null }) {
   const [link, setLink] = useState<string | null>(null);

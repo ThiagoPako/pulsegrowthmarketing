@@ -46,7 +46,7 @@ const KANBAN_COLUMNS = [
   { id: 'acompanhamento', label: 'Acompanhamento', icon: '👀' },
 ];
 
-const PLATFORMS = ['Instagram', 'TikTok', 'YouTube', 'Facebook', 'LinkedIn'];
+const PLATFORMS = ['Instagram', 'Facebook'];
 
 // Rocket Launch Button with floating animation
 const RocketLaunchButton = ({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) => {

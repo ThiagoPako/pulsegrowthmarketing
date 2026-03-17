@@ -86,20 +86,20 @@ Replique esse padrão no novo roteiro, adaptando ao cliente e tipo de vídeo sol
 }
 
 // Support Google Gemini, OpenAI, and Anthropic Claude
-function getAiConfig(provider?: string) {
+async function getAiConfig(provider?: string, dbApiKey?: string) {
   const geminiKey = Deno.env.get("GOOGLE_GEMINI_API_KEY");
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
   const claudeKey = Deno.env.get("ANTHROPIC_API_KEY");
-  const lovableKey = Deno.env.get("LOVABLE_API_KEY");
 
-  if (provider === "openai" && openaiKey) return { url: "https://api.openai.com/v1/chat/completions", key: openaiKey, provider: "openai" as const };
-  if (provider === "claude" && claudeKey) return { url: "https://api.anthropic.com/v1/messages", key: claudeKey, provider: "claude" as const };
-  if (provider === "gemini" && geminiKey) return { url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: geminiKey, provider: "gemini" as const };
+  if (provider === "gemini" && (geminiKey || dbApiKey)) return { url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: geminiKey || dbApiKey!, provider: "gemini" as const };
+  if (provider === "openai" && (openaiKey || dbApiKey)) return { url: "https://api.openai.com/v1/chat/completions", key: openaiKey || dbApiKey!, provider: "openai" as const };
+  if (provider === "claude" && (claudeKey || dbApiKey)) return { url: "https://api.anthropic.com/v1/messages", key: claudeKey || dbApiKey!, provider: "claude" as const };
+
   if (geminiKey) return { url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: geminiKey, provider: "gemini" as const };
   if (openaiKey) return { url: "https://api.openai.com/v1/chat/completions", key: openaiKey, provider: "openai" as const };
   if (claudeKey) return { url: "https://api.anthropic.com/v1/messages", key: claudeKey, provider: "claude" as const };
-  if (lovableKey) return { url: "https://ai.gateway.lovable.dev/v1/chat/completions", key: lovableKey, provider: "lovable" as const };
-  throw new Error("Nenhuma API key de IA configurada.");
+
+  throw new Error("Nenhuma API key de IA configurada. Configure via painel de APIs ou variáveis de ambiente.");
 }
 
 serve(async (req) => {

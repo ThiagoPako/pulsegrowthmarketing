@@ -300,8 +300,24 @@ ${contextData}`,
 
     messages.push({ role: "user", content: question });
 
+    // Fetch API key from DB if env vars not set
+    let dbApiKey: string | undefined;
+    if (aiProvider) {
+      const providerMap: Record<string, string> = { gemini: 'ai_gemini', openai: 'ai_openai', claude: 'ai_claude' };
+      const { data: aiIntegration } = await supabase
+        .from("api_integrations")
+        .select("config")
+        .eq("provider", providerMap[aiProvider] || '')
+        .eq("status", "ativo")
+        .limit(1)
+        .single();
+      if (aiIntegration?.config) {
+        dbApiKey = (aiIntegration.config as any).api_key_encrypted;
+      }
+    }
+
     // Call AI (supports Gemini, OpenAI, Claude)
-    const ai = getAiConfig(aiProvider);
+    const ai = await getAiConfig(aiProvider, dbApiKey);
     const answer = await callAi(ai, selectedModel, messages, { temperature: 0.3, max_tokens: 2000 });
 
     // Save messages to chat history

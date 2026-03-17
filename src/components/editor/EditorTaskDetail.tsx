@@ -203,19 +203,28 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
     
     try {
       const folder = `editor/${task.client_id}`;
+      console.log('[EditorUpload] Iniciando upload VPS:', { name: file.name, size: file.size, folder });
       const url = await uploadFileToVps(file, folder);
-      
-      await supabase.from('content_tasks').update({
+      console.log('[EditorUpload] URL retornada:', url);
+
+      const { error: dbError } = await supabase.from('content_tasks').update({
         edited_video_link: url,
         edited_video_type: 'upload',
         updated_at: new Date().toISOString()
       }).eq('id', task.id);
-      
+
+      if (dbError) {
+        console.error('[EditorUpload] Erro DB:', dbError);
+        toast.error('Upload ok mas erro ao salvar no banco');
+        return;
+      }
+
       setVideoLink(url);
       await logAction('Vídeo editado enviado via upload', url);
       toast.success('Vídeo enviado com sucesso!');
       onRefresh();
     } catch (err: any) {
+      console.error('[EditorUpload] Erro completo:', err);
       toast.error(`Erro no upload: ${err.message}`);
     } finally {
       setUploading(false);

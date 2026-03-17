@@ -410,7 +410,7 @@ export default function ClientOnboarding() {
                   : plan.recording_sessions || 4)
                 : client.monthly_recordings || 4;
               
-              const frequencyOptions = Array.from({ length: Math.min(maxWeeks, 8) }, (_, i) => i + 1);
+              const frequencyOptions = Array.from({ length: Math.min(maxWeeks, 4) }, (_, i) => i + 1);
               
               const toggleWeek = (week: number) => {
                 if (selectedWeeks.includes(week)) {

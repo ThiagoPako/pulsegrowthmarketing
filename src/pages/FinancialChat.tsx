@@ -73,10 +73,21 @@ export default function FinancialChat() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada');
 
+      // Fetch configured AI model
+      const { data: aiIntegration } = await supabase
+        .from('api_integrations')
+        .select('config')
+        .eq('provider', 'lovable_ai')
+        .eq('status', 'ativo')
+        .limit(1)
+        .single();
+      const aiModel = (aiIntegration as any)?.config?.ai_model || undefined;
+
       const response = await supabase.functions.invoke('financial-chat', {
         body: {
           question: q,
           conversationHistory: messages.slice(-10).map(m => ({ role: m.role, content: m.content })),
+          aiModel,
         },
       });
 

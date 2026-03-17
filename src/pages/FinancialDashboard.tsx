@@ -267,13 +267,33 @@ export default function FinancialDashboard() {
     [showCelebration]
   );
 
-  if (loading) return <p className="text-muted-foreground p-4">Carregando...</p>;
+  if (loading) return (
+    <div className="flex items-center justify-center h-64">
+      <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5 }}>
+        <Loader2 size={32} className="animate-spin text-primary" />
+      </motion.div>
+    </div>
+  );
 
   const chartConfig = {
     receita: { label: 'Receita', color: 'hsl(142, 71%, 45%)' },
     despesa: { label: 'Despesa', color: 'hsl(0, 72%, 51%)' },
     lucro: { label: 'Lucro', color: 'hsl(217, 91%, 60%)' },
   };
+
+  const kpiRow1 = [
+    { icon: <DollarSign size={18} />, label: 'MRR', value: fmt(mrr), gradient: 'from-blue-500/10 to-indigo-500/10', iconBg: 'bg-blue-500/20 text-blue-600', border: 'border-blue-200/50' },
+    { icon: <TrendingUp size={18} />, label: 'Recebida', value: fmt(revenueRecebida), gradient: 'from-emerald-500/10 to-green-500/10', iconBg: 'bg-emerald-500/20 text-emerald-600', border: 'border-emerald-200/50', sub: `Prevista: ${fmt(revenuePrevista)}` },
+    { icon: <TrendingDown size={18} />, label: 'Despesas', value: fmt(totalExpenses), gradient: 'from-rose-500/10 to-red-500/10', iconBg: 'bg-rose-500/20 text-rose-600', border: 'border-rose-200/50' },
+    { icon: <BarChart3 size={18} />, label: 'Lucro Líquido', value: fmt(lucro), gradient: lucro >= 0 ? 'from-emerald-500/10 to-teal-500/10' : 'from-rose-500/10 to-red-500/10', iconBg: lucro >= 0 ? 'bg-emerald-500/20 text-emerald-600' : 'bg-rose-500/20 text-rose-600', border: lucro >= 0 ? 'border-emerald-200/50' : 'border-rose-200/50' },
+  ];
+
+  const kpiRow2 = [
+    { icon: <AlertTriangle size={18} />, label: 'Em Atraso', value: fmt(revenueAtraso), gradient: 'from-orange-500/10 to-amber-500/10', iconBg: 'bg-orange-500/20 text-orange-600', border: 'border-orange-200/50' },
+    { icon: <CreditCard size={18} />, label: 'Ticket Médio', value: fmt(ticketMedio), gradient: 'from-violet-500/10 to-purple-500/10', iconBg: 'bg-violet-500/20 text-violet-600', border: 'border-violet-200/50' },
+    { icon: <Users size={18} />, label: 'Clientes Ativos', value: String(activeClients), gradient: 'from-sky-500/10 to-cyan-500/10', iconBg: 'bg-sky-500/20 text-sky-600', border: 'border-sky-200/50' },
+    { icon: <TrendingDown size={18} />, label: 'Cancelamento', value: `${taxaCancelamento.toFixed(1)}%`, gradient: 'from-slate-500/10 to-gray-500/10', iconBg: 'bg-slate-500/20 text-slate-600', border: 'border-slate-200/50' },
+  ];
 
 
   return (
@@ -287,29 +307,16 @@ export default function FinancialDashboard() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
           onClick={() => setShowCelebration(false)}
         >
-          {/* Confetti */}
           {confettiParticles.map(p => (
             <motion.div
               key={p.id}
               initial={{ y: -20, x: `${p.x}vw`, opacity: 1, rotate: 0, scale: 0 }}
-              animate={{
-                y: '110vh',
-                rotate: p.rotation + 720,
-                opacity: [1, 1, 0],
-                scale: [0, 1.2, 0.8],
-              }}
+              animate={{ y: '110vh', rotate: p.rotation + 720, opacity: [1, 1, 0], scale: [0, 1.2, 0.8] }}
               transition={{ delay: p.delay, duration: p.duration, ease: 'easeOut' }}
               className="fixed top-0 pointer-events-none"
-              style={{
-                width: p.size,
-                height: p.size * 1.4,
-                backgroundColor: p.color,
-                borderRadius: '2px',
-                left: `${p.x}%`,
-              }}
+              style={{ width: p.size, height: p.size * 1.4, backgroundColor: p.color, borderRadius: '2px', left: `${p.x}%` }}
             />
           ))}
-
           <motion.div
             initial={{ scale: 0.3, opacity: 0, y: 50 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -317,95 +324,73 @@ export default function FinancialDashboard() {
             className="flex flex-col items-center gap-6 p-8"
             onClick={e => e.stopPropagation()}
           >
-            <motion.div
-              animate={{
-                scale: [1, 1.05, 1],
-                rotate: [0, -2, 2, 0],
-              }}
-              transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
-              className="relative"
-            >
-              <motion.div
-                className="absolute inset-0 rounded-3xl bg-primary/30 blur-2xl"
-                animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0.8, 0.5] }}
-                transition={{ repeat: Infinity, duration: 1.5 }}
-              />
-              <img
-                src={cobrarTodosImg}
-                alt="Cobranças enviadas"
-                className="w-64 h-64 rounded-3xl object-cover shadow-2xl relative z-10 border-4 border-primary/50"
-              />
+            <motion.div animate={{ scale: [1, 1.05, 1], rotate: [0, -2, 2, 0] }} transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }} className="relative">
+              <motion.div className="absolute inset-0 rounded-3xl bg-primary/30 blur-2xl" animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0.8, 0.5] }} transition={{ repeat: Infinity, duration: 1.5 }} />
+              <img src={cobrarTodosImg} alt="Cobranças enviadas" className="w-64 h-64 rounded-3xl object-cover shadow-2xl relative z-10 border-4 border-primary/50" />
             </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="text-center space-y-2"
-            >
-              <h2 className="text-3xl font-black text-white drop-shadow-lg">
-                💰 {celebrationMsg}
-              </h2>
-              <p className="text-lg text-white/80 font-medium">
-                Agora é só esperar! 🚀
-              </p>
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 1.5 }}
-                className="text-sm text-white/50 mt-4"
-              >
-                Toque para fechar
-              </motion.p>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="text-center space-y-2">
+              <h2 className="text-3xl font-black text-white drop-shadow-lg">💰 {celebrationMsg}</h2>
+              <p className="text-lg text-white/80 font-medium">Agora é só esperar! 🚀</p>
+              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.5 }} className="text-sm text-white/50 mt-4">Toque para fechar</motion.p>
             </motion.div>
           </motion.div>
         </motion.div>
       )}
-      <div className="flex items-center justify-between">
+
+      {/* Header */}
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Financeiro</h1>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <motion.span animate={{ rotate: [0, 10, -10, 0] }} transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}>💰</motion.span>
+            Financeiro
+          </h1>
           <p className="text-sm text-muted-foreground">Visão geral da saúde financeira</p>
         </div>
         <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-          <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-48 shadow-sm"><SelectValue /></SelectTrigger>
           <SelectContent>
             {monthOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
           </SelectContent>
         </Select>
-      </div>
+      </motion.div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards Row 1 */}
       <motion.div className="grid grid-cols-2 md:grid-cols-4 gap-4" initial="hidden" animate="visible">
-        {[
-          { icon: <DollarSign size={16} />, label: 'MRR', value: fmt(mrr), color: '' },
-          { icon: <TrendingUp size={16} />, label: 'Recebida', value: fmt(revenueRecebida), color: 'text-green-600', sub: `Prevista: ${fmt(revenuePrevista)}` },
-          { icon: <TrendingDown size={16} />, label: 'Despesas', value: fmt(totalExpenses), color: 'text-red-600' },
-          { icon: <BarChart3 size={16} />, label: 'Lucro Líquido', value: fmt(lucro), color: lucro >= 0 ? 'text-green-600' : 'text-red-600', border: lucro < 0 ? 'border-destructive/50' : 'border-green-500/50' },
-        ].map((kpi, i) => (
+        {kpiRow1.map((kpi, i) => (
           <motion.div key={kpi.label} custom={i} variants={fadeUp}>
-            <Card className={kpi.border || ''}>
-              <CardContent className="pt-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">{kpi.icon} {kpi.label}</div>
-                <p className={`text-xl font-bold mt-1 ${kpi.color}`}>{kpi.value}</p>
-                {kpi.sub && <p className="text-xs text-muted-foreground">{kpi.sub}</p>}
+            <Card className={`overflow-hidden border ${kpi.border} group hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5`}>
+              <CardContent className={`pt-4 pb-4 bg-gradient-to-br ${kpi.gradient} relative`}>
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-9 h-9 rounded-xl ${kpi.iconBg} flex items-center justify-center transition-transform group-hover:scale-110`}>
+                    {kpi.icon}
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">{kpi.label}</p>
+                    <p className="text-lg font-bold text-foreground">{kpi.value}</p>
+                    {kpi.sub && <p className="text-[10px] text-muted-foreground">{kpi.sub}</p>}
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </motion.div>
         ))}
       </motion.div>
 
+      {/* KPI Cards Row 2 */}
       <motion.div className="grid grid-cols-2 md:grid-cols-4 gap-4" initial="hidden" animate="visible">
-        {[
-          { icon: <AlertTriangle size={16} />, label: 'Em Atraso', value: fmt(revenueAtraso), color: 'text-orange-600' },
-          { icon: <CreditCard size={16} />, label: 'Ticket Médio', value: fmt(ticketMedio), color: '' },
-          { icon: <Users size={16} />, label: 'Clientes Ativos', value: String(activeClients), color: '' },
-          { icon: <TrendingDown size={16} />, label: 'Cancelamento', value: `${taxaCancelamento.toFixed(1)}%`, color: '' },
-        ].map((kpi, i) => (
+        {kpiRow2.map((kpi, i) => (
           <motion.div key={kpi.label} custom={i + 4} variants={fadeUp}>
-            <Card>
-              <CardContent className="pt-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">{kpi.icon} {kpi.label}</div>
-                <p className={`text-xl font-bold mt-1 ${kpi.color}`}>{kpi.value}</p>
+            <Card className={`overflow-hidden border ${kpi.border} group hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5`}>
+              <CardContent className={`pt-4 pb-4 bg-gradient-to-br ${kpi.gradient} relative`}>
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-9 h-9 rounded-xl ${kpi.iconBg} flex items-center justify-center transition-transform group-hover:scale-110`}>
+                    {kpi.icon}
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">{kpi.label}</p>
+                    <p className="text-lg font-bold text-foreground">{kpi.value}</p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </motion.div>
@@ -445,21 +430,29 @@ export default function FinancialDashboard() {
       )}
 
       {/* Quick Navigation */}
-      <motion.div className="grid grid-cols-2 md:grid-cols-6 gap-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5, duration: 0.4 }}>
+      <motion.div className="grid grid-cols-2 md:grid-cols-4 gap-3" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.4 }}>
         {[
-          { label: 'Contratos', path: '/financeiro/contratos', icon: FileText },
-          { label: 'Receitas', path: '/financeiro/receitas', icon: TrendingUp },
-          { label: 'Despesas', path: '/financeiro/despesas', icon: TrendingDown },
-          { label: 'Movimentações', path: '/financeiro/movimentacoes', icon: ClipboardList },
-          { label: 'Caixa', path: '/financeiro/caixa', icon: Wallet },
-          { label: 'Inadimplência', path: '/financeiro/inadimplencia', icon: AlertTriangle },
-          { label: 'Parceiros', path: '/financeiro/parceiros', icon: Users },
-          { label: 'Configurações', path: '/financeiro/configuracoes', icon: CreditCard },
-        ].map(item => (
-          <Button key={item.path} variant="outline" className="h-auto py-3 flex flex-col gap-1 hover-scale" onClick={() => navigate(item.path)}>
-            <item.icon size={18} />
-            <span className="text-xs">{item.label}</span>
-          </Button>
+          { label: 'Contratos', path: '/financeiro/contratos', icon: FileText, gradient: 'from-blue-500 to-indigo-600' },
+          { label: 'Receitas', path: '/financeiro/receitas', icon: TrendingUp, gradient: 'from-emerald-500 to-green-600' },
+          { label: 'Despesas', path: '/financeiro/despesas', icon: TrendingDown, gradient: 'from-rose-500 to-red-600' },
+          { label: 'Movimentações', path: '/financeiro/movimentacoes', icon: ClipboardList, gradient: 'from-violet-500 to-purple-600' },
+          { label: 'Caixa', path: '/financeiro/caixa', icon: Wallet, gradient: 'from-amber-500 to-orange-600' },
+          { label: 'Inadimplência', path: '/financeiro/inadimplencia', icon: AlertTriangle, gradient: 'from-orange-500 to-red-500' },
+          { label: 'Parceiros', path: '/financeiro/parceiros', icon: Users, gradient: 'from-cyan-500 to-teal-600' },
+          { label: 'Configurações', path: '/financeiro/configuracoes', icon: CreditCard, gradient: 'from-slate-500 to-gray-600' },
+        ].map((item, i) => (
+          <motion.div key={item.path} whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }} transition={{ type: 'spring', stiffness: 400, damping: 17 }}>
+            <button
+              onClick={() => navigate(item.path)}
+              className="w-full h-auto py-4 px-3 flex flex-col items-center gap-2 rounded-xl border border-border/50 bg-card shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group"
+            >
+              <div className={`absolute inset-0 bg-gradient-to-br ${item.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
+              <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center text-white shadow-sm`}>
+                <item.icon size={18} />
+              </div>
+              <span className="text-xs font-medium text-foreground">{item.label}</span>
+            </button>
+          </motion.div>
         ))}
       </motion.div>
 

@@ -13,8 +13,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import ClientLogo from '@/components/ClientLogo';
 import {
   Kanban, CheckCircle, FileText, Palette, ArrowRight, Clock, User,
-  Camera, Upload, ExternalLink, Copy, AlertTriangle, Sparkles, Image, Phone, Mail, MapPin, Building2, CalendarDays
+  Camera, Upload, ExternalLink, Copy, AlertTriangle, Sparkles, Image, Phone, Mail, MapPin, Building2, CalendarDays, Trash2
 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';

@@ -13,8 +13,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import ClientLogo from '@/components/ClientLogo';
 import {
   Kanban, CheckCircle, FileText, Palette, ArrowRight, Clock, User,
-  Camera, Upload, ExternalLink, Copy, AlertTriangle, Sparkles, Image, Phone, Mail, MapPin, Building2, CalendarDays
+  Camera, Upload, ExternalLink, Copy, AlertTriangle, Sparkles, Image, Phone, Mail, MapPin, Building2, CalendarDays, Trash2
 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -48,7 +49,7 @@ interface ClientGroup {
 }
 
 export default function OnboardingManagement() {
-  const { tasksQuery, updateOnboardingTask, advanceToNextStage, createDesignTasksForClient } = useOnboarding();
+  const { tasksQuery, updateOnboardingTask, advanceToNextStage, createDesignTasksForClient, deleteOnboardingClient } = useOnboarding();
   const [selectedGroup, setSelectedGroup] = useState<ClientGroup | null>(null);
 
   const tasks = tasksQuery.data || [];
@@ -154,7 +155,7 @@ export default function OnboardingManagement() {
             </div>
             <div className="space-y-2.5 min-h-[100px]">
               {clientsByStage[stage.key]?.map(group => (
-                <OnboardingCard key={group.clientId} group={group} onClick={() => setSelectedGroup(group)} />
+                <OnboardingCard key={group.clientId} group={group} onClick={() => setSelectedGroup(group)} onDelete={() => deleteOnboardingClient.mutate(group.clientId)} />
               ))}
               {clientsByStage[stage.key]?.length === 0 && (
                 <div className="rounded-xl border border-dashed p-6 text-center">
@@ -178,7 +179,7 @@ export default function OnboardingManagement() {
 }
 
 /* ── Kanban Card ── */
-function OnboardingCard({ group, onClick }: { group: ClientGroup; onClick: () => void }) {
+function OnboardingCard({ group, onClick, onDelete }: { group: ClientGroup; onClick: () => void; onDelete: () => void }) {
   const progress = group.tasks.length > 0
     ? Math.round((group.completedStages.length / group.allStages.length) * 100)
     : 0;
@@ -186,7 +187,34 @@ function OnboardingCard({ group, onClick }: { group: ClientGroup; onClick: () =>
   const currentTask = group.tasks.find(t => t.status !== 'concluido');
 
   return (
-    <Card className="p-3 space-y-2.5 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all" onClick={onClick}>
+    <Card className="p-3 space-y-2.5 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all group/card relative" onClick={onClick}>
+      {/* Delete button */}
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-1.5 right-1.5 h-6 w-6 opacity-0 group-hover/card:opacity-100 transition-opacity text-destructive hover:bg-destructive/10 z-10"
+            onClick={e => e.stopPropagation()}
+          >
+            <Trash2 size={12} />
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent onClick={e => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar card de onboarding?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Todas as tarefas de onboarding de <strong>{group.companyName}</strong> serão removidas. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={onDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Apagar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div className="flex items-center gap-2">
         <ClientLogo client={{ companyName: group.companyName, color: group.color, logoUrl: group.logoUrl }} size="sm" />
         <div className="flex-1 min-w-0">

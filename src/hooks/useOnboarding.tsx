@@ -266,7 +266,7 @@ export function useOnboarding() {
         .ilike('title', '%Reformulação%')
         .limit(1);
       
-      if (existing?.length) return; // Already has tasks
+      if (existing?.length) return;
 
       const profileChecklist = [
         { id: crypto.randomUUID(), text: 'Criar arte do perfil', done: false },
@@ -298,7 +298,22 @@ export function useOnboarding() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  return { tasksQuery, createOnboardingForClient, updateOnboardingTask, advanceToNextStage, createDesignTasksForClient };
+  const deleteOnboardingClient = useMutation({
+    mutationFn: async (clientId: string) => {
+      const { error } = await supabase
+        .from('onboarding_tasks')
+        .delete()
+        .eq('client_id', clientId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['onboarding-tasks'] });
+      toast.success('Card de onboarding removido!');
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return { tasksQuery, createOnboardingForClient, updateOnboardingTask, advanceToNextStage, createDesignTasksForClient, deleteOnboardingClient };
 }
 
 function getStageFlow(clientId: string) {

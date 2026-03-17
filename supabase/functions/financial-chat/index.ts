@@ -8,29 +8,29 @@ const corsHeaders = {
 };
 
 // Support Google Gemini, OpenAI, and Anthropic Claude
-function getAiConfig(provider?: string) {
+// Reads from env vars first, then falls back to api_integrations table
+async function getAiConfig(provider?: string, dbApiKey?: string) {
   const geminiKey = Deno.env.get("GOOGLE_GEMINI_API_KEY");
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
   const claudeKey = Deno.env.get("ANTHROPIC_API_KEY");
-  // Fallback: Lovable AI (only works inside Lovable)
-  const lovableKey = Deno.env.get("LOVABLE_API_KEY");
 
-  if (provider === "openai" && openaiKey) {
-    return { url: "https://api.openai.com/v1/chat/completions", key: openaiKey, provider: "openai" as const };
+  // If a DB-stored key was provided, use it for the requested provider
+  if (provider === "gemini" && (geminiKey || dbApiKey)) {
+    return { url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: geminiKey || dbApiKey!, provider: "gemini" as const };
   }
-  if (provider === "claude" && claudeKey) {
-    return { url: "https://api.anthropic.com/v1/messages", key: claudeKey, provider: "claude" as const };
+  if (provider === "openai" && (openaiKey || dbApiKey)) {
+    return { url: "https://api.openai.com/v1/chat/completions", key: openaiKey || dbApiKey!, provider: "openai" as const };
   }
-  if (provider === "gemini" && geminiKey) {
-    return { url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: geminiKey, provider: "gemini" as const };
+  if (provider === "claude" && (claudeKey || dbApiKey)) {
+    return { url: "https://api.anthropic.com/v1/messages", key: claudeKey || dbApiKey!, provider: "claude" as const };
   }
-  // Auto-detect
+
+  // Auto-detect from env
   if (geminiKey) return { url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: geminiKey, provider: "gemini" as const };
   if (openaiKey) return { url: "https://api.openai.com/v1/chat/completions", key: openaiKey, provider: "openai" as const };
   if (claudeKey) return { url: "https://api.anthropic.com/v1/messages", key: claudeKey, provider: "claude" as const };
-  if (lovableKey) return { url: "https://ai.gateway.lovable.dev/v1/chat/completions", key: lovableKey, provider: "lovable" as const };
 
-  throw new Error("Nenhuma API key de IA configurada. Configure GOOGLE_GEMINI_API_KEY, OPENAI_API_KEY ou ANTHROPIC_API_KEY.");
+  throw new Error("Nenhuma API key de IA configurada. Configure via painel de APIs ou variáveis de ambiente.");
 }
 
 async function callAi(ai: ReturnType<typeof getAiConfig>, model: string, messages: any[], options: { temperature?: number; max_tokens?: number } = {}) {
@@ -300,8 +300,24 @@ ${contextData}`,
 
     messages.push({ role: "user", content: question });
 
+    // Fetch API key from DB if env vars not set
+    let dbApiKey: string | undefined;
+    if (aiProvider) {
+      const providerMap: Record<string, string> = { gemini: 'ai_gemini', openai: 'ai_openai', claude: 'ai_claude' };
+      const { data: aiIntegration } = await supabase
+        .from("api_integrations")
+        .select("config")
+        .eq("provider", providerMap[aiProvider] || '')
+        .eq("status", "ativo")
+        .limit(1)
+        .single();
+      if (aiIntegration?.config) {
+        dbApiKey = (aiIntegration.config as any).api_key_encrypted;
+      }
+    }
+
     // Call AI (supports Gemini, OpenAI, Claude)
-    const ai = getAiConfig(aiProvider);
+    const ai = await getAiConfig(aiProvider, dbApiKey);
     const answer = await callAi(ai, selectedModel, messages, { temperature: 0.3, max_tokens: 2000 });
 
     // Save messages to chat history

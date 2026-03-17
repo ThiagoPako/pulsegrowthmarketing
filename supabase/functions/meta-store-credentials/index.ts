@@ -52,6 +52,8 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const {
       integration_id,
+      secret_name,
+      secret_value,
       meta_app_id,
       meta_app_secret,
       meta_page_token,
@@ -59,6 +61,44 @@ Deno.serve(async (req) => {
       meta_page_id,
     } = body;
 
+    // Mode 1: Store a generic secret (e.g. AI API key) in the active integration config
+    if (secret_name && secret_value) {
+      // Find the active AI integration for this provider
+      const keyToProviderMap: Record<string, string> = {
+        GOOGLE_GEMINI_API_KEY: 'ai_gemini',
+        OPENAI_API_KEY: 'ai_openai',
+        ANTHROPIC_API_KEY: 'ai_claude',
+      };
+      const dbProvider = keyToProviderMap[secret_name];
+
+      if (dbProvider) {
+        // Store encrypted key in the integration config
+        const { data: existing } = await adminClient
+          .from("api_integrations")
+          .select("id, config")
+          .eq("provider", dbProvider)
+          .limit(1)
+          .single();
+
+        if (existing) {
+          const cfg = (existing.config as any) || {};
+          cfg.api_key_encrypted = secret_value;
+          cfg.api_key_set = true;
+          cfg.api_key_hint = "••••" + secret_value.slice(-4);
+          await adminClient.from("api_integrations").update({
+            config: cfg,
+            updated_at: new Date().toISOString(),
+          }).eq("id", existing.id);
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, message: `Secret ${secret_name} stored` }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Mode 2: Store Meta credentials — requires integration_id
     if (!integration_id) {
       return new Response(
         JSON.stringify({ error: "integration_id is required" }),

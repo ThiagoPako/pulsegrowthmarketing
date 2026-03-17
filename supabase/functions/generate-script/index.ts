@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -86,20 +87,20 @@ Replique esse padrão no novo roteiro, adaptando ao cliente e tipo de vídeo sol
 }
 
 // Support Google Gemini, OpenAI, and Anthropic Claude
-function getAiConfig(provider?: string) {
+async function getAiConfig(provider?: string, dbApiKey?: string) {
   const geminiKey = Deno.env.get("GOOGLE_GEMINI_API_KEY");
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
   const claudeKey = Deno.env.get("ANTHROPIC_API_KEY");
-  const lovableKey = Deno.env.get("LOVABLE_API_KEY");
 
-  if (provider === "openai" && openaiKey) return { url: "https://api.openai.com/v1/chat/completions", key: openaiKey, provider: "openai" as const };
-  if (provider === "claude" && claudeKey) return { url: "https://api.anthropic.com/v1/messages", key: claudeKey, provider: "claude" as const };
-  if (provider === "gemini" && geminiKey) return { url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: geminiKey, provider: "gemini" as const };
+  if (provider === "gemini" && (geminiKey || dbApiKey)) return { url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: geminiKey || dbApiKey!, provider: "gemini" as const };
+  if (provider === "openai" && (openaiKey || dbApiKey)) return { url: "https://api.openai.com/v1/chat/completions", key: openaiKey || dbApiKey!, provider: "openai" as const };
+  if (provider === "claude" && (claudeKey || dbApiKey)) return { url: "https://api.anthropic.com/v1/messages", key: claudeKey || dbApiKey!, provider: "claude" as const };
+
   if (geminiKey) return { url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: geminiKey, provider: "gemini" as const };
   if (openaiKey) return { url: "https://api.openai.com/v1/chat/completions", key: openaiKey, provider: "openai" as const };
   if (claudeKey) return { url: "https://api.anthropic.com/v1/messages", key: claudeKey, provider: "claude" as const };
-  if (lovableKey) return { url: "https://ai.gateway.lovable.dev/v1/chat/completions", key: lovableKey, provider: "lovable" as const };
-  throw new Error("Nenhuma API key de IA configurada.");
+
+  throw new Error("Nenhuma API key de IA configurada. Configure via painel de APIs ou variáveis de ambiente.");
 }
 
 serve(async (req) => {
@@ -110,7 +111,26 @@ serve(async (req) => {
   try {
     const { editorial, videoType, contentFormat, clientName, niche, exampleScripts, aiModel, aiProvider } = await req.json();
 
-    const ai = getAiConfig(aiProvider);
+    // Fetch API key from DB if env vars not set
+    let dbApiKey: string | undefined;
+    if (aiProvider) {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      const providerMap: Record<string, string> = { gemini: 'ai_gemini', openai: 'ai_openai', claude: 'ai_claude' };
+      const { data: aiIntegration } = await supabase
+        .from("api_integrations")
+        .select("config")
+        .eq("provider", providerMap[aiProvider] || '')
+        .eq("status", "ativo")
+        .limit(1)
+        .single();
+      if (aiIntegration?.config) {
+        dbApiKey = (aiIntegration.config as any).api_key_encrypted;
+      }
+    }
+
+    const ai = await getAiConfig(aiProvider, dbApiKey);
     const selectedModel = aiModel || "gemini-2.5-flash-lite";
 
     const structure = VIDEO_TYPE_STRUCTURES[videoType] || VIDEO_TYPE_STRUCTURES.vendas;

@@ -3,42 +3,79 @@ import { deleteFileFromVps } from '@/services/vpsApi';
 
 /**
  * Centralized cascading delete for content across all modules.
- * Ensures deleting from any module cleans up all related records.
+ * Ensures deleting from any module cleans up ALL related records:
+ * task_history, social_media_deliveries, client_portal_contents,
+ * client_portal_comments, client_portal_notifications,
+ * delivery_records, active_recordings, recordings, VPS files.
  */
 
+/** Helper: delete VPS file if URL points to agenciapulse.tech */
+async function tryDeleteVpsFile(url: string | null | undefined) {
+  if (!url?.includes('agenciapulse.tech')) return;
+  try {
+    const path = url.replace('https://agenciapulse.tech/uploads/', '');
+    await deleteFileFromVps(path);
+  } catch (err) {
+    console.error('VPS file delete error:', err);
+  }
+}
+
 /**
- * Delete a content_task and all related records across modules.
+ * Delete a content_task and ALL related records across every module.
  */
 export async function deleteContentTask(taskId: string) {
-  // 1. Get the task to find related data
   const { data: task } = await supabase
     .from('content_tasks')
-    .select('id, client_id, title, edited_video_link')
+    .select('id, client_id, title, edited_video_link, recording_id, script_id')
     .eq('id', taskId)
     .single();
 
   if (!task) return;
 
-  // 2. Delete from task_history
+  // 1. Delete task_history
   await supabase.from('task_history').delete().eq('task_id', taskId);
 
-  // 3. Delete from social_media_deliveries
+  // 2. Delete social_media_deliveries linked to this task
   await supabase.from('social_media_deliveries').delete().eq('content_task_id', taskId);
 
-  // 4. Delete matching client_portal_contents (by client_id + title)
-  await supabase
+  // 3. Delete matching client_portal_contents + their comments/notifications
+  const { data: portalContents } = await supabase
     .from('client_portal_contents')
-    .delete()
+    .select('id, file_url, thumbnail_url')
     .eq('client_id', task.client_id)
     .eq('title', task.title);
 
-  // 5. Try to delete the VPS file if it's a VPS upload
-  if (task.edited_video_link?.includes('agenciapulse.tech')) {
-    try {
-      const path = task.edited_video_link.replace('https://agenciapulse.tech/uploads/', '');
-      await deleteFileFromVps(path);
-    } catch (err) {
-      console.error('VPS file delete error:', err);
+  if (portalContents?.length) {
+    for (const pc of portalContents) {
+      await supabase.from('client_portal_comments').delete().eq('content_id', pc.id);
+      await supabase.from('client_portal_notifications').delete().eq('link_content_id', pc.id);
+      await tryDeleteVpsFile(pc.file_url);
+      await tryDeleteVpsFile(pc.thumbnail_url);
+    }
+    await supabase
+      .from('client_portal_contents')
+      .delete()
+      .eq('client_id', task.client_id)
+      .eq('title', task.title);
+  }
+
+  // 4. Delete VPS file for edited video
+  await tryDeleteVpsFile(task.edited_video_link);
+
+  // 5. Clean up recording if this was the only task using it
+  if (task.recording_id) {
+    // Check if other tasks share this recording
+    const { count } = await supabase
+      .from('content_tasks')
+      .select('id', { count: 'exact', head: true })
+      .eq('recording_id', task.recording_id)
+      .neq('id', taskId);
+
+    if (count === 0) {
+      // No other tasks use this recording — safe to delete
+      await supabase.from('active_recordings').delete().eq('recording_id', task.recording_id);
+      await supabase.from('delivery_records').delete().eq('recording_id', task.recording_id);
+      await supabase.from('recordings').delete().eq('id', task.recording_id);
     }
   }
 
@@ -59,12 +96,11 @@ export async function deleteSocialDelivery(deliveryId: string) {
 
   if (!delivery) return;
 
-  // Delete the delivery
   await supabase.from('social_media_deliveries').delete().eq('id', deliveryId);
 }
 
 /**
- * Delete a client_portal_content and clean up related records.
+ * Delete a client_portal_content and clean up all related records.
  */
 export async function deletePortalContent(contentId: string) {
   const { data: content } = await supabase
@@ -81,19 +117,11 @@ export async function deletePortalContent(contentId: string) {
   // 2. Delete related portal notifications
   await supabase.from('client_portal_notifications').delete().eq('link_content_id', contentId);
 
-  // 3. Try to delete VPS files
-  for (const url of [content.file_url, content.thumbnail_url]) {
-    if (url?.includes('agenciapulse.tech')) {
-      try {
-        const path = url.replace('https://agenciapulse.tech/uploads/', '');
-        await deleteFileFromVps(path);
-      } catch (err) {
-        console.error('VPS file delete error:', err);
-      }
-    }
-  }
+  // 3. Delete VPS files
+  await tryDeleteVpsFile(content.file_url);
+  await tryDeleteVpsFile(content.thumbnail_url);
 
-  // 4. Also remove edited_video_link from matching content_task
+  // 4. Remove edited_video_link from matching content_task
   const { data: matchingTask } = await supabase
     .from('content_tasks')
     .select('id, edited_video_link')

@@ -12,9 +12,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, KeyRound, Users, Handshake, Trash2, Shield, Lock } from 'lucide-react';
+import { Plus, KeyRound, Users, Handshake, Trash2, Shield, Lock, Cake, CalendarDays } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import { useUserPermissions, AVAILABLE_MODULES } from '@/hooks/useUserPermissions';
+import BirthdayCountdown from '@/components/BirthdayCountdown';
 
 const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'fotografo', 'designer'];
 
@@ -35,6 +36,7 @@ interface TeamMember {
   displayName?: string;
   jobTitle?: string;
   bio?: string;
+  birthday?: string | null;
 }
 
 interface PartnerInfo {
@@ -83,6 +85,7 @@ export default function Team() {
         displayName: p.display_name,
         jobTitle: p.job_title,
         bio: p.bio,
+        birthday: p.birthday,
       })));
     }
     setLoading(false);
@@ -267,6 +270,9 @@ export default function Team() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-display font-bold">Equipe</h1>
+
+      {/* Birthday Countdown Widget */}
+      <BirthdayCountdown />
         {currentUser?.role === 'admin' && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -468,6 +474,11 @@ export default function Team() {
                     <p className="font-medium">{u.displayName || u.name}</p>
                     <p className="text-xs text-muted-foreground">{u.email}{u.jobTitle ? ` · ${u.jobTitle}` : ''}</p>
                     {u.bio && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{u.bio}</p>}
+                    {u.birthday && (
+                      <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                        <Cake size={10} /> {new Date(u.birthday + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -492,6 +503,21 @@ export default function Team() {
                   )}
                   {currentUser?.role === 'admin' && (
                     <>
+                      {/* Birthday edit */}
+                      <div className="relative">
+                        <Input
+                          type="date"
+                          className="h-7 w-[130px] text-[10px] px-1.5"
+                          value={u.birthday || ''}
+                          title="Data de aniversário"
+                          onChange={async (e) => {
+                            const val = e.target.value || null;
+                            await supabase.from('profiles').update({ birthday: val } as any).eq('id', u.id);
+                            fetchMembers();
+                            toast.success('Aniversário atualizado!');
+                          }}
+                        />
+                      </div>
                       {u.id !== currentUser?.id && (
                         <Button variant="ghost" size="icon" className="h-8 w-8" title="Permissões de módulos" onClick={() => handleOpenPermissions(u)}>
                           <Lock size={16} />

@@ -13,6 +13,7 @@ import {
   LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Bot, Plug
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
+import BirthdayOverlay from '@/components/BirthdayOverlay';
 
 type NavCategory = {
   label: string;
@@ -106,6 +107,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      <BirthdayOverlay />
       {/* Collapsible sidebar */}
       <aside
         className={`hidden md:flex flex-col bg-sidebar border-r border-sidebar-border shrink-0 transition-all duration-300 ease-in-out ${sidebarExpanded ? 'w-[210px]' : 'w-[60px]'}`}

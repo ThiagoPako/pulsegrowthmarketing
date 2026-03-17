@@ -564,6 +564,26 @@ export default function ClientOnboarding() {
 
             <div className="space-y-3">
               <p className="text-xs text-muted-foreground font-medium">Selecione o dia e horário fixo de gravação:</p>
+              
+              {/* Stacking info */}
+              {monthlyRecordings > 1 && fixedDay && (
+                <div className={`p-3 rounded-lg text-xs flex items-start gap-2 ${
+                  (slotsPerDay.get(fixedDay) || 0) >= monthlyRecordings 
+                    ? 'bg-primary/5 border border-primary/20 text-primary' 
+                    : 'bg-muted border border-border text-muted-foreground'
+                }`}>
+                  <Calendar size={14} className="shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium">
+                      {(slotsPerDay.get(fixedDay) || 0) >= monthlyRecordings 
+                        ? `✅ Este dia comporta todas as ${monthlyRecordings} gravações consecutivas!`
+                        : `Este dia tem ${slotsPerDay.get(fixedDay) || 0} vaga(s) — para ${monthlyRecordings} gravações, distribua entre semanas diferentes.`
+                      }
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label>Dia da Semana</Label>
@@ -572,13 +592,18 @@ export default function ClientOnboarding() {
                     <SelectContent>
                       {(settings.work_days as string[]).map(d => {
                         const count = availableSlots.filter(s => s.day === d).length;
-                        return <SelectItem key={d} value={d}>{DAY_LABELS[d]} ({count} vagas)</SelectItem>;
+                        const canStack = count >= monthlyRecordings;
+                        return (
+                          <SelectItem key={d} value={d}>
+                            {DAY_LABELS[d]} ({count} vagas){canStack && monthlyRecordings > 1 ? ' ⭐' : ''}
+                          </SelectItem>
+                        );
                       })}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label>Horário</Label>
+                  <Label>Horário Inicial</Label>
                   {slotsForDay.length > 0 ? (
                     <Select value={fixedTime} onValueChange={setFixedTime}>
                       <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>

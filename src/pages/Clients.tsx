@@ -1457,14 +1457,28 @@ export default function Clients() {
         )}
       </div>
 
-      {clients.length === 0 ? (
-        <div className="glass-card p-12 text-center text-muted-foreground">
-          <Building2 size={40} className="mx-auto mb-3 opacity-50" />
-          <p>Nenhum cliente cadastrado</p>
-        </div>
-      ) : (
+      {/* Search filter */}
+      <div className="w-full max-w-sm">
+        <Input
+          placeholder="Buscar cliente pelo nome..."
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+          className="h-10"
+        />
+      </div>
+
+      {(() => {
+        const filtered = clients.filter(c =>
+          c.companyName.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+        return filtered.length === 0 ? (
+          <div className="glass-card p-12 text-center text-muted-foreground">
+            <Building2 size={40} className="mx-auto mb-3 opacity-50" />
+            <p>{searchTerm ? 'Nenhum cliente encontrado' : 'Nenhum cliente cadastrado'}</p>
+          </div>
+        ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {clients.map(c => (
+          {filtered.map(c => (
             <div key={c.id} className="glass-card overflow-hidden"
               style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${c.color || '220 10% 50%'})` }}>
               {/* Header row */}

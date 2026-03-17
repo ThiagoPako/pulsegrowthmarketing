@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Settings, Plus, Plug, PlugZap, Trash2, RefreshCw, Eye, EyeOff, Clock, AlertCircle,
-  CheckCircle, XCircle, Loader2, History, Zap
+  CheckCircle, XCircle, Loader2, History, Zap, Info
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -75,9 +75,6 @@ export default function FinancialApiSettings() {
     notes: '',
     metaAppId: '',
     metaAppSecret: '',
-    metaPageToken: '',
-    metaIgBusinessId: '',
-    metaPageId: '',
   });
 
   useEffect(() => { loadData(); }, []);
@@ -103,7 +100,7 @@ export default function FinancialApiSettings() {
   };
 
   const storeMetaCredentialsSecurely = async (integrationId: string) => {
-    const hasSecrets = form.metaAppSecret || form.metaPageToken || form.metaAppId || form.metaIgBusinessId || form.metaPageId;
+    const hasSecrets = form.metaAppSecret || form.metaAppId;
     if (!hasSecrets) return;
 
     try {
@@ -112,9 +109,6 @@ export default function FinancialApiSettings() {
           integration_id: integrationId,
           meta_app_id: form.metaAppId || undefined,
           meta_app_secret: form.metaAppSecret || undefined,
-          meta_page_token: form.metaPageToken || undefined,
-          meta_ig_business_id: form.metaIgBusinessId || undefined,
-          meta_page_id: form.metaPageId || undefined,
         },
       });
       if (error) throw error;
@@ -182,21 +176,16 @@ export default function FinancialApiSettings() {
       return;
     }
     if (form.provider === 'meta_ads' && !editingId) {
-      if (!form.metaAppId || !form.metaAppSecret || !form.metaPageToken || !form.metaIgBusinessId || !form.metaPageId) {
-        toast.error('Preencha todos os campos do Meta');
+      if (!form.metaAppId || !form.metaAppSecret) {
+        toast.error('Preencha App ID e App Secret');
         return;
       }
     }
 
-    // For Meta, only store non-sensitive data in the DB directly
     const configData: any = { notes: form.notes };
     if (form.provider === 'meta_ads') {
       configData.meta_app_id = form.metaAppId;
-      configData.meta_ig_business_id = form.metaIgBusinessId;
-      configData.meta_page_id = form.metaPageId;
-      // Masked display only
       if (form.metaAppSecret) configData.meta_app_secret = '••••' + form.metaAppSecret.slice(-4);
-      if (form.metaPageToken) configData.meta_page_token = '••••' + form.metaPageToken.slice(-4);
     }
 
     const payload: any = {
@@ -281,9 +270,6 @@ export default function FinancialApiSettings() {
       notes: integration.config?.notes || '',
       metaAppId: integration.config?.meta_app_id || '',
       metaAppSecret: '',
-      metaPageToken: '',
-      metaIgBusinessId: integration.config?.meta_ig_business_id || '',
-      metaPageId: integration.config?.meta_page_id || '',
     });
     setShowDialog(true);
   };
@@ -295,7 +281,7 @@ export default function FinancialApiSettings() {
   };
 
   const resetForm = () => {
-    setForm({ name: '', provider: 'meta_ads', api_type: 'rest', endpoint_url: '', notes: '', metaAppId: '', metaAppSecret: '', metaPageToken: '', metaIgBusinessId: '', metaPageId: '' });
+    setForm({ name: '', provider: 'meta_ads', api_type: 'rest', endpoint_url: '', notes: '', metaAppId: '', metaAppSecret: '' });
     setEditingId(null);
   };
 
@@ -420,11 +406,11 @@ export default function FinancialApiSettings() {
               </Select>
             </div>
 
-            {/* Meta-specific fields */}
+            {/* Meta-specific fields - Only App ID and Secret (global config) */}
             {form.provider === 'meta_ads' && (
               <>
                 <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-                  <p className="text-xs font-medium text-primary mb-3">📊 Credenciais Meta (Facebook/Instagram)</p>
+                  <p className="text-xs font-medium text-primary mb-3">📊 Configuração Global do App Meta</p>
                   <div className="space-y-3">
                     <div>
                       <Label className="text-xs">App ID *</Label>
@@ -434,25 +420,15 @@ export default function FinancialApiSettings() {
                       <Label className="text-xs">App Secret *</Label>
                       <Input type="password" value={form.metaAppSecret} onChange={e => setForm({ ...form, metaAppSecret: e.target.value })} placeholder={editingId ? 'Deixe em branco para manter' : 'Ex: abc123def456...'} />
                     </div>
-                    <div>
-                      <Label className="text-xs">Page Access Token (longa duração) *</Label>
-                      <Input type="password" value={form.metaPageToken} onChange={e => setForm({ ...form, metaPageToken: e.target.value })} placeholder={editingId ? 'Deixe em branco para manter' : 'Token gerado no Graph API Explorer'} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <Label className="text-xs">Facebook Page ID *</Label>
-                        <Input value={form.metaPageId} onChange={e => setForm({ ...form, metaPageId: e.target.value })} placeholder="Ex: 987654321" />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Instagram Business ID *</Label>
-                        <Input value={form.metaIgBusinessId} onChange={e => setForm({ ...form, metaIgBusinessId: e.target.value })} placeholder="Ex: 17841400..." />
-                      </div>
-                    </div>
                   </div>
+                </div>
+                <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 text-xs text-muted-foreground">
+                  <Info size={12} className="inline mr-1" />
+                  Configure apenas App ID e App Secret aqui. As contas (Facebook Pages, Instagram) serão conectadas automaticamente via OAuth no cadastro de cada cliente.
                 </div>
                 <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
                   <AlertCircle size={12} className="inline mr-1" />
-                  Os tokens sensíveis (App Secret e Page Token) serão armazenados de forma segura no backend. Apenas os últimos 4 caracteres ficam visíveis.
+                  O App Secret será armazenado de forma segura no backend. Apenas os últimos 4 caracteres ficam visíveis.
                 </div>
               </>
             )}

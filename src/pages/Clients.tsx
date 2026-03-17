@@ -629,31 +629,141 @@ export default function Clients() {
     </div>
   );
 
-  const simulateConnect = (platform: 'instagram' | 'facebook') => {
-    if (platform === 'instagram') {
-      setSocialAccounts(prev => ({
-        ...prev,
-        instagram: {
-          connected: true,
-          accountName: form.companyName || 'Conta Instagram',
-          username: `@${(form.companyName || 'empresa').toLowerCase().replace(/\s/g, '')}`,
-          pageId: 'mock_page_' + Date.now(),
-          businessId: 'mock_biz_' + Date.now(),
-        }
-      }));
-      toast.success('Instagram conectado com sucesso!');
-    } else {
-      setSocialAccounts(prev => ({
-        ...prev,
-        facebook: {
-          connected: true,
-          accountName: form.companyName || 'Página Facebook',
-          pageId: 'mock_page_' + Date.now(),
-        }
-      }));
-      toast.success('Facebook conectado com sucesso!');
+  const connectViaOAuth = async () => {
+    const clientId = editing?.id || 'new';
+    try {
+      const redirectUri = `${window.location.origin}/`;
+      
+      const { data, error } = await supabase.functions.invoke('meta-oauth', {
+        body: {
+          action: 'get_oauth_url',
+          client_id: clientId,
+          redirect_uri: redirectUri,
+        },
+      });
+
+      if (error || data?.error) {
+        toast.error(data?.error || 'Erro ao gerar link de conexão. Configure o App Meta em Gerenciamento de APIs primeiro.');
+        return;
+      }
+
+      // Store client context for the callback
+      sessionStorage.setItem('meta_oauth_client_id', clientId);
+      sessionStorage.setItem('meta_oauth_redirect_uri', redirectUri);
+      sessionStorage.setItem('meta_oauth_company_name', form.companyName || '');
+
+      // Open OAuth popup
+      const popup = window.open(data.oauth_url, 'meta_oauth', 'width=600,height=700,scrollbars=yes');
+      
+      // Listen for the callback
+      const handleMessage = async () => {
+        const interval = setInterval(async () => {
+          try {
+            if (popup?.closed) {
+              clearInterval(interval);
+              // Check URL params for code
+              const urlParams = new URLSearchParams(window.location.search);
+              const code = urlParams.get('code');
+              const state = urlParams.get('state');
+
+              if (code) {
+                toast.info('Conectando contas...');
+                let parsedClientId = clientId;
+                try {
+                  const stateObj = JSON.parse(decodeURIComponent(state || '{}'));
+                  parsedClientId = stateObj.client_id || clientId;
+                } catch {}
+
+                const { data: result, error: exchangeError } = await supabase.functions.invoke('meta-oauth', {
+                  body: {
+                    action: 'exchange_code',
+                    code,
+                    redirect_uri: redirectUri,
+                    client_id: parsedClientId,
+                  },
+                });
+
+                if (exchangeError || result?.error) {
+                  toast.error(result?.error || 'Erro ao conectar contas');
+                } else {
+                  const accounts = result.accounts || [];
+                  const ig = accounts.find((a: any) => a.platform === 'instagram');
+                  const fb = accounts.find((a: any) => a.platform === 'facebook');
+
+                  setSocialAccounts({
+                    instagram: ig ? { connected: true, accountName: ig.name, username: `@${ig.username || ig.name}`, pageId: ig.pageId || '', businessId: ig.businessId || '' } : emptySocialAccounts().instagram,
+                    facebook: fb ? { connected: true, accountName: fb.name, pageId: fb.pageId || '' } : emptySocialAccounts().facebook,
+                  });
+
+                  toast.success(`✅ ${accounts.length} conta(s) conectada(s) automaticamente!`);
+                }
+
+                // Clean URL
+                window.history.replaceState({}, '', window.location.pathname);
+              }
+            }
+          } catch {}
+        }, 500);
+      };
+
+      handleMessage();
+    } catch (err: any) {
+      toast.error('Erro: ' + err.message);
     }
   };
+
+  // Handle OAuth redirect on page load
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+
+    if (code) {
+      const savedClientId = sessionStorage.getItem('meta_oauth_client_id');
+      const savedRedirectUri = sessionStorage.getItem('meta_oauth_redirect_uri');
+
+      if (savedClientId && savedRedirectUri) {
+        (async () => {
+          toast.info('Finalizando conexão com Meta...');
+          
+          let parsedClientId = savedClientId;
+          try {
+            const stateObj = JSON.parse(decodeURIComponent(state || '{}'));
+            parsedClientId = stateObj.client_id || savedClientId;
+          } catch {}
+
+          const { data: result, error } = await supabase.functions.invoke('meta-oauth', {
+            body: {
+              action: 'exchange_code',
+              code,
+              redirect_uri: savedRedirectUri,
+              client_id: parsedClientId,
+            },
+          });
+
+          if (error || result?.error) {
+            toast.error(result?.error || 'Erro ao conectar contas');
+          } else {
+            const accounts = result.accounts || [];
+            const ig = accounts.find((a: any) => a.platform === 'instagram');
+            const fb = accounts.find((a: any) => a.platform === 'facebook');
+
+            setSocialAccounts({
+              instagram: ig ? { connected: true, accountName: ig.name, username: `@${ig.username || ig.name}`, pageId: ig.pageId || '', businessId: ig.businessId || '' } : emptySocialAccounts().instagram,
+              facebook: fb ? { connected: true, accountName: fb.name, pageId: fb.pageId || '' } : emptySocialAccounts().facebook,
+            });
+
+            toast.success(`✅ ${accounts.length} conta(s) conectada(s)!`);
+          }
+
+          sessionStorage.removeItem('meta_oauth_client_id');
+          sessionStorage.removeItem('meta_oauth_redirect_uri');
+          sessionStorage.removeItem('meta_oauth_company_name');
+          window.history.replaceState({}, '', window.location.pathname);
+        })();
+      }
+    }
+  }, []);
 
   const disconnectAccount = (platform: 'instagram' | 'facebook') => {
     if (platform === 'instagram') {
@@ -675,91 +785,85 @@ export default function Clients() {
         </p>
       </div>
 
-      {/* Instagram Card */}
-      <div className={`p-4 rounded-xl border-2 transition-all space-y-3 ${
-        socialAccounts.instagram.connected 
-          ? 'border-primary/40 bg-primary/5' 
-          : 'border-border bg-muted/30'
-      }`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-              socialAccounts.instagram.connected ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
-            }`}>
-              <Instagram size={20} />
-            </div>
-            <div>
-              <p className="font-semibold text-sm">Instagram</p>
-              {socialAccounts.instagram.connected ? (
-                <p className="text-xs text-primary flex items-center gap-1">🟢 Conectado · {socialAccounts.instagram.username}</p>
-              ) : (
-                <p className="text-xs text-muted-foreground flex items-center gap-1">🔴 Não conectado</p>
+      {/* Connect Button - Single OAuth for both platforms */}
+      {!socialAccounts.instagram.connected && !socialAccounts.facebook.connected ? (
+        <div className="space-y-3">
+          <Button className="w-full gap-2" onClick={connectViaOAuth}>
+            <Link2 size={16} /> Conectar Facebook e Instagram via Meta
+          </Button>
+          <div className="p-3 rounded-lg bg-accent/50 border border-accent flex gap-2 items-start">
+            <Info size={16} className="text-muted-foreground shrink-0 mt-0.5" />
+            <p className="text-xs text-muted-foreground">
+              Ao clicar, você será redirecionado para o Facebook. Após autorizar, as contas (Páginas e Instagram vinculado) serão conectadas automaticamente. Você pode conectar depois no perfil do cliente.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {/* Instagram status */}
+          <div className={`p-4 rounded-xl border-2 transition-all ${
+            socialAccounts.instagram.connected 
+              ? 'border-primary/40 bg-primary/5' 
+              : 'border-border bg-muted/30'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                  socialAccounts.instagram.connected ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
+                }`}>
+                  <Instagram size={20} />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">Instagram</p>
+                  {socialAccounts.instagram.connected ? (
+                    <p className="text-xs text-primary flex items-center gap-1">🟢 Conectado · {socialAccounts.instagram.username}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Não vinculado à página</p>
+                  )}
+                </div>
+              </div>
+              {socialAccounts.instagram.connected && (
+                <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive gap-1" onClick={() => disconnectAccount('instagram')}>
+                  <Unlink size={12} /> Remover
+                </Button>
               )}
             </div>
           </div>
-          {socialAccounts.instagram.connected ? (
-            <div className="flex gap-1">
-              <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => simulateConnect('instagram')}>
-                <RefreshCw size={12} /> Reconectar
-              </Button>
-              <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive gap-1" onClick={() => disconnectAccount('instagram')}>
-                <Unlink size={12} /> Remover
-              </Button>
-            </div>
-          ) : (
-            <Button size="sm" className="h-8 text-xs gap-1" onClick={() => simulateConnect('instagram')}>
-              <Link2 size={12} /> Conectar Instagram
-            </Button>
-          )}
-        </div>
-      </div>
 
-      {/* Facebook Card */}
-      <div className={`p-4 rounded-xl border-2 transition-all space-y-3 ${
-        socialAccounts.facebook.connected 
-          ? 'border-primary/40 bg-primary/5' 
-          : 'border-border bg-muted/30'
-      }`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-              socialAccounts.facebook.connected ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
-            }`}>
-              <Facebook size={20} />
-            </div>
-            <div>
-              <p className="font-semibold text-sm">Facebook</p>
-              {socialAccounts.facebook.connected ? (
-                <p className="text-xs text-primary flex items-center gap-1">🟢 Conectado · {socialAccounts.facebook.accountName}</p>
-              ) : (
-                <p className="text-xs text-muted-foreground flex items-center gap-1">🔴 Não conectado</p>
+          {/* Facebook status */}
+          <div className={`p-4 rounded-xl border-2 transition-all ${
+            socialAccounts.facebook.connected 
+              ? 'border-primary/40 bg-primary/5' 
+              : 'border-border bg-muted/30'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                  socialAccounts.facebook.connected ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
+                }`}>
+                  <Facebook size={20} />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">Facebook</p>
+                  {socialAccounts.facebook.connected ? (
+                    <p className="text-xs text-primary flex items-center gap-1">🟢 Conectado · {socialAccounts.facebook.accountName}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Não vinculado</p>
+                  )}
+                </div>
+              </div>
+              {socialAccounts.facebook.connected && (
+                <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive gap-1" onClick={() => disconnectAccount('facebook')}>
+                  <Unlink size={12} /> Remover
+                </Button>
               )}
             </div>
           </div>
-          {socialAccounts.facebook.connected ? (
-            <div className="flex gap-1">
-              <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => simulateConnect('facebook')}>
-                <RefreshCw size={12} /> Reconectar
-              </Button>
-              <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive gap-1" onClick={() => disconnectAccount('facebook')}>
-                <Unlink size={12} /> Remover
-              </Button>
-            </div>
-          ) : (
-            <Button size="sm" className="h-8 text-xs gap-1" onClick={() => simulateConnect('facebook')}>
-              <Link2 size={12} /> Conectar Facebook
-            </Button>
-          )}
-        </div>
-      </div>
 
-      {/* Info notice */}
-      {!socialAccounts.instagram.connected && !socialAccounts.facebook.connected && (
-        <div className="p-3 rounded-lg bg-accent/50 border border-accent flex gap-2 items-start">
-          <Info size={16} className="text-muted-foreground shrink-0 mt-0.5" />
-          <p className="text-xs text-muted-foreground">
-            Você poderá conectar as redes sociais depois no perfil do cliente. A conexão não é obrigatória para concluir o cadastro.
-          </p>
+          {/* Reconnect button */}
+          <Button variant="outline" className="w-full gap-2 text-xs" onClick={connectViaOAuth}>
+            <RefreshCw size={14} /> Reconectar contas via Meta
+          </Button>
         </div>
       )}
     </div>

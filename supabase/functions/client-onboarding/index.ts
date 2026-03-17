@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
       updatePayload.briefing_data = briefing_data
       // Also save instagram credentials to client record
       if (briefing_data.instagram_login) updatePayload.client_login = briefing_data.instagram_login
-      if (briefing_data.instagram_password) updatePayload.client_password = briefing_data.instagram_password
+      // client_password removed - portal uses hashed passwords via client-portal-auth function
       if (briefing_data.niche) updatePayload.niche = briefing_data.niche
     }
 

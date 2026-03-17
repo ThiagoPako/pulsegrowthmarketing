@@ -316,13 +316,10 @@ export default function Clients() {
       if (!newClient.clientLogin) {
         newClient.clientLogin = form.companyName!.toLowerCase().replace(/\s+/g, '.').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       }
-      if (!newClient.clientPassword) {
-        newClient.clientPassword = Math.random().toString(36).slice(-8);
-      }
       const ok = addClient(newClient);
       if (!ok) { toast.error('Empresa já cadastrada'); return; }
       // Update plan fields after insert
-      await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, contract_duration_months: contractDurationMonths, client_type: clientType, client_login: newClient.clientLogin, client_password: newClient.clientPassword, show_metrics: showMetrics } as any).eq('id', clientId);
+      await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, contract_duration_months: contractDurationMonths, client_type: clientType, client_login: newClient.clientLogin, show_metrics: showMetrics } as any).eq('id', clientId);
       // Create financial contract
       await supabase.from('financial_contracts').insert({
         client_id: clientId,

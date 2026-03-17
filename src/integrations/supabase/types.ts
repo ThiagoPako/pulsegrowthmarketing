@@ -561,7 +561,7 @@ export type Database = {
           briefing_data: Json | null
           city: string
           client_login: string | null
-          client_password: string | null
+          client_password_hash: string | null
           client_type: string
           color: string
           company_name: string
@@ -610,7 +610,7 @@ export type Database = {
           briefing_data?: Json | null
           city?: string
           client_login?: string | null
-          client_password?: string | null
+          client_password_hash?: string | null
           client_type?: string
           color?: string
           company_name: string
@@ -659,7 +659,7 @@ export type Database = {
           briefing_data?: Json | null
           city?: string
           client_login?: string | null
-          client_password?: string | null
+          client_password_hash?: string | null
           client_type?: string
           color?: string
           company_name?: string
@@ -2749,6 +2749,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_client_by_login: { Args: { p_login: string }; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]

@@ -34,7 +34,7 @@ function rowToClient(r: any): Client {
     monthlyRecordings: r.monthly_recordings ?? 4,
     niche: r.niche || '',
     clientLogin: r.client_login || '',
-    clientPassword: r.client_password || '',
+    clientPassword: '',
     driveLink: r.drive_link || '',
     driveFotos: r.drive_fotos || '',
     driveIdentidadeVisual: r.drive_identidade_visual || '',
@@ -72,7 +72,7 @@ function clientToRow(c: Client) {
     monthly_recordings: c.monthlyRecordings,
     niche: c.niche || '',
     client_login: c.clientLogin || '',
-    client_password: c.clientPassword || '',
+    // client_password removed for security
     drive_link: c.driveLink || '',
     drive_fotos: c.driveFotos || '',
     drive_identidade_visual: c.driveIdentidadeVisual || '',

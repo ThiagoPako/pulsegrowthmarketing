@@ -156,39 +156,82 @@ export default function FinancialApiSettings() {
     const { data } = await supabase
       .from('api_integrations')
       .select('*')
-      .eq('provider', 'lovable_ai')
+      .in('provider', ['ai_gemini', 'ai_openai', 'ai_claude'])
+      .eq('status', 'ativo')
       .limit(1)
       .single();
     if (data) {
       const d = data as any;
+      const providerMap: Record<string, string> = { ai_gemini: 'gemini', ai_openai: 'openai', ai_claude: 'claude' };
       setAiConfig({
-        model: d.config?.ai_model || 'google/gemini-2.5-flash-lite',
+        provider: providerMap[d.provider] || 'gemini',
+        model: d.config?.ai_model || 'gemini-2.5-flash-lite',
         active: d.status === 'ativo',
         integrationId: d.id,
+        apiKeySet: !!d.config?.api_key_set,
       });
     }
   };
 
-  const handleSaveAiConfig = async (model: string) => {
+  const handleSaveAiConfig = async (providerKey: string, model: string, apiKey?: string) => {
+    setSavingAi(true);
+    const providerInfo = AI_PROVIDERS.find(p => p.value === providerKey);
+    if (!providerInfo) return;
+
+    const dbProvider = `ai_${providerKey}`;
+    const configData: any = { ai_model: model, ai_provider: providerKey };
+
+    // If API key provided, store it via edge function
+    if (apiKey && apiKey.trim()) {
+      try {
+        await supabase.functions.invoke('meta-store-credentials', {
+          body: {
+            secret_name: providerInfo.keyName,
+            secret_value: apiKey.trim(),
+          },
+        });
+        configData.api_key_set = true;
+        configData.api_key_hint = '••••' + apiKey.slice(-4);
+      } catch (err: any) {
+        toast.error('Erro ao salvar API Key: ' + (err.message || 'Erro'));
+        setSavingAi(false);
+        return;
+      }
+    }
+
     const payload: any = {
-      name: 'Lovable AI',
-      provider: 'lovable_ai',
+      name: providerInfo.label,
+      provider: dbProvider,
       api_type: 'ai_gateway',
-      endpoint_url: 'https://ai.gateway.lovable.dev/v1/chat/completions',
-      config: { ai_model: model },
+      endpoint_url: providerInfo.getKeyUrl,
+      config: configData,
       status: 'ativo',
       updated_at: new Date().toISOString(),
     };
 
-    if (aiConfig.integrationId) {
+    // Deactivate other AI providers first
+    await supabase.from('api_integrations')
+      .update({ status: 'inativo' } as any)
+      .in('provider', ['ai_gemini', 'ai_openai', 'ai_claude']);
+
+    if (aiConfig.integrationId && aiConfig.provider === providerKey) {
       await supabase.from('api_integrations').update(payload).eq('id', aiConfig.integrationId);
     } else {
       payload.created_by = user?.id;
       const { data } = await supabase.from('api_integrations').insert(payload).select().single();
       if (data) setAiConfig(prev => ({ ...prev, integrationId: (data as any).id }));
     }
-    setAiConfig(prev => ({ ...prev, model, active: true }));
-    toast.success(`Modelo IA atualizado: ${AI_MODELS.find(m => m.value === model)?.label}`);
+
+    setAiConfig(prev => ({
+      ...prev,
+      provider: providerKey,
+      model,
+      active: true,
+      apiKeySet: configData.api_key_set || prev.apiKeySet,
+    }));
+    setAiApiKey('');
+    setSavingAi(false);
+    toast.success(`IA configurada: ${providerInfo.label} → ${model}`);
   };
 
   const loadData = async () => {

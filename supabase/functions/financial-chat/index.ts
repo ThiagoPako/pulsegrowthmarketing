@@ -7,16 +7,42 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+// Support both Lovable AI Gateway and Google Gemini API directly
+function getAiConfig() {
+  const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+  const geminiKey = Deno.env.get("GOOGLE_GEMINI_API_KEY");
+  
+  if (lovableKey) {
+    return {
+      url: "https://ai.gateway.lovable.dev/v1/chat/completions",
+      key: lovableKey,
+      provider: "lovable" as const,
+    };
   }
+  if (geminiKey) {
+    return {
+      url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+      key: geminiKey,
+      provider: "gemini" as const,
+    };
+  }
+  throw new Error("Nenhuma API key de IA configurada. Configure LOVABLE_API_KEY ou GOOGLE_GEMINI_API_KEY.");
+}
 
-  try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+// Map model names between providers
+function resolveModel(model: string, provider: "lovable" | "gemini"): string {
+  if (provider === "gemini") {
+    // Strip "google/" prefix for native Gemini API
+    const map: Record<string, string> = {
+      "google/gemini-2.5-flash-lite": "gemini-2.5-flash-lite",
+      "google/gemini-2.5-flash": "gemini-2.5-flash",
+      "google/gemini-2.5-pro": "gemini-2.5-pro",
+      "google/gemini-3-flash-preview": "gemini-3-flash-preview",
+    };
+    return map[model] || model.replace("google/", "");
+  }
+  return model;
+}
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

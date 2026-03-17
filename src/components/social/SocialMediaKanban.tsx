@@ -156,31 +156,31 @@ function RocketBurst({ onComplete }: { onComplete: () => void }) {
 }
 
 // Video link inline component
-function ReviewVideoLink({ contentTaskId }: { contentTaskId: string | null }) {
-  const [link, setLink] = useState<string | null>(null);
+function ReviewVideoLink({ contentTaskId, clientId }: { contentTaskId: string | null; clientId: string }) {
   const [isAltered, setIsAltered] = useState(false);
+  const [hasVideo, setHasVideo] = useState(false);
 
   useEffect(() => {
     if (!contentTaskId) return;
     supabase.from('content_tasks').select('edited_video_link, drive_link, adjustment_notes').eq('id', contentTaskId).single()
       .then(({ data }) => {
-        setLink(data?.edited_video_link || data?.drive_link || null);
+        setHasVideo(!!(data?.edited_video_link || data?.drive_link));
         setIsAltered(!!data?.adjustment_notes);
       });
   }, [contentTaskId]);
 
-  if (!link && !isAltered) return null;
+  if (!hasVideo && !isAltered) return null;
 
   return (
     <div className="mt-2 space-y-1">
       {isAltered && (
         <Badge className="text-[9px] font-bold px-1.5 py-0 border-0 bg-amber-500 text-white">🔄 Alterado</Badge>
       )}
-      {link && (
-        <a href={link} target="_blank" rel="noopener noreferrer"
+      {hasVideo && (
+        <a href={`/portal/${clientId}`} target="_blank" rel="noopener noreferrer"
           className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline bg-primary/5 border border-primary/15 rounded-md px-2 py-1.5 transition-colors hover:bg-primary/10">
-          <Link2 size={12} className="shrink-0" />
-          <span className="truncate">Assistir vídeo</span>
+          <Eye size={12} className="shrink-0" />
+          <span className="truncate">Assistir no Portal</span>
           <ExternalLink size={10} className="shrink-0 ml-auto" />
         </a>
       )}

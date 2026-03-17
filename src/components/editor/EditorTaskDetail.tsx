@@ -578,9 +578,9 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
 
                   {/* Current video */}
                   {task.edited_video_link && (
-                    <a href={task.edited_video_link} target="_blank" rel="noopener noreferrer"
+                    <a href={`/portal/${task.client_id}`} target="_blank" rel="noopener noreferrer"
                       className="flex items-center gap-2 text-sm font-medium text-green-600 dark:text-green-400 hover:underline bg-green-50 dark:bg-green-900/20 rounded-lg px-4 py-3 border border-green-200 dark:border-green-800">
-                      <Play size={16} /> 🎬 Abrir vídeo editado
+                      <Eye size={16} /> 🎬 Assistir no Portal do Cliente
                     </a>
                   )}
                 </div>

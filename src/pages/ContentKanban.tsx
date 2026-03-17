@@ -1280,14 +1280,14 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
           {/* Watch video button (revisão/alteração) */}
           {isRevisao && task.edited_video_link && (
             <a
-              href={task.edited_video_link}
+              href={`/portal/${task.client_id}`}
               target="_blank"
               rel="noopener noreferrer"
               onClick={e => e.stopPropagation()}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 transition-colors w-full text-left group/video"
             >
-              <Film size={11} className="text-teal-600 shrink-0" />
-              <span className="text-[10px] font-medium text-teal-700 truncate flex-1">Assistir Vídeo</span>
+              <Eye size={11} className="text-teal-600 shrink-0" />
+              <span className="text-[10px] font-medium text-teal-700 truncate flex-1">Assistir no Portal</span>
               <ExternalLink size={10} className="text-teal-500/60 group-hover/video:text-teal-600 transition-colors shrink-0" />
             </a>
           )}

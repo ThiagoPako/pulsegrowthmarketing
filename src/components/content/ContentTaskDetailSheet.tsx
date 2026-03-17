@@ -969,30 +969,12 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                     </a>
                   )}
                   {task.edited_video_link && (
-                    task.edited_video_link.match(/\.(mp4|mov|webm|avi)(\?|$)/i) ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-teal-500/10 border border-teal-500/20">
-                          <Film size={14} className="text-teal-600 shrink-0" />
-                          <span className="text-sm font-medium text-teal-700 dark:text-teal-400 truncate flex-1">🎬 Vídeo Editado</span>
-                        </div>
-                        <div className="rounded-lg overflow-hidden border border-border bg-black aspect-video">
-                          <video
-                            src={task.edited_video_link}
-                            controls
-                            className="w-full h-full"
-                            playsInline
-                            preload="metadata"
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <a href={task.edited_video_link} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/15 border border-teal-500/20 transition-colors">
-                        <Film size={14} className="text-teal-600 shrink-0" />
-                        <span className="text-sm font-medium text-teal-700 dark:text-teal-400 truncate flex-1">🎬 Assistir Vídeo Editado</span>
-                        <ExternalLink size={12} className="text-teal-500/60 shrink-0" />
-                      </a>
-                    )
+                    <a href={`/portal/${task.client_id}`} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/15 border border-teal-500/20 transition-colors">
+                      <Eye size={14} className="text-teal-600 shrink-0" />
+                      <span className="text-sm font-medium text-teal-700 dark:text-teal-400 truncate flex-1">🎬 Assistir no Portal do Cliente</span>
+                      <ExternalLink size={12} className="text-teal-500/60 shrink-0" />
+                    </a>
                   )}
                 </div>
 

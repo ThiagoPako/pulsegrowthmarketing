@@ -1273,12 +1273,9 @@ export default function SocialMediaDeliveries() {
               <div><Label>Data de postagem</Label><Input type="date" value={formPostedAt} onChange={e => setFormPostedAt(e.target.value)} /></div>
               <div><Label>Horário</Label><Input type="time" value={formScheduledTime} onChange={e => setFormScheduledTime(e.target.value)} /></div>
             </div>
-            <div>
-              <Label>Plataforma</Label>
-              <Select value={formPlatform} onValueChange={setFormPlatform}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>{PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-              </Select>
+            <div className="p-3 rounded-lg bg-muted/30 border border-border">
+              <Label className="text-xs text-muted-foreground">Plataformas</Label>
+              <p className="text-sm font-medium mt-1">📸 Instagram + Facebook</p>
             </div>
           </div>
           <DialogFooter>

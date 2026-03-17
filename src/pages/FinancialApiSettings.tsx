@@ -73,6 +73,11 @@ export default function FinancialApiSettings() {
     api_type: 'rest',
     endpoint_url: '',
     notes: '',
+    metaAppId: '',
+    metaAppSecret: '',
+    metaPageToken: '',
+    metaIgBusinessId: '',
+    metaPageId: '',
   });
 
   useEffect(() => { loadData(); }, []);

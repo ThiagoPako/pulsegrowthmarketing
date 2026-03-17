@@ -154,90 +154,108 @@ Além do roteiro, gere uma LEGENDA para postagem no Instagram. A legenda deve:
 - Ser envolvente e gerar curiosidade
 - NÃO incluir hashtags (serão adicionadas depois)`;
 
-    const response = await fetch(ai.url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${ai.key}`,
-      },
-      body: JSON.stringify({
-        model: selectedModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        max_tokens: 2500,
-        temperature: 0.8,
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "generate_script_with_caption",
-              description: "Returns the generated script content and a short Instagram caption",
-              parameters: {
-                type: "object",
-                properties: {
-                  content: {
-                    type: "string",
-                    description: "The full script content for the video"
+    let scriptContent = "";
+    let captionContent = "";
+
+    if (ai.provider === "claude") {
+      // Claude uses a different API format - no tool calling, parse from text
+      const res = await fetch(ai.url, {
+        method: "POST",
+        headers: {
+          "x-api-key": ai.key,
+          "anthropic-version": "2023-06-01",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: selectedModel,
+          max_tokens: 2500,
+          system: systemPrompt.replace("IMPORTANTE: Você DEVE responder usando tool calling com a função \"generate_script_with_caption\". NÃO responda em texto livre.", "Responda com o roteiro completo primeiro, depois em uma linha separada escreva \"LEGENDA:\" seguido da legenda para Instagram."),
+          messages: [{ role: "user", content: userPrompt }],
+        }),
+      });
+      if (!res.ok) { const e = await res.text(); throw new Error(`Claude error [${res.status}]: ${e}`); }
+      const data = await res.json();
+      const fullText = data.content?.[0]?.text || "";
+      const legendaIdx = fullText.lastIndexOf("LEGENDA:");
+      if (legendaIdx > -1) {
+        scriptContent = fullText.slice(0, legendaIdx).trim();
+        captionContent = fullText.slice(legendaIdx + 8).trim();
+      } else {
+        scriptContent = fullText;
+      }
+    } else {
+      // OpenAI-compatible (Gemini, OpenAI, Lovable) - use tool calling
+      const response = await fetch(ai.url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${ai.key}`,
+        },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          max_tokens: 2500,
+          temperature: 0.8,
+          tools: [
+            {
+              type: "function",
+              function: {
+                name: "generate_script_with_caption",
+                description: "Returns the generated script content and a short Instagram caption",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    content: { type: "string", description: "The full script content for the video" },
+                    caption: { type: "string", description: "Short Instagram caption (max 200 chars) with CTA and emojis" }
                   },
-                  caption: {
-                    type: "string",
-                    description: "Short Instagram caption (max 200 chars) with CTA and emojis"
-                  }
-                },
-                required: ["content", "caption"],
-                additionalProperties: false
+                  required: ["content", "caption"],
+                  additionalProperties: false
+                }
               }
             }
-          }
-        ],
-        tool_choice: { type: "function", function: { name: "generate_script_with_caption" } },
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("AI API error:", response.status, errText);
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Limite de requisições atingido. Tente novamente em alguns segundos." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Créditos de IA insuficientes." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      return new Response(JSON.stringify({ error: "Failed to generate script" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+          ],
+          tool_choice: { type: "function", function: { name: "generate_script_with_caption" } },
+        }),
       });
-    }
 
-    const data = await response.json();
-    
-    // Try to extract from tool call first
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    if (toolCall?.function?.arguments) {
-      try {
-        const args = JSON.parse(toolCall.function.arguments);
-        return new Response(JSON.stringify({ 
-          content: args.content || "", 
-          caption: args.caption || "" 
-        }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error("AI API error:", response.status, errText);
+        if (response.status === 429) {
+          return new Response(JSON.stringify({ error: "Limite de requisições atingido. Tente novamente em alguns segundos." }), {
+            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (response.status === 402) {
+          return new Response(JSON.stringify({ error: "Créditos de IA insuficientes." }), {
+            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify({ error: "Failed to generate script" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
-      } catch (e) {
-        console.error("Failed to parse tool call arguments:", e);
+      }
+
+      const data = await response.json();
+      const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+      if (toolCall?.function?.arguments) {
+        try {
+          const args = JSON.parse(toolCall.function.arguments);
+          scriptContent = args.content || "";
+          captionContent = args.caption || "";
+        } catch (e) {
+          console.error("Failed to parse tool call arguments:", e);
+        }
+      }
+      if (!scriptContent) {
+        scriptContent = data.choices?.[0]?.message?.content || "";
       }
     }
-    
-    // Fallback to regular content
-    const content = data.choices?.[0]?.message?.content || "";
-    return new Response(JSON.stringify({ content, caption: "" }), {
+
+    return new Response(JSON.stringify({ content: scriptContent, caption: captionContent }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {

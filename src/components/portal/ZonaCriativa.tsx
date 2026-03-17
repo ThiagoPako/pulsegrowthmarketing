@@ -12,6 +12,7 @@ interface Script {
   id: string;
   title: string;
   content: string;
+  caption: string;
   content_format: string;
   video_type: string;
   created_at: string;

@@ -561,6 +561,7 @@ export type Database = {
           briefing_data: Json | null
           city: string
           client_login: string | null
+          client_password_hash: string | null
           client_type: string
           color: string
           company_name: string
@@ -609,6 +610,7 @@ export type Database = {
           briefing_data?: Json | null
           city?: string
           client_login?: string | null
+          client_password_hash?: string | null
           client_type?: string
           color?: string
           company_name: string
@@ -657,6 +659,7 @@ export type Database = {
           briefing_data?: Json | null
           city?: string
           client_login?: string | null
+          client_password_hash?: string | null
           client_type?: string
           color?: string
           company_name?: string

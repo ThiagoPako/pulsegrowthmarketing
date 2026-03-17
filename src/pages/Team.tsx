@@ -162,6 +162,30 @@ export default function Team() {
     }
   };
 
+  const handleChangeRole = async (member: TeamMember, newRole: UserRole) => {
+    if (member.id === currentUser?.id) { toast.error('Você não pode alterar sua própria função'); return; }
+    try {
+      // Update profiles table
+      const { error: profileErr } = await supabase
+        .from('profiles')
+        .update({ role: newRole } as any)
+        .eq('id', member.id);
+      if (profileErr) throw profileErr;
+
+      // Update user_roles table
+      const { error: roleErr } = await supabase
+        .from('user_roles')
+        .update({ role: newRole } as any)
+        .eq('user_id', member.id);
+      if (roleErr) throw roleErr;
+
+      toast.success(`Função de ${member.displayName || member.name} alterada para ${ROLE_LABELS[newRole]}`);
+      fetchMembers();
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao alterar função');
+    }
+  };
+
   const handleSavePartner = async () => {
     if (!partnerCreateForm.name || !partnerCreateForm.email || !partnerCreateForm.password) { toast.error('Preencha todos os campos'); return; }
     if (partnerCreateForm.password.length < 6) { toast.error('Senha deve ter no mínimo 6 caracteres'); return; }

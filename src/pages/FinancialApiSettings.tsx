@@ -47,15 +47,70 @@ const PROVIDERS = [
   { value: 'google_ads', label: 'Google Ads', icon: '🔍' },
   { value: 'google_analytics', label: 'Google Analytics', icon: '📈' },
   { value: 'stripe', label: 'Stripe', icon: '💳' },
-  { value: 'lovable_ai', label: 'Lovable AI (Gemini)', icon: '🤖' },
   { value: 'custom', label: 'API Personalizada', icon: '🔧' },
 ];
 
-const AI_MODELS = [
-  { value: 'google/gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', desc: 'Mais rápido e econômico. Ideal para tarefas simples.' },
-  { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash', desc: 'Equilíbrio entre velocidade e qualidade.' },
-  { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro', desc: 'Máxima qualidade. Melhor raciocínio e precisão.' },
-  { value: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash (Preview)', desc: 'Última geração. Rápido e capaz.' },
+const AI_PROVIDERS = [
+  {
+    value: 'gemini',
+    label: 'Google Gemini',
+    icon: '🔮',
+    desc: 'IA do Google. Ótimo custo-benefício, suporte a texto e imagem.',
+    keyName: 'GOOGLE_GEMINI_API_KEY',
+    getKeyUrl: 'https://aistudio.google.com/apikey',
+    docsUrl: 'https://ai.google.dev/gemini-api/docs',
+    steps: [
+      'Acesse <a href="https://aistudio.google.com/apikey" target="_blank" class="text-primary underline">Google AI Studio</a>',
+      'Clique em <strong>"Create API Key"</strong>',
+      'Copie a chave e cole abaixo',
+    ],
+    models: [
+      { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', desc: 'Mais rápido e econômico' },
+      { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', desc: 'Equilíbrio velocidade/qualidade' },
+      { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', desc: 'Máxima qualidade e raciocínio' },
+    ],
+    defaultModel: 'gemini-2.5-flash-lite',
+  },
+  {
+    value: 'openai',
+    label: 'OpenAI (GPT)',
+    icon: '🧠',
+    desc: 'ChatGPT e GPT-4. Excelente raciocínio e precisão.',
+    keyName: 'OPENAI_API_KEY',
+    getKeyUrl: 'https://platform.openai.com/api-keys',
+    docsUrl: 'https://platform.openai.com/docs',
+    steps: [
+      'Acesse <a href="https://platform.openai.com/api-keys" target="_blank" class="text-primary underline">OpenAI Platform</a>',
+      'Clique em <strong>"Create new secret key"</strong>',
+      'Copie a chave e cole abaixo',
+    ],
+    models: [
+      { value: 'gpt-4o-mini', label: 'GPT-4o Mini', desc: 'Rápido e econômico' },
+      { value: 'gpt-4o', label: 'GPT-4o', desc: 'Melhor custo-benefício' },
+      { value: 'gpt-4-turbo', label: 'GPT-4 Turbo', desc: 'Alta performance' },
+    ],
+    defaultModel: 'gpt-4o-mini',
+  },
+  {
+    value: 'claude',
+    label: 'Anthropic Claude',
+    icon: '🤖',
+    desc: 'Claude da Anthropic. Excelente em textos longos e análise.',
+    keyName: 'ANTHROPIC_API_KEY',
+    getKeyUrl: 'https://console.anthropic.com/settings/keys',
+    docsUrl: 'https://docs.anthropic.com',
+    steps: [
+      'Acesse <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-primary underline">Anthropic Console</a>',
+      'Clique em <strong>"Create Key"</strong>',
+      'Copie a chave e cole abaixo',
+    ],
+    models: [
+      { value: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku', desc: 'Mais rápido e barato' },
+      { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet', desc: 'Melhor equilíbrio' },
+      { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus', desc: 'Máxima capacidade' },
+    ],
+    defaultModel: 'claude-3-haiku-20240307',
+  },
 ];
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: any }> = {
@@ -76,10 +131,14 @@ export default function FinancialApiSettings() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [aiConfig, setAiConfig] = useState({
-    model: 'google/gemini-2.5-flash-lite',
+    provider: 'gemini',
+    model: 'gemini-2.5-flash-lite',
     active: false,
     integrationId: null as string | null,
+    apiKeySet: false,
   });
+  const [aiApiKey, setAiApiKey] = useState('');
+  const [savingAi, setSavingAi] = useState(false);
 
   const [form, setForm] = useState({
     name: '',
@@ -97,39 +156,82 @@ export default function FinancialApiSettings() {
     const { data } = await supabase
       .from('api_integrations')
       .select('*')
-      .eq('provider', 'lovable_ai')
+      .in('provider', ['ai_gemini', 'ai_openai', 'ai_claude'])
+      .eq('status', 'ativo')
       .limit(1)
       .single();
     if (data) {
       const d = data as any;
+      const providerMap: Record<string, string> = { ai_gemini: 'gemini', ai_openai: 'openai', ai_claude: 'claude' };
       setAiConfig({
-        model: d.config?.ai_model || 'google/gemini-2.5-flash-lite',
+        provider: providerMap[d.provider] || 'gemini',
+        model: d.config?.ai_model || 'gemini-2.5-flash-lite',
         active: d.status === 'ativo',
         integrationId: d.id,
+        apiKeySet: !!d.config?.api_key_set,
       });
     }
   };
 
-  const handleSaveAiConfig = async (model: string) => {
+  const handleSaveAiConfig = async (providerKey: string, model: string, apiKey?: string) => {
+    setSavingAi(true);
+    const providerInfo = AI_PROVIDERS.find(p => p.value === providerKey);
+    if (!providerInfo) return;
+
+    const dbProvider = `ai_${providerKey}`;
+    const configData: any = { ai_model: model, ai_provider: providerKey };
+
+    // If API key provided, store it via edge function
+    if (apiKey && apiKey.trim()) {
+      try {
+        await supabase.functions.invoke('meta-store-credentials', {
+          body: {
+            secret_name: providerInfo.keyName,
+            secret_value: apiKey.trim(),
+          },
+        });
+        configData.api_key_set = true;
+        configData.api_key_hint = '••••' + apiKey.slice(-4);
+      } catch (err: any) {
+        toast.error('Erro ao salvar API Key: ' + (err.message || 'Erro'));
+        setSavingAi(false);
+        return;
+      }
+    }
+
     const payload: any = {
-      name: 'Lovable AI',
-      provider: 'lovable_ai',
+      name: providerInfo.label,
+      provider: dbProvider,
       api_type: 'ai_gateway',
-      endpoint_url: 'https://ai.gateway.lovable.dev/v1/chat/completions',
-      config: { ai_model: model },
+      endpoint_url: providerInfo.getKeyUrl,
+      config: configData,
       status: 'ativo',
       updated_at: new Date().toISOString(),
     };
 
-    if (aiConfig.integrationId) {
+    // Deactivate other AI providers first
+    await supabase.from('api_integrations')
+      .update({ status: 'inativo' } as any)
+      .in('provider', ['ai_gemini', 'ai_openai', 'ai_claude']);
+
+    if (aiConfig.integrationId && aiConfig.provider === providerKey) {
       await supabase.from('api_integrations').update(payload).eq('id', aiConfig.integrationId);
     } else {
       payload.created_by = user?.id;
       const { data } = await supabase.from('api_integrations').insert(payload).select().single();
       if (data) setAiConfig(prev => ({ ...prev, integrationId: (data as any).id }));
     }
-    setAiConfig(prev => ({ ...prev, model, active: true }));
-    toast.success(`Modelo IA atualizado: ${AI_MODELS.find(m => m.value === model)?.label}`);
+
+    setAiConfig(prev => ({
+      ...prev,
+      provider: providerKey,
+      model,
+      active: true,
+      apiKeySet: configData.api_key_set || prev.apiKeySet,
+    }));
+    setAiApiKey('');
+    setSavingAi(false);
+    toast.success(`IA configurada: ${providerInfo.label} → ${model}`);
   };
 
   const loadData = async () => {
@@ -138,7 +240,7 @@ export default function FinancialApiSettings() {
       .from('api_integrations')
       .select('*')
       .order('created_at', { ascending: false });
-    if (data) setIntegrations((data as ApiIntegration[]).filter(i => i.provider !== 'lovable_ai'));
+    if (data) setIntegrations((data as ApiIntegration[]).filter(i => !i.provider.startsWith('ai_') && i.provider !== 'lovable_ai'));
     setLoading(false);
   };
 
@@ -352,73 +454,123 @@ export default function FinancialApiSettings() {
         </Button>
       </div>
 
-      {/* AI Model Configuration */}
+      {/* AI Provider Configuration */}
       <div className="glass-card p-5 border border-primary/20">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-xl">🤖</div>
             <div>
-              <h3 className="font-semibold text-sm">Inteligência Artificial (Gemini)</h3>
-              <p className="text-[11px] text-muted-foreground">Modelo usado para gerar roteiros, legendas e chat financeiro</p>
+              <h3 className="font-semibold text-sm">Inteligência Artificial</h3>
+              <p className="text-[11px] text-muted-foreground">Configure o provedor de IA para roteiros, legendas e chat financeiro</p>
             </div>
           </div>
           <Badge variant="outline" className={aiConfig.active ? 'text-emerald-500' : 'text-muted-foreground'}>
-            {aiConfig.active ? '● Ativo' : '○ Inativo'}
+            {aiConfig.active ? `● ${AI_PROVIDERS.find(p => p.value === aiConfig.provider)?.label || 'Ativo'}` : '○ Não configurado'}
           </Badge>
         </div>
 
-        {/* Setup Tutorial */}
-        <div className="p-4 rounded-lg bg-muted/50 border border-border mb-4">
-          <p className="text-xs font-semibold mb-2 flex items-center gap-1">📘 Como configurar a IA (para VPS/Self-Hosted)</p>
-          <ol className="text-[11px] text-muted-foreground space-y-1.5 list-decimal list-inside">
-            <li>Acesse <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">Google AI Studio → API Keys</a></li>
-            <li>Clique em <strong>"Create API Key"</strong> e copie a chave gerada</li>
-            <li>No seu servidor (VPS), adicione a variável de ambiente: <code className="bg-background px-1 py-0.5 rounded text-[10px]">GOOGLE_GEMINI_API_KEY=sua_chave_aqui</code></li>
-            <li>Reinicie as Edge Functions do Supabase</li>
-          </ol>
-          <div className="mt-3 p-2 rounded bg-primary/5 border border-primary/10">
-            <p className="text-[10px] text-muted-foreground">
-              <strong className="text-foreground">💡 Nota:</strong> Na Lovable, o sistema usa automaticamente a <code className="bg-background px-1 rounded">LOVABLE_API_KEY</code>. 
-              Em ambientes externos (VPS, Docker), configure a <code className="bg-background px-1 rounded">GOOGLE_GEMINI_API_KEY</code> como secret no Supabase. 
-              O sistema detecta qual chave está disponível e usa automaticamente.
-            </p>
-          </div>
-          <div className="flex gap-2 mt-3">
-            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">
-              <Button variant="outline" size="sm" className="text-[11px] h-7">
-                <Zap size={12} className="mr-1" /> Obter API Key
-              </Button>
-            </a>
-            <a href="https://ai.google.dev/gemini-api/docs" target="_blank" rel="noopener noreferrer">
-              <Button variant="ghost" size="sm" className="text-[11px] h-7">
-                <Info size={12} className="mr-1" /> Documentação
-              </Button>
-            </a>
-          </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          {AI_MODELS.map(model => (
+        {/* Provider Selection */}
+        <div className="grid gap-3 sm:grid-cols-3 mb-4">
+          {AI_PROVIDERS.map(provider => (
             <button
-              key={model.value}
-              onClick={() => handleSaveAiConfig(model.value)}
+              key={provider.value}
+              onClick={() => setAiConfig(prev => ({ ...prev, provider: provider.value, model: provider.defaultModel }))}
               className={`p-3 rounded-lg border text-left transition-all ${
-                aiConfig.model === model.value
+                aiConfig.provider === provider.value
                   ? 'border-primary bg-primary/10 ring-1 ring-primary'
                   : 'border-border hover:border-primary/40'
               }`}
             >
-              <p className="text-sm font-medium">{model.label}</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">{model.desc}</p>
-              {aiConfig.model === model.value && (
-                <Badge className="mt-2 text-[10px]" variant="default">Selecionado</Badge>
-              )}
+              <p className="text-sm font-medium">{provider.icon} {provider.label}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{provider.desc}</p>
             </button>
           ))}
         </div>
-        <p className="text-[11px] text-muted-foreground mt-3 flex items-center gap-1">
-          <Info size={11} /> O modelo selecionado será usado automaticamente em todas as funcionalidades de IA do sistema.
-        </p>
+
+        {/* Selected Provider Config */}
+        {(() => {
+          const selectedProvider = AI_PROVIDERS.find(p => p.value === aiConfig.provider);
+          if (!selectedProvider) return null;
+          return (
+            <div className="space-y-4">
+              {/* Tutorial */}
+              <div className="p-4 rounded-lg bg-muted/50 border border-border">
+                <p className="text-xs font-semibold mb-2">📘 Como obter a API Key — {selectedProvider.label}</p>
+                <ol className="text-[11px] text-muted-foreground space-y-1.5 list-decimal list-inside">
+                  {selectedProvider.steps.map((step, i) => (
+                    <li key={i} dangerouslySetInnerHTML={{ __html: step }} />
+                  ))}
+                </ol>
+                <div className="flex gap-2 mt-3">
+                  <a href={selectedProvider.getKeyUrl} target="_blank" rel="noopener noreferrer">
+                    <Button variant="outline" size="sm" className="text-[11px] h-7">
+                      <Zap size={12} className="mr-1" /> Obter API Key
+                    </Button>
+                  </a>
+                  <a href={selectedProvider.docsUrl} target="_blank" rel="noopener noreferrer">
+                    <Button variant="ghost" size="sm" className="text-[11px] h-7">
+                      <Info size={12} className="mr-1" /> Documentação
+                    </Button>
+                  </a>
+                </div>
+              </div>
+
+              {/* API Key Input */}
+              <div>
+                <Label className="text-xs">API Key ({selectedProvider.keyName})</Label>
+                <div className="flex gap-2 mt-1">
+                  <Input
+                    type="password"
+                    value={aiApiKey}
+                    onChange={e => setAiApiKey(e.target.value)}
+                    placeholder={aiConfig.apiKeySet ? `Chave configurada (••••)` : 'Cole sua API Key aqui...'}
+                    className="text-sm"
+                  />
+                </div>
+                {aiConfig.apiKeySet && (
+                  <p className="text-[10px] text-emerald-500 mt-1">✅ API Key já configurada. Deixe em branco para manter.</p>
+                )}
+              </div>
+
+              {/* Model Selection */}
+              <div>
+                <Label className="text-xs mb-2 block">Modelo</Label>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {selectedProvider.models.map(model => (
+                    <button
+                      key={model.value}
+                      onClick={() => setAiConfig(prev => ({ ...prev, model: model.value }))}
+                      className={`p-2.5 rounded-lg border text-left transition-all text-xs ${
+                        aiConfig.model === model.value
+                          ? 'border-primary bg-primary/10 ring-1 ring-primary'
+                          : 'border-border hover:border-primary/40'
+                      }`}
+                    >
+                      <p className="font-medium">{model.label}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{model.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <Button
+                onClick={() => handleSaveAiConfig(aiConfig.provider, aiConfig.model, aiApiKey || undefined)}
+                disabled={savingAi || (!aiConfig.apiKeySet && !aiApiKey.trim())}
+                className="w-full"
+              >
+                {savingAi ? <Loader2 size={14} className="animate-spin mr-2" /> : <CheckCircle size={14} className="mr-2" />}
+                Salvar Configuração de IA
+              </Button>
+
+              <div className="p-2 rounded bg-muted/30 border border-border">
+                <p className="text-[10px] text-muted-foreground">
+                  💡 A API Key é armazenada como secret seguro no backend. No ambiente VPS, configure a variável <code className="bg-background px-1 rounded">{selectedProvider.keyName}</code> nas secrets do Supabase.
+                </p>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

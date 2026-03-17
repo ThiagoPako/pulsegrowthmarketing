@@ -239,6 +239,7 @@ export default function Clients() {
       setContractStartDate('');
       setAutoRenewal(false);
       setContractDurationMonths(12);
+      setShowMetrics(true);
       setPreferredShift('ambos');
       setContractValue(0);
       setDueDay(10);

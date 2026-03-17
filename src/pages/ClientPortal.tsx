@@ -374,12 +374,14 @@ export default function ClientPortal() {
               >
                 Zona Criativa
               </button>
-              <button
-                onClick={() => setActiveTab('metrics')}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'metrics' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
-              >
-                Métricas
-              </button>
+              {(client.show_metrics || isTeamMember) && (
+                <button
+                  onClick={() => setActiveTab('metrics')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'metrics' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+                >
+                  Métricas
+                </button>
+              )}
             </div>
             <PortalNotifications
               clientId={client.id}

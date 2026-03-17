@@ -343,6 +343,9 @@ const NICHE_DATES: Record<string, SeasonalDate[]> = {
     { month: 11, day: 25, label: 'Black Friday Gráfica', daysBeforeAlert: 40 },
   ],
   outro: [],
+
+  // Niches without explicit key get universal dates only
+};
 };
 
 /**

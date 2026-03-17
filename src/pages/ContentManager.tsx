@@ -486,7 +486,7 @@ export default function ContentManager() {
           ) : (
             <div className="grid grid-cols-3 gap-px bg-border">
               {filteredContents.map(content => (
-                <ContentTile key={content.id} content={content} onDelete={handleDelete} />
+                <ContentTile key={content.id} content={content} onDelete={handleDelete} onPlay={setPlayingContent} />
               ))}
             </div>
           )}

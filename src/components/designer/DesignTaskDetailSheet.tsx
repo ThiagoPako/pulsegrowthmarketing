@@ -718,11 +718,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                               if (!file) return;
                               setUploadingArt(true);
                               try {
-                                const ext = file.name.split('.').pop();
-                                const fileName = `artes/${task.client_id}/${Date.now()}_${file.name}`;
-                                const { data, error } = await supabase.storage.from('design-files').upload(fileName, file);
-                                if (error) throw error;
-                                const { data: { publicUrl } } = supabase.storage.from('design-files').getPublicUrl(data.path);
+                                const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
                                 setAttachmentUrl(publicUrl);
                                 await updateTask.mutateAsync({ id: task.id, attachment_url: publicUrl } as any);
                                 await addHistory.mutateAsync({ task_id: task.id, action: 'Arte enviada por upload', details: file.name, user_id: user?.id });

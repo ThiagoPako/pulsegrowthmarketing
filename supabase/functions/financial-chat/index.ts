@@ -40,8 +40,10 @@ serve(async (req) => {
     if (!profile || profile.role !== "admin")
       throw new Error("Admin access required");
 
-    const { question, conversationHistory } = await req.json();
+    const { question, conversationHistory, aiModel } = await req.json();
     if (!question) throw new Error("Question is required");
+
+    const selectedModel = aiModel || "google/gemini-2.5-flash-lite";
 
     // Fetch financial data for context
     const now = new Date();

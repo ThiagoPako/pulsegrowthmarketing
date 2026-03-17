@@ -51,6 +51,7 @@ import ClientPortal from "@/pages/ClientPortal";
 import ContentManager from "@/pages/ContentManager";
 import ClientPortalLogin from "@/pages/ClientPortalLogin";
 import ClientPortalRegister from "@/pages/ClientPortalRegister";
+import TrafficManagement from "@/pages/TrafficManagement";
 
 const queryClient = new QueryClient({
   defaultOptions: {

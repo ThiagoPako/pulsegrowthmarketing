@@ -152,6 +152,8 @@ export default function FinancialDashboard() {
           contractId: contract.id,
           clientId: contract.client_id,
           clientName: client?.companyName || 'Cliente',
+          clientColor: client?.color || '217 91% 60%',
+          clientLogoUrl: client?.logoUrl || null,
           dueDay: contract.due_day,
           dueDate: format(dueDate, 'dd/MM'),
           value: contract.contract_value,

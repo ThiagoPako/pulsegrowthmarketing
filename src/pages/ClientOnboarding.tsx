@@ -170,9 +170,13 @@ export default function ClientOnboarding() {
     fetchData();
   }, [clientId]);
 
+  // Each recording = 90 minutes (1h30min)
+  const RECORDING_DURATION = 90;
+  const BUFFER = 30;
+
   const availableSlots = useMemo(() => {
     if (!selectedVm || !settings) return [];
-    const duration = settings.recording_duration;
+    const duration = RECORDING_DURATION;
     const slots: { day: DayOfWeek; time: string }[] = [];
     const shiftRanges: number[][] = [];
     if (preferredShift !== 'turnoB') shiftRanges.push([timeToMinutes(settings.shift_a_start), timeToMinutes(settings.shift_a_end)]);
@@ -180,7 +184,7 @@ export default function ClientOnboarding() {
 
     for (const day of settings.work_days as DayOfWeek[]) {
       for (const [sStart, sEnd] of shiftRanges) {
-        for (let t = sStart; t + duration <= sEnd; t += duration + 30) {
+        for (let t = sStart; t + duration <= sEnd; t += duration + BUFFER) {
           const timeStr = minutesToTime(t);
           const occupied = existingClients.some(c =>
             c.id !== clientId && c.videomaker_id === selectedVm && c.fixed_day === day && c.fixed_time === timeStr
@@ -191,6 +195,15 @@ export default function ClientOnboarding() {
     }
     return slots;
   }, [selectedVm, settings, existingClients, preferredShift, clientId]);
+
+  // Count available slots per day to support stacking
+  const slotsPerDay = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of availableSlots) {
+      map.set(s.day, (map.get(s.day) || 0) + 1);
+    }
+    return map;
+  }, [availableSlots]);
 
   const slotsForDay = useMemo(() => availableSlots.filter(s => s.day === fixedDay), [availableSlots, fixedDay]);
   const backupSlotsForDay = useMemo(() => availableSlots.filter(s => s.day === backupDay && s.day !== fixedDay), [availableSlots, backupDay, fixedDay]);

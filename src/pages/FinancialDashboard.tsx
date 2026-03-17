@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
 import { generateDeliveryReport, resolvePaymentInfo } from '@/lib/billingReport';
+import ClientLogo from '@/components/ClientLogo';
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
 
 const fadeUp = {
@@ -152,6 +153,8 @@ export default function FinancialDashboard() {
           contractId: contract.id,
           clientId: contract.client_id,
           clientName: client?.companyName || 'Cliente',
+          clientColor: client?.color || '217 91% 60%',
+          clientLogoUrl: client?.logoUrl || null,
           dueDay: contract.due_day,
           dueDate: format(dueDate, 'dd/MM'),
           value: contract.contract_value,
@@ -540,11 +543,10 @@ export default function FinancialDashboard() {
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
-                      item.isPaid ? 'bg-emerald-500/15' : 'bg-primary/10'
-                    }`}>
-                      {item.isPaid ? '✅' : '📅'}
-                    </div>
+                    <ClientLogo
+                      client={{ companyName: item.clientName, color: item.clientColor, logoUrl: item.clientLogoUrl }}
+                      size="md"
+                    />
                     <div>
                       <span className="text-sm font-semibold text-foreground">{item.clientName}</span>
                       <div className="flex items-center gap-2 mt-0.5">

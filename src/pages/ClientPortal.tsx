@@ -299,21 +299,21 @@ export default function ClientPortal() {
 
   // Also group all contents by season for browsing
   const allSeasons = useMemo(() => {
-    const seasons = contents.reduce((acc, c) => {
+    const seasons = visibleContents.reduce((acc, c) => {
       const key = `${c.season_year}-${c.season_month}`;
       if (!acc[key]) acc[key] = { month: c.season_month, year: c.season_year, items: [] };
       acc[key].items.push(c);
       return acc;
     }, {} as Record<string, { month: number; year: number; items: PortalContent[] }>);
     return Object.values(seasons).sort((a, b) => b.year - a.year || b.month - a.month);
-  }, [contents]);
+  }, [visibleContents]);
 
   // Available months for selector
   const availableMonths = useMemo(() => {
     const months = new Set<string>();
-    contents.forEach(c => months.add(`${c.season_year}-${c.season_month}`));
+    visibleContents.forEach(c => months.add(`${c.season_year}-${c.season_month}`));
     return months;
-  }, [contents]);
+  }, [visibleContents]);
 
   // Metrics
   const reelsCount = seasonContents.filter(c => c.content_type === 'reel').length;

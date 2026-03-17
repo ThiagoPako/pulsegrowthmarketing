@@ -102,6 +102,80 @@ export default function FinancialApiSettings() {
     if (data) setLogs(data as ApiLog[]);
   };
 
+  const storeMetaCredentialsSecurely = async (integrationId: string) => {
+    const hasSecrets = form.metaAppSecret || form.metaPageToken || form.metaAppId || form.metaIgBusinessId || form.metaPageId;
+    if (!hasSecrets) return;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('meta-store-credentials', {
+        body: {
+          integration_id: integrationId,
+          meta_app_id: form.metaAppId || undefined,
+          meta_app_secret: form.metaAppSecret || undefined,
+          meta_page_token: form.metaPageToken || undefined,
+          meta_ig_business_id: form.metaIgBusinessId || undefined,
+          meta_page_id: form.metaPageId || undefined,
+        },
+      });
+      if (error) throw error;
+      toast.success('Credenciais armazenadas com segurança no backend');
+    } catch (err: any) {
+      console.error('Error storing credentials:', err);
+      toast.error('Erro ao armazenar credenciais: ' + (err.message || 'Erro desconhecido'));
+    }
+  };
+
+  const handleTestConnection = async (integrationId: string) => {
+    toast.info('Testando conexão com Meta...');
+    try {
+      const { data: integration } = await supabase
+        .from('api_integrations')
+        .select('config')
+        .eq('id', integrationId)
+        .single();
+
+      const config = (integration as any)?.config;
+      const token = config?.meta_page_token_encrypted || config?.meta_page_token;
+      const igId = config?.meta_ig_business_id;
+
+      if (!token || !igId) {
+        toast.error('Credenciais incompletas');
+        return;
+      }
+
+      const res = await fetch(`https://graph.facebook.com/v21.0/${igId}?fields=name,username,profile_picture_url&access_token=${token}`);
+      const data = await res.json();
+
+      if (data.error) {
+        await supabase.from('api_integrations').update({
+          status: 'erro',
+          last_error: data.error.message,
+          last_checked_at: new Date().toISOString(),
+        } as any).eq('id', integrationId);
+        toast.error('Erro: ' + data.error.message);
+      } else {
+        await supabase.from('api_integrations').update({
+          status: 'ativo',
+          last_error: null,
+          last_checked_at: new Date().toISOString(),
+        } as any).eq('id', integrationId);
+        toast.success(`✅ Conectado: @${data.username || data.name}`);
+      }
+
+      await supabase.from('api_integration_logs').insert({
+        integration_id: integrationId,
+        action: 'teste de conexão',
+        status: data.error ? 'error' : 'success',
+        details: data.error ? { error: data.error.message } : { username: data.username, name: data.name },
+        performed_by: user?.id,
+      } as any);
+
+      loadData();
+    } catch (err: any) {
+      toast.error('Falha no teste: ' + err.message);
+    }
+  };
+
   const handleSave = async () => {
     if (!form.name || !form.provider) {
       toast.error('Preencha nome e provedor');
@@ -113,14 +187,18 @@ export default function FinancialApiSettings() {
         return;
       }
     }
+
+    // For Meta, only store non-sensitive data in the DB directly
     const configData: any = { notes: form.notes };
     if (form.provider === 'meta_ads') {
       configData.meta_app_id = form.metaAppId;
-      configData.meta_app_secret = form.metaAppSecret ? '••••' + form.metaAppSecret.slice(-4) : '';
-      configData.meta_page_token = form.metaPageToken ? '••••' + form.metaPageToken.slice(-4) : '';
       configData.meta_ig_business_id = form.metaIgBusinessId;
       configData.meta_page_id = form.metaPageId;
+      // Masked display only
+      if (form.metaAppSecret) configData.meta_app_secret = '••••' + form.metaAppSecret.slice(-4);
+      if (form.metaPageToken) configData.meta_page_token = '••••' + form.metaPageToken.slice(-4);
     }
+
     const payload: any = {
       name: form.name,
       provider: form.provider,
@@ -130,9 +208,10 @@ export default function FinancialApiSettings() {
       updated_at: new Date().toISOString(),
     };
 
+    let savedId = editingId;
+
     if (editingId) {
       await supabase.from('api_integrations').update(payload).eq('id', editingId);
-      // Log
       await supabase.from('api_integration_logs').insert({
         integration_id: editingId,
         action: 'atualização',
@@ -140,22 +219,27 @@ export default function FinancialApiSettings() {
         details: { fields: Object.keys(payload) },
         performed_by: user?.id,
       } as any);
-      toast.success('Integração atualizada');
     } else {
       payload.created_by = user?.id;
       const { data } = await supabase.from('api_integrations').insert(payload).select().single();
       if (data) {
+        savedId = (data as any).id;
         await supabase.from('api_integration_logs').insert({
-          integration_id: (data as any).id,
+          integration_id: savedId,
           action: 'criação',
           status: 'success',
           details: { provider: form.provider },
           performed_by: user?.id,
         } as any);
       }
-      toast.success('Integração criada');
     }
 
+    // Store sensitive credentials via secure edge function
+    if (form.provider === 'meta_ads' && savedId) {
+      await storeMetaCredentialsSecurely(savedId);
+    }
+
+    toast.success(editingId ? 'Integração atualizada' : 'Integração criada');
     setShowDialog(false);
     resetForm();
     loadData();

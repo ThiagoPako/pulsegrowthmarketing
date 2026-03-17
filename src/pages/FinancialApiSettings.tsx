@@ -91,7 +91,46 @@ export default function FinancialApiSettings() {
     metaAppSecret: '',
   });
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); loadAiConfig(); }, []);
+
+  const loadAiConfig = async () => {
+    const { data } = await supabase
+      .from('api_integrations')
+      .select('*')
+      .eq('provider', 'lovable_ai')
+      .limit(1)
+      .single();
+    if (data) {
+      const d = data as any;
+      setAiConfig({
+        model: d.config?.ai_model || 'google/gemini-2.5-flash-lite',
+        active: d.status === 'ativo',
+        integrationId: d.id,
+      });
+    }
+  };
+
+  const handleSaveAiConfig = async (model: string) => {
+    const payload: any = {
+      name: 'Lovable AI',
+      provider: 'lovable_ai',
+      api_type: 'ai_gateway',
+      endpoint_url: 'https://ai.gateway.lovable.dev/v1/chat/completions',
+      config: { ai_model: model },
+      status: 'ativo',
+      updated_at: new Date().toISOString(),
+    };
+
+    if (aiConfig.integrationId) {
+      await supabase.from('api_integrations').update(payload).eq('id', aiConfig.integrationId);
+    } else {
+      payload.created_by = user?.id;
+      const { data } = await supabase.from('api_integrations').insert(payload).select().single();
+      if (data) setAiConfig(prev => ({ ...prev, integrationId: (data as any).id }));
+    }
+    setAiConfig(prev => ({ ...prev, model, active: true }));
+    toast.success(`Modelo IA atualizado: ${AI_MODELS.find(m => m.value === model)?.label}`);
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -99,7 +138,7 @@ export default function FinancialApiSettings() {
       .from('api_integrations')
       .select('*')
       .order('created_at', { ascending: false });
-    if (data) setIntegrations(data as ApiIntegration[]);
+    if (data) setIntegrations((data as ApiIntegration[]).filter(i => i.provider !== 'lovable_ai'));
     setLoading(false);
   };
 

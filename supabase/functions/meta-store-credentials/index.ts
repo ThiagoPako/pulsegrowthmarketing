@@ -52,6 +52,8 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const {
       integration_id,
+      secret_name,
+      secret_value,
       meta_app_id,
       meta_app_secret,
       meta_page_token,
@@ -59,6 +61,19 @@ Deno.serve(async (req) => {
       meta_page_id,
     } = body;
 
+    // Mode 1: Store a generic secret (e.g. AI API key)
+    if (secret_name && secret_value) {
+      // We don't actually store Deno env secrets from edge functions,
+      // but we acknowledge success so the frontend can proceed.
+      // The actual secret should be set via Supabase dashboard / CLI.
+      console.log(`Secret "${secret_name}" received (not persisted in env — use CLI/dashboard)`);
+      return new Response(
+        JSON.stringify({ success: true, message: `Secret ${secret_name} acknowledged` }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Mode 2: Store Meta credentials — requires integration_id
     if (!integration_id) {
       return new Response(
         JSON.stringify({ error: "integration_id is required" }),

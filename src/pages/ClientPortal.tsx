@@ -228,8 +228,70 @@ export default function ClientPortal() {
     setAdjustmentNote('');
     setIsPlaying(false);
     setVideoProgress(0);
+    setVideoDuration(0);
+    setResolvedVideoUrl(null);
+    setVideoLoadError(null);
     loadComments(content.id);
   };
+
+  useEffect(() => {
+    let objectUrlToRevoke: string | null = null;
+    let cancelled = false;
+
+    const loadSelectedVideo = async () => {
+      setIsPlaying(false);
+      setVideoProgress(0);
+      setVideoDuration(0);
+
+      if (!selectedContent?.file_url) {
+        setResolvedVideoUrl(null);
+        setVideoLoadError(null);
+        setVideoLoading(false);
+        return;
+      }
+
+      if (!isPortalVideo(selectedContent) || !shouldProxyPortalVideo(selectedContent.file_url)) {
+        setResolvedVideoUrl(selectedContent.file_url);
+        setVideoLoadError(null);
+        setVideoLoading(false);
+        return;
+      }
+
+      setResolvedVideoUrl(null);
+      setVideoLoadError(null);
+      setVideoLoading(true);
+
+      try {
+        const objectUrl = await createPortalVideoObjectUrl(selectedContent.file_url);
+
+        if (cancelled) {
+          URL.revokeObjectURL(objectUrl);
+          return;
+        }
+
+        objectUrlToRevoke = objectUrl;
+        setResolvedVideoUrl(objectUrl);
+      } catch (error) {
+        console.error('[Portal Video] Failed to load proxied video', error);
+        if (!cancelled) {
+          setVideoLoadError(error instanceof Error ? error.message : 'Não foi possível carregar o vídeo.');
+        }
+      } finally {
+        if (!cancelled) {
+          setVideoLoading(false);
+        }
+      }
+    };
+
+    loadSelectedVideo();
+
+    return () => {
+      cancelled = true;
+      if (objectUrlToRevoke) {
+        URL.revokeObjectURL(objectUrlToRevoke);
+      }
+    };
+  }, [selectedContent?.id, selectedContent?.file_url, selectedContent?.content_type]);
 
   const handleApprove = async () => {
     if (!selectedContent || !client) return;
@@ -270,11 +332,22 @@ export default function ClientPortal() {
     syncPortalComment(client.id, selectedContent.title, author.name, author.type, commentText).catch(console.error);
   };
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     if (!videoRef.current) return;
-    if (isPlaying) videoRef.current.pause();
-    else videoRef.current.play();
-    setIsPlaying(!isPlaying);
+
+    if (isPlaying) {
+      videoRef.current.pause();
+      setIsPlaying(false);
+      return;
+    }
+
+    try {
+      await videoRef.current.play();
+      setIsPlaying(true);
+    } catch (error) {
+      console.error('[Portal Video] Playback failed', error);
+      setIsPlaying(false);
+    }
   };
 
   const toggleMute = () => {

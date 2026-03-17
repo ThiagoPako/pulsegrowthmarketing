@@ -85,6 +85,7 @@ export default function Team() {
         displayName: p.display_name,
         jobTitle: p.job_title,
         bio: p.bio,
+        birthday: p.birthday,
       })));
     }
     setLoading(false);

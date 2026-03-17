@@ -515,9 +515,45 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
 
               {/* Upload / Link */}
               <TabsContent value="upload">
-                <div className="space-y-3">
+                <div className="space-y-4">
+                  {/* File Upload */}
                   <div>
-                    <p className="text-xs font-bold text-muted-foreground mb-2">LINK DO VÍDEO EDITADO</p>
+                    <p className="text-xs font-bold text-muted-foreground mb-2">📤 ENVIAR ARQUIVO DE VÍDEO</p>
+                    <div className="border-2 border-dashed border-border rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="video/*"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        id="editor-video-upload"
+                      />
+                      <label htmlFor="editor-video-upload" className="cursor-pointer flex flex-col items-center gap-2">
+                        <Upload size={24} className="text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">
+                          {uploading ? uploadProgress : 'Clique para selecionar o vídeo editado'}
+                        </span>
+                        <span className="text-xs text-muted-foreground/60">MP4, MOV, AVI — até 500MB</span>
+                      </label>
+                      {uploading && (
+                        <div className="mt-3 flex items-center justify-center gap-2">
+                          <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                          <span className="text-xs text-primary font-medium">Enviando...</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-px bg-border" />
+                    <span className="text-xs text-muted-foreground font-medium">OU</span>
+                    <div className="flex-1 h-px bg-border" />
+                  </div>
+
+                  {/* Link Input */}
+                  <div>
+                    <p className="text-xs font-bold text-muted-foreground mb-2">🔗 LINK DO VÍDEO EDITADO</p>
                     <div className="flex gap-2">
                       <Input
                         placeholder="Cole o link do Google Drive, Frame.io, etc..."
@@ -530,6 +566,8 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
                       </Button>
                     </div>
                   </div>
+
+                  {/* Current video */}
                   {task.edited_video_link && (
                     <a href={task.edited_video_link} target="_blank" rel="noopener noreferrer"
                       className="flex items-center gap-2 text-sm font-medium text-green-600 dark:text-green-400 hover:underline bg-green-50 dark:bg-green-900/20 rounded-lg px-4 py-3 border border-green-200 dark:border-green-800">

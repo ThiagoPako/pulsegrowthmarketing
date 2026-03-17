@@ -393,7 +393,63 @@ export default function Team() {
         </DialogContent>
       </Dialog>
 
-      {loading ? (
+      {/* Permissions Dialog */}
+      <Dialog open={!!permTarget} onOpenChange={v => { if (!v) setPermTarget(null); }}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock size={18} /> Permissões de Módulos
+            </DialogTitle>
+          </DialogHeader>
+          {permTarget && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                <UserAvatar user={permTarget} size="md" />
+                <div>
+                  <p className="font-medium text-sm">{permTarget.displayName || permTarget.name}</p>
+                  <p className="text-xs text-muted-foreground">{permTarget.email} · {ROLE_LABELS[permTarget.role]}</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Selecione os módulos que este membro pode acessar. Se nenhum for selecionado, o acesso padrão da função será usado.
+              </p>
+
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={selectAllModules} className="text-xs">Marcar Todos</Button>
+                <Button size="sm" variant="outline" onClick={clearAllModules} className="text-xs">Desmarcar Todos</Button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-1.5 max-h-[400px] overflow-y-auto pr-1">
+                {AVAILABLE_MODULES.map(mod => (
+                  <label
+                    key={mod.key}
+                    className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                      permModules.includes(mod.key) ? 'bg-primary/5 border-primary/30' : 'bg-card border-border hover:bg-muted/50'
+                    }`}
+                  >
+                    <Checkbox
+                      checked={permModules.includes(mod.key)}
+                      onCheckedChange={() => toggleModule(mod.key)}
+                    />
+                    <span className="text-lg">{mod.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{mod.label}</p>
+                      <p className="text-[11px] text-muted-foreground">{mod.description}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              <Button onClick={handleSavePermissions} className="w-full" disabled={setPermissions.isPending}>
+                {setPermissions.isPending ? 'Salvando...' : 'Salvar Permissões'}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+
         <div className="glass-card p-12 text-center text-muted-foreground">
           <p>Carregando equipe...</p>
         </div>

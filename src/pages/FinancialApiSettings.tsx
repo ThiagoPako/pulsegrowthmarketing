@@ -454,73 +454,123 @@ export default function FinancialApiSettings() {
         </Button>
       </div>
 
-      {/* AI Model Configuration */}
+      {/* AI Provider Configuration */}
       <div className="glass-card p-5 border border-primary/20">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-xl">🤖</div>
             <div>
-              <h3 className="font-semibold text-sm">Inteligência Artificial (Gemini)</h3>
-              <p className="text-[11px] text-muted-foreground">Modelo usado para gerar roteiros, legendas e chat financeiro</p>
+              <h3 className="font-semibold text-sm">Inteligência Artificial</h3>
+              <p className="text-[11px] text-muted-foreground">Configure o provedor de IA para roteiros, legendas e chat financeiro</p>
             </div>
           </div>
           <Badge variant="outline" className={aiConfig.active ? 'text-emerald-500' : 'text-muted-foreground'}>
-            {aiConfig.active ? '● Ativo' : '○ Inativo'}
+            {aiConfig.active ? `● ${AI_PROVIDERS.find(p => p.value === aiConfig.provider)?.label || 'Ativo'}` : '○ Não configurado'}
           </Badge>
         </div>
 
-        {/* Setup Tutorial */}
-        <div className="p-4 rounded-lg bg-muted/50 border border-border mb-4">
-          <p className="text-xs font-semibold mb-2 flex items-center gap-1">📘 Como configurar a IA (para VPS/Self-Hosted)</p>
-          <ol className="text-[11px] text-muted-foreground space-y-1.5 list-decimal list-inside">
-            <li>Acesse <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">Google AI Studio → API Keys</a></li>
-            <li>Clique em <strong>"Create API Key"</strong> e copie a chave gerada</li>
-            <li>No seu servidor (VPS), adicione a variável de ambiente: <code className="bg-background px-1 py-0.5 rounded text-[10px]">GOOGLE_GEMINI_API_KEY=sua_chave_aqui</code></li>
-            <li>Reinicie as Edge Functions do Supabase</li>
-          </ol>
-          <div className="mt-3 p-2 rounded bg-primary/5 border border-primary/10">
-            <p className="text-[10px] text-muted-foreground">
-              <strong className="text-foreground">💡 Nota:</strong> Na Lovable, o sistema usa automaticamente a <code className="bg-background px-1 rounded">LOVABLE_API_KEY</code>. 
-              Em ambientes externos (VPS, Docker), configure a <code className="bg-background px-1 rounded">GOOGLE_GEMINI_API_KEY</code> como secret no Supabase. 
-              O sistema detecta qual chave está disponível e usa automaticamente.
-            </p>
-          </div>
-          <div className="flex gap-2 mt-3">
-            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">
-              <Button variant="outline" size="sm" className="text-[11px] h-7">
-                <Zap size={12} className="mr-1" /> Obter API Key
-              </Button>
-            </a>
-            <a href="https://ai.google.dev/gemini-api/docs" target="_blank" rel="noopener noreferrer">
-              <Button variant="ghost" size="sm" className="text-[11px] h-7">
-                <Info size={12} className="mr-1" /> Documentação
-              </Button>
-            </a>
-          </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          {AI_MODELS.map(model => (
+        {/* Provider Selection */}
+        <div className="grid gap-3 sm:grid-cols-3 mb-4">
+          {AI_PROVIDERS.map(provider => (
             <button
-              key={model.value}
-              onClick={() => handleSaveAiConfig(model.value)}
+              key={provider.value}
+              onClick={() => setAiConfig(prev => ({ ...prev, provider: provider.value, model: provider.defaultModel }))}
               className={`p-3 rounded-lg border text-left transition-all ${
-                aiConfig.model === model.value
+                aiConfig.provider === provider.value
                   ? 'border-primary bg-primary/10 ring-1 ring-primary'
                   : 'border-border hover:border-primary/40'
               }`}
             >
-              <p className="text-sm font-medium">{model.label}</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">{model.desc}</p>
-              {aiConfig.model === model.value && (
-                <Badge className="mt-2 text-[10px]" variant="default">Selecionado</Badge>
-              )}
+              <p className="text-sm font-medium">{provider.icon} {provider.label}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{provider.desc}</p>
             </button>
           ))}
         </div>
-        <p className="text-[11px] text-muted-foreground mt-3 flex items-center gap-1">
-          <Info size={11} /> O modelo selecionado será usado automaticamente em todas as funcionalidades de IA do sistema.
-        </p>
+
+        {/* Selected Provider Config */}
+        {(() => {
+          const selectedProvider = AI_PROVIDERS.find(p => p.value === aiConfig.provider);
+          if (!selectedProvider) return null;
+          return (
+            <div className="space-y-4">
+              {/* Tutorial */}
+              <div className="p-4 rounded-lg bg-muted/50 border border-border">
+                <p className="text-xs font-semibold mb-2">📘 Como obter a API Key — {selectedProvider.label}</p>
+                <ol className="text-[11px] text-muted-foreground space-y-1.5 list-decimal list-inside">
+                  {selectedProvider.steps.map((step, i) => (
+                    <li key={i} dangerouslySetInnerHTML={{ __html: step }} />
+                  ))}
+                </ol>
+                <div className="flex gap-2 mt-3">
+                  <a href={selectedProvider.getKeyUrl} target="_blank" rel="noopener noreferrer">
+                    <Button variant="outline" size="sm" className="text-[11px] h-7">
+                      <Zap size={12} className="mr-1" /> Obter API Key
+                    </Button>
+                  </a>
+                  <a href={selectedProvider.docsUrl} target="_blank" rel="noopener noreferrer">
+                    <Button variant="ghost" size="sm" className="text-[11px] h-7">
+                      <Info size={12} className="mr-1" /> Documentação
+                    </Button>
+                  </a>
+                </div>
+              </div>
+
+              {/* API Key Input */}
+              <div>
+                <Label className="text-xs">API Key ({selectedProvider.keyName})</Label>
+                <div className="flex gap-2 mt-1">
+                  <Input
+                    type="password"
+                    value={aiApiKey}
+                    onChange={e => setAiApiKey(e.target.value)}
+                    placeholder={aiConfig.apiKeySet ? `Chave configurada (••••)` : 'Cole sua API Key aqui...'}
+                    className="text-sm"
+                  />
+                </div>
+                {aiConfig.apiKeySet && (
+                  <p className="text-[10px] text-emerald-500 mt-1">✅ API Key já configurada. Deixe em branco para manter.</p>
+                )}
+              </div>
+
+              {/* Model Selection */}
+              <div>
+                <Label className="text-xs mb-2 block">Modelo</Label>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {selectedProvider.models.map(model => (
+                    <button
+                      key={model.value}
+                      onClick={() => setAiConfig(prev => ({ ...prev, model: model.value }))}
+                      className={`p-2.5 rounded-lg border text-left transition-all text-xs ${
+                        aiConfig.model === model.value
+                          ? 'border-primary bg-primary/10 ring-1 ring-primary'
+                          : 'border-border hover:border-primary/40'
+                      }`}
+                    >
+                      <p className="font-medium">{model.label}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{model.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <Button
+                onClick={() => handleSaveAiConfig(aiConfig.provider, aiConfig.model, aiApiKey || undefined)}
+                disabled={savingAi || (!aiConfig.apiKeySet && !aiApiKey.trim())}
+                className="w-full"
+              >
+                {savingAi ? <Loader2 size={14} className="animate-spin mr-2" /> : <CheckCircle size={14} className="mr-2" />}
+                Salvar Configuração de IA
+              </Button>
+
+              <div className="p-2 rounded bg-muted/30 border border-border">
+                <p className="text-[10px] text-muted-foreground">
+                  💡 A API Key é armazenada como secret seguro no backend. No ambiente VPS, configure a variável <code className="bg-background px-1 rounded">{selectedProvider.keyName}</code> nas secrets do Supabase.
+                </p>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

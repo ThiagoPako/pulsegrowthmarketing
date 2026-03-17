@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink, Database, FileText as FileTextIcon, MonitorPlay, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
+import { uploadFileToVps } from '@/services/vpsApi';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
 import { Textarea } from '@/components/ui/textarea';
 import { useOnboarding } from '@/hooks/useOnboarding';
@@ -271,14 +272,11 @@ export default function Clients() {
     if (!logoFile) return form.logoUrl || null;
     setUploadingLogo(true);
     try {
-      const ext = logoFile.name.split('.').pop();
-      const path = `${clientId}.${ext}`;
-      // Remove old logo if exists
-      await supabase.storage.from('client-logos').remove([path]);
-      const { error } = await supabase.storage.from('client-logos').upload(path, logoFile, { upsert: true });
-      if (error) { console.error('Logo upload error:', error); return null; }
-      const { data: urlData } = supabase.storage.from('client-logos').getPublicUrl(path);
-      return urlData.publicUrl + '?t=' + Date.now();
+      const url = await uploadFileToVps(logoFile, `logos/${clientId}`);
+      return url + '?t=' + Date.now();
+    } catch (err) {
+      console.error('Logo upload error:', err);
+      return null;
     } finally {
       setUploadingLogo(false);
     }

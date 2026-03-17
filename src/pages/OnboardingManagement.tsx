@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { useOnboarding, ONBOARDING_STAGES, OnboardingTask, OnboardingStage } from '@/hooks/useOnboarding';
 import { supabase } from '@/integrations/supabase/client';
+import { uploadFileToVps } from '@/services/vpsApi';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -305,14 +306,7 @@ function OnboardingDetailSheet({ group, open, onOpenChange }: { group: ClientGro
     if (!file || !currentTask) return;
     setUploading(true);
     try {
-      const fileName = `${group.clientId}/${Date.now()}_${file.name}`;
-      const { data, error } = await supabase.storage
-        .from('onboarding-contracts')
-        .upload(fileName, file);
-      if (error) throw error;
-      const { data: { publicUrl } } = supabase.storage
-        .from('onboarding-contracts')
-        .getPublicUrl(data.path);
+      const publicUrl = await uploadFileToVps(file, `contracts/${group.clientId}`);
       await updateOnboardingTask.mutateAsync({
         id: currentTask.id,
         contract_url: publicUrl,

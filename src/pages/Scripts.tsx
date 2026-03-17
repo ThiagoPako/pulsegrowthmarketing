@@ -179,17 +179,21 @@ export default function Scripts() {
   const handleOpen = (script?: Script) => {
     if (script) {
       setEditing(script);
-      setForm({
-        clientId: script.clientId, title: script.title, videoType: script.videoType,
-        contentFormat: script.contentFormat || 'reels',
-        content: script.content, priority: script.priority || 'normal',
-        isEndomarketing: script.isEndomarketing || false,
-        endoClientId: script.endoClientId || '',
-        scheduledDate: script.scheduledDate || '',
+      // Load caption from DB
+      supabase.from('scripts').select('caption').eq('id', script.id).single().then(({ data }) => {
+        setForm({
+          clientId: script.clientId, title: script.title, videoType: script.videoType,
+          contentFormat: script.contentFormat || 'reels',
+          content: script.content, caption: (data as any)?.caption || '',
+          priority: script.priority || 'normal',
+          isEndomarketing: script.isEndomarketing || false,
+          endoClientId: script.endoClientId || '',
+          scheduledDate: script.scheduledDate || '',
+        });
       });
     } else {
       setEditing(null);
-      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '' });
+      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '' });
     }
     setOpen(true);
   };

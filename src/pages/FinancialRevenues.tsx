@@ -311,6 +311,7 @@ export default function FinancialRevenues() {
           </Table>
         </CardContent>
       </Card>
+      </motion.div>
     </div>
   );
 }

@@ -430,21 +430,29 @@ export default function FinancialDashboard() {
       )}
 
       {/* Quick Navigation */}
-      <motion.div className="grid grid-cols-2 md:grid-cols-6 gap-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5, duration: 0.4 }}>
+      <motion.div className="grid grid-cols-2 md:grid-cols-4 gap-3" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.4 }}>
         {[
-          { label: 'Contratos', path: '/financeiro/contratos', icon: FileText },
-          { label: 'Receitas', path: '/financeiro/receitas', icon: TrendingUp },
-          { label: 'Despesas', path: '/financeiro/despesas', icon: TrendingDown },
-          { label: 'Movimentações', path: '/financeiro/movimentacoes', icon: ClipboardList },
-          { label: 'Caixa', path: '/financeiro/caixa', icon: Wallet },
-          { label: 'Inadimplência', path: '/financeiro/inadimplencia', icon: AlertTriangle },
-          { label: 'Parceiros', path: '/financeiro/parceiros', icon: Users },
-          { label: 'Configurações', path: '/financeiro/configuracoes', icon: CreditCard },
-        ].map(item => (
-          <Button key={item.path} variant="outline" className="h-auto py-3 flex flex-col gap-1 hover-scale" onClick={() => navigate(item.path)}>
-            <item.icon size={18} />
-            <span className="text-xs">{item.label}</span>
-          </Button>
+          { label: 'Contratos', path: '/financeiro/contratos', icon: FileText, gradient: 'from-blue-500 to-indigo-600' },
+          { label: 'Receitas', path: '/financeiro/receitas', icon: TrendingUp, gradient: 'from-emerald-500 to-green-600' },
+          { label: 'Despesas', path: '/financeiro/despesas', icon: TrendingDown, gradient: 'from-rose-500 to-red-600' },
+          { label: 'Movimentações', path: '/financeiro/movimentacoes', icon: ClipboardList, gradient: 'from-violet-500 to-purple-600' },
+          { label: 'Caixa', path: '/financeiro/caixa', icon: Wallet, gradient: 'from-amber-500 to-orange-600' },
+          { label: 'Inadimplência', path: '/financeiro/inadimplencia', icon: AlertTriangle, gradient: 'from-orange-500 to-red-500' },
+          { label: 'Parceiros', path: '/financeiro/parceiros', icon: Users, gradient: 'from-cyan-500 to-teal-600' },
+          { label: 'Configurações', path: '/financeiro/configuracoes', icon: CreditCard, gradient: 'from-slate-500 to-gray-600' },
+        ].map((item, i) => (
+          <motion.div key={item.path} whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }} transition={{ type: 'spring', stiffness: 400, damping: 17 }}>
+            <button
+              onClick={() => navigate(item.path)}
+              className="w-full h-auto py-4 px-3 flex flex-col items-center gap-2 rounded-xl border border-border/50 bg-card shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group"
+            >
+              <div className={`absolute inset-0 bg-gradient-to-br ${item.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
+              <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center text-white shadow-sm`}>
+                <item.icon size={18} />
+              </div>
+              <span className="text-xs font-medium text-foreground">{item.label}</span>
+            </button>
+          </motion.div>
         ))}
       </motion.div>
 

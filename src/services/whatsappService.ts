@@ -37,6 +37,7 @@ interface SendMessageParams {
   triggerType?: 'manual' | 'auto_recording' | 'auto_reminder' | 'auto_confirmation' | 'auto_backup' | 'auto_design_approved';
   mediaUrl?: string;
   mediaFileName?: string;
+  useGroup?: boolean; // if true, will try to use the client's group number
 }
 
 export interface WhatsAppMessage {
@@ -161,9 +162,22 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<{ 
     return { success: false, error: 'Token da API não configurado' };
   }
 
+  // If useGroup is true (or not explicitly false) and clientId is provided, try to get the group number
+  let targetNumber = params.number;
+  if (params.clientId && params.useGroup !== false) {
+    const { data: clientData } = await supabase
+      .from('clients')
+      .select('whatsapp_group')
+      .eq('id', params.clientId)
+      .single();
+    if (clientData?.whatsapp_group) {
+      targetNumber = clientData.whatsapp_group;
+    }
+  }
+
   const { data, error } = await supabase.functions.invoke('send-whatsapp', {
     body: {
-      number: params.number,
+      number: targetNumber,
       message: params.message,
       userId: config.defaultUserId,
       queueId: config.defaultQueueId,

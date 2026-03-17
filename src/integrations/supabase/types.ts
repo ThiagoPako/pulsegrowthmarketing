@@ -500,6 +500,7 @@ export type Database = {
           weekly_reels: number
           weekly_stories: number
           whatsapp: string
+          whatsapp_group: string | null
         }
         Insert: {
           accepts_extra?: boolean
@@ -547,6 +548,7 @@ export type Database = {
           weekly_reels?: number
           weekly_stories?: number
           whatsapp?: string
+          whatsapp_group?: string | null
         }
         Update: {
           accepts_extra?: boolean
@@ -594,6 +596,7 @@ export type Database = {
           weekly_reels?: number
           weekly_stories?: number
           whatsapp?: string
+          whatsapp_group?: string | null
         }
         Relationships: [
           {

@@ -355,7 +355,7 @@ export default function Scripts() {
           .replace(/$/, '</p>')
           .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
           .replace(/\*(.*?)\*/g, '<em>$1</em>');
-        setForm(prev => ({ ...prev, content: htmlContent }));
+        setForm(prev => ({ ...prev, content: htmlContent, caption: data.caption || prev.caption }));
         if (!form.title) {
           const autoTitle = `${SCRIPT_VIDEO_TYPE_LABELS[form.videoType]} - ${client.companyName}`;
           setForm(prev => ({ ...prev, title: autoTitle }));

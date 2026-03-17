@@ -461,6 +461,14 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                     );
                   })()}
 
+                  {/* Caption */}
+                  {selectedScript.caption && (
+                    <div className="p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
+                      <p className="text-[10px] uppercase tracking-wider font-semibold text-white/40 mb-1.5">📝 Legenda</p>
+                      <p className="text-sm text-white/70 leading-relaxed">{selectedScript.caption}</p>
+                    </div>
+                  )}
+
                   {/* Script content */}
                   <ScrollArea className="max-h-[50vh]">
                     <div

@@ -133,6 +133,7 @@ function AppRoutes() {
       <Route path="/portal-registro/:clientId" element={<ClientPortalRegister />} />
       <Route path="/portal/:clientId" element={<ClientPortal />} />
       <Route path="/conteudos-portal" element={<ProtectedRoute><ContentManager /></ProtectedRoute>} />
+      <Route path="/trafego" element={<ProtectedRoute><TrafficManagement /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

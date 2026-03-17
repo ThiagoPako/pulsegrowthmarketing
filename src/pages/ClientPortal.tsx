@@ -1146,43 +1146,16 @@ function ContentRow({ label, items, clientColor, onSelect, delay = 0 }: {
   );
 }
 
-/* ── Reels Card with hover/touch video preview ── */
+/* ── Reels Card with smart preview ── */
 function ReelsCard({ content, clientColor, onSelect }: {
   content: PortalContent;
   clientColor: string;
   onSelect: (c: PortalContent) => void;
 }) {
-  const videoPreviewRef = useRef<HTMLVideoElement>(null);
-  const [videoReady, setVideoReady] = useState(false);
-
-  const isVideo = content.content_type !== 'arte' && !!content.file_url;
+  const isVideo = isPortalVideo(content);
   const Icon = CONTENT_TYPE_ICONS[content.content_type] || Film;
   const statusStyle = STATUS_COLORS[content.status];
-
-  // Auto-play first 5s in loop
-  useEffect(() => {
-    const vid = videoPreviewRef.current;
-    if (!vid || !isVideo) return;
-
-    const handleTimeUpdate = () => {
-      if (vid.currentTime >= 5) {
-        vid.currentTime = 0;
-      }
-    };
-
-    const startAutoplay = () => {
-      setVideoReady(true);
-      vid.play().catch(() => {});
-    };
-
-    vid.addEventListener('timeupdate', handleTimeUpdate);
-    vid.addEventListener('canplay', startAutoplay, { once: true });
-
-    return () => {
-      vid.removeEventListener('timeupdate', handleTimeUpdate);
-      vid.removeEventListener('canplay', startAutoplay);
-    };
-  }, [isVideo]);
+  const canAutoplayPreview = isVideo && !!content.file_url && !shouldProxyPortalVideo(content.file_url);
 
   return (
     <button
@@ -1191,7 +1164,6 @@ function ReelsCard({ content, clientColor, onSelect }: {
       style={{ '--tw-ring-color': `hsl(${clientColor} / 0.5)` } as any}
     >
       <div className="aspect-[9/16] relative overflow-hidden">
-        {/* Fallback thumbnail (behind video) */}
         {content.thumbnail_url ? (
           <img src={content.thumbnail_url} alt={content.title} className="w-full h-full object-cover" />
         ) : content.file_url && content.content_type === 'arte' ? (
@@ -1202,27 +1174,23 @@ function ReelsCard({ content, clientColor, onSelect }: {
           </div>
         )}
 
-        {/* Auto-playing 5s loop video preview */}
-        {isVideo && (
+        {canAutoplayPreview && (
           <video
-            ref={videoPreviewRef}
             src={content.file_url!}
             muted
             playsInline
+            autoPlay
+            loop
             preload="metadata"
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
-              videoReady ? 'opacity-100' : 'opacity-0'
-            }`}
+            className="absolute inset-0 w-full h-full object-cover"
           />
         )}
 
-        {/* Gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
 
-        {/* Play icon overlay for non-video content */}
-        {isVideo && !videoReady && (
+        {isVideo && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-10 h-10 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center transition-colors group-hover:bg-white/25">
               <Play size={18} fill="white" className="ml-0.5" />
             </div>
           </div>
@@ -1236,20 +1204,17 @@ function ReelsCard({ content, clientColor, onSelect }: {
           </div>
         )}
 
-        {/* Duration */}
         {content.duration_seconds > 0 && (
           <span className="absolute bottom-8 right-1.5 bg-black/80 text-[10px] px-1.5 py-0.5 rounded font-mono text-white/80">
             {Math.floor(content.duration_seconds / 60)}:{(content.duration_seconds % 60).toString().padStart(2, '0')}
           </span>
         )}
 
-        {/* Status */}
         <div className={`absolute top-1.5 left-1.5 flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold ${statusStyle?.bg} ${statusStyle?.text} backdrop-blur-sm`}>
           <span className={`w-1 h-1 rounded-full ${statusStyle?.dot}`} />
           {STATUS_LABELS[content.status]}
         </div>
 
-        {/* Title at bottom over gradient */}
         <div className="absolute bottom-0 inset-x-0 p-2.5">
           <p className="text-xs font-medium truncate text-white/90">{content.title}</p>
           <span className="text-[10px] text-white/40 mt-0.5 block">{CONTENT_TYPE_LABELS[content.content_type]}</span>

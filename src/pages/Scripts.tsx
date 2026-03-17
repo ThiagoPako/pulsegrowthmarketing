@@ -650,6 +650,21 @@ export default function Scripts() {
               <RichEditor key={editing?.id || 'new'} content={form.content} onChange={html => setForm(prev => ({ ...prev, content: html }))} />
             </div>
 
+            <div className="space-y-1">
+              <Label className="flex items-center gap-1.5">
+                📝 Legenda para Instagram
+                {form.caption && <Badge variant="outline" className="text-[9px]">{form.caption.length}/200</Badge>}
+              </Label>
+              <Textarea 
+                value={form.caption} 
+                onChange={e => setForm(prev => ({ ...prev, caption: e.target.value.slice(0, 200) }))} 
+                placeholder="Legenda curta com CTA para a postagem..." 
+                rows={2}
+                maxLength={200}
+              />
+              <p className="text-[10px] text-muted-foreground">Gerada automaticamente pela IA junto com o roteiro. Você pode editar manualmente.</p>
+            </div>
+
             <Button onClick={handleSave} className="w-full">{editing ? 'Salvar Alterações' : 'Criar Roteiro'}</Button>
           </div>
         </DialogContent>

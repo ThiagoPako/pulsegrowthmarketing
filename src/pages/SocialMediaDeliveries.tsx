@@ -1222,12 +1222,9 @@ export default function SocialMediaDeliveries() {
               </div>
               <div><Label>Data da postagem *</Label><Input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)} /></div>
               <div><Label>Horário (opcional)</Label><Input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)} /></div>
-              <div>
-                <Label>Plataforma</Label>
-                <Select value={schedPlatform} onValueChange={setSchedPlatform}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>{PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-                </Select>
+              <div className="p-3 rounded-lg bg-muted/30 border border-border">
+                <Label className="text-xs text-muted-foreground">Plataformas</Label>
+                <p className="text-sm font-medium mt-1">📸 Instagram + Facebook</p>
               </div>
             </div>
           )}

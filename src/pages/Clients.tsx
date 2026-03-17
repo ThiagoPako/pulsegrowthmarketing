@@ -344,6 +344,12 @@ export default function Clients() {
       }
     }
     setOpen(false);
+    } catch (err) {
+      console.error('Erro ao salvar cliente:', err);
+      toast.error('Erro ao salvar cliente');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const saveSocialAccounts = async (clientId: string) => {

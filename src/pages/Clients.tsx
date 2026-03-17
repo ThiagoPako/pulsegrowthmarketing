@@ -1562,7 +1562,8 @@ export default function Clients() {
             </div>
           ))}
         </div>
-      )}
+        );
+      })()}
 
       {/* WhatsApp Send Dialog */}
       <Dialog open={sendWaOpen} onOpenChange={setSendWaOpen}>

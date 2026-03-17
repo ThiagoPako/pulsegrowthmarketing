@@ -40,6 +40,8 @@ import FinancialSettings from "@/pages/FinancialSettings";
 import FinancialCashReserve from "@/pages/FinancialCashReserve";
 import FinancialMovements from "@/pages/FinancialMovements";
 import FinancialPartners from "@/pages/FinancialPartners";
+import FinancialChat from "@/pages/FinancialChat";
+import FinancialApiSettings from "@/pages/FinancialApiSettings";
 import NotFound from "@/pages/NotFound";
 import ClientOnboarding from "@/pages/ClientOnboarding";
 import DesignerKanban from "@/pages/DesignerKanban";

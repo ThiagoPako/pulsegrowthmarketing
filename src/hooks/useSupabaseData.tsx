@@ -22,6 +22,7 @@ function rowToClient(r: any): Client {
     acceptsExtra: r.accepts_extra,
     extraClientAppears: r.extra_client_appears,
     whatsapp: r.whatsapp || '',
+    whatsappGroup: r.whatsapp_group || '',
     email: r.email || '',
     city: r.city || '',
     weeklyReels: r.weekly_reels,

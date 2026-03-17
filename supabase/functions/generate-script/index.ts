@@ -203,22 +203,56 @@ Além do roteiro, gere uma LEGENDA para postagem no Instagram. A legenda deve:
       } else {
         scriptContent = fullText;
       }
-    } else {
-      // OpenAI-compatible (Gemini, OpenAI) - try tool calling first, fallback to text
-      const useToolCalling = ai.provider === "openai"; // Gemini OpenAI-compat may not support tools well
+    } else if (ai.provider === "gemini") {
+      // Use native Gemini API for better reliability
+      const geminiModel = selectedModel || "gemini-2.5-flash-lite";
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${ai.key}`;
 
+      const fullPrompt = `${systemPrompt.replace("IMPORTANTE: Você DEVE responder usando tool calling com a função \"generate_script_with_caption\". NÃO responda em texto livre.", "Responda com o roteiro completo primeiro, depois em uma linha separada escreva \"LEGENDA:\" seguido da legenda para Instagram.")}\n\n${userPrompt}`;
+
+      const response = await fetch(geminiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: fullPrompt }] }],
+          generationConfig: {
+            maxOutputTokens: 4096,
+            temperature: 0.8,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error("Gemini API error:", response.status, errText);
+        return new Response(JSON.stringify({ error: `Gemini error [${response.status}]: ${errText}` }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const data = await response.json();
+      console.log("Gemini response keys:", Object.keys(data));
+      const fullText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      console.log("Gemini text length:", fullText.length);
+
+      const legendaIdx = fullText.lastIndexOf("LEGENDA:");
+      if (legendaIdx > -1) {
+        scriptContent = fullText.slice(0, legendaIdx).trim();
+        captionContent = fullText.slice(legendaIdx + 8).trim();
+      } else {
+        scriptContent = fullText;
+      }
+    } else {
+      // OpenAI - use tool calling
       const requestBody: any = {
         model: selectedModel,
         messages: [
-          { role: "system", content: useToolCalling ? systemPrompt : systemPrompt.replace("IMPORTANTE: Você DEVE responder usando tool calling com a função \"generate_script_with_caption\". NÃO responda em texto livre.", "Responda com o roteiro completo primeiro, depois em uma linha separada escreva \"LEGENDA:\" seguido da legenda para Instagram.") },
+          { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         max_tokens: 4000,
         temperature: 0.8,
-      };
-
-      if (useToolCalling) {
-        requestBody.tools = [
+        tools: [
           {
             type: "function",
             function: {
@@ -235,9 +269,9 @@ Além do roteiro, gere uma LEGENDA para postagem no Instagram. A legenda deve:
               }
             }
           }
-        ];
-        requestBody.tool_choice = { type: "function", function: { name: "generate_script_with_caption" } };
-      }
+        ],
+        tool_choice: { type: "function", function: { name: "generate_script_with_caption" } },
+      };
 
       const response = await fetch(ai.url, {
         method: "POST",
@@ -251,25 +285,12 @@ Além do roteiro, gere uma LEGENDA para postagem no Instagram. A legenda deve:
       if (!response.ok) {
         const errText = await response.text();
         console.error("AI API error:", response.status, errText);
-        if (response.status === 429) {
-          return new Response(JSON.stringify({ error: "Limite de requisições atingido. Tente novamente em alguns segundos." }), {
-            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        if (response.status === 402) {
-          return new Response(JSON.stringify({ error: "Créditos de IA insuficientes." }), {
-            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
         return new Response(JSON.stringify({ error: `AI error [${response.status}]: ${errText}` }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       const data = await response.json();
-      console.log("AI response structure:", JSON.stringify(data).slice(0, 500));
-
-      // Try tool calling response first
       const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
       if (toolCall?.function?.arguments) {
         try {
@@ -280,8 +301,6 @@ Além do roteiro, gere uma LEGENDA para postagem no Instagram. A legenda deve:
           console.error("Failed to parse tool call arguments:", e);
         }
       }
-
-      // Fallback: extract from text content
       if (!scriptContent) {
         const fullText = data.choices?.[0]?.message?.content || "";
         const legendaIdx = fullText.lastIndexOf("LEGENDA:");

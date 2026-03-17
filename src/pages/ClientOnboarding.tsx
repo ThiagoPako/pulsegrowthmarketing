@@ -242,7 +242,7 @@ export default function ClientOnboarding() {
           fixed_time: fixedTime,
           backup_day: backupDay,
           backup_time: backupTime || '14:00',
-          monthly_recordings: selectedWeeks.length,
+          monthly_recordings: monthlyRecordings,
           selected_weeks: selectedWeeks,
           accepts_extra: acceptsExtra,
           extra_content_types: extraTypes,

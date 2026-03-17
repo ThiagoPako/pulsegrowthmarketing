@@ -95,6 +95,30 @@ export default function Team() {
 
   useEffect(() => { fetchMembers(); fetchPartners(); }, []);
 
+  // Sync permissions when target changes
+  useEffect(() => {
+    if (permTarget && permissionsQuery.data) {
+      setPermModules(permissionsQuery.data);
+    }
+  }, [permTarget, permissionsQuery.data]);
+
+  const handleOpenPermissions = (member: TeamMember) => {
+    setPermTarget(member);
+  };
+
+  const handleSavePermissions = async () => {
+    if (!permTarget) return;
+    await setPermissions.mutateAsync({ userId: permTarget.id, modules: permModules });
+    setPermTarget(null);
+  };
+
+  const toggleModule = (key: string) => {
+    setPermModules(prev => prev.includes(key) ? prev.filter(m => m !== key) : [...prev, key]);
+  };
+
+  const selectAllModules = () => setPermModules(AVAILABLE_MODULES.map(m => m.key));
+  const clearAllModules = () => setPermModules([]);
+
   const handleSave = async () => {
     if (!form.name || !form.email || !form.password) { toast.error('Preencha todos os campos'); return; }
     if (form.password.length < 6) { toast.error('Senha deve ter no mínimo 6 caracteres'); return; }

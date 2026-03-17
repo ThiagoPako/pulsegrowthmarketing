@@ -99,6 +99,7 @@ function verifyVideoUrl(url: string): Promise<void> {
     video.preload = 'metadata';
     video.muted = true;
     video.playsInline = true;
+    video.crossOrigin = 'anonymous';
     video.onloadedmetadata = () => finish(resolve);
     video.onerror = () => finish(() => reject(new Error('Upload concluído, mas o vídeo público não ficou acessível.')));
     video.src = url;
@@ -106,42 +107,12 @@ function verifyVideoUrl(url: string): Promise<void> {
   });
 }
 
-async function verifyUrlByHead(url: string): Promise<void> {
-  const response = await fetch(url, {
-    method: 'HEAD',
-    cache: 'no-store',
-  });
-
-  if (!response.ok) {
-    throw new Error(`Arquivo público indisponível (${response.status})`);
-  }
-}
-
-async function verifyUploadedFile(url: string, file: File): Promise<void> {
-  if (typeof window === 'undefined') return;
-
-  const isVideo = file.type.startsWith('video/');
-  const isImage = file.type.startsWith('image/');
-
-  if (!isVideo && !isImage) return;
-
+async function verifyWithRetry(url: string, verifier: (url: string) => Promise<void>): Promise<void> {
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= VERIFY_UPLOAD_ATTEMPTS; attempt += 1) {
-    const probeUrl = withCacheBust(url, attempt);
-
     try {
-      if (isVideo) {
-        try {
-          await verifyVideoUrl(probeUrl);
-        } catch (videoError) {
-          await verifyUrlByHead(probeUrl);
-          return;
-        }
-      } else {
-        await verifyImageUrl(probeUrl);
-      }
-
+      await verifier(withCacheBust(url, attempt));
       return;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error('Falha ao validar arquivo enviado.');
@@ -153,6 +124,26 @@ async function verifyUploadedFile(url: string, file: File): Promise<void> {
   }
 
   throw lastError ?? new Error('Falha ao validar arquivo enviado.');
+}
+
+async function verifyUploadedFile(url: string, file: File): Promise<void> {
+  if (typeof window === 'undefined') return;
+
+  if (file.type.startsWith('image/')) {
+    await verifyWithRetry(url, verifyImageUrl);
+    return;
+  }
+
+  if (file.type.startsWith('video/')) {
+    try {
+      await verifyWithRetry(url, verifyVideoUrl);
+    } catch (error) {
+      console.warn('[VPS Upload] Não foi possível validar o vídeo publicamente no navegador, mas o upload foi concluído e a URL será salva mesmo assim.', {
+        url,
+        error,
+      });
+    }
+  }
 }
 
 /**

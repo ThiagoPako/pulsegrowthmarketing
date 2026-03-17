@@ -63,6 +63,97 @@ export type Database = {
           },
         ]
       }
+      api_integration_logs: {
+        Row: {
+          action: string
+          created_at: string
+          details: Json | null
+          id: string
+          integration_id: string | null
+          performed_by: string | null
+          status: string
+        }
+        Insert: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          integration_id?: string | null
+          performed_by?: string | null
+          status?: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          integration_id?: string | null
+          performed_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_integration_logs_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "api_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      api_integrations: {
+        Row: {
+          api_type: string
+          config: Json | null
+          created_at: string
+          created_by: string | null
+          endpoint_url: string | null
+          id: string
+          last_checked_at: string | null
+          last_error: string | null
+          name: string
+          provider: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          api_type?: string
+          config?: Json | null
+          created_at?: string
+          created_by?: string | null
+          endpoint_url?: string | null
+          id?: string
+          last_checked_at?: string | null
+          last_error?: string | null
+          name?: string
+          provider?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          api_type?: string
+          config?: Json | null
+          created_at?: string
+          created_by?: string | null
+          endpoint_url?: string | null
+          id?: string
+          last_checked_at?: string | null
+          last_error?: string | null
+          name?: string
+          provider?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_integrations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       billing_messages: {
         Row: {
           client_id: string
@@ -1342,6 +1433,30 @@ export type Database = {
           entity_type?: string
           id?: string
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      financial_chat_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
+          user_id?: string
         }
         Relationships: []
       }

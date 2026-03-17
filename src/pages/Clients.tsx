@@ -640,6 +640,13 @@ export default function Clients() {
           <Label className="flex items-center gap-1"><FolderOpen size={12} /> Drive de Identidade Visual</Label>
           <Input value={form.driveIdentidadeVisual || ''} onChange={e => setForm({ ...form, driveIdentidadeVisual: e.target.value })} placeholder="https://drive.google.com/..." />
         </div>
+        <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
+          <div>
+            <p className="text-sm font-medium">Métricas no Portal</p>
+            <p className="text-xs text-muted-foreground">Permitir que o cliente veja as métricas no Pulse Club</p>
+          </div>
+          <Switch checked={showMetrics} onCheckedChange={setShowMetrics} />
+        </div>
       </div>
     </div>
   );

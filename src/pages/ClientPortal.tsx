@@ -484,12 +484,14 @@ export default function ClientPortal() {
                           <Play size={16} fill="currentColor" /> Assistir conteúdos
                         </button>
                       )}
-                      <button
-                        onClick={() => setActiveTab('metrics')}
-                        className="inline-flex items-center gap-2 px-6 py-3 rounded-full font-semibold text-sm bg-white/10 hover:bg-white/15 transition-all hover:scale-105 active:scale-95"
-                      >
-                        <BarChart3 size={16} /> Ver métricas
-                      </button>
+                      {(client.show_metrics || isTeamMember) && (
+                        <button
+                          onClick={() => setActiveTab('metrics')}
+                          className="inline-flex items-center gap-2 px-6 py-3 rounded-full font-semibold text-sm bg-white/10 hover:bg-white/15 transition-all hover:scale-105 active:scale-95"
+                        >
+                          <BarChart3 size={16} /> Ver métricas
+                        </button>
+                      )}
                     </div>
 
                     {/* Quick stats */}

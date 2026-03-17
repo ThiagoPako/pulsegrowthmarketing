@@ -130,6 +130,8 @@ function AppRoutes() {
       <Route path="/financeiro/caixa" element={<ProtectedRoute><FinancialCashReserve /></ProtectedRoute>} />
       <Route path="/financeiro/movimentacoes" element={<ProtectedRoute><FinancialMovements /></ProtectedRoute>} />
       <Route path="/financeiro/parceiros" element={<ProtectedRoute><FinancialPartners /></ProtectedRoute>} />
+      <Route path="/financeiro/chat" element={<ProtectedRoute><FinancialChat /></ProtectedRoute>} />
+      <Route path="/financeiro/apis" element={<ProtectedRoute><FinancialApiSettings /></ProtectedRoute>} />
       <Route path="/onboarding/:clientId" element={<ClientOnboarding />} />
       <Route path="/portal-login/:clientId" element={<ClientPortalLogin />} />
       <Route path="/portal-registro/:clientId" element={<ClientPortalRegister />} />

@@ -204,41 +204,48 @@ Além do roteiro, gere uma LEGENDA para postagem no Instagram. A legenda deve:
         scriptContent = fullText;
       }
     } else {
-      // OpenAI-compatible (Gemini, OpenAI, Lovable) - use tool calling
+      // OpenAI-compatible (Gemini, OpenAI) - try tool calling first, fallback to text
+      const useToolCalling = ai.provider === "openai"; // Gemini OpenAI-compat may not support tools well
+
+      const requestBody: any = {
+        model: selectedModel,
+        messages: [
+          { role: "system", content: useToolCalling ? systemPrompt : systemPrompt.replace("IMPORTANTE: Você DEVE responder usando tool calling com a função \"generate_script_with_caption\". NÃO responda em texto livre.", "Responda com o roteiro completo primeiro, depois em uma linha separada escreva \"LEGENDA:\" seguido da legenda para Instagram.") },
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: 4000,
+        temperature: 0.8,
+      };
+
+      if (useToolCalling) {
+        requestBody.tools = [
+          {
+            type: "function",
+            function: {
+              name: "generate_script_with_caption",
+              description: "Returns the generated script content and a short Instagram caption",
+              parameters: {
+                type: "object",
+                properties: {
+                  content: { type: "string", description: "The full script content for the video" },
+                  caption: { type: "string", description: "Short Instagram caption (max 200 chars) with CTA and emojis" }
+                },
+                required: ["content", "caption"],
+                additionalProperties: false
+              }
+            }
+          }
+        ];
+        requestBody.tool_choice = { type: "function", function: { name: "generate_script_with_caption" } };
+      }
+
       const response = await fetch(ai.url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${ai.key}`,
         },
-        body: JSON.stringify({
-          model: selectedModel,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          max_tokens: 2500,
-          temperature: 0.8,
-          tools: [
-            {
-              type: "function",
-              function: {
-                name: "generate_script_with_caption",
-                description: "Returns the generated script content and a short Instagram caption",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    content: { type: "string", description: "The full script content for the video" },
-                    caption: { type: "string", description: "Short Instagram caption (max 200 chars) with CTA and emojis" }
-                  },
-                  required: ["content", "caption"],
-                  additionalProperties: false
-                }
-              }
-            }
-          ],
-          tool_choice: { type: "function", function: { name: "generate_script_with_caption" } },
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -254,12 +261,15 @@ Além do roteiro, gere uma LEGENDA para postagem no Instagram. A legenda deve:
             status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        return new Response(JSON.stringify({ error: "Failed to generate script" }), {
+        return new Response(JSON.stringify({ error: `AI error [${response.status}]: ${errText}` }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       const data = await response.json();
+      console.log("AI response structure:", JSON.stringify(data).slice(0, 500));
+
+      // Try tool calling response first
       const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
       if (toolCall?.function?.arguments) {
         try {
@@ -270,8 +280,17 @@ Além do roteiro, gere uma LEGENDA para postagem no Instagram. A legenda deve:
           console.error("Failed to parse tool call arguments:", e);
         }
       }
+
+      // Fallback: extract from text content
       if (!scriptContent) {
-        scriptContent = data.choices?.[0]?.message?.content || "";
+        const fullText = data.choices?.[0]?.message?.content || "";
+        const legendaIdx = fullText.lastIndexOf("LEGENDA:");
+        if (legendaIdx > -1) {
+          scriptContent = fullText.slice(0, legendaIdx).trim();
+          captionContent = fullText.slice(legendaIdx + 8).trim();
+        } else {
+          scriptContent = fullText;
+        }
       }
     }
 

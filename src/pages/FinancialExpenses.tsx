@@ -76,23 +76,28 @@ export default function FinancialExpenses() {
       toast.success('Categoria criada');
     }
   };
+  const fixas = filtered.filter(e => e.expense_type === 'fixa').reduce((s, e) => s + Number(e.amount), 0);
+  const variaveis = filtered.filter(e => e.expense_type === 'variavel').reduce((s, e) => s + Number(e.amount), 0);
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro')}><ArrowLeft size={18} /></Button>
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro')} className="hover:bg-primary/10"><ArrowLeft size={18} /></Button>
         <div className="flex-1">
-          <h1 className="text-xl font-bold">Despesas</h1>
-          <p className="text-sm text-muted-foreground">Total do mês: {fmt(total)}</p>
+          <h1 className="text-xl font-bold flex items-center gap-2">💸 Despesas</h1>
         </div>
         <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-          <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-48 shadow-sm"><SelectValue /></SelectTrigger>
           <SelectContent>
             {monthOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
           </SelectContent>
         </Select>
         <Dialog open={catOpen} onOpenChange={setCatOpen}>
-          <DialogTrigger asChild><Button size="sm" variant="outline">+ Categoria</Button></DialogTrigger>
+          <DialogTrigger asChild>
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <Button size="sm" variant="outline" className="shadow-sm">+ Categoria</Button>
+            </motion.div>
+          </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>Nova Categoria</DialogTitle></DialogHeader>
             <div className="flex gap-2">
@@ -102,7 +107,11 @@ export default function FinancialExpenses() {
           </DialogContent>
         </Dialog>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setForm(emptyForm); setEditingId(null); } }}>
-          <DialogTrigger asChild><Button size="sm"><Plus size={16} className="mr-1" /> Nova Despesa</Button></DialogTrigger>
+          <DialogTrigger asChild>
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <Button size="sm" className="shadow-sm bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white"><Plus size={16} className="mr-1" /> Nova Despesa</Button>
+            </motion.div>
+          </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>{editingId ? 'Editar Despesa' : 'Nova Despesa'}</DialogTitle></DialogHeader>
             <div className="space-y-3">
@@ -136,7 +145,44 @@ export default function FinancialExpenses() {
             </div>
           </DialogContent>
         </Dialog>
-      </div>
+      </motion.div>
+
+      {/* KPI Summary */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.3 }} className="grid grid-cols-3 gap-3">
+        <Card className="border-rose-200/50 overflow-hidden">
+          <CardContent className="pt-3 pb-3 bg-gradient-to-br from-rose-500/10 to-red-500/10">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-rose-500/20 flex items-center justify-center"><TrendingDown size={16} className="text-rose-600" /></div>
+              <div>
+                <p className="text-[10px] text-muted-foreground font-medium">Total do Mês</p>
+                <p className="text-sm font-bold text-foreground">{fmt(total)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-amber-200/50 overflow-hidden">
+          <CardContent className="pt-3 pb-3 bg-gradient-to-br from-amber-500/10 to-orange-500/10">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center"><TrendingDown size={16} className="text-amber-600" /></div>
+              <div>
+                <p className="text-[10px] text-muted-foreground font-medium">Fixas</p>
+                <p className="text-sm font-bold text-foreground">{fmt(fixas)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-violet-200/50 overflow-hidden">
+          <CardContent className="pt-3 pb-3 bg-gradient-to-br from-violet-500/10 to-purple-500/10">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center"><TrendingDown size={16} className="text-violet-600" /></div>
+              <div>
+                <p className="text-[10px] text-muted-foreground font-medium">Variáveis</p>
+                <p className="text-sm font-bold text-foreground">{fmt(variaveis)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       <Card>
         <CardContent className="p-0">

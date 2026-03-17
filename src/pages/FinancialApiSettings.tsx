@@ -352,7 +352,44 @@ export default function FinancialApiSettings() {
         </Button>
       </div>
 
-      {/* Stats */}
+      {/* AI Model Configuration */}
+      <div className="glass-card p-5 border border-primary/20">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-xl">🤖</div>
+            <div>
+              <h3 className="font-semibold text-sm">Inteligência Artificial (Lovable AI)</h3>
+              <p className="text-[11px] text-muted-foreground">Modelo usado para gerar roteiros, legendas e chat financeiro</p>
+            </div>
+          </div>
+          <Badge variant="outline" className={aiConfig.active ? 'text-emerald-500' : 'text-muted-foreground'}>
+            {aiConfig.active ? '● Ativo' : '○ Inativo'}
+          </Badge>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {AI_MODELS.map(model => (
+            <button
+              key={model.value}
+              onClick={() => handleSaveAiConfig(model.value)}
+              className={`p-3 rounded-lg border text-left transition-all ${
+                aiConfig.model === model.value
+                  ? 'border-primary bg-primary/10 ring-1 ring-primary'
+                  : 'border-border hover:border-primary/40'
+              }`}
+            >
+              <p className="text-sm font-medium">{model.label}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{model.desc}</p>
+              {aiConfig.model === model.value && (
+                <Badge className="mt-2 text-[10px]" variant="default">Selecionado</Badge>
+              )}
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-3 flex items-center gap-1">
+          <Info size={11} /> O modelo selecionado será usado automaticamente em todas as funcionalidades de IA do sistema.
+        </p>
+      </div>
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="glass-card p-4 text-center">
           <p className="text-2xl font-bold text-primary">{integrations.length}</p>

@@ -151,7 +151,7 @@ Além do roteiro, gere uma LEGENDA para postagem no Instagram. A legenda deve:
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: selectedModel,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },

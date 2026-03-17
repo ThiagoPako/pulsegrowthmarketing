@@ -116,7 +116,9 @@ Regras fundamentais:
 - Use emojis com moderação
 - Indique entre aspas ("") as falas que devem ser ditas no vídeo
 - Use colchetes [descrição] para indicar cenas/ações visuais
-- IMPORTANTE: Se roteiros de referência forem fornecidos, analise-os cuidadosamente e replique o estilo, formato, tom e estrutura da equipe. A equipe quer consistência nos roteiros.`;
+- IMPORTANTE: Se roteiros de referência forem fornecidos, analise-os cuidadosamente e replique o estilo, formato, tom e estrutura da equipe. A equipe quer consistência nos roteiros.
+
+IMPORTANTE: Você DEVE responder usando tool calling com a função "generate_script_with_caption". NÃO responda em texto livre.`;
 
     const userPrompt = `Crie um roteiro completo para o seguinte cliente:
 
@@ -130,7 +132,15 @@ ESTRUTURA A SEGUIR:
 ${structure}
 ${examplesBlock}
 
-Gere o roteiro completo seguindo a estrutura indicada. Seja criativo mas fiel ao posicionamento do cliente. O roteiro deve estar pronto para ser usado pela equipe de gravação.`;
+Gere o roteiro completo seguindo a estrutura indicada. Seja criativo mas fiel ao posicionamento do cliente. O roteiro deve estar pronto para ser usado pela equipe de gravação.
+
+Além do roteiro, gere uma LEGENDA para postagem no Instagram. A legenda deve:
+- Ter no máximo 200 caracteres
+- Ser coerente com o conteúdo do vídeo
+- Incluir uma CTA curta e direta
+- Usar emojis de forma estratégica (1-3 emojis)
+- Ser envolvente e gerar curiosidade
+- NÃO incluir hashtags (serão adicionadas depois)`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -144,8 +154,33 @@ Gere o roteiro completo seguindo a estrutura indicada. Seja criativo mas fiel ao
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        max_tokens: 2000,
+        max_tokens: 2500,
         temperature: 0.8,
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "generate_script_with_caption",
+              description: "Returns the generated script content and a short Instagram caption",
+              parameters: {
+                type: "object",
+                properties: {
+                  content: {
+                    type: "string",
+                    description: "The full script content for the video"
+                  },
+                  caption: {
+                    type: "string",
+                    description: "Short Instagram caption (max 200 chars) with CTA and emojis"
+                  }
+                },
+                required: ["content", "caption"],
+                additionalProperties: false
+              }
+            }
+          }
+        ],
+        tool_choice: { type: "function", function: { name: "generate_script_with_caption" } },
       }),
     });
 
@@ -171,9 +206,26 @@ Gere o roteiro completo seguindo a estrutura indicada. Seja criativo mas fiel ao
     }
 
     const data = await response.json();
+    
+    // Try to extract from tool call first
+    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    if (toolCall?.function?.arguments) {
+      try {
+        const args = JSON.parse(toolCall.function.arguments);
+        return new Response(JSON.stringify({ 
+          content: args.content || "", 
+          caption: args.caption || "" 
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (e) {
+        console.error("Failed to parse tool call arguments:", e);
+      }
+    }
+    
+    // Fallback to regular content
     const content = data.choices?.[0]?.message?.content || "";
-
-    return new Response(JSON.stringify({ content }), {
+    return new Response(JSON.stringify({ content, caption: "" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {

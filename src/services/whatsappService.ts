@@ -37,6 +37,7 @@ interface SendMessageParams {
   triggerType?: 'manual' | 'auto_recording' | 'auto_reminder' | 'auto_confirmation' | 'auto_backup' | 'auto_design_approved';
   mediaUrl?: string;
   mediaFileName?: string;
+  useGroup?: boolean; // if true, will try to use the client's group number
 }
 
 export interface WhatsAppMessage {

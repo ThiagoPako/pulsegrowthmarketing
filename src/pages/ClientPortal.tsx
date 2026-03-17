@@ -276,10 +276,16 @@ export default function ClientPortal() {
     else setSelectedMonth(newMonth);
   };
 
+  // Filter: clients can't see 'revisao_interna' content, only team members can
+  const visibleContents = useMemo(() =>
+    isTeamMember ? contents : contents.filter(c => c.status !== 'revisao_interna'),
+    [contents, isTeamMember]
+  );
+
   // Group contents by type for current season
   const seasonContents = useMemo(() => 
-    contents.filter(c => c.season_month === selectedMonth && c.season_year === selectedYear),
-    [contents, selectedMonth, selectedYear]
+    visibleContents.filter(c => c.season_month === selectedMonth && c.season_year === selectedYear),
+    [visibleContents, selectedMonth, selectedYear]
   );
 
   const contentByType = useMemo(() => {

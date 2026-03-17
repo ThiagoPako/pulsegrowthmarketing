@@ -370,6 +370,11 @@ export default function FinancialApiSettings() {
                 </div>
 
                 <div className="flex gap-1 shrink-0">
+                  {integration.provider === 'meta_ads' && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleTestConnection(integration.id)} title="Testar Conexão">
+                      <Zap size={14} className="text-primary" />
+                    </Button>
+                  )}
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleViewLogs(integration)} title="Logs">
                     <History size={14} />
                   </Button>
@@ -380,7 +385,7 @@ export default function FinancialApiSettings() {
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(integration)} title="Editar">
                     <Settings size={14} />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => handleDelete(integration.id)} title="Remover">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(integration.id)} title="Remover">
                     <Trash2 size={14} />
                   </Button>
                 </div>

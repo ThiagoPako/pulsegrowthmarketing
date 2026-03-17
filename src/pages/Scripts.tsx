@@ -336,15 +336,16 @@ export default function Scripts() {
 
     setGenerating(true);
     try {
-      // Fetch configured AI model
+      // Fetch configured AI provider and model
       const { data: aiIntegration } = await supabase
         .from('api_integrations')
         .select('config')
-        .eq('provider', 'lovable_ai')
+        .in('provider', ['ai_gemini', 'ai_openai', 'ai_claude'])
         .eq('status', 'ativo')
         .limit(1)
         .single();
       const aiModel = (aiIntegration as any)?.config?.ai_model || undefined;
+      const aiProvider = (aiIntegration as any)?.config?.ai_provider || undefined;
 
       const { data, error } = await supabase.functions.invoke('generate-script', {
         body: {
@@ -355,6 +356,7 @@ export default function Scripts() {
           niche: client.niche || '',
           exampleScripts: orderedExamples,
           aiModel,
+          aiProvider,
         },
       });
       if (error) throw error;

@@ -205,7 +205,7 @@ export default function FinancialApiSettings() {
   };
 
   const resetForm = () => {
-    setForm({ name: '', provider: 'meta_ads', api_type: 'rest', endpoint_url: '', notes: '' });
+    setForm({ name: '', provider: 'meta_ads', api_type: 'rest', endpoint_url: '', notes: '', metaAppId: '', metaAppSecret: '', metaPageToken: '', metaIgBusinessId: '', metaPageId: '' });
     setEditingId(null);
   };
 

@@ -1442,8 +1442,8 @@ export default function Clients() {
                         Próximo <ChevronRight size={14} />
                       </Button>
                     ) : (
-                      <Button onClick={handleSave} className="ml-auto gap-1">
-                        <CalendarCheck size={14} /> Cadastrar Cliente
+                      <Button onClick={handleSave} className="ml-auto gap-1" disabled={saving}>
+                        {saving ? <><Loader2 size={14} className="animate-spin" /> Salvando...</> : <><CalendarCheck size={14} /> Cadastrar Cliente</>}
                       </Button>
                     )}
                   </>

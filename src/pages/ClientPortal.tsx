@@ -54,6 +54,41 @@ interface ClientData {
 
 type TabView = 'library' | 'metrics' | 'criativa' | 'agenda';
 
+const PORTAL_MEDIA_PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/portal-media-proxy`;
+const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
+
+function isPortalVideo(content: Pick<PortalContent, 'content_type' | 'file_url'>) {
+  return content.content_type !== 'arte' && !!content.file_url;
+}
+
+function shouldProxyPortalVideo(url: string) {
+  return url.startsWith(VPS_UPLOADS_URL);
+}
+
+async function createPortalVideoObjectUrl(url: string) {
+  const response = await fetch(PORTAL_MEDIA_PROXY_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+    },
+    body: JSON.stringify({ url }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Falha ao carregar o vídeo (${response.status})`);
+  }
+
+  const blob = await response.blob();
+
+  if (!blob.size) {
+    throw new Error('O vídeo retornou vazio.');
+  }
+
+  return URL.createObjectURL(blob);
+}
+
 export default function ClientPortal() {
   const { clientId: paramSlug } = useParams<{ clientId: string }>();
   const navigate = useNavigate();
@@ -72,6 +107,9 @@ export default function ClientPortal() {
   const [isMuted, setIsMuted] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
+  const [resolvedVideoUrl, setResolvedVideoUrl] = useState<string | null>(null);
+  const [videoLoading, setVideoLoading] = useState(false);
+  const [videoLoadError, setVideoLoadError] = useState<string | null>(null);
   const commentsEndRef = useRef<HTMLDivElement>(null);
 
   // Auth state: team member or client login
@@ -190,8 +228,70 @@ export default function ClientPortal() {
     setAdjustmentNote('');
     setIsPlaying(false);
     setVideoProgress(0);
+    setVideoDuration(0);
+    setResolvedVideoUrl(null);
+    setVideoLoadError(null);
     loadComments(content.id);
   };
+
+  useEffect(() => {
+    let objectUrlToRevoke: string | null = null;
+    let cancelled = false;
+
+    const loadSelectedVideo = async () => {
+      setIsPlaying(false);
+      setVideoProgress(0);
+      setVideoDuration(0);
+
+      if (!selectedContent?.file_url) {
+        setResolvedVideoUrl(null);
+        setVideoLoadError(null);
+        setVideoLoading(false);
+        return;
+      }
+
+      if (!isPortalVideo(selectedContent) || !shouldProxyPortalVideo(selectedContent.file_url)) {
+        setResolvedVideoUrl(selectedContent.file_url);
+        setVideoLoadError(null);
+        setVideoLoading(false);
+        return;
+      }
+
+      setResolvedVideoUrl(null);
+      setVideoLoadError(null);
+      setVideoLoading(true);
+
+      try {
+        const objectUrl = await createPortalVideoObjectUrl(selectedContent.file_url);
+
+        if (cancelled) {
+          URL.revokeObjectURL(objectUrl);
+          return;
+        }
+
+        objectUrlToRevoke = objectUrl;
+        setResolvedVideoUrl(objectUrl);
+      } catch (error) {
+        console.error('[Portal Video] Failed to load proxied video', error);
+        if (!cancelled) {
+          setVideoLoadError(error instanceof Error ? error.message : 'Não foi possível carregar o vídeo.');
+        }
+      } finally {
+        if (!cancelled) {
+          setVideoLoading(false);
+        }
+      }
+    };
+
+    loadSelectedVideo();
+
+    return () => {
+      cancelled = true;
+      if (objectUrlToRevoke) {
+        URL.revokeObjectURL(objectUrlToRevoke);
+      }
+    };
+  }, [selectedContent?.id, selectedContent?.file_url, selectedContent?.content_type]);
 
   const handleApprove = async () => {
     if (!selectedContent || !client) return;
@@ -232,11 +332,22 @@ export default function ClientPortal() {
     syncPortalComment(client.id, selectedContent.title, author.name, author.type, commentText).catch(console.error);
   };
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     if (!videoRef.current) return;
-    if (isPlaying) videoRef.current.pause();
-    else videoRef.current.play();
-    setIsPlaying(!isPlaying);
+
+    if (isPlaying) {
+      videoRef.current.pause();
+      setIsPlaying(false);
+      return;
+    }
+
+    try {
+      await videoRef.current.play();
+      setIsPlaying(true);
+    } catch (error) {
+      console.error('[Portal Video] Playback failed', error);
+      setIsPlaying(false);
+    }
   };
 
   const toggleMute = () => {
@@ -738,55 +849,76 @@ export default function ClientPortal() {
                   </div>
                 ) : selectedContent.file_url ? (
                   <div className="relative group">
-                    <video
-                      ref={videoRef}
-                      src={selectedContent.file_url}
-                      className="w-full aspect-video object-contain bg-black"
-                      onPlay={() => setIsPlaying(true)}
-                      onPause={() => setIsPlaying(false)}
-                      onEnded={() => setIsPlaying(false)}
-                      onTimeUpdate={handleTimeUpdate}
-                      onLoadedMetadata={handleTimeUpdate}
-                      onClick={togglePlay}
-                    />
-                    {/* Custom controls */}
-                    <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-12 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {/* Progress bar */}
-                      <div className="cursor-pointer h-1 bg-white/20 rounded-full mb-3 group/bar" onClick={handleSeek}>
-                        <div
-                          className="h-full rounded-full relative transition-all"
-                          style={{
-                            width: videoDuration ? `${(videoProgress / videoDuration) * 100}%` : '0%',
-                            background: `hsl(${clientColor})`,
-                          }}
-                        >
-                          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white opacity-0 group-hover/bar:opacity-100 transition-opacity" />
-                        </div>
+                    {videoLoading ? (
+                      <div className="aspect-video flex flex-col items-center justify-center gap-3 bg-[#0c0c14] text-white/60">
+                        <Loader2 className="w-8 h-8 animate-spin" />
+                        <p className="text-sm">Carregando vídeo...</p>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <button onClick={togglePlay} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
-                            {isPlaying ? <Pause size={18} /> : <Play size={18} fill="white" />}
-                          </button>
-                          <button onClick={toggleMute} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
-                            {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-                          </button>
-                          <span className="text-xs text-white/60 font-mono">
-                            {formatDuration(videoProgress)} / {formatDuration(videoDuration)}
-                          </span>
-                        </div>
-                        <button onClick={toggleFullscreen} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
-                          <Maximize size={16} />
-                        </button>
+                    ) : videoLoadError ? (
+                      <div className="aspect-video flex flex-col items-center justify-center gap-3 bg-[#0c0c14] text-center px-6 text-white/60">
+                        <Film size={36} className="text-white/20" />
+                        <p className="text-sm">{videoLoadError}</p>
                       </div>
-                    </div>
-                    {/* Center play button */}
-                    {!isPlaying && (
-                      <button onClick={togglePlay} className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
-                          <Play size={28} fill="white" className="ml-1" />
+                    ) : resolvedVideoUrl ? (
+                      <>
+                        <video
+                          key={`${selectedContent.id}-${resolvedVideoUrl}`}
+                          ref={videoRef}
+                          src={resolvedVideoUrl}
+                          playsInline
+                          preload="metadata"
+                          className="w-full aspect-video object-contain bg-black"
+                          onPlay={() => setIsPlaying(true)}
+                          onPause={() => setIsPlaying(false)}
+                          onEnded={() => setIsPlaying(false)}
+                          onTimeUpdate={handleTimeUpdate}
+                          onLoadedMetadata={handleTimeUpdate}
+                          onClick={() => void togglePlay()}
+                        />
+                        {/* Custom controls */}
+                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-12 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {/* Progress bar */}
+                          <div className="cursor-pointer h-1 bg-white/20 rounded-full mb-3 group/bar" onClick={handleSeek}>
+                            <div
+                              className="h-full rounded-full relative transition-all"
+                              style={{
+                                width: videoDuration ? `${(videoProgress / videoDuration) * 100}%` : '0%',
+                                background: `hsl(${clientColor})`,
+                              }}
+                            >
+                              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white opacity-0 group-hover/bar:opacity-100 transition-opacity" />
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <button onClick={() => void togglePlay()} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
+                                {isPlaying ? <Pause size={18} /> : <Play size={18} fill="white" />}
+                              </button>
+                              <button onClick={toggleMute} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
+                                {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                              </button>
+                              <span className="text-xs text-white/60 font-mono">
+                                {formatDuration(videoProgress)} / {formatDuration(videoDuration)}
+                              </span>
+                            </div>
+                            <button onClick={toggleFullscreen} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
+                              <Maximize size={16} />
+                            </button>
+                          </div>
                         </div>
-                      </button>
+                        {/* Center play button */}
+                        {!isPlaying && (
+                          <button onClick={() => void togglePlay()} className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
+                              <Play size={28} fill="white" className="ml-1" />
+                            </div>
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <div className="aspect-video flex items-center justify-center bg-[#0c0c14]">
+                        <Film size={64} className="text-white/10" />
+                      </div>
                     )}
                   </div>
                 ) : (
@@ -1014,43 +1146,16 @@ function ContentRow({ label, items, clientColor, onSelect, delay = 0 }: {
   );
 }
 
-/* ── Reels Card with hover/touch video preview ── */
+/* ── Reels Card with smart preview ── */
 function ReelsCard({ content, clientColor, onSelect }: {
   content: PortalContent;
   clientColor: string;
   onSelect: (c: PortalContent) => void;
 }) {
-  const videoPreviewRef = useRef<HTMLVideoElement>(null);
-  const [videoReady, setVideoReady] = useState(false);
-
-  const isVideo = content.content_type !== 'arte' && !!content.file_url;
+  const isVideo = isPortalVideo(content);
   const Icon = CONTENT_TYPE_ICONS[content.content_type] || Film;
   const statusStyle = STATUS_COLORS[content.status];
-
-  // Auto-play first 5s in loop
-  useEffect(() => {
-    const vid = videoPreviewRef.current;
-    if (!vid || !isVideo) return;
-
-    const handleTimeUpdate = () => {
-      if (vid.currentTime >= 5) {
-        vid.currentTime = 0;
-      }
-    };
-
-    const startAutoplay = () => {
-      setVideoReady(true);
-      vid.play().catch(() => {});
-    };
-
-    vid.addEventListener('timeupdate', handleTimeUpdate);
-    vid.addEventListener('canplay', startAutoplay, { once: true });
-
-    return () => {
-      vid.removeEventListener('timeupdate', handleTimeUpdate);
-      vid.removeEventListener('canplay', startAutoplay);
-    };
-  }, [isVideo]);
+  const canAutoplayPreview = isVideo && !!content.file_url && !shouldProxyPortalVideo(content.file_url);
 
   return (
     <button
@@ -1059,7 +1164,6 @@ function ReelsCard({ content, clientColor, onSelect }: {
       style={{ '--tw-ring-color': `hsl(${clientColor} / 0.5)` } as any}
     >
       <div className="aspect-[9/16] relative overflow-hidden">
-        {/* Fallback thumbnail (behind video) */}
         {content.thumbnail_url ? (
           <img src={content.thumbnail_url} alt={content.title} className="w-full h-full object-cover" />
         ) : content.file_url && content.content_type === 'arte' ? (
@@ -1070,27 +1174,23 @@ function ReelsCard({ content, clientColor, onSelect }: {
           </div>
         )}
 
-        {/* Auto-playing 5s loop video preview */}
-        {isVideo && (
+        {canAutoplayPreview && (
           <video
-            ref={videoPreviewRef}
             src={content.file_url!}
             muted
             playsInline
+            autoPlay
+            loop
             preload="metadata"
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
-              videoReady ? 'opacity-100' : 'opacity-0'
-            }`}
+            className="absolute inset-0 w-full h-full object-cover"
           />
         )}
 
-        {/* Gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
 
-        {/* Play icon overlay for non-video content */}
-        {isVideo && !videoReady && (
+        {isVideo && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-10 h-10 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center transition-colors group-hover:bg-white/25">
               <Play size={18} fill="white" className="ml-0.5" />
             </div>
           </div>
@@ -1104,20 +1204,17 @@ function ReelsCard({ content, clientColor, onSelect }: {
           </div>
         )}
 
-        {/* Duration */}
         {content.duration_seconds > 0 && (
           <span className="absolute bottom-8 right-1.5 bg-black/80 text-[10px] px-1.5 py-0.5 rounded font-mono text-white/80">
             {Math.floor(content.duration_seconds / 60)}:{(content.duration_seconds % 60).toString().padStart(2, '0')}
           </span>
         )}
 
-        {/* Status */}
         <div className={`absolute top-1.5 left-1.5 flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold ${statusStyle?.bg} ${statusStyle?.text} backdrop-blur-sm`}>
           <span className={`w-1 h-1 rounded-full ${statusStyle?.dot}`} />
           {STATUS_LABELS[content.status]}
         </div>
 
-        {/* Title at bottom over gradient */}
         <div className="absolute bottom-0 inset-x-0 p-2.5">
           <p className="text-xs font-medium truncate text-white/90">{content.title}</p>
           <span className="text-[10px] text-white/40 mt-0.5 block">{CONTENT_TYPE_LABELS[content.content_type]}</span>

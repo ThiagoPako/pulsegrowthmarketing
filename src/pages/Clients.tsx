@@ -101,6 +101,7 @@ export default function Clients() {
   const [contractStartDate, setContractStartDate] = useState('');
   const [autoRenewal, setAutoRenewal] = useState(false);
   const [contractDurationMonths, setContractDurationMonths] = useState(12);
+  const [showMetrics, setShowMetrics] = useState(true);
   
   // Financial contract state
   const [contractValue, setContractValue] = useState(0);

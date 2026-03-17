@@ -47,7 +47,7 @@ interface PortalComment {
 interface ClientData {
   id: string; company_name: string; logo_url: string | null; color: string;
   weekly_reels: number; weekly_creatives: number; weekly_stories: number;
-  monthly_recordings: number; plan_id: string | null;
+  monthly_recordings: number; plan_id: string | null; show_metrics: boolean;
 }
 
 type TabView = 'library' | 'metrics' | 'criativa';

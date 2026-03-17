@@ -300,32 +300,9 @@ ${contextData}`,
 
     messages.push({ role: "user", content: question });
 
-    // Call AI (supports both Lovable Gateway and Google Gemini)
-    const ai = getAiConfig();
-    const resolvedModel = resolveModel(selectedModel, ai.provider);
-
-    const aiResponse = await fetch(ai.url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${ai.key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: resolvedModel,
-        messages,
-        temperature: 0.3,
-        max_tokens: 2000,
-      }),
-    });
-
-    if (!aiResponse.ok) {
-      const err = await aiResponse.text();
-      throw new Error(`AI Gateway error [${aiResponse.status}]: ${err}`);
-    }
-
-    const aiData = await aiResponse.json();
-    const answer =
-      aiData.choices?.[0]?.message?.content || "Não foi possível gerar uma resposta.";
+    // Call AI (supports Gemini, OpenAI, Claude)
+    const ai = getAiConfig(aiProvider);
+    const answer = await callAi(ai, selectedModel, messages, { temperature: 0.3, max_tokens: 2000 });
 
     // Save messages to chat history
     await supabase.from("financial_chat_messages").insert([

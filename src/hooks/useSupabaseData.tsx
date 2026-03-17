@@ -72,7 +72,7 @@ function clientToRow(c: Client) {
     monthly_recordings: c.monthlyRecordings,
     niche: c.niche || '',
     client_login: c.clientLogin || '',
-    client_password: c.clientPassword || '',
+    // client_password removed for security
     drive_link: c.driveLink || '',
     drive_fotos: c.driveFotos || '',
     drive_identidade_visual: c.driveIdentidadeVisual || '',

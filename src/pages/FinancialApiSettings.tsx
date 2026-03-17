@@ -189,6 +189,11 @@ export default function FinancialApiSettings() {
       api_type: integration.api_type,
       endpoint_url: integration.endpoint_url || '',
       notes: integration.config?.notes || '',
+      metaAppId: integration.config?.meta_app_id || '',
+      metaAppSecret: '',
+      metaPageToken: '',
+      metaIgBusinessId: integration.config?.meta_ig_business_id || '',
+      metaPageId: integration.config?.meta_page_id || '',
     });
     setShowDialog(true);
   };

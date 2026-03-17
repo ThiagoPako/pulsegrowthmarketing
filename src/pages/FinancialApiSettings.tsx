@@ -47,15 +47,70 @@ const PROVIDERS = [
   { value: 'google_ads', label: 'Google Ads', icon: '🔍' },
   { value: 'google_analytics', label: 'Google Analytics', icon: '📈' },
   { value: 'stripe', label: 'Stripe', icon: '💳' },
-  { value: 'lovable_ai', label: 'Lovable AI (Gemini)', icon: '🤖' },
   { value: 'custom', label: 'API Personalizada', icon: '🔧' },
 ];
 
-const AI_MODELS = [
-  { value: 'google/gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', desc: 'Mais rápido e econômico. Ideal para tarefas simples.' },
-  { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash', desc: 'Equilíbrio entre velocidade e qualidade.' },
-  { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro', desc: 'Máxima qualidade. Melhor raciocínio e precisão.' },
-  { value: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash (Preview)', desc: 'Última geração. Rápido e capaz.' },
+const AI_PROVIDERS = [
+  {
+    value: 'gemini',
+    label: 'Google Gemini',
+    icon: '🔮',
+    desc: 'IA do Google. Ótimo custo-benefício, suporte a texto e imagem.',
+    keyName: 'GOOGLE_GEMINI_API_KEY',
+    getKeyUrl: 'https://aistudio.google.com/apikey',
+    docsUrl: 'https://ai.google.dev/gemini-api/docs',
+    steps: [
+      'Acesse <a href="https://aistudio.google.com/apikey" target="_blank" class="text-primary underline">Google AI Studio</a>',
+      'Clique em <strong>"Create API Key"</strong>',
+      'Copie a chave e cole abaixo',
+    ],
+    models: [
+      { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', desc: 'Mais rápido e econômico' },
+      { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', desc: 'Equilíbrio velocidade/qualidade' },
+      { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', desc: 'Máxima qualidade e raciocínio' },
+    ],
+    defaultModel: 'gemini-2.5-flash-lite',
+  },
+  {
+    value: 'openai',
+    label: 'OpenAI (GPT)',
+    icon: '🧠',
+    desc: 'ChatGPT e GPT-4. Excelente raciocínio e precisão.',
+    keyName: 'OPENAI_API_KEY',
+    getKeyUrl: 'https://platform.openai.com/api-keys',
+    docsUrl: 'https://platform.openai.com/docs',
+    steps: [
+      'Acesse <a href="https://platform.openai.com/api-keys" target="_blank" class="text-primary underline">OpenAI Platform</a>',
+      'Clique em <strong>"Create new secret key"</strong>',
+      'Copie a chave e cole abaixo',
+    ],
+    models: [
+      { value: 'gpt-4o-mini', label: 'GPT-4o Mini', desc: 'Rápido e econômico' },
+      { value: 'gpt-4o', label: 'GPT-4o', desc: 'Melhor custo-benefício' },
+      { value: 'gpt-4-turbo', label: 'GPT-4 Turbo', desc: 'Alta performance' },
+    ],
+    defaultModel: 'gpt-4o-mini',
+  },
+  {
+    value: 'claude',
+    label: 'Anthropic Claude',
+    icon: '🤖',
+    desc: 'Claude da Anthropic. Excelente em textos longos e análise.',
+    keyName: 'ANTHROPIC_API_KEY',
+    getKeyUrl: 'https://console.anthropic.com/settings/keys',
+    docsUrl: 'https://docs.anthropic.com',
+    steps: [
+      'Acesse <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-primary underline">Anthropic Console</a>',
+      'Clique em <strong>"Create Key"</strong>',
+      'Copie a chave e cole abaixo',
+    ],
+    models: [
+      { value: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku', desc: 'Mais rápido e barato' },
+      { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet', desc: 'Melhor equilíbrio' },
+      { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus', desc: 'Máxima capacidade' },
+    ],
+    defaultModel: 'claude-3-haiku-20240307',
+  },
 ];
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: any }> = {

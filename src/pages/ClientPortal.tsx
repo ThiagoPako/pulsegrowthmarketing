@@ -54,6 +54,41 @@ interface ClientData {
 
 type TabView = 'library' | 'metrics' | 'criativa' | 'agenda';
 
+const PORTAL_MEDIA_PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/portal-media-proxy`;
+const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
+
+function isPortalVideo(content: Pick<PortalContent, 'content_type' | 'file_url'>) {
+  return content.content_type !== 'arte' && !!content.file_url;
+}
+
+function shouldProxyPortalVideo(url: string) {
+  return url.startsWith(VPS_UPLOADS_URL);
+}
+
+async function createPortalVideoObjectUrl(url: string) {
+  const response = await fetch(PORTAL_MEDIA_PROXY_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+    },
+    body: JSON.stringify({ url }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Falha ao carregar o vídeo (${response.status})`);
+  }
+
+  const blob = await response.blob();
+
+  if (!blob.size) {
+    throw new Error('O vídeo retornou vazio.');
+  }
+
+  return URL.createObjectURL(blob);
+}
+
 export default function ClientPortal() {
   const { clientId: paramSlug } = useParams<{ clientId: string }>();
   const navigate = useNavigate();
@@ -72,6 +107,9 @@ export default function ClientPortal() {
   const [isMuted, setIsMuted] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
+  const [resolvedVideoUrl, setResolvedVideoUrl] = useState<string | null>(null);
+  const [videoLoading, setVideoLoading] = useState(false);
+  const [videoLoadError, setVideoLoadError] = useState<string | null>(null);
   const commentsEndRef = useRef<HTMLDivElement>(null);
 
   // Auth state: team member or client login

@@ -194,18 +194,21 @@ export default function FinancialRevenues() {
         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
           <Button size="sm" variant="outline" onClick={handleGenerate} className="shadow-sm"><RefreshCw size={14} className="mr-1" /> Gerar Receitas</Button>
         </motion.div>
-        {pendingRevenues.length > 0 && (
-          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-            <Button size="sm" onClick={handleSendAllBilling} disabled={sendingAll} className="gap-1.5 shadow-sm bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70">
-              {sendingAll ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <img src={cobrarTodosImg} alt="Cobrar Todos" className="w-6 h-6 rounded-full object-cover" />
-              )}
-              Cobrar Todos ({pendingRevenues.length})
-            </Button>
-          </motion.div>
-        )}
+        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+          <Button
+            size="sm"
+            onClick={handleSendAllBilling}
+            disabled={sendingAll || pendingRevenues.length === 0}
+            className="gap-1.5 shadow-sm bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+          >
+            {sendingAll ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <img src={cobrarTodosImg} alt="Cobrar Todos" className="w-6 h-6 rounded-full object-cover" />
+            )}
+            Cobrar Todos {pendingRevenues.length > 0 ? `(${pendingRevenues.length})` : ''}
+          </Button>
+        </motion.div>
       </motion.div>
 
       {/* KPI Summary Cards */}

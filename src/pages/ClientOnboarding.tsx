@@ -170,9 +170,13 @@ export default function ClientOnboarding() {
     fetchData();
   }, [clientId]);
 
+  // Each recording = 90 minutes (1h30min)
+  const RECORDING_DURATION = 90;
+  const BUFFER = 30;
+
   const availableSlots = useMemo(() => {
     if (!selectedVm || !settings) return [];
-    const duration = settings.recording_duration;
+    const duration = RECORDING_DURATION;
     const slots: { day: DayOfWeek; time: string }[] = [];
     const shiftRanges: number[][] = [];
     if (preferredShift !== 'turnoB') shiftRanges.push([timeToMinutes(settings.shift_a_start), timeToMinutes(settings.shift_a_end)]);
@@ -180,7 +184,7 @@ export default function ClientOnboarding() {
 
     for (const day of settings.work_days as DayOfWeek[]) {
       for (const [sStart, sEnd] of shiftRanges) {
-        for (let t = sStart; t + duration <= sEnd; t += duration + 30) {
+        for (let t = sStart; t + duration <= sEnd; t += duration + BUFFER) {
           const timeStr = minutesToTime(t);
           const occupied = existingClients.some(c =>
             c.id !== clientId && c.videomaker_id === selectedVm && c.fixed_day === day && c.fixed_time === timeStr
@@ -191,6 +195,15 @@ export default function ClientOnboarding() {
     }
     return slots;
   }, [selectedVm, settings, existingClients, preferredShift, clientId]);
+
+  // Count available slots per day to support stacking
+  const slotsPerDay = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of availableSlots) {
+      map.set(s.day, (map.get(s.day) || 0) + 1);
+    }
+    return map;
+  }, [availableSlots]);
 
   const slotsForDay = useMemo(() => availableSlots.filter(s => s.day === fixedDay), [availableSlots, fixedDay]);
   const backupSlotsForDay = useMemo(() => availableSlots.filter(s => s.day === backupDay && s.day !== fixedDay), [availableSlots, backupDay, fixedDay]);
@@ -229,7 +242,7 @@ export default function ClientOnboarding() {
           fixed_time: fixedTime,
           backup_day: backupDay,
           backup_time: backupTime || '14:00',
-          monthly_recordings: selectedWeeks.length,
+          monthly_recordings: monthlyRecordings,
           selected_weeks: selectedWeeks,
           accepts_extra: acceptsExtra,
           extra_content_types: extraTypes,
@@ -395,9 +408,9 @@ export default function ClientOnboarding() {
                 ? (plan.name.toLowerCase().includes('booster') || plan.name.toLowerCase().includes('boost') ? 3 
                   : plan.name.toLowerCase().includes('premium') ? 4 
                   : plan.recording_sessions || 4)
-                : 4;
+                : client.monthly_recordings || 4;
               
-              const frequencyOptions = Array.from({ length: maxWeeks }, (_, i) => i + 1);
+              const frequencyOptions = Array.from({ length: Math.min(maxWeeks, 8) }, (_, i) => i + 1);
               
               const toggleWeek = (week: number) => {
                 if (selectedWeeks.includes(week)) {
@@ -415,7 +428,10 @@ export default function ClientOnboarding() {
                 <div className="space-y-3">
                   <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
                     <p className="text-sm font-semibold flex items-center gap-2">
-                      <Video size={16} className="text-primary" /> Quantas vezes por mês você tem disponibilidade para gravar?
+                      <Video size={16} className="text-primary" /> Quantas gravações por mês?
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Cada gravação tem duração de <strong className="text-foreground">1h30min</strong>. Você pode agendar várias no mesmo dia.
                     </p>
                     <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(frequencyOptions.length, 4)}, 1fr)` }}>
                       {frequencyOptions.map(n => (
@@ -423,7 +439,9 @@ export default function ClientOnboarding() {
                           key={n}
                           onClick={() => {
                             setMonthlyRecordings(n);
-                            setSelectedWeeks(prev => prev.slice(0, n));
+                            if (n <= 4) {
+                              setSelectedWeeks(prev => prev.slice(0, n));
+                            }
                           }}
                           className={`p-3 rounded-xl border-2 text-center transition-all ${
                             monthlyRecordings === n
@@ -436,43 +454,49 @@ export default function ClientOnboarding() {
                         </button>
                       ))}
                     </div>
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                      <Clock size={10} /> {monthlyRecordings} gravação(ões) × 1h30min = {Math.floor(monthlyRecordings * 90 / 60)}h{(monthlyRecordings * 90) % 60 > 0 ? `${(monthlyRecordings * 90) % 60}min` : ''}/mês
+                    </p>
                   </div>
 
-                  <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
-                    <p className="text-sm font-semibold flex items-center gap-2">
-                      <Calendar size={16} className="text-primary" /> Em quais semanas do mês prefere gravar?
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Selecione {monthlyRecordings} semana{monthlyRecordings > 1 ? 's' : ''}.
-                    </p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {[1, 2, 3, 4].map(n => (
-                        <button
-                          key={n}
-                          onClick={() => toggleWeek(n)}
-                          className={`p-3 rounded-xl border-2 text-center transition-all ${
-                            selectedWeeks.includes(n)
-                              ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
-                              : selectedWeeks.length >= monthlyRecordings
-                                ? 'border-border opacity-40 cursor-not-allowed'
-                                : 'border-border hover:border-primary/40'
-                          }`}
-                        >
-                          <span className="text-lg font-bold block">{n}ª</span>
-                          <span className="text-[10px] text-muted-foreground">semana</span>
-                        </button>
-                      ))}
+                  {monthlyRecordings > 1 && (
+                    <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
+                      <p className="text-sm font-semibold flex items-center gap-2">
+                        <Calendar size={16} className="text-primary" /> Em quais semanas do mês prefere gravar?
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Selecione até {Math.min(monthlyRecordings, 4)} semana{monthlyRecordings > 1 ? 's' : ''}. 
+                        {monthlyRecordings > 4 && ' Se tiver mais gravações que semanas, elas serão empilhadas no mesmo dia.'}
+                      </p>
+                      <div className="grid grid-cols-4 gap-2">
+                        {[1, 2, 3, 4].map(n => (
+                          <button
+                            key={n}
+                            onClick={() => toggleWeek(n)}
+                            className={`p-3 rounded-xl border-2 text-center transition-all ${
+                              selectedWeeks.includes(n)
+                                ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                                : selectedWeeks.length >= Math.min(monthlyRecordings, 4)
+                                  ? 'border-border opacity-40 cursor-not-allowed'
+                                  : 'border-border hover:border-primary/40'
+                            }`}
+                          >
+                            <span className="text-lg font-bold block">{n}ª</span>
+                            <span className="text-[10px] text-muted-foreground">semana</span>
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground text-center">
+                        {selectedWeeks.length}/{Math.min(monthlyRecordings, 4)} selecionada{selectedWeeks.length > 1 ? 's' : ''} 
+                        {selectedWeeks.length > 0 && <> — {selectedWeeks.map(w => WEEK_LABELS[w-1]).join(', ')}</>}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground text-center">
-                      {selectedWeeks.length}/{monthlyRecordings} selecionada{selectedWeeks.length > 1 ? 's' : ''} 
-                      {selectedWeeks.length > 0 && <> — {selectedWeeks.map(w => WEEK_LABELS[w-1]).join(', ')}</>}
-                    </p>
-                  </div>
+                  )}
 
                   <div className="p-3 rounded-lg bg-accent/50 border border-accent text-xs text-muted-foreground">
                     <p>
-                      <strong className="text-foreground">💡 Importante:</strong> Gravar menos semanas por mês <strong>não significa produzir menos conteúdo</strong>. 
-                      Vamos otimizar cada sessão para extrair o máximo de material.
+                      <strong className="text-foreground">💡 Importante:</strong> Você pode concentrar várias gravações no mesmo dia, 
+                      desde que haja disponibilidade na agenda do videomaker. Cada sessão ocupa <strong>1h30min + 30min de intervalo</strong>.
                     </p>
                   </div>
                 </div>
@@ -526,7 +550,12 @@ export default function ClientOnboarding() {
                     >
                       <span className="text-sm font-semibold block">{DAY_LABELS[bd.day]}</span>
                       <span className="text-xs text-muted-foreground">{bd.count} vagas livres</span>
-                      <Badge variant="secondary" className="mt-1 text-[10px]">{i === 0 ? 'Melhor opção' : '2ª opção'}</Badge>
+                      {monthlyRecordings > 1 && bd.count >= monthlyRecordings && (
+                        <Badge variant="secondary" className="mt-1 text-[10px] bg-primary/15 text-primary border-0">
+                          Cabe {monthlyRecordings} gravações
+                        </Badge>
+                      )}
+                      {monthlyRecordings <= 1 && <Badge variant="secondary" className="mt-1 text-[10px]">{i === 0 ? 'Melhor opção' : '2ª opção'}</Badge>}
                     </button>
                   ))}
                 </div>
@@ -535,6 +564,26 @@ export default function ClientOnboarding() {
 
             <div className="space-y-3">
               <p className="text-xs text-muted-foreground font-medium">Selecione o dia e horário fixo de gravação:</p>
+              
+              {/* Stacking info */}
+              {monthlyRecordings > 1 && fixedDay && (
+                <div className={`p-3 rounded-lg text-xs flex items-start gap-2 ${
+                  (slotsPerDay.get(fixedDay) || 0) >= monthlyRecordings 
+                    ? 'bg-primary/5 border border-primary/20 text-primary' 
+                    : 'bg-muted border border-border text-muted-foreground'
+                }`}>
+                  <Calendar size={14} className="shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium">
+                      {(slotsPerDay.get(fixedDay) || 0) >= monthlyRecordings 
+                        ? `✅ Este dia comporta todas as ${monthlyRecordings} gravações consecutivas!`
+                        : `Este dia tem ${slotsPerDay.get(fixedDay) || 0} vaga(s) — para ${monthlyRecordings} gravações, distribua entre semanas diferentes.`
+                      }
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label>Dia da Semana</Label>
@@ -543,13 +592,18 @@ export default function ClientOnboarding() {
                     <SelectContent>
                       {(settings.work_days as string[]).map(d => {
                         const count = availableSlots.filter(s => s.day === d).length;
-                        return <SelectItem key={d} value={d}>{DAY_LABELS[d]} ({count} vagas)</SelectItem>;
+                        const canStack = count >= monthlyRecordings;
+                        return (
+                          <SelectItem key={d} value={d}>
+                            {DAY_LABELS[d]} ({count} vagas){canStack && monthlyRecordings > 1 ? ' ⭐' : ''}
+                          </SelectItem>
+                        );
                       })}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label>Horário</Label>
+                  <Label>Horário Inicial</Label>
                   {slotsForDay.length > 0 ? (
                     <Select value={fixedTime} onValueChange={setFixedTime}>
                       <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
@@ -557,7 +611,7 @@ export default function ClientOnboarding() {
                         {slotsForDay.map(s => (
                           <SelectItem key={s.time} value={s.time}>
                             <span className="flex items-center gap-1">
-                              <Clock size={12} /> {s.time} – {minutesToTime(timeToMinutes(s.time) + (settings?.recording_duration || 90))}
+                              <Clock size={12} /> {s.time} – {minutesToTime(timeToMinutes(s.time) + RECORDING_DURATION)}
                             </span>
                           </SelectItem>
                         ))}

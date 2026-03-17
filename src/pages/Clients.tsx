@@ -522,18 +522,8 @@ export default function Clients() {
         <Input value={form.responsiblePerson} onChange={e => setForm({ ...form, responsiblePerson: e.target.value })} placeholder="Ex: João Silva" />
       </div>
       <div className="space-y-1">
-        <Label>Telefone</Label>
-        <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="(62) 99999-9999" />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label>Email</Label>
-          <Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="contato@empresa.com" />
-        </div>
-        <div className="space-y-1">
-          <Label>Cidade</Label>
-          <Input value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} placeholder="Goiânia - GO" />
-        </div>
+        <Label>Cidade</Label>
+        <Input value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} placeholder="Goiânia - GO" />
       </div>
       <div className="space-y-1">
         <Label>WhatsApp do Cliente *</Label>
@@ -917,7 +907,7 @@ export default function Clients() {
             <p className="text-xs text-primary flex items-center gap-1"><Info size={12} /> Definido pelo plano selecionado</p>
           )}
           <div className="grid grid-cols-4 gap-2">
-            {[1, 2, 3, 4].map(n => (
+            {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
               <button
                 key={n}
                 type="button"

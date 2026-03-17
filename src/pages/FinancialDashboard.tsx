@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
 import { generateDeliveryReport, resolvePaymentInfo } from '@/lib/billingReport';
+import ClientLogo from '@/components/ClientLogo';
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
 
 const fadeUp = {

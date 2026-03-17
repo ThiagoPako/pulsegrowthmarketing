@@ -187,6 +187,38 @@ export async function syncContentTaskColumnChange(
       _type: 'review',
       _link: '/entregas-social',
     });
+
+    // Auto-upsert to client_portal_contents with 'revisao_interna' status
+    // This makes the video visible to team in the portal but NOT to the client
+    if (ctx.editedVideoLink) {
+      const now = new Date();
+      const { data: existing } = await supabase
+        .from('client_portal_contents')
+        .select('id')
+        .eq('client_id', ctx.clientId)
+        .eq('title', ctx.title)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (existing?.length) {
+        await supabase.from('client_portal_contents').update({
+          file_url: ctx.editedVideoLink,
+          status: 'revisao_interna',
+          updated_at: now.toISOString(),
+        } as any).eq('id', existing[0].id);
+      } else {
+        await supabase.from('client_portal_contents').insert({
+          client_id: ctx.clientId,
+          title: ctx.title,
+          content_type: ctx.contentType,
+          file_url: ctx.editedVideoLink,
+          status: 'revisao_interna',
+          season_month: now.getMonth() + 1,
+          season_year: now.getFullYear(),
+          uploaded_by: ctx.userId || null,
+        } as any);
+      }
+    }
   }
 
   if (newColumn === 'alteracao') {

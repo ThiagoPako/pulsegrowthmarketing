@@ -105,7 +105,7 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
     setLoading(true);
     const { data, error } = await supabase
       .from('scripts')
-      .select('id, title, content, content_format, video_type, created_at, created_by, priority, client_priority')
+      .select('id, title, content, caption, content_format, video_type, created_at, created_by, priority, client_priority')
       .eq('client_id', clientId)
       .eq('is_endomarketing', false)
       .order('created_at', { ascending: false });

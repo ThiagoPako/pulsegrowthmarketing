@@ -364,7 +364,8 @@ export default function SocialMediaDeliveries() {
   };
 
   const handleDelete = async (id: string) => {
-    await supabase.from('social_media_deliveries').delete().eq('id', id);
+    const { deleteSocialDelivery } = await import('@/lib/contentDeleteSync');
+    await deleteSocialDelivery(id);
     toast.success('Entrega removida'); fetchData();
   };
 

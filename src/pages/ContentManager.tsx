@@ -244,7 +244,8 @@ export default function ContentManager() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este conteúdo?')) return;
-    await supabase.from('client_portal_contents').delete().eq('id', id);
+    const { deletePortalContent } = await import('@/lib/contentDeleteSync');
+    await deletePortalContent(id);
     setContents(prev => prev.filter(c => c.id !== id));
     toast.success('Conteúdo excluído.');
   };

@@ -81,11 +81,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  const { hasModuleAccess } = useMyPermissions();
 
   const filteredCategories = navCategories
     .map(cat => ({
       ...cat,
-      items: cat.items.filter(item => currentUser && item.roles.includes(currentUser.role)),
+      items: cat.items.filter(item => {
+        if (!currentUser) return false;
+        // First check role-based access
+        if (!item.roles.includes(currentUser.role)) return false;
+        // Then check custom module permissions (admin always passes)
+        if (currentUser.role === 'admin') return true;
+        return hasModuleAccess(item.path);
+      }),
     }))
     .filter(cat => cat.items.length > 0);
 

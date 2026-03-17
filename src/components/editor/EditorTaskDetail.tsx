@@ -21,6 +21,7 @@ import {
 import ClientLogo from '@/components/ClientLogo';
 import { highlightQuotes } from '@/lib/highlightQuotes';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
+import { uploadFileToVps } from '@/services/vpsApi';
 import type { EditorTask } from '@/pages/EditorDashboard';
 import { getDeadlineStatus, getTypeConfig } from '@/pages/EditorDashboard';
 

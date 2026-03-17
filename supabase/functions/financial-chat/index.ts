@@ -7,41 +7,71 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-// Support both Lovable AI Gateway and Google Gemini API directly
-function getAiConfig() {
-  const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+// Support Google Gemini, OpenAI, and Anthropic Claude
+function getAiConfig(provider?: string) {
   const geminiKey = Deno.env.get("GOOGLE_GEMINI_API_KEY");
-  
-  if (lovableKey) {
-    return {
-      url: "https://ai.gateway.lovable.dev/v1/chat/completions",
-      key: lovableKey,
-      provider: "lovable" as const,
-    };
+  const openaiKey = Deno.env.get("OPENAI_API_KEY");
+  const claudeKey = Deno.env.get("ANTHROPIC_API_KEY");
+  // Fallback: Lovable AI (only works inside Lovable)
+  const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+
+  if (provider === "openai" && openaiKey) {
+    return { url: "https://api.openai.com/v1/chat/completions", key: openaiKey, provider: "openai" as const };
   }
-  if (geminiKey) {
-    return {
-      url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-      key: geminiKey,
-      provider: "gemini" as const,
-    };
+  if (provider === "claude" && claudeKey) {
+    return { url: "https://api.anthropic.com/v1/messages", key: claudeKey, provider: "claude" as const };
   }
-  throw new Error("Nenhuma API key de IA configurada. Configure LOVABLE_API_KEY ou GOOGLE_GEMINI_API_KEY.");
+  if (provider === "gemini" && geminiKey) {
+    return { url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: geminiKey, provider: "gemini" as const };
+  }
+  // Auto-detect
+  if (geminiKey) return { url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: geminiKey, provider: "gemini" as const };
+  if (openaiKey) return { url: "https://api.openai.com/v1/chat/completions", key: openaiKey, provider: "openai" as const };
+  if (claudeKey) return { url: "https://api.anthropic.com/v1/messages", key: claudeKey, provider: "claude" as const };
+  if (lovableKey) return { url: "https://ai.gateway.lovable.dev/v1/chat/completions", key: lovableKey, provider: "lovable" as const };
+
+  throw new Error("Nenhuma API key de IA configurada. Configure GOOGLE_GEMINI_API_KEY, OPENAI_API_KEY ou ANTHROPIC_API_KEY.");
 }
 
-// Map model names between providers
-function resolveModel(model: string, provider: "lovable" | "gemini"): string {
-  if (provider === "gemini") {
-    // Strip "google/" prefix for native Gemini API
-    const map: Record<string, string> = {
-      "google/gemini-2.5-flash-lite": "gemini-2.5-flash-lite",
-      "google/gemini-2.5-flash": "gemini-2.5-flash",
-      "google/gemini-2.5-pro": "gemini-2.5-pro",
-      "google/gemini-3-flash-preview": "gemini-3-flash-preview",
-    };
-    return map[model] || model.replace("google/", "");
+async function callAi(ai: ReturnType<typeof getAiConfig>, model: string, messages: any[], options: { temperature?: number; max_tokens?: number } = {}) {
+  const { temperature = 0.3, max_tokens = 2000 } = options;
+
+  if (ai.provider === "claude") {
+    // Anthropic has a different API format
+    const systemMsg = messages.find((m: any) => m.role === "system");
+    const otherMsgs = messages.filter((m: any) => m.role !== "system");
+
+    const res = await fetch(ai.url, {
+      method: "POST",
+      headers: {
+        "x-api-key": ai.key,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens,
+        ...(systemMsg ? { system: systemMsg.content } : {}),
+        messages: otherMsgs,
+      }),
+    });
+    if (!res.ok) { const e = await res.text(); throw new Error(`Claude error [${res.status}]: ${e}`); }
+    const data = await res.json();
+    return data.content?.[0]?.text || "";
   }
-  return model;
+
+  // OpenAI-compatible (Gemini, OpenAI, Lovable)
+  const res = await fetch(ai.url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${ai.key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ model, messages, temperature, max_tokens }),
+  });
+  if (!res.ok) { const e = await res.text(); throw new Error(`AI error [${res.status}]: ${e}`); }
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || "";
 }
 
 serve(async (req) => {

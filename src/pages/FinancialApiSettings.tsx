@@ -107,12 +107,20 @@ export default function FinancialApiSettings() {
       toast.error('Preencha nome e provedor');
       return;
     }
+    const configData: any = { notes: form.notes };
+    if (form.provider === 'meta_ads') {
+      configData.meta_app_id = form.metaAppId;
+      configData.meta_app_secret = form.metaAppSecret ? '••••' + form.metaAppSecret.slice(-4) : '';
+      configData.meta_page_token = form.metaPageToken ? '••••' + form.metaPageToken.slice(-4) : '';
+      configData.meta_ig_business_id = form.metaIgBusinessId;
+      configData.meta_page_id = form.metaPageId;
+    }
     const payload: any = {
       name: form.name,
       provider: form.provider,
       api_type: form.api_type,
-      endpoint_url: form.endpoint_url,
-      config: { notes: form.notes },
+      endpoint_url: form.provider === 'meta_ads' ? 'https://graph.facebook.com/v21.0' : form.endpoint_url,
+      config: configData,
       updated_at: new Date().toISOString(),
     };
 

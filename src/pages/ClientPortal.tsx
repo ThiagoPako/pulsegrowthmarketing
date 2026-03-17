@@ -435,9 +435,11 @@ export default function ClientPortal() {
         <button onClick={() => setActiveTab('criativa')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'criativa' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'criativa' ? { borderColor: `hsl(${clientColor})` } : {}}>
           Zona Criativa
         </button>
-        <button onClick={() => setActiveTab('metrics')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'metrics' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'metrics' ? { borderColor: `hsl(${clientColor})` } : {}}>
-          Métricas
-        </button>
+        {(client.show_metrics || isTeamMember) && (
+          <button onClick={() => setActiveTab('metrics')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'metrics' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'metrics' ? { borderColor: `hsl(${clientColor})` } : {}}>
+            Métricas
+          </button>
+        )}
       </div>
 
       <AnimatePresence mode="wait">

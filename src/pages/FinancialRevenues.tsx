@@ -286,22 +286,63 @@ export default function FinancialRevenues() {
         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
           <Button size="sm" variant="outline" onClick={handleGenerate} className="shadow-sm"><RefreshCw size={14} className="mr-1" /> Gerar Receitas</Button>
         </motion.div>
-        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-          <Button
-            size="sm"
-            onClick={handleSendAllBilling}
-            disabled={sendingAll || pendingRevenues.length === 0}
-            className="gap-1.5 shadow-sm bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
-          >
-            {sendingAll ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <img src={cobrarTodosImg} alt="Cobrar Todos" className="w-6 h-6 rounded-full object-cover" />
-            )}
-            Cobrar Todos {pendingRevenues.length > 0 ? `(${pendingRevenues.length})` : ''}
-          </Button>
-        </motion.div>
       </motion.div>
+
+      {/* ── BIG Cobrar Todos Button ── */}
+      <AnimatePresence>
+        {pendingRevenues.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 20 }}
+            transition={{ type: 'spring', stiffness: 200, damping: 18 }}
+            className="flex justify-center"
+          >
+            <motion.button
+              onClick={handleBigCobrarClick}
+              disabled={sendingAll}
+              className="relative group flex items-center gap-4 px-8 py-4 rounded-2xl bg-gradient-to-r from-primary via-primary/90 to-primary/70 text-primary-foreground font-bold text-lg shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 transition-shadow disabled:opacity-60 overflow-hidden"
+              whileHover={{ scale: 1.05, y: -2 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              {/* Shimmer effect */}
+              <motion.div
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12"
+                animate={{ x: ['-200%', '200%'] }}
+                transition={{ repeat: Infinity, duration: 2.5, ease: 'linear' }}
+              />
+              {/* Pulse ring */}
+              <motion.div
+                className="absolute inset-0 rounded-2xl border-2 border-primary-foreground/30"
+                animate={{ scale: [1, 1.05, 1], opacity: [0.5, 0, 0.5] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+              />
+              {sendingAll ? (
+                <Loader2 size={28} className="animate-spin relative z-10" />
+              ) : (
+                <motion.img
+                  src={cobrarTodosImg}
+                  alt="Cobrar Todos"
+                  className="w-12 h-12 rounded-xl object-cover shadow-md relative z-10"
+                  animate={{ rotate: [0, -5, 5, 0] }}
+                  transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
+                />
+              )}
+              <div className="relative z-10 text-left">
+                <span className="block text-lg leading-tight">🚀 Cobrar Todos</span>
+                <span className="block text-xs font-normal opacity-80">
+                  {pendingRevenues.length} cliente{pendingRevenues.length > 1 ? 's' : ''} pendente{pendingRevenues.length > 1 ? 's' : ''} • {fmt(pendingRevenues.reduce((s, r) => s + Number(r.amount), 0))}
+                </span>
+              </div>
+            </motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Rocket Overlay */}
+      <AnimatePresence>
+        {showRocket && <RocketOverlay onComplete={() => setShowRocket(false)} />}
+      </AnimatePresence>
 
       {/* KPI Summary Cards */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.3 }} className="grid grid-cols-3 gap-3">

@@ -176,21 +176,16 @@ export default function FinancialApiSettings() {
       return;
     }
     if (form.provider === 'meta_ads' && !editingId) {
-      if (!form.metaAppId || !form.metaAppSecret || !form.metaPageToken || !form.metaIgBusinessId || !form.metaPageId) {
-        toast.error('Preencha todos os campos do Meta');
+      if (!form.metaAppId || !form.metaAppSecret) {
+        toast.error('Preencha App ID e App Secret');
         return;
       }
     }
 
-    // For Meta, only store non-sensitive data in the DB directly
     const configData: any = { notes: form.notes };
     if (form.provider === 'meta_ads') {
       configData.meta_app_id = form.metaAppId;
-      configData.meta_ig_business_id = form.metaIgBusinessId;
-      configData.meta_page_id = form.metaPageId;
-      // Masked display only
       if (form.metaAppSecret) configData.meta_app_secret = '••••' + form.metaAppSecret.slice(-4);
-      if (form.metaPageToken) configData.meta_page_token = '••••' + form.metaPageToken.slice(-4);
     }
 
     const payload: any = {

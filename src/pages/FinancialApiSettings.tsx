@@ -100,7 +100,7 @@ export default function FinancialApiSettings() {
   };
 
   const storeMetaCredentialsSecurely = async (integrationId: string) => {
-    const hasSecrets = form.metaAppSecret || form.metaPageToken || form.metaAppId || form.metaIgBusinessId || form.metaPageId;
+    const hasSecrets = form.metaAppSecret || form.metaAppId;
     if (!hasSecrets) return;
 
     try {
@@ -109,9 +109,6 @@ export default function FinancialApiSettings() {
           integration_id: integrationId,
           meta_app_id: form.metaAppId || undefined,
           meta_app_secret: form.metaAppSecret || undefined,
-          meta_page_token: form.metaPageToken || undefined,
-          meta_ig_business_id: form.metaIgBusinessId || undefined,
-          meta_page_id: form.metaPageId || undefined,
         },
       });
       if (error) throw error;

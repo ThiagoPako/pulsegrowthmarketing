@@ -99,7 +99,7 @@ function ReviewVideoLink({ contentTaskId, clientId }: { contentTaskId: string | 
         </div>
       )}
       {hasVideo && (
-        <a href={`/portal/${clientId}`} target="_blank" rel="noopener noreferrer"
+        <a href={`/portal/${clientId}`}
           className="flex items-center gap-2 text-sm font-medium text-primary hover:underline bg-primary/5 border border-primary/20 rounded-lg px-3 py-2.5 transition-colors hover:bg-primary/10">
           <Eye size={16} className="shrink-0" />
           <span className="truncate">🎬 Assistir no Portal do Cliente</span>

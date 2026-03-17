@@ -110,33 +110,48 @@ export default function ClientPortal() {
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(paramSlug);
     const slug = decodeURIComponent(paramSlug);
 
+    let clientData: ClientData | null = null;
+
+    // Try direct query first (works for authenticated team members)
     let clientQuery;
     if (isUUID) {
       clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics').eq('id', slug).single();
     } else {
-      // Match by slug (lowercase, hyphens → spaces)
       const companySearch = slug.replace(/-/g, ' ');
       clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics').ilike('company_name', companySearch).single();
     }
 
-    const [clientRes, contentsRes] = await Promise.all([
-      clientQuery,
-      // If UUID, fetch contents directly; otherwise we'll re-fetch after resolving client
-      isUUID
-        ? supabase.from('client_portal_contents').select('*').eq('client_id', slug).order('created_at', { ascending: false })
-        : Promise.resolve({ data: null }),
-    ]);
+    const clientRes = await clientQuery;
 
     if (clientRes.data) {
-      const clientData = clientRes.data as ClientData;
-      setClient(clientData);
-      // If we used slug, now fetch contents with resolved ID
-      if (!isUUID) {
-        const { data: contData } = await supabase.from('client_portal_contents').select('*').eq('client_id', clientData.id).order('created_at', { ascending: false });
-        if (contData) setContents(contData as PortalContent[]);
-      } else if (contentsRes.data) {
-        setContents(contentsRes.data as PortalContent[]);
+      clientData = clientRes.data as ClientData;
+    } else {
+      // Fallback: use edge function for client portal auth (works without Supabase auth)
+      const { data: edgeData } = await supabase.functions.invoke('client-portal-auth', {
+        body: {
+          action: 'get_info',
+          ...(isUUID ? { client_id: slug } : { slug }),
+        },
+      });
+      if (edgeData && edgeData.id) {
+        clientData = {
+          id: edgeData.id,
+          company_name: edgeData.company_name,
+          logo_url: edgeData.logo_url,
+          color: edgeData.color || '217 91% 60%',
+          weekly_reels: 0, weekly_creatives: 0, weekly_stories: 0,
+          monthly_recordings: 0, plan_id: null, show_metrics: true,
+        };
+        // Fetch full client data with edge function resolved ID
+        const { data: fullClient } = await supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics').eq('id', edgeData.id).single();
+        if (fullClient) clientData = fullClient as ClientData;
       }
+    }
+
+    if (clientData) {
+      setClient(clientData);
+      const { data: contData } = await supabase.from('client_portal_contents').select('*').eq('client_id', clientData.id).order('created_at', { ascending: false });
+      if (contData) setContents(contData as PortalContent[]);
     }
     setLoading(false);
   };

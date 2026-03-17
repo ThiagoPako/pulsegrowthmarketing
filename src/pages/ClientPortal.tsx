@@ -126,7 +126,7 @@ export default function ClientPortal() {
     if (clientRes.data) {
       clientData = clientRes.data as ClientData;
     } else {
-      // Fallback: use edge function for client portal auth (works without Supabase auth)
+      // Fallback: use edge function (works without Supabase auth, e.g. client login)
       const { data: edgeData } = await supabase.functions.invoke('client-portal-auth', {
         body: {
           action: 'get_info',
@@ -139,19 +139,29 @@ export default function ClientPortal() {
           company_name: edgeData.company_name,
           logo_url: edgeData.logo_url,
           color: edgeData.color || '217 91% 60%',
-          weekly_reels: 0, weekly_creatives: 0, weekly_stories: 0,
-          monthly_recordings: 0, plan_id: null, show_metrics: true,
+          weekly_reels: edgeData.weekly_reels || 0,
+          weekly_creatives: edgeData.weekly_creatives || 0,
+          weekly_stories: edgeData.weekly_stories || 0,
+          monthly_recordings: edgeData.monthly_recordings || 0,
+          plan_id: edgeData.plan_id || null,
+          show_metrics: edgeData.show_metrics ?? true,
         };
-        // Fetch full client data with edge function resolved ID
-        const { data: fullClient } = await supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics').eq('id', edgeData.id).single();
-        if (fullClient) clientData = fullClient as ClientData;
       }
     }
 
     if (clientData) {
       setClient(clientData);
+      // Try direct query for contents first
       const { data: contData } = await supabase.from('client_portal_contents').select('*').eq('client_id', clientData.id).order('created_at', { ascending: false });
-      if (contData) setContents(contData as PortalContent[]);
+      if (contData && contData.length > 0) {
+        setContents(contData as PortalContent[]);
+      } else {
+        // Fallback: use edge function for contents
+        const { data: edgeContents } = await supabase.functions.invoke('client-portal-auth', {
+          body: { action: 'get_contents', client_id: clientData.id },
+        });
+        if (edgeContents?.contents) setContents(edgeContents.contents as PortalContent[]);
+      }
     }
     setLoading(false);
   };

@@ -586,7 +586,7 @@ export default function ClientOnboarding() {
                         {slotsForDay.map(s => (
                           <SelectItem key={s.time} value={s.time}>
                             <span className="flex items-center gap-1">
-                              <Clock size={12} /> {s.time} – {minutesToTime(timeToMinutes(s.time) + (settings?.recording_duration || 90))}
+                              <Clock size={12} /> {s.time} – {minutesToTime(timeToMinutes(s.time) + RECORDING_DURATION)}
                             </span>
                           </SelectItem>
                         ))}

@@ -188,6 +188,42 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
     setSaving(false);
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const maxSize = 500 * 1024 * 1024; // 500MB
+    if (file.size > maxSize) {
+      toast.error('Arquivo muito grande. Máximo: 500MB');
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress(`Enviando ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)...`);
+    
+    try {
+      const folder = `editor/${task.client_id}`;
+      const url = await uploadFileToVps(file, folder);
+      
+      await supabase.from('content_tasks').update({
+        edited_video_link: url,
+        edited_video_type: 'upload',
+        updated_at: new Date().toISOString()
+      }).eq('id', task.id);
+      
+      setVideoLink(url);
+      await logAction('Vídeo editado enviado via upload', url);
+      toast.success('Vídeo enviado com sucesso!');
+      onRefresh();
+    } catch (err: any) {
+      toast.error(`Erro no upload: ${err.message}`);
+    } finally {
+      setUploading(false);
+      setUploadProgress('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const sendForApproval = async () => {
     const currentLink = videoLink.trim() || task.edited_video_link;
     if (!currentLink) {

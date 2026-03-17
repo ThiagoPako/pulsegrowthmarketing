@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useFinancialData } from '@/hooks/useFinancialData';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,7 +14,93 @@ import { ptBR } from 'date-fns/locale';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
 import { generateDeliveryReport, resolvePaymentInfo } from '@/lib/billingReport';
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
+
+/* ── Rocket Animation Overlay ── */
+function RocketOverlay({ onComplete }: { onComplete: () => void }) {
+  const moneyEmojis = ['💵', '💰', '💸', '🤑', '💲'];
+  const particles = useMemo(() =>
+    Array.from({ length: 28 }, (_, i) => ({
+      id: i,
+      emoji: moneyEmojis[i % moneyEmojis.length],
+      x: (Math.random() - 0.5) * 500,
+      y: Math.random() * 300 + 100,
+      rotate: Math.random() * 720 - 360,
+      scale: Math.random() * 0.6 + 0.5,
+      delay: Math.random() * 0.6,
+    }))
+  , []);
+
+  useEffect(() => {
+    const timer = setTimeout(onComplete, 3200);
+    return () => clearTimeout(timer);
+  }, [onComplete]);
+
+  return createPortal(
+    <motion.div
+      className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <motion.div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+      />
+      <motion.img
+        src={cobrarTodosImg}
+        alt="Cobrar Todos"
+        className="absolute w-40 h-40 rounded-3xl object-cover shadow-2xl z-10"
+        initial={{ scale: 0, rotate: -30 }}
+        animate={{
+          scale: [0, 1.8, 1.4, 0],
+          rotate: [-30, 0, 0, 10],
+          y: [0, 0, 0, -600],
+        }}
+        transition={{ duration: 2.5, times: [0, 0.3, 0.5, 1], ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="absolute z-20 text-7xl"
+        initial={{ y: 200, scale: 0 }}
+        animate={{ y: [200, 0, -800], scale: [0, 1.3, 1], rotate: [0, 0, -5] }}
+        transition={{ duration: 2.5, times: [0, 0.35, 1], ease: 'easeIn' }}
+      >
+        🚀
+      </motion.div>
+      <motion.div
+        className="absolute z-10 text-5xl"
+        initial={{ y: 280, opacity: 0 }}
+        animate={{ y: [280, 80, -700], opacity: [0, 1, 0], scale: [0.5, 1.5, 0.3] }}
+        transition={{ duration: 2.5, times: [0, 0.35, 1], ease: 'easeIn' }}
+      >
+        🔥
+      </motion.div>
+      {particles.map(p => (
+        <motion.span
+          key={p.id}
+          className="absolute z-20"
+          style={{ fontSize: `${p.scale * 2}rem` }}
+          initial={{ y: 100, x: 0, opacity: 0, scale: 0, rotate: 0 }}
+          animate={{
+            y: [100, -p.y, -(p.y + 400)],
+            x: [0, p.x * 0.5, p.x],
+            opacity: [0, 1, 0],
+            scale: [0, p.scale, 0],
+            rotate: [0, p.rotate / 2, p.rotate],
+          }}
+          transition={{ duration: 2.2, delay: 0.4 + p.delay, ease: 'easeOut' }}
+        >
+          {p.emoji}
+        </motion.span>
+      ))}
+    </motion.div>,
+    document.body
+  );
+}
 
 const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'destructive' | 'secondary' }> = {
   prevista: { label: 'Prevista', variant: 'secondary' },
@@ -29,6 +115,7 @@ export default function FinancialRevenues() {
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
   const [sendingBilling, setSendingBilling] = useState<string | null>(null);
   const [sendingAll, setSendingAll] = useState(false);
+  const [showRocket, setShowRocket] = useState(false);
 
   const monthOptions = useMemo(() => {
     const options = [];
@@ -131,6 +218,12 @@ export default function FinancialRevenues() {
 
   const pendingRevenues = filtered.filter(r => r.status !== 'recebida');
 
+  const handleBigCobrarClick = useCallback(() => {
+    if (pendingRevenues.length === 0) { toast.info('Nenhuma receita pendente'); return; }
+    setShowRocket(true);
+    handleSendAllBilling();
+  }, [pendingRevenues.length]);
+
   const handleSendAllBilling = async () => {
     if (pendingRevenues.length === 0) { toast.info('Nenhuma receita pendente'); return; }
     setSendingAll(true);
@@ -149,7 +242,6 @@ export default function FinancialRevenues() {
           ? (paymentConfig?.msg_billing_overdue || 'Olá, {nome_cliente}! Lembrete: {valor}. {dados_pagamento}')
           : (paymentConfig?.msg_billing_due || 'Olá, {nome_cliente}! Mensalidade {valor} vence dia {dia_vencimento}. {dados_pagamento}');
 
-        // Get plan_id from contract
         const contract = contracts.find(c => c.client_id === r.client_id);
         const report = paymentConfig?.include_delivery_report !== false
           ? await generateDeliveryReport(r.client_id, contract?.plan_id, selectedMonth, paymentConfig?.msg_delivery_report || undefined)
@@ -194,22 +286,63 @@ export default function FinancialRevenues() {
         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
           <Button size="sm" variant="outline" onClick={handleGenerate} className="shadow-sm"><RefreshCw size={14} className="mr-1" /> Gerar Receitas</Button>
         </motion.div>
-        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-          <Button
-            size="sm"
-            onClick={handleSendAllBilling}
-            disabled={sendingAll || pendingRevenues.length === 0}
-            className="gap-1.5 shadow-sm bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
-          >
-            {sendingAll ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <img src={cobrarTodosImg} alt="Cobrar Todos" className="w-6 h-6 rounded-full object-cover" />
-            )}
-            Cobrar Todos {pendingRevenues.length > 0 ? `(${pendingRevenues.length})` : ''}
-          </Button>
-        </motion.div>
       </motion.div>
+
+      {/* ── BIG Cobrar Todos Button ── */}
+      <AnimatePresence>
+        {pendingRevenues.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 20 }}
+            transition={{ type: 'spring', stiffness: 200, damping: 18 }}
+            className="flex justify-center"
+          >
+            <motion.button
+              onClick={handleBigCobrarClick}
+              disabled={sendingAll}
+              className="relative group flex items-center gap-4 px-8 py-4 rounded-2xl bg-gradient-to-r from-primary via-primary/90 to-primary/70 text-primary-foreground font-bold text-lg shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 transition-shadow disabled:opacity-60 overflow-hidden"
+              whileHover={{ scale: 1.05, y: -2 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              {/* Shimmer effect */}
+              <motion.div
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12"
+                animate={{ x: ['-200%', '200%'] }}
+                transition={{ repeat: Infinity, duration: 2.5, ease: 'linear' }}
+              />
+              {/* Pulse ring */}
+              <motion.div
+                className="absolute inset-0 rounded-2xl border-2 border-primary-foreground/30"
+                animate={{ scale: [1, 1.05, 1], opacity: [0.5, 0, 0.5] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+              />
+              {sendingAll ? (
+                <Loader2 size={28} className="animate-spin relative z-10" />
+              ) : (
+                <motion.img
+                  src={cobrarTodosImg}
+                  alt="Cobrar Todos"
+                  className="w-12 h-12 rounded-xl object-cover shadow-md relative z-10"
+                  animate={{ rotate: [0, -5, 5, 0] }}
+                  transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
+                />
+              )}
+              <div className="relative z-10 text-left">
+                <span className="block text-lg leading-tight">🚀 Cobrar Todos</span>
+                <span className="block text-xs font-normal opacity-80">
+                  {pendingRevenues.length} cliente{pendingRevenues.length > 1 ? 's' : ''} pendente{pendingRevenues.length > 1 ? 's' : ''} • {fmt(pendingRevenues.reduce((s, r) => s + Number(r.amount), 0))}
+                </span>
+              </div>
+            </motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Rocket Overlay */}
+      <AnimatePresence>
+        {showRocket && <RocketOverlay onComplete={() => setShowRocket(false)} />}
+      </AnimatePresence>
 
       {/* KPI Summary Cards */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.3 }} className="grid grid-cols-3 gap-3">

@@ -199,6 +199,38 @@ export default function Scripts() {
     setOpen(true);
   };
 
+  const generateCaptionFromContent = async (content: string, clientId: string): Promise<string> => {
+    try {
+      const client = clients.find(c => c.id === clientId);
+      if (!client) return '';
+      
+      const { data: aiIntegration } = await supabase
+        .from('api_integrations')
+        .select('config')
+        .in('provider', ['ai_gemini', 'ai_openai', 'ai_claude'])
+        .eq('status', 'ativo')
+        .limit(1)
+        .single();
+      const aiModel = (aiIntegration as any)?.config?.ai_model || undefined;
+      const aiProvider = (aiIntegration as any)?.config?.ai_provider || undefined;
+
+      const { data, error } = await supabase.functions.invoke('generate-caption', {
+        body: {
+          scriptContent: content.replace(/<[^>]*>/g, '').slice(0, 2000),
+          clientName: client.companyName,
+          niche: client.niche || '',
+          aiModel,
+          aiProvider,
+        },
+      });
+      if (error) throw error;
+      return data?.caption || '';
+    } catch (err) {
+      console.error('Auto caption generation error:', err);
+      return '';
+    }
+  };
+
   const handleSave = async () => {
     if (!form.clientId || !form.title) {
       toast.error('Preencha o cliente e o título'); return;
@@ -206,26 +238,36 @@ export default function Scripts() {
     if (form.isEndomarketing && !form.endoClientId) {
       toast.error('Selecione o cliente de endomarketing'); return;
     }
+
+    // Auto-generate caption if content exists but caption is empty
+    let captionToSave = form.caption;
+    if (form.content && form.content.trim() && !form.caption.trim()) {
+      toast.info('Gerando legenda automaticamente...');
+      const autoCaption = await generateCaptionFromContent(form.content, form.clientId);
+      if (autoCaption) {
+        captionToSave = autoCaption;
+        setForm(prev => ({ ...prev, caption: autoCaption }));
+      }
+    }
+
     const now = new Date().toISOString();
     const scriptData = {
       ...form,
+      caption: captionToSave,
       endoClientId: form.endoClientId || undefined,
       scheduledDate: form.scheduledDate || undefined,
     };
     if (editing) {
       updateScript({ ...editing, ...scriptData, updatedAt: now });
-      // Save caption separately since it's not in the Script type
-      await supabase.from('scripts').update({ caption: form.caption } as any).eq('id', editing.id);
+      await supabase.from('scripts').update({ caption: captionToSave } as any).eq('id', editing.id);
       toast.success('Roteiro atualizado');
     } else {
       const scriptId = crypto.randomUUID();
       const scriptObj = { ...scriptData, id: scriptId, recorded: false, createdAt: now, updatedAt: now, createdBy: user?.id || undefined };
       
-      // Await script insert to ensure FK is satisfied before creating content_task
       await addScript(scriptObj);
-      // Save caption
-      if (form.caption) {
-        await supabase.from('scripts').update({ caption: form.caption } as any).eq('id', scriptId);
+      if (captionToSave) {
+        await supabase.from('scripts').update({ caption: captionToSave } as any).eq('id', scriptId);
       }
       
       const { error } = await supabase.from('content_tasks').insert({

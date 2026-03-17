@@ -54,6 +54,7 @@ import ContentManager from "@/pages/ContentManager";
 import ClientPortalLogin from "@/pages/ClientPortalLogin";
 import ClientPortalRegister from "@/pages/ClientPortalRegister";
 import TrafficManagement from "@/pages/TrafficManagement";
+import AutomationFlows from "@/pages/AutomationFlows";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -138,6 +139,7 @@ function AppRoutes() {
       <Route path="/portal/:clientId" element={<ClientPortal />} />
       <Route path="/conteudos-portal" element={<ProtectedRoute><ContentManager /></ProtectedRoute>} />
       <Route path="/trafego" element={<ProtectedRoute><TrafficManagement /></ProtectedRoute>} />
+      <Route path="/automacoes" element={<ProtectedRoute><AutomationFlows /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

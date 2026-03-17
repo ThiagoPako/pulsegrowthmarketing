@@ -15,6 +15,7 @@ import { Progress } from '@/components/ui/progress';
 import { useNavigate } from 'react-router-dom';
 import UserAvatar from '@/components/UserAvatar';
 import AgencyCapacityWidget from '@/components/AgencyCapacityWidget';
+import BirthdayCountdown from '@/components/BirthdayCountdown';
 import ClientLogo from '@/components/ClientLogo';
 import { getMessageStats } from '@/services/whatsappService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';

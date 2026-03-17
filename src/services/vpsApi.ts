@@ -38,6 +38,49 @@ function resolveUploadUrl(data: any, folder?: string) {
   throw new Error('Upload succeeded but no public URL was returned');
 }
 
+function verifyImageUrl(url: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error('Upload concluído, mas a imagem pública não ficou acessível.'));
+    image.src = url;
+  });
+}
+
+function verifyVideoUrl(url: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    let settled = false;
+
+    const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+      callback();
+    };
+
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+    video.onloadedmetadata = () => finish(resolve);
+    video.onerror = () => finish(() => reject(new Error('Upload concluído, mas o vídeo público não ficou acessível.')));
+    video.src = url;
+  });
+}
+
+async function verifyUploadedFile(url: string, file: File): Promise<void> {
+  if (typeof window === 'undefined') return;
+  if (file.type.startsWith('video/')) {
+    await verifyVideoUrl(url);
+    return;
+  }
+  if (file.type.startsWith('image/')) {
+    await verifyImageUrl(url);
+  }
+}
+
 /**
  * Upload a file to the VPS
  * @param file - File object to upload
@@ -63,7 +106,9 @@ export async function uploadFileToVps(
   }
 
   const data = await response.json();
-  return resolveUploadUrl(data, folder);
+  const publicUrl = resolveUploadUrl(data, folder);
+  await verifyUploadedFile(publicUrl, file);
+  return publicUrl;
 }
 
 /**

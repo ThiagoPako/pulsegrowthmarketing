@@ -311,7 +311,7 @@ export default function SocialMediaDeliveries() {
     if (!schedulingItem || !schedDate) { toast.error('Selecione a data de postagem'); return; }
     const { error } = await supabase.from('social_media_deliveries').update({
       posted_at: schedDate, scheduled_time: schedTime || null,
-      platform: schedPlatform || null, status: 'agendado',
+      platform: 'Instagram, Facebook', status: 'agendado',
     } as any).eq('id', schedulingItem.id);
     if (error) { toast.error('Erro ao agendar'); return; }
     // Move content_task to acompanhamento with full sync

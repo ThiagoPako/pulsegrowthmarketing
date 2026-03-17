@@ -49,7 +49,7 @@ interface ClientGroup {
 }
 
 export default function OnboardingManagement() {
-  const { tasksQuery, updateOnboardingTask, advanceToNextStage, createDesignTasksForClient } = useOnboarding();
+  const { tasksQuery, updateOnboardingTask, advanceToNextStage, createDesignTasksForClient, deleteOnboardingClient } = useOnboarding();
   const [selectedGroup, setSelectedGroup] = useState<ClientGroup | null>(null);
 
   const tasks = tasksQuery.data || [];

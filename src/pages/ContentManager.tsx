@@ -196,6 +196,7 @@ export default function ContentManager() {
   const [filterClient, setFilterClient] = useState('all');
   const [showPortalSelector, setShowPortalSelector] = useState(false);
   const [playingContent, setPlayingContent] = useState<ContentRow | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
 
   useEffect(() => { loadData(); }, []);
 

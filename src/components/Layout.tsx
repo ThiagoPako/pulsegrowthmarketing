@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { ROLE_LABELS } from '@/types';
+import { useMyPermissions, AVAILABLE_MODULES } from '@/hooks/useUserPermissions';
 import pulseLogo from '@/assets/pulse_logo.png';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';

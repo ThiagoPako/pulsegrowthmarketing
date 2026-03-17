@@ -450,6 +450,7 @@ export default function Team() {
       </Dialog>
 
       {loading ? (
+        <div className="glass-card p-12 text-center text-muted-foreground">
           <p>Carregando equipe...</p>
         </div>
       ) : tab === 'equipe' ? (

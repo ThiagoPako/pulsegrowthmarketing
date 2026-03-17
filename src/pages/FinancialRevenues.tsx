@@ -179,30 +179,71 @@ export default function FinancialRevenues() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3 flex-wrap">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro')}><ArrowLeft size={18} /></Button>
+      {/* Header */}
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="flex items-center gap-3 flex-wrap">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro')} className="hover:bg-primary/10"><ArrowLeft size={18} /></Button>
         <div className="flex-1">
-          <h1 className="text-xl font-bold">Receitas</h1>
-          <p className="text-sm text-muted-foreground">Total: {fmt(total)} | Recebida: {fmt(recebida)} | Atraso: {fmt(atraso)}</p>
+          <h1 className="text-xl font-bold flex items-center gap-2">📊 Receitas</h1>
         </div>
         <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-          <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-48 shadow-sm"><SelectValue /></SelectTrigger>
           <SelectContent>
             {monthOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Button size="sm" variant="outline" onClick={handleGenerate}><RefreshCw size={14} className="mr-1" /> Gerar Receitas</Button>
+        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+          <Button size="sm" variant="outline" onClick={handleGenerate} className="shadow-sm"><RefreshCw size={14} className="mr-1" /> Gerar Receitas</Button>
+        </motion.div>
         {pendingRevenues.length > 0 && (
-          <Button size="sm" onClick={handleSendAllBilling} disabled={sendingAll} className="gap-1.5">
-            {sendingAll ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <img src={cobrarTodosImg} alt="Cobrar Todos" className="w-6 h-6 rounded-full object-cover" />
-            )}
-            Cobrar Todos ({pendingRevenues.length})
-          </Button>
+          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+            <Button size="sm" onClick={handleSendAllBilling} disabled={sendingAll} className="gap-1.5 shadow-sm bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70">
+              {sendingAll ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <img src={cobrarTodosImg} alt="Cobrar Todos" className="w-6 h-6 rounded-full object-cover" />
+              )}
+              Cobrar Todos ({pendingRevenues.length})
+            </Button>
+          </motion.div>
         )}
-      </div>
+      </motion.div>
+
+      {/* KPI Summary Cards */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.3 }} className="grid grid-cols-3 gap-3">
+        <Card className="border-emerald-200/50 overflow-hidden">
+          <CardContent className="pt-3 pb-3 bg-gradient-to-br from-emerald-500/10 to-green-500/10">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center"><TrendingUp size={16} className="text-emerald-600" /></div>
+              <div>
+                <p className="text-[10px] text-muted-foreground font-medium">Total</p>
+                <p className="text-sm font-bold text-foreground">{fmt(total)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-green-200/50 overflow-hidden">
+          <CardContent className="pt-3 pb-3 bg-gradient-to-br from-green-500/10 to-teal-500/10">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center"><CheckCircle size={16} className="text-green-600" /></div>
+              <div>
+                <p className="text-[10px] text-muted-foreground font-medium">Recebida</p>
+                <p className="text-sm font-bold text-foreground">{fmt(recebida)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-orange-200/50 overflow-hidden">
+          <CardContent className="pt-3 pb-3 bg-gradient-to-br from-orange-500/10 to-red-500/10">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center"><AlertTriangle size={16} className="text-orange-600" /></div>
+              <div>
+                <p className="text-[10px] text-muted-foreground font-medium">Atraso</p>
+                <p className="text-sm font-bold text-foreground">{fmt(atraso)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       <Card>
         <CardContent className="p-0">

@@ -218,6 +218,12 @@ export default function FinancialRevenues() {
 
   const pendingRevenues = filtered.filter(r => r.status !== 'recebida');
 
+  const handleBigCobrarClick = useCallback(() => {
+    if (pendingRevenues.length === 0) { toast.info('Nenhuma receita pendente'); return; }
+    setShowRocket(true);
+    handleSendAllBilling();
+  }, [pendingRevenues.length]);
+
   const handleSendAllBilling = async () => {
     if (pendingRevenues.length === 0) { toast.info('Nenhuma receita pendente'); return; }
     setSendingAll(true);
@@ -236,7 +242,6 @@ export default function FinancialRevenues() {
           ? (paymentConfig?.msg_billing_overdue || 'Olá, {nome_cliente}! Lembrete: {valor}. {dados_pagamento}')
           : (paymentConfig?.msg_billing_due || 'Olá, {nome_cliente}! Mensalidade {valor} vence dia {dia_vencimento}. {dados_pagamento}');
 
-        // Get plan_id from contract
         const contract = contracts.find(c => c.client_id === r.client_id);
         const report = paymentConfig?.include_delivery_report !== false
           ? await generateDeliveryReport(r.client_id, contract?.plan_id, selectedMonth, paymentConfig?.msg_delivery_report || undefined)

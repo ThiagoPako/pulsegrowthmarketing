@@ -395,9 +395,9 @@ export default function ClientOnboarding() {
                 ? (plan.name.toLowerCase().includes('booster') || plan.name.toLowerCase().includes('boost') ? 3 
                   : plan.name.toLowerCase().includes('premium') ? 4 
                   : plan.recording_sessions || 4)
-                : 4;
+                : client.monthly_recordings || 4;
               
-              const frequencyOptions = Array.from({ length: maxWeeks }, (_, i) => i + 1);
+              const frequencyOptions = Array.from({ length: Math.min(maxWeeks, 8) }, (_, i) => i + 1);
               
               const toggleWeek = (week: number) => {
                 if (selectedWeeks.includes(week)) {
@@ -415,7 +415,10 @@ export default function ClientOnboarding() {
                 <div className="space-y-3">
                   <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
                     <p className="text-sm font-semibold flex items-center gap-2">
-                      <Video size={16} className="text-primary" /> Quantas vezes por mês você tem disponibilidade para gravar?
+                      <Video size={16} className="text-primary" /> Quantas gravações por mês?
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Cada gravação tem duração de <strong className="text-foreground">1h30min</strong>. Você pode agendar várias no mesmo dia.
                     </p>
                     <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(frequencyOptions.length, 4)}, 1fr)` }}>
                       {frequencyOptions.map(n => (
@@ -423,7 +426,9 @@ export default function ClientOnboarding() {
                           key={n}
                           onClick={() => {
                             setMonthlyRecordings(n);
-                            setSelectedWeeks(prev => prev.slice(0, n));
+                            if (n <= 4) {
+                              setSelectedWeeks(prev => prev.slice(0, n));
+                            }
                           }}
                           className={`p-3 rounded-xl border-2 text-center transition-all ${
                             monthlyRecordings === n
@@ -436,43 +441,49 @@ export default function ClientOnboarding() {
                         </button>
                       ))}
                     </div>
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                      <Clock size={10} /> {monthlyRecordings} gravação(ões) × 1h30min = {Math.floor(monthlyRecordings * 90 / 60)}h{(monthlyRecordings * 90) % 60 > 0 ? `${(monthlyRecordings * 90) % 60}min` : ''}/mês
+                    </p>
                   </div>
 
-                  <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
-                    <p className="text-sm font-semibold flex items-center gap-2">
-                      <Calendar size={16} className="text-primary" /> Em quais semanas do mês prefere gravar?
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Selecione {monthlyRecordings} semana{monthlyRecordings > 1 ? 's' : ''}.
-                    </p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {[1, 2, 3, 4].map(n => (
-                        <button
-                          key={n}
-                          onClick={() => toggleWeek(n)}
-                          className={`p-3 rounded-xl border-2 text-center transition-all ${
-                            selectedWeeks.includes(n)
-                              ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
-                              : selectedWeeks.length >= monthlyRecordings
-                                ? 'border-border opacity-40 cursor-not-allowed'
-                                : 'border-border hover:border-primary/40'
-                          }`}
-                        >
-                          <span className="text-lg font-bold block">{n}ª</span>
-                          <span className="text-[10px] text-muted-foreground">semana</span>
-                        </button>
-                      ))}
+                  {monthlyRecordings > 1 && (
+                    <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
+                      <p className="text-sm font-semibold flex items-center gap-2">
+                        <Calendar size={16} className="text-primary" /> Em quais semanas do mês prefere gravar?
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Selecione até {Math.min(monthlyRecordings, 4)} semana{monthlyRecordings > 1 ? 's' : ''}. 
+                        {monthlyRecordings > 4 && ' Se tiver mais gravações que semanas, elas serão empilhadas no mesmo dia.'}
+                      </p>
+                      <div className="grid grid-cols-4 gap-2">
+                        {[1, 2, 3, 4].map(n => (
+                          <button
+                            key={n}
+                            onClick={() => toggleWeek(n)}
+                            className={`p-3 rounded-xl border-2 text-center transition-all ${
+                              selectedWeeks.includes(n)
+                                ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                                : selectedWeeks.length >= Math.min(monthlyRecordings, 4)
+                                  ? 'border-border opacity-40 cursor-not-allowed'
+                                  : 'border-border hover:border-primary/40'
+                            }`}
+                          >
+                            <span className="text-lg font-bold block">{n}ª</span>
+                            <span className="text-[10px] text-muted-foreground">semana</span>
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground text-center">
+                        {selectedWeeks.length}/{Math.min(monthlyRecordings, 4)} selecionada{selectedWeeks.length > 1 ? 's' : ''} 
+                        {selectedWeeks.length > 0 && <> — {selectedWeeks.map(w => WEEK_LABELS[w-1]).join(', ')}</>}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground text-center">
-                      {selectedWeeks.length}/{monthlyRecordings} selecionada{selectedWeeks.length > 1 ? 's' : ''} 
-                      {selectedWeeks.length > 0 && <> — {selectedWeeks.map(w => WEEK_LABELS[w-1]).join(', ')}</>}
-                    </p>
-                  </div>
+                  )}
 
                   <div className="p-3 rounded-lg bg-accent/50 border border-accent text-xs text-muted-foreground">
                     <p>
-                      <strong className="text-foreground">💡 Importante:</strong> Gravar menos semanas por mês <strong>não significa produzir menos conteúdo</strong>. 
-                      Vamos otimizar cada sessão para extrair o máximo de material.
+                      <strong className="text-foreground">💡 Importante:</strong> Você pode concentrar várias gravações no mesmo dia, 
+                      desde que haja disponibilidade na agenda do videomaker. Cada sessão ocupa <strong>1h30min + 30min de intervalo</strong>.
                     </p>
                   </div>
                 </div>

@@ -129,10 +129,15 @@ const NICHE_DATES: Record<string, SeasonalDate[]> = {
   ],
   fitness: [
     { month: 1, day: 1, label: 'Metas de Ano Novo', daysBeforeAlert: 30 },
+    { month: 1, day: 1, label: 'Janeiro Branco (saúde mental + exercício)', daysBeforeAlert: 30 },
+    { month: 3, day: 31, label: 'Dia da Saúde e Nutrição', daysBeforeAlert: 25 },
     { month: 4, day: 6, label: 'Dia Mundial da Atividade Física', daysBeforeAlert: 30 },
+    { month: 5, day: 6, label: 'Dia do Alongamento', daysBeforeAlert: 20 },
     { month: 6, day: 1, label: 'Projeto Verão começa!', daysBeforeAlert: 30 },
     { month: 8, day: 6, label: 'Dia do Profissional de Ed. Física', daysBeforeAlert: 20 },
-    { month: 9, day: 1, label: 'Dia do Profissional de Ed. Física', daysBeforeAlert: 20 },
+    { month: 9, day: 1, label: 'Setembro Amarelo (saúde mental e exercício)', daysBeforeAlert: 30 },
+    { month: 10, day: 10, label: 'Dia Mundial da Saúde Mental', daysBeforeAlert: 25 },
+    { month: 11, day: 1, label: 'Desafio Novembro (treino intensivo)', daysBeforeAlert: 25 },
   ],
   emagrecimento: [
     { month: 1, day: 1, label: 'Resoluções de Ano Novo', daysBeforeAlert: 30 },

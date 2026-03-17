@@ -111,7 +111,26 @@ serve(async (req) => {
   try {
     const { editorial, videoType, contentFormat, clientName, niche, exampleScripts, aiModel, aiProvider } = await req.json();
 
-    const ai = getAiConfig(aiProvider);
+    // Fetch API key from DB if env vars not set
+    let dbApiKey: string | undefined;
+    if (aiProvider) {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      const providerMap: Record<string, string> = { gemini: 'ai_gemini', openai: 'ai_openai', claude: 'ai_claude' };
+      const { data: aiIntegration } = await supabase
+        .from("api_integrations")
+        .select("config")
+        .eq("provider", providerMap[aiProvider] || '')
+        .eq("status", "ativo")
+        .limit(1)
+        .single();
+      if (aiIntegration?.config) {
+        dbApiKey = (aiIntegration.config as any).api_key_encrypted;
+      }
+    }
+
+    const ai = await getAiConfig(aiProvider, dbApiKey);
     const selectedModel = aiModel || "gemini-2.5-flash-lite";
 
     const structure = VIDEO_TYPE_STRUCTURES[videoType] || VIDEO_TYPE_STRUCTURES.vendas;

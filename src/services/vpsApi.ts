@@ -81,11 +81,37 @@ async function verifyWithRetry(url: string, verifier: (url: string) => Promise<v
   throw lastError ?? new Error('Falha ao validar arquivo enviado.');
 }
 
-async function verifyUploadedFile(url: string, _file: File): Promise<void> {
+function isVpsAssetUrl(url: string) {
+  try {
+    return new URL(url).origin === new URL(VPS_UPLOADS_URL).origin;
+  } catch {
+    return false;
+  }
+}
+
+function isBrowserBlockedFetch(error: unknown) {
+  if (error instanceof TypeError) return true;
+  if (!(error instanceof Error)) return false;
+  return /failed to fetch|load failed|networkerror/i.test(error.message);
+}
+
+async function verifyUploadedFile(url: string, file: File): Promise<void> {
   if (typeof window === 'undefined') return;
 
-  // Use HEAD request to verify the file is publicly accessible — works for any file type
-  await verifyWithRetry(url, verifyUrlAccessible);
+  try {
+    await verifyWithRetry(url, verifyUrlAccessible);
+  } catch (error) {
+    if (isVpsAssetUrl(url) && isBrowserBlockedFetch(error)) {
+      console.warn('[vpsApi] Verificação pública bloqueada pelo navegador; mantendo upload.', {
+        url,
+        fileType: file.type,
+        error,
+      });
+      return;
+    }
+
+    throw error;
+  }
 }
 
 /**

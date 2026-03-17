@@ -207,6 +207,7 @@ export default function Clients() {
           setContractStartDate((data as any).contract_start_date || '');
           setAutoRenewal((data as any).auto_renewal || false);
           setContractDurationMonths((data as any).contract_duration_months || 12);
+          setShowMetrics((data as any).show_metrics !== false);
         }
       });
       // Load financial contract for editing

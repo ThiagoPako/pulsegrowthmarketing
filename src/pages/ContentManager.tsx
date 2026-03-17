@@ -274,6 +274,8 @@ export default function ContentManager() {
       if (insertError) throw insertError;
 
       toast.success('Conteúdo enviado com sucesso!');
+      setUploadSuccess(true);
+      setTimeout(() => setUploadSuccess(false), 3000);
       setTitle('');
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';

@@ -36,6 +36,7 @@ interface TeamMember {
   displayName?: string;
   jobTitle?: string;
   bio?: string;
+  birthday?: string | null;
 }
 
 interface PartnerInfo {

@@ -46,10 +46,8 @@ export default function BirthdayCountdown() {
               >
                 <UserAvatar
                   user={{
-                    id: person.id,
                     name: person.display_name || person.name,
                     avatarUrl: person.avatar_url || undefined,
-                    role: person.role,
                   }}
                   size="sm"
                 />

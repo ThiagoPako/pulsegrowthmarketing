@@ -107,6 +107,12 @@ export default function FinancialApiSettings() {
       toast.error('Preencha nome e provedor');
       return;
     }
+    if (form.provider === 'meta_ads' && !editingId) {
+      if (!form.metaAppId || !form.metaAppSecret || !form.metaPageToken || !form.metaIgBusinessId || !form.metaPageId) {
+        toast.error('Preencha todos os campos do Meta');
+        return;
+      }
+    }
     const configData: any = { notes: form.notes };
     if (form.provider === 'meta_ads') {
       configData.meta_app_id = form.metaAppId;

@@ -15,6 +15,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import PortalNotifications from '@/components/portal/PortalNotifications';
 import ZonaCriativa from '@/components/portal/ZonaCriativa';
 import PortalTutorial from '@/components/portal/PortalTutorial';
+import PortalRecordingCalendar from '@/components/portal/PortalRecordingCalendar';
 import { syncPortalApproval, syncPortalAdjustment, syncPortalComment } from '@/lib/portalSync';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
@@ -50,7 +51,7 @@ interface ClientData {
   monthly_recordings: number; plan_id: string | null; show_metrics: boolean;
 }
 
-type TabView = 'library' | 'metrics' | 'criativa';
+type TabView = 'library' | 'metrics' | 'criativa' | 'agenda';
 
 export default function ClientPortal() {
   const { clientId: paramSlug } = useParams<{ clientId: string }>();
@@ -374,6 +375,12 @@ export default function ClientPortal() {
               >
                 Zona Criativa
               </button>
+              <button
+                onClick={() => setActiveTab('agenda')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'agenda' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+              >
+                Agenda
+              </button>
               {(client.show_metrics || isTeamMember) && (
                 <button
                   onClick={() => setActiveTab('metrics')}
@@ -434,6 +441,9 @@ export default function ClientPortal() {
         </button>
         <button onClick={() => setActiveTab('criativa')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'criativa' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'criativa' ? { borderColor: `hsl(${clientColor})` } : {}}>
           Zona Criativa
+        </button>
+        <button onClick={() => setActiveTab('agenda')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'agenda' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'agenda' ? { borderColor: `hsl(${clientColor})` } : {}}>
+          Agenda
         </button>
         {(client.show_metrics || isTeamMember) && (
           <button onClick={() => setActiveTab('metrics')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'metrics' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'metrics' ? { borderColor: `hsl(${clientColor})` } : {}}>
@@ -555,6 +565,8 @@ export default function ClientPortal() {
           </motion.div>
         ) : activeTab === 'criativa' ? (
           <ZonaCriativa clientId={client.id} clientColor={clientColor} isAuthenticated={isAuthenticated} />
+        ) : activeTab === 'agenda' ? (
+          <PortalRecordingCalendar clientId={client.id} clientColor={clientColor} />
         ) : (
           /* ── METRICS TAB ── */
           <motion.div key="metrics" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8 pb-20 space-y-8">

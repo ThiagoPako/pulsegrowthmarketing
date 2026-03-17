@@ -281,9 +281,12 @@ export default function Clients() {
   };
 
   const handleSave = async () => {
+    if (saving) return;
     if (!form.companyName || !form.responsiblePerson || !form.whatsapp) {
       toast.error('Preencha todos os campos obrigatórios'); return;
     }
+    setSaving(true);
+    try {
     if (editing) {
       const logoUrl = await uploadLogo(editing.id);
       updateClient({ ...editing, ...form, logoUrl: logoUrl || undefined } as Client);

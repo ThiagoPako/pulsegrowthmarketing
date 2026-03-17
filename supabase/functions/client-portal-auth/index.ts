@@ -24,7 +24,9 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    const { action, login, password, client_id, slug } = await req.json();
+    const body = await req.json();
+    const { action, login, password, client_id, slug } = body;
+    console.log("Portal auth action:", action);
 
     // ACTION: login
     if (action === "login") {

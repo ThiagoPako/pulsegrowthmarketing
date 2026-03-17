@@ -819,10 +819,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                               }
                               setUploadingMockup(true);
                               try {
-                                const fileName = `mockups/${task.client_id}/${Date.now()}_${file.name}`;
-                                const { data, error } = await supabase.storage.from('design-files').upload(fileName, file);
-                                if (error) throw error;
-                                const { data: { publicUrl } } = supabase.storage.from('design-files').getPublicUrl(data.path);
+                                const publicUrl = await uploadFileToVps(file, `design/mockups/${task.client_id}`);
                                 setMockupUrl(publicUrl);
                                 await updateTask.mutateAsync({ id: task.id, mockup_url: publicUrl } as any);
                                 await addHistory.mutateAsync({ task_id: task.id, action: 'Mockup de apresentação enviado (PDF)', details: publicUrl, user_id: user?.id });

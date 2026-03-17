@@ -271,14 +271,11 @@ export default function Clients() {
     if (!logoFile) return form.logoUrl || null;
     setUploadingLogo(true);
     try {
-      const ext = logoFile.name.split('.').pop();
-      const path = `${clientId}.${ext}`;
-      // Remove old logo if exists
-      await supabase.storage.from('client-logos').remove([path]);
-      const { error } = await supabase.storage.from('client-logos').upload(path, logoFile, { upsert: true });
-      if (error) { console.error('Logo upload error:', error); return null; }
-      const { data: urlData } = supabase.storage.from('client-logos').getPublicUrl(path);
-      return urlData.publicUrl + '?t=' + Date.now();
+      const url = await uploadFileToVps(logoFile, `logos/${clientId}`);
+      return url + '?t=' + Date.now();
+    } catch (err) {
+      console.error('Logo upload error:', err);
+      return null;
     } finally {
       setUploadingLogo(false);
     }

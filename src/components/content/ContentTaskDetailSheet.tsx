@@ -506,20 +506,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
 
     setUploadingVideo(true);
     try {
-      const ext = file.name.split('.').pop() || 'mp4';
-      const filePath = `${task.client_id}/${task.id}/video_${Date.now()}.${ext}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('client-content')
-        .upload(filePath, file, { upsert: true });
-      
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
-        .from('client-content')
-        .getPublicUrl(filePath);
-
-      const videoUrl = urlData.publicUrl;
+      const videoUrl = await uploadFileToVps(file, `content/${task.client_id}/${task.id}`);
 
       await supabase.from('content_tasks').update({
         edited_video_link: videoUrl,

@@ -175,14 +175,7 @@ export default function ContentManager() {
 
     setUploading(true);
     try {
-      const ext = file.name.split('.').pop();
-      const filePath = `${clientId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-
-      const { error: uploadError } = await supabase.storage.from('client-content').upload(filePath, file);
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage.from('client-content').getPublicUrl(filePath);
-      const fileUrl = urlData.publicUrl;
+      const fileUrl = await uploadFileToVps(file, `content/${clientId}`);
 
       let thumbnailUrl: string | null = null;
       let durationSeconds = 0;
@@ -217,10 +210,7 @@ export default function ContentManager() {
 
           if (thumbnailUrl) {
             const thumbBlob = await fetch(thumbnailUrl).then(r => r.blob());
-            const thumbPath = `${clientId}/thumbs/${Date.now()}.jpg`;
-            await supabase.storage.from('client-content').upload(thumbPath, thumbBlob);
-            const { data: thumbUrlData } = supabase.storage.from('client-content').getPublicUrl(thumbPath);
-            thumbnailUrl = thumbUrlData.publicUrl;
+            thumbnailUrl = await uploadBlobToVps(thumbBlob, `thumb_${Date.now()}.jpg`, `content/${clientId}/thumbs`);
           }
         } catch { /* thumbnail generation is best-effort */ }
       }

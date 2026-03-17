@@ -25,12 +25,13 @@ const CONTENT_TYPE_ICONS: Record<string, any> = {
   reel: Film, criativo: Palette, institucional: Video, anuncio: Video, arte: Image,
 };
 const STATUS_LABELS: Record<string, string> = {
-  pendente: 'Pendente', aprovado: 'Aprovado', ajuste_solicitado: 'Ajuste Solicitado',
+  pendente: 'Pendente', aprovado: 'Aprovado', ajuste_solicitado: 'Ajuste Solicitado', revisao_interna: 'Em Revisão',
 };
 const STATUS_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
   pendente: { bg: 'bg-amber-500/15', text: 'text-amber-400', dot: 'bg-amber-400' },
   aprovado: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', dot: 'bg-emerald-400' },
   ajuste_solicitado: { bg: 'bg-orange-500/15', text: 'text-orange-400', dot: 'bg-orange-400' },
+  revisao_interna: { bg: 'bg-blue-500/15', text: 'text-blue-400', dot: 'bg-blue-400' },
 };
 
 interface PortalContent {
@@ -276,10 +277,16 @@ export default function ClientPortal() {
     else setSelectedMonth(newMonth);
   };
 
+  // Filter: clients can't see 'revisao_interna' content, only team members can
+  const visibleContents = useMemo(() =>
+    isTeamMember ? contents : contents.filter(c => c.status !== 'revisao_interna'),
+    [contents, isTeamMember]
+  );
+
   // Group contents by type for current season
   const seasonContents = useMemo(() => 
-    contents.filter(c => c.season_month === selectedMonth && c.season_year === selectedYear),
-    [contents, selectedMonth, selectedYear]
+    visibleContents.filter(c => c.season_month === selectedMonth && c.season_year === selectedYear),
+    [visibleContents, selectedMonth, selectedYear]
   );
 
   const contentByType = useMemo(() => {
@@ -293,21 +300,21 @@ export default function ClientPortal() {
 
   // Also group all contents by season for browsing
   const allSeasons = useMemo(() => {
-    const seasons = contents.reduce((acc, c) => {
+    const seasons = visibleContents.reduce((acc, c) => {
       const key = `${c.season_year}-${c.season_month}`;
       if (!acc[key]) acc[key] = { month: c.season_month, year: c.season_year, items: [] };
       acc[key].items.push(c);
       return acc;
     }, {} as Record<string, { month: number; year: number; items: PortalContent[] }>);
     return Object.values(seasons).sort((a, b) => b.year - a.year || b.month - a.month);
-  }, [contents]);
+  }, [visibleContents]);
 
   // Available months for selector
   const availableMonths = useMemo(() => {
     const months = new Set<string>();
-    contents.forEach(c => months.add(`${c.season_year}-${c.season_month}`));
+    visibleContents.forEach(c => months.add(`${c.season_year}-${c.season_month}`));
     return months;
-  }, [contents]);
+  }, [visibleContents]);
 
   // Metrics
   const reelsCount = seasonContents.filter(c => c.content_type === 'reel').length;

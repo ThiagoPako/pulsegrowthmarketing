@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.meta-oauth]
 verify_jwt = false
+
+[functions.generate-caption]
+verify_jwt = false

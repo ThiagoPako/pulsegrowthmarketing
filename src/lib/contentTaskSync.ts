@@ -236,6 +236,26 @@ export async function syncContentTaskColumnChange(
   }
 
   if (newColumn === 'envio') {
+    // Update portal content from revisao_interna → pendente (now visible to client)
+    try {
+      const { data: portalContentToPublish } = await supabase
+        .from('client_portal_contents')
+        .select('id')
+        .eq('client_id', ctx.clientId)
+        .eq('title', ctx.title)
+        .eq('status', 'revisao_interna')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (portalContentToPublish?.length) {
+        await supabase.from('client_portal_contents').update({
+          status: 'pendente',
+          updated_at: new Date().toISOString(),
+        } as any).eq('id', portalContentToPublish[0].id);
+      }
+    } catch (err) {
+      console.error('Portal content publish error:', err);
+    }
     // Auto-send WhatsApp portal invite message
     try {
       const whatsConfig = await getWhatsAppConfig();

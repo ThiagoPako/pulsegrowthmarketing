@@ -35,8 +35,45 @@ interface ContentRow {
   created_at: string; clients?: { company_name: string } | null;
 }
 
+/* ── Video Player Modal ── */
+function VideoPlayerModal({ content, onClose }: { content: ContentRow; onClose: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  return (
+    <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="relative w-full max-w-3xl max-h-[90vh] flex flex-col items-center"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between w-full mb-3">
+          <div>
+            <h3 className="text-white font-semibold text-lg">{content.title}</h3>
+            <p className="text-white/60 text-sm">{(content as any).clients?.company_name}</p>
+          </div>
+          <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={onClose}>
+            <X size={20} />
+          </Button>
+        </div>
+        {content.file_url?.match(/\.(mp4|mov|webm|avi)(\?|$)/i) || ['reel', 'institucional', 'anuncio'].includes(content.content_type) ? (
+          <video
+            ref={videoRef}
+            src={content.file_url || ''}
+            controls
+            autoPlay
+            playsInline
+            className="w-full max-h-[80vh] rounded-xl bg-black"
+          />
+        ) : (
+          <img src={content.file_url || ''} alt={content.title} className="w-full max-h-[80vh] object-contain rounded-xl" />
+        )}
+      </motion.div>
+    </div>
+  );
+}
+
 /* ── Instagram-style grid tile with hover video preview ── */
-function ContentTile({ content, onDelete }: { content: ContentRow; onDelete: (id: string) => void }) {
+function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDelete: (id: string) => void; onPlay: (content: ContentRow) => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [hovering, setHovering] = useState(false);
 
@@ -64,9 +101,10 @@ function ContentTile({ content, onDelete }: { content: ContentRow; onDelete: (id
   const statusColor = (s: string) =>
     s === 'aprovado' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
     s === 'ajuste_solicitado' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
+    s === 'revisao_interna' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
     'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
   const statusLabel = (s: string) =>
-    s === 'aprovado' ? 'Aprovado' : s === 'ajuste_solicitado' ? 'Ajuste' : 'Pendente';
+    s === 'aprovado' ? 'Aprovado' : s === 'ajuste_solicitado' ? 'Ajuste' : s === 'revisao_interna' ? 'Em Revisão' : 'Pendente';
 
   return (
     <div
@@ -75,6 +113,7 @@ function ContentTile({ content, onDelete }: { content: ContentRow; onDelete: (id
       onMouseLeave={stopPreview}
       onTouchStart={startPreview}
       onTouchEnd={stopPreview}
+      onClick={() => content.file_url && onPlay(content)}
     >
       {/* Thumbnail / image layer */}
       {content.thumbnail_url ? (
@@ -120,13 +159,15 @@ function ContentTile({ content, onDelete }: { content: ContentRow; onDelete: (id
         <Badge className={`text-[10px] ${statusColor(content.status)}`}>{statusLabel(content.status)}</Badge>
         <div className="flex items-center gap-1 mt-1">
           {content.file_url && (
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={e => { e.stopPropagation(); onPlay(content); }}>
+              <Eye size={14} />
+            </Button>
+          )}
+          {content.file_url && (
             <Button variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={e => { e.stopPropagation(); window.open(content.file_url!, '_blank'); }}>
               <ExternalLink size={14} />
             </Button>
           )}
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={e => { e.stopPropagation(); const name = (content as any).clients?.company_name || content.client_id; window.open(`/portal/${encodeURIComponent(name.replace(/\s+/g, '-').toLowerCase())}`, '_blank'); }}>
-            <Eye size={14} />
-          </Button>
           <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:bg-white/20" onClick={e => { e.stopPropagation(); onDelete(content.id); }}>
             <Trash2 size={14} />
           </Button>

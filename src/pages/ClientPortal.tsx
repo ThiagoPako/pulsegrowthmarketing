@@ -849,55 +849,76 @@ export default function ClientPortal() {
                   </div>
                 ) : selectedContent.file_url ? (
                   <div className="relative group">
-                    <video
-                      ref={videoRef}
-                      src={selectedContent.file_url}
-                      className="w-full aspect-video object-contain bg-black"
-                      onPlay={() => setIsPlaying(true)}
-                      onPause={() => setIsPlaying(false)}
-                      onEnded={() => setIsPlaying(false)}
-                      onTimeUpdate={handleTimeUpdate}
-                      onLoadedMetadata={handleTimeUpdate}
-                      onClick={togglePlay}
-                    />
-                    {/* Custom controls */}
-                    <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-12 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {/* Progress bar */}
-                      <div className="cursor-pointer h-1 bg-white/20 rounded-full mb-3 group/bar" onClick={handleSeek}>
-                        <div
-                          className="h-full rounded-full relative transition-all"
-                          style={{
-                            width: videoDuration ? `${(videoProgress / videoDuration) * 100}%` : '0%',
-                            background: `hsl(${clientColor})`,
-                          }}
-                        >
-                          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white opacity-0 group-hover/bar:opacity-100 transition-opacity" />
-                        </div>
+                    {videoLoading ? (
+                      <div className="aspect-video flex flex-col items-center justify-center gap-3 bg-[#0c0c14] text-white/60">
+                        <Loader2 className="w-8 h-8 animate-spin" />
+                        <p className="text-sm">Carregando vídeo...</p>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <button onClick={togglePlay} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
-                            {isPlaying ? <Pause size={18} /> : <Play size={18} fill="white" />}
-                          </button>
-                          <button onClick={toggleMute} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
-                            {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-                          </button>
-                          <span className="text-xs text-white/60 font-mono">
-                            {formatDuration(videoProgress)} / {formatDuration(videoDuration)}
-                          </span>
-                        </div>
-                        <button onClick={toggleFullscreen} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
-                          <Maximize size={16} />
-                        </button>
+                    ) : videoLoadError ? (
+                      <div className="aspect-video flex flex-col items-center justify-center gap-3 bg-[#0c0c14] text-center px-6 text-white/60">
+                        <Film size={36} className="text-white/20" />
+                        <p className="text-sm">{videoLoadError}</p>
                       </div>
-                    </div>
-                    {/* Center play button */}
-                    {!isPlaying && (
-                      <button onClick={togglePlay} className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
-                          <Play size={28} fill="white" className="ml-1" />
+                    ) : resolvedVideoUrl ? (
+                      <>
+                        <video
+                          key={`${selectedContent.id}-${resolvedVideoUrl}`}
+                          ref={videoRef}
+                          src={resolvedVideoUrl}
+                          playsInline
+                          preload="metadata"
+                          className="w-full aspect-video object-contain bg-black"
+                          onPlay={() => setIsPlaying(true)}
+                          onPause={() => setIsPlaying(false)}
+                          onEnded={() => setIsPlaying(false)}
+                          onTimeUpdate={handleTimeUpdate}
+                          onLoadedMetadata={handleTimeUpdate}
+                          onClick={() => void togglePlay()}
+                        />
+                        {/* Custom controls */}
+                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-12 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {/* Progress bar */}
+                          <div className="cursor-pointer h-1 bg-white/20 rounded-full mb-3 group/bar" onClick={handleSeek}>
+                            <div
+                              className="h-full rounded-full relative transition-all"
+                              style={{
+                                width: videoDuration ? `${(videoProgress / videoDuration) * 100}%` : '0%',
+                                background: `hsl(${clientColor})`,
+                              }}
+                            >
+                              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white opacity-0 group-hover/bar:opacity-100 transition-opacity" />
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <button onClick={() => void togglePlay()} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
+                                {isPlaying ? <Pause size={18} /> : <Play size={18} fill="white" />}
+                              </button>
+                              <button onClick={toggleMute} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
+                                {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                              </button>
+                              <span className="text-xs text-white/60 font-mono">
+                                {formatDuration(videoProgress)} / {formatDuration(videoDuration)}
+                              </span>
+                            </div>
+                            <button onClick={toggleFullscreen} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
+                              <Maximize size={16} />
+                            </button>
+                          </div>
                         </div>
-                      </button>
+                        {/* Center play button */}
+                        {!isPlaying && (
+                          <button onClick={() => void togglePlay()} className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
+                              <Play size={28} fill="white" className="ml-1" />
+                            </div>
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <div className="aspect-video flex items-center justify-center bg-[#0c0c14]">
+                        <Film size={64} className="text-white/10" />
+                      </div>
                     )}
                   </div>
                 ) : (

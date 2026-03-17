@@ -75,9 +75,6 @@ export default function FinancialApiSettings() {
     notes: '',
     metaAppId: '',
     metaAppSecret: '',
-    metaPageToken: '',
-    metaIgBusinessId: '',
-    metaPageId: '',
   });
 
   useEffect(() => { loadData(); }, []);

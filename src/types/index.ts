@@ -60,6 +60,7 @@ export interface Client {
   acceptsExtra: boolean;
   extraClientAppears: boolean;
   whatsapp: string; // 55+DDD+number format
+  whatsappGroup?: string; // group ID for sending to groups instead of individual
   weeklyReels: number;
   weeklyCreatives: number;
   weeklyGoal: number;

@@ -537,6 +537,11 @@ export default function Clients() {
         <Input value={form.whatsapp} onChange={e => setForm({ ...form, whatsapp: e.target.value })} placeholder="5562999999999" />
         <p className="text-[10px] text-muted-foreground">Formato: 55 + DDD + número (ex: 5562999999999)</p>
       </div>
+      <div className="space-y-1">
+        <Label>Grupo WhatsApp (opcional)</Label>
+        <Input value={form.whatsappGroup || ''} onChange={e => setForm({ ...form, whatsappGroup: e.target.value })} placeholder="ID do grupo ou número do grupo" />
+        <p className="text-[10px] text-muted-foreground">Se preenchido, mensagens automáticas serão enviadas para o grupo em vez do número pessoal</p>
+      </div>
       <div className="space-y-2">
         <Label>Cor de Identificação</Label>
         <div className="flex gap-2 flex-wrap">

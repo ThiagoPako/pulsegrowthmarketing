@@ -86,6 +86,7 @@ export default function Clients() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [saving, setSaving] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [preferredShift, setPreferredShift] = useState<PreferredShift>('ambos');
   const [sendWaOpen, setSendWaOpen] = useState(false);

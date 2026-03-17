@@ -155,7 +155,7 @@ export default function OnboardingManagement() {
             </div>
             <div className="space-y-2.5 min-h-[100px]">
               {clientsByStage[stage.key]?.map(group => (
-                <OnboardingCard key={group.clientId} group={group} onClick={() => setSelectedGroup(group)} />
+                <OnboardingCard key={group.clientId} group={group} onClick={() => setSelectedGroup(group)} onDelete={() => deleteOnboardingClient.mutate(group.clientId)} />
               ))}
               {clientsByStage[stage.key]?.length === 0 && (
                 <div className="rounded-xl border border-dashed p-6 text-center">

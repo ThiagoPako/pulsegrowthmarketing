@@ -492,6 +492,11 @@ export default function ContentManager() {
           )}
         </CardContent>
       </Card>
+
+      {/* Video Player Modal */}
+      {playingContent && (
+        <VideoPlayerModal content={playingContent} onClose={() => setPlayingContent(null)} />
+      )}
     </div>
   );
 }

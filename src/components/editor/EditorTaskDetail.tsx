@@ -202,7 +202,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
     setUploadProgress(`Enviando ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)...`);
     
     try {
-      const folder = `editor/${task.client_id}`;
+      const folder = `content/${task.client_id}/${task.id}`;
       console.log('[EditorUpload] Iniciando upload VPS:', { name: file.name, size: file.size, folder });
       const url = await uploadFileToVps(file, folder);
       console.log('[EditorUpload] URL retornada:', url);

@@ -7,6 +7,37 @@
 const VPS_BASE_URL = 'https://agenciapulse.tech/api';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
 
+function normalizeVpsPath(path: string) {
+  return path.replace(/^\/+/, '').replace(/^uploads\//, '');
+}
+
+function buildPublicVpsUrl(path: string) {
+  return `${VPS_UPLOADS_URL}/${normalizeVpsPath(path)}`;
+}
+
+function resolveUploadUrl(data: any, folder?: string) {
+  if (typeof data?.path === 'string' && data.path.trim()) {
+    return buildPublicVpsUrl(data.path.trim());
+  }
+
+  if (typeof data?.url === 'string' && data.url.trim()) {
+    const rawUrl = data.url.trim();
+
+    if (rawUrl.startsWith(VPS_UPLOADS_URL)) return rawUrl;
+    if (rawUrl.startsWith('/uploads/')) return `https://agenciapulse.tech${rawUrl}`;
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) return rawUrl;
+
+    return buildPublicVpsUrl(rawUrl);
+  }
+
+  if (typeof data?.filename === 'string' && data.filename.trim()) {
+    const baseFolder = folder ? `${normalizeVpsPath(folder)}/` : '';
+    return buildPublicVpsUrl(`${baseFolder}${data.filename.trim()}`);
+  }
+
+  throw new Error('Upload succeeded but no public URL was returned');
+}
+
 /**
  * Upload a file to the VPS
  * @param file - File object to upload
@@ -24,7 +55,6 @@ export async function uploadFileToVps(
   const response = await fetch(`${VPS_BASE_URL}/upload`, {
     method: 'POST',
     body: formData,
-    // Do NOT set Content-Type — browser sets it with boundary for multipart
   });
 
   if (!response.ok) {
@@ -33,8 +63,7 @@ export async function uploadFileToVps(
   }
 
   const data = await response.json();
-  // Expects response: { filename: "...", url: "..." } or { path: "..." }
-  return data.url || `${VPS_UPLOADS_URL}/${data.path || data.filename}`;
+  return resolveUploadUrl(data, folder);
 }
 
 /**
@@ -55,9 +84,8 @@ export async function uploadBlobToVps(
  */
 export function getVpsMediaUrl(path: string): string {
   if (!path) return '';
-  // If already a full URL, return as-is
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
-  return `${VPS_UPLOADS_URL}/${path}`;
+  return buildPublicVpsUrl(path);
 }
 
 /**
@@ -67,7 +95,7 @@ export async function deleteFileFromVps(path: string): Promise<void> {
   const response = await fetch(`${VPS_BASE_URL}/upload`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path }),
+    body: JSON.stringify({ path: normalizeVpsPath(path) }),
   });
   if (!response.ok) {
     console.error('Delete failed:', await response.text());

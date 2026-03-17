@@ -172,11 +172,11 @@ Além do roteiro, gere uma LEGENDA para postagem no Instagram. A legenda deve:
 - Ser envolvente e gerar curiosidade
 - NÃO incluir hashtags (serão adicionadas depois)`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch(ai.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
+        "Authorization": `Bearer ${ai.key}`,
       },
       body: JSON.stringify({
         model: selectedModel,

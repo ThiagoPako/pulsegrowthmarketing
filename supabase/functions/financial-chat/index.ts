@@ -263,15 +263,18 @@ ${contextData}`,
 
     messages.push({ role: "user", content: question });
 
-    // Call AI Gateway
-    const aiResponse = await fetch(AI_GATEWAY_URL, {
+    // Call AI (supports both Lovable Gateway and Google Gemini)
+    const ai = getAiConfig();
+    const resolvedModel = resolveModel(selectedModel, ai.provider);
+
+    const aiResponse = await fetch(ai.url, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${ai.key}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: selectedModel,
+        model: resolvedModel,
         messages,
         temperature: 0.3,
         max_tokens: 2000,

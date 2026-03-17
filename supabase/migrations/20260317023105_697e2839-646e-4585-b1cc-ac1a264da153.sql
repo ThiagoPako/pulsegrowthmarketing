@@ -1,0 +1,1 @@
+ALTER TABLE public.clients ADD COLUMN show_metrics boolean NOT NULL DEFAULT true;

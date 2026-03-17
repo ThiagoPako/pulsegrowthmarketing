@@ -47,7 +47,7 @@ interface PortalComment {
 interface ClientData {
   id: string; company_name: string; logo_url: string | null; color: string;
   weekly_reels: number; weekly_creatives: number; weekly_stories: number;
-  monthly_recordings: number; plan_id: string | null;
+  monthly_recordings: number; plan_id: string | null; show_metrics: boolean;
 }
 
 type TabView = 'library' | 'metrics' | 'criativa';
@@ -111,11 +111,11 @@ export default function ClientPortal() {
 
     let clientQuery;
     if (isUUID) {
-      clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id').eq('id', slug).single();
+      clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics').eq('id', slug).single();
     } else {
       // Match by slug (lowercase, hyphens → spaces)
       const companySearch = slug.replace(/-/g, ' ');
-      clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id').ilike('company_name', companySearch).single();
+      clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics').ilike('company_name', companySearch).single();
     }
 
     const [clientRes, contentsRes] = await Promise.all([
@@ -374,12 +374,14 @@ export default function ClientPortal() {
               >
                 Zona Criativa
               </button>
-              <button
-                onClick={() => setActiveTab('metrics')}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'metrics' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
-              >
-                Métricas
-              </button>
+              {(client.show_metrics || isTeamMember) && (
+                <button
+                  onClick={() => setActiveTab('metrics')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'metrics' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+                >
+                  Métricas
+                </button>
+              )}
             </div>
             <PortalNotifications
               clientId={client.id}
@@ -433,9 +435,11 @@ export default function ClientPortal() {
         <button onClick={() => setActiveTab('criativa')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'criativa' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'criativa' ? { borderColor: `hsl(${clientColor})` } : {}}>
           Zona Criativa
         </button>
-        <button onClick={() => setActiveTab('metrics')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'metrics' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'metrics' ? { borderColor: `hsl(${clientColor})` } : {}}>
-          Métricas
-        </button>
+        {(client.show_metrics || isTeamMember) && (
+          <button onClick={() => setActiveTab('metrics')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'metrics' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'metrics' ? { borderColor: `hsl(${clientColor})` } : {}}>
+            Métricas
+          </button>
+        )}
       </div>
 
       <AnimatePresence mode="wait">
@@ -480,12 +484,14 @@ export default function ClientPortal() {
                           <Play size={16} fill="currentColor" /> Assistir conteúdos
                         </button>
                       )}
-                      <button
-                        onClick={() => setActiveTab('metrics')}
-                        className="inline-flex items-center gap-2 px-6 py-3 rounded-full font-semibold text-sm bg-white/10 hover:bg-white/15 transition-all hover:scale-105 active:scale-95"
-                      >
-                        <BarChart3 size={16} /> Ver métricas
-                      </button>
+                      {(client.show_metrics || isTeamMember) && (
+                        <button
+                          onClick={() => setActiveTab('metrics')}
+                          className="inline-flex items-center gap-2 px-6 py-3 rounded-full font-semibold text-sm bg-white/10 hover:bg-white/15 transition-all hover:scale-105 active:scale-95"
+                        >
+                          <BarChart3 size={16} /> Ver métricas
+                        </button>
+                      )}
                     </div>
 
                     {/* Quick stats */}

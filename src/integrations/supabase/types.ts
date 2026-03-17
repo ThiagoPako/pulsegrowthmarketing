@@ -493,6 +493,7 @@ export type Database = {
           presence_days: number
           responsible_person: string
           selected_weeks: number[]
+          show_metrics: boolean
           updated_at: string
           videomaker_id: string | null
           weekly_creatives: number
@@ -541,6 +542,7 @@ export type Database = {
           presence_days?: number
           responsible_person?: string
           selected_weeks?: number[]
+          show_metrics?: boolean
           updated_at?: string
           videomaker_id?: string | null
           weekly_creatives?: number
@@ -589,6 +591,7 @@ export type Database = {
           presence_days?: number
           responsible_person?: string
           selected_weeks?: number[]
+          show_metrics?: boolean
           updated_at?: string
           videomaker_id?: string | null
           weekly_creatives?: number

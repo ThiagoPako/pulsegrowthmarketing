@@ -115,6 +115,7 @@ export default function FinancialRevenues() {
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
   const [sendingBilling, setSendingBilling] = useState<string | null>(null);
   const [sendingAll, setSendingAll] = useState(false);
+  const [showRocket, setShowRocket] = useState(false);
 
   const monthOptions = useMemo(() => {
     const options = [];

@@ -858,6 +858,24 @@ export default function ClientPortal() {
                       <div className="aspect-video flex flex-col items-center justify-center gap-3 bg-[#0c0c14] text-center px-6 text-white/60">
                         <Film size={36} className="text-white/20" />
                         <p className="text-sm">{videoLoadError}</p>
+                        <button
+                          onClick={() => {
+                            setVideoLoadError(null);
+                            setResolvedVideoUrl(null);
+                            setVideoLoading(true);
+                            if (selectedContent?.file_url && shouldProxyPortalVideo(selectedContent.file_url)) {
+                              createPortalVideoObjectUrl(selectedContent.file_url)
+                                .then(url => { setResolvedVideoUrl(url); setVideoLoading(false); })
+                                .catch(err => { setVideoLoadError(err instanceof Error ? err.message : 'Erro'); setVideoLoading(false); });
+                            } else if (selectedContent?.file_url) {
+                              setResolvedVideoUrl(selectedContent.file_url);
+                              setVideoLoading(false);
+                            }
+                          }}
+                          className="mt-1 px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-white/80 transition-colors"
+                        >
+                          Tentar novamente
+                        </button>
                       </div>
                     ) : resolvedVideoUrl ? (
                       <>

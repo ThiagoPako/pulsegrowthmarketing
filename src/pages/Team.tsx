@@ -492,6 +492,11 @@ export default function Team() {
                   )}
                   {currentUser?.role === 'admin' && (
                     <>
+                      {u.id !== currentUser?.id && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Permissões de módulos" onClick={() => handleOpenPermissions(u)}>
+                          <Lock size={16} />
+                        </Button>
+                      )}
                       <Button variant="ghost" size="icon" className="h-8 w-8" title="Redefinir senha" onClick={() => { setResetTarget(u); setResetOpen(true); }}>
                         <KeyRound size={16} />
                       </Button>

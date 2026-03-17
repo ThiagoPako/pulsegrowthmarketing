@@ -163,10 +163,29 @@ export default function FinancialDashboard() {
       .filter(c => c.isDueThisWeek);
   }, [contracts, clients, revenues]);
 
+  const [paidCelebration, setPaidCelebration] = useState(false);
+  const [paidClientName, setPaidClientName] = useState('');
+
+  const paidParticles = useMemo(() =>
+    Array.from({ length: 30 }, (_, i) => ({
+      id: i,
+      emoji: i % 3 === 0 ? '🚀' : i % 3 === 1 ? '💰' : '💵',
+      x: 10 + Math.random() * 80,
+      delay: Math.random() * 0.6,
+      duration: 1.2 + Math.random() * 1.5,
+      size: 18 + Math.random() * 16,
+    })),
+    [paidCelebration]
+  );
+
   const handleMarkPaid = async (item: typeof dueThisWeek[0]) => {
     if (item.revenueId) {
       const ok = await updateRevenue(item.revenueId, { status: 'recebida', paid_at: new Date().toISOString().split('T')[0] });
-      if (ok) toast.success(`${item.clientName} marcado como pago`);
+      if (ok) {
+        setPaidClientName(item.clientName);
+        setPaidCelebration(true);
+        setTimeout(() => setPaidCelebration(false), 3500);
+      }
     } else {
       toast.error('Gere as receitas do mês primeiro em Receitas');
     }

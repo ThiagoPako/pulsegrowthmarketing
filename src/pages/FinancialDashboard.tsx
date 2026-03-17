@@ -542,11 +542,10 @@ export default function FinancialDashboard() {
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
-                      item.isPaid ? 'bg-emerald-500/15' : 'bg-primary/10'
-                    }`}>
-                      {item.isPaid ? '✅' : '📅'}
-                    </div>
+                    <ClientLogo
+                      client={{ companyName: item.clientName, color: item.clientColor, logoUrl: item.clientLogoUrl }}
+                      size="md"
+                    />
                     <div>
                       <span className="text-sm font-semibold text-foreground">{item.clientName}</span>
                       <div className="flex items-center gap-2 mt-0.5">

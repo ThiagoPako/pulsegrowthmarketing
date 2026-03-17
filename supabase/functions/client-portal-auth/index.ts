@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: "client_id or slug required" }), { status: 400, headers: corsHeaders });
       }
 
-      let query = adminClient.from("clients").select("id, company_name, color, logo_url, client_login, client_password_hash");
+      let query = adminClient.from("clients").select("id, company_name, color, logo_url, client_login, client_password_hash, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics");
       if (client_id) {
         query = query.eq("id", client_id);
       } else {
@@ -132,7 +132,28 @@ Deno.serve(async (req) => {
         color: data.color,
         logo_url: data.logo_url,
         has_credentials: !!(data.client_login && data.client_password_hash),
+        weekly_reels: data.weekly_reels,
+        weekly_creatives: data.weekly_creatives,
+        weekly_stories: data.weekly_stories,
+        monthly_recordings: data.monthly_recordings,
+        plan_id: data.plan_id,
+        show_metrics: data.show_metrics,
       }), { headers: corsHeaders });
+    }
+
+    // ACTION: get_contents (portal contents for a client)
+    if (action === "get_contents") {
+      if (!client_id) {
+        return new Response(JSON.stringify({ error: "client_id required" }), { status: 400, headers: corsHeaders });
+      }
+
+      const { data, error } = await adminClient
+        .from("client_portal_contents")
+        .select("*")
+        .eq("client_id", client_id)
+        .order("created_at", { ascending: false });
+
+      return new Response(JSON.stringify({ contents: data || [] }), { headers: corsHeaders });
     }
 
     return new Response(JSON.stringify({ error: "Invalid action" }), { status: 400, headers: corsHeaders });

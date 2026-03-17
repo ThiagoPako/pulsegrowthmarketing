@@ -260,52 +260,86 @@ export default function FinancialRevenues() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map(r => {
+              {filtered.map((r, i) => {
                 const client = clients.find(c => c.id === r.client_id);
                 const st = STATUS_MAP[r.status] || { label: r.status, variant: 'secondary' as const };
                 return (
-                  <TableRow key={r.id}>
+                  <motion.tr
+                    key={r.id}
+                    initial={{ opacity: 0, x: -15 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.25 + i * 0.04, duration: 0.3 }}
+                    className="border-b transition-colors hover:bg-muted/50"
+                  >
                     <TableCell className="font-medium">{client?.companyName || '—'}</TableCell>
-                    <TableCell>{fmt(Number(r.amount))}</TableCell>
-                    <TableCell>{r.due_date}</TableCell>
+                    <TableCell className="font-semibold">{fmt(Number(r.amount))}</TableCell>
+                    <TableCell className="text-muted-foreground">{r.due_date}</TableCell>
                     <TableCell><Badge variant={st.variant}>{st.label}</Badge></TableCell>
-                    <TableCell>{r.paid_at || '—'}</TableCell>
+                    <TableCell className="text-muted-foreground">{r.paid_at || '—'}</TableCell>
                     <TableCell>
-                      <div className="flex gap-1">
+                      <div className="flex gap-1.5">
                         {r.status !== 'recebida' && (
                           <>
-                            <Button variant="ghost" size="sm" onClick={() => handleMarkPaid(r.id)} title="Marcar como recebida">
-                              <CheckCircle size={14} className="mr-1" /> Recebida
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-primary"
-                              onClick={() => handleSendBilling(r.id)}
-                              disabled={sendingBilling === r.id}
-                              title="Enviar cobrança via WhatsApp"
-                            >
-                              {sendingBilling === r.id ? (
-                                <Loader2 size={14} className="mr-1 animate-spin" />
-                              ) : (
-                                <MessageCircle size={14} className="mr-1" />
-                              )}
-                              Cobrar
-                            </Button>
+                            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.92 }}>
+                              <Button
+                                size="sm"
+                                onClick={() => handleMarkPaid(r.id)}
+                                title="Marcar como recebida"
+                                className="gap-1.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white shadow-sm shadow-emerald-500/20 font-medium"
+                              >
+                                <CheckCircle size={13} /> Recebida
+                              </Button>
+                            </motion.div>
+                            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.92 }}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleSendBilling(r.id)}
+                                disabled={sendingBilling === r.id}
+                                title="Enviar cobrança via WhatsApp"
+                                className="gap-1.5 border-primary/30 text-primary hover:bg-primary/10 font-medium shadow-sm"
+                              >
+                                {sendingBilling === r.id ? (
+                                  <Loader2 size={13} className="animate-spin" />
+                                ) : (
+                                  <MessageCircle size={13} />
+                                )}
+                                Cobrar
+                              </Button>
+                            </motion.div>
                           </>
                         )}
+                        {r.status === 'recebida' && (
+                          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 300 }}>
+                            <span className="text-emerald-500 text-lg">✅</span>
+                          </motion.div>
+                        )}
                         {r.status === 'prevista' && (
-                          <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleMarkOverdue(r.id)}>
-                            Em Atraso
-                          </Button>
+                          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.92 }}>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="gap-1.5 text-destructive hover:bg-destructive/10 font-medium"
+                              onClick={() => handleMarkOverdue(r.id)}
+                            >
+                              <AlertTriangle size={13} /> Em Atraso
+                            </Button>
+                          </motion.div>
                         )}
                       </div>
                     </TableCell>
-                  </TableRow>
+                  </motion.tr>
                 );
               })}
               {filtered.length === 0 && (
-                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhuma receita neste mês. Clique em "Gerar Receitas".</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-12">
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">
+                      <motion.span className="text-4xl block" animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 2 }}>📊</motion.span>
+                      <p className="text-muted-foreground text-sm">Nenhuma receita neste mês. Clique em "Gerar Receitas".</p>
+                    </motion.div>
+                  </TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>

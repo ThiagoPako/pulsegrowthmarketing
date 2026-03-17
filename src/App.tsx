@@ -40,6 +40,8 @@ import FinancialSettings from "@/pages/FinancialSettings";
 import FinancialCashReserve from "@/pages/FinancialCashReserve";
 import FinancialMovements from "@/pages/FinancialMovements";
 import FinancialPartners from "@/pages/FinancialPartners";
+import FinancialChat from "@/pages/FinancialChat";
+import FinancialApiSettings from "@/pages/FinancialApiSettings";
 import NotFound from "@/pages/NotFound";
 import ClientOnboarding from "@/pages/ClientOnboarding";
 import DesignerKanban from "@/pages/DesignerKanban";
@@ -128,6 +130,8 @@ function AppRoutes() {
       <Route path="/financeiro/caixa" element={<ProtectedRoute><FinancialCashReserve /></ProtectedRoute>} />
       <Route path="/financeiro/movimentacoes" element={<ProtectedRoute><FinancialMovements /></ProtectedRoute>} />
       <Route path="/financeiro/parceiros" element={<ProtectedRoute><FinancialPartners /></ProtectedRoute>} />
+      <Route path="/financeiro/chat" element={<ProtectedRoute><FinancialChat /></ProtectedRoute>} />
+      <Route path="/financeiro/apis" element={<ProtectedRoute><FinancialApiSettings /></ProtectedRoute>} />
       <Route path="/onboarding/:clientId" element={<ClientOnboarding />} />
       <Route path="/portal-login/:clientId" element={<ClientPortalLogin />} />
       <Route path="/portal-registro/:clientId" element={<ClientPortalRegister />} />

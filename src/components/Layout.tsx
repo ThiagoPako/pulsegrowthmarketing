@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import UserAvatar from '@/components/UserAvatar';
 import ProfileDialog from '@/components/ProfileDialog';
 import {
-  LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp
+  LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Bot, Plug
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 
@@ -65,6 +65,8 @@ const navCategories: NavCategory[] = [
     label: 'Sistema',
     items: [
       { path: '/financeiro', label: 'Financeiro', icon: DollarSign, roles: ['admin'] },
+      { path: '/financeiro/chat', label: 'Chat IA', icon: Bot, roles: ['admin'] },
+      { path: '/financeiro/apis', label: 'APIs', icon: Plug, roles: ['admin'] },
       { path: '/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin', 'social_media'] },
       { path: '/whatsapp', label: 'WhatsApp', icon: MessageSquare, roles: ['admin', 'social_media'] },
       { path: '/configuracoes', label: 'Config', icon: Settings, roles: ['admin', 'social_media'] },

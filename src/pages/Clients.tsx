@@ -629,31 +629,141 @@ export default function Clients() {
     </div>
   );
 
-  const simulateConnect = (platform: 'instagram' | 'facebook') => {
-    if (platform === 'instagram') {
-      setSocialAccounts(prev => ({
-        ...prev,
-        instagram: {
-          connected: true,
-          accountName: form.companyName || 'Conta Instagram',
-          username: `@${(form.companyName || 'empresa').toLowerCase().replace(/\s/g, '')}`,
-          pageId: 'mock_page_' + Date.now(),
-          businessId: 'mock_biz_' + Date.now(),
-        }
-      }));
-      toast.success('Instagram conectado com sucesso!');
-    } else {
-      setSocialAccounts(prev => ({
-        ...prev,
-        facebook: {
-          connected: true,
-          accountName: form.companyName || 'Página Facebook',
-          pageId: 'mock_page_' + Date.now(),
-        }
-      }));
-      toast.success('Facebook conectado com sucesso!');
+  const connectViaOAuth = async () => {
+    const clientId = editing?.id || 'new';
+    try {
+      const redirectUri = `${window.location.origin}/`;
+      
+      const { data, error } = await supabase.functions.invoke('meta-oauth', {
+        body: {
+          action: 'get_oauth_url',
+          client_id: clientId,
+          redirect_uri: redirectUri,
+        },
+      });
+
+      if (error || data?.error) {
+        toast.error(data?.error || 'Erro ao gerar link de conexão. Configure o App Meta em Gerenciamento de APIs primeiro.');
+        return;
+      }
+
+      // Store client context for the callback
+      sessionStorage.setItem('meta_oauth_client_id', clientId);
+      sessionStorage.setItem('meta_oauth_redirect_uri', redirectUri);
+      sessionStorage.setItem('meta_oauth_company_name', form.companyName || '');
+
+      // Open OAuth popup
+      const popup = window.open(data.oauth_url, 'meta_oauth', 'width=600,height=700,scrollbars=yes');
+      
+      // Listen for the callback
+      const handleMessage = async () => {
+        const interval = setInterval(async () => {
+          try {
+            if (popup?.closed) {
+              clearInterval(interval);
+              // Check URL params for code
+              const urlParams = new URLSearchParams(window.location.search);
+              const code = urlParams.get('code');
+              const state = urlParams.get('state');
+
+              if (code) {
+                toast.info('Conectando contas...');
+                let parsedClientId = clientId;
+                try {
+                  const stateObj = JSON.parse(decodeURIComponent(state || '{}'));
+                  parsedClientId = stateObj.client_id || clientId;
+                } catch {}
+
+                const { data: result, error: exchangeError } = await supabase.functions.invoke('meta-oauth', {
+                  body: {
+                    action: 'exchange_code',
+                    code,
+                    redirect_uri: redirectUri,
+                    client_id: parsedClientId,
+                  },
+                });
+
+                if (exchangeError || result?.error) {
+                  toast.error(result?.error || 'Erro ao conectar contas');
+                } else {
+                  const accounts = result.accounts || [];
+                  const ig = accounts.find((a: any) => a.platform === 'instagram');
+                  const fb = accounts.find((a: any) => a.platform === 'facebook');
+
+                  setSocialAccounts({
+                    instagram: ig ? { connected: true, accountName: ig.name, username: `@${ig.username || ig.name}`, pageId: ig.pageId || '', businessId: ig.businessId || '' } : emptySocialAccounts().instagram,
+                    facebook: fb ? { connected: true, accountName: fb.name, pageId: fb.pageId || '' } : emptySocialAccounts().facebook,
+                  });
+
+                  toast.success(`✅ ${accounts.length} conta(s) conectada(s) automaticamente!`);
+                }
+
+                // Clean URL
+                window.history.replaceState({}, '', window.location.pathname);
+              }
+            }
+          } catch {}
+        }, 500);
+      };
+
+      handleMessage();
+    } catch (err: any) {
+      toast.error('Erro: ' + err.message);
     }
   };
+
+  // Handle OAuth redirect on page load
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+
+    if (code) {
+      const savedClientId = sessionStorage.getItem('meta_oauth_client_id');
+      const savedRedirectUri = sessionStorage.getItem('meta_oauth_redirect_uri');
+
+      if (savedClientId && savedRedirectUri) {
+        (async () => {
+          toast.info('Finalizando conexão com Meta...');
+          
+          let parsedClientId = savedClientId;
+          try {
+            const stateObj = JSON.parse(decodeURIComponent(state || '{}'));
+            parsedClientId = stateObj.client_id || savedClientId;
+          } catch {}
+
+          const { data: result, error } = await supabase.functions.invoke('meta-oauth', {
+            body: {
+              action: 'exchange_code',
+              code,
+              redirect_uri: savedRedirectUri,
+              client_id: parsedClientId,
+            },
+          });
+
+          if (error || result?.error) {
+            toast.error(result?.error || 'Erro ao conectar contas');
+          } else {
+            const accounts = result.accounts || [];
+            const ig = accounts.find((a: any) => a.platform === 'instagram');
+            const fb = accounts.find((a: any) => a.platform === 'facebook');
+
+            setSocialAccounts({
+              instagram: ig ? { connected: true, accountName: ig.name, username: `@${ig.username || ig.name}`, pageId: ig.pageId || '', businessId: ig.businessId || '' } : emptySocialAccounts().instagram,
+              facebook: fb ? { connected: true, accountName: fb.name, pageId: fb.pageId || '' } : emptySocialAccounts().facebook,
+            });
+
+            toast.success(`✅ ${accounts.length} conta(s) conectada(s)!`);
+          }
+
+          sessionStorage.removeItem('meta_oauth_client_id');
+          sessionStorage.removeItem('meta_oauth_redirect_uri');
+          sessionStorage.removeItem('meta_oauth_company_name');
+          window.history.replaceState({}, '', window.location.pathname);
+        })();
+      }
+    }
+  }, []);
 
   const disconnectAccount = (platform: 'instagram' | 'facebook') => {
     if (platform === 'instagram') {

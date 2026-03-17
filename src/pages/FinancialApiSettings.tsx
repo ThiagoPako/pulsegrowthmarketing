@@ -47,7 +47,15 @@ const PROVIDERS = [
   { value: 'google_ads', label: 'Google Ads', icon: '🔍' },
   { value: 'google_analytics', label: 'Google Analytics', icon: '📈' },
   { value: 'stripe', label: 'Stripe', icon: '💳' },
+  { value: 'lovable_ai', label: 'Lovable AI (Gemini)', icon: '🤖' },
   { value: 'custom', label: 'API Personalizada', icon: '🔧' },
+];
+
+const AI_MODELS = [
+  { value: 'google/gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', desc: 'Mais rápido e econômico. Ideal para tarefas simples.' },
+  { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash', desc: 'Equilíbrio entre velocidade e qualidade.' },
+  { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro', desc: 'Máxima qualidade. Melhor raciocínio e precisão.' },
+  { value: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash (Preview)', desc: 'Última geração. Rápido e capaz.' },
 ];
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: any }> = {

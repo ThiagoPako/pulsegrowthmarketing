@@ -16,6 +16,7 @@ import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn } from '@/
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { uploadFileToVps } from '@/services/vpsApi';
 import ClientLogo from '@/components/ClientLogo';
 import { motion, AnimatePresence } from 'framer-motion';
 import {

@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { useOnboarding, ONBOARDING_STAGES, OnboardingTask, OnboardingStage } from '@/hooks/useOnboarding';
 import { supabase } from '@/integrations/supabase/client';
+import { uploadFileToVps } from '@/services/vpsApi';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';

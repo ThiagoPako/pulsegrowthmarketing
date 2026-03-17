@@ -1281,8 +1281,6 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
           {isRevisao && task.edited_video_link && (
             <a
               href={`/portal/${task.client_id}`}
-              target="_blank"
-              rel="noopener noreferrer"
               onClick={e => e.stopPropagation()}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 transition-colors w-full text-left group/video"
             >

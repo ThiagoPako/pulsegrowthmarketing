@@ -348,12 +348,13 @@ export default function ContentKanban() {
 
   const handleDeleteConfirmed = async () => {
     if (!deleteTaskId) return;
-    // Cascade delete related records
-    await supabase.from('task_history').delete().eq('task_id', deleteTaskId);
-    await supabase.from('social_media_deliveries').delete().eq('content_task_id', deleteTaskId);
-    const { error } = await supabase.from('content_tasks').delete().eq('id', deleteTaskId);
-    if (error) { toast.error('Erro ao excluir'); return; }
-    toast.success('Tarefa excluída com sucesso');
+    try {
+      const { deleteContentTask } = await import('@/lib/contentDeleteSync');
+      await deleteContentTask(deleteTaskId);
+      toast.success('Tarefa excluída com sucesso');
+    } catch {
+      toast.error('Erro ao excluir');
+    }
     setDeleteDialogOpen(false);
     setDeleteTaskId(null);
     fetchTasks();

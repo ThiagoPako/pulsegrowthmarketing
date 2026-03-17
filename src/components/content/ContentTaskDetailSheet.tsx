@@ -668,7 +668,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
       status: 'agendado',
       posted_at: schedDate,
       scheduled_time: schedTime,
-      platform: schedPlatform || null,
+      platform: 'Instagram, Facebook',
     } as any).eq('content_task_id', task.id);
 
     await syncTask('acompanhamento');
@@ -1170,14 +1170,9 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                           <Input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)} className="h-9" />
                         </div>
                       </div>
-                      <div>
-                        <Label className="text-xs">Plataforma</Label>
-                        <Select value={schedPlatform} onValueChange={setSchedPlatform}>
-                          <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                          <SelectContent>
-                            {PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
+                      <div className="p-2 rounded-lg bg-muted/30 border border-border">
+                        <Label className="text-xs text-muted-foreground">Plataformas</Label>
+                        <p className="text-sm font-medium mt-1">📸 Instagram + Facebook</p>
                       </div>
                       <div className="flex gap-2">
                         <Button size="sm" className="flex-1" onClick={handleSchedulePost}>

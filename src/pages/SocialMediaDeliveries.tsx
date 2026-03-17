@@ -311,7 +311,7 @@ export default function SocialMediaDeliveries() {
     if (!schedulingItem || !schedDate) { toast.error('Selecione a data de postagem'); return; }
     const { error } = await supabase.from('social_media_deliveries').update({
       posted_at: schedDate, scheduled_time: schedTime || null,
-      platform: schedPlatform || null, status: 'agendado',
+      platform: 'Instagram, Facebook', status: 'agendado',
     } as any).eq('id', schedulingItem.id);
     if (error) { toast.error('Erro ao agendar'); return; }
     // Move content_task to acompanhamento with full sync
@@ -349,7 +349,7 @@ export default function SocialMediaDeliveries() {
       client_id: formClientId, content_type: formType, title: formTitle,
       description: formDescription || null, delivered_at: formDeliveredAt,
       posted_at: formPostedAt || null, scheduled_time: formScheduledTime || null,
-      platform: formPlatform || null, status: formStatus, created_by: user?.id || null,
+      platform: 'Instagram, Facebook', status: formStatus, created_by: user?.id || null,
     };
     if (editingId) {
       const { error } = await supabase.from('social_media_deliveries').update(payload as any).eq('id', editingId);
@@ -1222,12 +1222,9 @@ export default function SocialMediaDeliveries() {
               </div>
               <div><Label>Data da postagem *</Label><Input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)} /></div>
               <div><Label>Horário (opcional)</Label><Input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)} /></div>
-              <div>
-                <Label>Plataforma</Label>
-                <Select value={schedPlatform} onValueChange={setSchedPlatform}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>{PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-                </Select>
+              <div className="p-3 rounded-lg bg-muted/30 border border-border">
+                <Label className="text-xs text-muted-foreground">Plataformas</Label>
+                <p className="text-sm font-medium mt-1">📸 Instagram + Facebook</p>
               </div>
             </div>
           )}
@@ -1276,12 +1273,9 @@ export default function SocialMediaDeliveries() {
               <div><Label>Data de postagem</Label><Input type="date" value={formPostedAt} onChange={e => setFormPostedAt(e.target.value)} /></div>
               <div><Label>Horário</Label><Input type="time" value={formScheduledTime} onChange={e => setFormScheduledTime(e.target.value)} /></div>
             </div>
-            <div>
-              <Label>Plataforma</Label>
-              <Select value={formPlatform} onValueChange={setFormPlatform}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>{PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-              </Select>
+            <div className="p-3 rounded-lg bg-muted/30 border border-border">
+              <Label className="text-xs text-muted-foreground">Plataformas</Label>
+              <p className="text-sm font-medium mt-1">📸 Instagram + Facebook</p>
             </div>
           </div>
           <DialogFooter>

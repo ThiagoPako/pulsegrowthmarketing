@@ -51,99 +51,22 @@ function withCacheBust(url: string, attempt: number) {
   return `${url}${separator}_verify=${Date.now()}-${attempt}`;
 }
 
-function verifyImageUrl(url: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    const timeoutId = window.setTimeout(() => {
-      image.onload = null;
-      image.onerror = null;
-      reject(new Error('Upload concluído, mas a imagem pública não ficou acessível.'));
-    }, VERIFY_UPLOAD_TIMEOUT_MS);
-
-    image.onload = () => {
-      window.clearTimeout(timeoutId);
-      resolve();
-    };
-
-    image.onerror = () => {
-      window.clearTimeout(timeoutId);
-      reject(new Error('Upload concluído, mas a imagem pública não ficou acessível.'));
-    };
-
-    image.decoding = 'async';
-    image.src = url;
-  });
-}
-
-function verifyVideoUrl(url: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement('video');
-    let settled = false;
-
-    const finish = (callback: () => void) => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(timeoutId);
-      video.onloadedmetadata = null;
-      video.onerror = null;
-      video.pause();
-      video.removeAttribute('src');
-      video.load();
-      callback();
-    };
-
-    const timeoutId = window.setTimeout(() => {
-      finish(() => reject(new Error('Upload concluído, mas o vídeo público não ficou acessível.')));
-    }, VERIFY_UPLOAD_TIMEOUT_MS);
-
-    video.preload = 'metadata';
-    video.muted = true;
-    video.playsInline = true;
-    video.crossOrigin = 'anonymous';
-    video.onloadedmetadata = () => finish(resolve);
-    video.onerror = () => finish(() => reject(new Error('Upload concluído, mas o vídeo público não ficou acessível.')));
-    video.src = url;
-    video.load();
-  });
-}
-
-async function verifyWithRetry(url: string, verifier: (url: string) => Promise<void>): Promise<void> {
-  let lastError: Error | null = null;
-
-  for (let attempt = 1; attempt <= VERIFY_UPLOAD_ATTEMPTS; attempt += 1) {
-    try {
-      await verifier(withCacheBust(url, attempt));
-      return;
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error('Falha ao validar arquivo enviado.');
-
-      if (attempt < VERIFY_UPLOAD_ATTEMPTS) {
-        await wait(VERIFY_UPLOAD_DELAY_MS * attempt);
-      }
-    }
+/**
+ * Verify a URL is accessible via a lightweight HEAD/GET check.
+ * Works for any file type (images, videos, documents).
+ */
+async function verifyUrlAccessible(url: string): Promise<void> {
+  const response = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`Arquivo não acessível publicamente (HTTP ${response.status}).`);
   }
-
-  throw lastError ?? new Error('Falha ao validar arquivo enviado.');
 }
 
-async function verifyUploadedFile(url: string, file: File): Promise<void> {
+async function verifyUploadedFile(url: string, _file: File): Promise<void> {
   if (typeof window === 'undefined') return;
 
-  if (file.type.startsWith('image/')) {
-    await verifyWithRetry(url, verifyImageUrl);
-    return;
-  }
-
-  if (file.type.startsWith('video/')) {
-    try {
-      await verifyWithRetry(url, verifyVideoUrl);
-    } catch (error) {
-      console.warn('[VPS Upload] Não foi possível validar o vídeo publicamente no navegador, mas o upload foi concluído e a URL será salva mesmo assim.', {
-        url,
-        error,
-      });
-    }
-  }
+  // Use HEAD request to verify the file is publicly accessible — works for any file type
+  await verifyWithRetry(url, verifyUrlAccessible);
 }
 
 /**

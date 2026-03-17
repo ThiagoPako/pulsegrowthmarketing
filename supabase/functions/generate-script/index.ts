@@ -85,6 +85,41 @@ IMPORTANTE: Analise os exemplos acima para entender:
 Replique esse padrão no novo roteiro, adaptando ao cliente e tipo de vídeo solicitado.`;
 }
 
+// Support both Lovable AI Gateway and Google Gemini API directly
+function getAiConfig() {
+  const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+  const geminiKey = Deno.env.get("GOOGLE_GEMINI_API_KEY");
+  
+  if (lovableKey) {
+    return {
+      url: "https://ai.gateway.lovable.dev/v1/chat/completions",
+      key: lovableKey,
+      provider: "lovable" as const,
+    };
+  }
+  if (geminiKey) {
+    return {
+      url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+      key: geminiKey,
+      provider: "gemini" as const,
+    };
+  }
+  throw new Error("Nenhuma API key de IA configurada. Configure LOVABLE_API_KEY ou GOOGLE_GEMINI_API_KEY.");
+}
+
+function resolveModel(model: string, provider: "lovable" | "gemini"): string {
+  if (provider === "gemini") {
+    const map: Record<string, string> = {
+      "google/gemini-2.5-flash-lite": "gemini-2.5-flash-lite",
+      "google/gemini-2.5-flash": "gemini-2.5-flash",
+      "google/gemini-2.5-pro": "gemini-2.5-pro",
+      "google/gemini-3-flash-preview": "gemini-3-flash-preview",
+    };
+    return map[model] || model.replace("google/", "");
+  }
+  return model;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -93,15 +128,8 @@ serve(async (req) => {
   try {
     const { editorial, videoType, contentFormat, clientName, niche, exampleScripts, aiModel } = await req.json();
 
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: "API key not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const selectedModel = aiModel || "google/gemini-2.5-flash-lite";
+    const ai = getAiConfig();
+    const selectedModel = resolveModel(aiModel || "google/gemini-2.5-flash-lite", ai.provider);
 
     const structure = VIDEO_TYPE_STRUCTURES[videoType] || VIDEO_TYPE_STRUCTURES.vendas;
     const format = FORMAT_CONTEXT[contentFormat] || FORMAT_CONTEXT.reels;

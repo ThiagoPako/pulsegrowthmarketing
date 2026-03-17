@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink, Database, FileText as FileTextIcon, MonitorPlay } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink, Database, FileText as FileTextIcon, MonitorPlay, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
@@ -86,6 +86,7 @@ export default function Clients() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [saving, setSaving] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [preferredShift, setPreferredShift] = useState<PreferredShift>('ambos');
   const [sendWaOpen, setSendWaOpen] = useState(false);
@@ -280,9 +281,12 @@ export default function Clients() {
   };
 
   const handleSave = async () => {
+    if (saving) return;
     if (!form.companyName || !form.responsiblePerson || !form.whatsapp) {
       toast.error('Preencha todos os campos obrigatórios'); return;
     }
+    setSaving(true);
+    try {
     if (editing) {
       const logoUrl = await uploadLogo(editing.id);
       updateClient({ ...editing, ...form, logoUrl: logoUrl || undefined } as Client);
@@ -340,6 +344,12 @@ export default function Clients() {
       }
     }
     setOpen(false);
+    } catch (err) {
+      console.error('Erro ao salvar cliente:', err);
+      toast.error('Erro ao salvar cliente');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const saveSocialAccounts = async (clientId: string) => {
@@ -1432,8 +1442,8 @@ export default function Clients() {
                         Próximo <ChevronRight size={14} />
                       </Button>
                     ) : (
-                      <Button onClick={handleSave} className="ml-auto gap-1">
-                        <CalendarCheck size={14} /> Cadastrar Cliente
+                      <Button onClick={handleSave} className="ml-auto gap-1" disabled={saving}>
+                        {saving ? <><Loader2 size={14} className="animate-spin" /> Salvando...</> : <><CalendarCheck size={14} /> Cadastrar Cliente</>}
                       </Button>
                     )}
                   </>

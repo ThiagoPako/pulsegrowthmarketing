@@ -163,10 +163,29 @@ export default function FinancialDashboard() {
       .filter(c => c.isDueThisWeek);
   }, [contracts, clients, revenues]);
 
+  const [paidCelebration, setPaidCelebration] = useState(false);
+  const [paidClientName, setPaidClientName] = useState('');
+
+  const paidParticles = useMemo(() =>
+    Array.from({ length: 30 }, (_, i) => ({
+      id: i,
+      emoji: i % 3 === 0 ? '🚀' : i % 3 === 1 ? '💰' : '💵',
+      x: 10 + Math.random() * 80,
+      delay: Math.random() * 0.6,
+      duration: 1.2 + Math.random() * 1.5,
+      size: 18 + Math.random() * 16,
+    })),
+    [paidCelebration]
+  );
+
   const handleMarkPaid = async (item: typeof dueThisWeek[0]) => {
     if (item.revenueId) {
       const ok = await updateRevenue(item.revenueId, { status: 'recebida', paid_at: new Date().toISOString().split('T')[0] });
-      if (ok) toast.success(`${item.clientName} marcado como pago`);
+      if (ok) {
+        setPaidClientName(item.clientName);
+        setPaidCelebration(true);
+        setTimeout(() => setPaidCelebration(false), 3500);
+      }
     } else {
       toast.error('Gere as receitas do mês primeiro em Receitas');
     }
@@ -456,42 +475,120 @@ export default function FinancialDashboard() {
         ))}
       </motion.div>
 
+      {/* Paid Celebration Overlay */}
+      {paidCelebration && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setPaidCelebration(false)}
+        >
+          {paidParticles.map(p => (
+            <motion.span
+              key={p.id}
+              initial={{ y: '50vh', x: `${p.x}vw`, opacity: 1, scale: 0 }}
+              animate={{ y: '-20vh', opacity: [1, 1, 0], scale: [0, 1.3, 0.6] }}
+              transition={{ delay: p.delay, duration: p.duration, ease: 'easeOut' }}
+              className="fixed pointer-events-none"
+              style={{ fontSize: p.size, left: `${p.x}%` }}
+            >
+              {p.emoji}
+            </motion.span>
+          ))}
+          <motion.div
+            initial={{ scale: 0.3, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', damping: 12, stiffness: 150, delay: 0.15 }}
+            className="flex flex-col items-center gap-4 p-8"
+          >
+            <motion.span animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 1.2 }} className="text-7xl">💰</motion.span>
+            <h2 className="text-2xl font-black text-white drop-shadow-lg">Pagamento confirmado!</h2>
+            <p className="text-lg text-white/80 font-medium">{paidClientName} 🚀</p>
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.5 }} className="text-sm text-white/50 mt-2">Toque para fechar</motion.p>
+          </motion.div>
+        </motion.div>
+      )}
+
       {/* Due This Week */}
-      <Card>
-        <CardHeader>
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55, duration: 0.4 }}>
+      <Card className="border-primary/20 shadow-md overflow-hidden">
+        <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10 border-b border-primary/10">
           <CardTitle className="text-sm flex items-center gap-2">
-            <CalendarClock size={16} /> Vencimentos desta Semana
+            <motion.span animate={{ rotate: [0, 15, -15, 0] }} transition={{ duration: 2, repeat: Infinity, repeatDelay: 4 }}>
+              <CalendarClock size={16} className="text-primary" />
+            </motion.span>
+            Vencimentos desta Semana
+            {dueThisWeek.length > 0 && (
+              <Badge variant="secondary" className="ml-auto text-xs">{dueThisWeek.length} cliente{dueThisWeek.length > 1 ? 's' : ''}</Badge>
+            )}
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-4">
           {dueThisWeek.length > 0 ? (
-            <div className="space-y-2">
-              {dueThisWeek.map(item => (
-                <div key={item.clientId} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
+            <div className="space-y-3">
+              {dueThisWeek.map((item, i) => (
+                <motion.div
+                  key={item.clientId}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.6 + i * 0.08, duration: 0.35 }}
+                  className={`flex items-center justify-between p-4 rounded-xl border transition-all duration-300 ${
+                    item.isPaid
+                      ? 'bg-emerald-500/5 border-emerald-300/40'
+                      : 'bg-card border-border/60 hover:border-primary/30 hover:shadow-sm'
+                  }`}
+                >
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium">{item.clientName}</span>
-                    <Badge variant="outline" className="text-xs">Dia {item.dueDay} ({item.dueDate})</Badge>
-                    <span className="text-sm font-bold">{fmt(Number(item.value))}</span>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
+                      item.isPaid ? 'bg-emerald-500/15' : 'bg-primary/10'
+                    }`}>
+                      {item.isPaid ? '✅' : '📅'}
+                    </div>
+                    <div>
+                      <span className="text-sm font-semibold text-foreground">{item.clientName}</span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">Dia {item.dueDay} ({item.dueDate})</Badge>
+                        <span className="text-sm font-bold text-foreground">{fmt(Number(item.value))}</span>
+                      </div>
+                    </div>
                   </div>
                   <div>
                     {item.isPaid ? (
-                      <Button size="sm" variant="secondary" onClick={() => handleRevertPaid(item)} className="gap-1 text-green-600">
-                        <CheckCircle size={12} /> Pago — desfazer
-                      </Button>
+                      <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleRevertPaid(item)}
+                          className="gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10 font-medium"
+                        >
+                          <CheckCircle size={14} /> Pago — desfazer
+                        </Button>
+                      </motion.div>
                     ) : (
-                      <Button size="sm" variant="outline" onClick={() => handleMarkPaid(item)} className="gap-1">
-                        <CheckCircle size={14} /> Marcar como Pago
-                      </Button>
+                      <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.93 }}>
+                        <Button
+                          size="sm"
+                          onClick={() => handleMarkPaid(item)}
+                          className="gap-1.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white shadow-md shadow-emerald-500/20 font-medium px-4"
+                        >
+                          <CheckCircle size={14} /> Marcar como Pago
+                        </Button>
+                      </motion.div>
                     )}
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           ) : (
-            <p className="text-muted-foreground text-sm text-center py-4">Nenhum vencimento esta semana</p>
+            <div className="text-center py-8">
+              <motion.span className="text-4xl block mb-2" animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 2 }}>🎉</motion.span>
+              <p className="text-muted-foreground text-sm">Nenhum vencimento esta semana</p>
+            </div>
           )}
         </CardContent>
       </Card>
+      </motion.div>
       <motion.div className="grid md:grid-cols-2 gap-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.5 }}>
         <Card>
           <CardHeader><CardTitle className="text-sm">Despesas por Categoria</CardTitle></CardHeader>

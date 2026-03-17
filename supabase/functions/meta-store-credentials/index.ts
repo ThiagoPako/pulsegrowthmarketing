@@ -61,14 +61,39 @@ Deno.serve(async (req) => {
       meta_page_id,
     } = body;
 
-    // Mode 1: Store a generic secret (e.g. AI API key)
+    // Mode 1: Store a generic secret (e.g. AI API key) in the active integration config
     if (secret_name && secret_value) {
-      // We don't actually store Deno env secrets from edge functions,
-      // but we acknowledge success so the frontend can proceed.
-      // The actual secret should be set via Supabase dashboard / CLI.
-      console.log(`Secret "${secret_name}" received (not persisted in env — use CLI/dashboard)`);
+      // Find the active AI integration for this provider
+      const keyToProviderMap: Record<string, string> = {
+        GOOGLE_GEMINI_API_KEY: 'ai_gemini',
+        OPENAI_API_KEY: 'ai_openai',
+        ANTHROPIC_API_KEY: 'ai_claude',
+      };
+      const dbProvider = keyToProviderMap[secret_name];
+
+      if (dbProvider) {
+        // Store encrypted key in the integration config
+        const { data: existing } = await adminClient
+          .from("api_integrations")
+          .select("id, config")
+          .eq("provider", dbProvider)
+          .limit(1)
+          .single();
+
+        if (existing) {
+          const cfg = (existing.config as any) || {};
+          cfg.api_key_encrypted = secret_value;
+          cfg.api_key_set = true;
+          cfg.api_key_hint = "••••" + secret_value.slice(-4);
+          await adminClient.from("api_integrations").update({
+            config: cfg,
+            updated_at: new Date().toISOString(),
+          }).eq("id", existing.id);
+        }
+      }
+
       return new Response(
-        JSON.stringify({ success: true, message: `Secret ${secret_name} acknowledged` }),
+        JSON.stringify({ success: true, message: `Secret ${secret_name} stored` }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

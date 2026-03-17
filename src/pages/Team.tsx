@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, KeyRound, Users, Handshake, Trash2 } from 'lucide-react';
+import { Plus, KeyRound, Users, Handshake, Trash2, Shield } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 
 const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'fotografo', 'designer'];
@@ -159,6 +159,30 @@ export default function Team() {
       fetchPartners();
     } catch (err: any) {
       toast.error(err.message || 'Erro ao excluir membro');
+    }
+  };
+
+  const handleChangeRole = async (member: TeamMember, newRole: UserRole) => {
+    if (member.id === currentUser?.id) { toast.error('Você não pode alterar sua própria função'); return; }
+    try {
+      // Update profiles table
+      const { error: profileErr } = await supabase
+        .from('profiles')
+        .update({ role: newRole } as any)
+        .eq('id', member.id);
+      if (profileErr) throw profileErr;
+
+      // Update user_roles table
+      const { error: roleErr } = await supabase
+        .from('user_roles')
+        .update({ role: newRole } as any)
+        .eq('user_id', member.id);
+      if (roleErr) throw roleErr;
+
+      toast.success(`Função de ${member.displayName || member.name} alterada para ${ROLE_LABELS[newRole]}`);
+      fetchMembers();
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao alterar função');
     }
   };
 
@@ -361,7 +385,25 @@ export default function Team() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${roleColors[u.role]}`}>{ROLE_LABELS[u.role]}</span>
+                  {currentUser?.role === 'admin' && u.id !== currentUser?.id ? (
+                    <Select value={u.role} onValueChange={v => handleChangeRole(u, v as UserRole)}>
+                      <SelectTrigger className="h-7 w-auto min-w-[130px] text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <Shield size={12} />
+                          <SelectValue />
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ROLES.map(r => (
+                          <SelectItem key={r} value={r}>
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${roleColors[r]}`}>{ROLE_LABELS[r]}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${roleColors[u.role]}`}>{ROLE_LABELS[u.role]}</span>
+                  )}
                   {currentUser?.role === 'admin' && (
                     <>
                       <Button variant="ghost" size="icon" className="h-8 w-8" title="Redefinir senha" onClick={() => { setResetTarget(u); setResetOpen(true); }}>

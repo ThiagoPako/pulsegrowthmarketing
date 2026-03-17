@@ -471,6 +471,11 @@ export default function Team() {
                     <p className="font-medium">{u.displayName || u.name}</p>
                     <p className="text-xs text-muted-foreground">{u.email}{u.jobTitle ? ` · ${u.jobTitle}` : ''}</p>
                     {u.bio && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{u.bio}</p>}
+                    {u.birthday && (
+                      <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                        <Cake size={10} /> {new Date(u.birthday + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -495,6 +500,21 @@ export default function Team() {
                   )}
                   {currentUser?.role === 'admin' && (
                     <>
+                      {/* Birthday edit */}
+                      <div className="relative">
+                        <Input
+                          type="date"
+                          className="h-7 w-[130px] text-[10px] px-1.5"
+                          value={u.birthday || ''}
+                          title="Data de aniversário"
+                          onChange={async (e) => {
+                            const val = e.target.value || null;
+                            await supabase.from('profiles').update({ birthday: val } as any).eq('id', u.id);
+                            fetchMembers();
+                            toast.success('Aniversário atualizado!');
+                          }}
+                        />
+                      </div>
                       {u.id !== currentUser?.id && (
                         <Button variant="ghost" size="icon" className="h-8 w-8" title="Permissões de módulos" onClick={() => handleOpenPermissions(u)}>
                           <Lock size={16} />

@@ -75,6 +75,12 @@ export default function FinancialApiSettings() {
   const [selectedIntegration, setSelectedIntegration] = useState<ApiIntegration | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  const [aiConfig, setAiConfig] = useState({
+    model: 'google/gemini-2.5-flash-lite',
+    active: false,
+    integrationId: null as string | null,
+  });
+
   const [form, setForm] = useState({
     name: '',
     provider: 'meta_ads',

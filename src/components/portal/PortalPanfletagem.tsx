@@ -422,11 +422,24 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       extraInfo: extraInfo.trim(),
     };
 
+    // Build observations: always include button selections, then append user text
+    const obsLines: string[] = [];
+    obsLines.push(`• ${FUEL_OPTIONS.find(f => f.value === data.fuel)?.label || data.fuel}`);
+    obsLines.push(`• Pneus ${TIRE_OPTIONS.find(t => t.value === data.tires)?.label || data.tires}`);
+    if (ipvaStatus === 'pago') obsLines.push('• IPVA Pago');
+    else if (ipvaStatus === 'pendente') obsLines.push('• IPVA Pendente');
+    // Append user extra observations as bullet points
+    if (data.extraInfo) {
+      data.extraInfo.split('\n').filter(l => l.trim()).forEach(line => {
+        obsLines.push(`• ${line.trim()}`);
+      });
+    }
+
     const cols = [
       { label: 'MODELO', value: data.model },
       { label: 'ANO', value: data.year },
       { label: 'CÂMBIO', value: data.transmission === 'automatico' ? 'Automático' : 'Manual' },
-      { label: 'OBSERVAÇÕES', value: data.extraInfo || `• ${FUEL_OPTIONS.find(f => f.value === data.fuel)?.label || data.fuel}\n• Pneus ${TIRE_OPTIONS.find(t => t.value === data.tires)?.label || data.tires}` },
+      { label: 'OBSERVAÇÕES', value: obsLines.join('\n') },
     ];
     const colW = W / 4;
     const colPad = Math.round(12 * bs);

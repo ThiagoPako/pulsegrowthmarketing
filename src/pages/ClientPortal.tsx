@@ -155,10 +155,10 @@ export default function ClientPortal() {
     // Try direct query first (works for authenticated team members)
     let clientQuery;
     if (isUUID) {
-      clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics').eq('id', slug).single();
+      clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche').eq('id', slug).single();
     } else {
       const companySearch = slug.replace(/-/g, ' ');
-      clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics').ilike('company_name', companySearch).single();
+      clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche').ilike('company_name', companySearch).single();
     }
 
     const clientRes = await clientQuery;

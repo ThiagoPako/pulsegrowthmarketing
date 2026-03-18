@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Car, Download, Eye, Plus, X, Image, Loader2, Check,
-  Gauge, Upload, Save, Move, Lock, Unlock, Trash2, Palette, Type
+  Gauge, Upload, Save, Move, Lock, Unlock, Trash2, Palette, Type, MapPin, Phone
 } from 'lucide-react';
 
 interface FlyerTemplate {
@@ -95,17 +95,19 @@ const TIRE_OPTIONS = [
 const CANVAS_W = 1080;
 const CANVAS_H = 1350;
 
-const COLOR_LABELS: { key: keyof LayoutColors; label: string }[] = [
-  { key: 'header', label: 'Cabeçalho' },
-  { key: 'headerText', label: 'Texto Cabeçalho' },
-  { key: 'priceBg', label: 'Caixa Preço' },
-  { key: 'priceText', label: 'Texto Preço' },
-  { key: 'infoBg', label: 'Barra Info' },
-  { key: 'infoPills', label: 'Etiquetas Info' },
-  { key: 'infoText', label: 'Texto Info' },
-  { key: 'footerBg', label: 'Rodapé Fundo' },
-  { key: 'footerAccent', label: 'Rodapé Destaque' },
-  { key: 'footerText', label: 'Texto Rodapé' },
+type CanvasZone = 'header' | 'price' | 'info' | 'footer' | null;
+
+const COLOR_LABELS: { key: keyof LayoutColors; label: string; zone: CanvasZone }[] = [
+  { key: 'header', label: 'Cabeçalho', zone: 'header' },
+  { key: 'headerText', label: 'Texto Cabeçalho', zone: 'header' },
+  { key: 'priceBg', label: 'Caixa Preço', zone: 'price' },
+  { key: 'priceText', label: 'Texto Preço', zone: 'price' },
+  { key: 'infoBg', label: 'Barra Info', zone: 'info' },
+  { key: 'infoPills', label: 'Etiquetas Info', zone: 'info' },
+  { key: 'infoText', label: 'Texto Info', zone: 'info' },
+  { key: 'footerBg', label: 'Rodapé Fundo', zone: 'footer' },
+  { key: 'footerAccent', label: 'Rodapé Destaque', zone: 'footer' },
+  { key: 'footerText', label: 'Texto Rodapé', zone: 'footer' },
 ];
 
 function darkenHex(hex: string, amount = 30): string {
@@ -141,18 +143,26 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [uploading, setUploading] = useState(false);
 
+  // Footer editable fields
+  const [footerAddress, setFooterAddress] = useState(clientCity || '');
+  const [footerWhatsapp, setFooterWhatsapp] = useState(clientWhatsapp || '');
+
   // Custom logo
   const [customLogoDataUrl, setCustomLogoDataUrl] = useState<string | null>(null);
 
   // Layout state
   const [logoX, setLogoX] = useState(820);
   const [logoY, setLogoY] = useState(60);
-  const [logoW, setLogoW] = useState(200);
-  const [logoH, setLogoH] = useState(120);
+  const [logoScale, setLogoScale] = useState(100); // percentage scale, keeps aspect ratio
+  const [logoNaturalW, setLogoNaturalW] = useState(200);
+  const [logoNaturalH, setLogoNaturalH] = useState(120);
   const [infoPosY, setInfoPosY] = useState(920);
 
-  // Font size multiplier (0.7 - 1.5)
+  // Font size multiplier
   const [fontScale, setFontScale] = useState(1.0);
+
+  // Info box scale (controls pill/box size proportionally)
+  const [infoBoxScale, setInfoBoxScale] = useState(1.0);
 
   // Per-component colors
   const [colors, setColors] = useState<LayoutColors>({ ...DEFAULT_COLORS });
@@ -168,6 +178,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [vehicleImgObj, setVehicleImgObj] = useState<HTMLImageElement | null>(null);
   const [logoImgObj, setLogoImgObj] = useState<HTMLImageElement | null>(null);
 
+  // Canvas click → zone color picker
+  const [activeColorZone, setActiveColorZone] = useState<CanvasZone>(null);
+
+  // Computed logo dimensions based on scale
+  const logoW = Math.round(logoNaturalW * (logoScale / 100));
+  const logoH = Math.round(logoNaturalH * (logoScale / 100));
+
   // Load saved layout
   useEffect(() => {
     const saved = localStorage.getItem(`flyer-layout-${clientId}`);
@@ -176,19 +193,29 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         const s = JSON.parse(saved);
         if (s.logoX != null) setLogoX(s.logoX);
         if (s.logoY != null) setLogoY(s.logoY);
-        if (s.logoW != null) setLogoW(s.logoW);
-        if (s.logoH != null) setLogoH(s.logoH);
+        if (s.logoScale != null) setLogoScale(s.logoScale);
         if (s.infoPosY != null) setInfoPosY(s.infoPosY);
         if (s.layoutLocked != null) setLayoutLocked(s.layoutLocked);
         if (s.customLogoDataUrl) setCustomLogoDataUrl(s.customLogoDataUrl);
         if (s.fontScale != null) setFontScale(s.fontScale);
+        if (s.infoBoxScale != null) setInfoBoxScale(s.infoBoxScale);
         if (s.colors) setColors({ ...DEFAULT_COLORS, ...s.colors });
+        if (s.footerAddress != null) setFooterAddress(s.footerAddress);
+        if (s.footerWhatsapp != null) setFooterWhatsapp(s.footerWhatsapp);
       } catch { /* ignore */ }
     }
   }, [clientId]);
 
+  // Sync defaults from props
+  useEffect(() => {
+    if (clientCity && !footerAddress) setFooterAddress(clientCity);
+  }, [clientCity]);
+  useEffect(() => {
+    if (clientWhatsapp && !footerWhatsapp) setFooterWhatsapp(clientWhatsapp);
+  }, [clientWhatsapp]);
+
   const saveLayoutSettings = () => {
-    const settings = { logoX, logoY, logoW, logoH, infoPosY, layoutLocked, customLogoDataUrl, fontScale, colors };
+    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, infoBoxScale, colors, footerAddress, footerWhatsapp };
     localStorage.setItem(`flyer-layout-${clientId}`, JSON.stringify(settings));
     toast.success('Layout salvo!');
   };
@@ -210,13 +237,17 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     setLoading(false);
   };
 
-  // Load logo image object
+  // Load logo image object & capture natural dimensions
   useEffect(() => {
     const src = customLogoDataUrl || clientLogoUrl;
     if (!src) { setLogoImgObj(null); return; }
     const img = new window.Image();
     img.crossOrigin = 'anonymous';
-    img.onload = () => setLogoImgObj(img);
+    img.onload = () => {
+      setLogoImgObj(img);
+      setLogoNaturalW(img.naturalWidth > 0 ? Math.min(img.naturalWidth, 400) : 200);
+      setLogoNaturalH(img.naturalHeight > 0 ? Math.min(img.naturalHeight, 300) : 120);
+    };
     img.onerror = () => setLogoImgObj(null);
     img.src = src;
   }, [customLogoDataUrl, clientLogoUrl]);
@@ -283,6 +314,16 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     setColors(prev => ({ ...prev, [key]: value }));
   };
 
+  // Detect which zone was clicked on canvas
+  const detectZone = (cy: number): CanvasZone => {
+    if (cy < 260) return 'header';
+    const infoEnd = infoPosY + Math.round(260 * infoBoxScale);
+    if (cy >= infoPosY - 160 && cy < infoPosY) return 'price'; // price area above info
+    if (cy >= infoPosY && cy < infoEnd) return 'info';
+    if (cy >= infoEnd) return 'footer';
+    return null;
+  };
+
   // Core draw function
   const drawCanvas = useCallback((canvas: HTMLCanvasElement, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {
     const ctx = canvas.getContext('2d');
@@ -291,6 +332,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     canvas.height = CANVAS_H;
     const W = CANVAS_W, H = CANVAS_H;
     const fs = fontScale;
+    const bs = infoBoxScale;
 
     const c = colors;
     const BRAND_DARK = darkenHex(c.header);
@@ -338,28 +380,25 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     // Price overlay
     const priceText = price ? formatPrice(price) : '';
     if (priceText) {
-      const priceBoxW = 460, priceBoxH = 120;
+      const priceBoxW = Math.round(460 * bs), priceBoxH = Math.round(120 * bs);
       const priceX = W - priceBoxW - 30;
       const priceYpos = infoPosY - priceBoxH - 30;
-      // Shadow
       ctx.fillStyle = 'rgba(0,0,0,0.4)';
       ctx.beginPath(); ctx.roundRect(priceX + 4, priceYpos + 4, priceBoxW, priceBoxH, 16); ctx.fill();
-      // Box
       const priceGrad = ctx.createLinearGradient(priceX, priceYpos, priceX + priceBoxW, priceYpos);
       priceGrad.addColorStop(0, c.priceBg); priceGrad.addColorStop(1, darkenHex(c.priceBg));
       ctx.fillStyle = priceGrad;
       ctx.beginPath(); ctx.roundRect(priceX, priceYpos, priceBoxW, priceBoxH, 16); ctx.fill();
       ctx.fillStyle = c.priceText; ctx.font = `${Math.round(20 * fs)}px Arial, sans-serif`; ctx.textAlign = 'left';
-      ctx.fillText('POR APENAS:', priceX + 24, priceYpos + 35);
+      ctx.fillText('POR APENAS:', priceX + 24, priceYpos + Math.round(35 * bs));
       ctx.font = `bold ${Math.round(52 * fs)}px Arial, sans-serif`;
-      ctx.fillText(priceText, priceX + 24, priceYpos + 90);
+      ctx.fillText(priceText, priceX + 24, priceYpos + Math.round(90 * bs));
     }
 
     // Info bar
-    const infoH = 260;
+    const infoH = Math.round(260 * bs);
     ctx.fillStyle = c.infoBg;
     ctx.fillRect(0, infoPosY, W, infoH);
-    // Top accent line
     ctx.fillStyle = c.infoPills;
     ctx.fillRect(0, infoPosY, W, 4);
 
@@ -379,107 +418,113 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       { label: 'OBSERVAÇÕES', value: data.extraInfo || `• ${FUEL_OPTIONS.find(f => f.value === data.fuel)?.label || data.fuel}\n• Pneus ${TIRE_OPTIONS.find(t => t.value === data.tires)?.label || data.tires}` },
     ];
     const colW = W / 4;
-    const colPad = 12;
+    const colPad = Math.round(12 * bs);
+    const pillH = Math.round(44 * bs);
+    const pillR = Math.round(22 * bs);
 
     cols.forEach((col, i) => {
       const cx = i * colW + colPad;
       const cw = colW - colPad * 2;
       // Pill
       ctx.fillStyle = c.infoPills;
-      ctx.beginPath(); ctx.roundRect(cx, infoPosY + 24, cw, 44, 22); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(cx, infoPosY + Math.round(24 * bs), cw, pillH, pillR); ctx.fill();
       ctx.fillStyle = c.infoText; ctx.font = `bold ${Math.round(20 * fs)}px Arial, sans-serif`; ctx.textAlign = 'center';
-      ctx.fillText(col.label, cx + cw / 2, infoPosY + 52);
+      ctx.fillText(col.label, cx + cw / 2, infoPosY + Math.round(24 * bs) + pillH / 2 + Math.round(7 * fs));
 
       ctx.fillStyle = c.infoText;
       ctx.font = i === 3 ? `${Math.round(18 * fs)}px Arial, sans-serif` : `bold ${Math.round(24 * fs)}px Arial, sans-serif`;
       ctx.textAlign = 'center';
+      const valueStartY = infoPosY + Math.round(24 * bs) + pillH + Math.round(30 * bs);
       if (col.value.includes('\n') || col.value.includes('•')) {
         const lines = col.value.split('\n').filter(l => l.trim());
-        lines.forEach((line, li) => ctx.fillText(line.trim(), cx + cw / 2, infoPosY + 104 + li * 30));
+        lines.forEach((line, li) => ctx.fillText(line.trim(), cx + cw / 2, valueStartY + li * Math.round(30 * bs)));
       } else {
         const words = col.value.split(' ');
-        let line = ''; let lineY = infoPosY + 114;
+        let line = ''; let lineY = valueStartY;
         words.forEach(word => {
           const test = line + (line ? ' ' : '') + word;
           if (ctx.measureText(test).width > cw - 10 && line) {
-            ctx.fillText(line, cx + cw / 2, lineY); line = word; lineY += 30;
+            ctx.fillText(line, cx + cw / 2, lineY); line = word; lineY += Math.round(30 * bs);
           } else { line = test; }
         });
         if (line) ctx.fillText(line, cx + cw / 2, lineY);
       }
       if (i < 3) {
         ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo((i + 1) * colW, infoPosY + 24); ctx.lineTo((i + 1) * colW, infoPosY + infoH - 20); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo((i + 1) * colW, infoPosY + Math.round(24 * bs)); ctx.lineTo((i + 1) * colW, infoPosY + infoH - 20); ctx.stroke();
       }
     });
 
-    // Footer — improved design
+    // Footer
     const footY = infoPosY + infoH;
     const footH = H - footY;
-    // Gradient footer bg
     const footGrad = ctx.createLinearGradient(0, footY, 0, footY + footH);
     footGrad.addColorStop(0, c.footerBg);
     footGrad.addColorStop(1, darkenHex(c.footerBg, 15));
     ctx.fillStyle = footGrad;
     ctx.fillRect(0, footY, W, footH);
-    // Top separator line
     ctx.fillStyle = c.footerAccent;
     ctx.fillRect(0, footY, W, 3);
 
     const footCenterY = footY + footH / 2;
+    const addrText = footerAddress || '';
+    const wpText = footerWhatsapp || '';
 
-    if (clientCity) {
-      // Icon circle
+    // Address section (left half)
+    if (addrText) {
+      // Pin icon circle
       ctx.fillStyle = c.footerAccent;
       ctx.beginPath(); ctx.arc(55, footCenterY, 24, 0, Math.PI * 2); ctx.fill();
-      // Inner icon
-      ctx.fillStyle = c.footerText;
-      ctx.font = `${Math.round(22 * fs)}px Arial, sans-serif`;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `bold ${Math.round(20 * fs)}px Arial, sans-serif`;
       ctx.textAlign = 'center';
-      ctx.fillText('📍', 55, footCenterY + 8);
-      // Address text
+      ctx.fillText('📍', 55, footCenterY + 7);
+
       ctx.fillStyle = c.footerText;
-      ctx.font = `bold ${Math.round(18 * fs)}px Arial, sans-serif`;
+      ctx.font = `${Math.round(12 * fs)}px Arial, sans-serif`;
       ctx.textAlign = 'left';
+      ctx.fillText('ENDEREÇO', 92, footCenterY - 18);
+      ctx.font = `bold ${Math.round(18 * fs)}px Arial, sans-serif`;
       const maxAddrW = W / 2 - 120;
-      const addrWords = clientCity.split(' ');
-      let addrLine = ''; let addrLineY = footCenterY - 10;
+      const addrWords = addrText.split(' ');
+      let addrLine = ''; let addrLineY = footCenterY + 6;
       addrWords.forEach(word => {
         const test = addrLine + (addrLine ? ' ' : '') + word;
         if (ctx.measureText(test).width > maxAddrW && addrLine) {
-          ctx.fillText(addrLine, 92, addrLineY); addrLine = word; addrLineY += 24;
+          ctx.fillText(addrLine, 92, addrLineY); addrLine = word; addrLineY += 22;
         } else { addrLine = test; }
       });
       if (addrLine) ctx.fillText(addrLine, 92, addrLineY);
     }
 
-    if (clientWhatsapp) {
-      // WhatsApp badge
+    // WhatsApp section (right half)
+    if (wpText) {
       const wpX = W / 2 + 40;
-      // Rounded rect background
+      // WhatsApp green circle
       ctx.fillStyle = '#25D366';
-      ctx.beginPath(); ctx.roundRect(wpX, footCenterY - 28, 56, 56, 28); ctx.fill();
+      ctx.beginPath(); ctx.arc(wpX + 24, footCenterY, 24, 0, Math.PI * 2); ctx.fill();
+      // WhatsApp icon (phone symbol)
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = `${Math.round(26 * fs)}px Arial, sans-serif`;
+      ctx.font = `bold ${Math.round(22 * fs)}px Arial, sans-serif`;
       ctx.textAlign = 'center';
-      ctx.fillText('📱', wpX + 28, footCenterY + 10);
+      ctx.fillText('📱', wpX + 24, footCenterY + 8);
 
       ctx.fillStyle = c.footerText;
-      ctx.font = `${Math.round(14 * fs)}px Arial, sans-serif`;
+      ctx.font = `${Math.round(12 * fs)}px Arial, sans-serif`;
       ctx.textAlign = 'left';
-      ctx.fillText('FALE CONOSCO', wpX + 68, footCenterY - 6);
+      ctx.fillText('WHATSAPP', wpX + 58, footCenterY - 18);
       ctx.font = `bold ${Math.round(24 * fs)}px Arial, sans-serif`;
-      ctx.fillText(clientWhatsapp, wpX + 68, footCenterY + 22);
+      ctx.fillText(wpText, wpX + 58, footCenterY + 12);
     }
 
-    // Logo
+    // Logo (proportional)
     if (lImg) {
       ctx.drawImage(lImg, logoX, logoY, logoW, logoH);
     } else if (clientName) {
       ctx.fillStyle = '#FFFFFF'; ctx.font = `bold ${Math.round(36 * fs)}px Arial, sans-serif`; ctx.textAlign = 'left';
       ctx.fillText(clientName, logoX, logoY + 40);
     }
-  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientCity, clientWhatsapp, clientName, clientColor, fontScale, colors]);
+  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, colors, footerAddress, footerWhatsapp, logoScale]);
 
   // Live preview rendering
   useEffect(() => {
@@ -504,9 +549,18 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (cx >= logoX && cx <= logoX + logoW && cy >= logoY && cy <= logoY + logoH) {
       setDragging('logo'); setDragOffset({ x: cx - logoX, y: cy - logoY }); return;
     }
-    if (cy >= infoPosY && cy <= infoPosY + 260) {
+    const infoH = Math.round(260 * infoBoxScale);
+    if (cy >= infoPosY && cy <= infoPosY + infoH) {
       setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); return;
     }
+  };
+
+  const handlePreviewClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Only trigger zone color selection on simple clicks (no drag)
+    if (dragging) return;
+    const { cy } = getCanvasCoords(e);
+    const zone = detectZone(cy);
+    setActiveColorZone(prev => prev === zone ? null : zone);
   };
 
   const handlePreviewMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -539,7 +593,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (cx >= logoX && cx <= logoX + logoW && cy >= logoY && cy <= logoY + logoH) {
       setDragging('logo'); setDragOffset({ x: cx - logoX, y: cy - logoY }); e.preventDefault(); return;
     }
-    if (cy >= infoPosY && cy <= infoPosY + 260) {
+    const infoH = Math.round(260 * infoBoxScale);
+    if (cy >= infoPosY && cy <= infoPosY + infoH) {
       setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); e.preventDefault(); return;
     }
   };
@@ -650,6 +705,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     toast.success('Panfleto apagado!');
   };
 
+  const zoneColorsFiltered = activeColorZone ? COLOR_LABELS.filter(c => c.zone === activeColorZone) : [];
+  const zoneLabel = activeColorZone === 'header' ? 'Cabeçalho' : activeColorZone === 'price' ? 'Preço' : activeColorZone === 'info' ? 'Barra de Informações' : activeColorZone === 'footer' ? 'Rodapé' : '';
+
   if (loading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   }
@@ -739,6 +797,29 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             </div>
           </div>
 
+          {/* Footer / Address & WhatsApp */}
+          <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
+            <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+              <MapPin size={16} style={{ color: `hsl(${clientColor})` }} /> Rodapé — Endereço e WhatsApp
+            </h3>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-white/60 flex items-center gap-1.5">
+                  <MapPin size={10} /> Endereço
+                </Label>
+                <Input value={footerAddress} onChange={e => setFooterAddress(e.target.value)} placeholder="Ex: Av. Brasil, 1500 - Centro, Cidade/UF"
+                  className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-white/60 flex items-center gap-1.5">
+                  <Phone size={10} /> WhatsApp
+                </Label>
+                <Input value={footerWhatsapp} onChange={e => setFooterWhatsapp(e.target.value)} placeholder="Ex: (11) 99999-9999"
+                  className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30" />
+              </div>
+            </div>
+          </div>
+
           {/* Photos upload */}
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
@@ -761,12 +842,12 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileSelect} />
           </div>
 
-          {/* Custom Logo Upload */}
+          {/* Logo Control (uses original, just controls scale) */}
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
-              <Upload size={16} style={{ color: `hsl(${clientColor})` }} /> Logo Personalizada
+              <Upload size={16} style={{ color: `hsl(${clientColor})` }} /> Logo
             </h3>
-            <p className="text-[11px] text-white/40">Envie uma logo diferente da padrão do cadastro, ou use a padrão.</p>
+            <p className="text-[11px] text-white/40">A logo original do cadastro é usada. Envie outra se precisar, ou ajuste o tamanho (proporcional).</p>
             <div className="flex items-center gap-4">
               {(customLogoDataUrl || clientLogoUrl) && (
                 <div className="w-16 h-16 rounded-lg bg-white/[0.06] overflow-hidden flex items-center justify-center">
@@ -776,31 +857,25 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
               <div className="flex flex-col gap-2">
                 <Button variant="outline" size="sm" onClick={() => logoFileInputRef.current?.click()}
                   className="border-white/[0.1] text-white/70 hover:text-white hover:bg-white/[0.06] text-xs">
-                  <Upload size={12} /> Enviar Logo
+                  <Upload size={12} /> Enviar Outra Logo
                 </Button>
                 {customLogoDataUrl && (
                   <Button variant="ghost" size="sm" onClick={() => setCustomLogoDataUrl(null)} className="text-white/40 hover:text-red-400 text-xs">
-                    <X size={12} /> Usar padrão
+                    <X size={12} /> Usar logo original
                   </Button>
                 )}
               </div>
             </div>
             <input ref={logoFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
 
-            {/* Logo size sliders */}
+            {/* Proportional logo scale slider */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-xs text-white/60">Largura da Logo</Label>
-                <span className="text-xs text-white/40">{logoW}px</span>
+                <Label className="text-xs text-white/60">Tamanho da Logo (proporcional)</Label>
+                <span className="text-xs text-white/40 font-mono">{logoScale}%</span>
               </div>
-              <Slider value={[logoW]} onValueChange={v => { if (!layoutLocked) setLogoW(v[0]); }} min={60} max={400} step={10} className="w-full" />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs text-white/60">Altura da Logo</Label>
-                <span className="text-xs text-white/40">{logoH}px</span>
-              </div>
-              <Slider value={[logoH]} onValueChange={v => { if (!layoutLocked) setLogoH(v[0]); }} min={40} max={300} step={10} className="w-full" />
+              <Slider value={[logoScale]} onValueChange={v => { if (!layoutLocked) setLogoScale(v[0]); }} min={20} max={200} step={5} className="w-full" />
+              <p className="text-[10px] text-white/30">{logoW} × {logoH}px</p>
             </div>
           </div>
 
@@ -821,11 +896,27 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             </div>
           </div>
 
-          {/* Color Pickers */}
+          {/* Info Box Scale */}
+          <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
+            <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+              <Palette size={16} style={{ color: `hsl(${clientColor})` }} /> Tamanho das Caixas (Info)
+            </h3>
+            <p className="text-[11px] text-white/40">Controla a escala das caixinhas de Modelo, Ano, Câmbio, etc. mantendo as proporções.</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-white/60">Escala</Label>
+                <span className="text-xs text-white/40 font-mono">{Math.round(infoBoxScale * 100)}%</span>
+              </div>
+              <Slider value={[infoBoxScale * 100]} onValueChange={v => setInfoBoxScale(v[0] / 100)} min={70} max={150} step={5} className="w-full" />
+            </div>
+          </div>
+
+          {/* Color Pickers — full list */}
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
               <Palette size={16} style={{ color: `hsl(${clientColor})` }} /> Cores do Layout
             </h3>
+            <p className="text-[11px] text-white/40">💡 Dica: clique em uma área da prévia para filtrar as cores daquela seção.</p>
             <div className="grid grid-cols-2 gap-3">
               {COLOR_LABELS.map(({ key, label }) => (
                 <div key={key} className="flex items-center gap-3">
@@ -928,11 +1019,46 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
                 onMouseMove={handlePreviewMouseMove}
                 onMouseUp={handlePreviewMouseUp}
                 onMouseLeave={handlePreviewMouseUp}
+                onClick={handlePreviewClick}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
               />
             </div>
+
+            {/* Zone-specific color picker (appears when clicking a zone on the preview) */}
+            <AnimatePresence>
+              {activeColorZone && zoneColorsFiltered.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="bg-white/[0.06] border border-white/[0.12] rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-semibold text-white/80 flex items-center gap-2">
+                        <Palette size={12} style={{ color: `hsl(${clientColor})` }} /> Cores: {zoneLabel}
+                      </h4>
+                      <button onClick={() => setActiveColorZone(null)} className="text-white/40 hover:text-white">
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      {zoneColorsFiltered.map(({ key, label }) => (
+                        <div key={key} className="flex items-center gap-2">
+                          <label className="relative w-8 h-8 rounded-lg overflow-hidden border-2 border-white/[0.2] cursor-pointer hover:border-white/[0.4] transition-colors flex-shrink-0">
+                            <input type="color" value={colors[key]} onChange={e => updateColor(key, e.target.value)} className="absolute inset-0 w-full h-full cursor-pointer opacity-0" />
+                            <div className="w-full h-full" style={{ backgroundColor: colors[key] }} />
+                          </label>
+                          <span className="text-[10px] text-white/50">{label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Generated Preview */}

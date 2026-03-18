@@ -502,7 +502,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.fillStyle = c.footerAccent;
     ctx.fillRect(0, footY, W, 3);
 
-    const footCenterY = footY + footH / 2;
+    const footContentCenterY = footCenterY + footerPosY;
+    const footContentOffX = footerPosX;
     const addrText = footerAddress || '';
     const wpText = footerWhatsapp || '';
 
@@ -511,7 +512,6 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.save();
       ctx.fillStyle = c.footerAccent;
       ctx.beginPath(); ctx.arc(cx, cy, size, 0, Math.PI * 2); ctx.fill();
-      // Pin shape
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
       const ps = size * 0.55;
@@ -530,7 +530,6 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.save();
       ctx.fillStyle = '#25D366';
       ctx.beginPath(); ctx.arc(cx, cy, size, 0, Math.PI * 2); ctx.fill();
-      // Phone handset shape
       ctx.fillStyle = '#FFFFFF';
       ctx.lineWidth = 2;
       ctx.strokeStyle = '#FFFFFF';
@@ -539,14 +538,12 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.arc(cx, cy, s * 0.9, 0, Math.PI * 2);
       ctx.lineWidth = s * 0.25;
       ctx.stroke();
-      // Chat bubble tail
       ctx.beginPath();
       ctx.moveTo(cx - s * 0.5, cy + s * 0.7);
       ctx.lineTo(cx - s * 0.9, cy + s * 1.2);
       ctx.lineTo(cx - s * 0.1, cy + s * 0.9);
       ctx.fillStyle = '#25D366';
       ctx.fill();
-      // Inner phone icon
       ctx.fillStyle = '#FFFFFF';
       ctx.font = `bold ${size * 0.8}px Arial`;
       ctx.textAlign = 'center';
@@ -555,36 +552,36 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.restore();
     };
 
-    // Address section (left half)
+    // Address section (left half) — offset by footerPosX/Y
     if (addrText) {
-      drawPinIcon(55, footCenterY, 24);
+      drawPinIcon(55 + footContentOffX, footContentCenterY, 24);
       ctx.fillStyle = c.footerText;
-      ctx.font = `${Math.round(12 * fs)}px 'Georgia', serif`;
+      ctx.font = `bold ${Math.round(12 * fs)}px 'Raleway', sans-serif`;
       ctx.textAlign = 'left';
-      ctx.fillText('ENDEREÇO', 92, footCenterY - 18);
-      ctx.font = `bold ${Math.round(18 * fs)}px Arial, sans-serif`;
+      ctx.fillText('ENDEREÇO', 92 + footContentOffX, footContentCenterY - 18);
+      ctx.font = `bold ${Math.round(18 * fs)}px 'Raleway', sans-serif`;
       const maxAddrW = W / 2 - 120;
       const addrWords = addrText.split(' ');
-      let addrLine = ''; let addrLineY = footCenterY + 6;
+      let addrLine = ''; let addrLineY = footContentCenterY + 6;
       addrWords.forEach(word => {
         const test = addrLine + (addrLine ? ' ' : '') + word;
         if (ctx.measureText(test).width > maxAddrW && addrLine) {
-          ctx.fillText(addrLine, 92, addrLineY); addrLine = word; addrLineY += 22;
+          ctx.fillText(addrLine, 92 + footContentOffX, addrLineY); addrLine = word; addrLineY += 22;
         } else { addrLine = test; }
       });
-      if (addrLine) ctx.fillText(addrLine, 92, addrLineY);
+      if (addrLine) ctx.fillText(addrLine, 92 + footContentOffX, addrLineY);
     }
 
-    // WhatsApp section (right half)
+    // WhatsApp section (right half) — offset by footerPosX/Y
     if (wpText) {
-      const wpX = W / 2 + 40;
-      drawWhatsAppIcon(wpX + 24, footCenterY, 24);
+      const wpX = W / 2 + 40 + footContentOffX;
+      drawWhatsAppIcon(wpX + 24, footContentCenterY, 24);
       ctx.fillStyle = c.footerText;
-      ctx.font = `${Math.round(12 * fs)}px 'Georgia', serif`;
+      ctx.font = `bold ${Math.round(12 * fs)}px 'Raleway', sans-serif`;
       ctx.textAlign = 'left';
-      ctx.fillText('WHATSAPP', wpX + 58, footCenterY - 18);
-      ctx.font = `bold ${Math.round(24 * fs)}px Arial, sans-serif`;
-      ctx.fillText(wpText, wpX + 58, footCenterY + 12);
+      ctx.fillText('WHATSAPP', wpX + 58, footContentCenterY - 18);
+      ctx.font = `bold ${Math.round(24 * fs)}px 'Raleway', sans-serif`;
+      ctx.fillText(wpText, wpX + 58, footContentCenterY + 12);
     }
 
     // Logo (proportional)

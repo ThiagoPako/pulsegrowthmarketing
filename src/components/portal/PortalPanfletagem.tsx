@@ -604,8 +604,12 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
 
   const handlePreviewMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (layoutLocked) return;
+    didDragRef.current = false;
     const { cx, cy } = getCanvasCoords(e);
+    // Check logo hit anywhere on canvas (no zone restriction)
     if (cx >= logoX && cx <= logoX + logoW && cy >= logoY && cy <= logoY + logoH) {
+      e.preventDefault();
+      e.stopPropagation();
       setDragging('logo'); setDragOffset({ x: cx - logoX, y: cy - logoY }); return;
     }
     const infoH = Math.round(260 * infoBoxScale);

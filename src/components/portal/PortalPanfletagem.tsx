@@ -619,9 +619,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   };
 
   const handlePreviewClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    // Only trigger zone color selection on simple clicks (no drag)
-    if (dragging) return;
+    if (didDragRef.current) { didDragRef.current = false; return; }
     const { cy } = getCanvasCoords(e);
+    const zone = detectZone(cy);
     const zone = detectZone(cy);
     setActiveColorZone(prev => prev === zone ? null : zone);
   };

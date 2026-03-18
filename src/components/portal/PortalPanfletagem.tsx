@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Car, Download, Eye, Plus, X, Image, Loader2, Check,
   Gauge, Upload, Save, Move, Lock, Unlock, Trash2, Palette, Type, MapPin, Phone

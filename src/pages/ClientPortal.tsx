@@ -52,6 +52,7 @@ interface ClientData {
   weekly_reels: number; weekly_creatives: number; weekly_stories: number;
   monthly_recordings: number; plan_id: string | null; show_metrics: boolean;
   has_vehicle_flyer: boolean; niche: string | null;
+  whatsapp?: string; city?: string;
 }
 
 type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem';

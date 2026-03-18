@@ -375,6 +375,7 @@ export default function PortalPanfletagem({ clientId, clientColor }: Props) {
             fuel: fuelType,
             tires: tireCondition,
             price: price ? formatPrice(price) : '',
+            extraInfo: extraInfo.trim(),
           });
         } catch (err) {
           console.warn('Art generation failed, saving without generated image:', err);

@@ -230,7 +230,15 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (s.customLogoDataUrl) setCustomLogoDataUrl(s.customLogoDataUrl);
         if (s.fontScale != null) setFontScale(s.fontScale);
         if (s.infoBoxScale != null) setInfoBoxScale(s.infoBoxScale);
-        if (s.infoFontScale != null) setInfoFontScale(s.infoFontScale);
+        // Legacy support: if old single infoFontScale exists, apply to all
+        if (s.modelFontScale != null) setModelFontScale(s.modelFontScale);
+        else if (s.infoFontScale != null) setModelFontScale(s.infoFontScale);
+        if (s.yearFontScale != null) setYearFontScale(s.yearFontScale);
+        else if (s.infoFontScale != null) setYearFontScale(s.infoFontScale);
+        if (s.transmissionFontScale != null) setTransmissionFontScale(s.transmissionFontScale);
+        else if (s.infoFontScale != null) setTransmissionFontScale(s.infoFontScale);
+        if (s.obsFontScale != null) setObsFontScale(s.obsFontScale);
+        else if (s.infoFontScale != null) setObsFontScale(s.infoFontScale);
         if (s.footerPosX != null) setFooterPosX(s.footerPosX);
         if (s.footerPosY != null) setFooterPosY(s.footerPosY);
         if (s.colors) setColors({ ...DEFAULT_COLORS, ...s.colors });

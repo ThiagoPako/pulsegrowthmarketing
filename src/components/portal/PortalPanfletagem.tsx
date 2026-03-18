@@ -622,7 +622,6 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (didDragRef.current) { didDragRef.current = false; return; }
     const { cy } = getCanvasCoords(e);
     const zone = detectZone(cy);
-    const zone = detectZone(cy);
     setActiveColorZone(prev => prev === zone ? null : zone);
   };
 

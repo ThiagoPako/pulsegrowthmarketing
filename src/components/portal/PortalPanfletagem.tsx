@@ -53,7 +53,8 @@ interface LayoutColors {
   headerText: string;
   infoBg: string;
   infoPills: string;
-  infoText: string;
+  infoLabelText: string;
+  infoValueText: string;
   priceBg: string;
   priceText: string;
   footerBg: string;
@@ -66,7 +67,8 @@ const DEFAULT_COLORS: LayoutColors = {
   headerText: '#1a1a2e',
   infoBg: '#1e2a45',
   infoPills: '#034e98',
-  infoText: '#FFFFFF',
+  infoLabelText: '#FFFFFF',
+  infoValueText: '#FFFFFF',
   priceBg: '#034e98',
   priceText: '#FFFFFF',
   footerBg: '#0a0f1e',
@@ -111,8 +113,9 @@ const COLOR_LABELS: { key: keyof LayoutColors; label: string; zone: CanvasZone }
   { key: 'priceBg', label: 'Caixa Preço', zone: 'price' },
   { key: 'priceText', label: 'Texto Preço', zone: 'price' },
   { key: 'infoBg', label: 'Barra Info', zone: 'info' },
-  { key: 'infoPills', label: 'Etiquetas Info', zone: 'info' },
-  { key: 'infoText', label: 'Texto Info', zone: 'info' },
+  { key: 'infoPills', label: 'Cor Etiquetas (caixa)', zone: 'info' },
+  { key: 'infoLabelText', label: 'Texto Etiquetas', zone: 'info' },
+  { key: 'infoValueText', label: 'Texto Valores', zone: 'info' },
   { key: 'footerBg', label: 'Rodapé Fundo', zone: 'footer' },
   { key: 'footerAccent', label: 'Rodapé Destaque', zone: 'footer' },
   { key: 'footerText', label: 'Texto Rodapé', zone: 'footer' },
@@ -249,7 +252,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (s.pillRadiusScale != null) setPillRadiusScale(s.pillRadiusScale);
         if (s.footerPosX != null) setFooterPosX(s.footerPosX);
         if (s.footerPosY != null) setFooterPosY(s.footerPosY);
-        if (s.colors) setColors({ ...DEFAULT_COLORS, ...s.colors });
+        if (s.colors) {
+          const migrated = { ...DEFAULT_COLORS, ...s.colors };
+          // Legacy: migrate old single infoText to split fields
+          if (s.colors.infoText && !s.colors.infoLabelText) migrated.infoLabelText = s.colors.infoText;
+          if (s.colors.infoText && !s.colors.infoValueText) migrated.infoValueText = s.colors.infoText;
+          setColors(migrated);
+        }
         if (s.footerAddress != null) setFooterAddress(s.footerAddress);
         if (s.footerWhatsapp != null) setFooterWhatsapp(s.footerWhatsapp);
       } catch { /* ignore */ }
@@ -502,12 +511,12 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       // Pill
       ctx.fillStyle = c.infoPills;
       ctx.beginPath(); ctx.roundRect(cx, infoPosY + Math.round(24 * bs), cw, pillH, pillR); ctx.fill();
-      ctx.fillStyle = c.infoText; ctx.font = `bold ${Math.round(20 * labelFontScale * fs)}px 'Raleway', sans-serif`; ctx.textAlign = 'center';
+      ctx.fillStyle = c.infoLabelText; ctx.font = `bold ${Math.round(20 * labelFontScale * fs)}px 'Raleway', sans-serif`; ctx.textAlign = 'center';
       ctx.fillText(col.label, cx + cw / 2, infoPosY + Math.round(24 * bs) + pillH / 2 + Math.round(7 * fs));
 
       const fieldScales = [modelFontScale, yearFontScale, transmissionFontScale, obsFontScale];
       const ifs = fieldScales[i];
-      ctx.fillStyle = c.infoText;
+      ctx.fillStyle = c.infoValueText;
       ctx.font = i === 3 ? `bold ${Math.round(18 * ifs * fs)}px 'Raleway', sans-serif` : `bold ${Math.round(24 * ifs * fs)}px 'Raleway', sans-serif`;
       ctx.textAlign = 'center';
       const valueStartY = infoPosY + Math.round(24 * bs) + pillH + Math.round(30 * bs);

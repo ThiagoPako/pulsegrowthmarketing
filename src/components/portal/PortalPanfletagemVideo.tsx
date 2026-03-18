@@ -448,10 +448,13 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
         {/* Right: Preview */}
         <div className="space-y-4">
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-4">
-            <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2 mb-3">
-              <Eye size={16} style={{ color: `hsl(${clientColor})` }} />
-              Pré-visualização
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+                <Eye size={16} style={{ color: `hsl(${clientColor})` }} />
+                Pré-visualização
+              </h3>
+              <span className="text-[9px] text-white/30 font-mono">1080×1920</span>
+            </div>
 
             {activePreview ? (
               <div className="space-y-3">

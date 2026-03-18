@@ -199,6 +199,25 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
 
   return (
     <div className="space-y-6">
+      {/* Reels format badge + safe zone warning */}
+      <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-4 space-y-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold text-white"
+            style={{ backgroundColor: `hsl(${clientColor})` }}>
+            <Film size={12} /> 1080 × 1920 — Reels
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-medium">
+            <VolumeX size={11} /> Todos os vídeos serão mutados — apenas a música de fundo toca
+          </div>
+        </div>
+        <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-500/[0.06] border border-amber-500/20">
+          <span className="text-amber-400 text-sm mt-0.5">⚠️</span>
+          <p className="text-[10px] text-amber-300/80 leading-relaxed">
+            <strong>Zona segura do Reels:</strong> Evite informações importantes nos <strong>250px superiores</strong> (nome do perfil, ícones) e nos <strong>280px inferiores</strong> (legenda, botões de interação). O conteúdo nessas áreas ficará coberto pela interface do Instagram.
+          </p>
+        </div>
+      </div>
+
       {/* Timeline overview */}
       <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-5">
         <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2 mb-4">
@@ -229,11 +248,11 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
             <Film size={12} className="mr-1" /> Final
           </div>
         </div>
-        {/* Music bar */}
+        {/* Music bar with fade info */}
         <div className={`mt-2 h-8 rounded-xl flex items-center justify-center text-[10px] font-medium transition-all ${musicFile ? 'border-2 text-white' : 'bg-white/[0.04] border border-dashed border-white/[0.15] text-white/30'}`}
           style={musicFile ? { borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.12)' } : {}}>
           <Music size={10} className="mr-1" />
-          {musicFile ? `♪ ${musicName}` : 'Música de fundo (opcional)'}
+          {musicFile ? `♪ ${musicName} (fade in ${musicFadeIn}s · fade out ${musicFadeOut}s)` : 'Música de fundo (opcional)'}
         </div>
       </div>
 

@@ -252,7 +252,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (s.pillRadiusScale != null) setPillRadiusScale(s.pillRadiusScale);
         if (s.footerPosX != null) setFooterPosX(s.footerPosX);
         if (s.footerPosY != null) setFooterPosY(s.footerPosY);
-        if (s.colors) setColors({ ...DEFAULT_COLORS, ...s.colors });
+        if (s.colors) {
+          const migrated = { ...DEFAULT_COLORS, ...s.colors };
+          // Legacy: migrate old single infoText to split fields
+          if (s.colors.infoText && !s.colors.infoLabelText) migrated.infoLabelText = s.colors.infoText;
+          if (s.colors.infoText && !s.colors.infoValueText) migrated.infoValueText = s.colors.infoText;
+          setColors(migrated);
+        }
         if (s.footerAddress != null) setFooterAddress(s.footerAddress);
         if (s.footerWhatsapp != null) setFooterWhatsapp(s.footerWhatsapp);
       } catch { /* ignore */ }

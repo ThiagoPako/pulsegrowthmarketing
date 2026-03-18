@@ -661,6 +661,12 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       setDragging('logo'); setDragOffset({ x: cx - logoX, y: cy - logoY }); return;
     }
     const infoH = Math.round(260 * infoBoxScale);
+    // Check photo zone hit (between header and info bar)
+    const photoY = 260;
+    if (cy >= photoY && cy < infoPosY) {
+      e.preventDefault(); e.stopPropagation();
+      setDragging('photo'); setDragOffset({ x: cx - photoOffsetX, y: cy - photoOffsetY }); return;
+    }
     if (cy >= infoPosY && cy <= infoPosY + infoH) {
       setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); return;
     }

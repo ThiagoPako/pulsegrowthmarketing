@@ -1470,6 +1470,9 @@ export default function Clients() {
         )}
       </div>
 
+      {/* Client Goal Rocket Widget */}
+      <ClientGoalRocket currentClients={clients.length} />
+
       {/* Search filter */}
       <div className="w-full max-w-sm">
         <Input

@@ -4,11 +4,12 @@ import { uploadFileToVps } from '@/services/vpsApi';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Car, Upload, Download, Eye, Plus, X, Image, Loader2, Check,
-  Fuel, Gauge, CircleDot, DollarSign, Calendar, Type, Trash2
+  Car, Download, Eye, Plus, X, Image, Loader2, Check,
+  Gauge, Upload, Save, Move, Maximize2
 } from 'lucide-react';
 
 interface FlyerTemplate {
@@ -45,6 +46,8 @@ interface Props {
   clientCity?: string;
 }
 
+type LogoPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+
 const TRANSMISSION_OPTIONS = [
   { value: 'manual', label: 'Manual', icon: Gauge },
   { value: 'automatico', label: 'Automático', icon: Gauge },
@@ -63,6 +66,13 @@ const TIRE_OPTIONS = [
   { value: 'novo', label: 'Novos' },
   { value: 'bom', label: 'Bons' },
   { value: 'regular', label: 'Regular' },
+];
+
+const LOGO_POSITIONS: { value: LogoPosition; label: string }[] = [
+  { value: 'top-left', label: '↖ Sup. Esq.' },
+  { value: 'top-right', label: '↗ Sup. Dir.' },
+  { value: 'bottom-left', label: '↙ Inf. Esq.' },
+  { value: 'bottom-right', label: '↘ Inf. Dir.' },
 ];
 
 export default function PortalPanfletagem({ clientId, clientColor, clientName, clientLogoUrl, clientWhatsapp, clientCity }: Props) {
@@ -87,6 +97,30 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [mediaPreviews, setMediaPreviews] = useState<string[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [uploading, setUploading] = useState(false);
+
+  // Layout customization state
+  const [logoPosition, setLogoPosition] = useState<LogoPosition>('top-right');
+  const [logoScale, setLogoScale] = useState(100); // percentage 50-200
+  const [infoPosY, setInfoPosY] = useState(68); // percentage of canvas height where info bar starts (68% default)
+
+  // Load saved layout settings
+  useEffect(() => {
+    const saved = localStorage.getItem(`flyer-layout-${clientId}`);
+    if (saved) {
+      try {
+        const s = JSON.parse(saved);
+        if (s.logoPosition) setLogoPosition(s.logoPosition);
+        if (s.logoScale) setLogoScale(s.logoScale);
+        if (s.infoPosY) setInfoPosY(s.infoPosY);
+      } catch { /* ignore */ }
+    }
+  }, [clientId]);
+
+  const saveLayoutSettings = () => {
+    const settings = { logoPosition, logoScale, infoPosY };
+    localStorage.setItem(`flyer-layout-${clientId}`, JSON.stringify(settings));
+    toast.success('Posições salvas!');
+  };
 
   useEffect(() => {
     loadData();
@@ -171,7 +205,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       canvas.width = W;
       canvas.height = H;
 
-      const BRAND_COLOR = '#034e98';
+      const BRAND = '#034e98';
       const BRAND_DARK = '#023a73';
       const DARK_BG = '#1a1a2e';
       const INFO_BG = '#1e2a45';
@@ -185,7 +219,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
 
         // === TOP HEADER (0 → 260) ===
         const headerGrad = ctx.createLinearGradient(0, 0, W, 0);
-        headerGrad.addColorStop(0, BRAND_COLOR);
+        headerGrad.addColorStop(0, BRAND);
         headerGrad.addColorStop(1, BRAND_DARK);
         ctx.fillStyle = headerGrad;
         ctx.fillRect(0, 0, W, 260);
@@ -206,20 +240,21 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         ctx.fillText('Seu próximo', 40, 80);
         ctx.fillText('carro está', 40, 140);
         ctx.font = 'bold italic 52px Arial, sans-serif';
-        ctx.fillStyle = BRAND_COLOR;
+        ctx.fillStyle = BRAND;
         ctx.fillText('aqui!', 40, 200);
 
-        // === VEHICLE PHOTO (260 → 920) — bigger area ===
+        // === VEHICLE PHOTO — fill from header to info bar ===
         const photoY = 260;
-        const photoH = 660;
+        const infoStartY = Math.round(H * (infoPosY / 100));
+        const photoH = infoStartY - photoY;
         drawImageCover(ctx, vehicleImg, 0, photoY, W, photoH);
 
-        // === PRICE OVERLAY ===
+        // === PRICE OVERLAY on photo ===
         if (data.price) {
           const priceBoxW = 460;
           const priceBoxH = 120;
           const priceX = W - priceBoxW - 30;
-          const priceY = photoY + photoH - priceBoxH - 30;
+          const priceY = infoStartY - priceBoxH - 30;
 
           ctx.fillStyle = 'rgba(0,0,0,0.4)';
           ctx.beginPath();
@@ -227,7 +262,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           ctx.fill();
 
           const priceGrad = ctx.createLinearGradient(priceX, priceY, priceX + priceBoxW, priceY);
-          priceGrad.addColorStop(0, BRAND_COLOR);
+          priceGrad.addColorStop(0, BRAND);
           priceGrad.addColorStop(1, BRAND_DARK);
           ctx.fillStyle = priceGrad;
           ctx.beginPath();
@@ -244,11 +279,10 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
 
         // === FRAME OVERLAY (optional) ===
         const continueAfterFrame = () => {
-          // === BOTTOM INFO BAR (920 → 1200) ===
-          const infoY = photoY + photoH;
+          // === BOTTOM INFO BAR ===
           const infoH = 260;
           ctx.fillStyle = INFO_BG;
-          ctx.fillRect(0, infoY, W, infoH);
+          ctx.fillRect(0, infoStartY, W, infoH);
 
           const cols = [
             { label: 'MODELO', value: data.model },
@@ -263,16 +297,18 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             const cx = i * colW + colPad;
             const cw = colW - colPad * 2;
 
-            ctx.fillStyle = BRAND_COLOR;
+            // Label pill
+            ctx.fillStyle = BRAND;
             ctx.beginPath();
-            ctx.roundRect(cx, infoY + 20, cw, 44, 22);
+            ctx.roundRect(cx, infoStartY + 20, cw, 44, 22);
             ctx.fill();
 
             ctx.fillStyle = '#FFFFFF';
             ctx.font = 'bold 20px Arial, sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText(col.label, cx + cw / 2, infoY + 48);
+            ctx.fillText(col.label, cx + cw / 2, infoStartY + 48);
 
+            // Value
             ctx.fillStyle = '#FFFFFF';
             ctx.font = i === 3 ? '18px Arial, sans-serif' : 'bold 24px Arial, sans-serif';
             ctx.textAlign = 'center';
@@ -280,12 +316,12 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             if (col.value.includes('\n') || col.value.includes('•')) {
               const lines = col.value.split('\n').filter(l => l.trim());
               lines.forEach((line, li) => {
-                ctx.fillText(line.trim(), cx + cw / 2, infoY + 100 + li * 30);
+                ctx.fillText(line.trim(), cx + cw / 2, infoStartY + 100 + li * 30);
               });
             } else {
               const words = col.value.split(' ');
               let line = '';
-              let lineY = infoY + 110;
+              let lineY = infoStartY + 110;
               words.forEach(word => {
                 const test = line + (line ? ' ' : '') + word;
                 if (ctx.measureText(test).width > cw - 10 && line) {
@@ -299,27 +335,26 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
               if (line) ctx.fillText(line, cx + cw / 2, lineY);
             }
 
+            // Separator
             if (i < 3) {
               ctx.strokeStyle = 'rgba(255,255,255,0.15)';
               ctx.lineWidth = 1;
               ctx.beginPath();
-              ctx.moveTo((i + 1) * colW, infoY + 20);
-              ctx.lineTo((i + 1) * colW, infoY + infoH - 20);
+              ctx.moveTo((i + 1) * colW, infoStartY + 20);
+              ctx.lineTo((i + 1) * colW, infoStartY + infoH - 20);
               ctx.stroke();
             }
           });
 
-          // === FOOTER with client info (1180 → 1350) ===
-          const footY = infoY + infoH;
+          // === FOOTER with address & whatsapp ===
+          const footY = infoStartY + infoH;
           const footH = H - footY;
           ctx.fillStyle = DARK_BG;
           ctx.fillRect(0, footY, W, footH);
 
-          // Address (left side)
-          const addrText = clientCity || '';
-          if (addrText) {
-            // Location pin icon circle
-            ctx.fillStyle = BRAND_COLOR;
+          // Address
+          if (clientCity) {
+            ctx.fillStyle = BRAND;
             ctx.beginPath();
             ctx.arc(60, footY + footH / 2, 22, 0, Math.PI * 2);
             ctx.fill();
@@ -331,9 +366,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             ctx.fillStyle = '#FFFFFF';
             ctx.font = 'bold 18px Arial, sans-serif';
             ctx.textAlign = 'left';
-            // Wrap address text
             const maxAddrW = W / 2 - 120;
-            const addrWords = addrText.split(' ');
+            const addrWords = clientCity.split(' ');
             let addrLine = '';
             let addrLineY = footY + footH / 2 - 12;
             addrWords.forEach(word => {
@@ -349,10 +383,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             if (addrLine) ctx.fillText(addrLine, 95, addrLineY);
           }
 
-          // WhatsApp (right side)
-          const whatsText = clientWhatsapp || '';
-          if (whatsText) {
-            ctx.fillStyle = BRAND_COLOR;
+          // WhatsApp
+          if (clientWhatsapp) {
+            ctx.fillStyle = BRAND;
             ctx.beginPath();
             ctx.arc(W - 300, footY + footH / 2, 22, 0, Math.PI * 2);
             ctx.fill();
@@ -366,42 +399,57 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             ctx.textAlign = 'left';
             ctx.fillText('FALE CONOSCO', W - 265, footY + footH / 2 - 8);
             ctx.font = 'bold 22px Arial, sans-serif';
-            ctx.fillText(whatsText, W - 265, footY + footH / 2 + 20);
+            ctx.fillText(clientWhatsapp, W - 265, footY + footH / 2 + 20);
           }
 
-          // === LOGO (top right, like reference) ===
-          const finalize = () => {
-            resolve(canvas.toDataURL('image/jpeg', 0.92));
-          };
+          // === LOGO ===
+          const finalize = () => resolve(canvas.toDataURL('image/jpeg', 0.92));
 
           if (clientLogoUrl) {
             const logoImg = new window.Image();
             logoImg.crossOrigin = 'anonymous';
             logoImg.onload = () => {
-              const logoMaxW = 220;
-              const logoMaxH = 140;
+              const baseW = 220;
+              const baseH = 140;
+              const scale = logoScale / 100;
+              const logoMaxW = baseW * scale;
+              const logoMaxH = baseH * scale;
               const logoAspect = logoImg.naturalWidth / logoImg.naturalHeight;
               let lw = logoMaxW;
               let lh = lw / logoAspect;
-              if (lh > logoMaxH) {
-                lh = logoMaxH;
-                lw = lh * logoAspect;
+              if (lh > logoMaxH) { lh = logoMaxH; lw = lh * logoAspect; }
+
+              let lx = 0, ly = 0;
+              const pad = 40;
+              switch (logoPosition) {
+                case 'top-left':
+                  lx = pad; ly = (260 - lh) / 2;
+                  break;
+                case 'top-right':
+                  lx = W - lw - pad; ly = (260 - lh) / 2;
+                  break;
+                case 'bottom-left':
+                  lx = pad; ly = H - lh - pad;
+                  break;
+                case 'bottom-right':
+                  lx = W - lw - pad; ly = H - lh - pad;
+                  break;
               }
-              const lx = W - lw - 40;
-              const ly = (260 - lh) / 2;
+
               ctx.drawImage(logoImg, lx, ly, lw, lh);
               finalize();
             };
             logoImg.onerror = () => finalize();
             logoImg.src = clientLogoUrl;
+          } else if (clientName) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 36px Arial, sans-serif';
+            ctx.textAlign = logoPosition.includes('right') ? 'right' : 'left';
+            const tx = logoPosition.includes('right') ? W - 40 : 40;
+            const ty = logoPosition.includes('top') ? 140 : H - 60;
+            ctx.fillText(clientName, tx, ty);
+            finalize();
           } else {
-            // Draw company name as text fallback
-            if (clientName) {
-              ctx.fillStyle = '#FFFFFF';
-              ctx.font = 'bold 36px Arial, sans-serif';
-              ctx.textAlign = 'right';
-              ctx.fillText(clientName, W - 40, 140);
-            }
             finalize();
           }
         };
@@ -422,7 +470,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       vehicleImg.onerror = () => reject('Failed to load vehicle image');
       vehicleImg.src = vehicleImage;
     });
-  }, [clientColor, clientLogoUrl, clientName, clientWhatsapp, clientCity]);
+  }, [clientColor, clientLogoUrl, clientName, clientWhatsapp, clientCity, logoPosition, logoScale, infoPosY]);
 
   const handleCreate = async () => {
     if (!model.trim() || !year.trim()) {
@@ -436,7 +484,6 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
 
     setCreating(true);
     try {
-      // Upload media files to VPS
       const uploadedUrls: string[] = [];
       for (const file of mediaFiles) {
         setUploading(true);
@@ -445,11 +492,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       }
       setUploading(false);
 
-      // Get frame template URL
       const frame = templates.find(t => t.id === selectedTemplate && t.template_type === 'frame');
       const frameUrl = frame?.file_url || '';
 
-      // Generate art using canvas
       setGenerating(true);
       let generatedUrl = '';
       if (uploadedUrls.length > 0 || mediaPreviews.length > 0) {
@@ -465,12 +510,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             extraInfo: extraInfo.trim(),
           });
         } catch (err) {
-          console.warn('Art generation failed, saving without generated image:', err);
+          console.warn('Art generation failed:', err);
         }
       }
       setGenerating(false);
 
-      // Save to database
       const { data: item, error } = await supabase.from('flyer_items').insert({
         client_id: clientId,
         template_id: selectedTemplate || null,
@@ -487,30 +531,18 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       }).select().single();
 
       if (error) throw error;
-
       toast.success('Panfleto criado com sucesso!');
       if (item) {
         setItems(prev => [item as FlyerItem, ...prev]);
         setPreviewItem(item as FlyerItem);
       }
-
-      // Reset form
-      setModel('');
-      setYear('');
-      setTransmission('manual');
-      setFuelType('flex');
-      setTireCondition('bom');
-      setPrice('');
-      setExtraInfo('');
-      setMediaFiles([]);
-      setMediaPreviews([]);
+      setModel(''); setYear(''); setTransmission('manual'); setFuelType('flex');
+      setTireCondition('bom'); setPrice(''); setExtraInfo('');
+      setMediaFiles([]); setMediaPreviews([]);
     } catch (err: any) {
-      console.error('Error creating flyer:', err);
       toast.error('Erro ao criar panfleto: ' + (err.message || 'Erro desconhecido'));
     } finally {
-      setCreating(false);
-      setGenerating(false);
-      setUploading(false);
+      setCreating(false); setGenerating(false); setUploading(false);
     }
   };
 
@@ -520,8 +552,6 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     link.href = item.generated_image_url;
     link.download = `${item.vehicle_model}-${item.vehicle_year}.jpg`;
     link.click();
-
-    // Update status
     supabase.from('flyer_items').update({ status: 'baixado' }).eq('id', item.id).then(() => {
       setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'baixado' } : i));
     });
@@ -659,11 +689,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
 
             {/* Extra info */}
             <div className="space-y-1.5">
-              <Label className="text-xs text-white/60">Informações adicionais</Label>
+              <Label className="text-xs text-white/60">Observações</Label>
               <Input
                 value={extraInfo}
                 onChange={e => setExtraInfo(e.target.value)}
-                placeholder="Ex: IPVA pago, único dono, etc."
+                placeholder="Ex: KM 61.845, IPVA pago, etc."
                 className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30"
               />
             </div>
@@ -704,6 +734,77 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
               className="hidden"
               onChange={handleFileSelect}
             />
+          </div>
+
+          {/* Layout Customization */}
+          <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-5">
+            <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+              <Move size={16} style={{ color: `hsl(${clientColor})` }} />
+              Posição & Tamanho
+            </h3>
+
+            {/* Logo Position */}
+            <div className="space-y-2">
+              <Label className="text-xs text-white/60">Posição da Logo</Label>
+              <div className="grid grid-cols-4 gap-2">
+                {LOGO_POSITIONS.map(pos => (
+                  <button
+                    key={pos.value}
+                    onClick={() => setLogoPosition(pos.value)}
+                    className={`px-2 py-2 rounded-lg text-[11px] font-medium transition-all ${
+                      logoPosition === pos.value
+                        ? 'text-white border-2'
+                        : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'
+                    }`}
+                    style={logoPosition === pos.value ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}
+                  >
+                    {pos.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Logo Size */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-white/60">Tamanho da Logo</Label>
+                <span className="text-xs text-white/40">{logoScale}%</span>
+              </div>
+              <Slider
+                value={[logoScale]}
+                onValueChange={v => setLogoScale(v[0])}
+                min={50}
+                max={200}
+                step={10}
+                className="w-full"
+              />
+            </div>
+
+            {/* Info Bar Position */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-white/60">Posição das Informações</Label>
+                <span className="text-xs text-white/40">{infoPosY}%</span>
+              </div>
+              <Slider
+                value={[infoPosY]}
+                onValueChange={v => setInfoPosY(v[0])}
+                min={55}
+                max={80}
+                step={1}
+                className="w-full"
+              />
+              <p className="text-[10px] text-white/30">Mais baixo = foto maior</p>
+            </div>
+
+            {/* Save button */}
+            <Button
+              variant="outline"
+              onClick={saveLayoutSettings}
+              className="w-full border-white/[0.1] text-white/70 hover:text-white hover:bg-white/[0.06]"
+            >
+              <Save size={14} /> Salvar Posições
+            </Button>
           </div>
 
           {/* Frame template selection */}

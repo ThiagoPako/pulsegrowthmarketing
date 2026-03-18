@@ -369,7 +369,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
-  const drawImageCover = (ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: number, dy: number, dw: number, dh: number) => {
+  const drawImageCover = (ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: number, dy: number, dw: number, dh: number, offX = 0, offY = 0) => {
     const imgAspect = img.naturalWidth / img.naturalHeight;
     const destAspect = dw / dh;
     let sx: number, sy: number, sw: number, sh: number;
@@ -378,6 +378,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     } else {
       sw = img.naturalWidth; sh = sw / destAspect; sx = 0; sy = (img.naturalHeight - sh) / 2;
     }
+    // Apply offset (in source-image pixel space)
+    const maxOffX = (img.naturalWidth - sw) / 2;
+    const maxOffY = (img.naturalHeight - sh) / 2;
+    sx += Math.max(-maxOffX, Math.min(maxOffX, offX * (img.naturalWidth / dw)));
+    sy += Math.max(-maxOffY, Math.min(maxOffY, offY * (img.naturalHeight / dh)));
     ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
   };
 

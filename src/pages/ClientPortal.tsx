@@ -52,6 +52,7 @@ interface ClientData {
   weekly_reels: number; weekly_creatives: number; weekly_stories: number;
   monthly_recordings: number; plan_id: string | null; show_metrics: boolean;
   has_vehicle_flyer: boolean; niche: string | null;
+  whatsapp?: string; city?: string;
 }
 
 type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem';
@@ -156,10 +157,10 @@ export default function ClientPortal() {
     // Try direct query first (works for authenticated team members)
     let clientQuery;
     if (isUUID) {
-      clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche').eq('id', slug).single();
+      clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city').eq('id', slug).single();
     } else {
       const companySearch = slug.replace(/-/g, ' ');
-      clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche').ilike('company_name', companySearch).single();
+      clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city').ilike('company_name', companySearch).single();
     }
 
     const clientRes = await clientQuery;
@@ -834,7 +835,7 @@ export default function ClientPortal() {
 
         {activeTab === 'panfletagem' && client.has_vehicle_flyer && (
           <motion.div key="panfletagem" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
-            <PortalPanfletagem clientId={client.id} clientColor={clientColor} />
+            <PortalPanfletagem clientId={client.id} clientColor={clientColor} clientName={client.company_name} clientLogoUrl={client.logo_url} clientWhatsapp={client.whatsapp} clientCity={client.city} />
           </motion.div>
         )}
       </AnimatePresence>

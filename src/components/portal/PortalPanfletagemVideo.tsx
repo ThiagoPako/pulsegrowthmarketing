@@ -5,7 +5,7 @@ import { Slider } from '@/components/ui/slider';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Upload, X, Play, Pause, Music, Film, Clapperboard,
+  Upload, X, Play, Pause, Music, Film, Clapperboard, Check, Eye,
   Video, Loader2, Volume2, VolumeX, ChevronDown, ChevronUp, Image as ImageIcon
 } from 'lucide-react';
 

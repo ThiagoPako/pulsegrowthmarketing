@@ -76,17 +76,20 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
   const [musicFadeIn, setMusicFadeIn] = useState(2);
   const [musicFadeOut, setMusicFadeOut] = useState(2);
 
-  // Vehicle info fields
-  const [model, setModel] = useState('');
-  const [year, setYear] = useState('');
-  const [transmission, setTransmission] = useState('manual');
-  const [fuelType, setFuelType] = useState('flex');
-  const [tireCondition, setTireCondition] = useState('bom');
-  const [price, setPrice] = useState('');
-  const [ipvaStatus, setIpvaStatus] = useState('nenhum');
-  const [extraInfo, setExtraInfo] = useState('');
-  const [footerAddress, setFooterAddress] = useState(clientCity || '');
-  const [footerWhatsapp, setFooterWhatsapp] = useState(clientWhatsapp || '');
+  // Vehicle info fields — load from localStorage
+  const savedVehicle = (() => {
+    try { const s = localStorage.getItem(`flyer-vehicle-video-${clientId}`); return s ? JSON.parse(s) : null; } catch { return null; }
+  })();
+  const [model, setModel] = useState(savedVehicle?.model || '');
+  const [year, setYear] = useState(savedVehicle?.year || '');
+  const [transmission, setTransmission] = useState(savedVehicle?.transmission || 'manual');
+  const [fuelType, setFuelType] = useState(savedVehicle?.fuelType || 'flex');
+  const [tireCondition, setTireCondition] = useState(savedVehicle?.tireCondition || 'bom');
+  const [price, setPrice] = useState(savedVehicle?.price || '');
+  const [ipvaStatus, setIpvaStatus] = useState(savedVehicle?.ipvaStatus || 'nenhum');
+  const [extraInfo, setExtraInfo] = useState(savedVehicle?.extraInfo || '');
+  const [footerAddress, setFooterAddress] = useState(savedVehicle?.footerAddress || clientCity || '');
+  const [footerWhatsapp, setFooterWhatsapp] = useState(savedVehicle?.footerWhatsapp || clientWhatsapp || '');
 
   // Preview
   const [activePreview, setActivePreview] = useState<VideoSegment | null>(null);

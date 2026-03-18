@@ -47,6 +47,8 @@ const IPVA_OPTIONS = [
   { value: 'pendente', label: 'IPVA Pendente' },
   { value: 'nenhum', label: 'Não informar' },
 ];
+const PORTAL_MEDIA_PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/portal-media-proxy`;
+const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
 
 function formatPrice(raw: string): string {
   const num = parseInt(raw, 10);
@@ -72,6 +74,33 @@ function loadSavedMedia(clientId: string): SavedMedia {
 
 function persistMedia(clientId: string, media: SavedMedia) {
   localStorage.setItem(`${STORAGE_KEY_PREFIX}${clientId}`, JSON.stringify(media));
+}
+
+function shouldProxyPreviewVideo(url: string) {
+  return url.startsWith(VPS_UPLOADS_URL);
+}
+
+async function createPreviewVideoObjectUrl(url: string) {
+  const response = await fetch(PORTAL_MEDIA_PROXY_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+    },
+    body: JSON.stringify({ url }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Falha ao carregar o vídeo (${response.status})`);
+  }
+
+  const blob = await response.blob();
+  if (!blob.size) {
+    throw new Error('O vídeo retornou vazio.');
+  }
+
+  return URL.createObjectURL(blob);
 }
 
 /** Upload file with XHR for progress tracking */
@@ -167,6 +196,8 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
   const [isPlaying, setIsPlaying] = useState(false);
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
   const audioPreviewRef = useRef<HTMLAudioElement>(null);
+  const previewObjectUrlRef = useRef<string | null>(null);
+  const previewRequestIdRef = useRef(0);
 
   const [generating, setGenerating] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string | null>('vehicle-info');
@@ -175,6 +206,12 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
   const carInputRef = useRef<HTMLInputElement>(null);
   const closingInputRef = useRef<HTMLInputElement>(null);
   const musicInputRef = useRef<HTMLInputElement>(null);
+
+  const releasePreviewObjectUrl = useCallback(() => {
+    if (!previewObjectUrlRef.current) return;
+    URL.revokeObjectURL(previewObjectUrlRef.current);
+    previewObjectUrlRef.current = null;
+  }, []);
 
   // ===== UPLOAD HANDLERS =====
   const handleVideoUpload = (segment: VideoSegment) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -254,7 +291,18 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
         { const m = loadSavedMedia(clientId); delete m.closingUrl; persistMedia(clientId, m); }
         break;
     }
-    if (activePreview === segment) { setActivePreview(null); setIsPlaying(false); }
+    if (activePreview === segment) {
+      setActivePreview(null);
+      setIsPlaying(false);
+      setPreviewLoading(false);
+      const video = videoPreviewRef.current;
+      if (video) {
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+      }
+      releasePreviewObjectUrl();
+    }
   };
 
   const removeMusic = () => {
@@ -268,7 +316,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     const url = segment === 'intro' ? introVideo : segment === 'car' ? carVideo : closingVideo;
     if (!url) return;
 
-    if (activePreview === segment && videoPreviewRef.current) {
+    if (activePreview === segment && videoPreviewRef.current?.currentSrc) {
       if (videoPreviewRef.current.paused) { videoPreviewRef.current.play().catch(() => {}); setIsPlaying(true); }
       else { videoPreviewRef.current.pause(); setIsPlaying(false); }
       return;
@@ -280,36 +328,82 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
   }, [introVideo, carVideo, closingVideo, activePreview]);
 
   useEffect(() => {
-    if (!activePreview) return;
-    const url = activePreview === 'intro' ? introVideo : activePreview === 'car' ? carVideo : closingVideo;
-    if (!url) return;
+    let cancelled = false;
+    const video = videoPreviewRef.current;
 
-    const v = videoPreviewRef.current;
-    if (!v) return;
-
-    v.src = url;
-    v.muted = true;
-    v.crossOrigin = 'anonymous';
-    v.load();
-
-    const onCanPlay = () => {
+    if (!activePreview || !video) {
       setPreviewLoading(false);
-      v.play().catch(() => setIsPlaying(false));
-      setIsPlaying(true);
+      setIsPlaying(false);
+      return;
+    }
+
+    const sourceUrl = activePreview === 'intro' ? introVideo : activePreview === 'car' ? carVideo : closingVideo;
+    if (!sourceUrl) {
+      setPreviewLoading(false);
+      return;
+    }
+
+    const requestId = ++previewRequestIdRef.current;
+    setPreviewLoading(true);
+    setIsPlaying(false);
+
+    const onReady = () => {
+      if (cancelled || requestId !== previewRequestIdRef.current) return;
+      setPreviewLoading(false);
+      video.play().catch(() => setIsPlaying(false));
     };
+
     const onError = () => {
+      if (cancelled || requestId !== previewRequestIdRef.current) return;
       setPreviewLoading(false);
+      setIsPlaying(false);
       toast.error('Erro ao carregar vídeo para pré-visualização');
     };
 
-    v.addEventListener('canplay', onCanPlay, { once: true });
-    v.addEventListener('error', onError, { once: true });
+    video.addEventListener('loadeddata', onReady, { once: true });
+    video.addEventListener('canplay', onReady, { once: true });
+    video.addEventListener('error', onError, { once: true });
+
+    const preparePreview = async () => {
+      try {
+        const playbackUrl = shouldProxyPreviewVideo(sourceUrl)
+          ? await createPreviewVideoObjectUrl(sourceUrl)
+          : sourceUrl;
+
+        if (cancelled || requestId !== previewRequestIdRef.current) {
+          if (playbackUrl.startsWith('blob:') && playbackUrl !== sourceUrl) URL.revokeObjectURL(playbackUrl);
+          return;
+        }
+
+        releasePreviewObjectUrl();
+        if (playbackUrl.startsWith('blob:') && playbackUrl !== sourceUrl) {
+          previewObjectUrlRef.current = playbackUrl;
+        }
+
+        video.pause();
+        video.currentTime = 0;
+        if (playbackUrl.startsWith('blob:')) video.removeAttribute('crossorigin');
+        else video.crossOrigin = 'anonymous';
+        video.preload = 'auto';
+        video.src = playbackUrl;
+        video.load();
+      } catch (error) {
+        if (cancelled) return;
+        setPreviewLoading(false);
+        setIsPlaying(false);
+        toast.error(error instanceof Error ? error.message : 'Erro ao preparar a pré-visualização');
+      }
+    };
+
+    preparePreview();
 
     return () => {
-      v.removeEventListener('canplay', onCanPlay);
-      v.removeEventListener('error', onError);
+      cancelled = true;
+      video.removeEventListener('loadeddata', onReady);
+      video.removeEventListener('canplay', onReady);
+      video.removeEventListener('error', onError);
     };
-  }, [activePreview, introVideo, carVideo, closingVideo]);
+  }, [activePreview, introVideo, carVideo, closingVideo, releasePreviewObjectUrl]);
 
   const togglePlayPause = () => {
     const v = videoPreviewRef.current;
@@ -347,9 +441,10 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
 
   useEffect(() => {
     return () => {
+      releasePreviewObjectUrl();
       [introVideo, carVideo, closingVideo, musicUrl].forEach(u => { if (u && u.startsWith('blob:')) URL.revokeObjectURL(u); });
     };
-  }, []);
+  }, [releasePreviewObjectUrl, introVideo, carVideo, closingVideo, musicUrl]);
 
   const segmentConfig = [
     { key: 'intro' as VideoSegment, label: 'Vídeo de Abertura', desc: 'Vinheta ou intro. Áudio mutado — apenas música de fundo.', icon: Clapperboard, video: introVideo, file: introFile, inputRef: introInputRef, saved: introSaved, canSave: true },

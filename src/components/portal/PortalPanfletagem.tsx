@@ -93,6 +93,12 @@ const TIRE_OPTIONS = [
   { value: 'regular', label: 'Regular' },
 ];
 
+const IPVA_OPTIONS = [
+  { value: 'pago', label: 'IPVA Pago' },
+  { value: 'pendente', label: 'IPVA Pendente' },
+  { value: 'nenhum', label: 'Não informar' },
+];
+
 const CANVAS_W = 1080;
 const CANVAS_H = 1350;
 

@@ -663,7 +663,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const { cx, cy } = getTouchCoords(e);
     if (dragging === 'logo') {
       setLogoX(Math.max(0, Math.min(CANVAS_W - logoW, cx - dragOffset.x)));
-      setLogoY(Math.max(0, Math.min(CANVAS_H - logoH, cy - dragOffset.y)));
+      setLogoY(Math.max(0, Math.min(CANVAS_H - logoH, cy - dragOffset.y)));  // Free movement across entire canvas
     } else if (dragging === 'info') {
       setInfoPosY(Math.max(400, Math.min(CANVAS_H - 330, cy - dragOffset.y)));
     }

@@ -363,11 +363,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.fill();
 
     ctx.fillStyle = c.headerText;
-    ctx.font = `bold ${Math.round(52 * fs)}px Arial, sans-serif`;
+    ctx.font = `bold ${Math.round(52 * fs)}px 'Georgia', serif`;
     ctx.textAlign = 'left';
     ctx.fillText('Seu próximo', 40, 80);
     ctx.fillText('carro está', 40, 140);
-    ctx.font = `bold italic ${Math.round(52 * fs)}px Arial, sans-serif`;
+    ctx.font = `bold italic ${Math.round(52 * fs)}px 'Georgia', serif`;
     ctx.fillStyle = c.header;
     ctx.fillText('aqui!', 40, 200);
 

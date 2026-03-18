@@ -182,8 +182,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   // Info box scale (controls pill/box size proportionally)
   const [infoBoxScale, setInfoBoxScale] = useState(1.0);
 
-  // Info values font scale (separate from global font)
-  const [infoFontScale, setInfoFontScale] = useState(1.0);
+  // Per-field font scales
+  const [modelFontScale, setModelFontScale] = useState(1.0);
+  const [yearFontScale, setYearFontScale] = useState(1.0);
+  const [transmissionFontScale, setTransmissionFontScale] = useState(1.0);
+  const [obsFontScale, setObsFontScale] = useState(1.0);
+  // Active field font editor (toggled by clicking label name)
+  const [activeFieldEditor, setActiveFieldEditor] = useState<string | null>(null);
 
   // Footer position (draggable)
   const [footerPosX, setFooterPosX] = useState(0);

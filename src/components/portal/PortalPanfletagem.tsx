@@ -639,11 +639,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     }
   }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
 
-  // Live preview rendering
+  // Live preview rendering + capture for video tab
   useEffect(() => {
     const canvas = previewCanvasRef.current;
     if (!canvas) return;
     drawCanvas(canvas, vehicleImgObj, logoImgObj);
+    // Capture flyer image for video tab usage
+    try { setFlyerImageDataUrl(canvas.toDataURL('image/jpeg', 0.8)); } catch {}
   }, [drawCanvas, vehicleImgObj, logoImgObj]);
 
   // Drag handlers on preview canvas

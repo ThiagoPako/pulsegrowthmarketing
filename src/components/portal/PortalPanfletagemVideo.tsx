@@ -217,6 +217,31 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     if (v.paused) { v.play().catch(() => {}); setIsPlaying(true); }
     else { v.pause(); setIsPlaying(false); }
   };
+  // Auto-save vehicle data to localStorage
+  useEffect(() => {
+    const data = { model, year, transmission, fuelType, tireCondition, price, ipvaStatus, extraInfo, footerAddress, footerWhatsapp };
+    localStorage.setItem(`flyer-vehicle-video-${clientId}`, JSON.stringify(data));
+  }, [model, year, transmission, fuelType, tireCondition, price, ipvaStatus, extraInfo, footerAddress, footerWhatsapp, clientId]);
+
+  // Import vehicle data from the Image tab
+  const importFromImage = () => {
+    try {
+      const s = localStorage.getItem(`flyer-vehicle-image-${clientId}`);
+      if (!s) { toast.error('Nenhum dado salvo na aba Imagem'); return; }
+      const d = JSON.parse(s);
+      if (d.model) setModel(d.model);
+      if (d.year) setYear(d.year);
+      if (d.transmission) setTransmission(d.transmission);
+      if (d.fuelType) setFuelType(d.fuelType);
+      if (d.tireCondition) setTireCondition(d.tireCondition);
+      if (d.price) setPrice(d.price);
+      if (d.ipvaStatus) setIpvaStatus(d.ipvaStatus);
+      if (d.extraInfo != null) setExtraInfo(d.extraInfo);
+      if (d.footerAddress) setFooterAddress(d.footerAddress);
+      if (d.footerWhatsapp) setFooterWhatsapp(d.footerWhatsapp);
+      toast.success('Dados importados da aba Imagem!');
+    } catch { toast.error('Erro ao importar dados'); }
+  };
 
   const handleGenerate = async () => {
     if (!carVideo && !introVideo && !closingVideo) {

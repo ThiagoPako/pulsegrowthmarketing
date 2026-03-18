@@ -39,6 +39,10 @@ interface FlyerItem {
 interface Props {
   clientId: string;
   clientColor: string;
+  clientName?: string;
+  clientLogoUrl?: string | null;
+  clientWhatsapp?: string;
+  clientCity?: string;
 }
 
 const TRANSMISSION_OPTIONS = [

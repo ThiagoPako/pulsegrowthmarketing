@@ -628,10 +628,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
 
   const handlePreviewMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!dragging || layoutLocked) return;
+    e.preventDefault();
+    didDragRef.current = true;
     const { cx, cy } = getCanvasCoords(e);
     if (dragging === 'logo') {
-      setLogoX(Math.max(0, Math.min(CANVAS_W - logoW, cx - dragOffset.x)));
-      setLogoY(Math.max(0, Math.min(CANVAS_H - logoH, cy - dragOffset.y)));  // Free movement across entire canvas
+      const newX = Math.max(-logoW / 2, Math.min(CANVAS_W - logoW / 2, cx - dragOffset.x));
+      const newY = Math.max(-logoH / 2, Math.min(CANVAS_H - logoH / 2, cy - dragOffset.y));
+      setLogoX(newX);
+      setLogoY(newY);  // Fully free movement
     } else if (dragging === 'info') {
       setInfoPosY(Math.max(400, Math.min(CANVAS_H - 330, cy - dragOffset.y)));
     }

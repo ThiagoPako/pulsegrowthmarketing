@@ -298,20 +298,10 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
                     <div className="px-4 pb-4 space-y-3">
                       <p className="text-[11px] text-white/40">{seg.desc}</p>
 
-                      {seg.key === 'car' && (
-                        <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.04]">
-                          <button onClick={() => setMuteCarVideo(!muteCarVideo)}
-                            className="flex items-center gap-2 text-xs text-white/70 hover:text-white transition-colors">
-                            {muteCarVideo ? <VolumeX size={14} className="text-red-400" /> : <Volume2 size={14} className="text-green-400" />}
-                            {muteCarVideo ? 'Áudio original será removido' : 'Áudio original será mantido'}
-                          </button>
-                        </div>
-                      )}
-
                       {seg.video ? (
                         <div className="space-y-2">
                           <div className="relative rounded-xl overflow-hidden bg-black aspect-video">
-                            <video src={seg.video} className="w-full h-full object-contain" muted={seg.key === 'car' && muteCarVideo} />
+                            <video src={seg.video} className="w-full h-full object-contain" muted />
                             <div className="absolute bottom-2 right-2 flex gap-1">
                               <button onClick={() => previewSegment(seg.key)}
                                 className="w-8 h-8 rounded-full bg-black/60 flex items-center justify-center hover:bg-black/80 transition-colors">

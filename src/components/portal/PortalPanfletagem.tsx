@@ -452,7 +452,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       // Pill
       ctx.fillStyle = c.infoPills;
       ctx.beginPath(); ctx.roundRect(cx, infoPosY + Math.round(24 * bs), cw, pillH, pillR); ctx.fill();
-      ctx.fillStyle = c.infoText; ctx.font = `bold ${Math.round(20 * fs)}px Arial, sans-serif`; ctx.textAlign = 'center';
+      ctx.fillStyle = c.infoText; ctx.font = `bold ${Math.round(20 * fs)}px 'Georgia', serif`; ctx.textAlign = 'center';
       ctx.fillText(col.label, cx + cw / 2, infoPosY + Math.round(24 * bs) + pillH / 2 + Math.round(7 * fs));
 
       ctx.fillStyle = c.infoText;

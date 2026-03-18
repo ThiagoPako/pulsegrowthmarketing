@@ -126,7 +126,8 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     setTimeout(() => {
       if (videoPreviewRef.current) {
         videoPreviewRef.current.src = url;
-        videoPreviewRef.current.muted = segment === 'car' && muteCarVideo;
+        // ALL segments are muted — only background music plays
+        videoPreviewRef.current.muted = true;
         videoPreviewRef.current.play().catch(() => {});
       }
     }, 100);

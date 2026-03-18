@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Car, Download, Eye, Plus, X, Image, Loader2, Check,
   Gauge, Upload, Save, Move, Lock, Unlock, Trash2, Palette, Type, MapPin, Phone
@@ -92,6 +93,12 @@ const TIRE_OPTIONS = [
   { value: 'regular', label: 'Regular' },
 ];
 
+const IPVA_OPTIONS = [
+  { value: 'pago', label: 'IPVA Pago' },
+  { value: 'pendente', label: 'IPVA Pendente' },
+  { value: 'nenhum', label: 'Não informar' },
+];
+
 const CANVAS_W = 1080;
 const CANVAS_H = 1350;
 
@@ -137,6 +144,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [fuelType, setFuelType] = useState('flex');
   const [tireCondition, setTireCondition] = useState('bom');
   const [price, setPrice] = useState('');
+  const [ipvaStatus, setIpvaStatus] = useState('nenhum');
   const [extraInfo, setExtraInfo] = useState('');
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
   const [mediaPreviews, setMediaPreviews] = useState<string[]>([]);
@@ -355,11 +363,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.fill();
 
     ctx.fillStyle = c.headerText;
-    ctx.font = `bold ${Math.round(52 * fs)}px Arial, sans-serif`;
+    ctx.font = `bold ${Math.round(52 * fs)}px 'Georgia', serif`;
     ctx.textAlign = 'left';
     ctx.fillText('Seu próximo', 40, 80);
     ctx.fillText('carro está', 40, 140);
-    ctx.font = `bold italic ${Math.round(52 * fs)}px Arial, sans-serif`;
+    ctx.font = `bold italic ${Math.round(52 * fs)}px 'Georgia', serif`;
     ctx.fillStyle = c.header;
     ctx.fillText('aqui!', 40, 200);
 
@@ -377,9 +385,10 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillText('Adicione uma foto do veículo', W / 2, photoY + Math.max(photoH, 100) / 2);
     }
 
-    // Price overlay
-    const priceText = price ? formatPrice(price) : '';
-    if (priceText) {
+    // Price overlay — show example when empty
+    const priceText = price ? formatPrice(price) : 'R$ 00.000,00';
+    const priceIsExample = !price;
+    {
       const priceBoxW = Math.round(460 * bs), priceBoxH = Math.round(120 * bs);
       const priceX = W - priceBoxW - 30;
       const priceYpos = infoPosY - priceBoxH - 30;
@@ -389,10 +398,12 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       priceGrad.addColorStop(0, c.priceBg); priceGrad.addColorStop(1, darkenHex(c.priceBg));
       ctx.fillStyle = priceGrad;
       ctx.beginPath(); ctx.roundRect(priceX, priceYpos, priceBoxW, priceBoxH, 16); ctx.fill();
+      ctx.globalAlpha = priceIsExample ? 0.4 : 1;
       ctx.fillStyle = c.priceText; ctx.font = `${Math.round(20 * fs)}px Arial, sans-serif`; ctx.textAlign = 'left';
       ctx.fillText('POR APENAS:', priceX + 24, priceYpos + Math.round(35 * bs));
       ctx.font = `bold ${Math.round(52 * fs)}px Arial, sans-serif`;
       ctx.fillText(priceText, priceX + 24, priceYpos + Math.round(90 * bs));
+      ctx.globalAlpha = 1;
     }
 
     // Info bar
@@ -411,11 +422,24 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       extraInfo: extraInfo.trim(),
     };
 
+    // Build observations: always include button selections, then append user text
+    const obsLines: string[] = [];
+    obsLines.push(`• ${FUEL_OPTIONS.find(f => f.value === data.fuel)?.label || data.fuel}`);
+    obsLines.push(`• Pneus ${TIRE_OPTIONS.find(t => t.value === data.tires)?.label || data.tires}`);
+    if (ipvaStatus === 'pago') obsLines.push('• IPVA Pago');
+    else if (ipvaStatus === 'pendente') obsLines.push('• IPVA Pendente');
+    // Append user extra observations as bullet points
+    if (data.extraInfo) {
+      data.extraInfo.split('\n').filter(l => l.trim()).forEach(line => {
+        obsLines.push(`• ${line.trim()}`);
+      });
+    }
+
     const cols = [
       { label: 'MODELO', value: data.model },
       { label: 'ANO', value: data.year },
       { label: 'CÂMBIO', value: data.transmission === 'automatico' ? 'Automático' : 'Manual' },
-      { label: 'OBSERVAÇÕES', value: data.extraInfo || `• ${FUEL_OPTIONS.find(f => f.value === data.fuel)?.label || data.fuel}\n• Pneus ${TIRE_OPTIONS.find(t => t.value === data.tires)?.label || data.tires}` },
+      { label: 'OBSERVAÇÕES', value: obsLines.join('\n') },
     ];
     const colW = W / 4;
     const colPad = Math.round(12 * bs);
@@ -428,7 +452,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       // Pill
       ctx.fillStyle = c.infoPills;
       ctx.beginPath(); ctx.roundRect(cx, infoPosY + Math.round(24 * bs), cw, pillH, pillR); ctx.fill();
-      ctx.fillStyle = c.infoText; ctx.font = `bold ${Math.round(20 * fs)}px Arial, sans-serif`; ctx.textAlign = 'center';
+      ctx.fillStyle = c.infoText; ctx.font = `bold ${Math.round(20 * fs)}px 'Georgia', serif`; ctx.textAlign = 'center';
       ctx.fillText(col.label, cx + cw / 2, infoPosY + Math.round(24 * bs) + pillH / 2 + Math.round(7 * fs));
 
       ctx.fillStyle = c.infoText;
@@ -470,18 +494,60 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const addrText = footerAddress || '';
     const wpText = footerWhatsapp || '';
 
+    // Draw pin icon (drawn, not emoji)
+    const drawPinIcon = (cx: number, cy: number, size: number) => {
+      ctx.save();
+      ctx.fillStyle = c.footerAccent;
+      ctx.beginPath(); ctx.arc(cx, cy, size, 0, Math.PI * 2); ctx.fill();
+      // Pin shape
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      const ps = size * 0.55;
+      ctx.moveTo(cx, cy + ps * 1.3);
+      ctx.quadraticCurveTo(cx - ps, cy, cx - ps * 0.5, cy - ps * 0.6);
+      ctx.arc(cx, cy - ps * 0.3, ps * 0.7, Math.PI * 1.15, Math.PI * -0.15);
+      ctx.quadraticCurveTo(cx + ps, cy, cx, cy + ps * 1.3);
+      ctx.fill();
+      ctx.fillStyle = c.footerAccent;
+      ctx.beginPath(); ctx.arc(cx, cy - ps * 0.3, ps * 0.25, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    };
+
+    // Draw WhatsApp icon (drawn, not emoji)
+    const drawWhatsAppIcon = (cx: number, cy: number, size: number) => {
+      ctx.save();
+      ctx.fillStyle = '#25D366';
+      ctx.beginPath(); ctx.arc(cx, cy, size, 0, Math.PI * 2); ctx.fill();
+      // Phone handset shape
+      ctx.fillStyle = '#FFFFFF';
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#FFFFFF';
+      const s = size * 0.45;
+      ctx.beginPath();
+      ctx.arc(cx, cy, s * 0.9, 0, Math.PI * 2);
+      ctx.lineWidth = s * 0.25;
+      ctx.stroke();
+      // Chat bubble tail
+      ctx.beginPath();
+      ctx.moveTo(cx - s * 0.5, cy + s * 0.7);
+      ctx.lineTo(cx - s * 0.9, cy + s * 1.2);
+      ctx.lineTo(cx - s * 0.1, cy + s * 0.9);
+      ctx.fillStyle = '#25D366';
+      ctx.fill();
+      // Inner phone icon
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `bold ${size * 0.8}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('✆', cx, cy + 1);
+      ctx.restore();
+    };
+
     // Address section (left half)
     if (addrText) {
-      // Pin icon circle
-      ctx.fillStyle = c.footerAccent;
-      ctx.beginPath(); ctx.arc(55, footCenterY, 24, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = `bold ${Math.round(20 * fs)}px Arial, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText('📍', 55, footCenterY + 7);
-
+      drawPinIcon(55, footCenterY, 24);
       ctx.fillStyle = c.footerText;
-      ctx.font = `${Math.round(12 * fs)}px Arial, sans-serif`;
+      ctx.font = `${Math.round(12 * fs)}px 'Georgia', serif`;
       ctx.textAlign = 'left';
       ctx.fillText('ENDEREÇO', 92, footCenterY - 18);
       ctx.font = `bold ${Math.round(18 * fs)}px Arial, sans-serif`;
@@ -500,17 +566,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     // WhatsApp section (right half)
     if (wpText) {
       const wpX = W / 2 + 40;
-      // WhatsApp green circle
-      ctx.fillStyle = '#25D366';
-      ctx.beginPath(); ctx.arc(wpX + 24, footCenterY, 24, 0, Math.PI * 2); ctx.fill();
-      // WhatsApp icon (phone symbol)
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = `bold ${Math.round(22 * fs)}px Arial, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText('📱', wpX + 24, footCenterY + 8);
-
+      drawWhatsAppIcon(wpX + 24, footCenterY, 24);
       ctx.fillStyle = c.footerText;
-      ctx.font = `${Math.round(12 * fs)}px Arial, sans-serif`;
+      ctx.font = `${Math.round(12 * fs)}px 'Georgia', serif`;
       ctx.textAlign = 'left';
       ctx.fillText('WHATSAPP', wpX + 58, footCenterY - 18);
       ctx.font = `bold ${Math.round(24 * fs)}px Arial, sans-serif`;
@@ -524,7 +582,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillStyle = '#FFFFFF'; ctx.font = `bold ${Math.round(36 * fs)}px Arial, sans-serif`; ctx.textAlign = 'left';
       ctx.fillText(clientName, logoX, logoY + 40);
     }
-  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, colors, footerAddress, footerWhatsapp, logoScale]);
+  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus]);
 
   // Live preview rendering
   useEffect(() => {
@@ -568,7 +626,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const { cx, cy } = getCanvasCoords(e);
     if (dragging === 'logo') {
       setLogoX(Math.max(0, Math.min(CANVAS_W - logoW, cx - dragOffset.x)));
-      setLogoY(Math.max(0, Math.min(CANVAS_H - logoH, cy - dragOffset.y)));
+      setLogoY(Math.max(0, Math.min(CANVAS_H - logoH, cy - dragOffset.y)));  // Free movement across entire canvas
     } else if (dragging === 'info') {
       setInfoPosY(Math.max(400, Math.min(CANVAS_H - 330, cy - dragOffset.y)));
     }
@@ -605,7 +663,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const { cx, cy } = getTouchCoords(e);
     if (dragging === 'logo') {
       setLogoX(Math.max(0, Math.min(CANVAS_W - logoW, cx - dragOffset.x)));
-      setLogoY(Math.max(0, Math.min(CANVAS_H - logoH, cy - dragOffset.y)));
+      setLogoY(Math.max(0, Math.min(CANVAS_H - logoH, cy - dragOffset.y)));  // Free movement across entire canvas
     } else if (dragging === 'info') {
       setInfoPosY(Math.max(400, Math.min(CANVAS_H - 330, cy - dragOffset.y)));
     }
@@ -785,15 +843,29 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             </div>
 
             <div className="space-y-1.5">
+              <Label className="text-xs text-white/60">IPVA</Label>
+              <div className="flex gap-2">
+                {IPVA_OPTIONS.map(opt => (
+                  <button key={opt.value} onClick={() => setIpvaStatus(opt.value)}
+                    className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${ipvaStatus === opt.value ? 'text-white border-2' : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'}`}
+                    style={ipvaStatus === opt.value ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
               <Label className="text-xs text-white/60">Valor</Label>
               <Input value={price ? formatPrice(price) : ''} onChange={e => setPrice(e.target.value.replace(/\D/g, ''))} placeholder="R$ 0,00"
                 className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30 text-lg font-bold" />
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs text-white/60">Observações</Label>
-              <Input value={extraInfo} onChange={e => setExtraInfo(e.target.value)} placeholder="Ex: KM 61.845, IPVA pago, etc."
-                className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30" />
+              <Label className="text-xs text-white/60">Observações extras (Enter = novo tópico)</Label>
+              <Textarea value={extraInfo} onChange={e => setExtraInfo(e.target.value)} placeholder="Ex: KM 61.845&#10;Único dono&#10;Revisado"
+                rows={3}
+                className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30 resize-none" />
             </div>
           </div>
 

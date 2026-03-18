@@ -654,7 +654,6 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   };
 
   const handlePreviewMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (layoutLocked) return;
     didDragRef.current = false;
     const { cx, cy } = getCanvasCoords(e);
     // Check logo hit

@@ -260,7 +260,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   }, [clientWhatsapp]);
 
   const saveLayoutSettings = () => {
-    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, footerPosX, footerPosY, colors, footerAddress, footerWhatsapp };
+    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, footerPosX, footerPosY, colors, footerAddress, footerWhatsapp };
     localStorage.setItem(`flyer-layout-${clientId}`, JSON.stringify(settings));
     toast.success('Layout salvo!');
   };

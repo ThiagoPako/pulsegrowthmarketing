@@ -202,6 +202,10 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [footerPosX, setFooterPosX] = useState(0);
   const [footerPosY, setFooterPosY] = useState(0); // offset from default position
 
+  // Vehicle photo position offset (panning inside the crop area)
+  const [photoOffsetX, setPhotoOffsetX] = useState(0);
+  const [photoOffsetY, setPhotoOffsetY] = useState(0);
+
   // Per-component colors
   const [colors, setColors] = useState<LayoutColors>({ ...DEFAULT_COLORS });
 
@@ -209,7 +213,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [layoutLocked, setLayoutLocked] = useState(false);
 
   // Drag state
-  const [dragging, setDragging] = useState<'logo' | 'info' | 'footer' | null>(null);
+  const [dragging, setDragging] = useState<'logo' | 'info' | 'footer' | 'photo' | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const didDragRef = useRef(false);
 

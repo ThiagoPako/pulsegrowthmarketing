@@ -32,7 +32,7 @@ const emptyClient = (): Partial<Client> & { clientType?: string } => ({
   videomaker: '', backupTime: '14:00', backupDay: 'terca', extraDay: 'quarta',
   extraContentTypes: [], acceptsExtra: false, extraClientAppears: false,
   weeklyReels: 0, weeklyCreatives: 0, weeklyGoal: 10,
-  hasEndomarketing: false, weeklyStories: 0, presenceDays: 1,
+  hasEndomarketing: false, hasVehicleFlyer: false, weeklyStories: 0, presenceDays: 1,
   monthlyRecordings: 4, niche: '',
   clientLogin: '', clientPassword: '', driveLink: '', driveFotos: '', driveIdentidadeVisual: '',
   editorial: '',

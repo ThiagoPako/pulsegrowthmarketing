@@ -29,6 +29,7 @@ function rowToClient(r: any): Client {
     weeklyCreatives: r.weekly_creatives,
     weeklyGoal: r.weekly_goal,
     hasEndomarketing: r.has_endomarketing,
+    hasVehicleFlyer: r.has_vehicle_flyer ?? false,
     weeklyStories: r.weekly_stories,
     presenceDays: r.presence_days,
     monthlyRecordings: r.monthly_recordings ?? 4,

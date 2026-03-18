@@ -132,6 +132,29 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
+  // Helper: draw image with cover behavior
+  const drawImageCover = (
+    ctx: CanvasRenderingContext2D,
+    img: HTMLImageElement,
+    dx: number, dy: number, dw: number, dh: number
+  ) => {
+    const imgAspect = img.naturalWidth / img.naturalHeight;
+    const destAspect = dw / dh;
+    let sx: number, sy: number, sw: number, sh: number;
+    if (imgAspect > destAspect) {
+      sh = img.naturalHeight;
+      sw = sh * destAspect;
+      sx = (img.naturalWidth - sw) / 2;
+      sy = 0;
+    } else {
+      sw = img.naturalWidth;
+      sh = sw / destAspect;
+      sx = 0;
+      sy = (img.naturalHeight - sh) / 2;
+    }
+    ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+  };
+
   const generateArt = useCallback(async (
     vehicleImage: string,
     frameUrl: string,
@@ -148,11 +171,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       canvas.width = W;
       canvas.height = H;
 
-      // Pulse brand color
       const PULSE_ORANGE = '#E8612D';
       const DARK_BG = '#1a1a2e';
       const INFO_BG = '#1e2a45';
-      const LABEL_BG = PULSE_ORANGE;
 
       const vehicleImg = new window.Image();
       vehicleImg.crossOrigin = 'anonymous';
@@ -161,15 +182,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         ctx.fillStyle = DARK_BG;
         ctx.fillRect(0, 0, W, H);
 
-        // === TOP HEADER SECTION (0 → 280) ===
-        // Orange gradient header
+        // === TOP HEADER (0 → 260) ===
         const headerGrad = ctx.createLinearGradient(0, 0, W, 0);
         headerGrad.addColorStop(0, PULSE_ORANGE);
         headerGrad.addColorStop(1, '#d4542a');
         ctx.fillStyle = headerGrad;
         ctx.fillRect(0, 0, W, 260);
 
-        // White curved shape on left for tagline
+        // White curved shape on left
         ctx.fillStyle = '#FFFFFF';
         ctx.beginPath();
         ctx.moveTo(0, 0);
@@ -178,7 +198,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         ctx.closePath();
         ctx.fill();
 
-        // Tagline text
+        // Tagline
         ctx.fillStyle = '#1a1a2e';
         ctx.font = 'bold 52px Arial, sans-serif';
         ctx.textAlign = 'left';
@@ -188,35 +208,23 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         ctx.fillStyle = PULSE_ORANGE;
         ctx.fillText('aqui!', 40, 200);
 
-        // === VEHICLE PHOTO (260 → 900) ===
+        // === VEHICLE PHOTO (260 → 920) — bigger area ===
         const photoY = 260;
-        const photoH = 640;
-        const imgRatio = vehicleImg.width / vehicleImg.height;
-        const canvasRatio = W / photoH;
-        let sx = 0, sy = 0, sw = vehicleImg.width, sh = vehicleImg.height;
-        if (imgRatio > canvasRatio) {
-          sw = vehicleImg.height * canvasRatio;
-          sx = (vehicleImg.width - sw) / 2;
-        } else {
-          sh = vehicleImg.width / canvasRatio;
-          sy = (vehicleImg.height - sh) / 2;
-        }
-        ctx.drawImage(vehicleImg, sx, sy, sw, sh, 0, photoY, W, photoH);
+        const photoH = 660;
+        drawImageCover(ctx, vehicleImg, 0, photoY, W, photoH);
 
-        // === PRICE OVERLAY on photo ===
+        // === PRICE OVERLAY ===
         if (data.price) {
           const priceBoxW = 460;
           const priceBoxH = 120;
           const priceX = W - priceBoxW - 30;
           const priceY = photoY + photoH - priceBoxH - 30;
 
-          // Shadow
           ctx.fillStyle = 'rgba(0,0,0,0.4)';
           ctx.beginPath();
           ctx.roundRect(priceX + 4, priceY + 4, priceBoxW, priceBoxH, 16);
           ctx.fill();
 
-          // Box
           const priceGrad = ctx.createLinearGradient(priceX, priceY, priceX + priceBoxW, priceY);
           priceGrad.addColorStop(0, PULSE_ORANGE);
           priceGrad.addColorStop(1, '#d4542a');
@@ -235,13 +243,12 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
 
         // === FRAME OVERLAY (optional) ===
         const continueAfterFrame = () => {
-          // === BOTTOM INFO BAR (900 → 1200) ===
-          const infoY = 920;
-          const infoH = 280;
+          // === BOTTOM INFO BAR (920 → 1200) ===
+          const infoY = photoY + photoH;
+          const infoH = 260;
           ctx.fillStyle = INFO_BG;
           ctx.fillRect(0, infoY, W, infoH);
 
-          // 4 columns
           const cols = [
             { label: 'MODELO', value: data.model },
             { label: 'ANO', value: data.year },
@@ -255,8 +262,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             const cx = i * colW + colPad;
             const cw = colW - colPad * 2;
 
-            // Label pill
-            ctx.fillStyle = LABEL_BG;
+            ctx.fillStyle = PULSE_ORANGE;
             ctx.beginPath();
             ctx.roundRect(cx, infoY + 20, cw, 44, 22);
             ctx.fill();
@@ -266,7 +272,6 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             ctx.textAlign = 'center';
             ctx.fillText(col.label, cx + cw / 2, infoY + 48);
 
-            // Value text
             ctx.fillStyle = '#FFFFFF';
             ctx.font = i === 3 ? '18px Arial, sans-serif' : 'bold 24px Arial, sans-serif';
             ctx.textAlign = 'center';
@@ -277,7 +282,6 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
                 ctx.fillText(line.trim(), cx + cw / 2, infoY + 100 + li * 30);
               });
             } else {
-              // Wrap long text
               const words = col.value.split(' ');
               let line = '';
               let lineY = infoY + 110;
@@ -294,7 +298,6 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
               if (line) ctx.fillText(line, cx + cw / 2, lineY);
             }
 
-            // Separator line
             if (i < 3) {
               ctx.strokeStyle = 'rgba(255,255,255,0.15)';
               ctx.lineWidth = 1;
@@ -305,24 +308,103 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             }
           });
 
-          // === FOOTER (1200 → 1350) ===
+          // === FOOTER with client info (1180 → 1350) ===
           const footY = infoY + infoH;
+          const footH = H - footY;
           ctx.fillStyle = DARK_BG;
-          ctx.fillRect(0, footY, W, H - footY);
+          ctx.fillRect(0, footY, W, footH);
 
-          // Pulse branding footer
-          ctx.fillStyle = PULSE_ORANGE;
-          ctx.font = 'bold 22px Arial, sans-serif';
-          ctx.textAlign = 'center';
-          ctx.fillText('PANFLETAGEM DIGITAL PULSE', W / 2, footY + 50);
-          ctx.fillStyle = 'rgba(255,255,255,0.4)';
-          ctx.font = '16px Arial, sans-serif';
-          ctx.fillText('Gerado automaticamente • agenciapulse.tech', W / 2, footY + 80);
+          // Address (left side)
+          const addrText = clientCity || '';
+          if (addrText) {
+            // Location pin icon circle
+            ctx.fillStyle = PULSE_ORANGE;
+            ctx.beginPath();
+            ctx.arc(60, footY + footH / 2, 22, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 20px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('📍', 60, footY + footH / 2 + 7);
 
-          resolve(canvas.toDataURL('image/jpeg', 0.92));
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 18px Arial, sans-serif';
+            ctx.textAlign = 'left';
+            // Wrap address text
+            const maxAddrW = W / 2 - 120;
+            const addrWords = addrText.split(' ');
+            let addrLine = '';
+            let addrLineY = footY + footH / 2 - 12;
+            addrWords.forEach(word => {
+              const test = addrLine + (addrLine ? ' ' : '') + word;
+              if (ctx.measureText(test).width > maxAddrW && addrLine) {
+                ctx.fillText(addrLine, 95, addrLineY);
+                addrLine = word;
+                addrLineY += 24;
+              } else {
+                addrLine = test;
+              }
+            });
+            if (addrLine) ctx.fillText(addrLine, 95, addrLineY);
+          }
+
+          // WhatsApp (right side)
+          const whatsText = clientWhatsapp || '';
+          if (whatsText) {
+            ctx.fillStyle = PULSE_ORANGE;
+            ctx.beginPath();
+            ctx.arc(W - 300, footY + footH / 2, 22, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 20px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('📱', W - 300, footY + footH / 2 + 7);
+
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 18px Arial, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('FALE CONOSCO', W - 265, footY + footH / 2 - 8);
+            ctx.font = 'bold 22px Arial, sans-serif';
+            ctx.fillText(whatsText, W - 265, footY + footH / 2 + 20);
+          }
+
+          // === LOGO (top right, like reference) ===
+          const finalize = () => {
+            resolve(canvas.toDataURL('image/jpeg', 0.92));
+          };
+
+          if (clientLogoUrl) {
+            const logoImg = new window.Image();
+            logoImg.crossOrigin = 'anonymous';
+            logoImg.onload = () => {
+              const logoMaxW = 220;
+              const logoMaxH = 140;
+              const logoAspect = logoImg.naturalWidth / logoImg.naturalHeight;
+              let lw = logoMaxW;
+              let lh = lw / logoAspect;
+              if (lh > logoMaxH) {
+                lh = logoMaxH;
+                lw = lh * logoAspect;
+              }
+              const lx = W - lw - 40;
+              const ly = (260 - lh) / 2;
+              ctx.drawImage(logoImg, lx, ly, lw, lh);
+              finalize();
+            };
+            logoImg.onerror = () => finalize();
+            logoImg.src = clientLogoUrl;
+          } else {
+            // Draw company name as text fallback
+            if (clientName) {
+              ctx.fillStyle = '#FFFFFF';
+              ctx.font = 'bold 36px Arial, sans-serif';
+              ctx.textAlign = 'right';
+              ctx.fillText(clientName, W - 40, 140);
+            }
+            finalize();
+          }
         };
 
-        // Try loading frame overlay
         if (frameUrl) {
           const frameImg = new window.Image();
           frameImg.crossOrigin = 'anonymous';
@@ -339,7 +421,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       vehicleImg.onerror = () => reject('Failed to load vehicle image');
       vehicleImg.src = vehicleImage;
     });
-  }, [clientColor]);
+  }, [clientColor, clientLogoUrl, clientName, clientWhatsapp, clientCity]);
 
   const handleCreate = async () => {
     if (!model.trim() || !year.trim()) {

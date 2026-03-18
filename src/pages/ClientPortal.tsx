@@ -834,7 +834,7 @@ export default function ClientPortal() {
 
         {activeTab === 'panfletagem' && client.has_vehicle_flyer && (
           <motion.div key="panfletagem" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
-            <PortalPanfletagem clientId={client.id} clientColor={clientColor} />
+            <PortalPanfletagem clientId={client.id} clientColor={clientColor} clientName={client.companyName} clientLogoUrl={client.logoUrl} clientWhatsapp={client.whatsapp} clientCity={client.city} />
           </motion.div>
         )}
       </AnimatePresence>

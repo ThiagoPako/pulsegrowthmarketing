@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Car, Download, Eye, Plus, X, Image, Loader2, Check,
-  Gauge, Upload, Save, Move, Maximize2
+  Gauge, Upload, Save, Move, Lock, Unlock, Trash2
 } from 'lucide-react';
 
 interface FlyerTemplate {
@@ -68,12 +68,8 @@ const TIRE_OPTIONS = [
   { value: 'regular', label: 'Regular' },
 ];
 
-const LOGO_POSITIONS: { value: LogoPosition; label: string }[] = [
-  { value: 'top-left', label: '↖ Sup. Esq.' },
-  { value: 'top-right', label: '↗ Sup. Dir.' },
-  { value: 'bottom-left', label: '↙ Inf. Esq.' },
-  { value: 'bottom-right', label: '↘ Inf. Dir.' },
-];
+const CANVAS_W = 1080;
+const CANVAS_H = 1350;
 
 export default function PortalPanfletagem({ clientId, clientColor, clientName, clientLogoUrl, clientWhatsapp, clientCity }: Props) {
   const [templates, setTemplates] = useState<FlyerTemplate[]>([]);
@@ -83,7 +79,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [generating, setGenerating] = useState(false);
   const [previewItem, setPreviewItem] = useState<FlyerItem | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
 
   // Form state
   const [model, setModel] = useState('');
@@ -98,33 +96,51 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [uploading, setUploading] = useState(false);
 
-  // Layout customization state
-  const [logoPosition, setLogoPosition] = useState<LogoPosition>('top-right');
-  const [logoScale, setLogoScale] = useState(100); // percentage 50-200
-  const [infoPosY, setInfoPosY] = useState(68); // percentage of canvas height where info bar starts (68% default)
+  // Custom logo
+  const [customLogoDataUrl, setCustomLogoDataUrl] = useState<string | null>(null);
 
-  // Load saved layout settings
+  // Layout state — pixel positions on canvas
+  const [logoX, setLogoX] = useState(820);
+  const [logoY, setLogoY] = useState(60);
+  const [logoW, setLogoW] = useState(200);
+  const [logoH, setLogoH] = useState(120);
+  const [infoPosY, setInfoPosY] = useState(920); // px on canvas
+
+  // Lock
+  const [layoutLocked, setLayoutLocked] = useState(false);
+
+  // Drag state
+  const [dragging, setDragging] = useState<'logo' | 'info' | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+  // Loaded images for preview
+  const [vehicleImgObj, setVehicleImgObj] = useState<HTMLImageElement | null>(null);
+  const [logoImgObj, setLogoImgObj] = useState<HTMLImageElement | null>(null);
+
+  // Load saved layout
   useEffect(() => {
     const saved = localStorage.getItem(`flyer-layout-${clientId}`);
     if (saved) {
       try {
         const s = JSON.parse(saved);
-        if (s.logoPosition) setLogoPosition(s.logoPosition);
-        if (s.logoScale) setLogoScale(s.logoScale);
-        if (s.infoPosY) setInfoPosY(s.infoPosY);
+        if (s.logoX != null) setLogoX(s.logoX);
+        if (s.logoY != null) setLogoY(s.logoY);
+        if (s.logoW != null) setLogoW(s.logoW);
+        if (s.logoH != null) setLogoH(s.logoH);
+        if (s.infoPosY != null) setInfoPosY(s.infoPosY);
+        if (s.layoutLocked != null) setLayoutLocked(s.layoutLocked);
+        if (s.customLogoDataUrl) setCustomLogoDataUrl(s.customLogoDataUrl);
       } catch { /* ignore */ }
     }
   }, [clientId]);
 
   const saveLayoutSettings = () => {
-    const settings = { logoPosition, logoScale, infoPosY };
+    const settings = { logoX, logoY, logoW, logoH, infoPosY, layoutLocked, customLogoDataUrl };
     localStorage.setItem(`flyer-layout-${clientId}`, JSON.stringify(settings));
-    toast.success('Posições salvas!');
+    toast.success('Layout salvo!');
   };
 
-  useEffect(() => {
-    loadData();
-  }, [clientId]);
+  useEffect(() => { loadData(); }, [clientId]);
 
   const loadData = async () => {
     setLoading(true);
@@ -134,11 +150,43 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ]);
     if (templatesRes.data) {
       setTemplates(templatesRes.data as FlyerTemplate[]);
-      const frames = templatesRes.data.filter((t: any) => t.template_type === 'frame');
-      if (frames.length > 0 && !selectedTemplate) setSelectedTemplate(frames[0].id);
+      const fr = templatesRes.data.filter((t: any) => t.template_type === 'frame');
+      if (fr.length > 0 && !selectedTemplate) setSelectedTemplate(fr[0].id);
     }
     if (itemsRes.data) setItems(itemsRes.data as FlyerItem[]);
     setLoading(false);
+  };
+
+  // Load logo image object
+  useEffect(() => {
+    const src = customLogoDataUrl || clientLogoUrl;
+    if (!src) { setLogoImgObj(null); return; }
+    const img = new window.Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => setLogoImgObj(img);
+    img.onerror = () => setLogoImgObj(null);
+    img.src = src;
+  }, [customLogoDataUrl, clientLogoUrl]);
+
+  // Load first vehicle image
+  useEffect(() => {
+    if (mediaPreviews.length === 0) { setVehicleImgObj(null); return; }
+    const img = new window.Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => setVehicleImgObj(img);
+    img.src = mediaPreviews[0];
+  }, [mediaPreviews]);
+
+  // Custom logo upload
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setCustomLogoDataUrl(ev.target?.result as string);
+      toast.success('Logo personalizada carregada!');
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -166,321 +214,296 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
-  // Helper: draw image with cover behavior
-  const drawImageCover = (
-    ctx: CanvasRenderingContext2D,
-    img: HTMLImageElement,
-    dx: number, dy: number, dw: number, dh: number
-  ) => {
+  const drawImageCover = (ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: number, dy: number, dw: number, dh: number) => {
     const imgAspect = img.naturalWidth / img.naturalHeight;
     const destAspect = dw / dh;
     let sx: number, sy: number, sw: number, sh: number;
     if (imgAspect > destAspect) {
-      sh = img.naturalHeight;
-      sw = sh * destAspect;
-      sx = (img.naturalWidth - sw) / 2;
-      sy = 0;
+      sh = img.naturalHeight; sw = sh * destAspect; sx = (img.naturalWidth - sw) / 2; sy = 0;
     } else {
-      sw = img.naturalWidth;
-      sh = sw / destAspect;
-      sx = 0;
-      sy = (img.naturalHeight - sh) / 2;
+      sw = img.naturalWidth; sh = sw / destAspect; sx = 0; sy = (img.naturalHeight - sh) / 2;
     }
     ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
   };
 
-  const generateArt = useCallback(async (
-    vehicleImage: string,
-    frameUrl: string,
-    data: { model: string; year: string; transmission: string; fuel: string; tires: string; price: string; extraInfo: string }
-  ): Promise<string> => {
+  // Core draw function used for both preview and final
+  const drawCanvas = useCallback((canvas: HTMLCanvasElement, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    canvas.width = CANVAS_W;
+    canvas.height = CANVAS_H;
+    const W = CANVAS_W, H = CANVAS_H;
+
+    const BRAND = '#034e98';
+    const BRAND_DARK = '#023a73';
+    const DARK_BG = '#1a1a2e';
+    const INFO_BG = '#1e2a45';
+
+    // Background
+    ctx.fillStyle = DARK_BG;
+    ctx.fillRect(0, 0, W, H);
+
+    // Header
+    const headerGrad = ctx.createLinearGradient(0, 0, W, 0);
+    headerGrad.addColorStop(0, BRAND);
+    headerGrad.addColorStop(1, BRAND_DARK);
+    ctx.fillStyle = headerGrad;
+    ctx.fillRect(0, 0, W, 260);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.moveTo(0, 0); ctx.lineTo(580, 0); ctx.quadraticCurveTo(480, 260, 0, 260); ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#1a1a2e';
+    ctx.font = 'bold 52px Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Seu próximo', 40, 80);
+    ctx.fillText('carro está', 40, 140);
+    ctx.font = 'bold italic 52px Arial, sans-serif';
+    ctx.fillStyle = BRAND;
+    ctx.fillText('aqui!', 40, 200);
+
+    // Vehicle photo
+    const photoY = 260;
+    const photoH = infoPosY - photoY;
+    if (vImg && photoH > 0) {
+      drawImageCover(ctx, vImg, 0, photoY, W, photoH);
+    } else {
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0, photoY, W, Math.max(photoH, 100));
+      ctx.fillStyle = '#555';
+      ctx.font = '28px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Adicione uma foto do veículo', W / 2, photoY + Math.max(photoH, 100) / 2);
+    }
+
+    // Price overlay
+    const priceText = price ? formatPrice(price) : '';
+    if (priceText) {
+      const priceBoxW = 460, priceBoxH = 120;
+      const priceX = W - priceBoxW - 30;
+      const priceYpos = infoPosY - priceBoxH - 30;
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.beginPath(); ctx.roundRect(priceX + 4, priceYpos + 4, priceBoxW, priceBoxH, 16); ctx.fill();
+      const priceGrad = ctx.createLinearGradient(priceX, priceYpos, priceX + priceBoxW, priceYpos);
+      priceGrad.addColorStop(0, BRAND); priceGrad.addColorStop(1, BRAND_DARK);
+      ctx.fillStyle = priceGrad;
+      ctx.beginPath(); ctx.roundRect(priceX, priceYpos, priceBoxW, priceBoxH, 16); ctx.fill();
+      ctx.fillStyle = '#FFFFFF'; ctx.font = '20px Arial, sans-serif'; ctx.textAlign = 'left';
+      ctx.fillText('POR APENAS:', priceX + 24, priceYpos + 35);
+      ctx.font = 'bold 52px Arial, sans-serif';
+      ctx.fillText(priceText, priceX + 24, priceYpos + 90);
+    }
+
+    // Info bar
+    const infoH = 260;
+    ctx.fillStyle = INFO_BG;
+    ctx.fillRect(0, infoPosY, W, infoH);
+
+    const data = {
+      model: model || 'Modelo',
+      year: year || 'Ano',
+      transmission,
+      fuel: fuelType,
+      tires: tireCondition,
+      extraInfo: extraInfo.trim(),
+    };
+
+    const cols = [
+      { label: 'MODELO', value: data.model },
+      { label: 'ANO', value: data.year },
+      { label: 'CÂMBIO', value: data.transmission === 'automatico' ? 'Automático' : 'Manual' },
+      { label: 'OBSERVAÇÕES', value: data.extraInfo || `• ${FUEL_OPTIONS.find(f => f.value === data.fuel)?.label || data.fuel}\n• Pneus ${TIRE_OPTIONS.find(t => t.value === data.tires)?.label || data.tires}` },
+    ];
+    const colW = W / 4;
+    const colPad = 12;
+
+    cols.forEach((col, i) => {
+      const cx = i * colW + colPad;
+      const cw = colW - colPad * 2;
+      ctx.fillStyle = BRAND;
+      ctx.beginPath(); ctx.roundRect(cx, infoPosY + 20, cw, 44, 22); ctx.fill();
+      ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 20px Arial, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(col.label, cx + cw / 2, infoPosY + 48);
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = i === 3 ? '18px Arial, sans-serif' : 'bold 24px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      if (col.value.includes('\n') || col.value.includes('•')) {
+        const lines = col.value.split('\n').filter(l => l.trim());
+        lines.forEach((line, li) => ctx.fillText(line.trim(), cx + cw / 2, infoPosY + 100 + li * 30));
+      } else {
+        const words = col.value.split(' ');
+        let line = ''; let lineY = infoPosY + 110;
+        words.forEach(word => {
+          const test = line + (line ? ' ' : '') + word;
+          if (ctx.measureText(test).width > cw - 10 && line) {
+            ctx.fillText(line, cx + cw / 2, lineY); line = word; lineY += 30;
+          } else { line = test; }
+        });
+        if (line) ctx.fillText(line, cx + cw / 2, lineY);
+      }
+      if (i < 3) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo((i + 1) * colW, infoPosY + 20); ctx.lineTo((i + 1) * colW, infoPosY + infoH - 20); ctx.stroke();
+      }
+    });
+
+    // Footer
+    const footY = infoPosY + infoH;
+    const footH = H - footY;
+    ctx.fillStyle = DARK_BG;
+    ctx.fillRect(0, footY, W, footH);
+
+    if (clientCity) {
+      ctx.fillStyle = BRAND; ctx.beginPath(); ctx.arc(60, footY + footH / 2, 22, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 20px Arial, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('📍', 60, footY + footH / 2 + 7);
+      ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 18px Arial, sans-serif'; ctx.textAlign = 'left';
+      const maxAddrW = W / 2 - 120;
+      const addrWords = clientCity.split(' ');
+      let addrLine = ''; let addrLineY = footY + footH / 2 - 12;
+      addrWords.forEach(word => {
+        const test = addrLine + (addrLine ? ' ' : '') + word;
+        if (ctx.measureText(test).width > maxAddrW && addrLine) {
+          ctx.fillText(addrLine, 95, addrLineY); addrLine = word; addrLineY += 24;
+        } else { addrLine = test; }
+      });
+      if (addrLine) ctx.fillText(addrLine, 95, addrLineY);
+    }
+
+    if (clientWhatsapp) {
+      ctx.fillStyle = BRAND; ctx.beginPath(); ctx.arc(W - 300, footY + footH / 2, 22, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 20px Arial, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('📱', W - 300, footY + footH / 2 + 7);
+      ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 18px Arial, sans-serif'; ctx.textAlign = 'left';
+      ctx.fillText('FALE CONOSCO', W - 265, footY + footH / 2 - 8);
+      ctx.font = 'bold 22px Arial, sans-serif';
+      ctx.fillText(clientWhatsapp, W - 265, footY + footH / 2 + 20);
+    }
+
+    // Logo
+    if (lImg) {
+      ctx.drawImage(lImg, logoX, logoY, logoW, logoH);
+    } else if (clientName) {
+      ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 36px Arial, sans-serif'; ctx.textAlign = 'left';
+      ctx.fillText(clientName, logoX, logoY + 40);
+    }
+  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientCity, clientWhatsapp, clientName, clientColor]);
+
+  // Live preview rendering
+  useEffect(() => {
+    const canvas = previewCanvasRef.current;
+    if (!canvas) return;
+    drawCanvas(canvas, vehicleImgObj, logoImgObj);
+  }, [drawCanvas, vehicleImgObj, logoImgObj]);
+
+  // Drag handlers on preview canvas
+  const getCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = previewCanvasRef.current;
+    if (!canvas) return { cx: 0, cy: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = CANVAS_W / rect.width;
+    const scaleY = CANVAS_H / rect.height;
+    return { cx: (e.clientX - rect.left) * scaleX, cy: (e.clientY - rect.top) * scaleY };
+  };
+
+  const handlePreviewMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (layoutLocked) return;
+    const { cx, cy } = getCanvasCoords(e);
+    // Check logo hit
+    if (cx >= logoX && cx <= logoX + logoW && cy >= logoY && cy <= logoY + logoH) {
+      setDragging('logo');
+      setDragOffset({ x: cx - logoX, y: cy - logoY });
+      return;
+    }
+    // Check info bar hit
+    if (cy >= infoPosY && cy <= infoPosY + 260) {
+      setDragging('info');
+      setDragOffset({ x: 0, y: cy - infoPosY });
+      return;
+    }
+  };
+
+  const handlePreviewMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!dragging || layoutLocked) return;
+    const { cx, cy } = getCanvasCoords(e);
+    if (dragging === 'logo') {
+      setLogoX(Math.max(0, Math.min(CANVAS_W - logoW, cx - dragOffset.x)));
+      setLogoY(Math.max(0, Math.min(CANVAS_H - logoH, cy - dragOffset.y)));
+    } else if (dragging === 'info') {
+      const newY = Math.max(400, Math.min(CANVAS_H - 330, cy - dragOffset.y));
+      setInfoPosY(newY);
+    }
+  };
+
+  const handlePreviewMouseUp = () => setDragging(null);
+
+  // Touch handlers
+  const getTouchCoords = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = previewCanvasRef.current;
+    if (!canvas) return { cx: 0, cy: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const scaleX = CANVAS_W / rect.width;
+    const scaleY = CANVAS_H / rect.height;
+    return { cx: (touch.clientX - rect.left) * scaleX, cy: (touch.clientY - rect.top) * scaleY };
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (layoutLocked) return;
+    const { cx, cy } = getTouchCoords(e);
+    if (cx >= logoX && cx <= logoX + logoW && cy >= logoY && cy <= logoY + logoH) {
+      setDragging('logo'); setDragOffset({ x: cx - logoX, y: cy - logoY }); e.preventDefault(); return;
+    }
+    if (cy >= infoPosY && cy <= infoPosY + 260) {
+      setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); e.preventDefault(); return;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!dragging || layoutLocked) return;
+    e.preventDefault();
+    const { cx, cy } = getTouchCoords(e);
+    if (dragging === 'logo') {
+      setLogoX(Math.max(0, Math.min(CANVAS_W - logoW, cx - dragOffset.x)));
+      setLogoY(Math.max(0, Math.min(CANVAS_H - logoH, cy - dragOffset.y)));
+    } else if (dragging === 'info') {
+      setInfoPosY(Math.max(400, Math.min(CANVAS_H - 330, cy - dragOffset.y)));
+    }
+  };
+
+  const handleTouchEnd = () => setDragging(null);
+
+  // Generate final art for saving
+  const generateFinalArt = useCallback(async (vehicleImageSrc: string): Promise<string> => {
     return new Promise((resolve, reject) => {
       const canvas = canvasRef.current;
       if (!canvas) return reject('Canvas not found');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return reject('Canvas context not found');
-
-      const W = 1080;
-      const H = 1350;
-      canvas.width = W;
-      canvas.height = H;
-
-      const BRAND = '#034e98';
-      const BRAND_DARK = '#023a73';
-      const DARK_BG = '#1a1a2e';
-      const INFO_BG = '#1e2a45';
-
-      const vehicleImg = new window.Image();
-      vehicleImg.crossOrigin = 'anonymous';
-      vehicleImg.onload = () => {
-        // === BACKGROUND ===
-        ctx.fillStyle = DARK_BG;
-        ctx.fillRect(0, 0, W, H);
-
-        // === TOP HEADER (0 → 260) ===
-        const headerGrad = ctx.createLinearGradient(0, 0, W, 0);
-        headerGrad.addColorStop(0, BRAND);
-        headerGrad.addColorStop(1, BRAND_DARK);
-        ctx.fillStyle = headerGrad;
-        ctx.fillRect(0, 0, W, 260);
-
-        // White curved shape on left
-        ctx.fillStyle = '#FFFFFF';
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(580, 0);
-        ctx.quadraticCurveTo(480, 260, 0, 260);
-        ctx.closePath();
-        ctx.fill();
-
-        // Tagline
-        ctx.fillStyle = '#1a1a2e';
-        ctx.font = 'bold 52px Arial, sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText('Seu próximo', 40, 80);
-        ctx.fillText('carro está', 40, 140);
-        ctx.font = 'bold italic 52px Arial, sans-serif';
-        ctx.fillStyle = BRAND;
-        ctx.fillText('aqui!', 40, 200);
-
-        // === VEHICLE PHOTO — fill from header to info bar ===
-        const photoY = 260;
-        const infoStartY = Math.round(H * (infoPosY / 100));
-        const photoH = infoStartY - photoY;
-        drawImageCover(ctx, vehicleImg, 0, photoY, W, photoH);
-
-        // === PRICE OVERLAY on photo ===
-        if (data.price) {
-          const priceBoxW = 460;
-          const priceBoxH = 120;
-          const priceX = W - priceBoxW - 30;
-          const priceY = infoStartY - priceBoxH - 30;
-
-          ctx.fillStyle = 'rgba(0,0,0,0.4)';
-          ctx.beginPath();
-          ctx.roundRect(priceX + 4, priceY + 4, priceBoxW, priceBoxH, 16);
-          ctx.fill();
-
-          const priceGrad = ctx.createLinearGradient(priceX, priceY, priceX + priceBoxW, priceY);
-          priceGrad.addColorStop(0, BRAND);
-          priceGrad.addColorStop(1, BRAND_DARK);
-          ctx.fillStyle = priceGrad;
-          ctx.beginPath();
-          ctx.roundRect(priceX, priceY, priceBoxW, priceBoxH, 16);
-          ctx.fill();
-
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = '20px Arial, sans-serif';
-          ctx.textAlign = 'left';
-          ctx.fillText('POR APENAS:', priceX + 24, priceY + 35);
-          ctx.font = 'bold 52px Arial, sans-serif';
-          ctx.fillText(data.price, priceX + 24, priceY + 90);
-        }
-
-        // === FRAME OVERLAY (optional) ===
-        const continueAfterFrame = () => {
-          // === BOTTOM INFO BAR ===
-          const infoH = 260;
-          ctx.fillStyle = INFO_BG;
-          ctx.fillRect(0, infoStartY, W, infoH);
-
-          const cols = [
-            { label: 'MODELO', value: data.model },
-            { label: 'ANO', value: data.year },
-            { label: 'CÂMBIO', value: data.transmission === 'automatico' ? 'Automático' : 'Manual' },
-            { label: 'OBSERVAÇÕES', value: data.extraInfo || `• ${FUEL_OPTIONS.find(f => f.value === data.fuel)?.label || data.fuel}\n• Pneus ${TIRE_OPTIONS.find(t => t.value === data.tires)?.label || data.tires}` },
-          ];
-          const colW = W / 4;
-          const colPad = 12;
-
-          cols.forEach((col, i) => {
-            const cx = i * colW + colPad;
-            const cw = colW - colPad * 2;
-
-            // Label pill
-            ctx.fillStyle = BRAND;
-            ctx.beginPath();
-            ctx.roundRect(cx, infoStartY + 20, cw, 44, 22);
-            ctx.fill();
-
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 20px Arial, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(col.label, cx + cw / 2, infoStartY + 48);
-
-            // Value
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = i === 3 ? '18px Arial, sans-serif' : 'bold 24px Arial, sans-serif';
-            ctx.textAlign = 'center';
-
-            if (col.value.includes('\n') || col.value.includes('•')) {
-              const lines = col.value.split('\n').filter(l => l.trim());
-              lines.forEach((line, li) => {
-                ctx.fillText(line.trim(), cx + cw / 2, infoStartY + 100 + li * 30);
-              });
-            } else {
-              const words = col.value.split(' ');
-              let line = '';
-              let lineY = infoStartY + 110;
-              words.forEach(word => {
-                const test = line + (line ? ' ' : '') + word;
-                if (ctx.measureText(test).width > cw - 10 && line) {
-                  ctx.fillText(line, cx + cw / 2, lineY);
-                  line = word;
-                  lineY += 30;
-                } else {
-                  line = test;
-                }
-              });
-              if (line) ctx.fillText(line, cx + cw / 2, lineY);
-            }
-
-            // Separator
-            if (i < 3) {
-              ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-              ctx.lineWidth = 1;
-              ctx.beginPath();
-              ctx.moveTo((i + 1) * colW, infoStartY + 20);
-              ctx.lineTo((i + 1) * colW, infoStartY + infoH - 20);
-              ctx.stroke();
-            }
-          });
-
-          // === FOOTER with address & whatsapp ===
-          const footY = infoStartY + infoH;
-          const footH = H - footY;
-          ctx.fillStyle = DARK_BG;
-          ctx.fillRect(0, footY, W, footH);
-
-          // Address
-          if (clientCity) {
-            ctx.fillStyle = BRAND;
-            ctx.beginPath();
-            ctx.arc(60, footY + footH / 2, 22, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 20px Arial, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('📍', 60, footY + footH / 2 + 7);
-
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 18px Arial, sans-serif';
-            ctx.textAlign = 'left';
-            const maxAddrW = W / 2 - 120;
-            const addrWords = clientCity.split(' ');
-            let addrLine = '';
-            let addrLineY = footY + footH / 2 - 12;
-            addrWords.forEach(word => {
-              const test = addrLine + (addrLine ? ' ' : '') + word;
-              if (ctx.measureText(test).width > maxAddrW && addrLine) {
-                ctx.fillText(addrLine, 95, addrLineY);
-                addrLine = word;
-                addrLineY += 24;
-              } else {
-                addrLine = test;
-              }
-            });
-            if (addrLine) ctx.fillText(addrLine, 95, addrLineY);
-          }
-
-          // WhatsApp
-          if (clientWhatsapp) {
-            ctx.fillStyle = BRAND;
-            ctx.beginPath();
-            ctx.arc(W - 300, footY + footH / 2, 22, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 20px Arial, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('📱', W - 300, footY + footH / 2 + 7);
-
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 18px Arial, sans-serif';
-            ctx.textAlign = 'left';
-            ctx.fillText('FALE CONOSCO', W - 265, footY + footH / 2 - 8);
-            ctx.font = 'bold 22px Arial, sans-serif';
-            ctx.fillText(clientWhatsapp, W - 265, footY + footH / 2 + 20);
-          }
-
-          // === LOGO ===
-          const finalize = () => resolve(canvas.toDataURL('image/jpeg', 0.92));
-
-          if (clientLogoUrl) {
-            const logoImg = new window.Image();
-            logoImg.crossOrigin = 'anonymous';
-            logoImg.onload = () => {
-              const baseW = 220;
-              const baseH = 140;
-              const scale = logoScale / 100;
-              const logoMaxW = baseW * scale;
-              const logoMaxH = baseH * scale;
-              const logoAspect = logoImg.naturalWidth / logoImg.naturalHeight;
-              let lw = logoMaxW;
-              let lh = lw / logoAspect;
-              if (lh > logoMaxH) { lh = logoMaxH; lw = lh * logoAspect; }
-
-              let lx = 0, ly = 0;
-              const pad = 40;
-              switch (logoPosition) {
-                case 'top-left':
-                  lx = pad; ly = (260 - lh) / 2;
-                  break;
-                case 'top-right':
-                  lx = W - lw - pad; ly = (260 - lh) / 2;
-                  break;
-                case 'bottom-left':
-                  lx = pad; ly = H - lh - pad;
-                  break;
-                case 'bottom-right':
-                  lx = W - lw - pad; ly = H - lh - pad;
-                  break;
-              }
-
-              ctx.drawImage(logoImg, lx, ly, lw, lh);
-              finalize();
-            };
-            logoImg.onerror = () => finalize();
-            logoImg.src = clientLogoUrl;
-          } else if (clientName) {
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 36px Arial, sans-serif';
-            ctx.textAlign = logoPosition.includes('right') ? 'right' : 'left';
-            const tx = logoPosition.includes('right') ? W - 40 : 40;
-            const ty = logoPosition.includes('top') ? 140 : H - 60;
-            ctx.fillText(clientName, tx, ty);
-            finalize();
-          } else {
-            finalize();
-          }
-        };
-
-        if (frameUrl) {
-          const frameImg = new window.Image();
-          frameImg.crossOrigin = 'anonymous';
-          frameImg.onload = () => {
-            ctx.drawImage(frameImg, 0, 0, W, H);
-            continueAfterFrame();
-          };
-          frameImg.onerror = () => continueAfterFrame();
-          frameImg.src = frameUrl;
+      const vImg = new window.Image();
+      vImg.crossOrigin = 'anonymous';
+      vImg.onload = () => {
+        const logoSrc = customLogoDataUrl || clientLogoUrl;
+        if (logoSrc) {
+          const lImg = new window.Image();
+          lImg.crossOrigin = 'anonymous';
+          lImg.onload = () => { drawCanvas(canvas, vImg, lImg); resolve(canvas.toDataURL('image/jpeg', 0.92)); };
+          lImg.onerror = () => { drawCanvas(canvas, vImg, null); resolve(canvas.toDataURL('image/jpeg', 0.92)); };
+          lImg.src = logoSrc;
         } else {
-          continueAfterFrame();
+          drawCanvas(canvas, vImg, null);
+          resolve(canvas.toDataURL('image/jpeg', 0.92));
         }
       };
-      vehicleImg.onerror = () => reject('Failed to load vehicle image');
-      vehicleImg.src = vehicleImage;
+      vImg.onerror = () => reject('Failed to load vehicle image');
+      vImg.src = vehicleImageSrc;
     });
-  }, [clientColor, clientLogoUrl, clientName, clientWhatsapp, clientCity, logoPosition, logoScale, infoPosY]);
+  }, [drawCanvas, customLogoDataUrl, clientLogoUrl]);
 
   const handleCreate = async () => {
-    if (!model.trim() || !year.trim()) {
-      toast.error('Preencha modelo e ano do veículo');
-      return;
-    }
-    if (mediaFiles.length === 0 && mediaPreviews.length === 0) {
-      toast.error('Adicione pelo menos uma foto do veículo');
-      return;
-    }
+    if (!model.trim() || !year.trim()) { toast.error('Preencha modelo e ano do veículo'); return; }
+    if (mediaFiles.length === 0 && mediaPreviews.length === 0) { toast.error('Adicione pelo menos uma foto do veículo'); return; }
 
     setCreating(true);
     try {
@@ -492,26 +515,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       }
       setUploading(false);
 
-      const frame = templates.find(t => t.id === selectedTemplate && t.template_type === 'frame');
-      const frameUrl = frame?.file_url || '';
-
       setGenerating(true);
       let generatedUrl = '';
-      if (uploadedUrls.length > 0 || mediaPreviews.length > 0) {
-        const firstImage = uploadedUrls[0] || mediaPreviews[0];
-        try {
-          generatedUrl = await generateArt(firstImage, frameUrl, {
-            model: model.trim(),
-            year: year.trim(),
-            transmission,
-            fuel: fuelType,
-            tires: tireCondition,
-            price: price ? formatPrice(price) : '',
-            extraInfo: extraInfo.trim(),
-          });
-        } catch (err) {
-          console.warn('Art generation failed:', err);
-        }
+      const firstImage = uploadedUrls[0] || mediaPreviews[0];
+      if (firstImage) {
+        try { generatedUrl = await generateFinalArt(firstImage); } catch (err) { console.warn('Art generation failed:', err); }
       }
       setGenerating(false);
 
@@ -532,18 +540,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
 
       if (error) throw error;
       toast.success('Panfleto criado com sucesso!');
-      if (item) {
-        setItems(prev => [item as FlyerItem, ...prev]);
-        setPreviewItem(item as FlyerItem);
-      }
+      if (item) { setItems(prev => [item as FlyerItem, ...prev]); setPreviewItem(item as FlyerItem); }
       setModel(''); setYear(''); setTransmission('manual'); setFuelType('flex');
       setTireCondition('bom'); setPrice(''); setExtraInfo('');
       setMediaFiles([]); setMediaPreviews([]);
     } catch (err: any) {
       toast.error('Erro ao criar panfleto: ' + (err.message || 'Erro desconhecido'));
-    } finally {
-      setCreating(false); setGenerating(false); setUploading(false);
-    }
+    } finally { setCreating(false); setGenerating(false); setUploading(false); }
   };
 
   const handleDownload = (item: FlyerItem) => {
@@ -557,14 +560,18 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     });
   };
 
+  const handleDeleteItem = async (itemId: string) => {
+    const { error } = await supabase.from('flyer_items').delete().eq('id', itemId);
+    if (error) { toast.error('Erro ao apagar'); return; }
+    setItems(prev => prev.filter(i => i.id !== itemId));
+    if (previewItem?.id === itemId) setPreviewItem(null);
+    toast.success('Panfleto apagado!');
+  };
+
   const frames = templates.filter(t => t.template_type === 'frame');
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 animate-spin text-white/40" />
-      </div>
-    );
+    return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-white/40" /></div>;
   }
 
   return (
@@ -575,10 +582,10 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       <div className="mb-8">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.08] border border-white/[0.08] text-xs font-medium text-white/70 mb-3">
           <Car size={12} style={{ color: `hsl(${clientColor})` }} />
-          Panfletagem Digital Pulse
+          Panfletagem Digital
         </div>
         <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Crie seu panfleto digital</h2>
-        <p className="text-white/50 mt-1 text-sm">Preencha os dados do veículo e gere a arte automaticamente</p>
+        <p className="text-white/50 mt-1 text-sm">Preencha os dados, ajuste a prévia em tempo real e gere a arte</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -587,262 +594,152 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           {/* Vehicle Info */}
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-5">
             <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
-              <Car size={16} style={{ color: `hsl(${clientColor})` }} />
-              Dados do Veículo
+              <Car size={16} style={{ color: `hsl(${clientColor})` }} /> Dados do Veículo
             </h3>
-
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs text-white/60">Modelo *</Label>
-                <Input
-                  value={model}
-                  onChange={e => setModel(e.target.value)}
-                  placeholder="Ex: Honda Civic"
-                  className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30"
-                />
+                <Input value={model} onChange={e => setModel(e.target.value)} placeholder="Ex: Honda Civic" className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-white/60">Ano *</Label>
-                <Input
-                  value={year}
-                  onChange={e => setYear(e.target.value)}
-                  placeholder="Ex: 2023/2024"
-                  className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30"
-                />
+                <Input value={year} onChange={e => setYear(e.target.value)} placeholder="Ex: 2023/2024" className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30" />
               </div>
             </div>
 
-            {/* Transmission */}
             <div className="space-y-1.5">
               <Label className="text-xs text-white/60">Câmbio</Label>
               <div className="flex gap-2">
                 {TRANSMISSION_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setTransmission(opt.value)}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium transition-all ${
-                      transmission === opt.value
-                        ? 'text-white border-2'
-                        : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'
-                    }`}
-                    style={transmission === opt.value ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}
-                  >
-                    <Gauge size={14} />
-                    {opt.label}
+                  <button key={opt.value} onClick={() => setTransmission(opt.value)}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium transition-all ${transmission === opt.value ? 'text-white border-2' : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'}`}
+                    style={transmission === opt.value ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}>
+                    <Gauge size={14} /> {opt.label}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Fuel */}
             <div className="space-y-1.5">
               <Label className="text-xs text-white/60">Combustível</Label>
               <div className="flex flex-wrap gap-2">
                 {FUEL_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setFuelType(opt.value)}
-                    className={`px-3 py-2 rounded-xl text-xs font-medium transition-all ${
-                      fuelType === opt.value
-                        ? 'text-white border-2'
-                        : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'
-                    }`}
-                    style={fuelType === opt.value ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}
-                  >
+                  <button key={opt.value} onClick={() => setFuelType(opt.value)}
+                    className={`px-3 py-2 rounded-xl text-xs font-medium transition-all ${fuelType === opt.value ? 'text-white border-2' : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'}`}
+                    style={fuelType === opt.value ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}>
                     {opt.label}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Tires */}
             <div className="space-y-1.5">
               <Label className="text-xs text-white/60">Pneus</Label>
               <div className="flex gap-2">
                 {TIRE_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setTireCondition(opt.value)}
-                    className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${
-                      tireCondition === opt.value
-                        ? 'text-white border-2'
-                        : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'
-                    }`}
-                    style={tireCondition === opt.value ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}
-                  >
+                  <button key={opt.value} onClick={() => setTireCondition(opt.value)}
+                    className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${tireCondition === opt.value ? 'text-white border-2' : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'}`}
+                    style={tireCondition === opt.value ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}>
                     {opt.label}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Price */}
             <div className="space-y-1.5">
               <Label className="text-xs text-white/60">Valor</Label>
-              <Input
-                value={price ? formatPrice(price) : ''}
-                onChange={e => setPrice(e.target.value.replace(/\D/g, ''))}
-                placeholder="R$ 0,00"
-                className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30 text-lg font-bold"
-              />
+              <Input value={price ? formatPrice(price) : ''} onChange={e => setPrice(e.target.value.replace(/\D/g, ''))} placeholder="R$ 0,00"
+                className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30 text-lg font-bold" />
             </div>
 
-            {/* Extra info */}
             <div className="space-y-1.5">
               <Label className="text-xs text-white/60">Observações</Label>
-              <Input
-                value={extraInfo}
-                onChange={e => setExtraInfo(e.target.value)}
-                placeholder="Ex: KM 61.845, IPVA pago, etc."
-                className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30"
-              />
+              <Input value={extraInfo} onChange={e => setExtraInfo(e.target.value)} placeholder="Ex: KM 61.845, IPVA pago, etc."
+                className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30" />
             </div>
           </div>
 
           {/* Photos upload */}
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
-              <Image size={16} style={{ color: `hsl(${clientColor})` }} />
-              Fotos do Veículo
+              <Image size={16} style={{ color: `hsl(${clientColor})` }} /> Fotos do Veículo
             </h3>
-
             <div className="grid grid-cols-3 gap-3">
               {mediaPreviews.map((preview, i) => (
                 <div key={i} className="relative aspect-square rounded-xl overflow-hidden group">
                   <img src={preview} alt="" className="w-full h-full object-cover" />
-                  <button
-                    onClick={() => removeMedia(i)}
-                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
+                  <button onClick={() => removeMedia(i)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <X size={12} />
                   </button>
                 </div>
               ))}
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="aspect-square rounded-xl border-2 border-dashed border-white/[0.15] flex flex-col items-center justify-center gap-2 text-white/40 hover:text-white/60 hover:border-white/[0.25] transition-all"
-              >
-                <Plus size={20} />
-                <span className="text-[10px]">Adicionar</span>
+              <button onClick={() => fileInputRef.current?.click()}
+                className="aspect-square rounded-xl border-2 border-dashed border-white/[0.15] flex flex-col items-center justify-center gap-2 text-white/40 hover:text-white/60 hover:border-white/[0.25] transition-all">
+                <Plus size={20} /><span className="text-[10px]">Adicionar</span>
               </button>
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,video/*"
-              multiple
-              className="hidden"
-              onChange={handleFileSelect}
-            />
+            <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileSelect} />
           </div>
 
-          {/* Layout Customization */}
-          <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-5">
+          {/* Custom Logo Upload */}
+          <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
-              <Move size={16} style={{ color: `hsl(${clientColor})` }} />
-              Posição & Tamanho
+              <Upload size={16} style={{ color: `hsl(${clientColor})` }} /> Logo Personalizada
             </h3>
-
-            {/* Logo Position */}
-            <div className="space-y-2">
-              <Label className="text-xs text-white/60">Posição da Logo</Label>
-              <div className="grid grid-cols-4 gap-2">
-                {LOGO_POSITIONS.map(pos => (
-                  <button
-                    key={pos.value}
-                    onClick={() => setLogoPosition(pos.value)}
-                    className={`px-2 py-2 rounded-lg text-[11px] font-medium transition-all ${
-                      logoPosition === pos.value
-                        ? 'text-white border-2'
-                        : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'
-                    }`}
-                    style={logoPosition === pos.value ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}
-                  >
-                    {pos.label}
-                  </button>
-                ))}
+            <p className="text-[11px] text-white/40">Envie uma logo diferente da padrão do cadastro, ou use a padrão.</p>
+            <div className="flex items-center gap-4">
+              {(customLogoDataUrl || clientLogoUrl) && (
+                <div className="w-16 h-16 rounded-lg bg-white/[0.06] overflow-hidden flex items-center justify-center">
+                  <img src={customLogoDataUrl || clientLogoUrl || ''} alt="Logo" className="max-w-full max-h-full object-contain" />
+                </div>
+              )}
+              <div className="flex flex-col gap-2">
+                <Button variant="outline" size="sm" onClick={() => logoFileInputRef.current?.click()}
+                  className="border-white/[0.1] text-white/70 hover:text-white hover:bg-white/[0.06] text-xs">
+                  <Upload size={12} /> Enviar Logo
+                </Button>
+                {customLogoDataUrl && (
+                  <Button variant="ghost" size="sm" onClick={() => setCustomLogoDataUrl(null)} className="text-white/40 hover:text-red-400 text-xs">
+                    <X size={12} /> Usar padrão
+                  </Button>
+                )}
               </div>
             </div>
+            <input ref={logoFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
 
-            {/* Logo Size */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs text-white/60">Tamanho da Logo</Label>
-                <span className="text-xs text-white/40">{logoScale}%</span>
-              </div>
-              <Slider
-                value={[logoScale]}
-                onValueChange={v => setLogoScale(v[0])}
-                min={50}
-                max={200}
-                step={10}
-                className="w-full"
-              />
-            </div>
-
-            {/* Info Bar Position */}
+            {/* Logo size slider */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-xs text-white/60">Posição das Informações</Label>
-                <span className="text-xs text-white/40">{infoPosY}%</span>
+                <Label className="text-xs text-white/60">Largura da Logo</Label>
+                <span className="text-xs text-white/40">{logoW}px</span>
               </div>
-              <Slider
-                value={[infoPosY]}
-                onValueChange={v => setInfoPosY(v[0])}
-                min={55}
-                max={80}
-                step={1}
-                className="w-full"
-              />
-              <p className="text-[10px] text-white/30">Mais baixo = foto maior</p>
+              <Slider value={[logoW]} onValueChange={v => { if (!layoutLocked) setLogoW(v[0]); }} min={60} max={400} step={10} className="w-full" />
             </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-white/60">Altura da Logo</Label>
+                <span className="text-xs text-white/40">{logoH}px</span>
+              </div>
+              <Slider value={[logoH]} onValueChange={v => { if (!layoutLocked) setLogoH(v[0]); }} min={40} max={300} step={10} className="w-full" />
+            </div>
+          </div>
 
-            {/* Save button */}
-            <Button
-              variant="outline"
-              onClick={saveLayoutSettings}
-              className="w-full border-white/[0.1] text-white/70 hover:text-white hover:bg-white/[0.06]"
-            >
+          {/* Lock + Save */}
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => setLayoutLocked(!layoutLocked)}
+              className={`flex-1 border-white/[0.1] text-xs ${layoutLocked ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40' : 'text-white/70 hover:text-white hover:bg-white/[0.06]'}`}>
+              {layoutLocked ? <Lock size={14} /> : <Unlock size={14} />}
+              {layoutLocked ? 'Layout Trancado' : 'Trancar Layout'}
+            </Button>
+            <Button variant="outline" onClick={saveLayoutSettings}
+              className="flex-1 border-white/[0.1] text-white/70 hover:text-white hover:bg-white/[0.06] text-xs">
               <Save size={14} /> Salvar Posições
             </Button>
           </div>
 
-          {/* Frame template selection */}
-          {frames.length > 0 && (
-            <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
-              <h3 className="text-sm font-semibold text-white/80">Moldura</h3>
-              <div className="grid grid-cols-3 gap-3">
-                {frames.map(f => (
-                  <button
-                    key={f.id}
-                    onClick={() => setSelectedTemplate(f.id)}
-                    className={`relative aspect-[3/4] rounded-xl overflow-hidden border-2 transition-all ${
-                      selectedTemplate === f.id ? 'border-white/40' : 'border-transparent opacity-60 hover:opacity-80'
-                    }`}
-                    style={selectedTemplate === f.id ? { borderColor: `hsl(${clientColor})` } : {}}
-                  >
-                    <img src={f.preview_url || f.file_url} alt={f.name} className="w-full h-full object-cover" />
-                    {selectedTemplate === f.id && (
-                      <div className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: `hsl(${clientColor})` }}>
-                        <Check size={10} />
-                      </div>
-                    )}
-                    <div className="absolute bottom-0 inset-x-0 bg-black/60 px-2 py-1">
-                      <p className="text-[10px] text-white/80 truncate">{f.name}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Generate button */}
-          <Button
-            onClick={handleCreate}
-            disabled={creating || generating || uploading || !model.trim() || !year.trim()}
-            className="w-full h-12 rounded-xl text-sm font-semibold text-white"
-            style={{ background: `hsl(${clientColor})` }}
-          >
+          <Button onClick={handleCreate} disabled={creating || generating || uploading || !model.trim() || !year.trim()}
+            className="w-full h-12 rounded-xl text-sm font-semibold text-white" style={{ background: `hsl(${clientColor})` }}>
             {creating || generating || uploading ? (
               <><Loader2 size={16} className="animate-spin" /> {uploading ? 'Enviando fotos...' : generating ? 'Gerando arte...' : 'Criando...'}</>
             ) : (
@@ -851,33 +748,50 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           </Button>
         </div>
 
-        {/* Right: Preview + history */}
+        {/* Right: Live Preview + history */}
         <div className="space-y-6">
-          {/* Preview */}
+          {/* Live Preview Canvas */}
+          <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+                <Eye size={16} style={{ color: `hsl(${clientColor})` }} /> Prévia em Tempo Real
+              </h3>
+              {!layoutLocked && (
+                <span className="text-[10px] text-white/40 bg-white/[0.06] px-2 py-1 rounded-full flex items-center gap-1">
+                  <Move size={10} /> Arraste para mover
+                </span>
+              )}
+            </div>
+            <div className="aspect-[4/5] rounded-xl overflow-hidden bg-black relative">
+              <canvas
+                ref={previewCanvasRef}
+                className="w-full h-full"
+                style={{ cursor: layoutLocked ? 'default' : dragging ? 'grabbing' : 'grab' }}
+                onMouseDown={handlePreviewMouseDown}
+                onMouseMove={handlePreviewMouseMove}
+                onMouseUp={handlePreviewMouseUp}
+                onMouseLeave={handlePreviewMouseUp}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+              />
+            </div>
+          </div>
+
+          {/* Generated Preview */}
           <AnimatePresence mode="wait">
             {previewItem?.generated_image_url && (
-              <motion.div
-                key={previewItem.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-4 space-y-4"
-              >
+              <motion.div key={previewItem.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-4 space-y-4">
                 <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
-                  <Eye size={16} style={{ color: `hsl(${clientColor})` }} />
-                  Prévia
+                  <Check size={16} style={{ color: `hsl(${clientColor})` }} /> Arte Gerada
                 </h3>
                 <div className="aspect-[4/5] rounded-xl overflow-hidden">
                   <img src={previewItem.generated_image_url} alt="Preview" className="w-full h-full object-contain bg-black" />
                 </div>
-                <div className="flex gap-3">
-                  <Button
-                    onClick={() => handleDownload(previewItem)}
-                    className="flex-1 h-10 rounded-xl text-white"
-                    style={{ background: `hsl(${clientColor})` }}
-                  >
-                    <Download size={14} /> Baixar
-                  </Button>
-                </div>
+                <Button onClick={() => handleDownload(previewItem)} className="w-full h-10 rounded-xl text-white" style={{ background: `hsl(${clientColor})` }}>
+                  <Download size={14} /> Baixar
+                </Button>
               </motion.div>
             )}
           </AnimatePresence>
@@ -888,32 +802,27 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
               <h3 className="text-sm font-semibold text-white/80">Panfletos Criados</h3>
               <div className="grid grid-cols-2 gap-3">
                 {items.map(item => (
-                  <button
-                    key={item.id}
-                    onClick={() => setPreviewItem(item)}
-                    className="relative aspect-[4/5] rounded-xl overflow-hidden group border border-white/[0.08] hover:border-white/[0.2] transition-all"
-                  >
-                    {item.generated_image_url ? (
-                      <img src={item.generated_image_url} alt="" className="w-full h-full object-cover" />
-                    ) : item.media_urls[0] ? (
-                      <img src={item.media_urls[0]} alt="" className="w-full h-full object-cover opacity-50" />
-                    ) : (
-                      <div className="w-full h-full bg-white/[0.04] flex items-center justify-center">
-                        <Car size={24} className="text-white/20" />
+                  <div key={item.id} className="relative group">
+                    <button onClick={() => setPreviewItem(item)}
+                      className="w-full relative aspect-[4/5] rounded-xl overflow-hidden border border-white/[0.08] hover:border-white/[0.2] transition-all">
+                      {item.generated_image_url ? (
+                        <img src={item.generated_image_url} alt="" className="w-full h-full object-cover" />
+                      ) : item.media_urls[0] ? (
+                        <img src={item.media_urls[0]} alt="" className="w-full h-full object-cover opacity-50" />
+                      ) : (
+                        <div className="w-full h-full bg-white/[0.04] flex items-center justify-center"><Car size={24} className="text-white/20" /></div>
+                      )}
+                      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+                        <p className="text-xs font-medium text-white truncate">{item.vehicle_model}</p>
+                        <p className="text-[10px] text-white/50">{item.vehicle_year} • {item.price || 'Sem preço'}</p>
                       </div>
-                    )}
-                    <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-                      <p className="text-xs font-medium text-white truncate">{item.vehicle_model}</p>
-                      <p className="text-[10px] text-white/50">{item.vehicle_year} • {item.price || 'Sem preço'}</p>
-                    </div>
-                    {item.generated_image_url && (
-                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <div className="w-7 h-7 rounded-full bg-black/60 flex items-center justify-center">
-                          <Download size={12} />
-                        </div>
-                      </div>
-                    )}
-                  </button>
+                    </button>
+                    {/* Delete button */}
+                    <button onClick={() => handleDeleteItem(item.id)}
+                      className="absolute top-2 right-2 w-7 h-7 rounded-full bg-red-600/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500">
+                      <Trash2 size={12} className="text-white" />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>

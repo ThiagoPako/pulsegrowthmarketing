@@ -1018,6 +1018,16 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
               </div>
               <Slider value={[infoBoxScale * 100]} onValueChange={v => setInfoBoxScale(v[0] / 100)} min={70} max={150} step={5} className="w-full" />
             </div>
+            <div className="space-y-2 pt-2 border-t border-white/[0.06]">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-white/60">Fonte dos Valores (Raleway Bold)</Label>
+                <span className="text-xs text-white/40 font-mono">{Math.round(infoFontScale * 100)}%</span>
+              </div>
+              <Slider value={[infoFontScale * 100]} onValueChange={v => setInfoFontScale(v[0] / 100)} min={70} max={200} step={5} className="w-full" />
+              <div className="flex justify-between text-[10px] text-white/30">
+                <span>Menor</span><span>Normal</span><span>Maior</span>
+              </div>
+            </div>
           </div>
 
           {/* Color Pickers — full list */}

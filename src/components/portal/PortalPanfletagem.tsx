@@ -291,6 +291,32 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     toast.success('Layout salvo!');
   };
 
+  // Auto-save vehicle data to localStorage
+  useEffect(() => {
+    const data = { model, year, transmission, fuelType, tireCondition, price, ipvaStatus, extraInfo, footerAddress, footerWhatsapp };
+    localStorage.setItem(`flyer-vehicle-image-${clientId}`, JSON.stringify(data));
+  }, [model, year, transmission, fuelType, tireCondition, price, ipvaStatus, extraInfo, footerAddress, footerWhatsapp, clientId]);
+
+  // Import vehicle data from the Video tab
+  const importFromVideo = () => {
+    try {
+      const s = localStorage.getItem(`flyer-vehicle-video-${clientId}`);
+      if (!s) { toast.error('Nenhum dado salvo na aba Vídeo'); return; }
+      const d = JSON.parse(s);
+      if (d.model) setModel(d.model);
+      if (d.year) setYear(d.year);
+      if (d.transmission) setTransmission(d.transmission);
+      if (d.fuelType) setFuelType(d.fuelType);
+      if (d.tireCondition) setTireCondition(d.tireCondition);
+      if (d.price) setPrice(d.price);
+      if (d.ipvaStatus) setIpvaStatus(d.ipvaStatus);
+      if (d.extraInfo != null) setExtraInfo(d.extraInfo);
+      if (d.footerAddress) setFooterAddress(d.footerAddress);
+      if (d.footerWhatsapp) setFooterWhatsapp(d.footerWhatsapp);
+      toast.success('Dados importados da aba Vídeo!');
+    } catch { toast.error('Erro ao importar dados'); }
+  };
+
   useEffect(() => { loadData(); }, [clientId]);
 
   const loadData = async () => {

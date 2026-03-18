@@ -723,7 +723,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
     didDragRef.current = false;
     const { cx, cy } = getTouchCoords(e);
-    if (cx >= logoX && cx <= logoX + logoW && cy >= logoY && cy <= logoY + logoH) {
+    if (!layoutLocked && cx >= logoX && cx <= logoX + logoW && cy >= logoY && cy <= logoY + logoH) {
       setDragging('logo'); setDragOffset({ x: cx - logoX, y: cy - logoY }); e.preventDefault(); return;
     }
     const infoH = Math.round(260 * infoBoxScale);
@@ -731,11 +731,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (cy >= photoY && cy < infoPosY) {
       setDragging('photo'); setDragOffset({ x: cx - photoOffsetX, y: cy - photoOffsetY }); e.preventDefault(); return;
     }
-    if (cy >= infoPosY && cy <= infoPosY + infoH) {
+    if (!layoutLocked && cy >= infoPosY && cy <= infoPosY + infoH) {
       setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); e.preventDefault(); return;
     }
     const footY = infoPosY + infoH;
-    if (cy >= footY) {
+    if (!layoutLocked && cy >= footY) {
       setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + (CANVAS_H - footY) / 2 + footerPosY) }); e.preventDefault(); return;
     }
   };

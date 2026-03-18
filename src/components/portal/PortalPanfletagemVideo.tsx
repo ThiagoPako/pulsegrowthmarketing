@@ -76,17 +76,20 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
   const [musicFadeIn, setMusicFadeIn] = useState(2);
   const [musicFadeOut, setMusicFadeOut] = useState(2);
 
-  // Vehicle info fields
-  const [model, setModel] = useState('');
-  const [year, setYear] = useState('');
-  const [transmission, setTransmission] = useState('manual');
-  const [fuelType, setFuelType] = useState('flex');
-  const [tireCondition, setTireCondition] = useState('bom');
-  const [price, setPrice] = useState('');
-  const [ipvaStatus, setIpvaStatus] = useState('nenhum');
-  const [extraInfo, setExtraInfo] = useState('');
-  const [footerAddress, setFooterAddress] = useState(clientCity || '');
-  const [footerWhatsapp, setFooterWhatsapp] = useState(clientWhatsapp || '');
+  // Vehicle info fields — load from localStorage
+  const savedVehicle = (() => {
+    try { const s = localStorage.getItem(`flyer-vehicle-video-${clientId}`); return s ? JSON.parse(s) : null; } catch { return null; }
+  })();
+  const [model, setModel] = useState(savedVehicle?.model || '');
+  const [year, setYear] = useState(savedVehicle?.year || '');
+  const [transmission, setTransmission] = useState(savedVehicle?.transmission || 'manual');
+  const [fuelType, setFuelType] = useState(savedVehicle?.fuelType || 'flex');
+  const [tireCondition, setTireCondition] = useState(savedVehicle?.tireCondition || 'bom');
+  const [price, setPrice] = useState(savedVehicle?.price || '');
+  const [ipvaStatus, setIpvaStatus] = useState(savedVehicle?.ipvaStatus || 'nenhum');
+  const [extraInfo, setExtraInfo] = useState(savedVehicle?.extraInfo || '');
+  const [footerAddress, setFooterAddress] = useState(savedVehicle?.footerAddress || clientCity || '');
+  const [footerWhatsapp, setFooterWhatsapp] = useState(savedVehicle?.footerWhatsapp || clientWhatsapp || '');
 
   // Preview
   const [activePreview, setActivePreview] = useState<VideoSegment | null>(null);
@@ -213,6 +216,31 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     if (!v) return;
     if (v.paused) { v.play().catch(() => {}); setIsPlaying(true); }
     else { v.pause(); setIsPlaying(false); }
+  };
+  // Auto-save vehicle data to localStorage
+  useEffect(() => {
+    const data = { model, year, transmission, fuelType, tireCondition, price, ipvaStatus, extraInfo, footerAddress, footerWhatsapp };
+    localStorage.setItem(`flyer-vehicle-video-${clientId}`, JSON.stringify(data));
+  }, [model, year, transmission, fuelType, tireCondition, price, ipvaStatus, extraInfo, footerAddress, footerWhatsapp, clientId]);
+
+  // Import vehicle data from the Image tab
+  const importFromImage = () => {
+    try {
+      const s = localStorage.getItem(`flyer-vehicle-image-${clientId}`);
+      if (!s) { toast.error('Nenhum dado salvo na aba Imagem'); return; }
+      const d = JSON.parse(s);
+      if (d.model) setModel(d.model);
+      if (d.year) setYear(d.year);
+      if (d.transmission) setTransmission(d.transmission);
+      if (d.fuelType) setFuelType(d.fuelType);
+      if (d.tireCondition) setTireCondition(d.tireCondition);
+      if (d.price) setPrice(d.price);
+      if (d.ipvaStatus) setIpvaStatus(d.ipvaStatus);
+      if (d.extraInfo != null) setExtraInfo(d.extraInfo);
+      if (d.footerAddress) setFooterAddress(d.footerAddress);
+      if (d.footerWhatsapp) setFooterWhatsapp(d.footerWhatsapp);
+      toast.success('Dados importados da aba Imagem!');
+    } catch { toast.error('Erro ao importar dados'); }
   };
 
   const handleGenerate = async () => {
@@ -370,6 +398,12 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
               {expandedSection === 'vehicle-info' && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
                   <div className="px-4 pb-4 space-y-4">
+                    {/* Import from Image button */}
+                    <button onClick={(e) => { e.stopPropagation(); importFromImage(); }}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium bg-white/[0.06] border border-white/[0.1] text-white/60 hover:bg-white/[0.1] hover:text-white/80 transition-all"
+                      title="Importar dados preenchidos na aba Imagem">
+                      <ImageIcon size={13} /> Importar dados da aba Imagem
+                    </button>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <Label className="text-xs text-white/60">Modelo *</Label>

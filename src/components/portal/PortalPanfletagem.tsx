@@ -153,23 +153,26 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (img.complete && img.naturalWidth > 0) wpIconRef.current = img;
   }, []);
 
-  // Form state
-  const [model, setModel] = useState('');
-  const [year, setYear] = useState('');
-  const [transmission, setTransmission] = useState('manual');
-  const [fuelType, setFuelType] = useState('flex');
-  const [tireCondition, setTireCondition] = useState('bom');
-  const [price, setPrice] = useState('');
-  const [ipvaStatus, setIpvaStatus] = useState('nenhum');
-  const [extraInfo, setExtraInfo] = useState('');
+  // Form state — load from localStorage
+  const savedVehicle = (() => {
+    try { const s = localStorage.getItem(`flyer-vehicle-image-${clientId}`); return s ? JSON.parse(s) : null; } catch { return null; }
+  })();
+  const [model, setModel] = useState(savedVehicle?.model || '');
+  const [year, setYear] = useState(savedVehicle?.year || '');
+  const [transmission, setTransmission] = useState(savedVehicle?.transmission || 'manual');
+  const [fuelType, setFuelType] = useState(savedVehicle?.fuelType || 'flex');
+  const [tireCondition, setTireCondition] = useState(savedVehicle?.tireCondition || 'bom');
+  const [price, setPrice] = useState(savedVehicle?.price || '');
+  const [ipvaStatus, setIpvaStatus] = useState(savedVehicle?.ipvaStatus || 'nenhum');
+  const [extraInfo, setExtraInfo] = useState(savedVehicle?.extraInfo || '');
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
   const [mediaPreviews, setMediaPreviews] = useState<string[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [uploading, setUploading] = useState(false);
 
   // Footer editable fields
-  const [footerAddress, setFooterAddress] = useState(clientCity || '');
-  const [footerWhatsapp, setFooterWhatsapp] = useState(clientWhatsapp || '');
+  const [footerAddress, setFooterAddress] = useState(savedVehicle?.footerAddress || clientCity || '');
+  const [footerWhatsapp, setFooterWhatsapp] = useState(savedVehicle?.footerWhatsapp || clientWhatsapp || '');
 
   // Custom logo
   const [customLogoDataUrl, setCustomLogoDataUrl] = useState<string | null>(null);
@@ -286,6 +289,32 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, footerPosX, footerPosY, photoOffsetX, photoOffsetY, colors, footerAddress, footerWhatsapp };
     localStorage.setItem(`flyer-layout-${clientId}`, JSON.stringify(settings));
     toast.success('Layout salvo!');
+  };
+
+  // Auto-save vehicle data to localStorage
+  useEffect(() => {
+    const data = { model, year, transmission, fuelType, tireCondition, price, ipvaStatus, extraInfo, footerAddress, footerWhatsapp };
+    localStorage.setItem(`flyer-vehicle-image-${clientId}`, JSON.stringify(data));
+  }, [model, year, transmission, fuelType, tireCondition, price, ipvaStatus, extraInfo, footerAddress, footerWhatsapp, clientId]);
+
+  // Import vehicle data from the Video tab
+  const importFromVideo = () => {
+    try {
+      const s = localStorage.getItem(`flyer-vehicle-video-${clientId}`);
+      if (!s) { toast.error('Nenhum dado salvo na aba Vídeo'); return; }
+      const d = JSON.parse(s);
+      if (d.model) setModel(d.model);
+      if (d.year) setYear(d.year);
+      if (d.transmission) setTransmission(d.transmission);
+      if (d.fuelType) setFuelType(d.fuelType);
+      if (d.tireCondition) setTireCondition(d.tireCondition);
+      if (d.price) setPrice(d.price);
+      if (d.ipvaStatus) setIpvaStatus(d.ipvaStatus);
+      if (d.extraInfo != null) setExtraInfo(d.extraInfo);
+      if (d.footerAddress) setFooterAddress(d.footerAddress);
+      if (d.footerWhatsapp) setFooterWhatsapp(d.footerWhatsapp);
+      toast.success('Dados importados da aba Vídeo!');
+    } catch { toast.error('Erro ao importar dados'); }
   };
 
   useEffect(() => { loadData(); }, [clientId]);
@@ -911,9 +940,16 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         <div className="space-y-6">
           {/* Vehicle Info */}
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-5">
-            <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
-              <Car size={16} style={{ color: `hsl(${clientColor})` }} /> Dados do Veículo
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+                <Car size={16} style={{ color: `hsl(${clientColor})` }} /> Dados do Veículo
+              </h3>
+              <button onClick={importFromVideo}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-medium bg-white/[0.06] border border-white/[0.1] text-white/60 hover:bg-white/[0.1] hover:text-white/80 transition-all"
+                title="Importar dados preenchidos na aba Vídeo">
+                <Film size={11} /> Importar do Vídeo
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs text-white/60">Modelo *</Label>

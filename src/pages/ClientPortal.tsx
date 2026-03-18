@@ -605,6 +605,11 @@ export default function ClientPortal() {
             Métricas
           </button>
         )}
+        {client.has_vehicle_flyer && (
+          <button onClick={() => setActiveTab('panfletagem')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'panfletagem' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'panfletagem' ? { borderColor: `hsl(${clientColor})` } : {}}>
+            🚗 Panfleto
+          </button>
+        )}
       </div>
 
       <AnimatePresence mode="wait">

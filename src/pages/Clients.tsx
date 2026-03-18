@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import ClientArtDatabaseDialog from '@/components/ClientArtDatabaseDialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import ClientGoalRocket from '@/components/ClientGoalRocket';
 
 const DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 const CONTENT_TYPES: ContentType[] = ['reels', 'story', 'produto'];
@@ -1468,6 +1469,9 @@ export default function Clients() {
           </Dialog>
         )}
       </div>
+
+      {/* Client Goal Rocket Widget */}
+      <ClientGoalRocket currentClients={clients.length} />
 
       {/* Search filter */}
       <div className="w-full max-w-sm">

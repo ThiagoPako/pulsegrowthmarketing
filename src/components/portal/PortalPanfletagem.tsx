@@ -245,6 +245,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (s.obsFontScale != null) setObsFontScale(s.obsFontScale);
         else if (s.infoFontScale != null) setObsFontScale(s.infoFontScale);
         if (s.labelFontScale != null) setLabelFontScale(s.labelFontScale);
+        if (s.pillHeightScale != null) setPillHeightScale(s.pillHeightScale);
+        if (s.pillRadiusScale != null) setPillRadiusScale(s.pillRadiusScale);
         if (s.footerPosX != null) setFooterPosX(s.footerPosX);
         if (s.footerPosY != null) setFooterPosY(s.footerPosY);
         if (s.colors) setColors({ ...DEFAULT_COLORS, ...s.colors });

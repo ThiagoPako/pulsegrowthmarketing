@@ -391,7 +391,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillStyle = '#111';
       ctx.fillRect(0, photoY, W, Math.max(photoH, 100));
       ctx.fillStyle = '#555';
-      ctx.font = `${Math.round(28 * fs)}px Arial`;
+      ctx.font = `${Math.round(28 * fs)}px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.fillText('Adicione uma foto do veículo', W / 2, photoY + Math.max(photoH, 100) / 2);
     }

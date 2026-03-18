@@ -189,6 +189,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [obsFontScale, setObsFontScale] = useState(1.0);
   // Active field font editor (toggled by clicking label name)
   const [activeFieldEditor, setActiveFieldEditor] = useState<string | null>(null);
+  // Column header label font scale
+  const [labelFontScale, setLabelFontScale] = useState(1.0);
 
   // Footer position (draggable)
   const [footerPosX, setFooterPosX] = useState(0);

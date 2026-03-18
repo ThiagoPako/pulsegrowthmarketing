@@ -144,6 +144,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [fuelType, setFuelType] = useState('flex');
   const [tireCondition, setTireCondition] = useState('bom');
   const [price, setPrice] = useState('');
+  const [ipvaStatus, setIpvaStatus] = useState('nenhum');
   const [extraInfo, setExtraInfo] = useState('');
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
   const [mediaPreviews, setMediaPreviews] = useState<string[]>([]);

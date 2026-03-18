@@ -1,25 +1,62 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload, X, Play, Pause, Music, Film, Clapperboard, Check, Eye,
-  Video, Loader2, Volume2, VolumeX, ChevronDown, ChevronUp, Image as ImageIcon
+  Video, Loader2, VolumeX, ChevronDown, ChevronUp, Image as ImageIcon,
+  Car, Gauge, MapPin, Phone
 } from 'lucide-react';
 
 interface Props {
   clientId: string;
   clientColor: string;
   clientName?: string;
+  clientWhatsapp?: string;
+  clientCity?: string;
   /** The generated flyer image data URL from the Image tab */
   flyerImageDataUrl?: string | null;
 }
 
 type VideoSegment = 'intro' | 'car' | 'closing';
 
-export default function PortalPanfletagemVideo({ clientId, clientColor, clientName, flyerImageDataUrl }: Props) {
+const TRANSMISSION_OPTIONS = [
+  { value: 'manual', label: 'Manual' },
+  { value: 'automatico', label: 'Automático' },
+];
+
+const FUEL_OPTIONS = [
+  { value: 'flex', label: 'Flex' },
+  { value: 'gasolina', label: 'Gasolina' },
+  { value: 'etanol', label: 'Etanol' },
+  { value: 'diesel', label: 'Diesel' },
+  { value: 'eletrico', label: 'Elétrico' },
+  { value: 'hibrido', label: 'Híbrido' },
+];
+
+const TIRE_OPTIONS = [
+  { value: 'novo', label: 'Novos' },
+  { value: 'bom', label: 'Bons' },
+  { value: 'regular', label: 'Regular' },
+];
+
+const IPVA_OPTIONS = [
+  { value: 'pago', label: 'IPVA Pago' },
+  { value: 'pendente', label: 'IPVA Pendente' },
+  { value: 'nenhum', label: 'Não informar' },
+];
+
+function formatPrice(raw: string): string {
+  const num = parseInt(raw, 10);
+  if (isNaN(num)) return '';
+  return `R$ ${(num / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+}
+
+export default function PortalPanfletagemVideo({ clientId, clientColor, clientName, clientWhatsapp, clientCity, flyerImageDataUrl }: Props) {
   // Video segments
   const [introVideo, setIntroVideo] = useState<string | null>(null);
   const [introFile, setIntroFile] = useState<File | null>(null);
@@ -33,12 +70,23 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
   const [musicName, setMusicName] = useState('');
   const [musicUrl, setMusicUrl] = useState<string | null>(null);
 
-  // Options — ALL segments are muted; only background music plays
-  const [muteCarVideo, setMuteCarVideo] = useState(true);
+  // Options
   const [useLayoutOverlay, setUseLayoutOverlay] = useState(true);
   const [overlayDuration, setOverlayDuration] = useState(3);
-  const [musicFadeIn, setMusicFadeIn] = useState(2); // seconds
-  const [musicFadeOut, setMusicFadeOut] = useState(2); // seconds
+  const [musicFadeIn, setMusicFadeIn] = useState(2);
+  const [musicFadeOut, setMusicFadeOut] = useState(2);
+
+  // Vehicle info fields
+  const [model, setModel] = useState('');
+  const [year, setYear] = useState('');
+  const [transmission, setTransmission] = useState('manual');
+  const [fuelType, setFuelType] = useState('flex');
+  const [tireCondition, setTireCondition] = useState('bom');
+  const [price, setPrice] = useState('');
+  const [ipvaStatus, setIpvaStatus] = useState('nenhum');
+  const [extraInfo, setExtraInfo] = useState('');
+  const [footerAddress, setFooterAddress] = useState(clientCity || '');
+  const [footerWhatsapp, setFooterWhatsapp] = useState(clientWhatsapp || '');
 
   // Preview
   const [activePreview, setActivePreview] = useState<VideoSegment | null>(null);
@@ -50,7 +98,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
   const [generating, setGenerating] = useState(false);
 
   // Expanded sections
-  const [expandedSection, setExpandedSection] = useState<string | null>('intro');
+  const [expandedSection, setExpandedSection] = useState<string | null>('vehicle-info');
 
   const introInputRef = useRef<HTMLInputElement>(null);
   const carInputRef = useRef<HTMLInputElement>(null);
@@ -111,6 +159,10 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
         setClosingVideo(null); setClosingFile(null);
         break;
     }
+    if (activePreview === segment) {
+      setActivePreview(null);
+      setIsPlaying(false);
+    }
   };
 
   const removeMusic = () => {
@@ -118,25 +170,48 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     setMusicFile(null); setMusicName(''); setMusicUrl(null);
   };
 
-  const previewSegment = (segment: VideoSegment) => {
+  const previewSegment = useCallback((segment: VideoSegment) => {
     const url = segment === 'intro' ? introVideo : segment === 'car' ? carVideo : closingVideo;
     if (!url) return;
+    
+    // If same segment, just toggle play/pause
+    if (activePreview === segment && videoPreviewRef.current) {
+      if (videoPreviewRef.current.paused) {
+        videoPreviewRef.current.play().catch(() => {});
+        setIsPlaying(true);
+      } else {
+        videoPreviewRef.current.pause();
+        setIsPlaying(false);
+      }
+      return;
+    }
+
     setActivePreview(segment);
     setIsPlaying(true);
-    setTimeout(() => {
-      if (videoPreviewRef.current) {
-        videoPreviewRef.current.src = url;
-        // ALL segments are muted — only background music plays
-        videoPreviewRef.current.muted = true;
-        videoPreviewRef.current.play().catch(() => {});
-      }
-    }, 100);
-  };
+  }, [introVideo, carVideo, closingVideo, activePreview]);
+
+  // When activePreview changes, load and play the video
+  useEffect(() => {
+    if (!activePreview) return;
+    const url = activePreview === 'intro' ? introVideo : activePreview === 'car' ? carVideo : closingVideo;
+    if (!url) return;
+    
+    const v = videoPreviewRef.current;
+    if (!v) return;
+    
+    v.src = url;
+    v.muted = true;
+    v.load();
+    const playPromise = v.play();
+    if (playPromise) {
+      playPromise.catch(() => setIsPlaying(false));
+    }
+  }, [activePreview, introVideo, carVideo, closingVideo]);
 
   const togglePlayPause = () => {
     const v = videoPreviewRef.current;
     if (!v) return;
-    if (v.paused) { v.play(); setIsPlaying(true); }
+    if (v.paused) { v.play().catch(() => {}); setIsPlaying(true); }
     else { v.pause(); setIsPlaying(false); }
   };
 
@@ -148,7 +223,6 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     setGenerating(true);
     toast.info('A composição de vídeo será processada no servidor. Isso pode levar alguns minutos...');
 
-    // For now, show a placeholder — real processing would need FFmpeg on VPS
     setTimeout(() => {
       setGenerating(false);
       toast.success('Funcionalidade de composição de vídeo em desenvolvimento. Os vídeos foram salvos!');
@@ -197,6 +271,18 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
 
   const totalSegments = [introVideo, carVideo, closingVideo].filter(Boolean).length;
 
+  const renderOptionButtons = (options: { value: string; label: string }[], current: string, setter: (v: string) => void) => (
+    <div className="flex flex-wrap gap-2">
+      {options.map(opt => (
+        <button key={opt.value} onClick={() => setter(opt.value)}
+          className={`px-3 py-2 rounded-xl text-xs font-medium transition-all ${current === opt.value ? 'text-white border-2' : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'}`}
+          style={current === opt.value ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}>
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       {/* Reels format badge + safe zone warning */}
@@ -225,30 +311,25 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
           Linha do Tempo do Vídeo
         </h3>
         <div className="flex items-center gap-1">
-          {/* Intro */}
           <div className={`flex-1 h-12 rounded-l-xl flex items-center justify-center text-xs font-medium transition-all ${introVideo ? 'border-2 text-white' : 'bg-white/[0.04] border border-dashed border-white/[0.15] text-white/30'}`}
             style={introVideo ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}>
             <Clapperboard size={12} className="mr-1" /> Abertura
           </div>
-          {/* Layout Image */}
           {useLayoutOverlay && flyerImageDataUrl && (
             <div className="w-16 h-12 flex items-center justify-center text-[9px] font-medium border-2 text-white rounded-md"
               style={{ borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.25)` }}>
               <ImageIcon size={10} className="mr-0.5" /> Layout
             </div>
           )}
-          {/* Car */}
           <div className={`flex-[2] h-12 flex items-center justify-center text-xs font-medium transition-all ${carVideo ? 'border-2 text-white' : 'bg-white/[0.04] border border-dashed border-white/[0.15] text-white/30'}`}
             style={carVideo ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}>
             <Video size={12} className="mr-1" /> Veículo
           </div>
-          {/* Closing */}
           <div className={`flex-1 h-12 rounded-r-xl flex items-center justify-center text-xs font-medium transition-all ${closingVideo ? 'border-2 text-white' : 'bg-white/[0.04] border border-dashed border-white/[0.15] text-white/30'}`}
             style={closingVideo ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}>
             <Film size={12} className="mr-1" /> Final
           </div>
         </div>
-        {/* Music bar with fade info */}
         <div className={`mt-2 h-8 rounded-xl flex items-center justify-center text-[10px] font-medium transition-all ${musicFile ? 'border-2 text-white' : 'bg-white/[0.04] border border-dashed border-white/[0.15] text-white/30'}`}
           style={musicFile ? { borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.12)' } : {}}>
           <Music size={10} className="mr-1" />
@@ -257,9 +338,109 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: Upload sections */}
+        {/* Left: Upload sections + Vehicle Info */}
         <div className="space-y-4">
-          {/* Video segments */}
+
+          {/* ====== VEHICLE INFO FIELDS ====== */}
+          <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl overflow-hidden">
+            <button
+              onClick={() => setExpandedSection(expandedSection === 'vehicle-info' ? null : 'vehicle-info')}
+              className="w-full p-4 flex items-center justify-between text-left hover:bg-white/[0.02] transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                  style={{ backgroundColor: `hsl(${clientColor} / 0.15)` }}>
+                  <Car size={16} style={{ color: `hsl(${clientColor})` }} />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-white/80">Dados do Veículo</p>
+                  <p className="text-[10px] text-white/40">{model ? `${model} ${year}` : 'Preencha os dados'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {model && year && (
+                  <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: `hsl(${clientColor})` }}>
+                    <Check size={10} className="text-white" />
+                  </div>
+                )}
+                {expandedSection === 'vehicle-info' ? <ChevronUp size={14} className="text-white/40" /> : <ChevronDown size={14} className="text-white/40" />}
+              </div>
+            </button>
+            <AnimatePresence>
+              {expandedSection === 'vehicle-info' && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+                  <div className="px-4 pb-4 space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-white/60">Modelo *</Label>
+                        <Input value={model} onChange={e => setModel(e.target.value)} placeholder="Ex: Honda Civic"
+                          className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-white/60">Ano *</Label>
+                        <Input value={year} onChange={e => setYear(e.target.value)} placeholder="Ex: 2023/2024"
+                          className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-white/60">Câmbio</Label>
+                      {renderOptionButtons(TRANSMISSION_OPTIONS, transmission, setTransmission)}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-white/60">Combustível</Label>
+                      {renderOptionButtons(FUEL_OPTIONS, fuelType, setFuelType)}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-white/60">Pneus</Label>
+                      {renderOptionButtons(TIRE_OPTIONS, tireCondition, setTireCondition)}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-white/60">IPVA</Label>
+                      {renderOptionButtons(IPVA_OPTIONS, ipvaStatus, setIpvaStatus)}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-white/60">Valor</Label>
+                      <Input value={price ? formatPrice(price) : ''} onChange={e => setPrice(e.target.value.replace(/\D/g, ''))} placeholder="R$ 0,00"
+                        className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30 text-lg font-bold" />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-white/60">Observações extras (Enter = novo tópico)</Label>
+                      <Textarea value={extraInfo} onChange={e => setExtraInfo(e.target.value)} placeholder="Ex: KM 61.845&#10;Único dono&#10;Revisado"
+                        rows={3}
+                        className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30 resize-none" />
+                    </div>
+
+                    {/* Footer fields */}
+                    <div className="pt-3 border-t border-white/[0.06] space-y-3">
+                      <p className="text-[11px] text-white/50 font-medium flex items-center gap-1.5"><MapPin size={10} /> Endereço e Contato</p>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-white/60 flex items-center gap-1.5">
+                          <MapPin size={10} /> Endereço
+                        </Label>
+                        <Input value={footerAddress} onChange={e => setFooterAddress(e.target.value)} placeholder="Ex: Av. Brasil, 1500 - Centro, Cidade/UF"
+                          className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-white/60 flex items-center gap-1.5">
+                          <Phone size={10} /> WhatsApp
+                        </Label>
+                        <Input value={footerWhatsapp} onChange={e => setFooterWhatsapp(e.target.value)} placeholder="Ex: (11) 99999-9999"
+                          className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30" />
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* ====== VIDEO SEGMENTS ====== */}
           {segmentConfig.map(seg => (
             <div key={seg.key} className="bg-white/[0.04] border border-white/[0.08] rounded-2xl overflow-hidden">
               <button
@@ -300,8 +481,8 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
 
                       {seg.video ? (
                         <div className="space-y-2">
-                          <div className="relative rounded-xl overflow-hidden bg-black aspect-video">
-                            <video src={seg.video} className="w-full h-full object-contain" muted />
+                          <div className="relative rounded-xl overflow-hidden bg-black aspect-[9/16] max-h-64">
+                            <video src={seg.video} className="w-full h-full object-cover" muted playsInline />
                             <div className="absolute bottom-2 right-2 flex gap-1">
                               <button onClick={() => previewSegment(seg.key)}
                                 className="w-8 h-8 rounded-full bg-black/60 flex items-center justify-center hover:bg-black/80 transition-colors">
@@ -369,7 +550,6 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
                             <X size={10} className="text-white" />
                           </button>
                         </div>
-                        {/* Fade In / Fade Out controls */}
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1.5">
                             <div className="flex items-center justify-between">
@@ -461,21 +641,21 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
                 <div className="relative rounded-xl overflow-hidden bg-black aspect-[9/16]">
                   <video
                     ref={videoPreviewRef}
-                    className="w-full h-full object-contain"
+                    className="w-full h-full object-cover"
                     onEnded={() => setIsPlaying(false)}
                     onPause={() => setIsPlaying(false)}
                     onPlay={() => setIsPlaying(true)}
                     playsInline
                     muted
                   />
-                  {/* Safe zone overlays — top ~13% and bottom ~14.6% */}
+                  {/* Safe zone overlays */}
                   <div className="absolute top-0 inset-x-0 h-[13%] bg-red-500/10 border-b border-dashed border-red-400/30 flex items-center justify-center pointer-events-none">
                     <span className="text-[8px] text-red-300/60 font-medium">ZONA COBERTA</span>
                   </div>
                   <div className="absolute bottom-0 inset-x-0 h-[14.6%] bg-red-500/10 border-t border-dashed border-red-400/30 flex items-end justify-center pb-1 pointer-events-none">
                     <span className="text-[8px] text-red-300/60 font-medium">ZONA COBERTA</span>
                   </div>
-                  <div className="absolute bottom-3 inset-x-3 flex items-center justify-between z-10">
+                  <div className="absolute bottom-[16%] inset-x-3 flex items-center justify-between z-10">
                     <button onClick={togglePlayPause}
                       className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center hover:bg-black/80">
                       {isPlaying ? <Pause size={16} className="text-white" /> : <Play size={16} className="text-white ml-0.5" />}
@@ -492,7 +672,6 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
               </div>
             ) : (
               <div className="relative aspect-[9/16] rounded-xl bg-white/[0.02] border border-dashed border-white/[0.1] flex flex-col items-center justify-center gap-3">
-                {/* Safe zone overlays */}
                 <div className="absolute top-0 inset-x-0 h-[13%] bg-red-500/5 border-b border-dashed border-red-400/20 flex items-center justify-center pointer-events-none">
                   <span className="text-[8px] text-red-300/40 font-medium">ZONA COBERTA</span>
                 </div>

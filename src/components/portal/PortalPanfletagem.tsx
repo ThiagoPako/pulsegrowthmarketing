@@ -615,15 +615,19 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (layoutLocked) return;
     didDragRef.current = false;
     const { cx, cy } = getCanvasCoords(e);
-    // Check logo hit anywhere on canvas (no zone restriction)
+    // Check logo hit
     if (cx >= logoX && cx <= logoX + logoW && cy >= logoY && cy <= logoY + logoH) {
-      e.preventDefault();
-      e.stopPropagation();
+      e.preventDefault(); e.stopPropagation();
       setDragging('logo'); setDragOffset({ x: cx - logoX, y: cy - logoY }); return;
     }
     const infoH = Math.round(260 * infoBoxScale);
     if (cy >= infoPosY && cy <= infoPosY + infoH) {
       setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); return;
+    }
+    // Check footer hit
+    const footY = infoPosY + infoH;
+    if (cy >= footY) {
+      setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + (CANVAS_H - footY) / 2 + footerPosY) }); return;
     }
   };
 
@@ -640,12 +644,16 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     didDragRef.current = true;
     const { cx, cy } = getCanvasCoords(e);
     if (dragging === 'logo') {
-      const newX = Math.max(-logoW / 2, Math.min(CANVAS_W - logoW / 2, cx - dragOffset.x));
-      const newY = Math.max(-logoH / 2, Math.min(CANVAS_H - logoH / 2, cy - dragOffset.y));
-      setLogoX(newX);
-      setLogoY(newY);  // Fully free movement
+      setLogoX(Math.max(-logoW / 2, Math.min(CANVAS_W - logoW / 2, cx - dragOffset.x)));
+      setLogoY(Math.max(-logoH / 2, Math.min(CANVAS_H - logoH / 2, cy - dragOffset.y)));
     } else if (dragging === 'info') {
       setInfoPosY(Math.max(400, Math.min(CANVAS_H - 330, cy - dragOffset.y)));
+    } else if (dragging === 'footer') {
+      const infoH = Math.round(260 * infoBoxScale);
+      const footY = infoPosY + infoH;
+      const footCenterDefault = footY + (CANVAS_H - footY) / 2;
+      setFooterPosX(cx - dragOffset.x);
+      setFooterPosY(cy - dragOffset.y - footCenterDefault);
     }
   };
 
@@ -673,6 +681,10 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (cy >= infoPosY && cy <= infoPosY + infoH) {
       setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); e.preventDefault(); return;
     }
+    const footY = infoPosY + infoH;
+    if (cy >= footY) {
+      setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + (CANVAS_H - footY) / 2 + footerPosY) }); e.preventDefault(); return;
+    }
   };
 
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
@@ -682,9 +694,15 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const { cx, cy } = getTouchCoords(e);
     if (dragging === 'logo') {
       setLogoX(Math.max(-logoW / 2, Math.min(CANVAS_W - logoW / 2, cx - dragOffset.x)));
-      setLogoY(Math.max(-logoH / 2, Math.min(CANVAS_H - logoH / 2, cy - dragOffset.y)));  // Fully free
+      setLogoY(Math.max(-logoH / 2, Math.min(CANVAS_H - logoH / 2, cy - dragOffset.y)));
     } else if (dragging === 'info') {
       setInfoPosY(Math.max(400, Math.min(CANVAS_H - 330, cy - dragOffset.y)));
+    } else if (dragging === 'footer') {
+      const infoH = Math.round(260 * infoBoxScale);
+      const footY = infoPosY + infoH;
+      const footCenterDefault = footY + (CANVAS_H - footY) / 2;
+      setFooterPosX(cx - dragOffset.x);
+      setFooterPosY(cy - dragOffset.y - footCenterDefault);
     }
   };
 

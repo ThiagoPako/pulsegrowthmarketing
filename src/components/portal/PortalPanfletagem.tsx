@@ -1007,7 +1007,24 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             </div>
           </div>
 
-          {/* Info Box Scale */}
+          {/* Info Font Scale */}
+          <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
+            <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+              <Type size={16} style={{ color: `hsl(${clientColor})` }} /> Fonte das Caixas de Info
+            </h3>
+            <p className="text-[11px] text-white/40">Controla o tamanho da fonte de Modelo, Ano, Câmbio e Observações (Raleway Bold).</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-white/60">Escala</Label>
+                <span className="text-xs text-white/40 font-mono">{Math.round(infoFontScale * 100)}%</span>
+              </div>
+              <Slider value={[infoFontScale * 100]} onValueChange={v => setInfoFontScale(v[0] / 100)} min={60} max={180} step={5} className="w-full" />
+              <div className="flex justify-between text-[10px] text-white/30">
+                <span>Menor</span><span>Normal</span><span>Maior</span>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
               <Palette size={16} style={{ color: `hsl(${clientColor})` }} /> Tamanho das Caixas (Info)

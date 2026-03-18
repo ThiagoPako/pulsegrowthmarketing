@@ -189,6 +189,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [obsFontScale, setObsFontScale] = useState(1.0);
   // Active field font editor (toggled by clicking label name)
   const [activeFieldEditor, setActiveFieldEditor] = useState<string | null>(null);
+  // Column header label font scale
+  const [labelFontScale, setLabelFontScale] = useState(1.0);
 
   // Footer position (draggable)
   const [footerPosX, setFooterPosX] = useState(0);
@@ -239,6 +241,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         else if (s.infoFontScale != null) setTransmissionFontScale(s.infoFontScale);
         if (s.obsFontScale != null) setObsFontScale(s.obsFontScale);
         else if (s.infoFontScale != null) setObsFontScale(s.infoFontScale);
+        if (s.labelFontScale != null) setLabelFontScale(s.labelFontScale);
         if (s.footerPosX != null) setFooterPosX(s.footerPosX);
         if (s.footerPosY != null) setFooterPosY(s.footerPosY);
         if (s.colors) setColors({ ...DEFAULT_COLORS, ...s.colors });
@@ -257,7 +260,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   }, [clientWhatsapp]);
 
   const saveLayoutSettings = () => {
-    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, footerPosX, footerPosY, colors, footerAddress, footerWhatsapp };
+    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, footerPosX, footerPosY, colors, footerAddress, footerWhatsapp };
     localStorage.setItem(`flyer-layout-${clientId}`, JSON.stringify(settings));
     toast.success('Layout salvo!');
   };
@@ -494,7 +497,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       // Pill
       ctx.fillStyle = c.infoPills;
       ctx.beginPath(); ctx.roundRect(cx, infoPosY + Math.round(24 * bs), cw, pillH, pillR); ctx.fill();
-      ctx.fillStyle = c.infoText; ctx.font = `bold ${Math.round(20 * fs)}px 'Raleway', sans-serif`; ctx.textAlign = 'center';
+      ctx.fillStyle = c.infoText; ctx.font = `bold ${Math.round(20 * labelFontScale * fs)}px 'Raleway', sans-serif`; ctx.textAlign = 'center';
       ctx.fillText(col.label, cx + cw / 2, infoPosY + Math.round(24 * bs) + pillH / 2 + Math.round(7 * fs));
 
       const fieldScales = [modelFontScale, yearFontScale, transmissionFontScale, obsFontScale];
@@ -606,7 +609,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillStyle = '#FFFFFF'; ctx.font = `bold ${Math.round(36 * fs)}px Arial, sans-serif`; ctx.textAlign = 'left';
       ctx.fillText(clientName, logoX, logoY + 40);
     }
-  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY]);
+  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY]);
 
   // Live preview rendering
   useEffect(() => {
@@ -1034,6 +1037,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             </div>
             {/* Per-field font scale controls */}
             {[
+              { key: 'labels', label: 'CABEÇALHOS (etiquetas)', scale: labelFontScale, setter: setLabelFontScale },
               { key: 'model', label: 'MODELO', scale: modelFontScale, setter: setModelFontScale },
               { key: 'year', label: 'ANO', scale: yearFontScale, setter: setYearFontScale },
               { key: 'transmission', label: 'CÂMBIO', scale: transmissionFontScale, setter: setTransmissionFontScale },

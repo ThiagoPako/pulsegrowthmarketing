@@ -494,18 +494,60 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const addrText = footerAddress || '';
     const wpText = footerWhatsapp || '';
 
+    // Draw pin icon (drawn, not emoji)
+    const drawPinIcon = (cx: number, cy: number, size: number) => {
+      ctx.save();
+      ctx.fillStyle = c.footerAccent;
+      ctx.beginPath(); ctx.arc(cx, cy, size, 0, Math.PI * 2); ctx.fill();
+      // Pin shape
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      const ps = size * 0.55;
+      ctx.moveTo(cx, cy + ps * 1.3);
+      ctx.quadraticCurveTo(cx - ps, cy, cx - ps * 0.5, cy - ps * 0.6);
+      ctx.arc(cx, cy - ps * 0.3, ps * 0.7, Math.PI * 1.15, Math.PI * -0.15);
+      ctx.quadraticCurveTo(cx + ps, cy, cx, cy + ps * 1.3);
+      ctx.fill();
+      ctx.fillStyle = c.footerAccent;
+      ctx.beginPath(); ctx.arc(cx, cy - ps * 0.3, ps * 0.25, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    };
+
+    // Draw WhatsApp icon (drawn, not emoji)
+    const drawWhatsAppIcon = (cx: number, cy: number, size: number) => {
+      ctx.save();
+      ctx.fillStyle = '#25D366';
+      ctx.beginPath(); ctx.arc(cx, cy, size, 0, Math.PI * 2); ctx.fill();
+      // Phone handset shape
+      ctx.fillStyle = '#FFFFFF';
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#FFFFFF';
+      const s = size * 0.45;
+      ctx.beginPath();
+      ctx.arc(cx, cy, s * 0.9, 0, Math.PI * 2);
+      ctx.lineWidth = s * 0.25;
+      ctx.stroke();
+      // Chat bubble tail
+      ctx.beginPath();
+      ctx.moveTo(cx - s * 0.5, cy + s * 0.7);
+      ctx.lineTo(cx - s * 0.9, cy + s * 1.2);
+      ctx.lineTo(cx - s * 0.1, cy + s * 0.9);
+      ctx.fillStyle = '#25D366';
+      ctx.fill();
+      // Inner phone icon
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `bold ${size * 0.8}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('✆', cx, cy + 1);
+      ctx.restore();
+    };
+
     // Address section (left half)
     if (addrText) {
-      // Pin icon circle
-      ctx.fillStyle = c.footerAccent;
-      ctx.beginPath(); ctx.arc(55, footCenterY, 24, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = `bold ${Math.round(20 * fs)}px Arial, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText('📍', 55, footCenterY + 7);
-
+      drawPinIcon(55, footCenterY, 24);
       ctx.fillStyle = c.footerText;
-      ctx.font = `${Math.round(12 * fs)}px Arial, sans-serif`;
+      ctx.font = `${Math.round(12 * fs)}px 'Georgia', serif`;
       ctx.textAlign = 'left';
       ctx.fillText('ENDEREÇO', 92, footCenterY - 18);
       ctx.font = `bold ${Math.round(18 * fs)}px Arial, sans-serif`;
@@ -524,17 +566,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     // WhatsApp section (right half)
     if (wpText) {
       const wpX = W / 2 + 40;
-      // WhatsApp green circle
-      ctx.fillStyle = '#25D366';
-      ctx.beginPath(); ctx.arc(wpX + 24, footCenterY, 24, 0, Math.PI * 2); ctx.fill();
-      // WhatsApp icon (phone symbol)
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = `bold ${Math.round(22 * fs)}px Arial, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText('📱', wpX + 24, footCenterY + 8);
-
+      drawWhatsAppIcon(wpX + 24, footCenterY, 24);
       ctx.fillStyle = c.footerText;
-      ctx.font = `${Math.round(12 * fs)}px Arial, sans-serif`;
+      ctx.font = `${Math.round(12 * fs)}px 'Georgia', serif`;
       ctx.textAlign = 'left';
       ctx.fillText('WHATSAPP', wpX + 58, footCenterY - 18);
       ctx.font = `bold ${Math.round(24 * fs)}px Arial, sans-serif`;

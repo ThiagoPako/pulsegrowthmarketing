@@ -841,7 +841,18 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
                     </span>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => { setActivePreview(null); setIsPlaying(false); setPreviewLoading(false); }}
+                <Button variant="outline" size="sm" onClick={() => {
+                  const video = videoPreviewRef.current;
+                  if (video) {
+                    video.pause();
+                    video.removeAttribute('src');
+                    video.load();
+                  }
+                  releasePreviewObjectUrl();
+                  setActivePreview(null);
+                  setIsPlaying(false);
+                  setPreviewLoading(false);
+                }}
                   className="w-full text-xs border-white/[0.1] text-white/60">
                   Fechar prévia
                 </Button>

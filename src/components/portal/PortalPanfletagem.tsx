@@ -8,6 +8,7 @@ import { Slider } from '@/components/ui/slider';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Textarea } from '@/components/ui/textarea';
+import whatsappIconSrc from '@/assets/whatsapp_icon.png';
 import {
   Car, Download, Eye, Plus, X, Image, Loader2, Check,
   Gauge, Upload, Save, Move, Lock, Unlock, Trash2, Palette, Type, MapPin, Phone
@@ -136,6 +137,15 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoFileInputRef = useRef<HTMLInputElement>(null);
+  const wpIconRef = useRef<HTMLImageElement | null>(null);
+
+  // Preload WhatsApp icon
+  useEffect(() => {
+    const img = document.createElement('img') as HTMLImageElement;
+    img.src = whatsappIconSrc;
+    img.onload = () => { wpIconRef.current = img; };
+    if (img.complete && img.naturalWidth > 0) wpIconRef.current = img;
+  }, []);
 
   // Form state
   const [model, setModel] = useState('');
@@ -526,31 +536,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.restore();
     };
 
-    // Draw WhatsApp icon (drawn, not emoji)
+    // Draw WhatsApp icon from imported image
     const drawWhatsAppIcon = (cx: number, cy: number, size: number) => {
-      ctx.save();
-      ctx.fillStyle = '#25D366';
-      ctx.beginPath(); ctx.arc(cx, cy, size, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#FFFFFF';
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#FFFFFF';
-      const s = size * 0.45;
-      ctx.beginPath();
-      ctx.arc(cx, cy, s * 0.9, 0, Math.PI * 2);
-      ctx.lineWidth = s * 0.25;
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(cx - s * 0.5, cy + s * 0.7);
-      ctx.lineTo(cx - s * 0.9, cy + s * 1.2);
-      ctx.lineTo(cx - s * 0.1, cy + s * 0.9);
-      ctx.fillStyle = '#25D366';
-      ctx.fill();
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = `bold ${size * 0.8}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('✆', cx, cy + 1);
-      ctx.restore();
+      const wpImg = wpIconRef.current;
+      if (wpImg) {
+        const s2 = size * 2;
+        ctx.drawImage(wpImg, cx - s2 / 2, cy - s2 / 2, s2, s2);
+      }
     };
 
     // Address section (left half) — offset by footerPosX/Y

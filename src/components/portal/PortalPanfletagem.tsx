@@ -352,7 +352,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           // WhatsApp (right side)
           const whatsText = clientWhatsapp || '';
           if (whatsText) {
-            ctx.fillStyle = PULSE_ORANGE;
+            ctx.fillStyle = BRAND_COLOR;
             ctx.beginPath();
             ctx.arc(W - 300, footY + footH / 2, 22, 0, Math.PI * 2);
             ctx.fill();

@@ -537,7 +537,7 @@ export default function ContentManager() {
           ) : filteredContents.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">Nenhum conteúdo encontrado.</p>
           ) : (
-            <div className="grid grid-cols-3 gap-px bg-border">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 p-4">
               {filteredContents.map(content => (
                 <ContentTile key={content.id} content={content} onDelete={handleDelete} onPlay={setPlayingContent} />
               ))}

@@ -169,7 +169,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     {
       key: 'intro' as VideoSegment,
       label: 'Vídeo de Abertura',
-      desc: 'Vinheta ou intro que aparecerá antes do conteúdo do veículo',
+      desc: 'Vinheta ou intro. O áudio será mutado — apenas a música de fundo toca.',
       icon: Clapperboard,
       video: introVideo,
       file: introFile,
@@ -178,7 +178,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     {
       key: 'car' as VideoSegment,
       label: 'Vídeo do Veículo',
-      desc: 'Vídeo principal do carro. O áudio original será removido automaticamente.',
+      desc: 'Vídeo principal do carro. O áudio original será mutado — apenas a música de fundo toca.',
       icon: Video,
       video: carVideo,
       file: carFile,
@@ -187,7 +187,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     {
       key: 'closing' as VideoSegment,
       label: 'Finalização',
-      desc: 'Encerramento, CTA ou logo final',
+      desc: 'Encerramento, CTA ou logo final. O áudio será mutado — apenas a música de fundo toca.',
       icon: Film,
       video: closingVideo,
       file: closingFile,

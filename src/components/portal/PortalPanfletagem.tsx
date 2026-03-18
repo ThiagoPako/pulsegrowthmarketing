@@ -191,6 +191,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [activeFieldEditor, setActiveFieldEditor] = useState<string | null>(null);
   // Column header label font scale
   const [labelFontScale, setLabelFontScale] = useState(1.0);
+  // Pill (rounded label box) controls
+  const [pillHeightScale, setPillHeightScale] = useState(1.0);
+  const [pillRadiusScale, setPillRadiusScale] = useState(1.0);
 
   // Footer position (draggable)
   const [footerPosX, setFooterPosX] = useState(0);
@@ -242,6 +245,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (s.obsFontScale != null) setObsFontScale(s.obsFontScale);
         else if (s.infoFontScale != null) setObsFontScale(s.infoFontScale);
         if (s.labelFontScale != null) setLabelFontScale(s.labelFontScale);
+        if (s.pillHeightScale != null) setPillHeightScale(s.pillHeightScale);
+        if (s.pillRadiusScale != null) setPillRadiusScale(s.pillRadiusScale);
         if (s.footerPosX != null) setFooterPosX(s.footerPosX);
         if (s.footerPosY != null) setFooterPosY(s.footerPosY);
         if (s.colors) setColors({ ...DEFAULT_COLORS, ...s.colors });
@@ -260,7 +265,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   }, [clientWhatsapp]);
 
   const saveLayoutSettings = () => {
-    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, footerPosX, footerPosY, colors, footerAddress, footerWhatsapp };
+    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, footerPosX, footerPosY, colors, footerAddress, footerWhatsapp };
     localStorage.setItem(`flyer-layout-${clientId}`, JSON.stringify(settings));
     toast.success('Layout salvo!');
   };
@@ -488,8 +493,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ];
     const colW = W / 4;
     const colPad = Math.round(12 * bs);
-    const pillH = Math.round(44 * bs);
-    const pillR = Math.round(22 * bs);
+    const pillH = Math.round(44 * bs * pillHeightScale);
+    const pillR = Math.round(22 * bs * pillRadiusScale);
 
     cols.forEach((col, i) => {
       const cx = i * colW + colPad;
@@ -609,7 +614,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillStyle = '#FFFFFF'; ctx.font = `bold ${Math.round(36 * fs)}px Arial, sans-serif`; ctx.textAlign = 'left';
       ctx.fillText(clientName, logoX, logoY + 40);
     }
-  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY]);
+  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY]);
 
   // Live preview rendering
   useEffect(() => {
@@ -1034,6 +1039,20 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
                 <span className="text-xs text-white/40 font-mono">{Math.round(infoBoxScale * 100)}%</span>
               </div>
               <Slider value={[infoBoxScale * 100]} onValueChange={v => setInfoBoxScale(v[0] / 100)} min={70} max={150} step={5} className="w-full" />
+            </div>
+            {/* Pill box controls */}
+            <div className="space-y-2 pt-2 border-t border-white/[0.06]">
+              <Label className="text-xs text-white/60">Caixas Arredondadas (etiquetas)</Label>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-white/40">Altura</span>
+                <span className="text-[10px] text-white/40 font-mono">{Math.round(pillHeightScale * 100)}%</span>
+              </div>
+              <Slider value={[pillHeightScale * 100]} onValueChange={v => setPillHeightScale(v[0] / 100)} min={50} max={200} step={5} className="w-full" />
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-white/40">Arredondamento</span>
+                <span className="text-[10px] text-white/40 font-mono">{Math.round(pillRadiusScale * 100)}%</span>
+              </div>
+              <Slider value={[pillRadiusScale * 100]} onValueChange={v => setPillRadiusScale(v[0] / 100)} min={0} max={200} step={10} className="w-full" />
             </div>
             {/* Per-field font scale controls */}
             {[

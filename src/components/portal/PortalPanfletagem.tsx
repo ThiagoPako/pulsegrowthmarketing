@@ -256,6 +256,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (s.pillRadiusScale != null) setPillRadiusScale(s.pillRadiusScale);
         if (s.footerPosX != null) setFooterPosX(s.footerPosX);
         if (s.footerPosY != null) setFooterPosY(s.footerPosY);
+        if (s.photoOffsetX != null) setPhotoOffsetX(s.photoOffsetX);
+        if (s.photoOffsetY != null) setPhotoOffsetY(s.photoOffsetY);
         if (s.colors) {
           const migrated = { ...DEFAULT_COLORS, ...s.colors };
           // Legacy: migrate old single infoText to split fields

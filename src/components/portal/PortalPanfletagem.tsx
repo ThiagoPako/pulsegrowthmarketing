@@ -940,8 +940,16 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         <div className="space-y-6">
           {/* Vehicle Info */}
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-5">
-            <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
-              <Car size={16} style={{ color: `hsl(${clientColor})` }} /> Dados do Veículo
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+                <Car size={16} style={{ color: `hsl(${clientColor})` }} /> Dados do Veículo
+              </h3>
+              <button onClick={importFromVideo}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-medium bg-white/[0.06] border border-white/[0.1] text-white/60 hover:bg-white/[0.1] hover:text-white/80 transition-all"
+                title="Importar dados preenchidos na aba Vídeo">
+                <Film size={11} /> Importar do Vídeo
+              </button>
+            </div>
             </h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">

@@ -53,7 +53,8 @@ interface LayoutColors {
   headerText: string;
   infoBg: string;
   infoPills: string;
-  infoText: string;
+  infoLabelText: string;
+  infoValueText: string;
   priceBg: string;
   priceText: string;
   footerBg: string;
@@ -66,7 +67,8 @@ const DEFAULT_COLORS: LayoutColors = {
   headerText: '#1a1a2e',
   infoBg: '#1e2a45',
   infoPills: '#034e98',
-  infoText: '#FFFFFF',
+  infoLabelText: '#FFFFFF',
+  infoValueText: '#FFFFFF',
   priceBg: '#034e98',
   priceText: '#FFFFFF',
   footerBg: '#0a0f1e',

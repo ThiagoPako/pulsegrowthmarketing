@@ -658,6 +658,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       setFooterPosX(Math.max(-200, Math.min(200, cx - dragOffset.x)));
       setFooterPosY(Math.max(-80, Math.min(80, cy - dragOffset.y - footY)));
     }
+  };
+
+  const handlePreviewMouseUp = () => { setDragging(null); };
 
   // Touch handlers
   const getTouchCoords = (e: React.TouchEvent<HTMLCanvasElement>) => {

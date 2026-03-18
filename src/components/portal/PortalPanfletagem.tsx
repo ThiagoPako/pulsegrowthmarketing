@@ -215,6 +215,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (s.customLogoDataUrl) setCustomLogoDataUrl(s.customLogoDataUrl);
         if (s.fontScale != null) setFontScale(s.fontScale);
         if (s.infoBoxScale != null) setInfoBoxScale(s.infoBoxScale);
+        if (s.infoFontScale != null) setInfoFontScale(s.infoFontScale);
+        if (s.footerPosX != null) setFooterPosX(s.footerPosX);
+        if (s.footerPosY != null) setFooterPosY(s.footerPosY);
         if (s.colors) setColors({ ...DEFAULT_COLORS, ...s.colors });
         if (s.footerAddress != null) setFooterAddress(s.footerAddress);
         if (s.footerWhatsapp != null) setFooterWhatsapp(s.footerWhatsapp);

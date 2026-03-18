@@ -50,9 +50,10 @@ interface ClientData {
   id: string; company_name: string; logo_url: string | null; color: string;
   weekly_reels: number; weekly_creatives: number; weekly_stories: number;
   monthly_recordings: number; plan_id: string | null; show_metrics: boolean;
+  has_vehicle_flyer: boolean; niche: string | null;
 }
 
-type TabView = 'library' | 'metrics' | 'criativa' | 'agenda';
+type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem';
 
 const PORTAL_MEDIA_PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/portal-media-proxy`;
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';

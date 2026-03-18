@@ -721,7 +721,6 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   };
 
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    if (layoutLocked) return;
     didDragRef.current = false;
     const { cx, cy } = getTouchCoords(e);
     if (cx >= logoX && cx <= logoX + logoW && cy >= logoY && cy <= logoY + logoH) {

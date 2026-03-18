@@ -649,14 +649,15 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (dragging === 'logo') {
       const newX = Math.max(-logoW / 2, Math.min(CANVAS_W - logoW / 2, cx - dragOffset.x));
       const newY = Math.max(-logoH / 2, Math.min(CANVAS_H - logoH / 2, cy - dragOffset.y));
-      setLogoX(newX);
-      setLogoY(newY);  // Fully free movement
+      setLogoX(newX); setLogoY(newY);
     } else if (dragging === 'info') {
       setInfoPosY(Math.max(400, Math.min(CANVAS_H - 330, cy - dragOffset.y)));
+    } else if (dragging === 'footer') {
+      const infoH = Math.round(260 * infoBoxScale);
+      const footY = infoPosY + infoH;
+      setFooterPosX(Math.max(-200, Math.min(200, cx - dragOffset.x)));
+      setFooterPosY(Math.max(-80, Math.min(80, cy - dragOffset.y - footY)));
     }
-  };
-
-  const handlePreviewMouseUp = () => { setDragging(null); };
 
   // Touch handlers
   const getTouchCoords = (e: React.TouchEvent<HTMLCanvasElement>) => {

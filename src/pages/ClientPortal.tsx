@@ -1201,6 +1201,12 @@ function ReelsCard({ content, clientColor, onSelect }: {
             loop
             preload="metadata"
             className="absolute inset-0 w-full h-full object-cover"
+            onTimeUpdate={(e) => {
+              const vid = e.currentTarget;
+              if (vid.currentTime >= 6) {
+                vid.currentTime = 0;
+              }
+            }}
           />
         )}
 

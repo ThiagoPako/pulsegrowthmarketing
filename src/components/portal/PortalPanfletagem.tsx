@@ -618,15 +618,19 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (layoutLocked) return;
     didDragRef.current = false;
     const { cx, cy } = getCanvasCoords(e);
-    // Check logo hit anywhere on canvas (no zone restriction)
+    // Check logo hit
     if (cx >= logoX && cx <= logoX + logoW && cy >= logoY && cy <= logoY + logoH) {
-      e.preventDefault();
-      e.stopPropagation();
+      e.preventDefault(); e.stopPropagation();
       setDragging('logo'); setDragOffset({ x: cx - logoX, y: cy - logoY }); return;
     }
     const infoH = Math.round(260 * infoBoxScale);
     if (cy >= infoPosY && cy <= infoPosY + infoH) {
       setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); return;
+    }
+    // Footer zone
+    const footY = infoPosY + infoH;
+    if (cy >= footY) {
+      setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + footerPosY) }); return;
     }
   };
 

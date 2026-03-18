@@ -319,7 +319,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           const addrText = clientCity || '';
           if (addrText) {
             // Location pin icon circle
-            ctx.fillStyle = PULSE_ORANGE;
+            ctx.fillStyle = BRAND_COLOR;
             ctx.beginPath();
             ctx.arc(60, footY + footH / 2, 22, 0, Math.PI * 2);
             ctx.fill();

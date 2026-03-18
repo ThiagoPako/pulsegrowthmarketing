@@ -741,7 +741,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   };
 
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    if (!dragging || layoutLocked) return;
+    if (!dragging || (layoutLocked && dragging !== 'photo')) return;
     e.preventDefault();
     didDragRef.current = true;
     const { cx, cy } = getTouchCoords(e);

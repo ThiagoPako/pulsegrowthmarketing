@@ -181,6 +181,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   // Drag state
   const [dragging, setDragging] = useState<'logo' | 'info' | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const didDragRef = useRef(false);
 
   // Loaded images for preview
   const [vehicleImgObj, setVehicleImgObj] = useState<HTMLImageElement | null>(null);

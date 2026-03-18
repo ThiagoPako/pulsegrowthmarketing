@@ -185,8 +185,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
 
         // === TOP HEADER (0 → 260) ===
         const headerGrad = ctx.createLinearGradient(0, 0, W, 0);
-        headerGrad.addColorStop(0, PULSE_ORANGE);
-        headerGrad.addColorStop(1, '#d4542a');
+        headerGrad.addColorStop(0, BRAND_COLOR);
+        headerGrad.addColorStop(1, BRAND_DARK);
         ctx.fillStyle = headerGrad;
         ctx.fillRect(0, 0, W, 260);
 

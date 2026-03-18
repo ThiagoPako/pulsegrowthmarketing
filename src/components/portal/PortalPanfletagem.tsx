@@ -65,7 +65,7 @@ const TIRE_OPTIONS = [
   { value: 'regular', label: 'Regular' },
 ];
 
-export default function PortalPanfletagem({ clientId, clientColor }: Props) {
+export default function PortalPanfletagem({ clientId, clientColor, clientName, clientLogoUrl, clientWhatsapp, clientCity }: Props) {
   const [templates, setTemplates] = useState<FlyerTemplate[]>([]);
   const [items, setItems] = useState<FlyerItem[]>([]);
   const [loading, setLoading] = useState(true);

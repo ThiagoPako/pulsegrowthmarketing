@@ -172,6 +172,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   // Info box scale (controls pill/box size proportionally)
   const [infoBoxScale, setInfoBoxScale] = useState(1.0);
 
+  // Info values font scale (separate from global font)
+  const [infoFontScale, setInfoFontScale] = useState(1.0);
+
+  // Footer position (draggable)
+  const [footerPosX, setFooterPosX] = useState(0);
+  const [footerPosY, setFooterPosY] = useState(0); // offset from default position
+
   // Per-component colors
   const [colors, setColors] = useState<LayoutColors>({ ...DEFAULT_COLORS });
 

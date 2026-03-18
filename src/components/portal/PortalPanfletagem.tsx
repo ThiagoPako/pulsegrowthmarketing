@@ -263,7 +263,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             const cx = i * colW + colPad;
             const cw = colW - colPad * 2;
 
-            ctx.fillStyle = PULSE_ORANGE;
+            ctx.fillStyle = BRAND_COLOR;
             ctx.beginPath();
             ctx.roundRect(cx, infoY + 20, cw, 44, 22);
             ctx.fill();

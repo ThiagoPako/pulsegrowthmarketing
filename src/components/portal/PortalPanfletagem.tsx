@@ -641,7 +641,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     }
   };
 
-  const handlePreviewMouseUp = () => setDragging(null);
+  const handlePreviewMouseUp = () => { setDragging(null); };
 
   // Touch handlers
   const getTouchCoords = (e: React.TouchEvent<HTMLCanvasElement>) => {

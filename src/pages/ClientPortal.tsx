@@ -16,6 +16,7 @@ import PortalNotifications from '@/components/portal/PortalNotifications';
 import ZonaCriativa from '@/components/portal/ZonaCriativa';
 import PortalTutorial from '@/components/portal/PortalTutorial';
 import PortalRecordingCalendar from '@/components/portal/PortalRecordingCalendar';
+import PortalPanfletagem from '@/components/portal/PortalPanfletagem';
 import { syncPortalApproval, syncPortalAdjustment, syncPortalComment } from '@/lib/portalSync';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {

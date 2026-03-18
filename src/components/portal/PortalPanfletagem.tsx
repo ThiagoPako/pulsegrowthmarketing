@@ -692,6 +692,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (dragging === 'logo') {
       setLogoX(Math.max(-logoW / 2, Math.min(CANVAS_W - logoW / 2, cx - dragOffset.x)));
       setLogoY(Math.max(-logoH / 2, Math.min(CANVAS_H - logoH / 2, cy - dragOffset.y)));
+    } else if (dragging === 'photo') {
+      setPhotoOffsetX(cx - dragOffset.x);
+      setPhotoOffsetY(cy - dragOffset.y);
     } else if (dragging === 'info') {
       setInfoPosY(Math.max(400, Math.min(CANVAS_H - 330, cy - dragOffset.y)));
     } else if (dragging === 'footer') {

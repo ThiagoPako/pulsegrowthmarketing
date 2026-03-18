@@ -32,7 +32,7 @@ const emptyClient = (): Partial<Client> & { clientType?: string } => ({
   videomaker: '', backupTime: '14:00', backupDay: 'terca', extraDay: 'quarta',
   extraContentTypes: [], acceptsExtra: false, extraClientAppears: false,
   weeklyReels: 0, weeklyCreatives: 0, weeklyGoal: 10,
-  hasEndomarketing: false, weeklyStories: 0, presenceDays: 1,
+  hasEndomarketing: false, hasVehicleFlyer: false, weeklyStories: 0, presenceDays: 1,
   monthlyRecordings: 4, niche: '',
   clientLogin: '', clientPassword: '', driveLink: '', driveFotos: '', driveIdentidadeVisual: '',
   editorial: '',
@@ -557,6 +557,20 @@ export default function Clients() {
           </SelectContent>
         </Select>
       </div>
+
+      {/* Panfletagem Digital (for vehicle niches) */}
+      {(form.niche === 'veiculos' || form.niche === 'automotivo') && (
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+          <Switch
+            checked={form.hasVehicleFlyer ?? false}
+            onCheckedChange={(v) => setForm({ ...form, hasVehicleFlyer: v })}
+          />
+          <div>
+            <Label className="text-sm font-medium">Panfletagem Digital Pulse</Label>
+            <p className="text-xs text-muted-foreground">Habilitar módulo de panfletagem digital para veículos no portal do cliente</p>
+          </div>
+        </div>
+      )}
 
       {/* Seasonal dates alert preview */}
       {form.niche && form.niche !== 'outro' && (() => {

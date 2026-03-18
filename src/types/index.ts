@@ -85,6 +85,7 @@ export interface Client {
   weeklyCreatives: number;
   weeklyGoal: number;
   hasEndomarketing: boolean;
+  hasVehicleFlyer: boolean;
   weeklyStories: number;
   presenceDays: number;
   monthlyRecordings: number;

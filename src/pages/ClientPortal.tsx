@@ -16,6 +16,7 @@ import PortalNotifications from '@/components/portal/PortalNotifications';
 import ZonaCriativa from '@/components/portal/ZonaCriativa';
 import PortalTutorial from '@/components/portal/PortalTutorial';
 import PortalRecordingCalendar from '@/components/portal/PortalRecordingCalendar';
+import PortalPanfletagem from '@/components/portal/PortalPanfletagem';
 import { syncPortalApproval, syncPortalAdjustment, syncPortalComment } from '@/lib/portalSync';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
@@ -50,9 +51,10 @@ interface ClientData {
   id: string; company_name: string; logo_url: string | null; color: string;
   weekly_reels: number; weekly_creatives: number; weekly_stories: number;
   monthly_recordings: number; plan_id: string | null; show_metrics: boolean;
+  has_vehicle_flyer: boolean; niche: string | null;
 }
 
-type TabView = 'library' | 'metrics' | 'criativa' | 'agenda';
+type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem';
 
 const PORTAL_MEDIA_PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/portal-media-proxy`;
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
@@ -154,10 +156,10 @@ export default function ClientPortal() {
     // Try direct query first (works for authenticated team members)
     let clientQuery;
     if (isUUID) {
-      clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics').eq('id', slug).single();
+      clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche').eq('id', slug).single();
     } else {
       const companySearch = slug.replace(/-/g, ' ');
-      clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics').ilike('company_name', companySearch).single();
+      clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche').ilike('company_name', companySearch).single();
     }
 
     const clientRes = await clientQuery;
@@ -184,6 +186,8 @@ export default function ClientPortal() {
           monthly_recordings: edgeData.monthly_recordings || 0,
           plan_id: edgeData.plan_id || null,
           show_metrics: edgeData.show_metrics ?? true,
+          has_vehicle_flyer: edgeData.has_vehicle_flyer ?? false,
+          niche: edgeData.niche || null,
         };
       }
     }
@@ -532,6 +536,14 @@ export default function ClientPortal() {
                   Métricas
                 </button>
               )}
+              {client.has_vehicle_flyer && (
+                <button
+                  onClick={() => setActiveTab('panfletagem')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'panfletagem' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+                >
+                  🚗 Panfletagem
+                </button>
+              )}
             </div>
             <PortalNotifications
               clientId={client.id}
@@ -591,6 +603,11 @@ export default function ClientPortal() {
         {(client.show_metrics || isTeamMember) && (
           <button onClick={() => setActiveTab('metrics')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'metrics' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'metrics' ? { borderColor: `hsl(${clientColor})` } : {}}>
             Métricas
+          </button>
+        )}
+        {client.has_vehicle_flyer && (
+          <button onClick={() => setActiveTab('panfletagem')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'panfletagem' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'panfletagem' ? { borderColor: `hsl(${clientColor})` } : {}}>
+            🚗 Panfleto
           </button>
         )}
       </div>
@@ -812,6 +829,12 @@ export default function ClientPortal() {
                 </motion.div>
               ))}
             </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'panfletagem' && client.has_vehicle_flyer && (
+          <motion.div key="panfletagem" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+            <PortalPanfletagem clientId={client.id} clientColor={clientColor} />
           </motion.div>
         )}
       </AnimatePresence>

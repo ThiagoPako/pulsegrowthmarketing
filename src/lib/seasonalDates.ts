@@ -17,6 +17,7 @@ export const NICHE_OPTIONS = [
   { value: 'tecnologia', label: 'Tecnologia' },
   { value: 'pet', label: 'Pet Shop / Veterinária' },
   { value: 'automotivo', label: 'Automotivo' },
+  { value: 'veiculos', label: 'Loja de Veículos' },
   { value: 'imoveis', label: 'Imóveis' },
   { value: 'agropecuaria', label: 'Agropecuária' },
   { value: 'construcao', label: 'Material de Construção' },

@@ -580,6 +580,7 @@ export type Database = {
           fixed_time: string
           has_endomarketing: boolean
           has_photo_shoot: boolean
+          has_vehicle_flyer: boolean
           id: string
           logo_url: string | null
           monthly_recordings: number
@@ -629,6 +630,7 @@ export type Database = {
           fixed_time?: string
           has_endomarketing?: boolean
           has_photo_shoot?: boolean
+          has_vehicle_flyer?: boolean
           id?: string
           logo_url?: string | null
           monthly_recordings?: number
@@ -678,6 +680,7 @@ export type Database = {
           fixed_time?: string
           has_endomarketing?: boolean
           has_photo_shoot?: boolean
+          has_vehicle_flyer?: boolean
           id?: string
           logo_url?: string | null
           monthly_recordings?: number
@@ -1617,6 +1620,111 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      flyer_items: {
+        Row: {
+          client_id: string
+          created_at: string
+          extra_info: string | null
+          fuel_type: string
+          generated_image_url: string | null
+          generated_video_url: string | null
+          id: string
+          media_urls: string[]
+          price: string
+          status: string
+          template_id: string | null
+          tire_condition: string
+          transmission: string
+          updated_at: string
+          vehicle_model: string
+          vehicle_year: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          extra_info?: string | null
+          fuel_type?: string
+          generated_image_url?: string | null
+          generated_video_url?: string | null
+          id?: string
+          media_urls?: string[]
+          price?: string
+          status?: string
+          template_id?: string | null
+          tire_condition?: string
+          transmission?: string
+          updated_at?: string
+          vehicle_model?: string
+          vehicle_year?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          extra_info?: string | null
+          fuel_type?: string
+          generated_image_url?: string | null
+          generated_video_url?: string | null
+          id?: string
+          media_urls?: string[]
+          price?: string
+          status?: string
+          template_id?: string | null
+          tire_condition?: string
+          transmission?: string
+          updated_at?: string
+          vehicle_model?: string
+          vehicle_year?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flyer_items_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flyer_items_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "flyer_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      flyer_templates: {
+        Row: {
+          created_at: string
+          file_url: string
+          id: string
+          is_active: boolean
+          name: string
+          preview_url: string | null
+          template_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          file_url?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          preview_url?: string | null
+          template_type?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          file_url?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          preview_url?: string | null
+          template_type?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       goals: {
         Row: {

@@ -271,13 +271,19 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const src = customLogoDataUrl || clientLogoUrl;
     if (!src) { setLogoImgObj(null); return; }
     const img = new window.Image();
-    img.crossOrigin = 'anonymous';
+    // Only set crossOrigin for non-data URLs to avoid CORS issues with data URIs
+    if (!src.startsWith('data:')) {
+      img.crossOrigin = 'anonymous';
+    }
     img.onload = () => {
       setLogoImgObj(img);
       setLogoNaturalW(img.naturalWidth > 0 ? Math.min(img.naturalWidth, 400) : 200);
       setLogoNaturalH(img.naturalHeight > 0 ? Math.min(img.naturalHeight, 300) : 120);
     };
-    img.onerror = () => setLogoImgObj(null);
+    img.onerror = (err) => {
+      console.error('Logo load error:', err, 'src length:', src.length);
+      setLogoImgObj(null);
+    };
     img.src = src;
   }, [customLogoDataUrl, clientLogoUrl]);
 

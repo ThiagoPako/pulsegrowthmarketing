@@ -58,6 +58,7 @@ const ClientPortalLogin = lazy(() => import("@/pages/ClientPortalLogin"));
 const ClientPortalRegister = lazy(() => import("@/pages/ClientPortalRegister"));
 const TrafficManagement = lazy(() => import("@/pages/TrafficManagement"));
 const AutomationFlows = lazy(() => import("@/pages/AutomationFlows"));
+const FlyerTemplates = lazy(() => import("@/pages/FlyerTemplates"));
 
 const queryClient = new QueryClient({
   defaultOptions: {

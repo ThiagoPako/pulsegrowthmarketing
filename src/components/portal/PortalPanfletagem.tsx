@@ -502,6 +502,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.fillStyle = c.footerAccent;
     ctx.fillRect(0, footY, W, 3);
 
+    const footCenterY = footY + footH / 2;
     const footContentCenterY = footCenterY + footerPosY;
     const footContentOffX = footerPosX;
     const addrText = footerAddress || '';

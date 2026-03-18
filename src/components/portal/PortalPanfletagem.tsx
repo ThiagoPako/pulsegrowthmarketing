@@ -206,7 +206,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         ctx.fillText('Seu próximo', 40, 80);
         ctx.fillText('carro está', 40, 140);
         ctx.font = 'bold italic 52px Arial, sans-serif';
-        ctx.fillStyle = PULSE_ORANGE;
+        ctx.fillStyle = BRAND_COLOR;
         ctx.fillText('aqui!', 40, 200);
 
         // === VEHICLE PHOTO (260 → 920) — bigger area ===

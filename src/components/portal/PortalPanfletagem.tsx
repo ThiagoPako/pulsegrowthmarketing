@@ -950,7 +950,6 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
                 <Film size={11} /> Importar do Vídeo
               </button>
             </div>
-            </h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs text-white/60">Modelo *</Label>

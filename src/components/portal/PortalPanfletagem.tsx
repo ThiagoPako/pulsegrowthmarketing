@@ -349,7 +349,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     canvas.height = CANVAS_H;
     const W = CANVAS_W, H = CANVAS_H;
     const fs = fontScale;
+    const ifs = infoFontScale;
     const bs = infoBoxScale;
+    const FONT = 'Raleway, Arial, sans-serif';
 
     const c = colors;
     const BRAND_DARK = darkenHex(c.header);

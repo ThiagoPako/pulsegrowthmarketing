@@ -463,11 +463,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       // Pill
       ctx.fillStyle = c.infoPills;
       ctx.beginPath(); ctx.roundRect(cx, infoPosY + Math.round(24 * bs), cw, pillH, pillR); ctx.fill();
-      ctx.fillStyle = c.infoText; ctx.font = `bold ${Math.round(20 * fs)}px 'Georgia', serif`; ctx.textAlign = 'center';
-      ctx.fillText(col.label, cx + cw / 2, infoPosY + Math.round(24 * bs) + pillH / 2 + Math.round(7 * fs));
+      ctx.fillStyle = c.infoText; ctx.font = `bold ${Math.round(20 * ifs)}px ${FONT}`; ctx.textAlign = 'center';
+      ctx.fillText(col.label, cx + cw / 2, infoPosY + Math.round(24 * bs) + pillH / 2 + Math.round(7 * ifs));
 
       ctx.fillStyle = c.infoText;
-      ctx.font = i === 3 ? `${Math.round(18 * fs)}px Arial, sans-serif` : `bold ${Math.round(24 * fs)}px Arial, sans-serif`;
+      ctx.font = i === 3 ? `${Math.round(18 * ifs)}px ${FONT}` : `bold ${Math.round(24 * ifs)}px ${FONT}`;
       ctx.textAlign = 'center';
       const valueStartY = infoPosY + Math.round(24 * bs) + pillH + Math.round(30 * bs);
       if (col.value.includes('\n') || col.value.includes('•')) {

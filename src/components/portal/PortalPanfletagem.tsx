@@ -491,8 +491,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ];
     const colW = W / 4;
     const colPad = Math.round(12 * bs);
-    const pillH = Math.round(44 * bs);
-    const pillR = Math.round(22 * bs);
+    const pillH = Math.round(44 * bs * pillHeightScale);
+    const pillR = Math.round(22 * bs * pillRadiusScale);
 
     cols.forEach((col, i) => {
       const cx = i * colW + colPad;

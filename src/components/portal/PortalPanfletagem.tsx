@@ -684,6 +684,10 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (cy >= infoPosY && cy <= infoPosY + infoH) {
       setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); e.preventDefault(); return;
     }
+    const footY = infoPosY + infoH;
+    if (cy >= footY) {
+      setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + footerPosY) }); e.preventDefault(); return;
+    }
   };
 
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
@@ -693,9 +697,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const { cx, cy } = getTouchCoords(e);
     if (dragging === 'logo') {
       setLogoX(Math.max(-logoW / 2, Math.min(CANVAS_W - logoW / 2, cx - dragOffset.x)));
-      setLogoY(Math.max(-logoH / 2, Math.min(CANVAS_H - logoH / 2, cy - dragOffset.y)));  // Fully free
+      setLogoY(Math.max(-logoH / 2, Math.min(CANVAS_H - logoH / 2, cy - dragOffset.y)));
     } else if (dragging === 'info') {
       setInfoPosY(Math.max(400, Math.min(CANVAS_H - 330, cy - dragOffset.y)));
+    } else if (dragging === 'footer') {
+      const infoH = Math.round(260 * infoBoxScale);
+      const footY = infoPosY + infoH;
+      setFooterPosX(Math.max(-200, Math.min(200, cx - dragOffset.x)));
+      setFooterPosY(Math.max(-80, Math.min(80, cy - dragOffset.y - footY)));
     }
   };
 

@@ -554,36 +554,38 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.restore();
     };
 
-    // Address section (left half)
+    // Address section (left half) — with draggable offset
+    const fOffX = footerPosX;
+    const fOffY = footerPosY;
     if (addrText) {
-      drawPinIcon(55, footCenterY, 24);
+      drawPinIcon(55 + fOffX, footCenterY + fOffY, 24);
       ctx.fillStyle = c.footerText;
-      ctx.font = `${Math.round(12 * fs)}px 'Georgia', serif`;
+      ctx.font = `600 ${Math.round(12 * fs)}px ${FONT}`;
       ctx.textAlign = 'left';
-      ctx.fillText('ENDEREÇO', 92, footCenterY - 18);
-      ctx.font = `bold ${Math.round(18 * fs)}px Arial, sans-serif`;
+      ctx.fillText('ENDEREÇO', 92 + fOffX, footCenterY + fOffY - 18);
+      ctx.font = `bold ${Math.round(18 * fs)}px ${FONT}`;
       const maxAddrW = W / 2 - 120;
       const addrWords = addrText.split(' ');
-      let addrLine = ''; let addrLineY = footCenterY + 6;
+      let addrLine = ''; let addrLineY = footCenterY + fOffY + 6;
       addrWords.forEach(word => {
         const test = addrLine + (addrLine ? ' ' : '') + word;
         if (ctx.measureText(test).width > maxAddrW && addrLine) {
-          ctx.fillText(addrLine, 92, addrLineY); addrLine = word; addrLineY += 22;
+          ctx.fillText(addrLine, 92 + fOffX, addrLineY); addrLine = word; addrLineY += 22;
         } else { addrLine = test; }
       });
-      if (addrLine) ctx.fillText(addrLine, 92, addrLineY);
+      if (addrLine) ctx.fillText(addrLine, 92 + fOffX, addrLineY);
     }
 
     // WhatsApp section (right half)
     if (wpText) {
-      const wpX = W / 2 + 40;
-      drawWhatsAppIcon(wpX + 24, footCenterY, 24);
+      const wpX = W / 2 + 40 + fOffX;
+      drawWhatsAppIcon(wpX + 24, footCenterY + fOffY, 24);
       ctx.fillStyle = c.footerText;
-      ctx.font = `${Math.round(12 * fs)}px 'Georgia', serif`;
+      ctx.font = `600 ${Math.round(12 * fs)}px ${FONT}`;
       ctx.textAlign = 'left';
-      ctx.fillText('WHATSAPP', wpX + 58, footCenterY - 18);
-      ctx.font = `bold ${Math.round(24 * fs)}px Arial, sans-serif`;
-      ctx.fillText(wpText, wpX + 58, footCenterY + 12);
+      ctx.fillText('WHATSAPP', wpX + 58, footCenterY + fOffY - 18);
+      ctx.font = `bold ${Math.round(24 * fs)}px ${FONT}`;
+      ctx.fillText(wpText, wpX + 58, footCenterY + fOffY + 12);
     }
 
     // Logo (proportional)

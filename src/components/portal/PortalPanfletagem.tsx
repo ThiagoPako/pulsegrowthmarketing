@@ -538,9 +538,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
 
     // Draw WhatsApp icon from imported image
     const drawWhatsAppIcon = (cx: number, cy: number, size: number) => {
-      const wpImg = document.createElement('img') as HTMLImageElement;
-      wpImg.src = whatsappIconSrc;
-      if (wpImg.complete && wpImg.naturalWidth > 0) {
+      const wpImg = wpIconRef.current;
+      if (wpImg) {
         const s2 = size * 2;
         ctx.drawImage(wpImg, cx - s2 / 2, cy - s2 / 2, s2, s2);
       }

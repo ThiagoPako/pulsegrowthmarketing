@@ -33,10 +33,12 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
   const [musicName, setMusicName] = useState('');
   const [musicUrl, setMusicUrl] = useState<string | null>(null);
 
-  // Options
+  // Options — ALL segments are muted; only background music plays
   const [muteCarVideo, setMuteCarVideo] = useState(true);
   const [useLayoutOverlay, setUseLayoutOverlay] = useState(true);
-  const [overlayDuration, setOverlayDuration] = useState(3); // seconds the layout image shows
+  const [overlayDuration, setOverlayDuration] = useState(3);
+  const [musicFadeIn, setMusicFadeIn] = useState(2); // seconds
+  const [musicFadeOut, setMusicFadeOut] = useState(2); // seconds
 
   // Preview
   const [activePreview, setActivePreview] = useState<VideoSegment | null>(null);
@@ -124,7 +126,8 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     setTimeout(() => {
       if (videoPreviewRef.current) {
         videoPreviewRef.current.src = url;
-        videoPreviewRef.current.muted = segment === 'car' && muteCarVideo;
+        // ALL segments are muted — only background music plays
+        videoPreviewRef.current.muted = true;
         videoPreviewRef.current.play().catch(() => {});
       }
     }, 100);
@@ -166,7 +169,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     {
       key: 'intro' as VideoSegment,
       label: 'Vídeo de Abertura',
-      desc: 'Vinheta ou intro que aparecerá antes do conteúdo do veículo',
+      desc: 'Vinheta ou intro. O áudio será mutado — apenas a música de fundo toca.',
       icon: Clapperboard,
       video: introVideo,
       file: introFile,
@@ -175,7 +178,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     {
       key: 'car' as VideoSegment,
       label: 'Vídeo do Veículo',
-      desc: 'Vídeo principal do carro. O áudio original será removido automaticamente.',
+      desc: 'Vídeo principal do carro. O áudio original será mutado — apenas a música de fundo toca.',
       icon: Video,
       video: carVideo,
       file: carFile,
@@ -184,7 +187,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     {
       key: 'closing' as VideoSegment,
       label: 'Finalização',
-      desc: 'Encerramento, CTA ou logo final',
+      desc: 'Encerramento, CTA ou logo final. O áudio será mutado — apenas a música de fundo toca.',
       icon: Film,
       video: closingVideo,
       file: closingFile,
@@ -196,6 +199,25 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
 
   return (
     <div className="space-y-6">
+      {/* Reels format badge + safe zone warning */}
+      <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-4 space-y-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold text-white"
+            style={{ backgroundColor: `hsl(${clientColor})` }}>
+            <Film size={12} /> 1080 × 1920 — Reels
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-medium">
+            <VolumeX size={11} /> Todos os vídeos serão mutados — apenas a música de fundo toca
+          </div>
+        </div>
+        <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-500/[0.06] border border-amber-500/20">
+          <span className="text-amber-400 text-sm mt-0.5">⚠️</span>
+          <p className="text-[10px] text-amber-300/80 leading-relaxed">
+            <strong>Zona segura do Reels:</strong> Evite informações importantes nos <strong>250px superiores</strong> (nome do perfil, ícones) e nos <strong>280px inferiores</strong> (legenda, botões de interação). O conteúdo nessas áreas ficará coberto pela interface do Instagram.
+          </p>
+        </div>
+      </div>
+
       {/* Timeline overview */}
       <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-5">
         <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2 mb-4">
@@ -226,11 +248,11 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
             <Film size={12} className="mr-1" /> Final
           </div>
         </div>
-        {/* Music bar */}
+        {/* Music bar with fade info */}
         <div className={`mt-2 h-8 rounded-xl flex items-center justify-center text-[10px] font-medium transition-all ${musicFile ? 'border-2 text-white' : 'bg-white/[0.04] border border-dashed border-white/[0.15] text-white/30'}`}
           style={musicFile ? { borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.12)' } : {}}>
           <Music size={10} className="mr-1" />
-          {musicFile ? `♪ ${musicName}` : 'Música de fundo (opcional)'}
+          {musicFile ? `♪ ${musicName} (fade in ${musicFadeIn}s · fade out ${musicFadeOut}s)` : 'Música de fundo (opcional)'}
         </div>
       </div>
 
@@ -276,20 +298,10 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
                     <div className="px-4 pb-4 space-y-3">
                       <p className="text-[11px] text-white/40">{seg.desc}</p>
 
-                      {seg.key === 'car' && (
-                        <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.04]">
-                          <button onClick={() => setMuteCarVideo(!muteCarVideo)}
-                            className="flex items-center gap-2 text-xs text-white/70 hover:text-white transition-colors">
-                            {muteCarVideo ? <VolumeX size={14} className="text-red-400" /> : <Volume2 size={14} className="text-green-400" />}
-                            {muteCarVideo ? 'Áudio original será removido' : 'Áudio original será mantido'}
-                          </button>
-                        </div>
-                      )}
-
                       {seg.video ? (
                         <div className="space-y-2">
                           <div className="relative rounded-xl overflow-hidden bg-black aspect-video">
-                            <video src={seg.video} className="w-full h-full object-contain" muted={seg.key === 'car' && muteCarVideo} />
+                            <video src={seg.video} className="w-full h-full object-contain" muted />
                             <div className="absolute bottom-2 right-2 flex gap-1">
                               <button onClick={() => previewSegment(seg.key)}
                                 className="w-8 h-8 rounded-full bg-black/60 flex items-center justify-center hover:bg-black/80 transition-colors">
@@ -344,17 +356,36 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
               {expandedSection === 'music' && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
                   <div className="px-4 pb-4 space-y-3">
-                    <p className="text-[11px] text-white/40">Adicione uma música que tocará durante todo o vídeo, substituindo o áudio original.</p>
+                    <p className="text-[11px] text-white/40">A música tocará durante todo o vídeo. Todos os segmentos terão o áudio original mutado.</p>
                     {musicFile ? (
-                      <div className="flex items-center gap-3 p-3 rounded-xl bg-green-500/[0.08] border border-green-500/20">
-                        <Music size={16} className="text-green-400 shrink-0" />
-                        <span className="text-xs text-white/70 truncate flex-1">{musicName}</span>
-                        {musicUrl && (
-                          <audio ref={audioPreviewRef} src={musicUrl} className="hidden" />
-                        )}
-                        <button onClick={removeMusic} className="w-7 h-7 rounded-full bg-red-600/40 flex items-center justify-center hover:bg-red-600/60">
-                          <X size={10} className="text-white" />
-                        </button>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3 p-3 rounded-xl bg-green-500/[0.08] border border-green-500/20">
+                          <Music size={16} className="text-green-400 shrink-0" />
+                          <span className="text-xs text-white/70 truncate flex-1">{musicName}</span>
+                          {musicUrl && (
+                            <audio ref={audioPreviewRef} src={musicUrl} className="hidden" />
+                          )}
+                          <button onClick={removeMusic} className="w-7 h-7 rounded-full bg-red-600/40 flex items-center justify-center hover:bg-red-600/60">
+                            <X size={10} className="text-white" />
+                          </button>
+                        </div>
+                        {/* Fade In / Fade Out controls */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-white/50">Fade In</span>
+                              <span className="text-[10px] text-white/40 font-mono">{musicFadeIn}s</span>
+                            </div>
+                            <Slider value={[musicFadeIn]} onValueChange={v => setMusicFadeIn(v[0])} min={0} max={5} step={0.5} className="w-full" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-white/50">Fade Out</span>
+                              <span className="text-[10px] text-white/40 font-mono">{musicFadeOut}s</span>
+                            </div>
+                            <Slider value={[musicFadeOut]} onValueChange={v => setMusicFadeOut(v[0])} min={0} max={5} step={0.5} className="w-full" />
+                          </div>
+                        </div>
                       </div>
                     ) : (
                       <button onClick={() => musicInputRef.current?.click()}
@@ -417,10 +448,13 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
         {/* Right: Preview */}
         <div className="space-y-4">
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-4">
-            <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2 mb-3">
-              <Eye size={16} style={{ color: `hsl(${clientColor})` }} />
-              Pré-visualização
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+                <Eye size={16} style={{ color: `hsl(${clientColor})` }} />
+                Pré-visualização
+              </h3>
+              <span className="text-[9px] text-white/30 font-mono">1080×1920</span>
+            </div>
 
             {activePreview ? (
               <div className="space-y-3">
@@ -432,8 +466,16 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
                     onPause={() => setIsPlaying(false)}
                     onPlay={() => setIsPlaying(true)}
                     playsInline
+                    muted
                   />
-                  <div className="absolute bottom-3 inset-x-3 flex items-center justify-between">
+                  {/* Safe zone overlays — top ~13% and bottom ~14.6% */}
+                  <div className="absolute top-0 inset-x-0 h-[13%] bg-red-500/10 border-b border-dashed border-red-400/30 flex items-center justify-center pointer-events-none">
+                    <span className="text-[8px] text-red-300/60 font-medium">ZONA COBERTA</span>
+                  </div>
+                  <div className="absolute bottom-0 inset-x-0 h-[14.6%] bg-red-500/10 border-t border-dashed border-red-400/30 flex items-end justify-center pb-1 pointer-events-none">
+                    <span className="text-[8px] text-red-300/60 font-medium">ZONA COBERTA</span>
+                  </div>
+                  <div className="absolute bottom-3 inset-x-3 flex items-center justify-between z-10">
                     <button onClick={togglePlayPause}
                       className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center hover:bg-black/80">
                       {isPlaying ? <Pause size={16} className="text-white" /> : <Play size={16} className="text-white ml-0.5" />}
@@ -449,10 +491,18 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
                 </Button>
               </div>
             ) : (
-              <div className="aspect-[9/16] rounded-xl bg-white/[0.02] border border-dashed border-white/[0.1] flex flex-col items-center justify-center gap-3">
+              <div className="relative aspect-[9/16] rounded-xl bg-white/[0.02] border border-dashed border-white/[0.1] flex flex-col items-center justify-center gap-3">
+                {/* Safe zone overlays */}
+                <div className="absolute top-0 inset-x-0 h-[13%] bg-red-500/5 border-b border-dashed border-red-400/20 flex items-center justify-center pointer-events-none">
+                  <span className="text-[8px] text-red-300/40 font-medium">ZONA COBERTA</span>
+                </div>
+                <div className="absolute bottom-0 inset-x-0 h-[14.6%] bg-red-500/5 border-t border-dashed border-red-400/20 flex items-end justify-center pb-1 pointer-events-none">
+                  <span className="text-[8px] text-red-300/40 font-medium">ZONA COBERTA</span>
+                </div>
                 <Video size={32} className="text-white/15" />
                 <p className="text-xs text-white/30 text-center px-8">
-                  Adicione vídeos e clique em <Play size={10} className="inline" /> para pré-visualizar cada segmento
+                  Formato Reels 1080×1920<br />
+                  Adicione vídeos e clique em <Play size={10} className="inline" /> para pré-visualizar
                 </p>
               </div>
             )}

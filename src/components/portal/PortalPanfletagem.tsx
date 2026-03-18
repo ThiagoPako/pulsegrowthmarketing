@@ -843,15 +843,29 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             </div>
 
             <div className="space-y-1.5">
+              <Label className="text-xs text-white/60">IPVA</Label>
+              <div className="flex gap-2">
+                {IPVA_OPTIONS.map(opt => (
+                  <button key={opt.value} onClick={() => setIpvaStatus(opt.value)}
+                    className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${ipvaStatus === opt.value ? 'text-white border-2' : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'}`}
+                    style={ipvaStatus === opt.value ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
               <Label className="text-xs text-white/60">Valor</Label>
               <Input value={price ? formatPrice(price) : ''} onChange={e => setPrice(e.target.value.replace(/\D/g, ''))} placeholder="R$ 0,00"
                 className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30 text-lg font-bold" />
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs text-white/60">Observações</Label>
-              <Input value={extraInfo} onChange={e => setExtraInfo(e.target.value)} placeholder="Ex: KM 61.845, IPVA pago, etc."
-                className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30" />
+              <Label className="text-xs text-white/60">Observações extras (Enter = novo tópico)</Label>
+              <Textarea value={extraInfo} onChange={e => setExtraInfo(e.target.value)} placeholder="Ex: KM 61.845&#10;Único dono&#10;Revisado"
+                rows={3}
+                className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30 resize-none" />
             </div>
           </div>
 

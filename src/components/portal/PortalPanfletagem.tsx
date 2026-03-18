@@ -686,7 +686,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   };
 
   const handlePreviewMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!dragging || layoutLocked) return;
+    if (!dragging || (layoutLocked && dragging !== 'photo')) return;
     e.preventDefault();
     didDragRef.current = true;
     const { cx, cy } = getCanvasCoords(e);

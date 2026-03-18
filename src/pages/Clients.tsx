@@ -558,6 +558,20 @@ export default function Clients() {
         </Select>
       </div>
 
+      {/* Panfletagem Digital (for vehicle niches) */}
+      {(form.niche === 'veiculos' || form.niche === 'automotivo') && (
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+          <Switch
+            checked={form.hasVehicleFlyer ?? false}
+            onCheckedChange={(v) => setForm({ ...form, hasVehicleFlyer: v })}
+          />
+          <div>
+            <Label className="text-sm font-medium">Panfletagem Digital Pulse</Label>
+            <p className="text-xs text-muted-foreground">Habilitar módulo de panfletagem digital para veículos no portal do cliente</p>
+          </div>
+        </div>
+      )}
+
       {/* Seasonal dates alert preview */}
       {form.niche && form.niche !== 'outro' && (() => {
         const alerts = getSeasonalAlerts(form.niche);

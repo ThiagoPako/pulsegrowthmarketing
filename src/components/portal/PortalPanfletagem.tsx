@@ -171,7 +171,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       canvas.width = W;
       canvas.height = H;
 
-      const PULSE_ORANGE = '#E8612D';
+      const BRAND_COLOR = '#034e98';
+      const BRAND_DARK = '#023a73';
       const DARK_BG = '#1a1a2e';
       const INFO_BG = '#1e2a45';
 
@@ -184,8 +185,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
 
         // === TOP HEADER (0 → 260) ===
         const headerGrad = ctx.createLinearGradient(0, 0, W, 0);
-        headerGrad.addColorStop(0, PULSE_ORANGE);
-        headerGrad.addColorStop(1, '#d4542a');
+        headerGrad.addColorStop(0, BRAND_COLOR);
+        headerGrad.addColorStop(1, BRAND_DARK);
         ctx.fillStyle = headerGrad;
         ctx.fillRect(0, 0, W, 260);
 
@@ -205,7 +206,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         ctx.fillText('Seu próximo', 40, 80);
         ctx.fillText('carro está', 40, 140);
         ctx.font = 'bold italic 52px Arial, sans-serif';
-        ctx.fillStyle = PULSE_ORANGE;
+        ctx.fillStyle = BRAND_COLOR;
         ctx.fillText('aqui!', 40, 200);
 
         // === VEHICLE PHOTO (260 → 920) — bigger area ===
@@ -226,8 +227,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           ctx.fill();
 
           const priceGrad = ctx.createLinearGradient(priceX, priceY, priceX + priceBoxW, priceY);
-          priceGrad.addColorStop(0, PULSE_ORANGE);
-          priceGrad.addColorStop(1, '#d4542a');
+          priceGrad.addColorStop(0, BRAND_COLOR);
+          priceGrad.addColorStop(1, BRAND_DARK);
           ctx.fillStyle = priceGrad;
           ctx.beginPath();
           ctx.roundRect(priceX, priceY, priceBoxW, priceBoxH, 16);
@@ -262,7 +263,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             const cx = i * colW + colPad;
             const cw = colW - colPad * 2;
 
-            ctx.fillStyle = PULSE_ORANGE;
+            ctx.fillStyle = BRAND_COLOR;
             ctx.beginPath();
             ctx.roundRect(cx, infoY + 20, cw, 44, 22);
             ctx.fill();
@@ -318,7 +319,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           const addrText = clientCity || '';
           if (addrText) {
             // Location pin icon circle
-            ctx.fillStyle = PULSE_ORANGE;
+            ctx.fillStyle = BRAND_COLOR;
             ctx.beginPath();
             ctx.arc(60, footY + footH / 2, 22, 0, Math.PI * 2);
             ctx.fill();
@@ -351,7 +352,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           // WhatsApp (right side)
           const whatsText = clientWhatsapp || '';
           if (whatsText) {
-            ctx.fillStyle = PULSE_ORANGE;
+            ctx.fillStyle = BRAND_COLOR;
             ctx.beginPath();
             ctx.arc(W - 300, footY + footH / 2, 22, 0, Math.PI * 2);
             ctx.fill();

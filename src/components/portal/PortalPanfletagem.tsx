@@ -497,7 +497,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillStyle = c.infoText; ctx.font = `bold ${Math.round(20 * fs)}px 'Raleway', sans-serif`; ctx.textAlign = 'center';
       ctx.fillText(col.label, cx + cw / 2, infoPosY + Math.round(24 * bs) + pillH / 2 + Math.round(7 * fs));
 
-      const ifs = infoFontScale;
+      const fieldScales = [modelFontScale, yearFontScale, transmissionFontScale, obsFontScale];
+      const ifs = fieldScales[i];
       ctx.fillStyle = c.infoText;
       ctx.font = i === 3 ? `bold ${Math.round(18 * ifs * fs)}px 'Raleway', sans-serif` : `bold ${Math.round(24 * ifs * fs)}px 'Raleway', sans-serif`;
       ctx.textAlign = 'center';

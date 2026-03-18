@@ -1040,6 +1040,20 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
               </div>
               <Slider value={[infoBoxScale * 100]} onValueChange={v => setInfoBoxScale(v[0] / 100)} min={70} max={150} step={5} className="w-full" />
             </div>
+            {/* Pill box controls */}
+            <div className="space-y-2 pt-2 border-t border-white/[0.06]">
+              <Label className="text-xs text-white/60">Caixas Arredondadas (etiquetas)</Label>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-white/40">Altura</span>
+                <span className="text-[10px] text-white/40 font-mono">{Math.round(pillHeightScale * 100)}%</span>
+              </div>
+              <Slider value={[pillHeightScale * 100]} onValueChange={v => setPillHeightScale(v[0] / 100)} min={50} max={200} step={5} className="w-full" />
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-white/40">Arredondamento</span>
+                <span className="text-[10px] text-white/40 font-mono">{Math.round(pillRadiusScale * 100)}%</span>
+              </div>
+              <Slider value={[pillRadiusScale * 100]} onValueChange={v => setPillRadiusScale(v[0] / 100)} min={0} max={200} step={10} className="w-full" />
+            </div>
             {/* Per-field font scale controls */}
             {[
               { key: 'labels', label: 'CABEÇALHOS (etiquetas)', scale: labelFontScale, setter: setLabelFontScale },

@@ -182,8 +182,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   // Info box scale (controls pill/box size proportionally)
   const [infoBoxScale, setInfoBoxScale] = useState(1.0);
 
-  // Info values font scale (separate from global font)
-  const [infoFontScale, setInfoFontScale] = useState(1.0);
+  // Per-field font scales
+  const [modelFontScale, setModelFontScale] = useState(1.0);
+  const [yearFontScale, setYearFontScale] = useState(1.0);
+  const [transmissionFontScale, setTransmissionFontScale] = useState(1.0);
+  const [obsFontScale, setObsFontScale] = useState(1.0);
+  // Active field font editor (toggled by clicking label name)
+  const [activeFieldEditor, setActiveFieldEditor] = useState<string | null>(null);
 
   // Footer position (draggable)
   const [footerPosX, setFooterPosX] = useState(0);
@@ -225,7 +230,15 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (s.customLogoDataUrl) setCustomLogoDataUrl(s.customLogoDataUrl);
         if (s.fontScale != null) setFontScale(s.fontScale);
         if (s.infoBoxScale != null) setInfoBoxScale(s.infoBoxScale);
-        if (s.infoFontScale != null) setInfoFontScale(s.infoFontScale);
+        // Legacy support: if old single infoFontScale exists, apply to all
+        if (s.modelFontScale != null) setModelFontScale(s.modelFontScale);
+        else if (s.infoFontScale != null) setModelFontScale(s.infoFontScale);
+        if (s.yearFontScale != null) setYearFontScale(s.yearFontScale);
+        else if (s.infoFontScale != null) setYearFontScale(s.infoFontScale);
+        if (s.transmissionFontScale != null) setTransmissionFontScale(s.transmissionFontScale);
+        else if (s.infoFontScale != null) setTransmissionFontScale(s.infoFontScale);
+        if (s.obsFontScale != null) setObsFontScale(s.obsFontScale);
+        else if (s.infoFontScale != null) setObsFontScale(s.infoFontScale);
         if (s.footerPosX != null) setFooterPosX(s.footerPosX);
         if (s.footerPosY != null) setFooterPosY(s.footerPosY);
         if (s.colors) setColors({ ...DEFAULT_COLORS, ...s.colors });
@@ -244,7 +257,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   }, [clientWhatsapp]);
 
   const saveLayoutSettings = () => {
-    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, infoBoxScale, infoFontScale, footerPosX, footerPosY, colors, footerAddress, footerWhatsapp };
+    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, footerPosX, footerPosY, colors, footerAddress, footerWhatsapp };
     localStorage.setItem(`flyer-layout-${clientId}`, JSON.stringify(settings));
     toast.success('Layout salvo!');
   };
@@ -484,7 +497,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillStyle = c.infoText; ctx.font = `bold ${Math.round(20 * fs)}px 'Raleway', sans-serif`; ctx.textAlign = 'center';
       ctx.fillText(col.label, cx + cw / 2, infoPosY + Math.round(24 * bs) + pillH / 2 + Math.round(7 * fs));
 
-      const ifs = infoFontScale;
+      const fieldScales = [modelFontScale, yearFontScale, transmissionFontScale, obsFontScale];
+      const ifs = fieldScales[i];
       ctx.fillStyle = c.infoText;
       ctx.font = i === 3 ? `bold ${Math.round(18 * ifs * fs)}px 'Raleway', sans-serif` : `bold ${Math.round(24 * ifs * fs)}px 'Raleway', sans-serif`;
       ctx.textAlign = 'center';
@@ -592,7 +606,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillStyle = '#FFFFFF'; ctx.font = `bold ${Math.round(36 * fs)}px Arial, sans-serif`; ctx.textAlign = 'left';
       ctx.fillText(clientName, logoX, logoY + 40);
     }
-  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, infoFontScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY]);
+  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY]);
 
   // Live preview rendering
   useEffect(() => {
@@ -1018,16 +1032,31 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
               </div>
               <Slider value={[infoBoxScale * 100]} onValueChange={v => setInfoBoxScale(v[0] / 100)} min={70} max={150} step={5} className="w-full" />
             </div>
-            <div className="space-y-2 pt-2 border-t border-white/[0.06]">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs text-white/60">Fonte dos Valores (Raleway Bold)</Label>
-                <span className="text-xs text-white/40 font-mono">{Math.round(infoFontScale * 100)}%</span>
+            {/* Per-field font scale controls */}
+            {[
+              { key: 'model', label: 'MODELO', scale: modelFontScale, setter: setModelFontScale },
+              { key: 'year', label: 'ANO', scale: yearFontScale, setter: setYearFontScale },
+              { key: 'transmission', label: 'CÂMBIO', scale: transmissionFontScale, setter: setTransmissionFontScale },
+              { key: 'obs', label: 'OBSERVAÇÕES', scale: obsFontScale, setter: setObsFontScale },
+            ].map(({ key, label, scale, setter }) => (
+              <div key={key} className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveFieldEditor(activeFieldEditor === key ? null : key)}
+                  className={`w-full text-left text-xs font-semibold px-2 py-1.5 rounded-lg transition-colors ${activeFieldEditor === key ? 'bg-white/[0.1] text-white' : 'text-white/60 hover:text-white/80 hover:bg-white/[0.04]'}`}
+                >
+                  {label} — {Math.round(scale * 100)}%
+                </button>
+                {activeFieldEditor === key && (
+                  <div className="pl-2 pr-1">
+                    <Slider value={[scale * 100]} onValueChange={v => setter(v[0] / 100)} min={50} max={250} step={5} className="w-full" />
+                    <div className="flex justify-between text-[9px] text-white/30 mt-0.5">
+                      <span>50%</span><span>100%</span><span>250%</span>
+                    </div>
+                  </div>
+                )}
               </div>
-              <Slider value={[infoFontScale * 100]} onValueChange={v => setInfoFontScale(v[0] / 100)} min={70} max={200} step={5} className="w-full" />
-              <div className="flex justify-between text-[10px] text-white/30">
-                <span>Menor</span><span>Normal</span><span>Maior</span>
-              </div>
-            </div>
+            ))}
           </div>
 
           {/* Color Pickers — full list */}

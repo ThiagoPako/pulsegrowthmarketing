@@ -153,23 +153,26 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (img.complete && img.naturalWidth > 0) wpIconRef.current = img;
   }, []);
 
-  // Form state
-  const [model, setModel] = useState('');
-  const [year, setYear] = useState('');
-  const [transmission, setTransmission] = useState('manual');
-  const [fuelType, setFuelType] = useState('flex');
-  const [tireCondition, setTireCondition] = useState('bom');
-  const [price, setPrice] = useState('');
-  const [ipvaStatus, setIpvaStatus] = useState('nenhum');
-  const [extraInfo, setExtraInfo] = useState('');
+  // Form state — load from localStorage
+  const savedVehicle = (() => {
+    try { const s = localStorage.getItem(`flyer-vehicle-image-${clientId}`); return s ? JSON.parse(s) : null; } catch { return null; }
+  })();
+  const [model, setModel] = useState(savedVehicle?.model || '');
+  const [year, setYear] = useState(savedVehicle?.year || '');
+  const [transmission, setTransmission] = useState(savedVehicle?.transmission || 'manual');
+  const [fuelType, setFuelType] = useState(savedVehicle?.fuelType || 'flex');
+  const [tireCondition, setTireCondition] = useState(savedVehicle?.tireCondition || 'bom');
+  const [price, setPrice] = useState(savedVehicle?.price || '');
+  const [ipvaStatus, setIpvaStatus] = useState(savedVehicle?.ipvaStatus || 'nenhum');
+  const [extraInfo, setExtraInfo] = useState(savedVehicle?.extraInfo || '');
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
   const [mediaPreviews, setMediaPreviews] = useState<string[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [uploading, setUploading] = useState(false);
 
   // Footer editable fields
-  const [footerAddress, setFooterAddress] = useState(clientCity || '');
-  const [footerWhatsapp, setFooterWhatsapp] = useState(clientWhatsapp || '');
+  const [footerAddress, setFooterAddress] = useState(savedVehicle?.footerAddress || clientCity || '');
+  const [footerWhatsapp, setFooterWhatsapp] = useState(savedVehicle?.footerWhatsapp || clientWhatsapp || '');
 
   // Custom logo
   const [customLogoDataUrl, setCustomLogoDataUrl] = useState<string | null>(null);

@@ -491,10 +491,18 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
                 </Button>
               </div>
             ) : (
-              <div className="aspect-[9/16] rounded-xl bg-white/[0.02] border border-dashed border-white/[0.1] flex flex-col items-center justify-center gap-3">
+              <div className="relative aspect-[9/16] rounded-xl bg-white/[0.02] border border-dashed border-white/[0.1] flex flex-col items-center justify-center gap-3">
+                {/* Safe zone overlays */}
+                <div className="absolute top-0 inset-x-0 h-[13%] bg-red-500/5 border-b border-dashed border-red-400/20 flex items-center justify-center pointer-events-none">
+                  <span className="text-[8px] text-red-300/40 font-medium">ZONA COBERTA</span>
+                </div>
+                <div className="absolute bottom-0 inset-x-0 h-[14.6%] bg-red-500/5 border-t border-dashed border-red-400/20 flex items-end justify-center pb-1 pointer-events-none">
+                  <span className="text-[8px] text-red-300/40 font-medium">ZONA COBERTA</span>
+                </div>
                 <Video size={32} className="text-white/15" />
                 <p className="text-xs text-white/30 text-center px-8">
-                  Adicione vídeos e clique em <Play size={10} className="inline" /> para pré-visualizar cada segmento
+                  Formato Reels 1080×1920<br />
+                  Adicione vídeos e clique em <Play size={10} className="inline" /> para pré-visualizar
                 </p>
               </div>
             )}

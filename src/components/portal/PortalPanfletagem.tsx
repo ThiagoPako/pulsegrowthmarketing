@@ -131,7 +131,7 @@ export default function PortalPanfletagem({ clientId, clientColor }: Props) {
   const generateArt = useCallback(async (
     vehicleImage: string,
     frameUrl: string,
-    data: { model: string; year: string; transmission: string; fuel: string; tires: string; price: string }
+    data: { model: string; year: string; transmission: string; fuel: string; tires: string; price: string; extraInfo: string }
   ): Promise<string> => {
     return new Promise((resolve, reject) => {
       const canvas = canvasRef.current;
@@ -144,12 +144,51 @@ export default function PortalPanfletagem({ clientId, clientColor }: Props) {
       canvas.width = W;
       canvas.height = H;
 
+      // Pulse brand color
+      const PULSE_ORANGE = '#E8612D';
+      const DARK_BG = '#1a1a2e';
+      const INFO_BG = '#1e2a45';
+      const LABEL_BG = PULSE_ORANGE;
+
       const vehicleImg = new window.Image();
       vehicleImg.crossOrigin = 'anonymous';
       vehicleImg.onload = () => {
-        // Draw vehicle image (cover)
+        // === BACKGROUND ===
+        ctx.fillStyle = DARK_BG;
+        ctx.fillRect(0, 0, W, H);
+
+        // === TOP HEADER SECTION (0 → 280) ===
+        // Orange gradient header
+        const headerGrad = ctx.createLinearGradient(0, 0, W, 0);
+        headerGrad.addColorStop(0, PULSE_ORANGE);
+        headerGrad.addColorStop(1, '#d4542a');
+        ctx.fillStyle = headerGrad;
+        ctx.fillRect(0, 0, W, 260);
+
+        // White curved shape on left for tagline
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(580, 0);
+        ctx.quadraticCurveTo(480, 260, 0, 260);
+        ctx.closePath();
+        ctx.fill();
+
+        // Tagline text
+        ctx.fillStyle = '#1a1a2e';
+        ctx.font = 'bold 52px Arial, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('Seu próximo', 40, 80);
+        ctx.fillText('carro está', 40, 140);
+        ctx.font = 'bold italic 52px Arial, sans-serif';
+        ctx.fillStyle = PULSE_ORANGE;
+        ctx.fillText('aqui!', 40, 200);
+
+        // === VEHICLE PHOTO (260 → 900) ===
+        const photoY = 260;
+        const photoH = 640;
         const imgRatio = vehicleImg.width / vehicleImg.height;
-        const canvasRatio = W / H;
+        const canvasRatio = W / photoH;
         let sx = 0, sy = 0, sw = vehicleImg.width, sh = vehicleImg.height;
         if (imgRatio > canvasRatio) {
           sw = vehicleImg.height * canvasRatio;
@@ -158,84 +197,140 @@ export default function PortalPanfletagem({ clientId, clientColor }: Props) {
           sh = vehicleImg.width / canvasRatio;
           sy = (vehicleImg.height - sh) / 2;
         }
-        ctx.drawImage(vehicleImg, sx, sy, sw, sh, 0, 0, W, H);
+        ctx.drawImage(vehicleImg, sx, sy, sw, sh, 0, photoY, W, photoH);
 
-        // Load frame overlay
-        const frameImg = new window.Image();
-        frameImg.crossOrigin = 'anonymous';
-        frameImg.onload = () => {
-          ctx.drawImage(frameImg, 0, 0, W, H);
+        // === PRICE OVERLAY on photo ===
+        if (data.price) {
+          const priceBoxW = 460;
+          const priceBoxH = 120;
+          const priceX = W - priceBoxW - 30;
+          const priceY = photoY + photoH - priceBoxH - 30;
 
-          // Draw vehicle info at the bottom
-          const infoY = H - 280;
-          
-          // Semi-transparent background for text
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          // Shadow
+          ctx.fillStyle = 'rgba(0,0,0,0.4)';
           ctx.beginPath();
-          ctx.roundRect(40, infoY, W - 80, 240, 20);
+          ctx.roundRect(priceX + 4, priceY + 4, priceBoxW, priceBoxH, 16);
           ctx.fill();
 
-          // Model
+          // Box
+          const priceGrad = ctx.createLinearGradient(priceX, priceY, priceX + priceBoxW, priceY);
+          priceGrad.addColorStop(0, PULSE_ORANGE);
+          priceGrad.addColorStop(1, '#d4542a');
+          ctx.fillStyle = priceGrad;
+          ctx.beginPath();
+          ctx.roundRect(priceX, priceY, priceBoxW, priceBoxH, 16);
+          ctx.fill();
+
           ctx.fillStyle = '#FFFFFF';
-          ctx.font = 'bold 42px Arial, sans-serif';
+          ctx.font = '20px Arial, sans-serif';
           ctx.textAlign = 'left';
-          ctx.fillText(`${data.model}`, 70, infoY + 55);
+          ctx.fillText('POR APENAS:', priceX + 24, priceY + 35);
+          ctx.font = 'bold 52px Arial, sans-serif';
+          ctx.fillText(data.price, priceX + 24, priceY + 90);
+        }
 
-          // Year
-          ctx.font = '28px Arial, sans-serif';
-          ctx.fillStyle = '#CCCCCC';
-          ctx.fillText(`${data.year}`, 70, infoY + 95);
+        // === FRAME OVERLAY (optional) ===
+        const continueAfterFrame = () => {
+          // === BOTTOM INFO BAR (900 → 1200) ===
+          const infoY = 920;
+          const infoH = 280;
+          ctx.fillStyle = INFO_BG;
+          ctx.fillRect(0, infoY, W, infoH);
 
-          // Tags row
-          const tags = [
-            data.transmission === 'automatico' ? '🔄 Automático' : '⚙️ Manual',
-            `⛽ ${FUEL_OPTIONS.find(f => f.value === data.fuel)?.label || data.fuel}`,
-            `🛞 Pneus ${TIRE_OPTIONS.find(t => t.value === data.tires)?.label || data.tires}`,
+          // 4 columns
+          const cols = [
+            { label: 'MODELO', value: data.model },
+            { label: 'ANO', value: data.year },
+            { label: 'CÂMBIO', value: data.transmission === 'automatico' ? 'Automático' : 'Manual' },
+            { label: 'OBSERVAÇÕES', value: data.extraInfo || `• ${FUEL_OPTIONS.find(f => f.value === data.fuel)?.label || data.fuel}\n• Pneus ${TIRE_OPTIONS.find(t => t.value === data.tires)?.label || data.tires}` },
           ];
-          ctx.font = '22px Arial, sans-serif';
-          ctx.fillStyle = '#AAAAAA';
-          let tagX = 70;
-          tags.forEach(tag => {
-            ctx.fillText(tag, tagX, infoY + 140);
-            tagX += ctx.measureText(tag).width + 30;
+          const colW = W / 4;
+          const colPad = 12;
+
+          cols.forEach((col, i) => {
+            const cx = i * colW + colPad;
+            const cw = colW - colPad * 2;
+
+            // Label pill
+            ctx.fillStyle = LABEL_BG;
+            ctx.beginPath();
+            ctx.roundRect(cx, infoY + 20, cw, 44, 22);
+            ctx.fill();
+
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 20px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(col.label, cx + cw / 2, infoY + 48);
+
+            // Value text
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = i === 3 ? '18px Arial, sans-serif' : 'bold 24px Arial, sans-serif';
+            ctx.textAlign = 'center';
+
+            if (col.value.includes('\n') || col.value.includes('•')) {
+              const lines = col.value.split('\n').filter(l => l.trim());
+              lines.forEach((line, li) => {
+                ctx.fillText(line.trim(), cx + cw / 2, infoY + 100 + li * 30);
+              });
+            } else {
+              // Wrap long text
+              const words = col.value.split(' ');
+              let line = '';
+              let lineY = infoY + 110;
+              words.forEach(word => {
+                const test = line + (line ? ' ' : '') + word;
+                if (ctx.measureText(test).width > cw - 10 && line) {
+                  ctx.fillText(line, cx + cw / 2, lineY);
+                  line = word;
+                  lineY += 30;
+                } else {
+                  line = test;
+                }
+              });
+              if (line) ctx.fillText(line, cx + cw / 2, lineY);
+            }
+
+            // Separator line
+            if (i < 3) {
+              ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.moveTo((i + 1) * colW, infoY + 20);
+              ctx.lineTo((i + 1) * colW, infoY + infoH - 20);
+              ctx.stroke();
+            }
           });
 
-          // Price
-          if (data.price) {
-            ctx.font = 'bold 48px Arial, sans-serif';
-            ctx.fillStyle = `hsl(${clientColor})`;
-            ctx.textAlign = 'right';
-            ctx.fillText(data.price, W - 70, infoY + 210);
-          }
+          // === FOOTER (1200 → 1350) ===
+          const footY = infoY + infoH;
+          ctx.fillStyle = DARK_BG;
+          ctx.fillRect(0, footY, W, H - footY);
+
+          // Pulse branding footer
+          ctx.fillStyle = PULSE_ORANGE;
+          ctx.font = 'bold 22px Arial, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('PANFLETAGEM DIGITAL PULSE', W / 2, footY + 50);
+          ctx.fillStyle = 'rgba(255,255,255,0.4)';
+          ctx.font = '16px Arial, sans-serif';
+          ctx.fillText('Gerado automaticamente • agenciapulse.tech', W / 2, footY + 80);
 
           resolve(canvas.toDataURL('image/jpeg', 0.92));
         };
-        frameImg.onerror = () => {
-          // No frame, just add text
-          const infoY = H - 280;
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-          ctx.beginPath();
-          ctx.roundRect(40, infoY, W - 80, 240, 20);
-          ctx.fill();
 
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = 'bold 42px Arial, sans-serif';
-          ctx.textAlign = 'left';
-          ctx.fillText(`${data.model}`, 70, infoY + 55);
-          ctx.font = '28px Arial, sans-serif';
-          ctx.fillStyle = '#CCCCCC';
-          ctx.fillText(`${data.year}`, 70, infoY + 95);
-
-          if (data.price) {
-            ctx.font = 'bold 48px Arial, sans-serif';
-            ctx.fillStyle = `hsl(${clientColor})`;
-            ctx.textAlign = 'right';
-            ctx.fillText(data.price, W - 70, infoY + 210);
-          }
-
-          resolve(canvas.toDataURL('image/jpeg', 0.92));
-        };
-        frameImg.src = frameUrl;
+        // Try loading frame overlay
+        if (frameUrl) {
+          const frameImg = new window.Image();
+          frameImg.crossOrigin = 'anonymous';
+          frameImg.onload = () => {
+            ctx.drawImage(frameImg, 0, 0, W, H);
+            continueAfterFrame();
+          };
+          frameImg.onerror = () => continueAfterFrame();
+          frameImg.src = frameUrl;
+        } else {
+          continueAfterFrame();
+        }
       };
       vehicleImg.onerror = () => reject('Failed to load vehicle image');
       vehicleImg.src = vehicleImage;
@@ -280,6 +375,7 @@ export default function PortalPanfletagem({ clientId, clientColor }: Props) {
             fuel: fuelType,
             tires: tireCondition,
             price: price ? formatPrice(price) : '',
+            extraInfo: extraInfo.trim(),
           });
         } catch (err) {
           console.warn('Art generation failed, saving without generated image:', err);

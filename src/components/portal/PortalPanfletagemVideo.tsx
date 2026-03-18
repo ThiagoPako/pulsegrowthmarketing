@@ -356,17 +356,36 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
               {expandedSection === 'music' && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
                   <div className="px-4 pb-4 space-y-3">
-                    <p className="text-[11px] text-white/40">Adicione uma música que tocará durante todo o vídeo, substituindo o áudio original.</p>
+                    <p className="text-[11px] text-white/40">A música tocará durante todo o vídeo. Todos os segmentos terão o áudio original mutado.</p>
                     {musicFile ? (
-                      <div className="flex items-center gap-3 p-3 rounded-xl bg-green-500/[0.08] border border-green-500/20">
-                        <Music size={16} className="text-green-400 shrink-0" />
-                        <span className="text-xs text-white/70 truncate flex-1">{musicName}</span>
-                        {musicUrl && (
-                          <audio ref={audioPreviewRef} src={musicUrl} className="hidden" />
-                        )}
-                        <button onClick={removeMusic} className="w-7 h-7 rounded-full bg-red-600/40 flex items-center justify-center hover:bg-red-600/60">
-                          <X size={10} className="text-white" />
-                        </button>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3 p-3 rounded-xl bg-green-500/[0.08] border border-green-500/20">
+                          <Music size={16} className="text-green-400 shrink-0" />
+                          <span className="text-xs text-white/70 truncate flex-1">{musicName}</span>
+                          {musicUrl && (
+                            <audio ref={audioPreviewRef} src={musicUrl} className="hidden" />
+                          )}
+                          <button onClick={removeMusic} className="w-7 h-7 rounded-full bg-red-600/40 flex items-center justify-center hover:bg-red-600/60">
+                            <X size={10} className="text-white" />
+                          </button>
+                        </div>
+                        {/* Fade In / Fade Out controls */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-white/50">Fade In</span>
+                              <span className="text-[10px] text-white/40 font-mono">{musicFadeIn}s</span>
+                            </div>
+                            <Slider value={[musicFadeIn]} onValueChange={v => setMusicFadeIn(v[0])} min={0} max={5} step={0.5} className="w-full" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-white/50">Fade Out</span>
+                              <span className="text-[10px] text-white/40 font-mono">{musicFadeOut}s</span>
+                            </div>
+                            <Slider value={[musicFadeOut]} onValueChange={v => setMusicFadeOut(v[0])} min={0} max={5} step={0.5} className="w-full" />
+                          </div>
+                        </div>
                       </div>
                     ) : (
                       <button onClick={() => musicInputRef.current?.click()}

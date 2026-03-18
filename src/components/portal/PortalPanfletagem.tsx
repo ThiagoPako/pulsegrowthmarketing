@@ -171,7 +171,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       canvas.width = W;
       canvas.height = H;
 
-      const PULSE_ORANGE = '#E8612D';
+      const BRAND_COLOR = '#034e98';
+      const BRAND_DARK = '#023a73';
       const DARK_BG = '#1a1a2e';
       const INFO_BG = '#1e2a45';
 

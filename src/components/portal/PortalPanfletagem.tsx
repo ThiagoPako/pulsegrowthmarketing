@@ -165,9 +165,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [logoNaturalW, setLogoNaturalW] = useState(200);
   const [logoNaturalH, setLogoNaturalH] = useState(120);
   const [infoPosY, setInfoPosY] = useState(920);
+  const [footerPosX, setFooterPosX] = useState(0); // horizontal offset for footer content
+  const [footerPosY, setFooterPosY] = useState(0); // vertical offset within footer
 
   // Font size multiplier
   const [fontScale, setFontScale] = useState(1.0);
+
+  // Info box font scale (separate from global)
+  const [infoFontScale, setInfoFontScale] = useState(1.0);
 
   // Info box scale (controls pill/box size proportionally)
   const [infoBoxScale, setInfoBoxScale] = useState(1.0);

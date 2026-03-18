@@ -656,24 +656,24 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const handlePreviewMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     didDragRef.current = false;
     const { cx, cy } = getCanvasCoords(e);
-    // Check logo hit
-    if (cx >= logoX && cx <= logoX + logoW && cy >= logoY && cy <= logoY + logoH) {
+    // Check logo hit (only when unlocked)
+    if (!layoutLocked && cx >= logoX && cx <= logoX + logoW && cy >= logoY && cy <= logoY + logoH) {
       e.preventDefault(); e.stopPropagation();
       setDragging('logo'); setDragOffset({ x: cx - logoX, y: cy - logoY }); return;
     }
     const infoH = Math.round(260 * infoBoxScale);
-    // Check photo zone hit (between header and info bar)
+    // Photo zone is ALWAYS draggable (even when locked)
     const photoY = 260;
     if (cy >= photoY && cy < infoPosY) {
       e.preventDefault(); e.stopPropagation();
       setDragging('photo'); setDragOffset({ x: cx - photoOffsetX, y: cy - photoOffsetY }); return;
     }
-    if (cy >= infoPosY && cy <= infoPosY + infoH) {
+    if (!layoutLocked && cy >= infoPosY && cy <= infoPosY + infoH) {
       setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); return;
     }
-    // Check footer hit
+    // Check footer hit (only when unlocked)
     const footY = infoPosY + infoH;
-    if (cy >= footY) {
+    if (!layoutLocked && cy >= footY) {
       setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + (CANVAS_H - footY) / 2 + footerPosY) }); return;
     }
   };

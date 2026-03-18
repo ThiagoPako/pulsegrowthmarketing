@@ -1037,6 +1037,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             </div>
             {/* Per-field font scale controls */}
             {[
+              { key: 'labels', label: 'CABEÇALHOS (etiquetas)', scale: labelFontScale, setter: setLabelFontScale },
               { key: 'model', label: 'MODELO', scale: modelFontScale, setter: setModelFontScale },
               { key: 'year', label: 'ANO', scale: yearFontScale, setter: setYearFontScale },
               { key: 'transmission', label: 'CÂMBIO', scale: transmissionFontScale, setter: setTransmissionFontScale },

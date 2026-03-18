@@ -873,15 +873,37 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       <canvas ref={canvasRef} className="hidden" />
 
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.08] border border-white/[0.08] text-xs font-medium text-white/70 mb-3">
           <Car size={12} style={{ color: `hsl(${clientColor})` }} />
           Panfletagem Digital
         </div>
         <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Crie seu panfleto digital</h2>
-        <p className="text-white/50 mt-1 text-sm">Preencha os dados, ajuste a prévia em tempo real e gere a arte</p>
+        <p className="text-white/50 mt-1 text-sm">Preencha os dados, ajuste a prévia em tempo real e gere a arte ou vídeo</p>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-2 mb-8">
+        <button onClick={() => setActiveTab('image')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'image' ? 'text-white border-2' : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'}`}
+          style={activeTab === 'image' ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}>
+          <Image size={16} /> Imagem
+        </button>
+        <button onClick={() => setActiveTab('video')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'video' ? 'text-white border-2' : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'}`}
+          style={activeTab === 'video' ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}>
+          <Film size={16} /> Vídeo
+        </button>
+      </div>
+
+      {activeTab === 'video' ? (
+        <PortalPanfletagemVideo
+          clientId={clientId}
+          clientColor={clientColor}
+          clientName={clientName}
+          flyerImageDataUrl={flyerImageDataUrl}
+        />
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Left: Form */}
         <div className="space-y-6">

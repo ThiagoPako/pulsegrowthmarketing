@@ -165,9 +165,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [logoNaturalW, setLogoNaturalW] = useState(200);
   const [logoNaturalH, setLogoNaturalH] = useState(120);
   const [infoPosY, setInfoPosY] = useState(920);
+  const [footerPosX, setFooterPosX] = useState(0); // horizontal offset for footer content
+  const [footerPosY, setFooterPosY] = useState(0); // vertical offset within footer
 
   // Font size multiplier
   const [fontScale, setFontScale] = useState(1.0);
+
+  // Info box font scale (separate from global)
+  const [infoFontScale, setInfoFontScale] = useState(1.0);
 
   // Info box scale (controls pill/box size proportionally)
   const [infoBoxScale, setInfoBoxScale] = useState(1.0);
@@ -179,7 +184,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [layoutLocked, setLayoutLocked] = useState(false);
 
   // Drag state
-  const [dragging, setDragging] = useState<'logo' | 'info' | null>(null);
+  const [dragging, setDragging] = useState<'logo' | 'info' | 'footer' | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const didDragRef = useRef(false);
 
@@ -207,10 +212,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (s.layoutLocked != null) setLayoutLocked(s.layoutLocked);
         if (s.customLogoDataUrl) setCustomLogoDataUrl(s.customLogoDataUrl);
         if (s.fontScale != null) setFontScale(s.fontScale);
+        if (s.infoFontScale != null) setInfoFontScale(s.infoFontScale);
         if (s.infoBoxScale != null) setInfoBoxScale(s.infoBoxScale);
         if (s.colors) setColors({ ...DEFAULT_COLORS, ...s.colors });
         if (s.footerAddress != null) setFooterAddress(s.footerAddress);
         if (s.footerWhatsapp != null) setFooterWhatsapp(s.footerWhatsapp);
+        if (s.footerPosX != null) setFooterPosX(s.footerPosX);
+        if (s.footerPosY != null) setFooterPosY(s.footerPosY);
       } catch { /* ignore */ }
     }
   }, [clientId]);
@@ -224,7 +232,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   }, [clientWhatsapp]);
 
   const saveLayoutSettings = () => {
-    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, infoBoxScale, colors, footerAddress, footerWhatsapp };
+    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, infoFontScale, infoBoxScale, colors, footerAddress, footerWhatsapp, footerPosX, footerPosY };
     localStorage.setItem(`flyer-layout-${clientId}`, JSON.stringify(settings));
     toast.success('Layout salvo!');
   };
@@ -341,7 +349,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     canvas.height = CANVAS_H;
     const W = CANVAS_W, H = CANVAS_H;
     const fs = fontScale;
+    const ifs = infoFontScale;
     const bs = infoBoxScale;
+    const FONT = 'Raleway, Arial, sans-serif';
 
     const c = colors;
     const BRAND_DARK = darkenHex(c.header);
@@ -364,11 +374,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.fill();
 
     ctx.fillStyle = c.headerText;
-    ctx.font = `bold ${Math.round(52 * fs)}px 'Georgia', serif`;
+    ctx.font = `bold ${Math.round(52 * fs)}px ${FONT}`;
     ctx.textAlign = 'left';
     ctx.fillText('Seu próximo', 40, 80);
     ctx.fillText('carro está', 40, 140);
-    ctx.font = `bold italic ${Math.round(52 * fs)}px 'Georgia', serif`;
+    ctx.font = `bold italic ${Math.round(52 * fs)}px ${FONT}`;
     ctx.fillStyle = c.header;
     ctx.fillText('aqui!', 40, 200);
 
@@ -381,7 +391,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillStyle = '#111';
       ctx.fillRect(0, photoY, W, Math.max(photoH, 100));
       ctx.fillStyle = '#555';
-      ctx.font = `${Math.round(28 * fs)}px Arial`;
+      ctx.font = `${Math.round(28 * fs)}px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.fillText('Adicione uma foto do veículo', W / 2, photoY + Math.max(photoH, 100) / 2);
     }
@@ -400,9 +410,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillStyle = priceGrad;
       ctx.beginPath(); ctx.roundRect(priceX, priceYpos, priceBoxW, priceBoxH, 16); ctx.fill();
       ctx.globalAlpha = priceIsExample ? 0.4 : 1;
-      ctx.fillStyle = c.priceText; ctx.font = `${Math.round(20 * fs)}px Arial, sans-serif`; ctx.textAlign = 'left';
+      ctx.fillStyle = c.priceText; ctx.font = `${Math.round(20 * fs)}px ${FONT}`; ctx.textAlign = 'left';
       ctx.fillText('POR APENAS:', priceX + 24, priceYpos + Math.round(35 * bs));
-      ctx.font = `bold ${Math.round(52 * fs)}px Arial, sans-serif`;
+      ctx.font = `bold ${Math.round(52 * fs)}px ${FONT}`;
       ctx.fillText(priceText, priceX + 24, priceYpos + Math.round(90 * bs));
       ctx.globalAlpha = 1;
     }
@@ -453,11 +463,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       // Pill
       ctx.fillStyle = c.infoPills;
       ctx.beginPath(); ctx.roundRect(cx, infoPosY + Math.round(24 * bs), cw, pillH, pillR); ctx.fill();
-      ctx.fillStyle = c.infoText; ctx.font = `bold ${Math.round(20 * fs)}px 'Georgia', serif`; ctx.textAlign = 'center';
-      ctx.fillText(col.label, cx + cw / 2, infoPosY + Math.round(24 * bs) + pillH / 2 + Math.round(7 * fs));
+      ctx.fillStyle = c.infoText; ctx.font = `bold ${Math.round(20 * ifs)}px ${FONT}`; ctx.textAlign = 'center';
+      ctx.fillText(col.label, cx + cw / 2, infoPosY + Math.round(24 * bs) + pillH / 2 + Math.round(7 * ifs));
 
       ctx.fillStyle = c.infoText;
-      ctx.font = i === 3 ? `${Math.round(18 * fs)}px Arial, sans-serif` : `bold ${Math.round(24 * fs)}px Arial, sans-serif`;
+      ctx.font = i === 3 ? `${Math.round(18 * ifs)}px ${FONT}` : `bold ${Math.round(24 * ifs)}px ${FONT}`;
       ctx.textAlign = 'center';
       const valueStartY = infoPosY + Math.round(24 * bs) + pillH + Math.round(30 * bs);
       if (col.value.includes('\n') || col.value.includes('•')) {
@@ -544,46 +554,48 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.restore();
     };
 
-    // Address section (left half)
+    // Address section (left half) — with draggable offset
+    const fOffX = footerPosX;
+    const fOffY = footerPosY;
     if (addrText) {
-      drawPinIcon(55, footCenterY, 24);
+      drawPinIcon(55 + fOffX, footCenterY + fOffY, 24);
       ctx.fillStyle = c.footerText;
-      ctx.font = `${Math.round(12 * fs)}px 'Georgia', serif`;
+      ctx.font = `600 ${Math.round(12 * fs)}px ${FONT}`;
       ctx.textAlign = 'left';
-      ctx.fillText('ENDEREÇO', 92, footCenterY - 18);
-      ctx.font = `bold ${Math.round(18 * fs)}px Arial, sans-serif`;
+      ctx.fillText('ENDEREÇO', 92 + fOffX, footCenterY + fOffY - 18);
+      ctx.font = `bold ${Math.round(18 * fs)}px ${FONT}`;
       const maxAddrW = W / 2 - 120;
       const addrWords = addrText.split(' ');
-      let addrLine = ''; let addrLineY = footCenterY + 6;
+      let addrLine = ''; let addrLineY = footCenterY + fOffY + 6;
       addrWords.forEach(word => {
         const test = addrLine + (addrLine ? ' ' : '') + word;
         if (ctx.measureText(test).width > maxAddrW && addrLine) {
-          ctx.fillText(addrLine, 92, addrLineY); addrLine = word; addrLineY += 22;
+          ctx.fillText(addrLine, 92 + fOffX, addrLineY); addrLine = word; addrLineY += 22;
         } else { addrLine = test; }
       });
-      if (addrLine) ctx.fillText(addrLine, 92, addrLineY);
+      if (addrLine) ctx.fillText(addrLine, 92 + fOffX, addrLineY);
     }
 
     // WhatsApp section (right half)
     if (wpText) {
-      const wpX = W / 2 + 40;
-      drawWhatsAppIcon(wpX + 24, footCenterY, 24);
+      const wpX = W / 2 + 40 + fOffX;
+      drawWhatsAppIcon(wpX + 24, footCenterY + fOffY, 24);
       ctx.fillStyle = c.footerText;
-      ctx.font = `${Math.round(12 * fs)}px 'Georgia', serif`;
+      ctx.font = `600 ${Math.round(12 * fs)}px ${FONT}`;
       ctx.textAlign = 'left';
-      ctx.fillText('WHATSAPP', wpX + 58, footCenterY - 18);
-      ctx.font = `bold ${Math.round(24 * fs)}px Arial, sans-serif`;
-      ctx.fillText(wpText, wpX + 58, footCenterY + 12);
+      ctx.fillText('WHATSAPP', wpX + 58, footCenterY + fOffY - 18);
+      ctx.font = `bold ${Math.round(24 * fs)}px ${FONT}`;
+      ctx.fillText(wpText, wpX + 58, footCenterY + fOffY + 12);
     }
 
     // Logo (proportional)
     if (lImg) {
       ctx.drawImage(lImg, logoX, logoY, logoW, logoH);
     } else if (clientName) {
-      ctx.fillStyle = '#FFFFFF'; ctx.font = `bold ${Math.round(36 * fs)}px Arial, sans-serif`; ctx.textAlign = 'left';
+      ctx.fillStyle = '#FFFFFF'; ctx.font = `bold ${Math.round(36 * fs)}px ${FONT}`; ctx.textAlign = 'left';
       ctx.fillText(clientName, logoX, logoY + 40);
     }
-  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus]);
+  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoFontScale, infoBoxScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY]);
 
   // Live preview rendering
   useEffect(() => {
@@ -606,15 +618,19 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (layoutLocked) return;
     didDragRef.current = false;
     const { cx, cy } = getCanvasCoords(e);
-    // Check logo hit anywhere on canvas (no zone restriction)
+    // Check logo hit
     if (cx >= logoX && cx <= logoX + logoW && cy >= logoY && cy <= logoY + logoH) {
-      e.preventDefault();
-      e.stopPropagation();
+      e.preventDefault(); e.stopPropagation();
       setDragging('logo'); setDragOffset({ x: cx - logoX, y: cy - logoY }); return;
     }
     const infoH = Math.round(260 * infoBoxScale);
     if (cy >= infoPosY && cy <= infoPosY + infoH) {
       setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); return;
+    }
+    // Footer zone
+    const footY = infoPosY + infoH;
+    if (cy >= footY) {
+      setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + footerPosY) }); return;
     }
   };
 
@@ -633,10 +649,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (dragging === 'logo') {
       const newX = Math.max(-logoW / 2, Math.min(CANVAS_W - logoW / 2, cx - dragOffset.x));
       const newY = Math.max(-logoH / 2, Math.min(CANVAS_H - logoH / 2, cy - dragOffset.y));
-      setLogoX(newX);
-      setLogoY(newY);  // Fully free movement
+      setLogoX(newX); setLogoY(newY);
     } else if (dragging === 'info') {
       setInfoPosY(Math.max(400, Math.min(CANVAS_H - 330, cy - dragOffset.y)));
+    } else if (dragging === 'footer') {
+      const infoH = Math.round(260 * infoBoxScale);
+      const footY = infoPosY + infoH;
+      setFooterPosX(Math.max(-200, Math.min(200, cx - dragOffset.x)));
+      setFooterPosY(Math.max(-80, Math.min(80, cy - dragOffset.y - footY)));
     }
   };
 
@@ -664,6 +684,10 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (cy >= infoPosY && cy <= infoPosY + infoH) {
       setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); e.preventDefault(); return;
     }
+    const footY = infoPosY + infoH;
+    if (cy >= footY) {
+      setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + footerPosY) }); e.preventDefault(); return;
+    }
   };
 
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
@@ -673,9 +697,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const { cx, cy } = getTouchCoords(e);
     if (dragging === 'logo') {
       setLogoX(Math.max(-logoW / 2, Math.min(CANVAS_W - logoW / 2, cx - dragOffset.x)));
-      setLogoY(Math.max(-logoH / 2, Math.min(CANVAS_H - logoH / 2, cy - dragOffset.y)));  // Fully free
+      setLogoY(Math.max(-logoH / 2, Math.min(CANVAS_H - logoH / 2, cy - dragOffset.y)));
     } else if (dragging === 'info') {
       setInfoPosY(Math.max(400, Math.min(CANVAS_H - 330, cy - dragOffset.y)));
+    } else if (dragging === 'footer') {
+      const infoH = Math.round(260 * infoBoxScale);
+      const footY = infoPosY + infoH;
+      setFooterPosX(Math.max(-200, Math.min(200, cx - dragOffset.x)));
+      setFooterPosY(Math.max(-80, Math.min(80, cy - dragOffset.y - footY)));
     }
   };
 
@@ -978,7 +1007,24 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             </div>
           </div>
 
-          {/* Info Box Scale */}
+          {/* Info Font Scale */}
+          <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
+            <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+              <Type size={16} style={{ color: `hsl(${clientColor})` }} /> Fonte das Caixas de Info
+            </h3>
+            <p className="text-[11px] text-white/40">Controla o tamanho da fonte de Modelo, Ano, Câmbio e Observações (Raleway Bold).</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-white/60">Escala</Label>
+                <span className="text-xs text-white/40 font-mono">{Math.round(infoFontScale * 100)}%</span>
+              </div>
+              <Slider value={[infoFontScale * 100]} onValueChange={v => setInfoFontScale(v[0] / 100)} min={60} max={180} step={5} className="w-full" />
+              <div className="flex justify-between text-[10px] text-white/30">
+                <span>Menor</span><span>Normal</span><span>Maior</span>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
               <Palette size={16} style={{ color: `hsl(${clientColor})` }} /> Tamanho das Caixas (Info)

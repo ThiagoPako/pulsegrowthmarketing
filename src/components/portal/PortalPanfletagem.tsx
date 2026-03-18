@@ -901,6 +901,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           clientId={clientId}
           clientColor={clientColor}
           clientName={clientName}
+          clientWhatsapp={clientWhatsapp}
+          clientCity={clientCity}
           flyerImageDataUrl={flyerImageDataUrl}
         />
       ) : (

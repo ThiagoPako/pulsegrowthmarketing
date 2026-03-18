@@ -227,8 +227,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           ctx.fill();
 
           const priceGrad = ctx.createLinearGradient(priceX, priceY, priceX + priceBoxW, priceY);
-          priceGrad.addColorStop(0, PULSE_ORANGE);
-          priceGrad.addColorStop(1, '#d4542a');
+          priceGrad.addColorStop(0, BRAND_COLOR);
+          priceGrad.addColorStop(1, BRAND_DARK);
           ctx.fillStyle = priceGrad;
           ctx.beginPath();
           ctx.roundRect(priceX, priceY, priceBoxW, priceBoxH, 16);

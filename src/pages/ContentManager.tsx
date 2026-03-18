@@ -76,6 +76,7 @@ function VideoPlayerModal({ content, onClose }: { content: ContentRow; onClose: 
 function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDelete: (id: string) => void; onPlay: (content: ContentRow) => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [hovering, setHovering] = useState(false);
+  const [videoLoaded, setVideoLoaded] = useState(false);
 
   const isVideo = !!(content.file_url?.match(/\.(mp4|mov|webm|avi)(\?|$)/i) ||
     ['reel', 'institucional', 'anuncio'].includes(content.content_type));
@@ -106,72 +107,88 @@ function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDel
   const statusLabel = (s: string) =>
     s === 'aprovado' ? 'Aprovado' : s === 'ajuste_solicitado' ? 'Ajuste' : s === 'revisao_interna' ? 'Em Revisão' : 'Pendente';
 
+  const typeIcon = CONTENT_TYPES.find(t => t.value === content.content_type);
+  const TypeIcon = typeIcon?.icon || Film;
+
   return (
     <div
-      className="relative aspect-[9/16] bg-muted overflow-hidden cursor-pointer group"
+      className="relative aspect-square bg-muted rounded-xl overflow-hidden cursor-pointer group border border-border/50 hover:border-primary/30 transition-all duration-200 hover:shadow-md"
       onMouseEnter={startPreview}
       onMouseLeave={stopPreview}
-      onTouchStart={startPreview}
-      onTouchEnd={stopPreview}
       onClick={() => content.file_url && onPlay(content)}
     >
       {/* Thumbnail / image layer */}
       {content.thumbnail_url ? (
-        <img src={content.thumbnail_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <img src={content.thumbnail_url} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
       ) : content.content_type === 'arte' && content.file_url ? (
-        <img src={content.file_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <img src={content.file_url} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-          <Film size={36} />
+        <div className="absolute inset-0 flex items-center justify-center bg-muted">
+          <TypeIcon size={28} className="text-muted-foreground/40" />
         </div>
       )}
 
-      {/* Video preview layer (hidden until hover) */}
+      {/* Video preview layer — only load src on hover */}
       {isVideo && content.file_url && (
         <video
           ref={videoRef}
-          src={content.file_url}
+          src={hovering ? content.file_url : undefined}
           muted
           playsInline
-          preload="metadata"
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${hovering ? 'opacity-100' : 'opacity-0'}`}
+          preload="none"
+          onCanPlay={() => setVideoLoaded(true)}
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${hovering && videoLoaded ? 'opacity-100' : 'opacity-0'}`}
         />
       )}
 
-      {/* Play icon for videos (when not hovering) */}
-      {isVideo && !hovering && (
-        <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm rounded-full p-1">
-          <Play size={14} className="text-white fill-white" />
+      {/* Bottom gradient overlay (always visible) */}
+      <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/70 via-black/30 to-transparent pointer-events-none" />
+
+      {/* Content info at bottom */}
+      <div className="absolute inset-x-0 bottom-0 p-2.5 flex flex-col gap-1 z-10">
+        <p className="text-white text-xs font-semibold line-clamp-1 drop-shadow-sm">{content.title}</p>
+        <div className="flex items-center justify-between">
+          <span className="text-white/60 text-[10px] truncate max-w-[60%]">{(content as any).clients?.company_name}</span>
+          <Badge className={`text-[9px] px-1.5 py-0 h-4 ${statusColor(content.status)}`}>{statusLabel(content.status)}</Badge>
+        </div>
+      </div>
+
+      {/* Play icon + type badge (top) */}
+      <div className="absolute top-2 left-2 flex items-center gap-1 z-10">
+        <div className="bg-black/50 backdrop-blur-sm rounded-md px-1.5 py-0.5 flex items-center gap-1">
+          <TypeIcon size={10} className="text-white/80" />
+          <span className="text-white/80 text-[9px] font-medium">{typeIcon?.label}</span>
+        </div>
+      </div>
+
+      {isVideo && (
+        <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-sm rounded-full p-1 z-10">
+          <Play size={10} className="text-white fill-white" />
         </div>
       )}
 
       {/* Duration badge */}
       {content.duration_seconds > 0 && (
-        <span className="absolute bottom-2 right-2 bg-black/80 text-white text-[10px] px-1.5 py-0.5 rounded font-mono z-10">
+        <span className="absolute bottom-10 right-2 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded font-mono z-10">
           {Math.floor(content.duration_seconds / 60)}:{(content.duration_seconds % 60).toString().padStart(2, '0')}
         </span>
       )}
 
-      {/* Hover overlay with info */}
-      <div className={`absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-2 transition-opacity duration-200 ${hovering ? 'opacity-100' : 'opacity-0'}`}>
-        <p className="text-white text-sm font-semibold text-center px-3 line-clamp-2">{content.title}</p>
-        <p className="text-white/70 text-xs">{(content as any).clients?.company_name}</p>
-        <Badge className={`text-[10px] ${statusColor(content.status)}`}>{statusLabel(content.status)}</Badge>
-        <div className="flex items-center gap-1 mt-1">
-          {content.file_url && (
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={e => { e.stopPropagation(); onPlay(content); }}>
-              <Eye size={14} />
-            </Button>
-          )}
-          {content.file_url && (
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={e => { e.stopPropagation(); window.open(content.file_url!, '_blank'); }}>
-              <ExternalLink size={14} />
-            </Button>
-          )}
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:bg-white/20" onClick={e => { e.stopPropagation(); onDelete(content.id); }}>
-            <Trash2 size={14} />
+      {/* Hover action buttons */}
+      <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1.5 transition-all duration-200 ${hovering ? 'opacity-100 scale-100' : 'opacity-0 scale-90'} z-20`}>
+        {content.file_url && (
+          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full bg-white/20 backdrop-blur-sm text-white hover:bg-white/30" onClick={e => { e.stopPropagation(); onPlay(content); }}>
+            <Eye size={14} />
           </Button>
-        </div>
+        )}
+        {content.file_url && (
+          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full bg-white/20 backdrop-blur-sm text-white hover:bg-white/30" onClick={e => { e.stopPropagation(); window.open(content.file_url!, '_blank'); }}>
+            <ExternalLink size={14} />
+          </Button>
+        )}
+        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full bg-red-500/20 backdrop-blur-sm text-red-300 hover:bg-red-500/40" onClick={e => { e.stopPropagation(); onDelete(content.id); }}>
+          <Trash2 size={14} />
+        </Button>
       </div>
     </div>
   );

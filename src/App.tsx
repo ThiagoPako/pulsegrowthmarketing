@@ -155,6 +155,7 @@ function AppRoutes() {
         <Route path="/conteudos-portal" element={<ProtectedRoute><ContentManager /></ProtectedRoute>} />
         <Route path="/trafego" element={<ProtectedRoute><TrafficManagement /></ProtectedRoute>} />
         <Route path="/automacoes" element={<ProtectedRoute><AutomationFlows /></ProtectedRoute>} />
+        <Route path="/panfletagem" element={<ProtectedRoute><FlyerTemplates /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>

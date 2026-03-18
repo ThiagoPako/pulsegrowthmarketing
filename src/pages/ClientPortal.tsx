@@ -728,6 +728,10 @@ export default function ClientPortal() {
           <ZonaCriativa clientId={client.id} clientColor={clientColor} isAuthenticated={isAuthenticated} />
         ) : activeTab === 'agenda' ? (
           <PortalRecordingCalendar clientId={client.id} clientColor={clientColor} />
+        ) : activeTab === 'panfletagem' && client.has_vehicle_flyer ? (
+          <motion.div key="panfletagem" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+            <PortalPanfletagem clientId={client.id} clientColor={clientColor} clientName={client.company_name} clientLogoUrl={client.logo_url} clientWhatsapp={client.whatsapp} clientCity={client.city} />
+          </motion.div>
         ) : (
           /* ── METRICS TAB ── */
           <motion.div key="metrics" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8 pb-20 space-y-8">
@@ -833,11 +837,6 @@ export default function ClientPortal() {
           </motion.div>
         )}
 
-        {activeTab === 'panfletagem' && client.has_vehicle_flyer && (
-          <motion.div key="panfletagem" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
-            <PortalPanfletagem clientId={client.id} clientColor={clientColor} clientName={client.company_name} clientLogoUrl={client.logo_url} clientWhatsapp={client.whatsapp} clientCity={client.city} />
-          </motion.div>
-        )}
       </AnimatePresence>
 
       {/* ── CONTENT DETAIL MODAL ── */}

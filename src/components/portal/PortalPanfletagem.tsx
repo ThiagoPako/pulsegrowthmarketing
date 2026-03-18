@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Car, Download, Eye, Plus, X, Image, Loader2, Check,
-  Gauge, Upload, Save, Move, Lock, Unlock, Trash2
+  Gauge, Upload, Save, Move, Lock, Unlock, Trash2, Palette, Type
 } from 'lucide-react';
 
 interface FlyerTemplate {
@@ -46,7 +46,31 @@ interface Props {
   clientCity?: string;
 }
 
-type LogoPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+interface LayoutColors {
+  header: string;
+  headerText: string;
+  infoBg: string;
+  infoPills: string;
+  infoText: string;
+  priceBg: string;
+  priceText: string;
+  footerBg: string;
+  footerAccent: string;
+  footerText: string;
+}
+
+const DEFAULT_COLORS: LayoutColors = {
+  header: '#034e98',
+  headerText: '#1a1a2e',
+  infoBg: '#1e2a45',
+  infoPills: '#034e98',
+  infoText: '#FFFFFF',
+  priceBg: '#034e98',
+  priceText: '#FFFFFF',
+  footerBg: '#0a0f1e',
+  footerAccent: '#034e98',
+  footerText: '#FFFFFF',
+};
 
 const TRANSMISSION_OPTIONS = [
   { value: 'manual', label: 'Manual', icon: Gauge },
@@ -70,6 +94,27 @@ const TIRE_OPTIONS = [
 
 const CANVAS_W = 1080;
 const CANVAS_H = 1350;
+
+const COLOR_LABELS: { key: keyof LayoutColors; label: string }[] = [
+  { key: 'header', label: 'Cabeçalho' },
+  { key: 'headerText', label: 'Texto Cabeçalho' },
+  { key: 'priceBg', label: 'Caixa Preço' },
+  { key: 'priceText', label: 'Texto Preço' },
+  { key: 'infoBg', label: 'Barra Info' },
+  { key: 'infoPills', label: 'Etiquetas Info' },
+  { key: 'infoText', label: 'Texto Info' },
+  { key: 'footerBg', label: 'Rodapé Fundo' },
+  { key: 'footerAccent', label: 'Rodapé Destaque' },
+  { key: 'footerText', label: 'Texto Rodapé' },
+];
+
+function darkenHex(hex: string, amount = 30): string {
+  let r = parseInt(hex.slice(1, 3), 16);
+  let g = parseInt(hex.slice(3, 5), 16);
+  let b = parseInt(hex.slice(5, 7), 16);
+  r = Math.max(0, r - amount); g = Math.max(0, g - amount); b = Math.max(0, b - amount);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
 
 export default function PortalPanfletagem({ clientId, clientColor, clientName, clientLogoUrl, clientWhatsapp, clientCity }: Props) {
   const [templates, setTemplates] = useState<FlyerTemplate[]>([]);
@@ -99,12 +144,18 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   // Custom logo
   const [customLogoDataUrl, setCustomLogoDataUrl] = useState<string | null>(null);
 
-  // Layout state — pixel positions on canvas
+  // Layout state
   const [logoX, setLogoX] = useState(820);
   const [logoY, setLogoY] = useState(60);
   const [logoW, setLogoW] = useState(200);
   const [logoH, setLogoH] = useState(120);
-  const [infoPosY, setInfoPosY] = useState(920); // px on canvas
+  const [infoPosY, setInfoPosY] = useState(920);
+
+  // Font size multiplier (0.7 - 1.5)
+  const [fontScale, setFontScale] = useState(1.0);
+
+  // Per-component colors
+  const [colors, setColors] = useState<LayoutColors>({ ...DEFAULT_COLORS });
 
   // Lock
   const [layoutLocked, setLayoutLocked] = useState(false);
@@ -130,12 +181,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (s.infoPosY != null) setInfoPosY(s.infoPosY);
         if (s.layoutLocked != null) setLayoutLocked(s.layoutLocked);
         if (s.customLogoDataUrl) setCustomLogoDataUrl(s.customLogoDataUrl);
+        if (s.fontScale != null) setFontScale(s.fontScale);
+        if (s.colors) setColors({ ...DEFAULT_COLORS, ...s.colors });
       } catch { /* ignore */ }
     }
   }, [clientId]);
 
   const saveLayoutSettings = () => {
-    const settings = { logoX, logoY, logoW, logoH, infoPosY, layoutLocked, customLogoDataUrl };
+    const settings = { logoX, logoY, logoW, logoH, infoPosY, layoutLocked, customLogoDataUrl, fontScale, colors };
     localStorage.setItem(`flyer-layout-${clientId}`, JSON.stringify(settings));
     toast.success('Layout salvo!');
   };
@@ -226,42 +279,46 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
   };
 
-  // Core draw function used for both preview and final
+  const updateColor = (key: keyof LayoutColors, value: string) => {
+    setColors(prev => ({ ...prev, [key]: value }));
+  };
+
+  // Core draw function
   const drawCanvas = useCallback((canvas: HTMLCanvasElement, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     canvas.width = CANVAS_W;
     canvas.height = CANVAS_H;
     const W = CANVAS_W, H = CANVAS_H;
+    const fs = fontScale;
 
-    const BRAND = '#034e98';
-    const BRAND_DARK = '#023a73';
-    const DARK_BG = '#1a1a2e';
-    const INFO_BG = '#1e2a45';
+    const c = colors;
+    const BRAND_DARK = darkenHex(c.header);
 
     // Background
-    ctx.fillStyle = DARK_BG;
+    ctx.fillStyle = '#0d1117';
     ctx.fillRect(0, 0, W, H);
 
     // Header
     const headerGrad = ctx.createLinearGradient(0, 0, W, 0);
-    headerGrad.addColorStop(0, BRAND);
+    headerGrad.addColorStop(0, c.header);
     headerGrad.addColorStop(1, BRAND_DARK);
     ctx.fillStyle = headerGrad;
     ctx.fillRect(0, 0, W, 260);
 
+    // White diagonal
     ctx.fillStyle = '#FFFFFF';
     ctx.beginPath();
     ctx.moveTo(0, 0); ctx.lineTo(580, 0); ctx.quadraticCurveTo(480, 260, 0, 260); ctx.closePath();
     ctx.fill();
 
-    ctx.fillStyle = '#1a1a2e';
-    ctx.font = 'bold 52px Arial, sans-serif';
+    ctx.fillStyle = c.headerText;
+    ctx.font = `bold ${Math.round(52 * fs)}px Arial, sans-serif`;
     ctx.textAlign = 'left';
     ctx.fillText('Seu próximo', 40, 80);
     ctx.fillText('carro está', 40, 140);
-    ctx.font = 'bold italic 52px Arial, sans-serif';
-    ctx.fillStyle = BRAND;
+    ctx.font = `bold italic ${Math.round(52 * fs)}px Arial, sans-serif`;
+    ctx.fillStyle = c.header;
     ctx.fillText('aqui!', 40, 200);
 
     // Vehicle photo
@@ -273,7 +330,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillStyle = '#111';
       ctx.fillRect(0, photoY, W, Math.max(photoH, 100));
       ctx.fillStyle = '#555';
-      ctx.font = '28px Arial';
+      ctx.font = `${Math.round(28 * fs)}px Arial`;
       ctx.textAlign = 'center';
       ctx.fillText('Adicione uma foto do veículo', W / 2, photoY + Math.max(photoH, 100) / 2);
     }
@@ -284,22 +341,27 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       const priceBoxW = 460, priceBoxH = 120;
       const priceX = W - priceBoxW - 30;
       const priceYpos = infoPosY - priceBoxH - 30;
+      // Shadow
       ctx.fillStyle = 'rgba(0,0,0,0.4)';
       ctx.beginPath(); ctx.roundRect(priceX + 4, priceYpos + 4, priceBoxW, priceBoxH, 16); ctx.fill();
+      // Box
       const priceGrad = ctx.createLinearGradient(priceX, priceYpos, priceX + priceBoxW, priceYpos);
-      priceGrad.addColorStop(0, BRAND); priceGrad.addColorStop(1, BRAND_DARK);
+      priceGrad.addColorStop(0, c.priceBg); priceGrad.addColorStop(1, darkenHex(c.priceBg));
       ctx.fillStyle = priceGrad;
       ctx.beginPath(); ctx.roundRect(priceX, priceYpos, priceBoxW, priceBoxH, 16); ctx.fill();
-      ctx.fillStyle = '#FFFFFF'; ctx.font = '20px Arial, sans-serif'; ctx.textAlign = 'left';
+      ctx.fillStyle = c.priceText; ctx.font = `${Math.round(20 * fs)}px Arial, sans-serif`; ctx.textAlign = 'left';
       ctx.fillText('POR APENAS:', priceX + 24, priceYpos + 35);
-      ctx.font = 'bold 52px Arial, sans-serif';
+      ctx.font = `bold ${Math.round(52 * fs)}px Arial, sans-serif`;
       ctx.fillText(priceText, priceX + 24, priceYpos + 90);
     }
 
     // Info bar
     const infoH = 260;
-    ctx.fillStyle = INFO_BG;
+    ctx.fillStyle = c.infoBg;
     ctx.fillRect(0, infoPosY, W, infoH);
+    // Top accent line
+    ctx.fillStyle = c.infoPills;
+    ctx.fillRect(0, infoPosY, W, 4);
 
     const data = {
       model: model || 'Modelo',
@@ -322,20 +384,21 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     cols.forEach((col, i) => {
       const cx = i * colW + colPad;
       const cw = colW - colPad * 2;
-      ctx.fillStyle = BRAND;
-      ctx.beginPath(); ctx.roundRect(cx, infoPosY + 20, cw, 44, 22); ctx.fill();
-      ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 20px Arial, sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText(col.label, cx + cw / 2, infoPosY + 48);
+      // Pill
+      ctx.fillStyle = c.infoPills;
+      ctx.beginPath(); ctx.roundRect(cx, infoPosY + 24, cw, 44, 22); ctx.fill();
+      ctx.fillStyle = c.infoText; ctx.font = `bold ${Math.round(20 * fs)}px Arial, sans-serif`; ctx.textAlign = 'center';
+      ctx.fillText(col.label, cx + cw / 2, infoPosY + 52);
 
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = i === 3 ? '18px Arial, sans-serif' : 'bold 24px Arial, sans-serif';
+      ctx.fillStyle = c.infoText;
+      ctx.font = i === 3 ? `${Math.round(18 * fs)}px Arial, sans-serif` : `bold ${Math.round(24 * fs)}px Arial, sans-serif`;
       ctx.textAlign = 'center';
       if (col.value.includes('\n') || col.value.includes('•')) {
         const lines = col.value.split('\n').filter(l => l.trim());
-        lines.forEach((line, li) => ctx.fillText(line.trim(), cx + cw / 2, infoPosY + 100 + li * 30));
+        lines.forEach((line, li) => ctx.fillText(line.trim(), cx + cw / 2, infoPosY + 104 + li * 30));
       } else {
         const words = col.value.split(' ');
-        let line = ''; let lineY = infoPosY + 110;
+        let line = ''; let lineY = infoPosY + 114;
         words.forEach(word => {
           const test = line + (line ? ' ' : '') + word;
           if (ctx.measureText(test).width > cw - 10 && line) {
@@ -345,52 +408,78 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (line) ctx.fillText(line, cx + cw / 2, lineY);
       }
       if (i < 3) {
-        ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo((i + 1) * colW, infoPosY + 20); ctx.lineTo((i + 1) * colW, infoPosY + infoH - 20); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo((i + 1) * colW, infoPosY + 24); ctx.lineTo((i + 1) * colW, infoPosY + infoH - 20); ctx.stroke();
       }
     });
 
-    // Footer
+    // Footer — improved design
     const footY = infoPosY + infoH;
     const footH = H - footY;
-    ctx.fillStyle = DARK_BG;
+    // Gradient footer bg
+    const footGrad = ctx.createLinearGradient(0, footY, 0, footY + footH);
+    footGrad.addColorStop(0, c.footerBg);
+    footGrad.addColorStop(1, darkenHex(c.footerBg, 15));
+    ctx.fillStyle = footGrad;
     ctx.fillRect(0, footY, W, footH);
+    // Top separator line
+    ctx.fillStyle = c.footerAccent;
+    ctx.fillRect(0, footY, W, 3);
+
+    const footCenterY = footY + footH / 2;
 
     if (clientCity) {
-      ctx.fillStyle = BRAND; ctx.beginPath(); ctx.arc(60, footY + footH / 2, 22, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 20px Arial, sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('📍', 60, footY + footH / 2 + 7);
-      ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 18px Arial, sans-serif'; ctx.textAlign = 'left';
+      // Icon circle
+      ctx.fillStyle = c.footerAccent;
+      ctx.beginPath(); ctx.arc(55, footCenterY, 24, 0, Math.PI * 2); ctx.fill();
+      // Inner icon
+      ctx.fillStyle = c.footerText;
+      ctx.font = `${Math.round(22 * fs)}px Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('📍', 55, footCenterY + 8);
+      // Address text
+      ctx.fillStyle = c.footerText;
+      ctx.font = `bold ${Math.round(18 * fs)}px Arial, sans-serif`;
+      ctx.textAlign = 'left';
       const maxAddrW = W / 2 - 120;
       const addrWords = clientCity.split(' ');
-      let addrLine = ''; let addrLineY = footY + footH / 2 - 12;
+      let addrLine = ''; let addrLineY = footCenterY - 10;
       addrWords.forEach(word => {
         const test = addrLine + (addrLine ? ' ' : '') + word;
         if (ctx.measureText(test).width > maxAddrW && addrLine) {
-          ctx.fillText(addrLine, 95, addrLineY); addrLine = word; addrLineY += 24;
+          ctx.fillText(addrLine, 92, addrLineY); addrLine = word; addrLineY += 24;
         } else { addrLine = test; }
       });
-      if (addrLine) ctx.fillText(addrLine, 95, addrLineY);
+      if (addrLine) ctx.fillText(addrLine, 92, addrLineY);
     }
 
     if (clientWhatsapp) {
-      ctx.fillStyle = BRAND; ctx.beginPath(); ctx.arc(W - 300, footY + footH / 2, 22, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 20px Arial, sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('📱', W - 300, footY + footH / 2 + 7);
-      ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 18px Arial, sans-serif'; ctx.textAlign = 'left';
-      ctx.fillText('FALE CONOSCO', W - 265, footY + footH / 2 - 8);
-      ctx.font = 'bold 22px Arial, sans-serif';
-      ctx.fillText(clientWhatsapp, W - 265, footY + footH / 2 + 20);
+      // WhatsApp badge
+      const wpX = W / 2 + 40;
+      // Rounded rect background
+      ctx.fillStyle = '#25D366';
+      ctx.beginPath(); ctx.roundRect(wpX, footCenterY - 28, 56, 56, 28); ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `${Math.round(26 * fs)}px Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('📱', wpX + 28, footCenterY + 10);
+
+      ctx.fillStyle = c.footerText;
+      ctx.font = `${Math.round(14 * fs)}px Arial, sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.fillText('FALE CONOSCO', wpX + 68, footCenterY - 6);
+      ctx.font = `bold ${Math.round(24 * fs)}px Arial, sans-serif`;
+      ctx.fillText(clientWhatsapp, wpX + 68, footCenterY + 22);
     }
 
     // Logo
     if (lImg) {
       ctx.drawImage(lImg, logoX, logoY, logoW, logoH);
     } else if (clientName) {
-      ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 36px Arial, sans-serif'; ctx.textAlign = 'left';
+      ctx.fillStyle = '#FFFFFF'; ctx.font = `bold ${Math.round(36 * fs)}px Arial, sans-serif`; ctx.textAlign = 'left';
       ctx.fillText(clientName, logoX, logoY + 40);
     }
-  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientCity, clientWhatsapp, clientName, clientColor]);
+  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientCity, clientWhatsapp, clientName, clientColor, fontScale, colors]);
 
   // Live preview rendering
   useEffect(() => {
@@ -412,17 +501,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const handlePreviewMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (layoutLocked) return;
     const { cx, cy } = getCanvasCoords(e);
-    // Check logo hit
     if (cx >= logoX && cx <= logoX + logoW && cy >= logoY && cy <= logoY + logoH) {
-      setDragging('logo');
-      setDragOffset({ x: cx - logoX, y: cy - logoY });
-      return;
+      setDragging('logo'); setDragOffset({ x: cx - logoX, y: cy - logoY }); return;
     }
-    // Check info bar hit
     if (cy >= infoPosY && cy <= infoPosY + 260) {
-      setDragging('info');
-      setDragOffset({ x: 0, y: cy - infoPosY });
-      return;
+      setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); return;
     }
   };
 
@@ -433,8 +516,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       setLogoX(Math.max(0, Math.min(CANVAS_W - logoW, cx - dragOffset.x)));
       setLogoY(Math.max(0, Math.min(CANVAS_H - logoH, cy - dragOffset.y)));
     } else if (dragging === 'info') {
-      const newY = Math.max(400, Math.min(CANVAS_H - 330, cy - dragOffset.y));
-      setInfoPosY(newY);
+      setInfoPosY(Math.max(400, Math.min(CANVAS_H - 330, cy - dragOffset.y)));
     }
   };
 
@@ -476,7 +558,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
 
   const handleTouchEnd = () => setDragging(null);
 
-  // Generate final art for saving
+  // Generate final art
   const generateFinalArt = useCallback(async (vehicleImageSrc: string): Promise<string> => {
     return new Promise((resolve, reject) => {
       const canvas = canvasRef.current;
@@ -568,10 +650,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     toast.success('Panfleto apagado!');
   };
 
-  const frames = templates.filter(t => t.template_type === 'frame');
-
   if (loading) {
-    return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-white/40" /></div>;
+    return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   }
 
   return (
@@ -707,7 +787,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             </div>
             <input ref={logoFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
 
-            {/* Logo size slider */}
+            {/* Logo size sliders */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-xs text-white/60">Largura da Logo</Label>
@@ -724,15 +804,78 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             </div>
           </div>
 
-          {/* Lock + Save */}
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={() => setLayoutLocked(!layoutLocked)}
-              className={`flex-1 border-white/[0.1] text-xs ${layoutLocked ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40' : 'text-white/70 hover:text-white hover:bg-white/[0.06]'}`}>
-              {layoutLocked ? <Lock size={14} /> : <Unlock size={14} />}
-              {layoutLocked ? 'Layout Trancado' : 'Trancar Layout'}
+          {/* Font Size Control */}
+          <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
+            <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+              <Type size={16} style={{ color: `hsl(${clientColor})` }} /> Tamanho da Fonte
+            </h3>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-white/60">Escala</Label>
+                <span className="text-xs text-white/40 font-mono">{Math.round(fontScale * 100)}%</span>
+              </div>
+              <Slider value={[fontScale * 100]} onValueChange={v => setFontScale(v[0] / 100)} min={70} max={150} step={5} className="w-full" />
+              <div className="flex justify-between text-[10px] text-white/30">
+                <span>Menor</span><span>Normal</span><span>Maior</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Color Pickers */}
+          <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
+            <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+              <Palette size={16} style={{ color: `hsl(${clientColor})` }} /> Cores do Layout
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              {COLOR_LABELS.map(({ key, label }) => (
+                <div key={key} className="flex items-center gap-3">
+                  <label className="relative w-9 h-9 rounded-lg overflow-hidden border-2 border-white/[0.15] cursor-pointer hover:border-white/[0.3] transition-colors flex-shrink-0">
+                    <input
+                      type="color"
+                      value={colors[key]}
+                      onChange={e => updateColor(key, e.target.value)}
+                      className="absolute inset-0 w-full h-full cursor-pointer opacity-0"
+                    />
+                    <div className="w-full h-full" style={{ backgroundColor: colors[key] }} />
+                  </label>
+                  <span className="text-[11px] text-white/60 leading-tight">{label}</span>
+                </div>
+              ))}
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setColors({ ...DEFAULT_COLORS })} className="text-white/40 hover:text-white text-xs w-full">
+              Resetar Cores Padrão
             </Button>
+          </div>
+
+          {/* Animated Lock + Save */}
+          <div className="flex gap-3">
+            <motion.button
+              onClick={() => setLayoutLocked(!layoutLocked)}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-semibold border-2 transition-colors ${
+                layoutLocked
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
+                  : 'bg-white/[0.04] text-white/60 border-white/[0.1] hover:bg-white/[0.08] hover:text-white'
+              }`}
+              whileTap={{ scale: 0.95 }}
+            >
+              <motion.div
+                animate={layoutLocked ? { rotate: [0, -10, 10, -5, 0], scale: [1, 1.2, 1] } : { rotate: 0, scale: 1 }}
+                transition={{ duration: 0.5, ease: 'easeInOut' }}
+                key={layoutLocked ? 'locked' : 'unlocked'}
+              >
+                {layoutLocked ? <Lock size={18} /> : <Unlock size={18} />}
+              </motion.div>
+              {layoutLocked ? 'Layout Trancado' : 'Trancar Layout'}
+              {layoutLocked && (
+                <motion.div
+                  className="w-2 h-2 rounded-full bg-amber-400"
+                  animate={{ scale: [1, 1.4, 1], opacity: [1, 0.5, 1] }}
+                  transition={{ repeat: Infinity, duration: 1.5 }}
+                />
+              )}
+            </motion.button>
             <Button variant="outline" onClick={saveLayoutSettings}
-              className="flex-1 border-white/[0.1] text-white/70 hover:text-white hover:bg-white/[0.06] text-xs">
+              className="flex-1 border-white/[0.1] text-white/70 hover:text-white hover:bg-white/[0.06] text-xs h-auto">
               <Save size={14} /> Salvar Posições
             </Button>
           </div>
@@ -756,11 +899,25 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
               <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
                 <Eye size={16} style={{ color: `hsl(${clientColor})` }} /> Prévia em Tempo Real
               </h3>
-              {!layoutLocked && (
-                <span className="text-[10px] text-white/40 bg-white/[0.06] px-2 py-1 rounded-full flex items-center gap-1">
-                  <Move size={10} /> Arraste para mover
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {layoutLocked && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/20 border border-amber-500/30"
+                  >
+                    <motion.div animate={{ rotate: [0, -8, 8, 0] }} transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}>
+                      <Lock size={10} className="text-amber-400" />
+                    </motion.div>
+                    <span className="text-[10px] text-amber-300 font-medium">Trancado</span>
+                  </motion.div>
+                )}
+                {!layoutLocked && (
+                  <span className="text-[10px] text-white/40 bg-white/[0.06] px-2 py-1 rounded-full flex items-center gap-1">
+                    <Move size={10} /> Arraste para mover
+                  </span>
+                )}
+              </div>
             </div>
             <div className="aspect-[4/5] rounded-xl overflow-hidden bg-black relative">
               <canvas
@@ -817,7 +974,6 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
                         <p className="text-[10px] text-white/50">{item.vehicle_year} • {item.price || 'Sem preço'}</p>
                       </div>
                     </button>
-                    {/* Delete button */}
                     <button onClick={() => handleDeleteItem(item.id)}
                       className="absolute top-2 right-2 w-7 h-7 rounded-full bg-red-600/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500">
                       <Trash2 size={12} className="text-white" />

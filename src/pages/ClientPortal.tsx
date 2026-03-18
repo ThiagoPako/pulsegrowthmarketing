@@ -185,6 +185,8 @@ export default function ClientPortal() {
           monthly_recordings: edgeData.monthly_recordings || 0,
           plan_id: edgeData.plan_id || null,
           show_metrics: edgeData.show_metrics ?? true,
+          has_vehicle_flyer: edgeData.has_vehicle_flyer ?? false,
+          niche: edgeData.niche || null,
         };
       }
     }

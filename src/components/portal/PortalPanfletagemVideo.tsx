@@ -398,6 +398,12 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
               {expandedSection === 'vehicle-info' && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
                   <div className="px-4 pb-4 space-y-4">
+                    {/* Import from Image button */}
+                    <button onClick={(e) => { e.stopPropagation(); importFromImage(); }}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium bg-white/[0.06] border border-white/[0.1] text-white/60 hover:bg-white/[0.1] hover:text-white/80 transition-all"
+                      title="Importar dados preenchidos na aba Imagem">
+                      <ImageIcon size={13} /> Importar dados da aba Imagem
+                    </button>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <Label className="text-xs text-white/60">Modelo *</Label>

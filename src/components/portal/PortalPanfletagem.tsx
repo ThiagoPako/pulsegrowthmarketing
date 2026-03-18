@@ -443,7 +443,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const photoY = 260;
     const photoH = infoPosY - photoY;
     if (vImg && photoH > 0) {
-      drawImageCover(ctx, vImg, 0, photoY, W, photoH);
+      drawImageCover(ctx, vImg, 0, photoY, W, photoH, photoOffsetX, photoOffsetY);
     } else {
       ctx.fillStyle = '#111';
       ctx.fillRect(0, photoY, W, Math.max(photoH, 100));

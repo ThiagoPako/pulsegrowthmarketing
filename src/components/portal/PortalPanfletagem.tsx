@@ -717,7 +717,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         const logoSrc = customLogoDataUrl || clientLogoUrl;
         if (logoSrc) {
           const lImg = new window.Image();
-          lImg.crossOrigin = 'anonymous';
+          if (!logoSrc.startsWith('data:')) lImg.crossOrigin = 'anonymous';
           lImg.onload = () => { drawCanvas(canvas, vImg, lImg); resolve(canvas.toDataURL('image/jpeg', 0.92)); };
           lImg.onerror = () => { drawCanvas(canvas, vImg, null); resolve(canvas.toDataURL('image/jpeg', 0.92)); };
           lImg.src = logoSrc;

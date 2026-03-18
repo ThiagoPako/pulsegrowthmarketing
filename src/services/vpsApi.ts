@@ -124,9 +124,13 @@ export async function uploadFileToVps(
   file: File,
   folder?: string,
 ): Promise<string> {
+  const normalizedFolder = folder?.trim().replace(/^\/+|\/+$/g, '');
   const formData = new FormData();
+
+  // Multer resolve o destino do arquivo durante o parsing multipart.
+  // O campo `folder` precisa chegar antes do `file` para evitar fallback em `general`.
+  if (normalizedFolder) formData.append('folder', normalizedFolder);
   formData.append('file', file);
-  if (folder) formData.append('folder', folder);
 
   const response = await fetch(`${VPS_BASE_URL}/upload`, {
     method: 'POST',
@@ -139,7 +143,7 @@ export async function uploadFileToVps(
   }
 
   const data = await response.json();
-  const publicUrl = resolveUploadUrl(data, folder);
+  const publicUrl = resolveUploadUrl(data, normalizedFolder);
   await verifyUploadedFile(publicUrl, file);
   return publicUrl;
 }

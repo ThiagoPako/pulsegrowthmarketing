@@ -202,6 +202,10 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [footerPosX, setFooterPosX] = useState(0);
   const [footerPosY, setFooterPosY] = useState(0); // offset from default position
 
+  // Vehicle photo position offset (panning inside the crop area)
+  const [photoOffsetX, setPhotoOffsetX] = useState(0);
+  const [photoOffsetY, setPhotoOffsetY] = useState(0);
+
   // Per-component colors
   const [colors, setColors] = useState<LayoutColors>({ ...DEFAULT_COLORS });
 
@@ -209,7 +213,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [layoutLocked, setLayoutLocked] = useState(false);
 
   // Drag state
-  const [dragging, setDragging] = useState<'logo' | 'info' | 'footer' | null>(null);
+  const [dragging, setDragging] = useState<'logo' | 'info' | 'footer' | 'photo' | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const didDragRef = useRef(false);
 
@@ -252,6 +256,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (s.pillRadiusScale != null) setPillRadiusScale(s.pillRadiusScale);
         if (s.footerPosX != null) setFooterPosX(s.footerPosX);
         if (s.footerPosY != null) setFooterPosY(s.footerPosY);
+        if (s.photoOffsetX != null) setPhotoOffsetX(s.photoOffsetX);
+        if (s.photoOffsetY != null) setPhotoOffsetY(s.photoOffsetY);
         if (s.colors) {
           const migrated = { ...DEFAULT_COLORS, ...s.colors };
           // Legacy: migrate old single infoText to split fields
@@ -274,7 +280,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   }, [clientWhatsapp]);
 
   const saveLayoutSettings = () => {
-    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, footerPosX, footerPosY, colors, footerAddress, footerWhatsapp };
+    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, footerPosX, footerPosY, photoOffsetX, photoOffsetY, colors, footerAddress, footerWhatsapp };
     localStorage.setItem(`flyer-layout-${clientId}`, JSON.stringify(settings));
     toast.success('Layout salvo!');
   };
@@ -365,7 +371,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
-  const drawImageCover = (ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: number, dy: number, dw: number, dh: number) => {
+  const drawImageCover = (ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: number, dy: number, dw: number, dh: number, offX = 0, offY = 0) => {
     const imgAspect = img.naturalWidth / img.naturalHeight;
     const destAspect = dw / dh;
     let sx: number, sy: number, sw: number, sh: number;
@@ -374,6 +380,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     } else {
       sw = img.naturalWidth; sh = sw / destAspect; sx = 0; sy = (img.naturalHeight - sh) / 2;
     }
+    // Apply offset (in source-image pixel space)
+    const maxOffX = (img.naturalWidth - sw) / 2;
+    const maxOffY = (img.naturalHeight - sh) / 2;
+    sx += Math.max(-maxOffX, Math.min(maxOffX, offX * (img.naturalWidth / dw)));
+    sy += Math.max(-maxOffY, Math.min(maxOffY, offY * (img.naturalHeight / dh)));
     ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
   };
 
@@ -434,7 +445,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const photoY = 260;
     const photoH = infoPosY - photoY;
     if (vImg && photoH > 0) {
-      drawImageCover(ctx, vImg, 0, photoY, W, photoH);
+      drawImageCover(ctx, vImg, 0, photoY, W, photoH, photoOffsetX, photoOffsetY);
     } else {
       ctx.fillStyle = '#111';
       ctx.fillRect(0, photoY, W, Math.max(photoH, 100));
@@ -623,7 +634,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillStyle = '#FFFFFF'; ctx.font = `bold ${Math.round(36 * fs)}px Arial, sans-serif`; ctx.textAlign = 'left';
       ctx.fillText(clientName, logoX, logoY + 40);
     }
-  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY]);
+  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
 
   // Live preview rendering
   useEffect(() => {
@@ -652,6 +663,12 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       setDragging('logo'); setDragOffset({ x: cx - logoX, y: cy - logoY }); return;
     }
     const infoH = Math.round(260 * infoBoxScale);
+    // Check photo zone hit (between header and info bar)
+    const photoY = 260;
+    if (cy >= photoY && cy < infoPosY) {
+      e.preventDefault(); e.stopPropagation();
+      setDragging('photo'); setDragOffset({ x: cx - photoOffsetX, y: cy - photoOffsetY }); return;
+    }
     if (cy >= infoPosY && cy <= infoPosY + infoH) {
       setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); return;
     }
@@ -677,6 +694,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (dragging === 'logo') {
       setLogoX(Math.max(-logoW / 2, Math.min(CANVAS_W - logoW / 2, cx - dragOffset.x)));
       setLogoY(Math.max(-logoH / 2, Math.min(CANVAS_H - logoH / 2, cy - dragOffset.y)));
+    } else if (dragging === 'photo') {
+      setPhotoOffsetX(cx - dragOffset.x);
+      setPhotoOffsetY(cy - dragOffset.y);
     } else if (dragging === 'info') {
       setInfoPosY(Math.max(400, Math.min(CANVAS_H - 330, cy - dragOffset.y)));
     } else if (dragging === 'footer') {
@@ -709,6 +729,10 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       setDragging('logo'); setDragOffset({ x: cx - logoX, y: cy - logoY }); e.preventDefault(); return;
     }
     const infoH = Math.round(260 * infoBoxScale);
+    const photoY = 260;
+    if (cy >= photoY && cy < infoPosY) {
+      setDragging('photo'); setDragOffset({ x: cx - photoOffsetX, y: cy - photoOffsetY }); e.preventDefault(); return;
+    }
     if (cy >= infoPosY && cy <= infoPosY + infoH) {
       setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); e.preventDefault(); return;
     }
@@ -726,6 +750,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (dragging === 'logo') {
       setLogoX(Math.max(-logoW / 2, Math.min(CANVAS_W - logoW / 2, cx - dragOffset.x)));
       setLogoY(Math.max(-logoH / 2, Math.min(CANVAS_H - logoH / 2, cy - dragOffset.y)));
+    } else if (dragging === 'photo') {
+      setPhotoOffsetX(cx - dragOffset.x);
+      setPhotoOffsetY(cy - dragOffset.y);
     } else if (dragging === 'info') {
       setInfoPosY(Math.max(400, Math.min(CANVAS_H - 330, cy - dragOffset.y)));
     } else if (dragging === 'footer') {

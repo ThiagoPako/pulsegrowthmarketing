@@ -1032,16 +1032,31 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
               </div>
               <Slider value={[infoBoxScale * 100]} onValueChange={v => setInfoBoxScale(v[0] / 100)} min={70} max={150} step={5} className="w-full" />
             </div>
-            <div className="space-y-2 pt-2 border-t border-white/[0.06]">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs text-white/60">Fonte dos Valores (Raleway Bold)</Label>
-                <span className="text-xs text-white/40 font-mono">{Math.round(infoFontScale * 100)}%</span>
+            {/* Per-field font scale controls */}
+            {[
+              { key: 'model', label: 'MODELO', scale: modelFontScale, setter: setModelFontScale },
+              { key: 'year', label: 'ANO', scale: yearFontScale, setter: setYearFontScale },
+              { key: 'transmission', label: 'CÂMBIO', scale: transmissionFontScale, setter: setTransmissionFontScale },
+              { key: 'obs', label: 'OBSERVAÇÕES', scale: obsFontScale, setter: setObsFontScale },
+            ].map(({ key, label, scale, setter }) => (
+              <div key={key} className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveFieldEditor(activeFieldEditor === key ? null : key)}
+                  className={`w-full text-left text-xs font-semibold px-2 py-1.5 rounded-lg transition-colors ${activeFieldEditor === key ? 'bg-white/[0.1] text-white' : 'text-white/60 hover:text-white/80 hover:bg-white/[0.04]'}`}
+                >
+                  {label} — {Math.round(scale * 100)}%
+                </button>
+                {activeFieldEditor === key && (
+                  <div className="pl-2 pr-1">
+                    <Slider value={[scale * 100]} onValueChange={v => setter(v[0] / 100)} min={50} max={250} step={5} className="w-full" />
+                    <div className="flex justify-between text-[9px] text-white/30 mt-0.5">
+                      <span>50%</span><span>100%</span><span>250%</span>
+                    </div>
+                  </div>
+                )}
               </div>
-              <Slider value={[infoFontScale * 100]} onValueChange={v => setInfoFontScale(v[0] / 100)} min={70} max={200} step={5} className="w-full" />
-              <div className="flex justify-between text-[10px] text-white/30">
-                <span>Menor</span><span>Normal</span><span>Maior</span>
-              </div>
-            </div>
+            ))}
           </div>
 
           {/* Color Pickers — full list */}

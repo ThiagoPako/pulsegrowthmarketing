@@ -33,10 +33,12 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
   const [musicName, setMusicName] = useState('');
   const [musicUrl, setMusicUrl] = useState<string | null>(null);
 
-  // Options
+  // Options — ALL segments are muted; only background music plays
   const [muteCarVideo, setMuteCarVideo] = useState(true);
   const [useLayoutOverlay, setUseLayoutOverlay] = useState(true);
-  const [overlayDuration, setOverlayDuration] = useState(3); // seconds the layout image shows
+  const [overlayDuration, setOverlayDuration] = useState(3);
+  const [musicFadeIn, setMusicFadeIn] = useState(2); // seconds
+  const [musicFadeOut, setMusicFadeOut] = useState(2); // seconds
 
   // Preview
   const [activePreview, setActivePreview] = useState<VideoSegment | null>(null);

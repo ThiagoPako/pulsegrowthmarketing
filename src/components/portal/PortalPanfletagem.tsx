@@ -297,7 +297,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   }, [mediaPreviews]);
 
   // Custom logo upload
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -306,6 +306,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       toast.success('Logo personalizada carregada!');
     };
     reader.readAsDataURL(file);
+    // Reset input so the same file can be re-selected
+    e.target.value = '';
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {

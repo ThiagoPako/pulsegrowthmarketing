@@ -505,12 +505,12 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       // Pill
       ctx.fillStyle = c.infoPills;
       ctx.beginPath(); ctx.roundRect(cx, infoPosY + Math.round(24 * bs), cw, pillH, pillR); ctx.fill();
-      ctx.fillStyle = c.infoText; ctx.font = `bold ${Math.round(20 * labelFontScale * fs)}px 'Raleway', sans-serif`; ctx.textAlign = 'center';
+      ctx.fillStyle = c.infoLabelText; ctx.font = `bold ${Math.round(20 * labelFontScale * fs)}px 'Raleway', sans-serif`; ctx.textAlign = 'center';
       ctx.fillText(col.label, cx + cw / 2, infoPosY + Math.round(24 * bs) + pillH / 2 + Math.round(7 * fs));
 
       const fieldScales = [modelFontScale, yearFontScale, transmissionFontScale, obsFontScale];
       const ifs = fieldScales[i];
-      ctx.fillStyle = c.infoText;
+      ctx.fillStyle = c.infoValueText;
       ctx.font = i === 3 ? `bold ${Math.round(18 * ifs * fs)}px 'Raleway', sans-serif` : `bold ${Math.round(24 * ifs * fs)}px 'Raleway', sans-serif`;
       ctx.textAlign = 'center';
       const valueStartY = infoPosY + Math.round(24 * bs) + pillH + Math.round(30 * bs);

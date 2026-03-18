@@ -466,8 +466,16 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
                     onPause={() => setIsPlaying(false)}
                     onPlay={() => setIsPlaying(true)}
                     playsInline
+                    muted
                   />
-                  <div className="absolute bottom-3 inset-x-3 flex items-center justify-between">
+                  {/* Safe zone overlays — top ~13% and bottom ~14.6% */}
+                  <div className="absolute top-0 inset-x-0 h-[13%] bg-red-500/10 border-b border-dashed border-red-400/30 flex items-center justify-center pointer-events-none">
+                    <span className="text-[8px] text-red-300/60 font-medium">ZONA COBERTA</span>
+                  </div>
+                  <div className="absolute bottom-0 inset-x-0 h-[14.6%] bg-red-500/10 border-t border-dashed border-red-400/30 flex items-end justify-center pb-1 pointer-events-none">
+                    <span className="text-[8px] text-red-300/60 font-medium">ZONA COBERTA</span>
+                  </div>
+                  <div className="absolute bottom-3 inset-x-3 flex items-center justify-between z-10">
                     <button onClick={togglePlayPause}
                       className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center hover:bg-black/80">
                       {isPlaying ? <Pause size={16} className="text-white" /> : <Play size={16} className="text-white ml-0.5" />}

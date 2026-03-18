@@ -1343,6 +1343,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

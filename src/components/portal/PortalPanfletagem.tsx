@@ -727,6 +727,10 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       setDragging('logo'); setDragOffset({ x: cx - logoX, y: cy - logoY }); e.preventDefault(); return;
     }
     const infoH = Math.round(260 * infoBoxScale);
+    const photoY = 260;
+    if (cy >= photoY && cy < infoPosY) {
+      setDragging('photo'); setDragOffset({ x: cx - photoOffsetX, y: cy - photoOffsetY }); e.preventDefault(); return;
+    }
     if (cy >= infoPosY && cy <= infoPosY + infoH) {
       setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); e.preventDefault(); return;
     }

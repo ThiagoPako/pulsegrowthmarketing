@@ -68,6 +68,7 @@ function clientToRow(c: Client) {
     weekly_creatives: c.weeklyCreatives,
     weekly_goal: c.weeklyGoal,
     has_endomarketing: c.hasEndomarketing,
+    has_vehicle_flyer: c.hasVehicleFlyer ?? false,
     weekly_stories: c.weeklyStories,
     presence_days: c.presenceDays,
     monthly_recordings: c.monthlyRecordings,

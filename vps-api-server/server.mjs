@@ -1,0 +1,1120 @@
+/**
+ * VPS API Server — Replaces all Supabase Edge Functions
+ * Deploy on agenciapulse.tech alongside the existing upload-server
+ * 
+ * SETUP:
+ * 1. npm init -y && npm install express cors @supabase/supabase-js node-fetch
+ * 2. Create .env with all required variables (see bottom of file)
+ * 3. pm2 start server.mjs --name pulse-api
+ * 
+ * Runs on port 3002 (upload-server uses 3001)
+ */
+
+import express from 'express';
+import cors from 'cors';
+import { createClient } from '@supabase/supabase-js';
+
+const app = express();
+const PORT = process.env.API_PORT || 3002;
+
+// ─── Middleware ──────────────────────────────────────────────
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+
+// ─── Supabase clients ───────────────────────────────────────
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+
+function getAdminClient() {
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+}
+
+function getUserClient(authHeader) {
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  });
+}
+
+// ─── Auth helpers ───────────────────────────────────────────
+async function verifyUser(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) throw new Error('Unauthorized');
+  const userClient = getUserClient(authHeader);
+  const token = authHeader.replace('Bearer ', '');
+  const { data, error } = await userClient.auth.getUser(token);
+  if (error || !data?.user) throw new Error('Unauthorized');
+  return { user: data.user, userClient };
+}
+
+async function verifyAdmin(req) {
+  const { user, userClient } = await verifyUser(req);
+  const admin = getAdminClient();
+  const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single();
+  if (!profile || profile.role !== 'admin') throw new Error('Admin access required');
+  return { user, userClient, admin };
+}
+
+// ─── AI helpers ─────────────────────────────────────────────
+function getAiConfig(provider, dbApiKey) {
+  const geminiKey = process.env.GOOGLE_GEMINI_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
+  const claudeKey = process.env.ANTHROPIC_API_KEY;
+
+  if (provider === 'gemini' && (geminiKey || dbApiKey)) return { url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', key: geminiKey || dbApiKey, provider: 'gemini' };
+  if (provider === 'openai' && (openaiKey || dbApiKey)) return { url: 'https://api.openai.com/v1/chat/completions', key: openaiKey || dbApiKey, provider: 'openai' };
+  if (provider === 'claude' && (claudeKey || dbApiKey)) return { url: 'https://api.anthropic.com/v1/messages', key: claudeKey || dbApiKey, provider: 'claude' };
+  if (geminiKey) return { url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', key: geminiKey, provider: 'gemini' };
+  if (openaiKey) return { url: 'https://api.openai.com/v1/chat/completions', key: openaiKey, provider: 'openai' };
+  if (claudeKey) return { url: 'https://api.anthropic.com/v1/messages', key: claudeKey, provider: 'claude' };
+  throw new Error('Nenhuma API key de IA configurada.');
+}
+
+async function fetchDbApiKey(supabase, aiProvider) {
+  if (!aiProvider) return undefined;
+  const providerMap = { gemini: 'ai_gemini', openai: 'ai_openai', claude: 'ai_claude' };
+  const { data } = await supabase
+    .from('api_integrations').select('config')
+    .eq('provider', providerMap[aiProvider] || '').eq('status', 'ativo').limit(1).single();
+  return data?.config?.api_key_encrypted;
+}
+
+async function callAi(ai, model, messages, options = {}) {
+  const { temperature = 0.3, max_tokens = 2000 } = options;
+  if (ai.provider === 'claude') {
+    const systemMsg = messages.find(m => m.role === 'system');
+    const otherMsgs = messages.filter(m => m.role !== 'system');
+    const res = await fetch(ai.url, {
+      method: 'POST',
+      headers: { 'x-api-key': ai.key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, max_tokens, ...(systemMsg ? { system: systemMsg.content } : {}), messages: otherMsgs }),
+    });
+    if (!res.ok) throw new Error(`Claude error [${res.status}]: ${await res.text()}`);
+    const data = await res.json();
+    return data.content?.[0]?.text || '';
+  }
+  const res = await fetch(ai.url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${ai.key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, messages, temperature, max_tokens }),
+  });
+  if (!res.ok) throw new Error(`AI error [${res.status}]: ${await res.text()}`);
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
+// WhatsApp helper
+const WHATSAPP_API_URL = 'https://api.atendeclique.com.br/api/messages/send';
+
+async function sendWhatsAppDirect(config, number, message, supabase, clientId, triggerType) {
+  try {
+    const apiBody = {
+      number: number.replace(/\D/g, ''),
+      body: message,
+      userId: config.default_user_id || '',
+      queueId: config.default_queue_id || '',
+      sendSignature: config.send_signature || false,
+      closeTicket: config.close_ticket || false,
+    };
+    const apiResponse = await fetch(WHATSAPP_API_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${config.api_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(apiBody),
+    });
+    const apiResult = await apiResponse.json();
+    await supabase.from('whatsapp_messages').insert({
+      phone_number: number.replace(/\D/g, ''),
+      message,
+      status: apiResponse.ok ? 'sent' : 'failed',
+      api_response: apiResult,
+      client_id: clientId || null,
+      trigger_type: triggerType,
+    });
+    return { ok: apiResponse.ok, result: apiResult };
+  } catch (e) {
+    console.error('sendWhatsApp error:', e);
+    return { ok: false, error: e.message };
+  }
+}
+
+function applyTemplate(template, vars) {
+  let result = template;
+  for (const [key, value] of Object.entries(vars)) {
+    result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+  }
+  return result;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ROUTES
+// ═══════════════════════════════════════════════════════════════
+
+// ─── 1. Financial Chat ─────────────────────────────────────
+app.post('/api/financial-chat', async (req, res) => {
+  try {
+    const { user, admin } = await verifyAdmin(req);
+    const { question, conversationHistory, aiModel, aiProvider } = req.body;
+    if (!question) return res.status(400).json({ error: 'Question is required' });
+
+    const selectedModel = aiModel || 'gemini-2.5-flash-lite';
+    const now = new Date();
+    const startOfYear = `${now.getFullYear()}-01-01`;
+
+    const [revenuesRes, expensesRes, contractsRes, clientsRes, cashRes, partnersRes] = await Promise.all([
+      admin.from('revenues').select('*, clients(company_name)').gte('due_date', startOfYear).order('due_date', { ascending: false }).limit(500),
+      admin.from('expenses').select('*, expense_categories(name)').gte('date', startOfYear).order('date', { ascending: false }).limit(500),
+      admin.from('financial_contracts').select('*, clients(company_name), plans(name, price)').eq('status', 'ativo'),
+      admin.from('clients').select('id, company_name, color, plan_id, weekly_reels, weekly_creatives, weekly_stories, weekly_goal, monthly_recordings'),
+      admin.from('cash_reserve_movements').select('*').gte('date', startOfYear).order('date', { ascending: false }).limit(100),
+      admin.from('partners').select('*, profiles:user_id(name)').eq('active', true),
+    ]);
+
+    const revenues = revenuesRes.data || [];
+    const expenses = expensesRes.data || [];
+    const contracts = contractsRes.data || [];
+    const clients = clientsRes.data || [];
+    const cashMovements = cashRes.data || [];
+    const partners = partnersRes.data || [];
+
+    const totalRevenuePaid = revenues.filter(r => r.status === 'pago').reduce((s, r) => s + Number(r.amount), 0);
+    const totalRevenuePending = revenues.filter(r => r.status === 'pendente').reduce((s, r) => s + Number(r.amount), 0);
+    const totalRevenueOverdue = revenues.filter(r => r.status === 'vencido').reduce((s, r) => s + Number(r.amount), 0);
+    const totalExpenses = expenses.reduce((s, e) => s + Number(e.amount), 0);
+
+    const expByCategory = {};
+    expenses.forEach(e => { const cat = e.expense_categories?.name || 'Sem categoria'; expByCategory[cat] = (expByCategory[cat] || 0) + Number(e.amount); });
+
+    const revByMonth = {};
+    revenues.forEach(r => { const m = r.due_date?.slice(0, 7) || 'N/A'; if (!revByMonth[m]) revByMonth[m] = { paid: 0, pending: 0 }; if (r.status === 'pago') revByMonth[m].paid += Number(r.amount); else revByMonth[m].pending += Number(r.amount); });
+
+    const expByMonth = {};
+    expenses.forEach(e => { const m = e.date?.slice(0, 7) || 'N/A'; expByMonth[m] = (expByMonth[m] || 0) + Number(e.amount); });
+
+    const revByClient = {};
+    revenues.forEach(r => { const name = r.clients?.company_name || 'N/A'; revByClient[name] = (revByClient[name] || 0) + Number(r.amount); });
+
+    const fmt = v => v.toLocaleString('pt-BR');
+    const contextData = `## Dados Financeiros da Agência Pulse (${now.getFullYear()})\n### Resumo Geral\n- Receitas pagas: R$ ${fmt(totalRevenuePaid)}\n- Receitas pendentes: R$ ${fmt(totalRevenuePending)}\n- Receitas vencidas: R$ ${fmt(totalRevenueOverdue)}\n- Despesas totais: R$ ${fmt(totalExpenses)}\n- Lucro bruto: R$ ${fmt(totalRevenuePaid - totalExpenses)}\n- Contratos ativos: ${contracts.length}\n- Clientes: ${clients.length}\n- Parceiros ativos: ${partners.length}\n\n### Receitas por Mês\n${Object.entries(revByMonth).sort(([a], [b]) => b.localeCompare(a)).slice(0, 12).map(([m, v]) => `- ${m}: Pago R$ ${fmt(v.paid)} | Pendente R$ ${fmt(v.pending)}`).join('\n')}\n\n### Despesas por Mês\n${Object.entries(expByMonth).sort(([a], [b]) => b.localeCompare(a)).slice(0, 12).map(([m, v]) => `- ${m}: R$ ${fmt(v)}`).join('\n')}\n\n### Despesas por Categoria\n${Object.entries(expByCategory).sort(([, a], [, b]) => b - a).map(([cat, val]) => `- ${cat}: R$ ${fmt(val)}`).join('\n')}\n\n### Receita por Cliente (Top 15)\n${Object.entries(revByClient).sort(([, a], [, b]) => b - a).slice(0, 15).map(([name, val]) => `- ${name}: R$ ${fmt(val)}`).join('\n')}\n\n### Contratos Ativos\n${contracts.map(c => `- ${c.clients?.company_name}: R$ ${fmt(Number(c.contract_value))}/mês (${c.payment_method}) Dia ${c.due_day}`).join('\n')}\n\n### Parceiros\n${partners.map(p => `- ${p.profiles?.name || 'N/A'}: ${p.service_function} (R$ ${fmt(Number(p.fixed_rate))})`).join('\n')}\n\n### Movimentações do Caixa\n${cashMovements.slice(0, 10).map(m => `- ${m.date}: ${m.type} R$ ${fmt(Number(m.amount))} - ${m.description}`).join('\n')}\n\n### Clientes e Produção\n${clients.slice(0, 20).map(c => `- ${c.company_name}: ${c.weekly_reels} reels/sem, ${c.weekly_creatives} criativos/sem, ${c.weekly_stories} stories/sem, ${c.monthly_recordings} gravações/mês`).join('\n')}`;
+
+    const messages = [{ role: 'system', content: `Você é o assistente financeiro inteligente da Agência Pulse. Responda perguntas sobre dados financeiros e operacionais usando os dados abaixo. Seja preciso com números, use formato brasileiro (R$, vírgulas). Responda em português do Brasil. Use markdown para formatar.\n\nQuando não tiver dados suficientes, diga claramente. Sempre contextualize com períodos (mês, ano). Sugira insights quando pertinente.\n\n${contextData}` }];
+    if (conversationHistory && Array.isArray(conversationHistory)) {
+      for (const msg of conversationHistory.slice(-10)) messages.push({ role: msg.role, content: msg.content });
+    }
+    messages.push({ role: 'user', content: question });
+
+    const dbApiKey = await fetchDbApiKey(admin, aiProvider);
+    const ai = getAiConfig(aiProvider, dbApiKey);
+    const answer = await callAi(ai, selectedModel, messages, { temperature: 0.3, max_tokens: 2000 });
+
+    await admin.from('financial_chat_messages').insert([
+      { user_id: user.id, role: 'user', content: question },
+      { user_id: user.id, role: 'assistant', content: answer },
+    ]);
+
+    res.json({ answer });
+  } catch (error) {
+    console.error('Financial chat error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── 2. Send WhatsApp ───────────────────────────────────────
+app.post('/api/send-whatsapp', async (req, res) => {
+  try {
+    const { user, userClient } = await verifyUser(req);
+    const admin = getAdminClient();
+
+    const { data: configData } = await admin.from('whatsapp_config').select('api_token, default_user_id, default_queue_id, send_signature, close_ticket').limit(1).single();
+    const WHATSAPP_TOKEN = configData?.api_token;
+    if (!WHATSAPP_TOKEN) return res.status(400).json({ error: 'Token da API WhatsApp não configurado' });
+
+    const { action, number, message, userId: apiUserId, queueId, sendSignature, closeTicket, clientId, triggerType, mediaUrl, mediaFileName } = req.body;
+    const effectiveUserId = apiUserId || configData?.default_user_id || '';
+    const effectiveQueueId = queueId || configData?.default_queue_id || '';
+    const effectiveSignature = sendSignature !== undefined ? sendSignature : (configData?.send_signature || false);
+    const effectiveCloseTicket = closeTicket !== undefined ? closeTicket : (configData?.close_ticket || false);
+
+    if (action === 'test_connection') {
+      try {
+        const testResponse = await fetch(WHATSAPP_API_URL, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ number: '0', body: '', userId: '', queueId: '', sendSignature: false, closeTicket: false }),
+        });
+        const isTokenValid = testResponse.status !== 401 && testResponse.status !== 403;
+        return res.json({ success: isTokenValid, status: testResponse.status });
+      } catch (e) {
+        return res.status(502).json({ success: false, error: 'Não foi possível conectar à API' });
+      }
+    }
+
+    if (!number || !message) return res.status(400).json({ error: 'number and message are required' });
+    const cleanNumber = number.replace(/\D/g, '');
+
+    let apiResponse, apiResult;
+    if (mediaUrl) {
+      const fileResponse = await fetch(mediaUrl);
+      if (!fileResponse.ok) return res.status(400).json({ error: 'Não foi possível baixar o arquivo de mídia' });
+      const fileBlob = await fileResponse.blob();
+      const fileName = mediaFileName || mediaUrl.split('/').pop() || 'file';
+      const formData = new FormData();
+      formData.append('number', cleanNumber);
+      formData.append('body', message);
+      formData.append('userId', effectiveUserId);
+      formData.append('queueId', effectiveQueueId);
+      formData.append('sendSignature', String(effectiveSignature));
+      formData.append('closeTicket', String(effectiveCloseTicket));
+      formData.append('medias', fileBlob, fileName);
+      apiResponse = await fetch(WHATSAPP_API_URL, { method: 'POST', headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` }, body: formData });
+      apiResult = await apiResponse.json();
+    } else {
+      apiResponse = await fetch(WHATSAPP_API_URL, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number: cleanNumber, body: message, userId: effectiveUserId, queueId: effectiveQueueId, sendSignature: effectiveSignature, closeTicket: effectiveCloseTicket }),
+      });
+      apiResult = await apiResponse.json();
+    }
+
+    const status = apiResponse.ok ? 'sent' : 'failed';
+    await userClient.from('whatsapp_messages').insert({
+      phone_number: cleanNumber,
+      message: mediaUrl ? `${message} [📎 ${mediaFileName || 'arquivo'}]` : message,
+      status,
+      api_response: apiResult,
+      sent_by: user.id,
+      client_id: clientId || null,
+      trigger_type: triggerType || 'manual',
+    });
+
+    res.status(apiResponse.ok ? 200 : 502).json({ success: apiResponse.ok, status, apiResult });
+  } catch (error) {
+    console.error('send-whatsapp error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── 3. Generate Script ─────────────────────────────────────
+const VIDEO_TYPE_STRUCTURES = {
+  vendas: `Estrutura GCT (Gancho, Conteúdo, CTA):\n1. GANCHO - Primeiros segundos para capturar atenção.\n2. CONTEÚDO - Apresente produto/serviço, benefícios.\n3. CTA - Direcione para ação.`,
+  institucional: `Vídeo Institucional - Fortalecer imagem e transmitir credibilidade.`,
+  reconhecimento: `Vídeo de Reconhecimento - Apresentar a empresa.`,
+  educacional: `Vídeo Educacional - Ensinar algo relevante.`,
+  bastidores: `Vídeo de Bastidores - Mostrar o dia a dia.`,
+  depoimento: `Vídeo de Depoimento - Prova social.`,
+  lancamento: `Vídeo de Lançamento - Apresentar novidade com impacto.`,
+};
+
+const FORMAT_CONTEXT = {
+  reels: 'Formato: Reels (vídeo vertical curto, 30-90 segundos)',
+  story: 'Formato: Story (vídeo vertical 15-60 segundos)',
+  criativo: 'Formato: Criativo/Arte (peça visual estática)',
+};
+
+app.post('/api/generate-script', async (req, res) => {
+  try {
+    const { editorial, videoType, contentFormat, clientName, niche, exampleScripts, aiModel, aiProvider } = req.body;
+    const admin = getAdminClient();
+    const dbApiKey = await fetchDbApiKey(admin, aiProvider);
+    const ai = getAiConfig(aiProvider, dbApiKey);
+    const selectedModel = aiModel || 'gemini-2.5-flash-lite';
+    const structure = VIDEO_TYPE_STRUCTURES[videoType] || VIDEO_TYPE_STRUCTURES.vendas;
+    const format = FORMAT_CONTEXT[contentFormat] || FORMAT_CONTEXT.reels;
+
+    let examplesBlock = '';
+    if (exampleScripts?.length) {
+      examplesBlock = '\n\nROTEIROS DE REFERÊNCIA:\n' + exampleScripts.map((ex, i) => `--- EXEMPLO ${i + 1} ---\nTítulo: ${ex.title}\nTipo: ${ex.videoType} | Formato: ${ex.contentFormat} | Cliente: ${ex.clientName}\nConteúdo:\n${ex.content}\n--- FIM ---`).join('\n\n');
+    }
+
+    const systemPrompt = `Você é um redator profissional de conteúdo para redes sociais de uma agência de marketing digital brasileira chamada Pulse.\n\nRegras: CTA conectado, venda sem parecer venda, aspas ("") para falas, [descrição] para cenas/ações.\nResponda com o roteiro completo primeiro, depois "LEGENDA:" seguido da legenda para Instagram.`;
+    const userPrompt = `Crie um roteiro completo:\nCLIENTE: ${clientName}\n${niche ? `NICHO: ${niche}` : ''}\n${editorial ? `EDITORIAL:\n${editorial}` : ''}\nTIPO: ${videoType}\n${format}\nESTRUTURA:\n${structure}${examplesBlock}\n\nGere o roteiro + legenda (max 200 chars, com CTA e emojis, sem hashtags).`;
+
+    let scriptContent = '', captionContent = '';
+
+    if (ai.provider === 'gemini') {
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${ai.key}`;
+      const response = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }], generationConfig: { maxOutputTokens: 4096, temperature: 0.8 } }),
+      });
+      if (!response.ok) throw new Error(`Gemini error [${response.status}]: ${await response.text()}`);
+      const data = await response.json();
+      const fullText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const legendaIdx = fullText.lastIndexOf('LEGENDA:');
+      if (legendaIdx > -1) { scriptContent = fullText.slice(0, legendaIdx).trim(); captionContent = fullText.slice(legendaIdx + 8).trim(); }
+      else scriptContent = fullText;
+    } else {
+      const answer = await callAi(ai, selectedModel, [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }], { temperature: 0.8, max_tokens: 4000 });
+      const legendaIdx = answer.lastIndexOf('LEGENDA:');
+      if (legendaIdx > -1) { scriptContent = answer.slice(0, legendaIdx).trim(); captionContent = answer.slice(legendaIdx + 8).trim(); }
+      else scriptContent = answer;
+    }
+
+    res.json({ content: scriptContent, caption: captionContent });
+  } catch (error) {
+    console.error('Generate script error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── 4. Generate Caption ────────────────────────────────────
+app.post('/api/generate-caption', async (req, res) => {
+  try {
+    const { scriptContent, clientName, niche, aiModel, aiProvider } = req.body;
+    if (!scriptContent) return res.status(400).json({ error: 'scriptContent is required' });
+
+    const admin = getAdminClient();
+    const dbApiKey = await fetchDbApiKey(admin, aiProvider);
+    const ai = getAiConfig(aiProvider, dbApiKey);
+    const model = aiModel || 'gemini-2.5-flash-lite';
+
+    const prompt = `Você é um social media profissional brasileiro. Gere uma LEGENDA curta para Instagram.\nRegras: Máximo 200 chars, CTA, 1-3 emojis, sem hashtags.\n${clientName ? `CLIENTE: ${clientName}` : ''}\n${niche ? `NICHO: ${niche}` : ''}\nROTEIRO:\n${scriptContent}\n\nResponda APENAS com a legenda.`;
+
+    let caption = '';
+    if (ai.provider === 'gemini') {
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${ai.key}`;
+      const response = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 300, temperature: 0.7 } }),
+      });
+      if (!response.ok) throw new Error(`Gemini error: ${await response.text()}`);
+      const data = await response.json();
+      caption = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+    } else {
+      caption = await callAi(ai, model, [{ role: 'user', content: prompt }], { temperature: 0.7, max_tokens: 300 });
+    }
+    if (caption.length > 200) caption = caption.slice(0, 197) + '...';
+    res.json({ caption });
+  } catch (error) {
+    console.error('Generate caption error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── 5. Client Portal Auth ──────────────────────────────────
+async function hashPassword(password) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + 'pulse_portal_salt_2026');
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+app.post('/api/client-portal-auth', async (req, res) => {
+  try {
+    const admin = getAdminClient();
+    const { action, login, password, client_id, slug } = req.body;
+
+    if (action === 'login') {
+      if (!login || !password) return res.status(400).json({ error: 'Login e senha obrigatórios' });
+      const { data: client, error } = await admin.from('clients').select('id, company_name, client_login, client_password_hash, color, logo_url').eq('client_login', login.trim()).single();
+      if (error || !client) return res.status(404).json({ error: 'Login não encontrado' });
+      const passwordHash = await hashPassword(password);
+      if (client.client_password_hash !== passwordHash) return res.status(401).json({ error: 'Senha incorreta' });
+      return res.json({ success: true, client_id: client.id, company_name: client.company_name, color: client.color, logo_url: client.logo_url });
+    }
+
+    if (action === 'register') {
+      if (!client_id || !login || !password) return res.status(400).json({ error: 'Dados incompletos' });
+      const { data: existing } = await admin.from('clients').select('client_login, client_password_hash').eq('id', client_id).single();
+      if (existing?.client_login && existing?.client_password_hash) return res.status(409).json({ error: 'Conta já existe' });
+      const { data: taken } = await admin.from('clients').select('id').eq('client_login', login.trim()).neq('id', client_id).maybeSingle();
+      if (taken) return res.status(409).json({ error: 'Login já em uso' });
+      const passwordHash = await hashPassword(password);
+      const { error } = await admin.from('clients').update({ client_login: login.trim(), client_password_hash: passwordHash }).eq('id', client_id);
+      if (error) return res.status(500).json({ error: 'Erro ao criar conta' });
+      const { data: clientData } = await admin.from('clients').select('company_name').eq('id', client_id).single();
+      return res.json({ success: true, client_id, company_name: clientData?.company_name });
+    }
+
+    if (action === 'get_info') {
+      if (!client_id && !slug) return res.status(400).json({ error: 'client_id or slug required' });
+      let query = admin.from('clients').select('id, company_name, color, logo_url, client_login, client_password_hash, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics');
+      if (client_id) query = query.eq('id', client_id); else query = query.ilike('company_name', slug.replace(/-/g, ' '));
+      const { data, error } = await query.single();
+      if (error || !data) return res.status(404).json({ error: 'Cliente não encontrado' });
+      return res.json({ id: data.id, company_name: data.company_name, color: data.color, logo_url: data.logo_url, has_credentials: !!(data.client_login && data.client_password_hash), weekly_reels: data.weekly_reels, weekly_creatives: data.weekly_creatives, weekly_stories: data.weekly_stories, monthly_recordings: data.monthly_recordings, plan_id: data.plan_id, show_metrics: data.show_metrics });
+    }
+
+    if (action === 'get_contents') {
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      const { data } = await admin.from('client_portal_contents').select('*').eq('client_id', client_id).order('created_at', { ascending: false });
+      return res.json({ contents: data || [] });
+    }
+
+    res.status(400).json({ error: 'Invalid action' });
+  } catch (err) {
+    console.error('Portal auth error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── 6. Portal Recordings ───────────────────────────────────
+app.post('/api/portal-recordings', async (req, res) => {
+  try {
+    const admin = getAdminClient();
+    const { action, client_id, recording_id, new_date, new_time } = req.body;
+    if (!client_id) return res.status(400).json({ error: 'client_id required' });
+
+    if (action === 'list') {
+      const { data: recordings } = await admin.from('recordings').select('id, client_id, videomaker_id, date, start_time, status, type, confirmation_status').eq('client_id', client_id).neq('status', 'cancelada').order('date', { ascending: true });
+      const vmIds = [...new Set((recordings || []).map(r => r.videomaker_id))];
+      let vmNames = {};
+      if (vmIds.length > 0) { const { data: profiles } = await admin.from('profiles').select('id, name, avatar_url').in('id', vmIds); if (profiles) profiles.forEach(p => { vmNames[p.id] = p.name; }); }
+      return res.json({ recordings: (recordings || []).map(r => ({ ...r, videomaker_name: vmNames[r.videomaker_id] || 'Videomaker' })) });
+    }
+
+    if (action === 'check_availability') {
+      if (!new_date) return res.status(400).json({ error: 'new_date required' });
+      const { data: clientData } = await admin.from('clients').select('videomaker_id').eq('id', client_id).single();
+      if (!clientData?.videomaker_id) return res.status(400).json({ error: 'Nenhum videomaker atribuído' });
+      const { data: settings } = await admin.from('company_settings').select('*').limit(1).single();
+      const duration = (settings?.recording_duration || 2) * 60;
+      const buffer = 30;
+      const { data: existing } = await admin.from('recordings').select('start_time, date').eq('videomaker_id', clientData.videomaker_id).eq('date', new_date).neq('status', 'cancelada');
+      const occupied = (existing || []).map(r => { const [h, m] = r.start_time.split(':').map(Number); const start = h * 60 + m; return { start, end: start + duration + buffer }; });
+      const slots = [];
+      const generateSlots = (startStr, endStr) => { const [sh, sm] = startStr.split(':').map(Number); const [eh, em] = endStr.split(':').map(Number); let cursor = sh * 60 + sm; const endMin = eh * 60 + em; while (cursor + duration <= endMin) { const conflict = occupied.some(o => cursor < o.end && cursor + duration + buffer > o.start); if (!conflict) slots.push(`${String(Math.floor(cursor / 60)).padStart(2, '0')}:${String(cursor % 60).padStart(2, '0')}`); cursor += 30; } };
+      generateSlots(settings?.shift_a_start || '08:30', settings?.shift_a_end || '12:00');
+      generateSlots(settings?.shift_b_start || '14:30', settings?.shift_b_end || '18:00');
+      const { data: vmProfile } = await admin.from('profiles').select('name').eq('id', clientData.videomaker_id).single();
+      return res.json({ available_slots: slots, videomaker_name: vmProfile?.name || 'Videomaker', videomaker_id: clientData.videomaker_id, date: new_date });
+    }
+
+    if (action === 'reschedule') {
+      if (!recording_id || !new_date || !new_time) return res.status(400).json({ error: 'recording_id, new_date, new_time required' });
+      const { data: rec } = await admin.from('recordings').select('id, client_id, videomaker_id, date, start_time').eq('id', recording_id).eq('client_id', client_id).single();
+      if (!rec) return res.status(404).json({ error: 'Gravação não encontrada' });
+      const { data: settings } = await admin.from('company_settings').select('recording_duration').limit(1).single();
+      const duration = (settings?.recording_duration || 2) * 60;
+      const buffer = 30;
+      const { data: conflicts } = await admin.from('recordings').select('id, start_time').eq('videomaker_id', rec.videomaker_id).eq('date', new_date).neq('status', 'cancelada').neq('id', recording_id);
+      const [nh, nm] = new_time.split(':').map(Number);
+      const newStart = nh * 60 + nm;
+      const newEnd = newStart + duration + buffer;
+      const hasConflict = (conflicts || []).some(c => { const [ch, cm] = c.start_time.split(':').map(Number); const cStart = ch * 60 + cm; return newStart < cStart + duration + buffer && newEnd > cStart; });
+      if (hasConflict) return res.status(409).json({ error: 'Horário não está mais disponível' });
+      await admin.from('recordings').update({ date: new_date, start_time: new_time, confirmation_status: 'pendente' }).eq('id', recording_id);
+      const { data: clientInfo } = await admin.from('clients').select('company_name').eq('id', client_id).single();
+      await admin.rpc('notify_role', { _role: 'admin', _title: 'Reagendamento pelo cliente', _message: `${clientInfo?.company_name} reagendou gravação de ${rec.date} ${rec.start_time} para ${new_date} ${new_time}`, _type: 'warning', _link: '/agenda' });
+      await admin.rpc('notify_role', { _role: 'social_media', _title: 'Reagendamento pelo cliente', _message: `${clientInfo?.company_name} reagendou gravação de ${rec.date} ${rec.start_time} para ${new_date} ${new_time}`, _type: 'warning', _link: '/agenda' });
+      return res.json({ success: true });
+    }
+
+    res.status(400).json({ error: 'Invalid action' });
+  } catch (err) {
+    console.error('Portal recordings error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── 7. Portal Media Proxy ──────────────────────────────────
+app.all('/api/portal-media-proxy', async (req, res) => {
+  try {
+    const targetUrl = req.method === 'GET' ? req.query.url : req.body?.url;
+    if (!targetUrl) return res.status(400).json({ error: 'url is required' });
+    try { const parsed = new URL(targetUrl); if (parsed.origin !== 'https://agenciapulse.tech' || !parsed.pathname.startsWith('/uploads/')) return res.status(400).json({ error: 'URL not allowed' }); } catch { return res.status(400).json({ error: 'Invalid URL' }); }
+
+    const headers = {};
+    if (req.headers.range) headers.Range = req.headers.range;
+    if (req.headers.accept) headers.Accept = req.headers.accept;
+    const upstream = await fetch(targetUrl, { headers, redirect: 'follow' });
+    if (!upstream.ok && upstream.status !== 206) return res.status(upstream.status).json({ error: 'Failed to fetch media' });
+
+    const passthroughHeaders = ['content-type', 'content-length', 'content-range', 'accept-ranges', 'cache-control', 'etag', 'last-modified'];
+    for (const h of passthroughHeaders) { const v = upstream.headers.get(h); if (v) res.setHeader(h, v); }
+    if (!upstream.headers.get('content-type')) {
+      if (/\.mp4(\?|$)/i.test(targetUrl)) res.setHeader('content-type', 'video/mp4');
+      else res.setHeader('content-type', 'application/octet-stream');
+    }
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Content-Disposition', 'inline');
+    
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+    res.status(upstream.status).send(buffer);
+  } catch (error) {
+    console.error('portal-media-proxy error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── 8. Meta OAuth ──────────────────────────────────────────
+const META_API_BASE = 'https://graph.facebook.com/v21.0';
+
+app.post('/api/meta-oauth', async (req, res) => {
+  try {
+    const admin = getAdminClient();
+    const { action, client_id, redirect_uri, code } = req.body;
+
+    const { data: metaIntegration } = await admin.from('api_integrations').select('config').eq('provider', 'meta_ads').eq('status', 'ativo').limit(1).single();
+    if (!metaIntegration) return res.status(400).json({ error: 'Meta integration not configured' });
+    const config = metaIntegration.config;
+    const appId = config?.meta_app_id;
+
+    if (action === 'get_oauth_url') {
+      if (!appId) return res.status(400).json({ error: 'Meta App ID not found' });
+      const scopes = 'pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish';
+      const state = JSON.stringify({ client_id });
+      const oauthUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirect_uri)}&scope=${scopes}&state=${encodeURIComponent(state)}&response_type=code`;
+      return res.json({ oauth_url: oauthUrl });
+    }
+
+    if (action === 'exchange_code') {
+      if (!code || !redirect_uri || !client_id) return res.status(400).json({ error: 'Missing code, redirect_uri, or client_id' });
+      const appSecret = config?.meta_app_secret_encrypted;
+      if (!appId || !appSecret) return res.status(400).json({ error: 'Meta App ID or Secret not found' });
+
+      const tokenRes = await fetch(`${META_API_BASE}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&redirect_uri=${encodeURIComponent(redirect_uri)}&code=${code}`);
+      const tokenData = await tokenRes.json();
+      if (tokenData.error) return res.status(400).json({ error: 'Failed to exchange code: ' + (tokenData.error.message || JSON.stringify(tokenData.error)) });
+
+      const longTokenRes = await fetch(`${META_API_BASE}/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${tokenData.access_token}`);
+      const longTokenData = await longTokenRes.json();
+      const longToken = longTokenData.access_token || tokenData.access_token;
+
+      const pagesRes = await fetch(`${META_API_BASE}/me/accounts?fields=id,name,access_token,instagram_business_account{id,name,username,profile_picture_url}&access_token=${longToken}`);
+      const pagesData = await pagesRes.json();
+      if (pagesData.error) return res.status(400).json({ error: 'Failed to fetch pages: ' + pagesData.error.message });
+
+      const pages = pagesData.data || [];
+      const connectedAccounts = [];
+      await admin.from('social_accounts').delete().eq('client_id', client_id);
+
+      for (const page of pages) {
+        await admin.from('social_accounts').insert({ client_id, platform: 'facebook', facebook_page_id: page.id, account_name: page.name, access_token: page.access_token, status: 'connected', token_expiration: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() });
+        connectedAccounts.push({ platform: 'facebook', name: page.name, pageId: page.id });
+        if (page.instagram_business_account) {
+          const ig = page.instagram_business_account;
+          await admin.from('social_accounts').insert({ client_id, platform: 'instagram', facebook_page_id: page.id, instagram_business_id: ig.id, account_name: ig.username || ig.name, access_token: page.access_token, status: 'connected', token_expiration: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() });
+          connectedAccounts.push({ platform: 'instagram', name: ig.username || ig.name, username: ig.username, businessId: ig.id, profilePicture: ig.profile_picture_url, pageId: page.id });
+        }
+        await admin.from('integration_logs').insert({ client_id, platform: 'facebook', action: 'oauth_connect', status: 'success', message: `Página ${page.name} conectada via OAuth.` });
+      }
+      return res.json({ success: true, accounts: connectedAccounts, pages_found: pages.length });
+    }
+
+    res.status(400).json({ error: 'Invalid action' });
+  } catch (error) {
+    console.error('Meta OAuth error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── 9. Meta Publish ────────────────────────────────────────
+async function fetchMetaWithRetry(url, options, retries = 3) {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    await new Promise(r => setTimeout(r, 200));
+    const response = await fetch(url, options);
+    if (response.ok) return response;
+    const body = await response.text();
+    if (response.status === 429 || body.includes('too many calls') || response.status >= 500) {
+      await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
+      continue;
+    }
+    throw new Error(`Meta API error [${response.status}]: ${body}`);
+  }
+  throw new Error('Max retries exceeded');
+}
+
+app.post('/api/meta-publish', async (req, res) => {
+  try {
+    const admin = getAdminClient();
+    const { integration_id, client_id, publish_type, media_url, caption, scheduled_time } = req.body;
+    if (!integration_id || !client_id || !publish_type || !media_url) return res.status(400).json({ error: 'Missing required fields' });
+    const { data: integration } = await admin.from('api_integrations').select('*').eq('id', integration_id).single();
+    if (!integration || integration.status !== 'ativo') return res.status(400).json({ error: 'Integration not active' });
+    const config = integration.config || {};
+    const pageToken = config.meta_page_token_encrypted || config.meta_page_token;
+    const igBusinessId = config.meta_ig_business_id;
+    const pageId = config.meta_page_id;
+    if (!pageToken || !igBusinessId || !pageId) throw new Error('Missing Meta credentials');
+
+    let result;
+    if (publish_type === 'feed') {
+      const params = new URLSearchParams({ url: media_url, access_token: pageToken });
+      if (caption) params.set('caption', caption);
+      if (scheduled_time) { params.set('published', 'false'); params.set('scheduled_publish_time', String(scheduled_time)); }
+      const response = await fetchMetaWithRetry(`${META_API_BASE}/${pageId}/photos?${params}`, { method: 'POST' });
+      result = await response.json();
+    } else if (publish_type === 'reels') {
+      const cp = new URLSearchParams({ media_type: 'REELS', video_url: media_url, access_token: pageToken });
+      if (caption) cp.set('caption', caption);
+      const cr = await fetchMetaWithRetry(`${META_API_BASE}/${igBusinessId}/media?${cp}`, { method: 'POST' });
+      const cd = await cr.json();
+      if (!cd.id) throw new Error('Failed to create container');
+      let ready = false;
+      for (let i = 0; i < 30; i++) { await new Promise(r => setTimeout(r, 2000)); const sr = await fetchMetaWithRetry(`${META_API_BASE}/${cd.id}?fields=status_code&access_token=${pageToken}`, { method: 'GET' }); const sd = await sr.json(); if (sd.status_code === 'FINISHED') { ready = true; break; } if (sd.status_code === 'ERROR') throw new Error('Media processing failed'); }
+      if (!ready) throw new Error('Media processing timed out');
+      const pr = await fetchMetaWithRetry(`${META_API_BASE}/${igBusinessId}/media_publish?creation_id=${cd.id}&access_token=${pageToken}`, { method: 'POST' });
+      result = await pr.json();
+    } else if (publish_type === 'stories') {
+      const isVideo = /\.(mp4|mov|webm)/i.test(media_url);
+      const cp = new URLSearchParams({ media_type: 'STORIES', access_token: pageToken });
+      if (isVideo) cp.set('video_url', media_url); else cp.set('image_url', media_url);
+      const cr = await fetchMetaWithRetry(`${META_API_BASE}/${igBusinessId}/media?${cp}`, { method: 'POST' });
+      const cd = await cr.json();
+      if (isVideo) for (let i = 0; i < 20; i++) { await new Promise(r => setTimeout(r, 2000)); const sr = await fetchMetaWithRetry(`${META_API_BASE}/${cd.id}?fields=status_code&access_token=${pageToken}`, { method: 'GET' }); const sd = await sr.json(); if (sd.status_code === 'FINISHED') break; if (sd.status_code === 'ERROR') throw new Error('Story video failed'); }
+      const pr = await fetchMetaWithRetry(`${META_API_BASE}/${igBusinessId}/media_publish?creation_id=${cd.id}&access_token=${pageToken}`, { method: 'POST' });
+      result = await pr.json();
+    }
+
+    await admin.from('api_integration_logs').insert({ integration_id, action: `publicação ${publish_type}`, status: 'success', details: { client_id, media_id: result?.id, publish_type } });
+    await admin.from('api_integrations').update({ last_checked_at: new Date().toISOString(), last_error: null, status: 'ativo' }).eq('id', integration_id);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Meta publish error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ─── 10. Meta Store Credentials ─────────────────────────────
+app.post('/api/meta-store-credentials', async (req, res) => {
+  try {
+    const { user, admin } = await verifyAdmin(req);
+    const { integration_id, secret_name, secret_value, meta_app_id, meta_app_secret, meta_page_token, meta_ig_business_id, meta_page_id } = req.body;
+
+    if (secret_name && secret_value) {
+      const keyToProviderMap = { GOOGLE_GEMINI_API_KEY: 'ai_gemini', OPENAI_API_KEY: 'ai_openai', ANTHROPIC_API_KEY: 'ai_claude' };
+      const dbProvider = keyToProviderMap[secret_name];
+      if (dbProvider) {
+        const { data: existing } = await admin.from('api_integrations').select('id, config').eq('provider', dbProvider).limit(1).single();
+        if (existing) {
+          const cfg = existing.config || {};
+          cfg.api_key_encrypted = secret_value;
+          cfg.api_key_set = true;
+          cfg.api_key_hint = '••••' + secret_value.slice(-4);
+          await admin.from('api_integrations').update({ config: cfg, updated_at: new Date().toISOString() }).eq('id', existing.id);
+        }
+      }
+      return res.json({ success: true, message: `Secret ${secret_name} stored` });
+    }
+
+    if (!integration_id) return res.status(400).json({ error: 'integration_id is required' });
+    const { data: current } = await admin.from('api_integrations').select('config').eq('id', integration_id).single();
+    const updatedConfig = { ...(current?.config || {}) };
+    if (meta_app_id) updatedConfig.meta_app_id = meta_app_id;
+    if (meta_app_secret) { updatedConfig.meta_app_secret_encrypted = meta_app_secret; updatedConfig.meta_app_secret = '••••' + meta_app_secret.slice(-4); }
+    if (meta_page_token) { updatedConfig.meta_page_token_encrypted = meta_page_token; updatedConfig.meta_page_token = '••••' + meta_page_token.slice(-4); }
+    if (meta_ig_business_id) updatedConfig.meta_ig_business_id = meta_ig_business_id;
+    if (meta_page_id) updatedConfig.meta_page_id = meta_page_id;
+    updatedConfig.credentials_updated_at = new Date().toISOString();
+    await admin.from('api_integrations').update({ config: updatedConfig, updated_at: new Date().toISOString() }).eq('id', integration_id);
+    await admin.from('api_integration_logs').insert({ integration_id, action: 'credenciais atualizadas via backend seguro', status: 'success', details: { fields_updated: [meta_app_id && 'app_id', meta_app_secret && 'app_secret', meta_page_token && 'page_token', meta_ig_business_id && 'ig_business_id', meta_page_id && 'page_id'].filter(Boolean) }, performed_by: user.id });
+    res.json({ success: true, message: 'Credentials stored securely' });
+  } catch (error) {
+    console.error('Store credentials error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── 11. Meta Token Refresh ─────────────────────────────────
+app.post('/api/meta-token-refresh', async (req, res) => {
+  try {
+    const admin = getAdminClient();
+    const { data: integrations } = await admin.from('api_integrations').select('*').eq('provider', 'meta_ads').eq('status', 'ativo');
+    if (!integrations?.length) return res.json({ message: 'No active Meta integrations' });
+    const results = [];
+    for (const integration of integrations) {
+      const config = integration.config || {};
+      const token = config.meta_page_token_encrypted || config.meta_page_token;
+      const appId = config.meta_app_id;
+      const appSecret = config.meta_app_secret_encrypted || config.meta_app_secret;
+      if (!token || !appId || !appSecret) { results.push({ id: integration.id, status: 'skipped' }); continue; }
+      try {
+        const r = await fetch(`${META_API_BASE}/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${token}`);
+        const data = await r.json();
+        if (data.access_token) {
+          await admin.from('api_integrations').update({ config: { ...config, meta_page_token_encrypted: data.access_token, token_refreshed_at: new Date().toISOString(), token_expires_in: data.expires_in }, last_checked_at: new Date().toISOString(), last_error: null, status: 'ativo' }).eq('id', integration.id);
+          results.push({ id: integration.id, status: 'refreshed' });
+        } else { results.push({ id: integration.id, status: 'error', error: data.error?.message }); }
+      } catch (err) { results.push({ id: integration.id, status: 'error', error: err.message }); }
+    }
+    res.json({ success: true, results });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── 12. Reset Password ────────────────────────────────────
+app.post('/api/reset-password', async (req, res) => {
+  try {
+    const { user, admin } = await verifyAdmin(req);
+    const { userId, newPassword } = req.body;
+    if (!userId || !newPassword || newPassword.length < 6) return res.status(400).json({ error: 'userId and newPassword (min 6 chars) required' });
+    const { error } = await admin.auth.admin.updateUser(userId, { password: newPassword });
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── 13. Delete User ────────────────────────────────────────
+app.post('/api/delete-user', async (req, res) => {
+  try {
+    const { user, admin } = await verifyAdmin(req);
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+    if (userId === user.id) return res.status(400).json({ error: 'Cannot delete yourself' });
+    await admin.from('partners').delete().eq('user_id', userId);
+    await admin.from('user_roles').delete().eq('user_id', userId);
+    await admin.from('notifications').delete().eq('user_id', userId);
+    await admin.from('profiles').delete().eq('id', userId);
+    const { error } = await admin.auth.admin.deleteUser(userId);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ─── 14. Client Onboarding ──────────────────────────────────
+app.all('/api/client-onboarding', async (req, res) => {
+  try {
+    const admin = getAdminClient();
+    if (req.method === 'GET') {
+      const clientId = req.query.clientId;
+      if (!clientId) return res.status(400).json({ error: 'Missing clientId' });
+      const { data: client } = await admin.from('clients').select('id, company_name, responsible_person, logo_url, onboarding_completed, videomaker_id, fixed_day, fixed_time, backup_day, backup_time, monthly_recordings, accepts_extra, extra_content_types, extra_client_appears, plan_id, selected_weeks, client_type, photo_preference, has_photo_shoot, accepts_photo_shoot_cost, briefing_data').eq('id', clientId).single();
+      if (!client) return res.status(404).json({ error: 'Client not found' });
+      const { data: videomakers } = await admin.from('profiles').select('id, name, display_name, avatar_url, bio, job_title').eq('role', 'videomaker');
+      const { data: settings } = await admin.from('company_settings').select('*').limit(1).single();
+      const { data: existingClients } = await admin.from('clients').select('id, videomaker_id, fixed_day, fixed_time').not('videomaker_id', 'is', null);
+      let plan = null;
+      if (client.plan_id) { const { data: planData } = await admin.from('plans').select('id, name, recording_sessions, accepts_extra_content').eq('id', client.plan_id).single(); plan = planData; }
+      return res.json({ client, videomakers: videomakers || [], settings, existingClients: existingClients || [], plan });
+    }
+    // POST — full onboarding save logic (same as original edge function)
+    const body = req.body;
+    const { clientId, videomaker_id, fixed_day, fixed_time, backup_day, backup_time, monthly_recordings, accepts_extra, extra_content_types, extra_client_appears, selected_weeks, photo_preference, has_photo_shoot, accepts_photo_shoot_cost, briefing_data } = body;
+    if (!clientId || !videomaker_id || !fixed_day || !fixed_time) return res.status(400).json({ error: 'Missing required fields' });
+
+    const updatePayload = { videomaker_id, fixed_day, fixed_time, backup_day: backup_day || 'terca', backup_time: backup_time || '14:00', monthly_recordings: monthly_recordings || 4, accepts_extra: accepts_extra || false, extra_content_types: extra_content_types || [], extra_client_appears: extra_client_appears || false, selected_weeks: selected_weeks || [1, 2, 3, 4], onboarding_completed: true, photo_preference: photo_preference || 'nao_precisa', has_photo_shoot: has_photo_shoot || false, accepts_photo_shoot_cost: accepts_photo_shoot_cost || false };
+    if (briefing_data && Object.keys(briefing_data).length > 0) { updatePayload.briefing_data = briefing_data; if (briefing_data.instagram_login) updatePayload.client_login = briefing_data.instagram_login; if (briefing_data.niche) updatePayload.niche = briefing_data.niche; }
+
+    const { error } = await admin.from('clients').update(updatePayload).eq('id', clientId);
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Auto-complete onboarding tasks + create recordings (simplified)
+    const weeks = selected_weeks || [1, 2, 3, 4];
+    // Create upcoming recordings
+    const dayMap = { domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6 };
+    const targetDay = dayMap[fixed_day];
+    if (targetDay !== undefined) {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = today.getMonth();
+      const allDates = [];
+      const current = new Date(year, month, 1);
+      while (current.getMonth() === month) { if (current.getDay() === targetDay) allDates.push(current.toISOString().split('T')[0]); current.setDate(current.getDate() + 1); }
+      const todayStr = today.toISOString().split('T')[0];
+      let dates = weeks.filter(w => w >= 1 && w <= allDates.length).map(w => allDates[w - 1]).filter(d => d > todayStr);
+      if (dates.length === 0) {
+        const nextMonth = new Date(year, month + 1, 1);
+        const nextAllDates = [];
+        const next = new Date(nextMonth);
+        while (next.getMonth() === nextMonth.getMonth()) { if (next.getDay() === targetDay) nextAllDates.push(next.toISOString().split('T')[0]); next.setDate(next.getDate() + 1); }
+        dates = weeks.filter(w => w >= 1 && w <= nextAllDates.length).map(w => nextAllDates[w - 1]);
+      }
+      if (dates.length > 0) await admin.from('recordings').insert(dates.map(date => ({ client_id: clientId, videomaker_id, date, start_time: fixed_time, type: 'fixa', status: 'agendada', confirmation_status: 'pendente' })));
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Client onboarding error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── 15. Billing Automation ─────────────────────────────────
+app.post('/api/billing-automation', async (req, res) => {
+  try {
+    const admin = getAdminClient();
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const currentDay = today.getDate();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+
+    const { data: contracts } = await admin.from('financial_contracts').select('*').eq('status', 'ativo');
+    if (!contracts?.length) return res.json({ message: 'No active contracts' });
+    const { data: paymentConfigs } = await admin.from('payment_config').select('*').limit(1);
+    const paymentConfig = paymentConfigs?.[0];
+    const { data: whatsappConfigs } = await admin.from('whatsapp_config').select('*').limit(1);
+    const whatsappConfig = whatsappConfigs?.[0];
+    const results = [];
+
+    for (const contract of contracts) {
+      const isDueDay = currentDay === contract.due_day;
+      const dueDate = new Date(currentYear, currentMonth, contract.due_day);
+      const daysSinceDue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+      const isReminder = daysSinceDue === 3;
+      if (!isDueDay && !isReminder) continue;
+
+      const { data: clientData } = await admin.from('clients').select('*').eq('id', contract.client_id).single();
+      if (!clientData?.whatsapp) continue;
+      const refMonth = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
+      const { data: existingRevenues } = await admin.from('revenues').select('*').eq('client_id', contract.client_id).eq('reference_month', refMonth);
+      const revenue = existingRevenues?.[0];
+      if (revenue?.status === 'recebida') continue;
+      const { data: existingMessages } = await admin.from('billing_messages').select('*').eq('client_id', contract.client_id).gte('sent_at', todayStr + 'T00:00:00').lte('sent_at', todayStr + 'T23:59:59');
+      if (existingMessages?.length) continue;
+
+      const value = Number(contract.contract_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      let paymentInfo = '';
+      if (paymentConfig?.pix_key) {
+        const template = paymentConfig.msg_payment_data || '💳 *Dados:*\nNome: {nome_recebedor}\nBanco: {banco}\nPIX: {chave_pix}\nDoc: {documento}';
+        paymentInfo = template.replace(/\{nome_recebedor\}/g, paymentConfig.receiver_name || '').replace(/\{banco\}/g, paymentConfig.bank || '').replace(/\{chave_pix\}/g, paymentConfig.pix_key || '').replace(/\{documento\}/g, paymentConfig.document || '');
+      }
+
+      const applyVars = tpl => tpl.replace(/\{nome_cliente\}/g, clientData.company_name).replace(/\{valor\}/g, value).replace(/\{dia_vencimento\}/g, String(contract.due_day)).replace(/\{dados_pagamento\}/g, paymentInfo);
+      let message;
+      if (isReminder) {
+        message = applyVars(paymentConfig?.msg_billing_overdue || `Olá, {nome_cliente}! Identificamos pendência de {valor}. Se já pagou, desconsidere.{dados_pagamento}`);
+        if (revenue) await admin.from('revenues').update({ status: 'em_atraso' }).eq('id', revenue.id);
+      } else {
+        message = applyVars(paymentConfig?.msg_billing_due || `Olá, {nome_cliente}! 🚀\n💰 Mensalidade: {valor}\n📅 Vencimento: Dia {dia_vencimento}{dados_pagamento}`);
+      }
+
+      if (whatsappConfig?.api_token && whatsappConfig?.integration_active) {
+        try {
+          await sendWhatsAppDirect(whatsappConfig, clientData.whatsapp, message, admin, contract.client_id, isReminder ? 'cobranca_lembrete' : 'cobranca');
+          await admin.from('billing_messages').insert({ revenue_id: revenue?.id || null, client_id: contract.client_id, message_type: isReminder ? 'lembrete' : 'cobranca', status: 'enviada' });
+          results.push({ client: clientData.company_name, type: isReminder ? 'lembrete' : 'cobranca', status: 'sent' });
+        } catch (err) { results.push({ client: clientData.company_name, status: 'error', error: String(err) }); }
+      }
+    }
+    res.json({ results, processed: results.length });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// ─── 16. WhatsApp Webhook ───────────────────────────────────
+const CONFIRM_WORDS = ['1', 'confirmar', 'confirmado', 'ok', 'sim', 'quero aproveitar', 'quero'];
+const CANCEL_WORDS = ['2', 'cancelar', 'cancelado', 'não posso', 'nao posso', 'não', 'nao'];
+
+function classifyResponse(text) {
+  const n = text.trim().toLowerCase().replace(/[^\w\sáéíóúãõâêîôûç]/g, '');
+  if (CONFIRM_WORDS.some(w => n === w || n.startsWith(w))) return 'confirm';
+  if (CANCEL_WORDS.some(w => n === w || n.startsWith(w))) return 'cancel';
+  return 'unknown';
+}
+
+function extractPayload(body) {
+  let phone = body.from || body.number || body.phone || body.remoteJid || body.contact?.number || body.ticket?.contact?.number || '';
+  let message = body.body || body.message || body.text || body.msg || body.content || '';
+  if (typeof message === 'object' && message !== null) message = message.body || message.text || message.content || message.conversation || '';
+  if (!phone && body.data) { phone = body.data.from || body.data.number || body.data.phone || ''; if (!message) message = body.data.body || body.data.message || ''; }
+  if (!phone && body.ticket) phone = body.ticket.contact?.number || body.ticket.number || '';
+  if (!message && body.ticket) message = body.ticket.lastMessage || '';
+  phone = phone.replace(/\D/g, '').replace(/@.*/, '');
+  return { phone, message: typeof message === 'string' ? message : '' };
+}
+
+app.post('/api/whatsapp-webhook', async (req, res) => {
+  try {
+    const admin = getAdminClient();
+    const { phone: phoneNumber, message: messageText } = extractPayload(req.body);
+    if (!phoneNumber || !messageText) return res.json({ ok: true, skipped: 'no_phone_or_message' });
+
+    const phoneVariants = [phoneNumber];
+    if (phoneNumber.startsWith('55') && phoneNumber.length > 10) phoneVariants.push(phoneNumber.slice(2));
+    else phoneVariants.push('55' + phoneNumber);
+
+    const { data: confirmations } = await admin.from('whatsapp_confirmations').select('*, recordings(*), clients(*)').in('phone_number', phoneVariants).eq('status', 'pending').not('sent_at', 'is', null).order('sent_at', { ascending: false }).limit(1);
+    if (!confirmations?.length) return res.json({ ok: true, skipped: 'no_pending_confirmation' });
+
+    const confirmation = confirmations[0];
+    const recording = confirmation.recordings;
+    const client = confirmation.clients;
+    const classification = classifyResponse(messageText);
+    if (classification === 'unknown') return res.json({ ok: true, skipped: 'unrecognized_response' });
+
+    const { data: configData } = await admin.from('whatsapp_config').select('*').limit(1).single();
+    if (!configData?.api_token) return res.status(400).json({ error: 'No API token' });
+
+    const templateVars = { nome_cliente: client?.company_name || '', data_gravacao: recording?.date || '', hora_gravacao: recording?.start_time || '' };
+
+    if (confirmation.type === 'confirmation') {
+      if (classification === 'confirm') {
+        await admin.from('whatsapp_confirmations').update({ status: 'confirmed', responded_at: new Date().toISOString(), response_message: messageText }).eq('id', confirmation.id);
+        await admin.from('recordings').update({ confirmation_status: 'confirmada' }).eq('id', confirmation.recording_id);
+        await sendWhatsAppDirect(configData, confirmation.phone_number, applyTemplate(configData.msg_confirmation_confirmed, templateVars), admin, client?.id, 'auto_confirmation');
+      } else {
+        await admin.from('whatsapp_confirmations').update({ status: 'cancelled', responded_at: new Date().toISOString(), response_message: messageText }).eq('id', confirmation.id);
+        await admin.from('recordings').update({ status: 'cancelada', confirmation_status: 'cancelada' }).eq('id', confirmation.recording_id);
+        await sendWhatsAppDirect(configData, confirmation.phone_number, applyTemplate(configData.msg_confirmation_cancelled, templateVars), admin, client?.id, 'auto_confirmation');
+      }
+    }
+
+    res.json({ ok: true, classification, type: confirmation.type });
+  } catch (error) {
+    console.error('whatsapp-webhook error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── 17. Confirmation Cron ──────────────────────────────────
+app.post('/api/whatsapp-confirmation-cron', async (req, res) => {
+  try {
+    const admin = getAdminClient();
+    const { data: config } = await admin.from('whatsapp_config').select('*').limit(1).single();
+    if (!config?.integration_active || !config?.api_token || !config?.auto_confirmation) return res.json({ ok: true, skipped: 'disabled' });
+
+    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const { data: recordings } = await admin.from('recordings').select('*, clients(*)').eq('date', tomorrowStr).eq('status', 'agendada').eq('confirmation_status', 'pendente');
+    if (!recordings?.length) return res.json({ ok: true, sent: 0 });
+
+    const recordingIds = recordings.map(r => r.id);
+    const { data: existingConfirmations } = await admin.from('whatsapp_confirmations').select('recording_id').in('recording_id', recordingIds).eq('type', 'confirmation');
+    const alreadySent = new Set((existingConfirmations || []).map(c => c.recording_id));
+
+    const vmIds = [...new Set(recordings.map(r => r.videomaker_id))];
+    const { data: profiles } = await admin.from('profiles').select('id, name').in('id', vmIds);
+    const vmNames = {};
+    (profiles || []).forEach(p => { vmNames[p.id] = p.name; });
+
+    let sentCount = 0;
+    for (const recording of recordings) {
+      if (alreadySent.has(recording.id)) continue;
+      const client = recording.clients;
+      if (!client?.whatsapp) continue;
+      const phoneNumber = client.whatsapp.replace(/\D/g, '');
+      if (!phoneNumber) continue;
+      const message = applyTemplate(config.msg_confirmation, { nome_cliente: client.company_name, data_gravacao: recording.date, hora_gravacao: recording.start_time, videomaker: vmNames[recording.videomaker_id] || 'Equipe' });
+      await admin.from('whatsapp_confirmations').insert({ recording_id: recording.id, client_id: client.id, phone_number: phoneNumber, type: 'confirmation', status: 'pending', sent_at: new Date().toISOString() });
+      await admin.from('recordings').update({ confirmation_status: 'aguardando' }).eq('id', recording.id);
+      const result = await sendWhatsAppDirect(config, client.whatsapp, message, admin, client.id, 'auto_confirmation');
+      if (result.ok) sentCount++;
+    }
+    res.json({ ok: true, sent: sentCount, total: recordings.length });
+  } catch (error) {
+    console.error('confirmation-cron error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── 18. Approval Deadline Cron ─────────────────────────────
+app.post('/api/approval-deadline-cron', async (req, res) => {
+  try {
+    const admin = getAdminClient();
+    const now = new Date().toISOString();
+    const { data: expiredTasks } = await admin.from('content_tasks').select('id, client_id, title, edited_video_link, approval_deadline').eq('kanban_column', 'envio').not('approval_deadline', 'is', null).lt('approval_deadline', now);
+    if (!expiredTasks?.length) return res.json({ ok: true, moved: 0 });
+
+    const { data: config } = await admin.from('whatsapp_config').select('*').limit(1).single();
+    const clientIds = [...new Set(expiredTasks.map(t => t.client_id))];
+    const { data: clientsData } = await admin.from('clients').select('id, company_name, whatsapp, responsible_person').in('id', clientIds);
+    const clientsMap = {};
+    (clientsData || []).forEach(c => { clientsMap[c.id] = c; });
+
+    let movedCount = 0;
+    for (const task of expiredTasks) {
+      await admin.from('content_tasks').update({ kanban_column: 'agendamentos', approved_at: now, updated_at: now }).eq('id', task.id);
+      await admin.from('social_media_deliveries').update({ status: 'entregue' }).eq('content_task_id', task.id);
+      const client = clientsMap[task.client_id];
+      await admin.rpc('notify_role', { _role: 'social_media', _title: 'Aprovação expirada', _message: `"${task.title}" (${client?.company_name || ''}) não foi aprovado em 6h. Movido para agendamento.`, _type: 'deadline', _link: '/entregas-social' });
+
+      if (config?.integration_active && config?.api_token && client?.whatsapp) {
+        const msg = applyTemplate(config.msg_approval_expired || 'Olá, {nome_cliente}! O vídeo "{titulo}" foi encaminhado para agendamento.', { nome_cliente: client.responsible_person || client.company_name, titulo: task.title });
+        await sendWhatsAppDirect(config, client.whatsapp, msg, admin, task.client_id, 'auto_approval_expired');
+      }
+      movedCount++;
+    }
+    res.json({ ok: true, moved: movedCount });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── 19. Generate Monthly Revenues ──────────────────────────
+app.post('/api/generate-monthly-revenues', async (req, res) => {
+  try {
+    const admin = getAdminClient();
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const refMonth = `${year}-${String(month).padStart(2, '0')}-01`;
+    const { data: contracts } = await admin.from('financial_contracts').select('*').eq('status', 'ativo');
+    if (!contracts?.length) return res.json({ message: 'No active contracts', generated: 0 });
+    const { data: existing } = await admin.from('revenues').select('client_id').eq('reference_month', refMonth);
+    const existingClientIds = new Set((existing || []).map(r => r.client_id));
+    const newRevenues = contracts.filter(c => !existingClientIds.has(c.client_id)).map(c => ({ client_id: c.client_id, contract_id: c.id, reference_month: refMonth, amount: c.contract_value, due_date: `${year}-${String(month).padStart(2, '0')}-${String(c.due_day).padStart(2, '0')}`, status: 'prevista' }));
+    if (newRevenues.length > 0) {
+      await admin.from('revenues').insert(newRevenues);
+      await admin.from('financial_activity_log').insert({ action_type: 'geração_automática', entity_type: 'receita', description: `Cron gerou ${newRevenues.length} receita(s) recorrente(s)`, details: { month: refMonth, count: newRevenues.length } });
+    }
+    res.json({ generated: newRevenues.length, month: refMonth });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// ─── 20. Endo Daily Tasks Notify ────────────────────────────
+app.post('/api/endo-daily-tasks-notify', async (req, res) => {
+  try {
+    const admin = getAdminClient();
+    const today = new Date().toISOString().split('T')[0];
+    const { data: configData } = await admin.from('whatsapp_config').select('api_token, integration_active').limit(1).single();
+    if (!configData?.api_token || !configData.integration_active) return res.status(400).json({ error: 'WhatsApp não configurado' });
+
+    let tasksQuery = admin.from('endomarketing_partner_tasks').select('*, clients(company_name)').eq('date', today).eq('status', 'pendente');
+    const requestedPartnerId = req.body?.partner_id;
+    if (requestedPartnerId) tasksQuery = tasksQuery.eq('partner_id', requestedPartnerId);
+    const { data: todayTasks } = await tasksQuery;
+    if (!todayTasks?.length) return res.json({ success: true, message: 'Sem tarefas para hoje', sent: 0 });
+
+    const tasksByPartner = new Map();
+    for (const task of todayTasks) { if (!task.partner_id) continue; const arr = tasksByPartner.get(task.partner_id) || []; arr.push(task); tasksByPartner.set(task.partner_id, arr); }
+    const partnerIds = [...tasksByPartner.keys()];
+    if (!partnerIds.length) return res.json({ success: true, sent: 0 });
+
+    const { data: profiles } = await admin.from('profiles').select('id, name, display_name').in('id', partnerIds);
+    const { data: partners } = await admin.from('partners').select('user_id, phone').in('user_id', partnerIds);
+    const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]));
+    const phoneMap = Object.fromEntries((partners || []).map(p => [p.user_id, p.phone]));
+
+    let sentCount = 0;
+    for (const [partnerId, partnerTasks] of tasksByPartner) {
+      const phone = phoneMap[partnerId];
+      if (!phone) continue;
+      const profile = profileMap[partnerId];
+      const partnerName = profile?.display_name || profile?.name || 'Parceiro';
+      const taskLines = partnerTasks.map((t, i) => `   ${i + 1}. ${t.task_type} — *${t.clients?.company_name || 'Cliente'}* (${t.duration_minutes}min)`).join('\n');
+      const message = `🌟 *Bom dia, ${partnerName}!*\n\n📋 *Suas tarefas de hoje:*\n\n${taskLines}\n\n✨ Você está fazendo um trabalho incrível! 🚀`;
+      const result = await sendWhatsAppDirect({ api_token: configData.api_token }, phone, message, admin, partnerTasks[0].client_id, 'endo_daily_tasks');
+      if (result.ok) sentCount++;
+    }
+    res.json({ success: true, sent: sentCount, total_partners: partnerIds.length });
+  } catch (error) {
+    console.error('endo-daily-tasks-notify error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── Health check ───────────────────────────────────────────
+app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+
+// ─── Start ──────────────────────────────────────────────────
+app.listen(PORT, () => {
+  console.log(`🚀 Pulse API Server running on port ${PORT}`);
+});
+
+/*
+ * .env required variables:
+ * 
+ * SUPABASE_URL=https://zqpplhbzhetabjopdzcn.supabase.co
+ * SUPABASE_SERVICE_ROLE_KEY=<your_service_role_key>
+ * SUPABASE_ANON_KEY=<your_anon_key>
+ * GOOGLE_GEMINI_API_KEY=<your_gemini_key>
+ * WHATSAPP_API_TOKEN=<your_whatsapp_token>
+ * API_PORT=3002
+ * 
+ * Optional:
+ * OPENAI_API_KEY=<if using OpenAI>
+ * ANTHROPIC_API_KEY=<if using Claude>
+ */

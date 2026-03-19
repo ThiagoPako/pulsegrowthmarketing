@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 import { FileText, Film, Palette, Video, Image, Sparkles, User, Tag, AlertTriangle, Flame } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';

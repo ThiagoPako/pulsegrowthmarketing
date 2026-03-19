@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 import { format, addDays, getDay } from 'date-fns';
 import { getWhatsAppConfig, sendWhatsAppMessage } from '@/services/whatsappService';
 

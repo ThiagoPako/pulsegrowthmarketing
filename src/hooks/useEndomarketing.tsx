@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 import { format, addDays, getDay } from 'date-fns';
 
 // ─── Legacy compatibility exports (used by Schedule.tsx, Scripts.tsx) ────

@@ -9,7 +9,7 @@ import { useDesignTasks } from '@/hooks/useDesignTasks';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import ClientLogo from '@/components/ClientLogo';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 
 interface Props {
   open: boolean;

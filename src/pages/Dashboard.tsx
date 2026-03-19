@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 import { DAY_LABELS } from '@/types';
 import { getSeasonalAlerts, NICHE_OPTIONS } from '@/lib/seasonalDates';
 import { motion } from 'framer-motion';

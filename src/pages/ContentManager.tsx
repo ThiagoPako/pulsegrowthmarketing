@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 import { uploadFileToVps, uploadBlobToVps } from '@/services/vpsApi';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';

@@ -1,6 +1,5 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
 
 export type AppRole = 'admin' | 'videomaker' | 'social_media' | 'editor' | 'endomarketing' | 'parceiro' | 'fotografo' | 'designer';
 
@@ -16,9 +15,9 @@ export interface Profile {
 }
 
 interface AuthContextType {
-  user: SupabaseUser | null;
+  user: { id: string; email: string } | null;
   profile: Profile | null;
-  session: Session | null;
+  session: { access_token: string } | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, name: string, role: AppRole) => Promise<{ error: string | null }>;
@@ -27,12 +26,15 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
 }
 
+const VPS_API_BASE = 'https://agenciapulse.tech/api';
+const TOKEN_KEY = 'pulse_jwt';
+
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [user, setUser] = useState<{ id: string; email: string } | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<{ access_token: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = useCallback(async (userId: string) => {
@@ -46,47 +48,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // On mount, check for existing JWT token
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        // Use setTimeout to avoid deadlock with Supabase auth
-        setTimeout(() => fetchProfile(session.user.id), 0);
-      } else {
-        setProfile(null);
-      }
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (token) {
+      // Validate token via /api/auth/me
+      fetch(`${VPS_API_BASE}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(res => res.ok ? res.json() : Promise.reject())
+        .then(data => {
+          const u = { id: data.user.id, email: data.user.email };
+          setUser(u);
+          setSession({ access_token: token });
+          fetchProfile(u.id);
+        })
+        .catch(() => {
+          localStorage.removeItem(TOKEN_KEY);
+        })
+        .finally(() => setLoading(false));
+    } else {
       setLoading(false);
-    });
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      }
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    }
   }, [fetchProfile]);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    try {
+      const res = await fetch(`${VPS_API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { error: data.error || 'Erro ao autenticar' };
+      }
+      localStorage.setItem(TOKEN_KEY, data.token);
+      const u = { id: data.user.id, email: data.user.email };
+      setUser(u);
+      setSession({ access_token: data.token });
+      await fetchProfile(u.id);
+      return { error: null };
+    } catch {
+      return { error: 'Erro de conexão com o servidor' };
+    }
   };
 
   const signUp = async (email: string, password: string, name: string, role: AppRole) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { name, role } },
-    });
-    return { error: error?.message ?? null };
+    // For now, user creation is admin-only via the Team page
+    return { error: 'Cadastro deve ser feito pelo administrador' };
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    localStorage.removeItem(TOKEN_KEY);
     setUser(null);
     setProfile(null);
     setSession(null);

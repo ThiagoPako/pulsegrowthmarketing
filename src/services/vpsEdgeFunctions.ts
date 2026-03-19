@@ -1,17 +1,16 @@
 /**
  * VPS Edge Functions Service
- * Replaces all supabase.functions.invoke() calls with VPS API calls
+ * Uses VPS JWT token for authentication
  */
 
-import { supabase } from '@/integrations/supabase/client';
-
 const VPS_API_BASE = 'https://agenciapulse.tech/api';
+const TOKEN_KEY = 'pulse_jwt';
 
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const { data: { session } } = await supabase.auth.getSession();
+function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (session?.access_token) {
-    headers['Authorization'] = `Bearer ${session.access_token}`;
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
   return headers;
 }
@@ -24,7 +23,7 @@ export async function invokeVpsFunction(
   options?: { body?: any; method?: string }
 ): Promise<{ data: any; error: any }> {
   try {
-    const headers = await getAuthHeaders();
+    const headers = getAuthHeaders();
     const method = options?.method || 'POST';
     
     const fetchOptions: RequestInit = {

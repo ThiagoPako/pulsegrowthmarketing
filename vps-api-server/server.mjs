@@ -1308,6 +1308,414 @@ app.post('/api/endo-daily-tasks-notify', async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// CRUD ROUTES — Phase 4: Direct DB access (replaces Supabase SDK)
+// ═══════════════════════════════════════════════════════════════
+
+// ─── Clients ────────────────────────────────────────────────
+app.get('/api/clients', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { rows } = await pool.query('SELECT * FROM clients ORDER BY company_name');
+    res.json(rows);
+  } catch (e) { res.status(e.message === 'Unauthorized' ? 401 : 500).json({ error: e.message }); }
+});
+
+app.post('/api/clients', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const c = req.body;
+    const { rows } = await pool.query(
+      `INSERT INTO clients (id, company_name, responsible_person, phone, color, logo_url, fixed_day, fixed_time,
+        videomaker_id, backup_time, backup_day, extra_day, extra_content_types, accepts_extra, extra_client_appears,
+        whatsapp, whatsapp_group, email, city, weekly_reels, weekly_creatives, weekly_goal, has_endomarketing,
+        has_vehicle_flyer, weekly_stories, presence_days, monthly_recordings, niche, client_login,
+        drive_link, drive_fotos, drive_identidade_visual, editorial, plan_id, contract_start_date,
+        contract_duration_months, auto_renewal, selected_weeks, has_photo_shoot, accepts_photo_shoot_cost,
+        briefing_data, show_metrics, photo_preference, client_type)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44)
+       RETURNING *`,
+      [
+        c.id || crypto.randomUUID(), c.company_name, c.responsible_person || '', c.phone || '', c.color || '217 91% 60%',
+        c.logo_url || null, c.fixed_day || 'segunda', c.fixed_time || '09:00', c.videomaker_id || null,
+        c.backup_time || '14:00', c.backup_day || 'terca', c.extra_day || 'quarta',
+        c.extra_content_types || '{}', c.accepts_extra ?? false, c.extra_client_appears ?? false,
+        c.whatsapp || '', c.whatsapp_group || null, c.email || '', c.city || '',
+        c.weekly_reels ?? 0, c.weekly_creatives ?? 0, c.weekly_goal ?? 10, c.has_endomarketing ?? false,
+        c.has_vehicle_flyer ?? false, c.weekly_stories ?? 0, c.presence_days ?? 1, c.monthly_recordings ?? 4,
+        c.niche || '', c.client_login || '', c.drive_link || '', c.drive_fotos || '',
+        c.drive_identidade_visual || '', c.editorial || '', c.plan_id || null, c.contract_start_date || null,
+        c.contract_duration_months ?? 12, c.auto_renewal ?? false, c.selected_weeks || '{1,2,3,4}',
+        c.has_photo_shoot ?? false, c.accepts_photo_shoot_cost ?? false,
+        c.briefing_data ? JSON.stringify(c.briefing_data) : '{}', c.show_metrics ?? true,
+        c.photo_preference || 'nao_precisa', c.client_type || 'novo'
+      ]
+    );
+    res.json(rows[0]);
+  } catch (e) { console.error('POST /api/clients error:', e); res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/clients/:id', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { id } = req.params;
+    const c = req.body;
+    // Build dynamic SET clause from provided fields
+    const allowed = [
+      'company_name','responsible_person','phone','color','logo_url','fixed_day','fixed_time',
+      'videomaker_id','backup_time','backup_day','extra_day','extra_content_types','accepts_extra',
+      'extra_client_appears','whatsapp','whatsapp_group','email','city','weekly_reels','weekly_creatives',
+      'weekly_goal','has_endomarketing','has_vehicle_flyer','weekly_stories','presence_days',
+      'monthly_recordings','niche','client_login','drive_link','drive_fotos','drive_identidade_visual',
+      'editorial','plan_id','contract_start_date','contract_duration_months','auto_renewal',
+      'selected_weeks','has_photo_shoot','accepts_photo_shoot_cost','briefing_data','show_metrics',
+      'photo_preference','client_type','onboarding_completed'
+    ];
+    const sets = []; const vals = [];
+    let idx = 1;
+    for (const key of allowed) {
+      if (c[key] !== undefined) {
+        sets.push(`${key} = $${idx}`);
+        vals.push(key === 'briefing_data' ? JSON.stringify(c[key]) : c[key]);
+        idx++;
+      }
+    }
+    if (sets.length === 0) return res.json({ message: 'Nothing to update' });
+    sets.push(`updated_at = NOW()`);
+    vals.push(id);
+    const { rows } = await pool.query(`UPDATE clients SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`, vals);
+    res.json(rows[0]);
+  } catch (e) { console.error('PUT /api/clients error:', e); res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/clients/:id', async (req, res) => {
+  try {
+    await verifyAdmin(req);
+    const { id } = req.params;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Cascade delete related tables
+      const { rows: contentTasks } = await client.query('SELECT id FROM content_tasks WHERE client_id = $1', [id]);
+      if (contentTasks.length > 0) {
+        const taskIds = contentTasks.map(t => t.id);
+        await client.query('DELETE FROM task_comments WHERE task_id = ANY($1)', [taskIds]);
+        await client.query('DELETE FROM task_history WHERE task_id = ANY($1)', [taskIds]);
+      }
+      await client.query('DELETE FROM content_tasks WHERE client_id = $1', [id]);
+      await client.query('DELETE FROM social_media_deliveries WHERE client_id = $1', [id]);
+      await client.query('DELETE FROM delivery_records WHERE client_id = $1', [id]);
+      await client.query('DELETE FROM active_recordings WHERE client_id = $1', [id]);
+      await client.query('DELETE FROM recordings WHERE client_id = $1', [id]);
+      await client.query('DELETE FROM billing_messages WHERE client_id = $1', [id]);
+      await client.query('DELETE FROM revenues WHERE client_id = $1', [id]);
+      await client.query('DELETE FROM financial_contracts WHERE client_id = $1', [id]);
+      await client.query('DELETE FROM endomarketing_partner_tasks WHERE client_id = $1', [id]);
+      await client.query('DELETE FROM client_endomarketing_contracts WHERE client_id = $1', [id]);
+      const { rows: endoClients } = await client.query("SELECT id FROM endomarketing_clientes WHERE client_id = $1", [id]);
+      if (endoClients.length > 0) {
+        const endoIds = endoClients.map(e => e.id);
+        await client.query('DELETE FROM endomarketing_agendamentos WHERE cliente_id = ANY($1)', [endoIds]);
+        await client.query('DELETE FROM endomarketing_logs WHERE cliente_id = ANY($1)', [endoIds]);
+      }
+      await client.query("DELETE FROM endomarketing_clientes WHERE client_id = $1", [id]);
+      await client.query('DELETE FROM social_accounts WHERE client_id = $1', [id]);
+      await client.query('DELETE FROM integration_logs WHERE client_id = $1', [id]);
+      await client.query('DELETE FROM kanban_tasks WHERE client_id = $1', [id]);
+      await client.query('DELETE FROM scripts WHERE client_id = $1', [id]);
+      await client.query('DELETE FROM flyer_items WHERE client_id = $1', [id]);
+      await client.query('DELETE FROM onboarding_tasks WHERE client_id = $1', [id]);
+      await client.query('DELETE FROM client_portal_contents WHERE client_id = $1', [id]);
+      await client.query('DELETE FROM client_portal_notifications WHERE client_id = $1', [id]);
+      // Design tasks cascade
+      const { rows: designTasks } = await client.query('SELECT id FROM design_tasks WHERE client_id = $1', [id]);
+      if (designTasks.length > 0) {
+        const dtIds = designTasks.map(t => t.id);
+        await client.query('DELETE FROM design_task_history WHERE task_id = ANY($1)', [dtIds]);
+      }
+      await client.query('DELETE FROM design_tasks WHERE client_id = $1', [id]);
+      // Traffic campaigns
+      await client.query('DELETE FROM traffic_campaigns WHERE client_id = $1', [id]);
+      // Finally delete client
+      await client.query('DELETE FROM clients WHERE id = $1', [id]);
+      await client.query('COMMIT');
+      res.json({ success: true });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (e) { console.error('DELETE /api/clients error:', e); res.status(500).json({ error: e.message }); }
+});
+
+// ─── Recordings ─────────────────────────────────────────────
+app.get('/api/recordings', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { rows } = await pool.query('SELECT * FROM recordings ORDER BY date DESC');
+    res.json(rows);
+  } catch (e) { res.status(401).json({ error: e.message }); }
+});
+
+app.post('/api/recordings', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const items = Array.isArray(req.body) ? req.body : [req.body];
+    const results = [];
+    for (const r of items) {
+      const { rows } = await pool.query(
+        `INSERT INTO recordings (id, client_id, videomaker_id, date, start_time, type, status, confirmation_status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+        [r.id || crypto.randomUUID(), r.client_id, r.videomaker_id, r.date, r.start_time, r.type || 'fixa', r.status || 'agendada', r.confirmation_status || 'pendente']
+      );
+      results.push(rows[0]);
+    }
+    res.json(results.length === 1 ? results[0] : results);
+  } catch (e) { console.error('POST /api/recordings error:', e); res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/recordings/:id', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { id } = req.params;
+    const r = req.body;
+    const allowed = ['client_id','videomaker_id','date','start_time','type','status','confirmation_status'];
+    const sets = []; const vals = []; let idx = 1;
+    for (const key of allowed) { if (r[key] !== undefined) { sets.push(`${key} = $${idx}`); vals.push(r[key]); idx++; } }
+    if (sets.length === 0) return res.json({ message: 'Nothing to update' });
+    vals.push(id);
+    const { rows } = await pool.query(`UPDATE recordings SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`, vals);
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/recordings/:id', async (req, res) => {
+  try {
+    await verifyUser(req);
+    await pool.query('DELETE FROM recordings WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Bulk delete future recordings for a client
+app.delete('/api/recordings/future/:clientId', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const today = new Date().toISOString().split('T')[0];
+    const { rowCount } = await pool.query(
+      "DELETE FROM recordings WHERE client_id = $1 AND status = 'agendada' AND date >= $2",
+      [req.params.clientId, today]
+    );
+    res.json({ deleted: rowCount });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Kanban Tasks ───────────────────────────────────────────
+app.get('/api/kanban-tasks', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { rows } = await pool.query('SELECT * FROM kanban_tasks ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (e) { res.status(401).json({ error: e.message }); }
+});
+
+app.post('/api/kanban-tasks', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const t = req.body;
+    const { rows } = await pool.query(
+      `INSERT INTO kanban_tasks (id, client_id, title, "column", checklist, week_start, recording_date)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [t.id || crypto.randomUUID(), t.client_id, t.title, t.column || 'todo', JSON.stringify(t.checklist || []), t.week_start, t.recording_date || null]
+    );
+    res.json(rows[0]);
+  } catch (e) { console.error('POST /api/kanban-tasks error:', e); res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/kanban-tasks/:id', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { id } = req.params;
+    const t = req.body;
+    const allowed = ['client_id','title','column','checklist','week_start','recording_date'];
+    const sets = []; const vals = []; let idx = 1;
+    for (const key of allowed) {
+      if (t[key] !== undefined) {
+        sets.push(`"${key === 'column' ? 'column' : key}" = $${idx}`);
+        vals.push(key === 'checklist' ? JSON.stringify(t[key]) : t[key]);
+        idx++;
+      }
+    }
+    if (sets.length === 0) return res.json({ message: 'Nothing to update' });
+    sets.push('updated_at = NOW()');
+    vals.push(id);
+    const { rows } = await pool.query(`UPDATE kanban_tasks SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`, vals);
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/kanban-tasks/:id', async (req, res) => {
+  try {
+    await verifyUser(req);
+    await pool.query('DELETE FROM kanban_tasks WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Scripts ────────────────────────────────────────────────
+app.get('/api/scripts', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { rows } = await pool.query('SELECT * FROM scripts ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (e) { res.status(401).json({ error: e.message }); }
+});
+
+app.post('/api/scripts', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const s = req.body;
+    const { rows } = await pool.query(
+      `INSERT INTO scripts (id, client_id, title, video_type, content_format, content, recorded, priority, is_endomarketing, endo_client_id, scheduled_date, created_by, caption, client_priority)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+      [s.id || crypto.randomUUID(), s.client_id, s.title, s.video_type || 'reels', s.content_format || 'reels',
+       s.content || '', s.recorded ?? false, s.priority || 'normal', s.is_endomarketing ?? false,
+       s.endo_client_id || null, s.scheduled_date || null, s.created_by || null, s.caption || null, s.client_priority || 'normal']
+    );
+    // Create portal notification
+    try {
+      await pool.query(
+        `INSERT INTO client_portal_notifications (client_id, title, message, type, link_script_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [s.client_id, '📝 Novo roteiro criado', `O roteiro "${s.title}" foi criado. Confira na Zona Criativa!`, 'new_script', rows[0].id]
+      );
+    } catch (err) { console.error('Portal script notification error:', err); }
+    res.json(rows[0]);
+  } catch (e) { console.error('POST /api/scripts error:', e); res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/scripts/:id', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { id } = req.params;
+    const s = req.body;
+    const allowed = ['client_id','title','video_type','content_format','content','recorded','priority','is_endomarketing','endo_client_id','scheduled_date','created_by','caption','client_priority'];
+    const sets = []; const vals = []; let idx = 1;
+    for (const key of allowed) { if (s[key] !== undefined) { sets.push(`${key} = $${idx}`); vals.push(s[key]); idx++; } }
+    if (sets.length === 0) return res.json({ message: 'Nothing to update' });
+    sets.push('updated_at = NOW()');
+    vals.push(id);
+    const { rows } = await pool.query(`UPDATE scripts SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`, vals);
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/scripts/:id', async (req, res) => {
+  try {
+    await verifyUser(req);
+    await pool.query('DELETE FROM scripts WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Company Settings ───────────────────────────────────────
+app.get('/api/company-settings', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { rows } = await pool.query('SELECT * FROM company_settings LIMIT 1');
+    res.json(rows[0] || null);
+  } catch (e) { res.status(401).json({ error: e.message }); }
+});
+
+app.put('/api/company-settings/:id', async (req, res) => {
+  try {
+    await verifyAdmin(req);
+    const { id } = req.params;
+    const s = req.body;
+    const allowed = ['shift_a_start','shift_a_end','shift_b_start','shift_b_end','work_days','recording_duration','editing_deadline_hours','review_deadline_hours','alteration_deadline_hours','approval_deadline_hours'];
+    const sets = []; const vals = []; let idx = 1;
+    for (const key of allowed) { if (s[key] !== undefined) { sets.push(`${key} = $${idx}`); vals.push(key === 'work_days' ? s[key] : s[key]); idx++; } }
+    if (sets.length === 0) return res.json({ message: 'Nothing to update' });
+    sets.push('updated_at = NOW()');
+    vals.push(id);
+    const { rows } = await pool.query(`UPDATE company_settings SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`, vals);
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Active Recordings ──────────────────────────────────────
+app.get('/api/active-recordings', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { rows } = await pool.query('SELECT * FROM active_recordings');
+    res.json(rows);
+  } catch (e) { res.status(401).json({ error: e.message }); }
+});
+
+app.post('/api/active-recordings', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const r = req.body;
+    // Remove existing for this recording
+    await pool.query('DELETE FROM active_recordings WHERE recording_id = $1', [r.recording_id]);
+    const { rows } = await pool.query(
+      `INSERT INTO active_recordings (recording_id, videomaker_id, client_id, started_at, planned_script_ids)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [r.recording_id, r.videomaker_id, r.client_id, r.started_at || new Date().toISOString(), r.planned_script_ids || '{}']
+    );
+    res.json(rows[0]);
+  } catch (e) { console.error('POST /api/active-recordings error:', e); res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/active-recordings/:recordingId', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { rows } = await pool.query('SELECT * FROM active_recordings WHERE recording_id = $1', [req.params.recordingId]);
+    await pool.query('DELETE FROM active_recordings WHERE recording_id = $1', [req.params.recordingId]);
+    res.json({ success: true, deleted: rows[0] || null });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Stop active recording with delivery record creation
+app.post('/api/active-recordings/:recordingId/stop', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { recordingId } = req.params;
+    const { deliveryOverrides, completedScriptIds } = req.body;
+    
+    const { rows: activeRows } = await pool.query('SELECT * FROM active_recordings WHERE recording_id = $1', [recordingId]);
+    await pool.query('DELETE FROM active_recordings WHERE recording_id = $1', [recordingId]);
+    
+    const active = activeRows[0];
+    if (active) {
+      await pool.query(
+        `INSERT INTO delivery_records (recording_id, client_id, videomaker_id, date, reels_produced, creatives_produced, stories_produced, arts_produced, extras_produced, videos_recorded, delivery_status, observations)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [recordingId, active.client_id, active.videomaker_id, new Date().toISOString().split('T')[0],
+         deliveryOverrides?.reels_produced ?? 0, deliveryOverrides?.creatives_produced ?? 0,
+         deliveryOverrides?.stories_produced ?? 0, deliveryOverrides?.arts_produced ?? 0,
+         deliveryOverrides?.extras_produced ?? 0, deliveryOverrides?.videos_recorded ?? 1,
+         'realizada', 'Registro automático ao finalizar gravação']
+      );
+      
+      if (completedScriptIds?.length > 0) {
+        for (const scriptId of completedScriptIds) {
+          const { rows: scriptRows } = await pool.query('SELECT title, content_format FROM scripts WHERE id = $1', [scriptId]);
+          const script = scriptRows[0];
+          await pool.query(
+            `INSERT INTO social_media_deliveries (client_id, content_type, title, status, delivered_at, script_id, recording_id, created_by)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [active.client_id, script?.content_format || 'reels', script?.title || 'Vídeo gravado',
+             'entregue', new Date().toISOString().split('T')[0], scriptId, recordingId, active.videomaker_id]
+          );
+        }
+      }
+    }
+    res.json({ success: true });
+  } catch (e) { console.error('POST /api/active-recordings/stop error:', e); res.status(500).json({ error: e.message }); }
+});
+
 // ─── Health check ───────────────────────────────────────────
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 

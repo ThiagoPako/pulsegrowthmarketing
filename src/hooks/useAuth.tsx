@@ -74,12 +74,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      // Try VPS API first
       const res = await fetch(`${VPS_API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
+
       if (res.ok) {
         const data = await res.json();
         localStorage.setItem(TOKEN_KEY, data.token);
@@ -89,13 +89,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await fetchProfile(u.id);
         return { error: null };
       }
+
       const errData = await res.json().catch(() => ({}));
-      return { error: errData.error || 'Email ou senha inválidos' };
+      if (res.status === 401 || res.status === 400) {
+        return { error: errData.error || 'Email ou senha inválidos' };
+      }
+
+      throw new Error(errData.error || 'Falha ao conectar com o servidor de autenticação');
     } catch {
-      // Fallback to Supabase Auth (for Lovable preview)
       try {
+        await supabase.auth.signOut();
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) return { error: error.message };
+        if (error) return { error: error.message || 'Falha no login alternativo' };
         if (data.user && data.session) {
           const u = { id: data.user.id, email: data.user.email || '' };
           setUser(u);
@@ -103,9 +108,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await fetchProfile(u.id);
           return { error: null };
         }
-        return { error: 'Erro ao autenticar' };
+        return { error: 'Não foi possível autenticar' };
       } catch {
-        return { error: 'Erro de conexão com o servidor' };
+        return { error: 'Não foi possível conectar à VPS e o login alternativo também falhou' };
       }
     }
   };

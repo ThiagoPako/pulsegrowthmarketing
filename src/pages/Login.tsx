@@ -20,7 +20,7 @@ export default function Login() {
     const { error } = await signIn(email, password);
     setLoading(false);
     if (error) {
-      toast.error('Email ou senha inválidos');
+      toast.error(error);
     } else {
       navigate('/dashboard');
     }

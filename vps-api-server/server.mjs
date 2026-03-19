@@ -3,7 +3,7 @@
  * Deploy on agenciapulse.tech alongside the existing upload-server
  * 
  * SETUP:
- * 1. npm init -y && npm install express cors @supabase/supabase-js node-fetch
+ * 1. npm install express cors @supabase/supabase-js pg bcrypt jsonwebtoken
  * 2. Create .env with all required variables (see bottom of file)
  * 3. pm2 start server.mjs --name pulse-api
  * 
@@ -13,7 +13,11 @@
 import express from 'express';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
+import pg from 'pg';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 
+const { Pool } = pg;
 const app = express();
 const PORT = process.env.API_PORT || 3002;
 
@@ -21,39 +25,199 @@ const PORT = process.env.API_PORT || 3002;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// ─── Supabase clients ───────────────────────────────────────
+// ─── PostgreSQL local ───────────────────────────────────────
+const pool = new Pool({
+  host: process.env.PG_HOST || 'localhost',
+  port: Number(process.env.PG_PORT) || 5432,
+  database: process.env.PG_DATABASE || 'pulse_db',
+  user: process.env.PG_USER || 'pulse_user',
+  password: process.env.PG_PASSWORD || '',
+});
+
+// ─── JWT Config ─────────────────────────────────────────────
+const JWT_SECRET = process.env.JWT_SECRET || 'CHANGE_ME_IN_PRODUCTION';
+const JWT_EXPIRES_IN = '7d';
+
+// ─── Supabase clients (transitional — will be removed later) ──
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
 function getAdminClient() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 }
 
 function getUserClient(authHeader) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: authHeader } },
   });
 }
 
-// ─── Auth helpers ───────────────────────────────────────────
+// ─── Auth helpers (JWT-based) ───────────────────────────────
+function signToken(payload) {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+}
+
+function verifyToken(token) {
+  return jwt.verify(token, JWT_SECRET);
+}
+
 async function verifyUser(req) {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) throw new Error('Unauthorized');
-  const userClient = getUserClient(authHeader);
   const token = authHeader.replace('Bearer ', '');
-  const { data, error } = await userClient.auth.getUser(token);
-  if (error || !data?.user) throw new Error('Unauthorized');
-  return { user: data.user, userClient };
+
+  try {
+    // Try JWT first (new system)
+    const decoded = verifyToken(token);
+    return {
+      user: { id: decoded.sub, email: decoded.email, role: decoded.role },
+      userClient: getUserClient(authHeader),
+    };
+  } catch {
+    // Fallback to Supabase Auth (transitional)
+    const userClient = getUserClient(authHeader);
+    if (!userClient) throw new Error('Unauthorized');
+    const { data, error } = await userClient.auth.getUser(token);
+    if (error || !data?.user) throw new Error('Unauthorized');
+    return { user: data.user, userClient };
+  }
 }
 
 async function verifyAdmin(req) {
   const { user, userClient } = await verifyUser(req);
-  const admin = getAdminClient();
-  const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single();
-  if (!profile || profile.role !== 'admin') throw new Error('Admin access required');
-  return { user, userClient, admin };
+  // Check role from JWT payload first
+  if (user.role === 'admin') {
+    return { user, userClient, admin: getAdminClient() };
+  }
+  // Fallback: check DB
+  const { rows } = await pool.query(
+    'SELECT role FROM user_roles WHERE user_id = $1 AND role = $2',
+    [user.id, 'admin']
+  );
+  if (rows.length === 0) throw new Error('Admin access required');
+  return { user, userClient, admin: getAdminClient() };
 }
+
+// ═══════════════════════════════════════════════════════════════
+// AUTH ROUTES
+// ═══════════════════════════════════════════════════════════════
+
+// ─── Login ──────────────────────────────────────────────────
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email e senha são obrigatórios' });
+
+    // Find profile by email
+    const { rows: profiles } = await pool.query(
+      'SELECT id, name, email, role, avatar_url, display_name, job_title, password_hash FROM profiles WHERE email = $1 LIMIT 1',
+      [email.toLowerCase().trim()]
+    );
+    if (profiles.length === 0) return res.status(401).json({ error: 'Email ou senha inválidos' });
+
+    const profile = profiles[0];
+    if (!profile.password_hash) return res.status(401).json({ error: 'Senha não configurada. Solicite ao administrador.' });
+
+    const valid = await bcrypt.compare(password, profile.password_hash);
+    if (!valid) return res.status(401).json({ error: 'Email ou senha inválidos' });
+
+    // Get role from user_roles table
+    const { rows: roles } = await pool.query(
+      'SELECT role FROM user_roles WHERE user_id = $1 LIMIT 1',
+      [profile.id]
+    );
+    const role = roles[0]?.role || profile.role || 'editor';
+
+    const token = signToken({ sub: profile.id, email: profile.email, role });
+
+    res.json({
+      token,
+      user: {
+        id: profile.id,
+        email: profile.email,
+        name: profile.display_name || profile.name,
+        role,
+        avatar_url: profile.avatar_url,
+        job_title: profile.job_title,
+      },
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Erro interno no servidor' });
+  }
+});
+
+// ─── Get current user ───────────────────────────────────────
+app.get('/api/auth/me', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    const { rows } = await pool.query(
+      'SELECT p.id, p.name, p.email, p.avatar_url, p.display_name, p.job_title, p.bio, p.birthday, ur.role FROM profiles p LEFT JOIN user_roles ur ON ur.user_id = p.id WHERE p.id = $1 LIMIT 1',
+      [user.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Perfil não encontrado' });
+
+    const profile = rows[0];
+    res.json({
+      id: profile.id,
+      email: profile.email,
+      name: profile.display_name || profile.name,
+      role: profile.role,
+      avatar_url: profile.avatar_url,
+      job_title: profile.job_title,
+      bio: profile.bio,
+      birthday: profile.birthday,
+    });
+  } catch (error) {
+    res.status(401).json({ error: 'Não autenticado' });
+  }
+});
+
+// ─── Change password ────────────────────────────────────────
+app.post('/api/auth/change-password', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    const { currentPassword, newPassword } = req.body;
+    if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: 'Nova senha deve ter pelo menos 6 caracteres' });
+
+    const { rows } = await pool.query('SELECT password_hash FROM profiles WHERE id = $1', [user.id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Perfil não encontrado' });
+
+    // If user already has a password, verify current one
+    if (rows[0].password_hash && currentPassword) {
+      const valid = await bcrypt.compare(currentPassword, rows[0].password_hash);
+      if (!valid) return res.status(401).json({ error: 'Senha atual incorreta' });
+    }
+
+    const hash = await bcrypt.hash(newPassword, 12);
+    await pool.query('UPDATE profiles SET password_hash = $1, updated_at = NOW() WHERE id = $2', [hash, user.id]);
+
+    res.json({ success: true, message: 'Senha alterada com sucesso' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── Admin: Set password for a team member ──────────────────
+app.post('/api/auth/set-password', async (req, res) => {
+  try {
+    const { user } = await verifyAdmin(req);
+    const { userId, password } = req.body;
+    if (!userId || !password || password.length < 6) return res.status(400).json({ error: 'userId e senha (min 6 chars) obrigatórios' });
+
+    const hash = await bcrypt.hash(password, 12);
+    await pool.query('UPDATE profiles SET password_hash = $1, updated_at = NOW() WHERE id = $2', [hash, userId]);
+
+    res.json({ success: true, message: 'Senha definida com sucesso' });
+  } catch (error) {
+    console.error('Set password error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // ─── AI helpers ─────────────────────────────────────────────
 function getAiConfig(provider, dbApiKey) {

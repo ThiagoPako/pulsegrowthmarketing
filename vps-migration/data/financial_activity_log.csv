@@ -1,0 +1,2 @@
+id,user_id,action_type,entity_type,entity_id,description,details,created_at
+3b1ad496-1f6e-4752-9930-8c032eec4a4c,865011fc-0834-47cf-bb23-25a74a761c55,geração,receita,,Gerou 21 receita(s) recorrente(s) para 2026-03,"{""count"": 21, ""month"": ""2026-03""}",2026-03-16 22:26:00.84045+00

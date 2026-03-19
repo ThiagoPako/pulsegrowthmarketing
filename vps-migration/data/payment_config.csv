@@ -1,0 +1,34 @@
+id,pix_key,receiver_name,bank,document,updated_at,msg_billing_due,msg_billing_overdue,include_delivery_report,msg_payment_data,msg_delivery_report
+27a9b97a-09b8-4b84-8fe9-c49f3bfa49bd,"","","","",2026-03-05 17:15:14.97518+00,"Olá, {nome_cliente}! 😊
+
+Passando para lembrar que a mensalidade no valor de {valor} vence no dia {dia_vencimento}.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem.
+
+{dados_pagamento}
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀","Olá, {nome_cliente}! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de {valor}.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+{dados_pagamento}
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",t,"💳 *Dados para pagamento:*
+Nome: {nome_recebedor}
+Banco: {banco}
+Chave PIX: {chave_pix}
+CPF/CNPJ: {documento}","Esse mês foi incrível e fizemos muita coisa juntos! 💪
+
+Estivemos juntos durante *{horas_gravacao}h de gravação* em {sessoes} sessões 📹
+Produzimos *{videos} vídeos* juntos 🎬
+Publicamos *{reels} reels* no seu perfil 🎥
+Estivemos presentes nos stories com *{stories} publicações* 📱
+Criamos *{artes} artes* para seus canais 🎨
+Desenvolvemos *{criativos} criativos* para suas campanhas ✨
+Ainda entregamos *{extras} conteúdos extras* além do contratado ➕"

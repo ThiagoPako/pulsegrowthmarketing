@@ -1,0 +1,614 @@
+id,phone_number,message,status,api_response,sent_at,sent_by,client_id,trigger_type,created_at
+c4f48714-b9dd-4446-b0e7-38f19cfe5738,5562985382981,"Olá, Pulse!
+
+Aqui é a equipe da Pulse Growth Marketing 🚀
+
+Passando para confirmar sua gravação agendada.
+
+📅 Data: 2026-03-04
+⏰ Horário: 08:00
+🎥 Videomaker: Victor 
+
+Por favor responda com uma das opções abaixo:
+
+1️⃣ Confirmar gravação
+2️⃣ Cancelar gravação
+
+Assim conseguimos organizar nossa agenda da melhor forma para você.",failed,"{""error"": ""Ticket em outro atendimento. Atendente: Thaynná - Fila: Minaçu""}",2026-03-05 02:20:42.792135+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_confirmation,2026-03-05 02:20:42.792135+00
+3792db73-2a0a-47dd-9eca-f3ce45673e2a,5562985382981,"Olá, Pulse!
+
+Aqui é a equipe da Pulse Growth Marketing 🚀
+
+Passando para confirmar sua gravação agendada.
+
+📅 Data: 2026-03-04
+⏰ Horário: 08:00
+🎥 Videomaker: Victor 
+
+Por favor responda com uma das opções abaixo:
+
+1️⃣ Confirmar gravação
+2️⃣ Cancelar gravação
+
+Assim conseguimos organizar nossa agenda da melhor forma para você.",sent,"{""status"": ""SUCCESS""}",2026-03-05 02:26:26.96264+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_confirmation,2026-03-05 02:26:26.96264+00
+b5b7e917-c48c-4e92-9bf0-6eabdb088348,5562985382981,"Olá, Pulse!
+
+Aqui é a equipe da Pulse Growth Marketing 🚀
+
+Passando para confirmar sua gravação agendada.
+
+📅 Data: 2026-03-04
+⏰ Horário: 08:00
+🎥 Videomaker: Victor 
+
+Por favor responda com uma das opções abaixo:
+
+1️⃣ Confirmar gravação
+2️⃣ Cancelar gravação
+
+Assim conseguimos organizar nossa agenda da melhor forma para você.",sent,"{""status"": ""SUCCESS""}",2026-03-05 02:32:25.293246+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_confirmation,2026-03-05 02:32:25.293246+00
+a5f5adc6-204c-415e-8291-ca1187c52eb3,5562985382981,"Olá! Sua gravação foi agendada.
+
+Cliente: Pulse
+Data: 2026-03-05
+Horário: 09:00
+Videomaker: Victor 
+
+Equipe Pulse Growth Marketing",sent,"{""status"": ""SUCCESS""}",2026-03-05 10:05:11.246709+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_recording,2026-03-05 10:05:11.246709+00
+02cb4367-abea-4f90-b021-c06631531c28,5562996634932,"Olá! Sua gravação foi agendada.
+
+Empresa: Água mineral Serra Da Mesa
+Data: 2026-03-05
+Horário: 14:30
+Videomaker: Victor 
+
+Equipe Pulse Growth Marketing",sent,"{""status"": ""SUCCESS""}",2026-03-05 14:32:37.836108+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_recording,2026-03-05 14:32:37.836108+00
+b294332e-6571-4a30-9cb8-1ee73ffdfcae,5562996634932,teste,sent,"{""status"": ""SUCCESS""}",2026-03-05 14:40:34.312667+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 14:40:34.312667+00
+ac5a1b6f-cf13-490c-b658-4098ff75d993,5562996634932,"Olá, Água mineral Serra Da Mesa!
+
+Aqui é a equipe da Pulse Growth Marketing 🚀
+
+Passando para confirmar sua gravação agendada.
+
+📅 Data: 2026-03-05
+⏰ Horário: 14:30
+🎥 Videomaker: Victor 
+
+Por favor responda com uma das opções abaixo:
+
+1️⃣ Confirmar gravação
+2️⃣ Cancelar gravação
+
+Assim conseguimos organizar nossa agenda da melhor forma para você.",sent,"{""status"": ""SUCCESS""}",2026-03-05 14:40:59.489947+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_confirmation,2026-03-05 14:40:59.489947+00
+a1af05ea-d32a-4bc4-b20f-457b15ca6cd9,5562996634932,"Entendido, Água mineral Serra Da Mesa.
+
+Sua gravação foi marcada como cancelada.
+
+Se surgir uma nova vaga na agenda entraremos em contato com você.
+
+Equipe Pulse Growth Marketing",sent,"{""status"": ""SUCCESS""}",2026-03-05 14:41:20.825561+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_confirmation,2026-03-05 14:41:20.825561+00
+ec74bd5d-c555-4c79-8765-69957ede1951,5562986350884,"Olá! Sua gravação foi agendada.
+
+Empresa: Nahyelly
+Data: 2026-03-06
+Horário: 16:00
+Videomaker: Victor 
+
+Equipe Pulse Growth Marketing",sent,"{""status"": ""SUCCESS""}",2026-03-05 16:17:10.969778+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_recording,2026-03-05 16:17:10.969778+00
+53987db7-b573-4ec1-9bbf-f4a95a54fec1,5562986350884,"Olá, Nahyelly!
+
+Aqui é a equipe da Pulse Growth Marketing 🚀
+
+Passando para confirmar sua gravação agendada.
+
+📅 Data: 2026-03-06
+⏰ Horário: 16:00
+🎥 Videomaker: Victor 
+
+Por favor responda com uma das opções abaixo:
+
+1️⃣ Confirmar gravação
+2️⃣ Cancelar gravação
+
+Assim conseguimos organizar nossa agenda da melhor forma para você.",sent,"{""status"": ""SUCCESS""}",2026-03-05 16:17:27.67152+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_confirmation,2026-03-05 16:17:27.67152+00
+d523b6e2-9db7-4687-99a2-2ed03a12afbb,5562986350884,"Entendido, Nahyelly.
+
+Sua gravação foi marcada como cancelada.
+
+Se surgir uma nova vaga na agenda entraremos em contato com você.
+
+Equipe Pulse Growth Marketing",sent,"{""status"": ""SUCCESS""}",2026-03-05 16:17:40.753307+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_confirmation,2026-03-05 16:17:40.753307+00
+a79cd5d7-5906-4009-a9bb-15b2f01bdf86,5562986350884,"Olá! Sua gravação foi agendada.
+
+Empresa: Nahyelly
+Data: 2026-03-05
+Horário: 09:00
+Videomaker: Victor 
+
+Equipe Pulse Growth Marketing",sent,"{""status"": ""SUCCESS""}",2026-03-05 16:18:17.533429+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_recording,2026-03-05 16:18:17.533429+00
+1d7b1ec2-b446-4bed-ae57-49d53889e924,5562996634932,"Olá, Ana Paula Contruções! 😊
+
+Passando para lembrar que a mensalidade no valor de R$ 1.680,00 vence no dia 06.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-05 18:51:19.282017+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 18:51:19.282017+00
+83040879-0679-4556-b958-36f575721277,5562996634932,"Olá, Ana Paula Contruções! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-05 19:16:01.272857+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 19:16:01.272857+00
+30e7e988-e652-4e31-b8be-3f30ceb710a5,5562996634932,"Olá, Ana Paula Contruções! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-05 19:16:21.989838+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 19:16:21.989838+00
+82d0f820-accf-4d6b-8452-1543c2791b88,5562996634932,"Olá, Bem popular! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-05 19:16:03.942068+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 19:16:03.942068+00
+b0cc720f-0c06-46a9-a06d-20f34a0cdb28,62985382981,teste,failed,"{""error"": ""Ticket em outro atendimento. Atendente: undefined - Fila: undefined""}",2026-03-12 20:47:52.130929+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-12 20:47:52.130929+00
+13805c85-dd26-43cf-932c-0f608157644c,62985382981,teste,sent,"{""status"": ""SUCCESS""}",2026-03-12 21:04:12.93423+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-12 21:04:12.93423+00
+9755115f-7fa0-47da-9182-7bcc38a04385,5562996634932,"Olá, Bem popular! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-05 19:16:24.293845+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 19:16:24.293845+00
+24d50be0-b0be-4308-ba3d-06af9da3de60,62985382981,"Olá, adriana! 🎉
+
+Seja muito bem-vindo(a) à *Pulse Growth Marketing*! 🚀
+
+Estamos felizes em tê-lo(a) conosco! A partir de agora, você receberá:
+
+📅 *Lembrete 24h antes* de cada gravação agendada
+🎬 *Atualizações* quando seus vídeos entrarem em edição
+📲 *Link para aprovação* assim que o conteúdo estiver pronto
+
+Nosso objetivo é manter você sempre informado(a) sobre o andamento dos seus conteúdos.
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-12 01:42:50.520051+00,,,auto_recording,2026-03-12 01:42:50.520051+00
+ff557844-ff53-4768-a3da-094d95f5b35c,62985382981,"Olá, Adriana! 🎬
+
+Hoje gravamos o vídeo *""teste""* e ele já está com o nosso time de edição! ✂️
+
+Assim que estiver pronto, enviaremos o link aqui para sua aprovação. 📲
+
+Agradecemos pela confiança!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-12 01:48:37.208668+00,de0a63e1-564c-4dc7-ae0c-3ab7059e6851,,auto_recording,2026-03-12 01:48:37.208668+00
+da72b750-ad47-4710-bca4-b48ed62b6653,62985382981,teste,failed,"{""error"": ""Ticket em outro atendimento. Atendente: undefined - Fila: undefined""}",2026-03-12 20:48:18.157551+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-12 20:48:18.157551+00
+4591261a-12f6-41ed-ad34-981ba7d8f3a5,62985382981,"Seu vídeo está pronto para aprovação.
+
+Acesse o link abaixo para assistir:
+https://pulsegrowthmarketing.lovable.app/portal/ef8e4b05-a730-454a-b5f9-25db4756dd37
+
+Se precisar de ajustes nos avise.
+
+Equipe Pulse Growth Marketing",sent,"{""status"": ""SUCCESS""}",2026-03-12 02:04:17.835389+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_confirmation,2026-03-12 02:04:17.835389+00
+408bcc60-c1c2-4ba1-bde2-143c5275ce4f,62985382981,testeeeeee,failed,"{""error"": ""Ticket em outro atendimento. Atendente: undefined - Fila: undefined""}",2026-03-12 20:52:23.425534+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-12 20:52:23.425534+00
+f674b488-5f7b-441e-b181-f335469c9ab5,5562996634932,"Olá, Bem popular! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-05 19:16:45.418931+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 19:16:45.418931+00
+f990555a-50c3-405f-b56a-8c8531e3e8b2,5562996634932,"Olá, Bem popular! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-05 19:18:16.315012+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 19:18:16.315012+00
+70ede885-28a1-4061-b688-cd106e04501d,5562996634932,"Olá, Bem popular! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-05 19:30:58.365845+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 19:30:58.365845+00
+eadb8a2a-93c0-4598-a5fd-08d22d1b4e5e,5562996634932,"Olá, Bem popular! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-05 19:33:05.848051+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 19:33:05.848051+00
+6ce61552-d26c-4748-affa-c0156d91f240,5562996634932,"Olá, Bem popular! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-05 19:54:07.895153+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 19:54:07.895153+00
+a1bf9ec8-67f2-4b79-90f7-2b2d0c09e224,5562996634932,"Olá, Bem popular! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-05 19:54:26.499872+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 19:54:26.499872+00
+d7afe226-4817-4b20-b20a-0134e4ab0cb1,62985382981,"Seu vídeo está pronto para aprovação.
+
+Acesse o link abaixo para assistir:
+https://pulsegrowthmarketing.lovable.app/portal/ef8e4b05-a730-454a-b5f9-25db4756dd37
+
+Se precisar de ajustes nos avise.
+
+Equipe Pulse Growth Marketing",sent,"{""status"": ""SUCCESS""}",2026-03-12 02:04:20.795762+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_confirmation,2026-03-12 02:04:20.795762+00
+7178f950-ab1b-4c65-9e4c-6523b1eef93c,62985382981,teste,failed,"{""error"": ""Ticket em outro atendimento. Atendente: undefined - Fila: undefined""}",2026-03-12 20:57:38.568567+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-12 20:57:38.568567+00
+7ed3f328-75a7-485c-adea-4c1c97c78b1b,5562996634932,"Olá, Ana Paula Contruções! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-05 19:16:43.160934+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 19:16:43.160934+00
+f98d291d-5520-4b4f-b628-fef456846780,5562996634932,"Olá, Ana Paula Contruções! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-05 19:18:14.212015+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 19:18:14.212015+00
+322925aa-25dc-4f84-9bc3-3ac709fc1ba5,5562996634932,"Olá, Ana Paula Contruções! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-05 19:30:55.443131+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 19:30:55.443131+00
+a24b13af-d03e-4765-ac71-4c057e36b204,5562996634932,"Olá! Sua gravação foi agendada.
+
+Empresa: Ana Paula Contruções
+Data: 2026-03-03
+Horário: 09:00
+Videomaker: Victor 
+
+Equipe Pulse Growth Marketing",sent,"{""status"": ""SUCCESS""}",2026-03-05 19:31:34.268554+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_recording,2026-03-05 19:31:34.268554+00
+4fa4e6c8-e0ab-4480-8d97-c9dfdfb65500,5562996634932,"Olá, Ana Paula Contruções! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-05 19:33:02.299048+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 19:33:02.299048+00
+f5c99d0f-91ec-4001-a923-b39941e46d89,5562996634932,"Olá, Ana Paula Contruções! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-05 19:33:36.923216+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 19:33:36.923216+00
+c1070909-908b-45c0-9b3d-c12f95c2c4c8,5562996634932,"Olá, Ana Paula Contruções! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀
+
+Esse mês foi incrível e fizemos muita coisa juntos! 💪
+
+Estivemos juntos durante *2h de gravação* em 1 sessão 📹
+Produzimos *2 vídeos* para sua marca 🎬
+Publicamos *2 reels* no seu perfil 🎥",sent,"{""status"": ""SUCCESS""}",2026-03-05 19:35:03.531291+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 19:35:03.531291+00
+25d4ded6-3263-4174-af95-f7fd75a78f83,5562996634932,"Olá, Ana Paula Contruções! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀
+
+Esse mês foi incrível e fizemos muita coisa juntos! 💪
+
+Estivemos juntos durante *2h de gravação* em 1 sessão(ões) 📹
+Produzimos *2 vídeos* para sua marca 🎬
+Publicamos *2 reels* no seu perfil 🎥",sent,"{""status"": ""SUCCESS""}",2026-03-05 19:53:59.683235+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 19:53:59.683235+00
+1ceb0c8c-a180-4a8b-bf0b-0530df11f16d,5562996634932,"Olá! Sua gravação foi agendada.
+
+Empresa: Ana Paula Contruções
+Data: 2026-03-05
+Horário: 09:00
+Videomaker: Victor 
+
+Equipe Pulse Growth Marketing",sent,"{""status"": ""SUCCESS""}",2026-03-05 22:37:26.327731+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_recording,2026-03-05 22:37:26.327731+00
+9f3453b8-80e8-44fc-a4b6-9adaa6d5b358,5562996634932,"Olá, Bem popular! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-05 21:16:04.82117+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 21:16:04.82117+00
+f1f7f518-7535-4eb4-b953-23137a95128f,5562996634932,"Olá, Bem popular! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-05 22:18:54.909163+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 22:18:54.909163+00
+78b1eefc-cf80-4fda-a8aa-6c3433acf499,5562985382981,"Olá! Sua gravação foi agendada.
+
+Empresa: Bem popular
+Data: 2026-03-06
+Horário: 09:00
+Videomaker: Victor 
+
+Equipe Pulse Growth Marketing",sent,"{""status"": ""SUCCESS""}",2026-03-05 22:31:02.210566+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_recording,2026-03-05 22:31:02.210566+00
+cbfc7819-3e49-4b6c-b82e-e5e8b170168c,5562996634932,"Olá, Ana Paula Contruções! 😊
+
+Esperamos que esteja tudo bem! Passando aqui apenas para lembrar que identificamos uma pendência referente à mensalidade no valor de R$ 1.680,00.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem e nos envie o comprovante.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀
+
+Esse mês foi incrível e fizemos muita coisa juntos! 💪
+
+Estivemos juntos durante *2h de gravação* em 1 sessão(ões) 📹
+Produzimos *2 vídeos* para sua marca 🎬
+Publicamos *2 reels* no seu perfil 🎥",sent,"{""status"": ""SUCCESS""}",2026-03-05 19:54:24.083868+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-05 19:54:24.083868+00
+7ba6d7db-0e0d-40ff-9471-1c098f3467ef,5562996634932,"Olá! Sua gravação foi agendada.
+
+Empresa: Ana Paula Contruções
+Data: 2026-03-05
+Horário: 09:00
+Videomaker: Victor 
+
+Equipe Pulse Growth Marketing",sent,"{""status"": ""SUCCESS""}",2026-03-05 23:36:54.540249+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_recording,2026-03-05 23:36:54.540249+00
+3cb4d83c-01e1-4c29-898b-c5af492370c4,5562996634932,"Entendido, Ana Paula Contruções.
+
+Sua gravação foi marcada como cancelada.
+
+Se surgir uma nova vaga na agenda entraremos em contato com você.
+
+Equipe Pulse Growth Marketing",sent,"{""status"": ""SUCCESS""}",2026-03-06 00:28:52.143059+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_confirmation,2026-03-06 00:28:52.143059+00
+1149c97f-e45c-4c6b-b7ca-a7fabcd53fd5,5562996634932,"Olá! Sua gravação foi agendada.
+
+Empresa: Ana Paula Contruções
+Data: 2026-03-05
+Horário: 14:00
+Videomaker: Victor 
+
+Equipe Pulse Growth Marketing",sent,"{""status"": ""SUCCESS""}",2026-03-06 00:30:57.080072+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_recording,2026-03-06 00:30:57.080072+00
+3b9da2d7-3e68-4271-868d-27f1f2a19a6d,5562985382981,"Olá, Ana Paula! 😊
+
+Seu conteúdo ""teste teste"" ficou pronto! 🎬
+
+📎 Acesse aqui: https://drive.google.com/drive/folders/1ecyVKNIEzDBT4QYex_mGh0-3juFTPA9z
+
+Por favor, avalie e nos diga se está aprovado ou se precisa de algum ajuste.
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-06 01:42:41.864656+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-06 01:42:41.864656+00
+24fcac19-10d9-45f7-90e0-48785b9a11db,5562985382981,"Olá, Bem popular!
+
+Aqui é a equipe da Pulse Growth Marketing 🚀
+
+Passando para confirmar sua gravação agendada.
+
+📅 Data: 2026-03-06
+⏰ Horário: 09:00
+🎥 Videomaker: Victor 
+
+Por favor responda com uma das opções abaixo:
+
+1️⃣ Confirmar gravação
+2️⃣ Cancelar gravação
+
+Assim conseguimos organizar nossa agenda da melhor forma para você.",sent,"{""status"": ""SUCCESS""}",2026-03-05 22:31:57.478765+00,013f7f2c-e50f-4958-8563-b87c24de2b3b,,auto_confirmation,2026-03-05 22:31:57.478765+00
+ae405aa4-91bf-4838-bad9-ae94af6e5503,5562985382981,"Seu vídeo está pronto para aprovação.
+
+Acesse o link abaixo para assistir:
+https://drive.google.com/file/d/1iRVnVIz9buWdw8PTJzTX0e_cT_QYUxOE/view?usp=drive_link
+
+Se precisar de ajustes nos avise.
+
+Equipe Pulse Growth Marketing",sent,"{""status"": ""SUCCESS""}",2026-03-06 03:31:40.767861+00,13be1a49-2856-4adc-94b7-6efc2c797330,,auto_confirmation,2026-03-06 03:31:40.767861+00
+86592c05-8629-4f19-a6d3-0f7195acd19e,5562985382981,"Seu vídeo está pronto para aprovação.
+
+Acesse o link abaixo para assistir:
+https://drive.google.com/file/d/1iRVnVIz9buWdw8PTJzTX0e_cT_QYUxOE/view?usp=drive_link
+
+Se precisar de ajustes nos avise.
+
+Equipe Pulse Growth Marketing",sent,"{""status"": ""SUCCESS""}",2026-03-06 03:34:19.917759+00,13be1a49-2856-4adc-94b7-6efc2c797330,,auto_confirmation,2026-03-06 03:34:19.917759+00
+514a0a63-ffbd-4cde-a53c-7bd86c9075ab,5562985382981,"Olá! Sua gravação foi agendada.
+
+Empresa: Ana paula
+Data: 2026-03-06
+Horário: 09:00
+Videomaker: Victor 
+
+Equipe Pulse Growth Marketing",sent,"{""status"": ""SUCCESS""}",2026-03-06 11:13:23.240539+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_recording,2026-03-06 11:13:23.240539+00
+c04864e6-c755-47b6-9973-94acec4bc1f8,5562985382981,"Seu vídeo está pronto para aprovação.
+
+Acesse o link abaixo para assistir:
+https://drive.google.com/file/d/1iRVnVIz9buWdw8PTJzTX0e_cT_QYUxOE/view?usp=drive_link
+
+Se precisar de ajustes nos avise.
+
+Equipe Pulse Growth Marketing",sent,"{""status"": ""SUCCESS""}",2026-03-06 13:18:16.159744+00,13be1a49-2856-4adc-94b7-6efc2c797330,,auto_confirmation,2026-03-06 13:18:16.159744+00
+dbdce70a-a45d-4841-800c-c7a504f248a4,5562985382981,"Olá, Ana paula!
+
+Aqui é a equipe da Pulse Growth Marketing 🚀
+
+Passando para confirmar sua gravação agendada.
+
+📅 Data: 2026-03-05
+⏰ Horário: 10:30
+🎥 Videomaker: Victor 
+
+Por favor responda com uma das opções abaixo:
+
+1️⃣ Confirmar gravação
+2️⃣ Cancelar gravação
+
+Assim conseguimos organizar nossa agenda da melhor forma para você.",sent,"{""status"": ""SUCCESS""}",2026-03-06 13:21:52.732074+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_confirmation,2026-03-06 13:21:52.732074+00
+7d845acf-64f1-4351-b8af-d758479848a5,5562985382981,"Olá! Sua gravação foi agendada.
+
+Empresa: Ana paula
+Data: 2026-03-06
+Horário: 14:30
+Videomaker: Victor 
+
+Equipe Pulse Growth Marketing",sent,"{""status"": ""SUCCESS""}",2026-03-06 13:28:22.836717+00,013f7f2c-e50f-4958-8563-b87c24de2b3b,,auto_recording,2026-03-06 13:28:22.836717+00
+1ac1fcc0-9fd6-4f27-b9a5-a4e480b7a2c7,62985382981,"Olá, adriana! 😊
+
+Para manter o fluxo de conteúdos em dia e não atrasar suas publicações, o vídeo ""teste"" foi encaminhado para agendamento pela nossa equipe.
+
+Pode ficar tranquilo(a)! Foi feita uma revisão interna cuidadosa no vídeo antes de seguir para a postagem. 👍
+
+Se precisar de algum ajuste, é só nos avisar!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-12 08:15:03.181063+00,,,auto_approval_expired,2026-03-12 08:15:03.181063+00
+da275a92-c9cb-4f28-a8b2-e20dac0a06be,62985382981,teste,failed,"{""error"": ""Ticket em outro atendimento. Atendente: undefined - Fila: undefined""}",2026-03-12 20:59:14.233475+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-12 20:59:14.233475+00
+9918d33b-d2b5-4bdf-a697-e6271d16576e,62985382981,teste,sent,"{""status"": ""SUCCESS""}",2026-03-12 20:46:17.867817+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-12 20:46:17.867817+00
+5675fc1f-75e7-41f7-a884-0963ce5434f8,62985382981,"Olá Adriana, teste de envio!",failed,"{""error"": ""Ticket em outro atendimento. Atendente: undefined - Fila: undefined""}",2026-03-12 21:02:34.252474+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-12 21:02:34.252474+00
+6c4ee40a-b2ff-4939-ac7b-b67cc69aead4,62985382981,"Olá, Super Brasil! 🎬
+
+Hoje gravamos o vídeo *""ts""* e ele já está com o nosso time de edição! ✂️
+
+Assim que estiver pronto, enviaremos o link aqui para sua aprovação. 📲
+
+Agradecemos pela confiança!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-11 17:28:31.656117+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_recording,2026-03-11 17:28:31.656117+00
+4ad6f0f8-3403-4811-b287-c57b7daded5b,62985382981,"Seu vídeo está pronto para aprovação.
+
+Acesse o link abaixo para assistir:
+https://drive.google.com/file/d/1mOIjk66EayWhpMxKFSqIVV4alxIe6K7F/view?usp=drive_link
+
+Se precisar de ajustes nos avise.
+
+Equipe Pulse Growth Marketing\n\n⏰ Você tem até *6 horas* para avaliar e aprovar o vídeo. Após esse prazo, ele será encaminhado para agendamento automaticamente.",sent,"{""status"": ""SUCCESS""}",2026-03-11 17:30:08.95152+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_confirmation,2026-03-11 17:30:08.95152+00
+b359e3ef-b4b8-43ec-b585-612973505609,62985382981,"Olá, Eugênio Romão! 🎨
+
+Segue a arte criada para sua empresa. Pode nos confirmar se está aprovado? [📎 1773257523386_01d4e617-0aa1-493a-94cb-8196e1c88856.webp]",sent,"{""status"": ""SUCCESS""}",2026-03-11 19:44:25.130403+00,865011fc-0834-47cf-bb23-25a74a761c55,,auto_design_approved,2026-03-11 19:44:25.130403+00
+e1eb15db-038a-4cad-bdf7-4f8e82d4ddd5,62985382981,teste de API,sent,"{""status"": ""SUCCESS""}",2026-03-11 23:17:34.10846+00,de0a63e1-564c-4dc7-ae0c-3ab7059e6851,,manual,2026-03-11 23:17:34.10846+00
+9dd425b1-613d-439e-bfa8-f700ba916038,62985382981,"Olá, Eugênio Romão! 🎨
+
+Segue a arte criada para sua empresa. Pode nos confirmar se está aprovado? [📎 1773257523386_01d4e617-0aa1-493a-94cb-8196e1c88856.webp]",sent,"{""status"": ""SUCCESS""}",2026-03-11 23:18:10.792449+00,de0a63e1-564c-4dc7-ae0c-3ab7059e6851,,auto_design_approved,2026-03-11 23:18:10.792449+00
+7e2a6ce2-6e3d-46f8-9b81-5ed684d4a34d,5562985382981,"Olá, CEEPRAM! 🎉
+
+Seja muito bem-vindo(a) à *Pulse Growth Marketing*! 🚀
+
+Estamos felizes em tê-lo(a) conosco! A partir de agora, você receberá:
+
+📅 *Lembrete 24h antes* de cada gravação agendada
+🎬 *Atualizações* quando seus vídeos entrarem em edição
+📲 *Link para aprovação* assim que o conteúdo estiver pronto
+
+Nosso objetivo é manter você sempre informado(a) sobre o andamento dos seus conteúdos.
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-11 13:35:58.228501+00,,,auto_recording,2026-03-11 13:35:58.228501+00
+6411effc-50fa-49bd-8667-d02e6e565100,5562986350884,"Olá, Naay! 😊
+
+Passando para lembrar que a mensalidade no valor de R$ 1.680,00 vence no dia 01.
+
+Se já realizou o pagamento, por favor desconsidere esta mensagem.
+
+
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe Pulse Growth Marketing 🚀",sent,"{""status"": ""SUCCESS""}",2026-03-09 22:25:01.582724+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-09 22:25:01.582724+00
+db908911-90da-44ad-8056-c559877c5703,5562986350884,https://pulsegrowthmarketing.lovable.app/onboarding/99f0d160-d02b-4507-a97a-6e4778f13345,sent,"{""status"": ""SUCCESS""}",2026-03-10 22:52:09.059824+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-10 22:52:09.059824+00
+8930c5dc-2530-4849-aada-95d93c25cbe1,5562985382981,https://pulsegrowthmarketing.lovable.app/onboarding/e004a81d-da0f-4bcd-963e-4c856b55b440,sent,"{""status"": ""SUCCESS""}",2026-03-10 22:52:16.272665+00,865011fc-0834-47cf-bb23-25a74a761c55,,manual,2026-03-10 22:52:16.272665+00

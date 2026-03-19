@@ -1,0 +1,5 @@
+id,name,description,reels_qty,creatives_qty,stories_qty,arts_qty,recording_sessions,recording_hours,extra_content_allowed,price,periodicity,status,created_at,updated_at,partner_id,partner_cost,is_partner_plan,accepts_extra_content
+62b9a132-c049-477e-b078-907cea82373e,Starter,"",0,2,0,4,0,0,0,1350,mensal,ativo,2026-03-12 01:40:14.757009+00,2026-03-12 01:40:22.47+00,,0,f,f
+e29a189e-a5de-4876-afc6-5ce2ffad3706,Boost,Plano intermediário de presença semanal,4,2,0,0,3,0,0,1680,mensal,ativo,2026-03-13 14:22:01.123281+00,2026-03-13 14:22:01.123281+00,,0,f,t
+2689b069-5fbd-4713-8703-7fa41b6cfe3e,Premium,Plano mais completo presença 3x semana,8,3,20,4,4,0,0,2680,mensal,ativo,2026-03-13 14:23:06.402566+00,2026-03-13 14:23:06.402566+00,,0,f,t
+00d473c8-23f0-4eb1-8a3e-3c46428316b8,Elite,"",12,4,40,4,5,0,0,3200,mensal,ativo,2026-03-13 14:25:06.384808+00,2026-03-13 14:25:06.384808+00,,0,f,t

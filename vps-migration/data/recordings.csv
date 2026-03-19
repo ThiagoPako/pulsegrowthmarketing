@@ -1,0 +1,3 @@
+id,client_id,videomaker_id,date,start_time,type,status,created_at,confirmation_status
+74c6aa4d-7594-4d96-a148-7a9b18e3125d,812c0c1b-d270-455e-8266-58ffcb218750,013f7f2c-e50f-4958-8563-b87c24de2b3b,2026-03-18,09:00,fixa,concluida,2026-03-17 03:17:56.693755+00,pendente
+9fcfa787-6c1a-4a38-bdcf-27c424033962,812c0c1b-d270-455e-8266-58ffcb218750,013f7f2c-e50f-4958-8563-b87c24de2b3b,2026-03-17,19:00,fixa,concluida,2026-03-17 21:05:35.417261+00,pendente

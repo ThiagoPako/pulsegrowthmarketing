@@ -1,0 +1,2 @@
+id,type,title,target_value,current_value,period,start_date,end_date,status,notes,created_at,updated_at
+ba582e7c-0d78-4358-9022-6b45286bbb2c,faturamento,FATURAMENTO,45000,0,mensal,2026-03-16,2026-03-31,em_andamento,,2026-03-17 01:31:53.121213+00,2026-03-17 01:31:54.557+00

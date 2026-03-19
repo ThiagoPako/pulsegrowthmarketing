@@ -1,0 +1,2 @@
+id,shift_a_start,shift_a_end,work_days,recording_duration,updated_at,shift_b_start,shift_b_end,editing_deadline_hours,review_deadline_hours,alteration_deadline_hours,approval_deadline_hours
+c8b9bf36-944a-444d-a5ed-d891d1244aea,08:30,12:00,"{segunda,terca,quarta,quinta,sexta}",90,2026-03-04 22:59:55.220005+00,14:30,18:00,48,24,24,6

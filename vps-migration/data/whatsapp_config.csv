@@ -1,0 +1,95 @@
+id,api_token_configured,integration_active,default_user_id,default_queue_id,send_signature,close_ticket,auto_recording_scheduled,auto_recording_reminder,auto_video_approval,auto_video_approved,updated_at,api_token,msg_recording_scheduled,msg_recording_reminder,msg_video_approval,msg_video_approved,msg_confirmation,msg_confirmation_confirmed,msg_confirmation_cancelled,msg_backup_invite,msg_backup_confirmed,auto_confirmation,msg_approval_expired,auto_task_editing,msg_task_editing,auto_task_approved,msg_task_approved,auto_approval_expired
+a62ec304-fe62-4de9-b838-4c4b7dcec535,f,f,3,34,t,f,t,t,t,t,2026-03-13 14:25:54.128+00,EFnwzmOtt8oMXzksjXbrL3nCfCaNcZ,"Olá! Sua gravação foi agendada.
+
+Empresa: {nome_cliente}
+Data: {data_gravacao}
+Horário: {hora_gravacao}
+Videomaker: {videomaker}
+
+Equipe Pulse Growth Marketing","Lembrete da sua gravação amanhã.
+
+Cliente: {nome_cliente}
+Horário: {hora_gravacao}
+
+Equipe Pulse Growth Marketing","Seu vídeo está pronto para aprovação.
+
+Acesse o link abaixo para assistir:
+{link_video}
+
+Se precisar de ajustes nos avise.
+
+Equipe Pulse Growth Marketing","Seu vídeo foi aprovado e será publicado em breve.
+
+Obrigado pela confiança na Pulse Growth Marketing.","Olá, {nome_cliente}!
+
+Aqui é a equipe da Pulse Growth Marketing 🚀
+
+Passando para confirmar sua gravação agendada.
+
+📅 Data: {data_gravacao}
+⏰ Horário: {hora_gravacao}
+🎥 Videomaker: {videomaker}
+
+Por favor responda com uma das opções abaixo:
+
+1️⃣ Confirmar gravação
+2️⃣ Cancelar gravação
+
+Assim conseguimos organizar nossa agenda da melhor forma para você.","Perfeito, {nome_cliente}!
+
+Sua gravação está confirmada para:
+
+📅 {data_gravacao}
+⏰ {hora_gravacao}
+
+Nossa equipe estará pronta para criar conteúdos incríveis para sua marca 🚀
+
+Até breve!
+
+Equipe Pulse Growth Marketing","Entendido, {nome_cliente}.
+
+Sua gravação foi marcada como cancelada.
+
+Se surgir uma nova vaga na agenda entraremos em contato com você.
+
+Equipe Pulse Growth Marketing","Olá, {nome_cliente}!
+
+Surgiu uma vaga extra de gravação na agenda da Pulse 🚀
+
+📅 Data: {data_gravacao}
+⏰ Horário: {hora_gravacao}
+
+Gostaria de aproveitar essa oportunidade para gravar conteúdos extras?
+
+Responda:
+
+1️⃣ Quero aproveitar
+2️⃣ Não posso dessa vez","Perfeito, {nome_cliente}!
+
+Sua gravação extra foi confirmada.
+
+Nossa equipe estará indo até você no horário combinado.
+
+Equipe Pulse Growth Marketing",t,"Olá, {nome_cliente}! 😊
+
+Para manter o fluxo de conteúdos em dia e não atrasar suas publicações, o vídeo ""{titulo}"" foi encaminhado para agendamento pela nossa equipe.
+
+Pode ficar tranquilo(a)! Foi feita uma revisão interna cuidadosa no vídeo antes de seguir para a postagem. 👍
+
+Se precisar de algum ajuste, é só nos avisar!
+
+Equipe Pulse Growth Marketing 🚀",t,"Olá, {nome_cliente}! 🎬
+
+Hoje gravamos o vídeo *""{titulo}""* e ele já está com o nosso time de edição! ✂️
+
+Assim que estiver pronto, enviaremos o link aqui para sua aprovação. 📲
+
+Agradecemos pela confiança!
+
+Equipe Pulse Growth Marketing 🚀",t,"Olá, {nome_cliente}! ✅
+
+Seu vídeo *""{titulo}""* foi aprovado com sucesso e já está sendo encaminhado para agendamento! 📅
+
+Obrigado pela confiança!
+
+Equipe Pulse Growth Marketing 🚀",t

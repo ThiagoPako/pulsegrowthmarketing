@@ -16,7 +16,7 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
-async function executeQuery(body: any): Promise<{ data: any; error: any }> {
+async function executeQuery(body: any): Promise<{ data: any; error: any; count?: number | null }> {
   try {
     const response = await fetch(`${VPS_API_BASE}/db/query`, {
       method: 'POST',
@@ -27,13 +27,13 @@ async function executeQuery(body: any): Promise<{ data: any; error: any }> {
     if (!response.ok) {
       return { data: null, error: result.error || { message: `HTTP ${response.status}` } };
     }
-    return { data: result.data, error: result.error || null };
+    return { data: result.data, error: result.error || null, count: result.count ?? null };
   } catch (error: any) {
     return { data: null, error: { message: error.message || 'Network error' } };
   }
 }
 
-type FilterOp = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'like' | 'ilike' | 'is' | 'in' | 'contains';
+type FilterOp = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'like' | 'ilike' | 'is' | 'in' | 'contains' | 'not' | 'or';
 
 interface Filter {
   column: string;
@@ -48,23 +48,26 @@ interface OrderSpec {
 
 class QueryBuilder {
   private _table: string;
-  private _operation: string;
+  private _operation: string = 'select';
   private _select: string = '*';
   private _filters: Filter[] = [];
   private _order: OrderSpec[] = [];
   private _limit: number | null = null;
   private _single: boolean = false;
+  private _head: boolean = false;
   private _data: any = null;
   private _count: 'exact' | null = null;
+  private _onConflict: string | null = null;
 
   constructor(table: string) {
     this._table = table;
   }
 
-  select(columns?: string, options?: { count?: 'exact' }): this {
+  select(columns?: string, options?: { count?: 'exact'; head?: boolean }): this {
     this._operation = 'select';
     if (columns) this._select = columns;
     if (options?.count) this._count = options.count;
+    if (options?.head) this._head = true;
     return this;
   }
 
@@ -85,10 +88,10 @@ class QueryBuilder {
     return this;
   }
 
-  upsert(data: any): this {
-    // Upsert = insert with conflict handling; for simplicity, try insert
-    this._operation = 'insert';
+  upsert(data: any, options?: { onConflict?: string }): this {
+    this._operation = 'upsert';
     this._data = data;
+    if (options?.onConflict) this._onConflict = options.onConflict;
     return this;
   }
 
@@ -104,6 +107,18 @@ class QueryBuilder {
   is(column: string, value: any): this { this._filters.push({ column, op: 'is', value }); return this; }
   in(column: string, value: any[]): this { this._filters.push({ column, op: 'in', value }); return this; }
   contains(column: string, value: any): this { this._filters.push({ column, op: 'contains', value }); return this; }
+
+  /** .not('column', 'op', value) — negates a filter */
+  not(column: string, op: string, value: any): this {
+    this._filters.push({ column, op: 'not' as FilterOp, value: { op, value } });
+    return this;
+  }
+
+  /** .or('col.eq.val,col2.eq.val2') — Supabase-style OR filter string */
+  or(filterString: string): this {
+    this._filters.push({ column: '_or', op: 'or' as FilterOp, value: filterString });
+    return this;
+  }
 
   // Ordering
   order(column: string, options?: { ascending?: boolean }): this {
@@ -131,8 +146,13 @@ class QueryBuilder {
   }
 
   // Execute: the builder is thenable so it works with await
-  then(resolve: (value: { data: any; error: any; count?: number | null }) => any, reject?: (reason: any) => any): Promise<any> {
-    return this._execute().then(resolve, reject);
+  // Allow 0 args for fire-and-forget `.then()` pattern
+  then(resolve?: (value: { data: any; error: any; count?: number | null }) => any, reject?: (reason: any) => any): Promise<any> {
+    const p = this._execute();
+    if (resolve || reject) {
+      return p.then(resolve, reject);
+    }
+    return p;
   }
 
   private async _execute(): Promise<{ data: any; error: any; count?: number | null }> {
@@ -143,24 +163,28 @@ class QueryBuilder {
     };
 
     if (this._operation === 'select') {
-      // Parse select to handle joins (e.g. '*, clients(company_name)')
       const { selectStr, joins } = this._parseSelect(this._select);
       body.select = selectStr;
       if (joins.length > 0) body.joins = joins;
       if (this._order.length > 0) body.order = this._order;
       if (this._limit !== null) body.limit = this._limit;
       body.single = this._single;
-    } else if (this._operation === 'insert' || this._operation === 'update') {
+      if (this._count) body.count = this._count;
+      if (this._head) body.head = true;
+    } else if (this._operation === 'insert') {
       body.data = this._data;
-      if (this._operation === 'update') {
-        body.filters = this._filters;
-      }
+    } else if (this._operation === 'update') {
+      body.data = this._data;
+      body.filters = this._filters;
+    } else if (this._operation === 'upsert') {
+      body.data = this._data;
+      if (this._onConflict) body.onConflict = this._onConflict;
     } else if (this._operation === 'delete') {
       body.filters = this._filters;
     }
 
     const result = await executeQuery(body);
-    
+
     // For maybeSingle, don't treat null as error
     if (this._single && result.data === null && !result.error) {
       return { data: null, error: null };
@@ -170,32 +194,26 @@ class QueryBuilder {
   }
 
   private _parseSelect(select: string): { selectStr: string; joins: any[] } {
-    // Handle Supabase-style relation selects like '*, clients(company_name), plans(name, price)'
-    // For now, convert to simple select with LEFT JOINs
     const joins: any[] = [];
     let selectStr = select;
 
-    // Find patterns like table_name(columns)
     const relationPattern = /(\w+)\(([^)]+)\)/g;
     let match;
     const extraSelects: string[] = [];
-    
+
     while ((match = relationPattern.exec(select)) !== null) {
       const joinTable = match[1];
       const joinColumns = match[2].split(',').map(c => c.trim());
-      
-      // Try to figure out the join condition from common FK patterns
-      // e.g., clients(company_name) on a table with client_id -> clients.id
+
       const fkColumn = `${this._table}.${joinTable.replace(/s$/, '')}_id`;
       const on = `${fkColumn} = ${joinTable}.id`;
-      
+
       joins.push({ table: joinTable, type: 'left', on });
-      
+
       for (const col of joinColumns) {
         extraSelects.push(`${joinTable}.${col} as ${joinTable}_${col}`);
       }
-      
-      // Remove from select string
+
       selectStr = selectStr.replace(match[0], '').replace(/,\s*,/g, ',').replace(/,\s*$/, '').replace(/^\s*,/, '');
     }
 
@@ -225,8 +243,10 @@ class RpcBuilder {
     return this;
   }
 
-  then(resolve: (value: { data: any; error: any }) => any, reject?: (reason: any) => any): Promise<any> {
-    return this._execute().then(resolve, reject);
+  then(resolve?: (value: { data: any; error: any }) => any, reject?: (reason: any) => any): Promise<any> {
+    const p = this._execute();
+    if (resolve || reject) return p.then(resolve, reject);
+    return p;
   }
 
   private async _execute(): Promise<{ data: any; error: any }> {
@@ -241,27 +261,44 @@ class RpcBuilder {
 
 class ChannelBuilder {
   private _name: string;
-  private _handlers: any[] = [];
 
   constructor(name: string) {
     this._name = name;
   }
 
   on(_event: string, _filter: any, _callback: (payload: any) => void): this {
-    // No-op: realtime is handled by polling in useSupabaseData
     return this;
   }
 
   subscribe(): this {
-    // No-op
     return this;
+  }
+}
+
+/**
+ * Invoke a VPS API function (replaces supabase.functions.invoke)
+ * Routes to https://agenciapulse.tech/api/<functionName>
+ */
+async function invokeFunction(functionName: string, options?: { body?: any }): Promise<{ data: any; error: any }> {
+  try {
+    const response = await fetch(`${VPS_API_BASE}/${functionName}`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: options?.body ? JSON.stringify(options.body) : undefined,
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return { data: null, error: data.error || { message: `HTTP ${response.status}` } };
+    }
+    return { data, error: null };
+  } catch (error: any) {
+    return { data: null, error: { message: error.message || 'Network error' } };
   }
 }
 
 /**
  * VPS Database client — drop-in replacement for Supabase client
  * Usage: import { supabase } from '@/lib/vpsDb';
- * Then use exactly like Supabase: supabase.from('table').select('*').eq('id', value)
  */
 export const supabase = {
   from(table: string): QueryBuilder {
@@ -276,11 +313,14 @@ export const supabase = {
     return new ChannelBuilder(name);
   },
 
-  removeChannel(_channel: any): void {
-    // No-op
+  removeChannel(_channel: any): void {},
+
+  // Functions namespace — replaces supabase.functions.invoke
+  functions: {
+    invoke: invokeFunction,
   },
 
-  // Auth namespace — delegates to VPS auth endpoints
+  // Auth namespace
   auth: {
     async getUser(): Promise<{ data: { user: any } | null; error: any }> {
       try {
@@ -304,12 +344,37 @@ export const supabase = {
     },
 
     onAuthStateChange(callback: (event: string, session: any) => void): { data: { subscription: { unsubscribe: () => void } } } {
-      // Check initial state
       const token = localStorage.getItem(TOKEN_KEY);
       if (token) {
         callback('SIGNED_IN', { access_token: token });
       }
       return { data: { subscription: { unsubscribe: () => {} } } };
+    },
+
+    async signInWithPassword(credentials: { email: string; password: string }): Promise<{ data: { user: any; session: any } | null; error: any }> {
+      try {
+        const response = await fetch(`${VPS_API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(credentials),
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          return { data: null, error: { message: result.error || 'Login failed' } };
+        }
+        if (result.token) {
+          localStorage.setItem(TOKEN_KEY, result.token);
+        }
+        return {
+          data: {
+            user: result.user || { id: result.id, email: credentials.email },
+            session: { access_token: result.token },
+          },
+          error: null,
+        };
+      } catch (e: any) {
+        return { data: null, error: { message: e.message } };
+      }
     },
 
     async signOut(): Promise<{ error: any }> {

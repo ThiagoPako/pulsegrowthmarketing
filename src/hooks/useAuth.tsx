@@ -95,8 +95,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, name: string, role: AppRole) => {
-    // For now, user creation is admin-only via the Team page
-    return { error: 'Cadastro deve ser feito pelo administrador' };
+    try {
+      const token = localStorage.getItem(TOKEN_KEY);
+      const res = await fetch(`${VPS_API_BASE}/auth/create-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ email, password, name, role }),
+      });
+      const data = await res.json();
+      if (!res.ok) return { error: data.error || 'Erro ao cadastrar usuário' };
+      return { error: null };
+    } catch {
+      return { error: 'Erro de conexão com o servidor' };
+    }
   };
 
   const signOut = async () => {

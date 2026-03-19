@@ -164,11 +164,17 @@ export default function Team() {
 
     setResetting(true);
     try {
-      const { data, error } = await supabase.functions.invoke('reset-password', {
-        body: { userId: resetTarget.id, newPassword },
+      const token = localStorage.getItem('pulse_jwt');
+      const res = await fetch('https://agenciapulse.tech/api/auth/reset-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ userId: resetTarget.id, newPassword }),
       });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao redefinir senha');
       toast.success(`Senha de ${resetTarget.displayName || resetTarget.name} redefinida!`);
       setResetOpen(false);
       setNewPassword('');

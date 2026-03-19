@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 import { useAuth } from '@/hooks/useAuth';
 import { Bell } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';

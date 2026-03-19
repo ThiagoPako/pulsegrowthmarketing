@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useCallback, useState, useEffect } from 'react'; // refreshed
 import { useAuth, type Profile } from '@/hooks/useAuth';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 import { generateFixedRecordings, generateExtraRecordings, findRescheduleSlot } from '@/lib/schedulingUtils';
 import { sendRecordingScheduledNotification } from '@/services/whatsappService';
 import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek, Script, ActiveRecording, UserRole } from '@/types';

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 import { toast } from 'sonner';
 
 export type OnboardingStage = 'cliente_novo' | 'contrato' | 'identidade_visual' | 'fotografia' | 'reformulacao_perfil';

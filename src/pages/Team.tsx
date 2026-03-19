@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth, type AppRole } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 import { ROLE_LABELS } from '@/types';
 import type { UserRole } from '@/types';
 import { Button } from '@/components/ui/button';

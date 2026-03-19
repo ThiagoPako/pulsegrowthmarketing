@@ -6,7 +6,7 @@ import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 import { motion, AnimatePresence } from 'framer-motion';
 import { uploadFileToVps, VPS_BASE_URL } from '@/services/vpsApi';
 import {

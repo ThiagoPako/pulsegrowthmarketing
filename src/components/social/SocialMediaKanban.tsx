@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import DeadlineBadge from '@/components/DeadlineBadge';
 import { motion, AnimatePresence } from 'framer-motion';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 
 // Drag-to-scroll container
 function DragScrollContainer({ children, className }: { children: React.ReactNode; className?: string }) {

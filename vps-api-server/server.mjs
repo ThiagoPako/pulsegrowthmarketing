@@ -219,6 +219,54 @@ app.post('/api/auth/set-password', async (req, res) => {
   }
 });
 
+// ─── Admin: Create user ─────────────────────────────────────
+app.post('/api/auth/create-user', async (req, res) => {
+  try {
+    await verifyAdmin(req);
+    const { name, email, password, role } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
+    if (password.length < 6) return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
+
+    const { rows: existing } = await pool.query('SELECT id FROM profiles WHERE email = $1', [email.toLowerCase().trim()]);
+    if (existing.length > 0) return res.status(409).json({ error: 'Email já cadastrado no sistema' });
+
+    const id = crypto.randomUUID();
+    const hash = await bcrypt.hash(password, 12);
+    const userRole = role || 'editor';
+
+    await pool.query(
+      `INSERT INTO profiles (id, name, email, role, password_hash) VALUES ($1, $2, $3, $4, $5)`,
+      [id, name, email.toLowerCase().trim(), userRole, hash]
+    );
+    await pool.query(
+      `INSERT INTO user_roles (user_id, role) VALUES ($1, $2)`,
+      [id, userRole]
+    );
+
+    res.json({ success: true, user: { id, name, email: email.toLowerCase().trim(), role: userRole } });
+  } catch (error) {
+    console.error('Create user error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── Admin: Reset password ──────────────────────────────────
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    await verifyAdmin(req);
+    const { userId, newPassword } = req.body;
+    if (!userId || !newPassword || newPassword.length < 6) return res.status(400).json({ error: 'userId e nova senha (min 6 chars) obrigatórios' });
+
+    const hash = await bcrypt.hash(newPassword, 12);
+    await pool.query('UPDATE profiles SET password_hash = $1, updated_at = NOW() WHERE id = $2', [hash, userId]);
+
+    res.json({ success: true, message: 'Senha redefinida com sucesso' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ─── AI helpers ─────────────────────────────────────────────
 function getAiConfig(provider, dbApiKey) {
   const geminiKey = process.env.GOOGLE_GEMINI_API_KEY;

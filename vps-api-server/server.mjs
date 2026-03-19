@@ -1309,6 +1309,183 @@ app.post('/api/endo-daily-tasks-notify', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// GENERIC DB QUERY ENDPOINT — Replaces Supabase PostgREST
+// ═══════════════════════════════════════════════════════════════
+
+const ALLOWED_TABLES = [
+  'clients','recordings','kanban_tasks','scripts','company_settings','active_recordings',
+  'profiles','user_roles','plans','goals','notifications','content_tasks','task_history',
+  'task_comments','design_tasks','design_task_history','delivery_records','revenues',
+  'expenses','expense_categories','financial_contracts','financial_activity_log',
+  'financial_chat_messages','cash_reserve_movements','billing_messages','payment_config',
+  'social_media_deliveries','social_accounts','integration_logs','automation_flows',
+  'automation_logs','api_integrations','api_integration_logs','onboarding_tasks',
+  'client_portal_contents','client_portal_comments','client_portal_notifications',
+  'flyer_items','flyer_templates','endomarketing_clientes','endomarketing_agendamentos',
+  'endomarketing_profissionais','endomarketing_logs','endomarketing_packages',
+  'endomarketing_partner_tasks','client_endomarketing_contracts','partners',
+  'traffic_campaigns','whatsapp_config','whatsapp_messages','whatsapp_confirmations',
+];
+
+function sanitizeIdentifier(name) {
+  // Only allow alphanumeric and underscores
+  return name.replace(/[^a-zA-Z0-9_]/g, '');
+}
+
+// Generic query endpoint
+app.post('/api/db/query', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { table, operation, data, filters, select, order, limit: queryLimit, single, joins } = req.body;
+
+    const safeTable = sanitizeIdentifier(table);
+    if (!ALLOWED_TABLES.includes(safeTable)) {
+      return res.status(403).json({ error: `Table "${safeTable}" is not allowed` });
+    }
+
+    let result;
+
+    switch (operation) {
+      case 'select': {
+        let query = `SELECT ${select || '*'} FROM ${safeTable}`;
+        const params = [];
+        let paramIdx = 1;
+
+        // Handle joins
+        if (joins && Array.isArray(joins)) {
+          for (const join of joins) {
+            const joinTable = sanitizeIdentifier(join.table);
+            if (!ALLOWED_TABLES.includes(joinTable)) continue;
+            const joinType = join.type === 'inner' ? 'INNER JOIN' : 'LEFT JOIN';
+            query += ` ${joinType} ${joinTable} ON ${sanitizeIdentifier(join.on)}`;
+          }
+        }
+
+        // Handle filters
+        if (filters && Array.isArray(filters)) {
+          const whereClauses = [];
+          for (const f of filters) {
+            const col = sanitizeIdentifier(f.column);
+            switch (f.op) {
+              case 'eq': whereClauses.push(`${safeTable}.${col} = $${paramIdx}`); params.push(f.value); paramIdx++; break;
+              case 'neq': whereClauses.push(`${safeTable}.${col} != $${paramIdx}`); params.push(f.value); paramIdx++; break;
+              case 'gt': whereClauses.push(`${safeTable}.${col} > $${paramIdx}`); params.push(f.value); paramIdx++; break;
+              case 'gte': whereClauses.push(`${safeTable}.${col} >= $${paramIdx}`); params.push(f.value); paramIdx++; break;
+              case 'lt': whereClauses.push(`${safeTable}.${col} < $${paramIdx}`); params.push(f.value); paramIdx++; break;
+              case 'lte': whereClauses.push(`${safeTable}.${col} <= $${paramIdx}`); params.push(f.value); paramIdx++; break;
+              case 'like': whereClauses.push(`${safeTable}.${col} LIKE $${paramIdx}`); params.push(f.value); paramIdx++; break;
+              case 'ilike': whereClauses.push(`${safeTable}.${col} ILIKE $${paramIdx}`); params.push(f.value); paramIdx++; break;
+              case 'is': whereClauses.push(`${safeTable}.${col} IS ${f.value === null ? 'NULL' : 'NOT NULL'}`); break;
+              case 'in': whereClauses.push(`${safeTable}.${col} = ANY($${paramIdx})`); params.push(f.value); paramIdx++; break;
+              case 'contains': whereClauses.push(`${safeTable}.${col} @> $${paramIdx}`); params.push(f.value); paramIdx++; break;
+            }
+          }
+          if (whereClauses.length > 0) query += ` WHERE ${whereClauses.join(' AND ')}`;
+        }
+
+        // Handle order
+        if (order) {
+          const orderParts = Array.isArray(order) ? order : [order];
+          const orderClauses = orderParts.map(o => `${sanitizeIdentifier(o.column)} ${o.ascending === false ? 'DESC' : 'ASC'}`);
+          query += ` ORDER BY ${orderClauses.join(', ')}`;
+        }
+
+        // Handle limit
+        if (queryLimit) query += ` LIMIT ${parseInt(queryLimit)}`;
+
+        const { rows } = await pool.query(query, params);
+        result = { data: single ? (rows[0] || null) : rows, error: null };
+        break;
+      }
+
+      case 'insert': {
+        const items = Array.isArray(data) ? data : [data];
+        const allResults = [];
+        for (const item of items) {
+          const keys = Object.keys(item).map(sanitizeIdentifier);
+          const values = Object.values(item).map(v => typeof v === 'object' && v !== null && !Array.isArray(v) ? JSON.stringify(v) : v);
+          const placeholders = values.map((_, i) => `$${i + 1}`);
+          const { rows } = await pool.query(
+            `INSERT INTO ${safeTable} (${keys.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`,
+            values
+          );
+          allResults.push(rows[0]);
+        }
+        result = { data: allResults.length === 1 ? allResults[0] : allResults, error: null };
+        break;
+      }
+
+      case 'update': {
+        const keys = Object.keys(data).map(sanitizeIdentifier);
+        const values = Object.values(data).map(v => typeof v === 'object' && v !== null && !Array.isArray(v) ? JSON.stringify(v) : v);
+        let paramIdx = 1;
+        const setClauses = keys.map(k => `${k} = $${paramIdx++}`);
+
+        let query = `UPDATE ${safeTable} SET ${setClauses.join(', ')}`;
+        const params = [...values];
+
+        if (filters && Array.isArray(filters)) {
+          const whereClauses = [];
+          for (const f of filters) {
+            const col = sanitizeIdentifier(f.column);
+            if (f.op === 'eq') { whereClauses.push(`${col} = $${paramIdx}`); params.push(f.value); paramIdx++; }
+            else if (f.op === 'in') { whereClauses.push(`${col} = ANY($${paramIdx})`); params.push(f.value); paramIdx++; }
+          }
+          if (whereClauses.length > 0) query += ` WHERE ${whereClauses.join(' AND ')}`;
+        }
+        query += ' RETURNING *';
+        const { rows } = await pool.query(query, params);
+        result = { data: rows, error: null };
+        break;
+      }
+
+      case 'delete': {
+        let query = `DELETE FROM ${safeTable}`;
+        const params = [];
+        let paramIdx = 1;
+
+        if (filters && Array.isArray(filters)) {
+          const whereClauses = [];
+          for (const f of filters) {
+            const col = sanitizeIdentifier(f.column);
+            if (f.op === 'eq') { whereClauses.push(`${col} = $${paramIdx}`); params.push(f.value); paramIdx++; }
+            else if (f.op === 'in') { whereClauses.push(`${col} = ANY($${paramIdx})`); params.push(f.value); paramIdx++; }
+          }
+          if (whereClauses.length > 0) query += ` WHERE ${whereClauses.join(' AND ')}`;
+        }
+        query += ' RETURNING *';
+        const { rows } = await pool.query(query, params);
+        result = { data: rows, error: null };
+        break;
+      }
+
+      case 'rpc': {
+        // Call a database function
+        const funcName = sanitizeIdentifier(data.function_name);
+        const args = data.args || {};
+        const argKeys = Object.keys(args);
+        const argValues = Object.values(args);
+        const placeholders = argValues.map((_, i) => `$${i + 1}`);
+        const funcCall = argKeys.length > 0
+          ? `SELECT * FROM ${funcName}(${argKeys.map((k, i) => `${sanitizeIdentifier(k)} := $${i + 1}`).join(', ')})`
+          : `SELECT * FROM ${funcName}()`;
+        const { rows } = await pool.query(funcCall, argValues);
+        result = { data: single ? (rows[0] || null) : rows, error: null };
+        break;
+      }
+
+      default:
+        return res.status(400).json({ error: `Unknown operation: ${operation}` });
+    }
+
+    res.json(result);
+  } catch (e) {
+    console.error('DB query error:', e);
+    res.status(500).json({ data: null, error: { message: e.message } });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
 // CRUD ROUTES — Phase 4: Direct DB access (replaces Supabase SDK)
 // ═══════════════════════════════════════════════════════════════
 

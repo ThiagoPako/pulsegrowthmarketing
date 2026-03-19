@@ -74,23 +74,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
+      // Try VPS API first
       const res = await fetch(`${VPS_API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        return { error: data.error || 'Erro ao autenticar' };
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem(TOKEN_KEY, data.token);
+        const u = { id: data.user.id, email: data.user.email };
+        setUser(u);
+        setSession({ access_token: data.token });
+        await fetchProfile(u.id);
+        return { error: null };
       }
-      localStorage.setItem(TOKEN_KEY, data.token);
-      const u = { id: data.user.id, email: data.user.email };
-      setUser(u);
-      setSession({ access_token: data.token });
-      await fetchProfile(u.id);
-      return { error: null };
+      const errData = await res.json().catch(() => ({}));
+      return { error: errData.error || 'Email ou senha inválidos' };
     } catch {
-      return { error: 'Erro de conexão com o servidor' };
+      // Fallback to Supabase Auth (for Lovable preview)
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) return { error: error.message };
+        if (data.user && data.session) {
+          const u = { id: data.user.id, email: data.user.email || '' };
+          setUser(u);
+          setSession({ access_token: data.session.access_token });
+          await fetchProfile(u.id);
+          return { error: null };
+        }
+        return { error: 'Erro ao autenticar' };
+      } catch {
+        return { error: 'Erro de conexão com o servidor' };
+      }
     }
   };
 

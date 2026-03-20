@@ -854,7 +854,7 @@ export default function ClientPortal() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 40 }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="max-w-5xl mx-auto my-4 sm:my-8"
+              className="max-w-5xl mx-auto my-2 sm:my-8"
               onClick={e => e.stopPropagation()}
             >
               {/* Close button */}

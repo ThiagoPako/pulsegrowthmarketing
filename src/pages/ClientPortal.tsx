@@ -1249,7 +1249,7 @@ function ReelsCard({ content, clientColor, onSelect }: {
   return (
     <button
       onClick={() => onSelect(content)}
-      className="group relative shrink-0 w-[140px] sm:w-[170px] snap-start rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.04] hover:ring-1 focus:outline-none bg-white/[0.03]"
+      className="group relative shrink-0 w-[120px] sm:w-[170px] snap-start rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.04] hover:ring-1 focus:outline-none bg-white/[0.03]"
       style={{ '--tw-ring-color': `hsl(${clientColor} / 0.5)` } as any}
     >
       <div className="aspect-[9/16] relative overflow-hidden">

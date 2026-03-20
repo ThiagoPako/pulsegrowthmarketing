@@ -105,15 +105,15 @@ export default function PortalNotifications({ clientId, clientColor, onSelectCon
       <AnimatePresence>
         {open && (
           <>
-            <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
+            <div className="fixed inset-0 z-[60] bg-black/40 sm:bg-transparent" onClick={() => setOpen(false)} />
             <motion.div
               initial={{ opacity: 0, y: -8, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.95 }}
               transition={{ duration: 0.15 }}
-              className="absolute right-0 top-full mt-2 z-[70] w-80 bg-[#14141f] border border-white/[0.08] rounded-2xl shadow-2xl overflow-hidden"
+              className="fixed inset-x-0 top-0 bottom-0 z-[70] sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-[#14141f] sm:border sm:border-white/[0.08] sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col"
             >
-              <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] shrink-0">
                 <h3 className="text-sm font-semibold">Notificações</h3>
                 <div className="flex items-center gap-2">
                   {unreadCount > 0 && (
@@ -121,13 +121,13 @@ export default function PortalNotifications({ clientId, clientColor, onSelectCon
                       Marcar todas como lidas
                     </button>
                   )}
-                  <button onClick={() => setOpen(false)} className="p-1 rounded-full hover:bg-white/10 transition-colors">
-                    <X size={12} className="text-white/40" />
+                  <button onClick={() => setOpen(false)} className="p-1.5 rounded-full hover:bg-white/10 transition-colors">
+                    <X size={14} className="text-white/40" />
                   </button>
                 </div>
               </div>
 
-              <div className="max-h-[360px] overflow-y-auto">
+              <div className="flex-1 overflow-y-auto sm:max-h-[360px]">
                 {notifications.length === 0 ? (
                   <div className="py-12 text-center">
                     <Bell size={24} className="mx-auto mb-2 text-white/10" />

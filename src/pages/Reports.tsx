@@ -355,9 +355,9 @@ export default function Reports() {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
-    doc.text(`Período: ${capitalize(periodLabel)}`, pageW / 2, y, { align: 'center' });
+    doc.text(`Periodo: ${capitalize(periodLabel)}`, pageW / 2, y, { align: 'center' });
     y += 4;
-    doc.text(`Emitido em ${format(new Date(), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })}`, pageW / 2, y, { align: 'center' });
+    doc.text(`Emitido em ${format(new Date(), "dd/MM/yyyy")} as ${format(new Date(), "HH:mm")}`, pageW / 2, y, { align: 'center' });
     y += 8;
     drawLine(y); y += 8;
 

@@ -25,6 +25,7 @@ interface AppContextType {
   addRecording: (recording: Recording) => boolean;
   updateRecording: (recording: Recording) => void;
   cancelRecording: (id: string) => void;
+  deleteRecording: (id: string) => Promise<boolean>;
   cancelAndReschedule: (recording: Recording) => { success: boolean; rescheduled?: { date: string; startTime: string; videomakerId: string; type: string } };
   generateScheduleForClient: (client: Client) => Promise<number>;
   regenerateScheduleForClient: (client: Client) => Promise<{ deleted: number; created: number }>;

@@ -30,6 +30,7 @@ export const AVAILABLE_MODULES: ModuleDef[] = [
   { key: 'relatorios', label: 'Relatórios', icon: '📊', description: 'Relatórios gerais', paths: ['/relatorios'] },
   { key: 'whatsapp', label: 'WhatsApp', icon: '💬', description: 'Automação WhatsApp', paths: ['/whatsapp'] },
   { key: 'configuracoes', label: 'Configurações', icon: '⚙️', description: 'Configurações do sistema', paths: ['/configuracoes'] },
+  { key: 'portal_videos', label: 'Vídeos Portal', icon: '🎬', description: 'Vídeos de boas-vindas e novidades', paths: ['/portal-videos'] },
 ];
 
 export function useUserPermissions(userId?: string) {

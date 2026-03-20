@@ -483,7 +483,7 @@ export default function Clients() {
     }
 
     return { vmName: vm.name, workDays, grid };
-  }, [form.videomaker, settings, clients, users, editing, preferredShift]);
+  }, [form.videomaker, settings, users, preferredShift, getOccupyingClient]);
 
   const canProceedStep0 = form.companyName && form.responsiblePerson && form.whatsapp;
 

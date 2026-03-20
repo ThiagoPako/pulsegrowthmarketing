@@ -131,6 +131,12 @@ export default function VideomakerDashboard() {
       toast.error('Selecione pelo menos 1 roteiro para iniciar a gravação');
       return;
     }
+    // Auto-end waiting if active
+    if (rec.waitStartedAt && !rec.waitEndedAt) {
+      const now = new Date().toISOString();
+      await supabase.from('recordings').update({ wait_ended_at: now } as any).eq('id', rec.id);
+      rec = { ...rec, waitEndedAt: now };
+    }
     // Store planned scripts and mark recording as locally active
     setPlannedScripts(prev => ({ ...prev, [rec.id]: Array.from(selectedScriptIds) }));
     setLocalActiveRecordingId(rec.id);

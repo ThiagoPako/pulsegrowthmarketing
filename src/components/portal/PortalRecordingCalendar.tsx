@@ -188,12 +188,17 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     setCancelling(false);
   };
 
-  const handleAcceptBackup = async () => {
-    if (!cancelFlow || cancelFlow.step !== 'result' || !cancelFlow.backupSlot) return;
+  const handleAcceptBackup = async (altVmId?: string, altDate?: string, altTime?: string) => {
+    const useAlt = !!altVmId;
+    const date = useAlt ? altDate! : cancelFlow && cancelFlow.step === 'result' ? cancelFlow.backupSlot?.date : undefined;
+    const time = useAlt ? altTime! : cancelFlow && cancelFlow.step === 'result' ? cancelFlow.backupSlot?.time : undefined;
+    if (!date || !time) return;
     setAcceptingBackup(true);
-    const { data } = await invokeVpsFunction('portal-recordings', { body: { action: 'accept_backup', client_id: clientId, backup_date: cancelFlow.backupSlot.date, backup_time: cancelFlow.backupSlot.time } });
-    if (data?.success) { toast.success('🚀 Remarcar para backup confirmado!'); setCancelFlow(null); await loadRecordings(); }
-    else toast.error('Erro ao remarcar');
+    const body: any = { action: 'accept_backup', client_id: clientId, backup_date: date, backup_time: time };
+    if (altVmId) body.videomaker_id = altVmId;
+    const { data } = await invokeVpsFunction('portal-recordings', { body });
+    if (data?.success) { toast.success('🚀 Gravação remarcada com sucesso!'); setCancelFlow(null); setSelectedAltVm(null); setSelectedAltTime(''); await loadRecordings(); }
+    else toast.error(data?.error || 'Erro ao remarcar');
     setAcceptingBackup(false);
   };
 

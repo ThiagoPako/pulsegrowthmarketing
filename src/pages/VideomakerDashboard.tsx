@@ -79,8 +79,11 @@ export default function VideomakerDashboard() {
 
   const typeLabels: Record<string, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.' };
 
-  // ── Active recording ──
+  // ── Active recording (use local backup to survive polling race conditions) ──
+  const [localActiveRecordingId, setLocalActiveRecordingId] = useState<string | null>(null);
   const myActiveRec = activeRecordings.find(a => a.videomarkerId === vmId);
+  // A recording is considered active if either the server says so OR local state says so
+  const activeRecordingId = myActiveRec?.recordingId || localActiveRecordingId;
 
   const handleStartRecording = (rec: Recording) => {
     setScriptsClientId(rec.clientId);

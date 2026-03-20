@@ -64,9 +64,9 @@ function isPortalVideo(content: Pick<PortalContent, 'content_type' | 'file_url'>
   return content.content_type !== 'arte' && !!content.file_url;
 }
 
-function shouldProxyPortalVideo(_url: string) {
-  // CORS + Cross-Origin-Resource-Policy headers now set on Nginx — direct playback works
-  return false;
+function shouldProxyPortalVideo(url: string) {
+  // Keep VPS videos behind the media proxy to avoid ORB/CORS inconsistencies in browsers
+  return url.startsWith(VPS_UPLOADS_URL);
 }
 
 async function createPortalVideoObjectUrl(url: string) {

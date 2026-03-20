@@ -151,6 +151,7 @@ export default function Scripts() {
     isEndomarketing: false,
     endoClientId: '' as string,
     scheduledDate: '' as string,
+    directToEditing: false,
   });
 
   const printRef = useRef<HTMLDivElement>(null);

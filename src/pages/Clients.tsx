@@ -1547,7 +1547,7 @@ export default function Clients() {
                   <p className="font-semibold text-base leading-tight truncate">{c.companyName}</p>
                   {!isDesignerOnly && (
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {DAY_LABELS[c.fixedDay]} · {c.fixedTime} · {users.find(u => u.id === c.videomaker)?.name || '—'}
+                      {DAY_LABELS[c.fixedDay]} · {c.fullShiftRecording ? `Turno ${c.preferredShift === 'tarde' ? 'Tarde' : 'Manhã'}` : c.fixedTime} · {users.find(u => u.id === c.videomaker)?.name || '—'}
                     </p>
                   )}
                   <div className="flex gap-1.5 mt-2 flex-wrap">

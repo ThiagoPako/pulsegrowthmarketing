@@ -125,6 +125,8 @@ export interface Recording {
   type: RecordingType;
   status: RecordingStatus;
   confirmationStatus?: ConfirmationStatus;
+  waitStartedAt?: string;
+  waitEndedAt?: string;
 }
 
 export type KanbanColumn = 'backlog' | 'em_producao' | 'gravado' | 'finalizado';

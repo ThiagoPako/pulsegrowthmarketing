@@ -827,6 +827,7 @@ export default function Schedule() {
                                     <button onClick={() => handleSendConfirmation(evt.recording!)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Enviar Confirmação"><MessageSquare size={10} /></button>
                                     <button onClick={() => handleComplete(evt.recording!)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Gravado"><Check size={10} /></button>
                                     <button onClick={() => handleCancel(evt.recording!)} className="p-0.5 rounded hover:bg-destructive/20 text-destructive" title="Cancelar"><XCircle size={10} /></button>
+                                    <button onClick={() => handleDeleteRecording(evt.recording!)} className="p-0.5 rounded hover:bg-destructive/20 text-destructive" title="Apagar"><Trash2 size={10} /></button>
                                   </>
                                 )}
                               </div>

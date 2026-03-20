@@ -245,6 +245,18 @@ export default function Schedule() {
     setBackupOpen(true);
   };
 
+  const handleDeleteRecording = async (rec: Recording) => {
+    const client = clients.find(c => c.id === rec.clientId);
+    const confirmed = window.confirm(`Tem certeza que deseja APAGAR permanentemente esta gravação${client ? ` de ${client.companyName}` : ''}?\n\nEsta ação não pode ser desfeita.`);
+    if (!confirmed) return;
+    const success = await deleteRecording(rec.id);
+    if (success) {
+      toast.success('Gravação apagada com sucesso');
+    } else {
+      toast.error('Erro ao apagar gravação');
+    }
+  };
+
   const handleCancelWithoutBackup = async () => {
     if (!cancellingRec) return;
     cancelRecording(cancellingRec.id);

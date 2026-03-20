@@ -33,6 +33,7 @@ interface ContentRow {
   season_month: number; season_year: number; file_url: string | null;
   thumbnail_url: string | null; duration_seconds: number; status: string;
   created_at: string; clients?: { company_name: string } | null;
+  client_name?: string;
 }
 
 /* ── Video Player Modal ── */

@@ -743,7 +743,19 @@ export default function Scripts() {
               </div>
             )}
 
-            <div className="space-y-1">
+            {/* Direct to editing toggle */}
+            <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-accent/30">
+              <Switch checked={form.directToEditing} onCheckedChange={v => setForm({ ...form, directToEditing: v })} />
+              <div>
+                <Label className="font-medium flex items-center gap-1.5">
+                  🎬 Direto para Edição
+                </Label>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Para materiais prontos do cliente. Fica em espera e sobe automaticamente para o editor com menos tarefas quando a fila esvaziar.
+                </p>
+              </div>
+            </div>
+
               <Label>Título do Roteiro *</Label>
               <Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Ex: Roteiro de Vendas - Black Friday" />
             </div>

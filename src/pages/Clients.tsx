@@ -606,7 +606,46 @@ export default function Clients() {
       <div className="space-y-1">
         <Label>Grupo WhatsApp (opcional)</Label>
         <Input value={form.whatsappGroup || ''} onChange={e => setForm({ ...form, whatsappGroup: e.target.value })} placeholder="ID do grupo ou número do grupo" />
-        <p className="text-[10px] text-muted-foreground">Se preenchido, mensagens automáticas serão enviadas para o grupo em vez do número pessoal</p>
+         <p className="text-[10px] text-muted-foreground">Se preenchido, mensagens automáticas serão enviadas para o grupo em vez do número pessoal</p>
+      </div>
+
+      {/* Cliente Star toggle - moved here from Step 2 */}
+      <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-3">
+        <div className="flex items-center gap-3">
+          <Switch
+            checked={form.fullShiftRecording || false}
+            onCheckedChange={v => {
+              setPreferredShift(v ? ((form.preferredShift || 'manha') === 'tarde' ? 'turnoB' : 'turnoA') : 'ambos');
+              setForm(prev => ({
+                ...prev,
+                fullShiftRecording: v,
+                preferredShift: v ? (prev.preferredShift || 'manha') : prev.preferredShift,
+                fixedTime: v ? ((prev.preferredShift || 'manha') === 'tarde' ? settings.shiftBStart : settings.shiftAStart) : prev.fixedTime,
+              }));
+            }}
+          />
+          <div>
+            <Label className="font-medium flex items-center gap-1.5"><Star size={14} className="text-amber-500" /> Cliente Star</Label>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Reserva o turno inteiro (manhã ou tarde) para este cliente.
+            </p>
+          </div>
+        </div>
+        {form.fullShiftRecording && (
+          <div className="space-y-1">
+            <Label>Turno Preferido</Label>
+            <Select value={form.preferredShift || 'manha'} onValueChange={v => {
+              setPreferredShift(v === 'tarde' ? 'turnoB' : 'turnoA');
+              setForm(prev => ({ ...prev, preferredShift: v as 'manha' | 'tarde', fixedTime: v === 'tarde' ? settings.shiftBStart : settings.shiftAStart }));
+            }}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="manha">☀️ Manhã ({settings.shiftAStart} – {settings.shiftAEnd})</SelectItem>
+                <SelectItem value="tarde">🌙 Tarde ({settings.shiftBStart} – {settings.shiftBEnd})</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
       <div className="space-y-2">
         <Label>Cor de Identificação</Label>

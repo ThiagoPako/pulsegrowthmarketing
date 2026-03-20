@@ -513,24 +513,24 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8 pb-20">
+    <div className="max-w-[1400px] mx-auto px-2 sm:px-8 py-4 sm:py-8 pb-20">
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <motion.div className="p-3 rounded-2xl relative overflow-hidden" style={{ background: `hsl(${clientColor} / 0.15)` }} whileHover={{ scale: 1.05 }}>
-              <CalendarDays size={22} style={{ color: `hsl(${clientColor})` }} className="relative z-10" />
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-4 sm:mb-8">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+            <motion.div className="p-2 sm:p-3 rounded-xl sm:rounded-2xl relative overflow-hidden shrink-0" style={{ background: `hsl(${clientColor} / 0.15)` }} whileHover={{ scale: 1.05 }}>
+              <CalendarDays size={18} style={{ color: `hsl(${clientColor})` }} className="relative z-10 sm:w-[22px] sm:h-[22px]" />
             </motion.div>
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <div className="min-w-0">
+              <h2 className="text-lg sm:text-2xl font-bold tracking-tight flex items-center gap-2">
                 Meu Calendário
-                <motion.span animate={{ y: [0, -4, 0], rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2.5 }}>🚀</motion.span>
+                <motion.span animate={{ y: [0, -4, 0], rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2.5 }} className="text-sm sm:text-base">🚀</motion.span>
               </h2>
-              <p className="text-sm text-white/40">Acompanhe em tempo real toda a operação dos seus conteúdos</p>
+              <p className="text-[10px] sm:text-sm text-white/40 truncate">Acompanhe em tempo real sua operação</p>
             </div>
           </div>
           <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setShowSpecialRequest(true)}
-            className="hidden sm:flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all"
+            className="hidden sm:flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0"
             style={{ background: `linear-gradient(135deg, hsl(${clientColor} / 0.2), hsl(280 80% 60% / 0.15))`, border: `1px solid hsl(${clientColor} / 0.3)`, color: `hsl(${clientColor})` }}>
             <MessageSquarePlus size={14} /> Solicitar gravação especial
           </motion.button>
@@ -539,18 +539,19 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
 
       {/* Upcoming recordings */}
       {upcomingRecordings.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mb-4 sm:mb-8">
+          <div className="flex items-center gap-2 mb-3 sm:mb-4">
             <motion.span animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}>🔥</motion.span>
-            <h3 className="text-xs font-bold text-white/50 uppercase tracking-[0.15em]">Próximas gravações</h3>
+            <h3 className="text-[10px] sm:text-xs font-bold text-white/50 uppercase tracking-[0.15em]">Próximas gravações</h3>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="flex gap-3 overflow-x-auto pb-2 sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0 snap-x snap-mandatory"
+            style={{ scrollbarWidth: 'none' }}>
             {upcomingRecordings.map((rec, i) => {
               const typeInfo = TYPE_MAP[rec.type] || { label: rec.type, emoji: '🎬' };
               const isConfirmed = rec.confirmation_status === 'confirmada';
               return (
                 <motion.div key={rec.id} initial={{ opacity: 0, y: 15, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ delay: 0.08 * i, type: 'spring', stiffness: 200 }} className="relative group rounded-2xl overflow-hidden">
+                  transition={{ delay: 0.08 * i, type: 'spring', stiffness: 200 }} className="relative group rounded-2xl overflow-hidden min-w-[260px] sm:min-w-0 snap-center">
                   <FireBorder color={clientColor} />
                   <div className="absolute inset-0 rounded-2xl p-[1px] z-[1]" style={{ background: `linear-gradient(135deg, hsl(25 100% 50% / 0.5), hsl(${clientColor} / 0.4), hsl(25 100% 50% / 0.3))` }}>
                     <div className="w-full h-full rounded-2xl bg-[#0d0d18]" />
@@ -613,30 +614,36 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
         <MessageSquarePlus size={14} /> Solicitar gravação especial
       </motion.button>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr,380px] gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr,380px] gap-4 sm:gap-6">
         {/* Calendar Grid */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-          className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 sm:p-6 relative overflow-hidden">
-          <div className="flex items-center justify-between mb-6">
-            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2.5 rounded-xl hover:bg-white/10 transition-colors">
-              <ChevronLeft size={18} />
+          className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-3 sm:p-6 relative overflow-hidden">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
+            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1.5 sm:p-2.5 rounded-xl hover:bg-white/10 transition-colors">
+              <ChevronLeft size={16} className="sm:w-[18px] sm:h-[18px]" />
             </motion.button>
             <div className="text-center">
-              <h3 className="text-lg font-bold capitalize">{format(currentMonth, 'MMMM', { locale: pt })}</h3>
-              <p className="text-[11px] text-white/30 font-medium">{format(currentMonth, 'yyyy')} • {totalThisMonth} gravações</p>
+              <h3 className="text-base sm:text-lg font-bold capitalize">{format(currentMonth, 'MMMM', { locale: pt })}</h3>
+              <p className="text-[10px] sm:text-[11px] text-white/30 font-medium">{format(currentMonth, 'yyyy')} • {totalThisMonth} gravações</p>
             </div>
-            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2.5 rounded-xl hover:bg-white/10 transition-colors">
-              <ChevronRight size={18} />
+            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-1.5 sm:p-2.5 rounded-xl hover:bg-white/10 transition-colors">
+              <ChevronRight size={16} className="sm:w-[18px] sm:h-[18px]" />
             </motion.button>
           </div>
 
-          <div className="grid grid-cols-7 gap-1.5 mb-2">
-            {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
-              <div key={d} className="text-center text-[10px] font-bold text-white/25 uppercase tracking-wider py-1.5">{d}</div>
-            ))}
+          <div className="grid grid-cols-7 gap-0.5 sm:gap-1.5 mb-1 sm:mb-2">
+            {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => {
+              const fullNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+              return (
+                <div key={`${d}-${i}`} className="text-center text-[9px] sm:text-[10px] font-bold text-white/25 uppercase tracking-wider py-1 sm:py-1.5">
+                  <span className="hidden sm:inline">{fullNames[i]}</span>
+                  <span className="sm:hidden">{d}</span>
+                </div>
+              );
+            })}
           </div>
 
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-1 sm:gap-2">
             {Array.from({ length: startPad }).map((_, i) => <div key={`pad-${i}`} className="aspect-square" />)}
             {daysInMonth.map((day, idx) => {
               const dateStr = format(day, 'yyyy-MM-dd');
@@ -671,8 +678,8 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                   onClick={() => setSelectedDay(day)}
                   onMouseEnter={() => setHoveredDay(dateStr)} onMouseLeave={() => setHoveredDay(null)}
                   whileHover={!isPast ? { scale: 1.12, zIndex: 20 } : {}} whileTap={!isPast ? { scale: 0.95 } : {}}
-                  className={`aspect-square rounded-2xl flex flex-col items-center justify-center relative transition-all duration-300 overflow-hidden
-                    ${isToday && !isSelected ? 'ring-2 ring-white/30' : ''}
+                  className={`aspect-square rounded-lg sm:rounded-2xl flex flex-col items-center justify-center relative transition-all duration-300 overflow-hidden
+                    ${isToday && !isSelected ? 'ring-1 sm:ring-2 ring-white/30' : ''}
                     ${isPast ? 'text-white/25' : 'text-white/80'}
                     ${hasAnyEvent && !isPast ? 'text-white shadow-lg' : ''}`}
                   style={{
@@ -695,10 +702,10 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                   )}
                   {hasCancelled && !isPast && (
                     <motion.span initial={{ scale: 0, rotate: -45 }} animate={{ scale: 1, rotate: 0 }}
-                      className="absolute inset-0 flex items-center justify-center text-red-500/30 text-3xl font-black z-0 pointer-events-none">✕</motion.span>
+                      className="absolute inset-0 flex items-center justify-center text-red-500/30 text-xl sm:text-3xl font-black z-0 pointer-events-none">✕</motion.span>
                   )}
                   {recs.length > 0 && !isPast && hasUpcoming && !hasCancelled && <RocketFireIndicator small />}
-                  <span className={`text-sm leading-none relative z-10 ${isToday ? 'font-extrabold text-white' : hasAnyEvent ? 'font-bold' : 'font-medium'}`}>
+                  <span className={`text-xs sm:text-sm leading-none relative z-10 ${isToday ? 'font-extrabold text-white' : hasAnyEvent ? 'font-bold' : 'font-medium'}`}>
                     {format(day, 'd')}
                   </span>
                   {uniqueEvents.length > 0 && (
@@ -724,7 +731,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                   <AnimatePresence>
                     {isHovered && hasAnyEvent && !isSelected && (
                       <motion.div initial={{ opacity: 0, y: 5, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 5, scale: 0.9 }}
-                        className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full z-30 pointer-events-none">
+                        className="hidden sm:block absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full z-30 pointer-events-none">
                         <div className="bg-[#12122a]/95 backdrop-blur-xl border border-white/15 rounded-xl px-4 py-2.5 shadow-2xl whitespace-nowrap space-y-1">
                           {dayEvents.slice(0, 5).map((ev, i) => (
                             <p key={i} className={`text-xs font-bold flex items-center gap-1.5 ${ev.color}`}>
@@ -741,42 +748,6 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
             })}
           </div>
 
-          {/* Legend — grouped by category */}
-          <div className="mt-6 pt-5 border-t border-white/[0.08] space-y-3">
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
-              <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest w-full mb-1">Gravações</span>
-              {['agendada', 'gravada', 'cancelada', 'remarcada', 'extra', 'solicitada'].map(k => {
-                const s = EVENT_STYLES[k];
-                return (
-                  <div key={k} className="flex items-center gap-2 text-xs text-white/50 font-medium">
-                    <span className="text-base drop-shadow-md">{s.icon}</span>{s.label.replace('Gravação ', '')}
-                  </div>
-                );
-              })}
-            </div>
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
-              <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest w-full mb-1">Produção</span>
-              {['material_sent', 'editing', 'deadline', 'in_review', 'approval_sent', 'approved', 'adjustment', 'completed'].map(k => {
-                const s = EVENT_STYLES[k];
-                return (
-                  <div key={k} className="flex items-center gap-2 text-xs text-white/50 font-medium">
-                    <span className="text-base drop-shadow-md">{s.icon}</span>{s.label.split(' — ')[0]}
-                  </div>
-                );
-              })}
-            </div>
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
-              <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest w-full mb-1">Entrega</span>
-              {['delivered', 'posted', 'scheduled_post'].map(k => {
-                const s = EVENT_STYLES[k];
-                return (
-                  <div key={k} className="flex items-center gap-2 text-xs text-white/50 font-medium">
-                    <span className="text-base drop-shadow-md">{s.icon}</span>{s.label}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
         </motion.div>
 
         {/* Sidebar — Day Detail */}
@@ -786,7 +757,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
               <motion.div key={format(selectedDay, 'yyyy-MM-dd')}
                 initial={{ opacity: 0, x: 20, scale: 0.97 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, x: -20, scale: 0.97 }}
                 transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-                className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 relative overflow-hidden max-h-[80vh] overflow-y-auto">
+                className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-5 relative overflow-hidden max-h-[60vh] lg:max-h-[80vh] overflow-y-auto">
                 <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl" style={{ background: `hsl(${clientColor})` }} />
                 <div className="flex items-center gap-3 mb-4 mt-1">
                   <div className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-extrabold relative"
@@ -970,6 +941,53 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
           </AnimatePresence>
         </motion.div>
       </div>
+
+      {/* Legend — always at the bottom */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+        className="mt-4 sm:mt-6 bg-white/[0.03] border border-white/[0.06] rounded-2xl p-3 sm:p-5 space-y-3">
+        <h4 className="text-[10px] sm:text-xs font-bold text-white/40 uppercase tracking-widest">Legenda dos ícones</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+          <div className="space-y-1.5">
+            <span className="text-[9px] sm:text-[10px] font-bold text-white/30 uppercase tracking-widest">Gravações</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {['agendada', 'gravada', 'cancelada', 'remarcada', 'extra', 'solicitada'].map(k => {
+                const s = EVENT_STYLES[k];
+                return (
+                  <div key={k} className="flex items-center gap-1.5 text-[11px] sm:text-xs text-white/50 font-medium">
+                    <span className="text-sm sm:text-base drop-shadow-md">{s.icon}</span>{s.label.replace('Gravação ', '')}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <span className="text-[9px] sm:text-[10px] font-bold text-white/30 uppercase tracking-widest">Produção</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {['material_sent', 'editing', 'deadline', 'in_review', 'approval_sent', 'approved', 'adjustment', 'completed'].map(k => {
+                const s = EVENT_STYLES[k];
+                return (
+                  <div key={k} className="flex items-center gap-1.5 text-[11px] sm:text-xs text-white/50 font-medium">
+                    <span className="text-sm sm:text-base drop-shadow-md">{s.icon}</span>{s.label.split(' — ')[0]}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <span className="text-[9px] sm:text-[10px] font-bold text-white/30 uppercase tracking-widest">Entrega</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {['delivered', 'posted', 'scheduled_post'].map(k => {
+                const s = EVENT_STYLES[k];
+                return (
+                  <div key={k} className="flex items-center gap-1.5 text-[11px] sm:text-xs text-white/50 font-medium">
+                    <span className="text-sm sm:text-base drop-shadow-md">{s.icon}</span>{s.label}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </motion.div>
 
       {/* ── Cancel Flow Modal ── */}
       <AnimatePresence>

@@ -697,7 +697,8 @@ app.post('/api/portal-recordings', async (req, res) => {
       }
       if (!vmId) return res.status(400).json({ error: 'Nenhum videomaker atribuído' });
       const { rows: [settings] } = await pool.query('SELECT * FROM company_settings LIMIT 1');
-      const duration = (settings?.recording_duration || 2) * 60;
+      const rawDur = settings?.recording_duration || 2;
+      const duration = rawDur > 10 ? rawDur : rawDur * 60;
       const buffer = 30;
       const { rows: existing } = await pool.query(
         `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,

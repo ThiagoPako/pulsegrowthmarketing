@@ -416,10 +416,10 @@ export default function Reports() {
     ], y);
     drawLine(y); y += 8;
 
-    // ── Conteúdos Postados (Social Media) ──
+    // ── Conteudos Postados (Social Media) ──
     if (stats.totalSocialDelivered > 0) {
       checkPageBreak(50);
-      y = drawSectionTitle('Conteúdos Entregues & Postados (Social Media)', y); y += 8;
+      y = drawSectionTitle('Conteudos Entregues & Postados (Social Media)', y); y += 8;
       y = drawKpiGrid([
         { label: 'Reels Postados', value: String(stats.socialReelsPosted) },
         { label: 'Criativos Postados', value: String(stats.socialCriativosPosted) },

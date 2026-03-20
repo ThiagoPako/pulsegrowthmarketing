@@ -917,7 +917,7 @@ export default function ClientPortal() {
                           onClick={() => void togglePlay()}
                         />
                         {/* Custom controls */}
-                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-12 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-3 sm:p-4 pt-12 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                           {/* Progress bar */}
                           <div className="cursor-pointer h-1 bg-white/20 rounded-full mb-3 group/bar" onClick={handleSeek}>
                             <div

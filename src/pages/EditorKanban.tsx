@@ -362,6 +362,10 @@ export default function EditorKanban() {
     if (targetColumn === 'edicao' && !draggedTask.editing_started_at) {
       updateData.editing_started_at = new Date().toISOString();
     }
+    // Auto-assign to current editor if not yet assigned
+    if (!draggedTask.assigned_to && user) {
+      updateData.assigned_to = user.id;
+    }
     const { error } = await supabase.from('content_tasks').update(updateData).eq('id', draggedTask.id);
     if (error) {
       toast.error('Erro ao mover cartão');

@@ -96,6 +96,8 @@ export interface Client {
   driveFotos?: string;
   driveIdentidadeVisual?: string;
   editorial?: string;
+  fullShiftRecording?: boolean; // client uses entire shift (morning or afternoon)
+  preferredShift?: 'manha' | 'tarde'; // which shift the client prefers
 }
 
 export interface SocialAccount {

@@ -418,6 +418,13 @@ export default function VideomakerDashboard() {
     let msg = `Gravação concluída! ${reelsCount} roteiro(s) enviado(s) para edição`;
     if (rejectedScripts.size > 0) msg += ` · ${rejectedScripts.size} rejeitado(s) e apagado(s)`;
     if (returnedCount > 0) msg += ` · ${returnedCount} retornado(s) ao banco`;
+
+    // Show celebration popup with score
+    const score = reelsCount * 10;
+    setCelebrationScore(score);
+    setShowCelebration(true);
+    setTimeout(() => setShowCelebration(false), 3500);
+
     toast.success(msg);
 
     // Clean up

@@ -237,7 +237,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
 }
 
 export default function EditorKanban() {
-  const { clients, scripts } = useApp();
+  const { clients, scripts, users } = useApp();
   const { user } = useAuth();
   const [tasks, setTasks] = useState<EditorTask[]>([]);
   const [loading, setLoading] = useState(true);

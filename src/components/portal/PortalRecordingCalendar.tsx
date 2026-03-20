@@ -81,7 +81,15 @@ function FireBorder({ color }: { color: string }) {
   );
 }
 
-type CancelFlow = null | { step: 'confirming'; rec: Recording } | { step: 'result'; rec: Recording; backupAvailable: boolean; backupSlot: { date: string; time: string } | null; nextFixedDate: string | null };
+interface AlternativeVideomaker {
+  id: string;
+  name: string;
+  date: string;
+  available_slots: string[];
+  total_free: number;
+}
+
+type CancelFlow = null | { step: 'confirming'; rec: Recording } | { step: 'result'; rec: Recording; backupAvailable: boolean; backupSlot: { date: string; time: string } | null; nextFixedDate: string | null; alternativeVideomakers: AlternativeVideomaker[] };
 
 export default function PortalRecordingCalendar({ clientId, clientColor }: Props) {
   const [recordings, setRecordings] = useState<Recording[]>([]);
@@ -99,6 +107,9 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
   const [cancelFlow, setCancelFlow] = useState<CancelFlow>(null);
   const [cancelling, setCancelling] = useState(false);
   const [acceptingBackup, setAcceptingBackup] = useState(false);
+  // Alternative videomaker selection
+  const [selectedAltVm, setSelectedAltVm] = useState<AlternativeVideomaker | null>(null);
+  const [selectedAltTime, setSelectedAltTime] = useState('');
   // Special request
   const [showSpecialRequest, setShowSpecialRequest] = useState(false);
   const [specialDate, setSpecialDate] = useState('');
@@ -171,18 +182,23 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     setCancelling(true);
     const { data } = await invokeVpsFunction('portal-recordings', { body: { action: 'cancel', client_id: clientId, recording_id: rec.id } });
     if (data?.success) {
-      setCancelFlow({ step: 'result', rec, backupAvailable: data.backup_available, backupSlot: data.backup_slot, nextFixedDate: data.next_fixed_date });
+      setCancelFlow({ step: 'result', rec, backupAvailable: data.backup_available, backupSlot: data.backup_slot, nextFixedDate: data.next_fixed_date, alternativeVideomakers: data.alternative_videomakers || [] });
       await loadRecordings();
     } else toast.error('Erro ao cancelar');
     setCancelling(false);
   };
 
-  const handleAcceptBackup = async () => {
-    if (!cancelFlow || cancelFlow.step !== 'result' || !cancelFlow.backupSlot) return;
+  const handleAcceptBackup = async (altVmId?: string, altDate?: string, altTime?: string) => {
+    const useAlt = !!altVmId;
+    const date = useAlt ? altDate! : cancelFlow && cancelFlow.step === 'result' ? cancelFlow.backupSlot?.date : undefined;
+    const time = useAlt ? altTime! : cancelFlow && cancelFlow.step === 'result' ? cancelFlow.backupSlot?.time : undefined;
+    if (!date || !time) return;
     setAcceptingBackup(true);
-    const { data } = await invokeVpsFunction('portal-recordings', { body: { action: 'accept_backup', client_id: clientId, backup_date: cancelFlow.backupSlot.date, backup_time: cancelFlow.backupSlot.time } });
-    if (data?.success) { toast.success('🚀 Remarcar para backup confirmado!'); setCancelFlow(null); await loadRecordings(); }
-    else toast.error('Erro ao remarcar');
+    const body: any = { action: 'accept_backup', client_id: clientId, backup_date: date, backup_time: time };
+    if (altVmId) body.videomaker_id = altVmId;
+    const { data } = await invokeVpsFunction('portal-recordings', { body });
+    if (data?.success) { toast.success('🚀 Gravação remarcada com sucesso!'); setCancelFlow(null); setSelectedAltVm(null); setSelectedAltTime(''); await loadRecordings(); }
+    else toast.error(data?.error || 'Erro ao remarcar');
     setAcceptingBackup(false);
   };
 
@@ -617,39 +633,83 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                         </p>
                       </div>
                       <div className="flex gap-3">
-                        <motion.button whileTap={{ scale: 0.95 }} onClick={handleAcceptBackup} disabled={acceptingBackup}
+                         <motion.button whileTap={{ scale: 0.95 }} onClick={() => handleAcceptBackup()} disabled={acceptingBackup}
                           className="flex-1 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                           style={{ background: `linear-gradient(135deg, hsl(25 100% 50%), hsl(${clientColor}))` }}>
                           {acceptingBackup ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check size={14} /> Aceitar backup</>}
                         </motion.button>
                         <motion.button whileTap={{ scale: 0.95 }} onClick={() => setCancelFlow(null)}
-                          className="py-3 px-4 rounded-xl text-sm font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition-all text-white/50">
-                          Não
+                          className="py-3 px-4 rounded-xl text-sm font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition-all text-white/50 flex items-center gap-2">
+                          <CalendarDays size={13} /> Deixar para a próxima
                         </motion.button>
                       </div>
-                      <p className="text-[11px] text-white/30 text-center">Se preferir, sua próxima gravação fica para a semana seguinte.</p>
+                      <p className="text-[11px] text-white/30 text-center">Ao recusar, sua gravação fica para a próxima data fixa.</p>
                     </div>
-                  ) : (
+                   ) : (
                     <div className="space-y-4">
                       <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-                        <p className="text-sm text-amber-300 font-medium">Não há vaga disponível no seu dia de backup.</p>
-                        {cancelFlow.nextFixedDate && (
-                          <p className="text-xs text-white/50 mt-2">
-                            Sua próxima gravação será em <strong className="text-white/70">{format(parseISO(cancelFlow.nextFixedDate), "EEEE, dd/MM", { locale: pt })}</strong>.
-                          </p>
-                        )}
+                        <p className="text-sm text-amber-300 font-medium">Seu videomaker não tem vaga no dia de backup.</p>
                       </div>
-                      <p className="text-xs text-white/40">Você também pode explorar horários vagos do seu videomaker:</p>
-                      <motion.button whileTap={{ scale: 0.95 }}
-                        onClick={() => { setCancelFlow(null); setShowExploreSlots(true); setExploreSlotsDate(''); setExploreSlotsData([]); }}
-                        className="w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition-all"
-                        style={{ color: `hsl(${clientColor})` }}>
-                        <CalendarDays size={14} /> Explorar agenda do videomaker
-                      </motion.button>
-                      <motion.button whileTap={{ scale: 0.95 }} onClick={() => setCancelFlow(null)}
-                        className="w-full py-2.5 rounded-xl text-xs font-medium text-white/40 hover:text-white/60 transition-all">
-                        Fechar
-                      </motion.button>
+
+                      {/* Alternative videomakers */}
+                      {cancelFlow.alternativeVideomakers.length > 0 && (
+                        <div className="space-y-3">
+                          <p className="text-xs text-white/50 font-medium">🎬 Outros videomakers disponíveis no dia <strong className="text-white/70">{format(parseISO(cancelFlow.alternativeVideomakers[0].date), "dd/MM (EEEE)", { locale: pt })}</strong>:</p>
+                          {cancelFlow.alternativeVideomakers.map(vm => (
+                            <div key={vm.id} className={`rounded-xl border p-3 transition-all cursor-pointer ${selectedAltVm?.id === vm.id ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06]'}`}
+                              onClick={() => { setSelectedAltVm(vm); setSelectedAltTime(''); }}>
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-bold text-white/80 flex items-center gap-2">
+                                  <Video size={13} style={{ color: `hsl(${clientColor})` }} />
+                                  {vm.name}
+                                </span>
+                                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300">{vm.total_free} horário{vm.total_free > 1 ? 's' : ''}</span>
+                              </div>
+                              {selectedAltVm?.id === vm.id && (
+                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="overflow-hidden">
+                                  <p className="text-[11px] text-white/40 mb-2">Escolha o horário:</p>
+                                  <div className="grid grid-cols-3 gap-1.5">
+                                    {vm.available_slots.map(slot => (
+                                      <motion.button key={slot} whileTap={{ scale: 0.95 }}
+                                        onClick={(e) => { e.stopPropagation(); setSelectedAltTime(slot); }}
+                                        className={`py-2 rounded-lg text-xs font-bold transition-all ${selectedAltTime === slot ? 'text-white' : 'bg-white/[0.05] text-white/60 hover:bg-white/[0.1] border border-white/[0.06]'}`}
+                                        style={selectedAltTime === slot ? { background: `hsl(${clientColor})` } : {}}>
+                                        {slot}
+                                      </motion.button>
+                                    ))}
+                                  </div>
+                                </motion.div>
+                              )}
+                            </div>
+                          ))}
+                          {selectedAltVm && selectedAltTime && (
+                            <motion.button initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => handleAcceptBackup(selectedAltVm.id, selectedAltVm.date, selectedAltTime)}
+                              disabled={acceptingBackup}
+                              className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                              style={{ background: `linear-gradient(135deg, hsl(25 100% 50%), hsl(${clientColor}))` }}>
+                              {acceptingBackup ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check size={14} /> Gravar com {selectedAltVm.name} às {selectedAltTime}</>}
+                            </motion.button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Option to wait for next recording */}
+                      <div className="border-t border-white/[0.06] pt-4">
+                        <p className="text-xs text-white/40 mb-2">Ou prefira aguardar:</p>
+                        {cancelFlow.nextFixedDate && (
+                          <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 mb-3">
+                            <p className="text-xs text-white/50">
+                              Sua próxima gravação fixa será em <strong className="text-white/70 capitalize">{format(parseISO(cancelFlow.nextFixedDate), "EEEE, dd/MM", { locale: pt })}</strong>.
+                            </p>
+                          </div>
+                        )}
+                        <motion.button whileTap={{ scale: 0.95 }} onClick={() => { setCancelFlow(null); setSelectedAltVm(null); setSelectedAltTime(''); }}
+                          className="w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition-all text-white/50">
+                          <CalendarDays size={14} /> Deixar para a próxima gravação
+                        </motion.button>
+                      </div>
                     </div>
                   )}
                 </div>

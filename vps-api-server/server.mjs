@@ -749,7 +749,7 @@ app.post('/api/portal-recordings', async (req, res) => {
       return res.json({ success: true });
     }
 
-    /* ── cancel (with backup check) ── */
+    /* ── cancel (with backup check + alternative videomakers) ── */
     if (action === 'cancel') {
       if (!recording_id) return res.status(400).json({ error: 'recording_id required' });
       const { rows: [recCancel] } = await pool.query('SELECT id, date::text, start_time, videomaker_id FROM recordings WHERE id = $1 AND client_id = $2', [recording_id, client_id]);
@@ -772,6 +772,48 @@ app.post('/api/portal-recordings', async (req, res) => {
         const bConflict = bConflicts.some(c => { const [ch, cm] = c.start_time.split(':').map(Number); const cStart = ch * 60 + cm; return bStart < cStart + durationCancel + bufferCancel && bStart + durationCancel + bufferCancel > cStart; });
         if (!bConflict) { backupAvailable = true; backupSlot = { date: backupDateCancel, time: clientCancel.backup_time }; }
       }
+
+      // If main videomaker backup not available, find alternative videomakers with space
+      let alternativeVideomakers = [];
+      if (!backupAvailable && backupDateCancel) {
+        const { rows: allVideomakers } = await pool.query(
+          `SELECT p.id, p.name FROM profiles p JOIN user_roles ur ON ur.user_id = p.id WHERE ur.role = 'videomaker' AND p.id != $1`,
+          [clientCancel.videomaker_id]
+        );
+        const shiftAStart = settingsCancel?.shift_a_start || '08:30';
+        const shiftAEnd = settingsCancel?.shift_a_end || '12:00';
+        const shiftBStart = settingsCancel?.shift_b_start || '14:30';
+        const shiftBEnd = settingsCancel?.shift_b_end || '18:00';
+
+        for (const vm of allVideomakers) {
+          const { rows: vmRecs } = await pool.query(
+            `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,
+            [vm.id, backupDateCancel]
+          );
+          const occupied = vmRecs.map(r => { const [h, m] = r.start_time.split(':').map(Number); return { start: h * 60 + m, end: h * 60 + m + durationCancel }; });
+          // Find available slots for this videomaker
+          const slots = [];
+          const generateSlots = (startStr, endStr) => {
+            const [sh, sm] = startStr.split(':').map(Number);
+            const [eh, em] = endStr.split(':').map(Number);
+            let cursor = sh * 60 + sm;
+            const endMin = eh * 60 + em;
+            while (cursor + durationCancel <= endMin) {
+              const conflict = occupied.some(o => cursor < o.end + bufferCancel && cursor + durationCancel + bufferCancel > o.start);
+              if (!conflict) slots.push(`${String(Math.floor(cursor / 60)).padStart(2, '0')}:${String(cursor % 60).padStart(2, '0')}`);
+              cursor += 30;
+            }
+          };
+          generateSlots(shiftAStart, shiftAEnd);
+          generateSlots(shiftBStart, shiftBEnd);
+          if (slots.length > 0) {
+            alternativeVideomakers.push({ id: vm.id, name: vm.name, date: backupDateCancel, available_slots: slots, total_free: slots.length });
+          }
+        }
+        // Sort by most free slots first
+        alternativeVideomakers.sort((a, b) => b.total_free - a.total_free);
+      }
+
       const fixedDayCancel = dayMapCancel[clientCancel?.fixed_day] ?? 1;
       let nextFixedDate = null;
       for (let i = 1; i <= 14; i++) { const d = new Date(todayCancel); d.setDate(d.getDate() + i); if (d.getDay() === fixedDayCancel) { nextFixedDate = d.toISOString().split('T')[0]; break; } }
@@ -781,16 +823,19 @@ app.post('/api/portal-recordings', async (req, res) => {
         await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
           [u.user_id, 'Gravação cancelada pelo cliente', `${clientCancel?.company_name || 'Cliente'} cancelou gravação ${recCancel.date} ${recCancel.start_time}`, 'warning', '/agenda']);
       }
-      return res.json({ success: true, backup_available: backupAvailable, backup_slot: backupSlot, next_fixed_date: nextFixedDate });
+      return res.json({ success: true, backup_available: backupAvailable, backup_slot: backupSlot, next_fixed_date: nextFixedDate, alternative_videomakers: alternativeVideomakers });
     }
 
     /* ── accept_backup ── */
     if (action === 'accept_backup') {
-      const { backup_date, backup_time } = req.body;
+      const { backup_date, backup_time, videomaker_id: requestedVmId } = req.body;
       if (!backup_date || !backup_time) return res.status(400).json({ error: 'backup_date and backup_time required' });
-      // Get videomaker from client or fallback to the most recent cancelled recording's videomaker
-      const { rows: [clientBackup] } = await pool.query('SELECT videomaker_id FROM clients WHERE id = $1', [client_id]);
-      let vmId = clientBackup?.videomaker_id;
+      // Use requested videomaker_id (alternative) or fallback to client's default
+      let vmId = requestedVmId || null;
+      if (!vmId) {
+        const { rows: [clientBackup] } = await pool.query('SELECT videomaker_id FROM clients WHERE id = $1', [client_id]);
+        vmId = clientBackup?.videomaker_id;
+      }
       if (!vmId) {
         const { rows: [lastRec] } = await pool.query(
           `SELECT videomaker_id FROM recordings WHERE client_id = $1 AND status = 'cancelada' ORDER BY created_at DESC LIMIT 1`, [client_id]
@@ -798,13 +843,28 @@ app.post('/api/portal-recordings', async (req, res) => {
         vmId = lastRec?.videomaker_id;
       }
       if (!vmId) {
-        // Ultimate fallback: any videomaker from any recording of this client
         const { rows: [anyRec] } = await pool.query(
           `SELECT videomaker_id FROM recordings WHERE client_id = $1 AND videomaker_id IS NOT NULL ORDER BY created_at DESC LIMIT 1`, [client_id]
         );
         vmId = anyRec?.videomaker_id;
       }
       if (!vmId) return res.status(400).json({ error: 'Nenhum videomaker encontrado para este cliente' });
+      // Verify no conflict for selected videomaker/date/time
+      const { rows: [settingsBackup] } = await pool.query('SELECT recording_duration FROM company_settings LIMIT 1');
+      const durationBackup = (settingsBackup?.recording_duration || 2) * 60;
+      const bufferBackup = 30;
+      const { rows: conflictsBackup } = await pool.query(
+        `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,
+        [vmId, backup_date]
+      );
+      const [nbh, nbm] = backup_time.split(':').map(Number);
+      const newStartBackup = nbh * 60 + nbm;
+      const hasConflictBackup = conflictsBackup.some(c => {
+        const [ch, cm] = c.start_time.split(':').map(Number);
+        const cStart = ch * 60 + cm;
+        return newStartBackup < cStart + durationBackup + bufferBackup && newStartBackup + durationBackup + bufferBackup > cStart;
+      });
+      if (hasConflictBackup) return res.status(409).json({ error: 'Horário não está mais disponível' });
       await pool.query(`INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ($1, $2, $3, $4, 'secundaria', 'agendada', 'confirmada')`, [client_id, vmId, backup_date, backup_time]);
       return res.json({ success: true });
     }

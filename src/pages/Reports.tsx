@@ -82,6 +82,7 @@ export default function Reports() {
   const [socialDeliveries, setSocialDeliveries] = useState<SocialDelivery[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [clientPlans, setClientPlans] = useState<Record<string, string | null>>({});
+  const [waitLogs, setWaitLogs] = useState<WaitLog[]>([]);
   const [selectedClient, setSelectedClient] = useState('all');
   const [periodType, setPeriodType] = useState<'current' | 'previous' | 'custom'>('current');
   const [customStart, setCustomStart] = useState('');
@@ -89,11 +90,12 @@ export default function Reports() {
   const [showPreview, setShowPreview] = useState(true);
 
   const fetchData = useCallback(async () => {
-    const [rRes, pRes, cRes, sRes] = await Promise.all([
+    const [rRes, pRes, cRes, sRes, wRes] = await Promise.all([
       supabase.from('delivery_records').select('*').order('date', { ascending: false }),
       supabase.from('plans').select('*'),
       supabase.from('clients').select('id, plan_id'),
       supabase.from('social_media_deliveries').select('*').order('delivered_at', { ascending: false }),
+      supabase.from('recording_wait_logs').select('*'),
     ]);
     if (rRes.data) setRecords(rRes.data as DeliveryRecord[]);
     if (pRes.data) setPlans(pRes.data as Plan[]);
@@ -103,6 +105,7 @@ export default function Reports() {
       setClientPlans(map);
     }
     if (sRes.data) setSocialDeliveries(sRes.data as SocialDelivery[]);
+    if (wRes.data) setWaitLogs(wRes.data as WaitLog[]);
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);

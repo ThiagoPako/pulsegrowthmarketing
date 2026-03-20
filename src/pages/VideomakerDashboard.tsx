@@ -111,8 +111,9 @@ export default function VideomakerDashboard() {
       toast.error('Selecione pelo menos 1 roteiro para iniciar a gravação');
       return;
     }
-    // Store planned scripts for this recording session
+    // Store planned scripts and mark recording as locally active
     setPlannedScripts(prev => ({ ...prev, [rec.id]: Array.from(selectedScriptIds) }));
+    setLocalActiveRecordingId(rec.id);
     startActiveRecording({
       recordingId: rec.id,
       videomarkerId: vmId,

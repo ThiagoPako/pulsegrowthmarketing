@@ -34,6 +34,15 @@ interface DeliveryRecord {
   delivery_status: string;
 }
 
+interface WaitLog {
+  id: string;
+  recording_id: string;
+  client_id: string;
+  wait_duration_seconds: number | null;
+  started_at: string;
+  ended_at: string | null;
+}
+
 interface SocialDelivery {
   id: string;
   client_id: string;
@@ -73,6 +82,7 @@ export default function Reports() {
   const [socialDeliveries, setSocialDeliveries] = useState<SocialDelivery[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [clientPlans, setClientPlans] = useState<Record<string, string | null>>({});
+  const [waitLogs, setWaitLogs] = useState<WaitLog[]>([]);
   const [selectedClient, setSelectedClient] = useState('all');
   const [periodType, setPeriodType] = useState<'current' | 'previous' | 'custom'>('current');
   const [customStart, setCustomStart] = useState('');
@@ -80,11 +90,12 @@ export default function Reports() {
   const [showPreview, setShowPreview] = useState(true);
 
   const fetchData = useCallback(async () => {
-    const [rRes, pRes, cRes, sRes] = await Promise.all([
+    const [rRes, pRes, cRes, sRes, wRes] = await Promise.all([
       supabase.from('delivery_records').select('*').order('date', { ascending: false }),
       supabase.from('plans').select('*'),
       supabase.from('clients').select('id, plan_id'),
       supabase.from('social_media_deliveries').select('*').order('delivered_at', { ascending: false }),
+      supabase.from('recording_wait_logs').select('*'),
     ]);
     if (rRes.data) setRecords(rRes.data as DeliveryRecord[]);
     if (pRes.data) setPlans(pRes.data as Plan[]);
@@ -94,6 +105,7 @@ export default function Reports() {
       setClientPlans(map);
     }
     if (sRes.data) setSocialDeliveries(sRes.data as SocialDelivery[]);
+    if (wRes.data) setWaitLogs(wRes.data as WaitLog[]);
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -122,6 +134,14 @@ export default function Reports() {
     });
   }, [socialDeliveries, selectedClient, dateRange]);
 
+  const filteredWaitLogs = useMemo(() => {
+    return waitLogs.filter(w => {
+      if (selectedClient !== 'all' && w.client_id !== selectedClient) return false;
+      const d = w.started_at?.split('T')[0] || '';
+      return d >= dateRange.start && d <= dateRange.end;
+    });
+  }, [waitLogs, selectedClient, dateRange]);
+
   // Recording duration in minutes from company settings
   const recDuration = settings.recordingDuration || 90;
 
@@ -146,6 +166,11 @@ export default function Reports() {
     const totalMinutes = realizadas.length * recDuration;
     const totalHours = (totalMinutes / 60).toFixed(1);
 
+    // Wait time stats
+    const totalWaitSeconds = filteredWaitLogs.reduce((a, w) => a + (w.wait_duration_seconds || 0), 0);
+    const totalWaitMinutes = Math.round(totalWaitSeconds / 60);
+    const waitCount = filteredWaitLogs.length;
+
     // Social media deliveries
     const socialReelsPosted = filteredSocial.filter(d => d.content_type === 'reels' && d.status === 'postado').length;
     const socialCriativosPosted = filteredSocial.filter(d => d.content_type === 'criativo' && d.status === 'postado').length;
@@ -158,9 +183,10 @@ export default function Reports() {
       realizadas: realizadas.length, canceladas: canceladas.length, encaixes: encaixes.length, extras: extras.length, 
       totalVideos, totalReels, totalCreatives, totalStories, totalArts, totalExtras, cancelRate,
       totalContent, avgPerSession, totalHours, totalMinutes,
+      totalWaitSeconds, totalWaitMinutes, waitCount,
       socialReelsPosted, socialCriativosPosted, socialStoriesPosted, socialArtesDelivered, totalPosted, totalSocialDelivered,
     };
-  }, [filteredRecords, filteredSocial, recDuration]);
+  }, [filteredRecords, filteredSocial, filteredWaitLogs, recDuration]);
 
   const comparison = useMemo(() => {
     if (selectedClient === 'all') return null;
@@ -324,14 +350,14 @@ export default function Reports() {
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 23, 42);
-    doc.text('Relatório de Entregas', pageW / 2, y, { align: 'center' });
+    doc.text('Relatorio de Entregas', pageW / 2, y, { align: 'center' });
     y += 7;
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
-    doc.text(`Período: ${capitalize(periodLabel)}`, pageW / 2, y, { align: 'center' });
+    doc.text(`Periodo: ${capitalize(periodLabel)}`, pageW / 2, y, { align: 'center' });
     y += 4;
-    doc.text(`Emitido em ${format(new Date(), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })}`, pageW / 2, y, { align: 'center' });
+    doc.text(`Emitido em ${format(new Date(), "dd/MM/yyyy")} as ${format(new Date(), "HH:mm")}`, pageW / 2, y, { align: 'center' });
     y += 8;
     drawLine(y); y += 8;
 
@@ -357,7 +383,7 @@ export default function Reports() {
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(100, 116, 139);
-      doc.text(`Responsável: ${selectedClientObj.responsiblePerson}`, infoX, y + 7);
+      doc.text(`Responsavel: ${selectedClientObj.responsiblePerson}`, infoX, y + 7);
       const planId = clientPlans[selectedClient];
       const plan = planId ? plans.find(p => p.id === planId) : null;
       if (plan) doc.text(`Plano: ${plan.name}`, infoX, y + 12);
@@ -366,34 +392,34 @@ export default function Reports() {
     }
 
     // ── Resumo de Captação ──
-    y = drawSectionTitle('Resumo de Captação (Gravações)', y); y += 8;
+    y = drawSectionTitle('Resumo de Captacao (Gravacoes)', y); y += 8;
     y = drawKpiGrid([
-      { label: 'Gravações Realizadas', value: String(stats.realizadas) },
+      { label: 'Gravacoes Realizadas', value: String(stats.realizadas) },
       { label: 'Cancelamentos', value: String(stats.canceladas) },
       { label: 'Encaixes', value: String(stats.encaixes) },
       { label: 'Horas Dedicadas', value: `${stats.totalHours}h` },
-      { label: 'Média Conteúdo/Gravação', value: stats.avgPerSession },
+      { label: 'Media Conteudo/Gravacao', value: stats.avgPerSession },
       { label: 'Taxa Cancelamento', value: `${stats.cancelRate}%` },
     ], y);
     drawLine(y); y += 8;
 
-    // ── Produção de Conteúdo (gravado) ──
+    // ── Producao de Conteudo (gravado) ──
     checkPageBreak(50);
-    y = drawSectionTitle('Produção de Conteúdo (Gravados)', y); y += 8;
+    y = drawSectionTitle('Producao de Conteudo (Gravados)', y); y += 8;
     y = drawKpiGrid([
       { label: 'Reels Gravados', value: String(stats.totalReels) },
       { label: 'Criativos Gravados', value: String(stats.totalCreatives) },
       { label: 'Stories Gravados', value: String(stats.totalStories) },
       { label: 'Artes Produzidas', value: String(stats.totalArts) },
-      { label: 'Conteúdos Extras', value: String(stats.totalExtras) },
+      { label: 'Conteudos Extras', value: String(stats.totalExtras) },
       { label: 'Total Produzido', value: String(stats.totalContent) },
     ], y);
     drawLine(y); y += 8;
 
-    // ── Conteúdos Postados (Social Media) ──
+    // ── Conteudos Postados (Social Media) ──
     if (stats.totalSocialDelivered > 0) {
       checkPageBreak(50);
-      y = drawSectionTitle('Conteúdos Entregues & Postados (Social Media)', y); y += 8;
+      y = drawSectionTitle('Conteudos Entregues & Postados (Social Media)', y); y += 8;
       y = drawKpiGrid([
         { label: 'Reels Postados', value: String(stats.socialReelsPosted) },
         { label: 'Criativos Postados', value: String(stats.socialCriativosPosted) },
@@ -439,26 +465,44 @@ export default function Reports() {
       drawLine(y); y += 8;
     }
 
-    // ── Horas de Gravação ──
+    // ── Horas de Gravacao ──
     checkPageBreak(30);
-    y = drawSectionTitle('Horas de Gravação Dedicadas', y); y += 6;
+    y = drawSectionTitle('Horas de Gravacao Dedicadas', y); y += 6;
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(71, 85, 105);
-    doc.text(`${stats.realizadas} gravações × ${recDuration} min = ${stats.totalMinutes} min (${stats.totalHours} horas)`, margin, y);
+    doc.text(`${stats.realizadas} gravacoes x ${recDuration} min = ${stats.totalMinutes} min (${stats.totalHours} horas)`, margin, y);
     y += 5;
     if (stats.realizadas > 0) {
-      doc.text(`Média de ${stats.avgPerSession} conteúdos produzidos por sessão de gravação`, margin, y);
+      doc.text(`Media de ${stats.avgPerSession} conteudos produzidos por sessao de gravacao`, margin, y);
       y += 5;
     }
     y += 3;
     drawLine(y); y += 8;
 
+    // ── Tempo de Espera nas Gravacoes ──
+    checkPageBreak(40);
+    y = drawSectionTitle('Tempo de Espera nas Gravacoes', y); y += 8;
+    if (stats.waitCount > 0) {
+      y = drawKpiGrid([
+        { label: 'Total de Esperas', value: String(stats.waitCount) },
+        { label: 'Tempo Total de Espera', value: `${stats.totalWaitMinutes} min` },
+        { label: 'Media por Espera', value: `${stats.waitCount > 0 ? Math.round(stats.totalWaitSeconds / stats.waitCount / 60) : 0} min` },
+      ], y);
+    } else {
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(71, 85, 105);
+      doc.text('Nenhum registro de espera no periodo.', margin, y);
+      y += 8;
+    }
+    drawLine(y); y += 8;
+
     // ── Detailed History ──
     if (filteredRecords.length > 0) {
       checkPageBreak(30);
-      y = drawSectionTitle('Histórico de Gravações', y); y += 8;
-      const dHeaders = ['Data', 'Videomaker', 'Vídeos', 'Reels', 'Criativos', 'Status'];
+      y = drawSectionTitle('Historico de Gravacoes', y); y += 8;
+      const dHeaders = ['Data', 'Videomaker', 'Videos', 'Reels', 'Criativos', 'Status'];
       const dColW = [25, 35, 18, 18, 22, 42];
       y = drawTableHeader(dHeaders, dColW, y);
       filteredRecords.forEach((rec, i) => {
@@ -478,19 +522,24 @@ export default function Reports() {
     // ── Social Media History ──
     if (filteredSocial.length > 0) {
       checkPageBreak(30);
-      y = drawSectionTitle('Histórico de Postagens (Social Media)', y); y += 8;
-      const sHeaders = ['Data', 'Tipo', 'Título', 'Plataforma', 'Status'];
+      y = drawSectionTitle('Historico de Postagens (Social Media)', y); y += 8;
+      const sHeaders = ['Data', 'Tipo', 'Titulo', 'Plataforma', 'Status'];
       const sColW = [25, 25, 55, 30, 25];
       y = drawTableHeader(sHeaders, sColW, y);
       filteredSocial.forEach((d, i) => {
         if (y > 255) { doc.addPage(); y = 15; y = drawTableHeader(sHeaders, sColW, y); }
         const typeLabels: Record<string, string> = { reels: 'Reels', criativo: 'Criativo', story: 'Story', arte: 'Arte' };
-        const statusLabels: Record<string, string> = { entregue: 'Entregue', postado: 'Postado', revisao: 'Em revisão' };
+        const statusLabels: Record<string, string> = { entregue: 'Entregue', postado: 'Postado', revisao: 'Em revisao' };
+        const dateStr = d.delivered_at ? (() => {
+          const raw = d.delivered_at.includes('T') ? d.delivered_at : d.delivered_at + 'T12:00:00';
+          const dt = new Date(raw);
+          return isNaN(dt.getTime()) ? (d.delivered_at.split('T')[0] || '--') : dt.toLocaleDateString('pt-BR');
+        })() : '--';
         y = drawTableRow([
-          new Date(d.delivered_at + 'T12:00:00').toLocaleDateString('pt-BR'),
+          dateStr,
           typeLabels[d.content_type] || d.content_type,
-          d.title.substring(0, 28),
-          d.platform || '—',
+          (d.title || '').substring(0, 28),
+          d.platform || '--',
           statusLabels[d.status] || d.status,
         ], sColW, y, i % 2 === 0);
       });
@@ -506,13 +555,13 @@ export default function Reports() {
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 23, 42);
-    doc.text('Obrigado pela confiança!', pageW / 2, y + 5, { align: 'center' });
+    doc.text('Obrigado pela confianca!', pageW / 2, y + 5, { align: 'center' });
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(71, 85, 105);
-    ['Agradecemos por fazer parte da família Pulse Growth Marketing.',
-     'Nosso compromisso é entregar resultados que impulsionem o seu negócio.',
-     'Conte conosco para transformar sua presença digital! 🚀',
+    ['Agradecemos por fazer parte da familia Pulse Growth Marketing.',
+     'Nosso compromisso e entregar resultados que impulsionem o seu negocio.',
+     'Conte conosco para transformar sua presenca digital!',
     ].forEach((line, i) => {
       doc.text(line, pageW / 2, y + 11 + i * 5, { align: 'center' });
     });
@@ -526,8 +575,8 @@ export default function Reports() {
       doc.setFontSize(7);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(148, 163, 184);
-      doc.text('Relatório gerado automaticamente pelo sistema Pulse Growth Marketing', pageW / 2, 289, { align: 'center' });
-      doc.text(`${format(new Date(), "dd/MM/yyyy HH:mm:ss")} — Página ${p} de ${totalPages}`, pageW / 2, 293, { align: 'center' });
+      doc.text('Relatorio gerado automaticamente pelo sistema Pulse Growth Marketing', pageW / 2, 289, { align: 'center' });
+      doc.text(`${format(new Date(), "dd/MM/yyyy HH:mm:ss")} -- Pagina ${p} de ${totalPages}`, pageW / 2, 293, { align: 'center' });
     }
 
     const clientName = selectedClientObj ? `-${selectedClientObj.companyName.replace(/\s+/g, '-')}` : '';

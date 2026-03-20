@@ -157,13 +157,13 @@ export default function EditorDashboard() {
 
   // Filtered tasks for editing queue (only edicao + alteracao)
   const editingQueueTasks = useMemo(() => {
-    return tasks.filter(t => t.kanban_column === 'edicao' || t.kanban_column === 'alteracao');
-  }, [tasks]);
+    return visibleTasks.filter(t => t.kanban_column === 'edicao' || t.kanban_column === 'alteracao');
+  }, [visibleTasks]);
 
   // Filtered tasks for review tab (revisao + envio)
   const reviewTasks = useMemo(() => {
-    return tasks.filter(t => t.kanban_column === 'revisao' || t.kanban_column === 'envio');
-  }, [tasks]);
+    return visibleTasks.filter(t => t.kanban_column === 'revisao' || t.kanban_column === 'envio');
+  }, [visibleTasks]);
 
   // Apply filters to editing queue
   const filteredQueueTasks = useMemo(() => {

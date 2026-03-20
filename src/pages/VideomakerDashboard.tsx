@@ -605,11 +605,13 @@ export default function VideomakerDashboard() {
                   <motion.div key={rec.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
                     className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
                       isActive ? 'border-primary bg-primary/5 ring-1 ring-primary/30' :
-                      isDone ? 'border-success/30 bg-success/5' : 'border-border bg-secondary/50'
+                      isDone ? 'border-success/30 bg-success/5' :
+                      rec.waitStartedAt && !rec.waitEndedAt ? 'border-warning bg-warning/5 ring-1 ring-warning/30' :
+                      'border-border bg-secondary/50'
                     }`}>
                     <div className="w-1.5 h-12 rounded-full shrink-0" style={{ backgroundColor: `hsl(${color})` }} />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-sm truncate">{getClientName(rec.clientId)}</span>
                         <Badge variant="outline" className="text-[10px]">{typeLabels[rec.type]}</Badge>
                         {isActive && (
@@ -622,16 +624,42 @@ export default function VideomakerDashboard() {
                             <Check size={10} className="mr-0.5" /> Concluída
                           </Badge>
                         )}
+                        {rec.waitStartedAt && !rec.waitEndedAt && !isActive && !isDone && (
+                          <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px] animate-pulse">
+                            <Hourglass size={10} className="mr-0.5" /> Aguardando cliente
+                          </Badge>
+                        )}
+                        {rec.waitStartedAt && rec.waitEndedAt && !isActive && !isDone && (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                            ⏱️ Esperou {Math.round((new Date(rec.waitEndedAt).getTime() - new Date(rec.waitStartedAt).getTime()) / 60000)}min
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         <Clock size={10} className="inline mr-1" />{rec.startTime}
                       </p>
                     </div>
-                    <div className="flex gap-1.5 shrink-0">
+                    <div className="flex gap-1.5 shrink-0 flex-wrap">
                       {rec.status === 'agendada' && !isActive && (
-                        <Button size="sm" onClick={() => handleStartRecording(rec)} className="gap-1">
-                          <Play size={14} /> Iniciar
-                        </Button>
+                        <>
+                          {!rec.waitStartedAt && (
+                            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                              <Button size="sm" variant="outline" onClick={() => handleStartWaiting(rec)} className="gap-1 border-warning/50 text-warning hover:bg-warning/10">
+                                <Hourglass size={14} /> Aguardar
+                              </Button>
+                            </motion.div>
+                          )}
+                          {rec.waitStartedAt && !rec.waitEndedAt && (
+                            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                              <Button size="sm" variant="outline" onClick={() => handleStopWaiting(rec)} className="gap-1 border-warning text-warning bg-warning/10">
+                                <Hourglass size={14} className="animate-pulse" /> Parar
+                              </Button>
+                            </motion.div>
+                          )}
+                          <Button size="sm" onClick={() => handleStartRecording(rec)} className="gap-1">
+                            <Play size={14} /> Iniciar
+                          </Button>
+                        </>
                       )}
                       {isActive && (
                         <>

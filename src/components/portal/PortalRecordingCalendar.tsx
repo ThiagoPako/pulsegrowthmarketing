@@ -748,42 +748,6 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
             })}
           </div>
 
-          {/* Legend — grouped by category */}
-          <div className="mt-6 pt-5 border-t border-white/[0.08] space-y-3">
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
-              <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest w-full mb-1">Gravações</span>
-              {['agendada', 'gravada', 'cancelada', 'remarcada', 'extra', 'solicitada'].map(k => {
-                const s = EVENT_STYLES[k];
-                return (
-                  <div key={k} className="flex items-center gap-2 text-xs text-white/50 font-medium">
-                    <span className="text-base drop-shadow-md">{s.icon}</span>{s.label.replace('Gravação ', '')}
-                  </div>
-                );
-              })}
-            </div>
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
-              <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest w-full mb-1">Produção</span>
-              {['material_sent', 'editing', 'deadline', 'in_review', 'approval_sent', 'approved', 'adjustment', 'completed'].map(k => {
-                const s = EVENT_STYLES[k];
-                return (
-                  <div key={k} className="flex items-center gap-2 text-xs text-white/50 font-medium">
-                    <span className="text-base drop-shadow-md">{s.icon}</span>{s.label.split(' — ')[0]}
-                  </div>
-                );
-              })}
-            </div>
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
-              <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest w-full mb-1">Entrega</span>
-              {['delivered', 'posted', 'scheduled_post'].map(k => {
-                const s = EVENT_STYLES[k];
-                return (
-                  <div key={k} className="flex items-center gap-2 text-xs text-white/50 font-medium">
-                    <span className="text-base drop-shadow-md">{s.icon}</span>{s.label}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
         </motion.div>
 
         {/* Sidebar — Day Detail */}
@@ -793,7 +757,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
               <motion.div key={format(selectedDay, 'yyyy-MM-dd')}
                 initial={{ opacity: 0, x: 20, scale: 0.97 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, x: -20, scale: 0.97 }}
                 transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-                className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 relative overflow-hidden max-h-[80vh] overflow-y-auto">
+                className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-5 relative overflow-hidden max-h-[60vh] lg:max-h-[80vh] overflow-y-auto">
                 <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl" style={{ background: `hsl(${clientColor})` }} />
                 <div className="flex items-center gap-3 mb-4 mt-1">
                   <div className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-extrabold relative"

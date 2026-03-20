@@ -309,6 +309,17 @@ export default function EditorKanban() {
     return map;
   }, [filteredTasks]);
 
+  const handleClaimTask = async (task: EditorTask) => {
+    if (!user) return;
+    const { error } = await supabase.from('content_tasks').update({
+      assigned_to: user.id,
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', task.id);
+    if (error) { toast.error('Erro ao pegar tarefa'); return; }
+    toast.success('Tarefa atribuída a você!');
+    fetchTasks();
+  };
+
   const handleDragStart = (e: React.DragEvent, task: EditorTask) => {
     setDraggedTask(task);
     e.dataTransfer.effectAllowed = 'move';

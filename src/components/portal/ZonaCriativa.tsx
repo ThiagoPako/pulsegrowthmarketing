@@ -726,12 +726,10 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
 
                   {/* Script content */}
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
-                    <ScrollArea className="max-h-[50vh]">
-                      <div
-                        className="prose prose-invert prose-sm max-w-none text-white/75 leading-relaxed"
-                        dangerouslySetInnerHTML={{ __html: selectedScript.content }}
-                      />
-                    </ScrollArea>
+                    <div
+                      className="prose prose-invert prose-sm max-w-none text-white/75 leading-relaxed"
+                      dangerouslySetInnerHTML={{ __html: selectedScript.content }}
+                    />
                   </motion.div>
                 </div>
               </div>

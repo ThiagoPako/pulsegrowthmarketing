@@ -465,26 +465,44 @@ export default function Reports() {
       drawLine(y); y += 8;
     }
 
-    // ── Horas de Gravação ──
+    // ── Horas de Gravacao ──
     checkPageBreak(30);
-    y = drawSectionTitle('Horas de Gravação Dedicadas', y); y += 6;
+    y = drawSectionTitle('Horas de Gravacao Dedicadas', y); y += 6;
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(71, 85, 105);
-    doc.text(`${stats.realizadas} gravações × ${recDuration} min = ${stats.totalMinutes} min (${stats.totalHours} horas)`, margin, y);
+    doc.text(`${stats.realizadas} gravacoes x ${recDuration} min = ${stats.totalMinutes} min (${stats.totalHours} horas)`, margin, y);
     y += 5;
     if (stats.realizadas > 0) {
-      doc.text(`Média de ${stats.avgPerSession} conteúdos produzidos por sessão de gravação`, margin, y);
+      doc.text(`Media de ${stats.avgPerSession} conteudos produzidos por sessao de gravacao`, margin, y);
       y += 5;
     }
     y += 3;
     drawLine(y); y += 8;
 
+    // ── Tempo de Espera nas Gravacoes ──
+    checkPageBreak(40);
+    y = drawSectionTitle('Tempo de Espera nas Gravacoes', y); y += 8;
+    if (stats.waitCount > 0) {
+      y = drawKpiGrid([
+        { label: 'Total de Esperas', value: String(stats.waitCount) },
+        { label: 'Tempo Total de Espera', value: `${stats.totalWaitMinutes} min` },
+        { label: 'Media por Espera', value: `${stats.waitCount > 0 ? Math.round(stats.totalWaitSeconds / stats.waitCount / 60) : 0} min` },
+      ], y);
+    } else {
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(71, 85, 105);
+      doc.text('Nenhum registro de espera no periodo.', margin, y);
+      y += 8;
+    }
+    drawLine(y); y += 8;
+
     // ── Detailed History ──
     if (filteredRecords.length > 0) {
       checkPageBreak(30);
-      y = drawSectionTitle('Histórico de Gravações', y); y += 8;
-      const dHeaders = ['Data', 'Videomaker', 'Vídeos', 'Reels', 'Criativos', 'Status'];
+      y = drawSectionTitle('Historico de Gravacoes', y); y += 8;
+      const dHeaders = ['Data', 'Videomaker', 'Videos', 'Reels', 'Criativos', 'Status'];
       const dColW = [25, 35, 18, 18, 22, 42];
       y = drawTableHeader(dHeaders, dColW, y);
       filteredRecords.forEach((rec, i) => {
@@ -504,19 +522,24 @@ export default function Reports() {
     // ── Social Media History ──
     if (filteredSocial.length > 0) {
       checkPageBreak(30);
-      y = drawSectionTitle('Histórico de Postagens (Social Media)', y); y += 8;
-      const sHeaders = ['Data', 'Tipo', 'Título', 'Plataforma', 'Status'];
+      y = drawSectionTitle('Historico de Postagens (Social Media)', y); y += 8;
+      const sHeaders = ['Data', 'Tipo', 'Titulo', 'Plataforma', 'Status'];
       const sColW = [25, 25, 55, 30, 25];
       y = drawTableHeader(sHeaders, sColW, y);
       filteredSocial.forEach((d, i) => {
         if (y > 255) { doc.addPage(); y = 15; y = drawTableHeader(sHeaders, sColW, y); }
         const typeLabels: Record<string, string> = { reels: 'Reels', criativo: 'Criativo', story: 'Story', arte: 'Arte' };
-        const statusLabels: Record<string, string> = { entregue: 'Entregue', postado: 'Postado', revisao: 'Em revisão' };
+        const statusLabels: Record<string, string> = { entregue: 'Entregue', postado: 'Postado', revisao: 'Em revisao' };
+        const dateStr = d.delivered_at ? (() => {
+          const raw = d.delivered_at.includes('T') ? d.delivered_at : d.delivered_at + 'T12:00:00';
+          const dt = new Date(raw);
+          return isNaN(dt.getTime()) ? (d.delivered_at.split('T')[0] || '--') : dt.toLocaleDateString('pt-BR');
+        })() : '--';
         y = drawTableRow([
-          new Date(d.delivered_at + 'T12:00:00').toLocaleDateString('pt-BR'),
+          dateStr,
           typeLabels[d.content_type] || d.content_type,
-          d.title.substring(0, 28),
-          d.platform || '—',
+          (d.title || '').substring(0, 28),
+          d.platform || '--',
           statusLabels[d.status] || d.status,
         ], sColW, y, i % 2 === 0);
       });
@@ -532,13 +555,13 @@ export default function Reports() {
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 23, 42);
-    doc.text('Obrigado pela confiança!', pageW / 2, y + 5, { align: 'center' });
+    doc.text('Obrigado pela confianca!', pageW / 2, y + 5, { align: 'center' });
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(71, 85, 105);
-    ['Agradecemos por fazer parte da família Pulse Growth Marketing.',
-     'Nosso compromisso é entregar resultados que impulsionem o seu negócio.',
-     'Conte conosco para transformar sua presença digital! 🚀',
+    ['Agradecemos por fazer parte da familia Pulse Growth Marketing.',
+     'Nosso compromisso e entregar resultados que impulsionem o seu negocio.',
+     'Conte conosco para transformar sua presenca digital!',
     ].forEach((line, i) => {
       doc.text(line, pageW / 2, y + 11 + i * 5, { align: 'center' });
     });
@@ -552,8 +575,8 @@ export default function Reports() {
       doc.setFontSize(7);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(148, 163, 184);
-      doc.text('Relatório gerado automaticamente pelo sistema Pulse Growth Marketing', pageW / 2, 289, { align: 'center' });
-      doc.text(`${format(new Date(), "dd/MM/yyyy HH:mm:ss")} — Página ${p} de ${totalPages}`, pageW / 2, 293, { align: 'center' });
+      doc.text('Relatorio gerado automaticamente pelo sistema Pulse Growth Marketing', pageW / 2, 289, { align: 'center' });
+      doc.text(`${format(new Date(), "dd/MM/yyyy HH:mm:ss")} -- Pagina ${p} de ${totalPages}`, pageW / 2, 293, { align: 'center' });
     }
 
     const clientName = selectedClientObj ? `-${selectedClientObj.companyName.replace(/\s+/g, '-')}` : '';

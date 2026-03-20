@@ -742,36 +742,36 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
           </div>
 
           {/* Legend — grouped by category */}
-          <div className="mt-5 pt-4 border-t border-white/[0.06] space-y-2">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span className="text-[9px] font-bold text-white/20 uppercase tracking-wider w-full mb-1">Gravações</span>
+          <div className="mt-6 pt-5 border-t border-white/[0.08] space-y-3">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+              <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest w-full mb-1">Gravações</span>
               {['agendada', 'gravada', 'cancelada', 'remarcada', 'extra', 'solicitada'].map(k => {
                 const s = EVENT_STYLES[k];
                 return (
-                  <div key={k} className="flex items-center gap-1.5 text-[10px] text-white/40">
-                    <span className="text-[10px]">{s.icon}</span>{s.label.replace('Gravação ', '')}
+                  <div key={k} className="flex items-center gap-2 text-xs text-white/50 font-medium">
+                    <span className="text-base drop-shadow-md">{s.icon}</span>{s.label.replace('Gravação ', '')}
                   </div>
                 );
               })}
             </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span className="text-[9px] font-bold text-white/20 uppercase tracking-wider w-full mb-1">Produção</span>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+              <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest w-full mb-1">Produção</span>
               {['material_sent', 'editing', 'deadline', 'in_review', 'approval_sent', 'approved', 'adjustment', 'completed'].map(k => {
                 const s = EVENT_STYLES[k];
                 return (
-                  <div key={k} className="flex items-center gap-1.5 text-[10px] text-white/40">
-                    <span className="text-[10px]">{s.icon}</span>{s.label.split(' — ')[0]}
+                  <div key={k} className="flex items-center gap-2 text-xs text-white/50 font-medium">
+                    <span className="text-base drop-shadow-md">{s.icon}</span>{s.label.split(' — ')[0]}
                   </div>
                 );
               })}
             </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span className="text-[9px] font-bold text-white/20 uppercase tracking-wider w-full mb-1">Entrega</span>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+              <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest w-full mb-1">Entrega</span>
               {['delivered', 'posted', 'scheduled_post'].map(k => {
                 const s = EVENT_STYLES[k];
                 return (
-                  <div key={k} className="flex items-center gap-1.5 text-[10px] text-white/40">
-                    <span className="text-[10px]">{s.icon}</span>{s.label}
+                  <div key={k} className="flex items-center gap-2 text-xs text-white/50 font-medium">
+                    <span className="text-base drop-shadow-md">{s.icon}</span>{s.label}
                   </div>
                 );
               })}

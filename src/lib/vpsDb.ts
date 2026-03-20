@@ -162,10 +162,15 @@ class QueryBuilder {
       filters: this._filters.length > 0 ? this._filters : undefined,
     };
 
+    let joinTables: string[] = [];
+
     if (this._operation === 'select') {
       const { selectStr, joins } = this._parseSelect(this._select);
       body.select = selectStr;
-      if (joins.length > 0) body.joins = joins;
+      if (joins.length > 0) {
+        body.joins = joins;
+        joinTables = joins.map((j: any) => j.table);
+      }
       if (this._order.length > 0) body.order = this._order;
       if (this._limit !== null) body.limit = this._limit;
       body.single = this._single;
@@ -184,6 +189,32 @@ class QueryBuilder {
     }
 
     const result = await executeQuery(body);
+
+    // Re-nest flattened join columns: { clients_company_name: 'X' } → { clients: { company_name: 'X' } }
+    if (joinTables.length > 0 && result.data && !result.error) {
+      const nestRow = (row: any) => {
+        if (!row || typeof row !== 'object') return row;
+        for (const jt of joinTables) {
+          const prefix = `${jt}_`;
+          const nested: Record<string, any> = {};
+          let hasAny = false;
+          for (const key of Object.keys(row)) {
+            if (key.startsWith(prefix)) {
+              nested[key.slice(prefix.length)] = row[key];
+              delete row[key];
+              hasAny = true;
+            }
+          }
+          if (hasAny) row[jt] = nested;
+        }
+        return row;
+      };
+      if (Array.isArray(result.data)) {
+        result.data.forEach(nestRow);
+      } else {
+        nestRow(result.data);
+      }
+    }
 
     // For maybeSingle, don't treat null as error
     if (this._single && result.data === null && !result.error) {

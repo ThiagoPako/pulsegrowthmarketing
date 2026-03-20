@@ -1092,8 +1092,38 @@ export default function Clients() {
         </div>
       )}
 
-      {/* Manual day/time selection */}
+      {/* Full shift recording toggle */}
       {form.videomaker && (
+        <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-3">
+          <div className="flex items-center gap-3">
+            <Switch 
+              checked={form.fullShiftRecording || false} 
+              onCheckedChange={v => setForm(prev => ({ ...prev, fullShiftRecording: v, fixedTime: v ? (prev.preferredShift === 'tarde' ? settings.shiftBStart : settings.shiftAStart) : prev.fixedTime }))} 
+            />
+            <div>
+              <Label className="font-medium">⏱️ Gravação por Turno Inteiro</Label>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                O cliente ocupa o turno completo (manhã ou tarde) — reserva todos os horários do período selecionado.
+              </p>
+            </div>
+          </div>
+          {form.fullShiftRecording && (
+            <div className="space-y-1">
+              <Label>Turno Preferido</Label>
+              <Select value={form.preferredShift || 'manha'} onValueChange={v => setForm(prev => ({ ...prev, preferredShift: v as 'manha' | 'tarde', fixedTime: v === 'tarde' ? settings.shiftBStart : settings.shiftAStart }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manha">☀️ Manhã ({settings.shiftAStart} – {settings.shiftAEnd})</SelectItem>
+                  <SelectItem value="tarde">🌙 Tarde ({settings.shiftBStart} – {settings.shiftBEnd})</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Manual day/time selection */}
+      {form.videomaker && !form.fullShiftRecording && (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">Ou selecione manualmente:</p>
           <div className="grid grid-cols-2 gap-3">

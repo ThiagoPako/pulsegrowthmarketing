@@ -558,6 +558,11 @@ export default function Scripts() {
                       <Sparkles size={8} className="mr-0.5" /> Endo
                     </Badge>
                   )}
+                  {script.directToEditing && (
+                    <Badge className="text-[9px] bg-blue-500/20 text-blue-600 border-blue-500/30">
+                      🎬 Direto p/ Edição
+                    </Badge>
+                  )}
                   {script.priority === 'urgent' && (
                     <Badge className="text-[9px] bg-destructive/20 text-destructive border-destructive/30">Urgente</Badge>
                   )}

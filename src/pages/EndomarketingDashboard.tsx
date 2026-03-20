@@ -68,14 +68,14 @@ export default function EndomarketingDashboard() {
             <p className="text-xs sm:text-sm text-muted-foreground">Gestão de pacotes e parceiros</p>
           </div>
         </div>
-        <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0">
-          <Button variant="outline" size="sm" onClick={() => navigate('/endomarketing/calendario')} className="shrink-0 text-xs sm:text-sm">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => navigate('/endomarketing/calendario')} className="text-xs sm:text-sm h-8">
             <CalendarDays size={14} className="mr-1" /> Calendário
           </Button>
-          <Button variant="outline" size="sm" onClick={() => navigate('/endomarketing/relatorios')} className="shrink-0 text-xs sm:text-sm">
+          <Button variant="outline" size="sm" onClick={() => navigate('/endomarketing/relatorios')} className="text-xs sm:text-sm h-8">
             <BarChart3 size={14} className="mr-1" /> Relatórios
           </Button>
-          <Button size="sm" onClick={() => navigate('/endomarketing/contratos')} className="shrink-0 text-xs sm:text-sm">
+          <Button size="sm" onClick={() => navigate('/endomarketing/contratos')} className="text-xs sm:text-sm h-8">
             <Plus size={14} className="mr-1" /> Novo Contrato
           </Button>
         </div>

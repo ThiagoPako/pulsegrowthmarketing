@@ -133,12 +133,12 @@ export default function EndomarketingTasks() {
             <p className="text-xs sm:text-sm text-muted-foreground">{stats.pending} pendentes · {stats.completed} concluídas</p>
           </div>
         </div>
-        <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0">
-          <Button variant="outline" size="sm" onClick={handleSendDailyNotifications} disabled={sendingNotifications} className="shrink-0 text-xs sm:text-sm">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={handleSendDailyNotifications} disabled={sendingNotifications} className="text-xs sm:text-sm h-8">
             <MessageCircle size={14} className="mr-1" />
             {sendingNotifications ? 'Enviando...' : 'WhatsApp'}
           </Button>
-          <Button size="sm" onClick={() => setGenDialogOpen(true)} className="shrink-0 text-xs sm:text-sm">
+          <Button size="sm" onClick={() => setGenDialogOpen(true)} className="text-xs sm:text-sm h-8">
             <CalendarPlus size={14} className="mr-1" /> Gerar Tarefas
           </Button>
         </div>

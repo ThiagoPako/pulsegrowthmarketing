@@ -635,7 +635,7 @@ export default function ClientPortal() {
                       <Sparkles size={12} style={{ color: `hsl(${clientColor})` }} />
                       <span className="capitalize">Temporada {seasonLabel}</span>
                     </div>
-                    <h2 className="text-3xl sm:text-5xl font-bold tracking-tight max-w-lg leading-tight">
+                    <h2 className="text-2xl sm:text-5xl font-bold tracking-tight max-w-lg leading-tight">
                       Sua biblioteca de conteúdos
                     </h2>
                     <p className="text-white/50 mt-3 max-w-md text-sm sm:text-base">

@@ -947,6 +947,11 @@ export default function Schedule() {
                                 </button>
                               </>
                             )}
+                            {evt.recording.status !== 'agendada' && (
+                              <button onClick={() => handleDeleteRecording(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/15 transition-colors flex items-center justify-center gap-1 col-span-2">
+                                <Trash2 size={10} /> Apagar
+                              </button>
+                            )}
                           </div>
                         )}
                       </motion.div>

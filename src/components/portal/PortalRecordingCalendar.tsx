@@ -637,15 +637,21 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
           </div>
 
           {/* Legend */}
-          <div className="flex flex-wrap items-center gap-4 mt-5 pt-4 border-t border-white/[0.06]">
+          <div className="flex flex-wrap items-center gap-3 mt-5 pt-4 border-t border-white/[0.06]">
             {[
               { icon: '📹', label: 'Agendada' },
               { icon: '🎬', label: 'Gravada' },
               { icon: '❌', label: 'Cancelada' },
               { icon: '🔄', label: 'Remarcada' },
               { icon: '⭐', label: 'Extra' },
-              { icon: '✂️', label: 'Em edição' },
+              { icon: '✂️', label: 'Edição' },
+              { icon: '👁', label: 'Revisão' },
+              { icon: '✅', label: 'Aprovado' },
+              { icon: '🔧', label: 'Ajuste' },
+              { icon: '📦', label: 'Entregue' },
               { icon: '📱', label: 'Postado' },
+              { icon: '📅', label: 'Agendado' },
+              { icon: '🏁', label: 'Concluído' },
             ].map(item => (
               <div key={item.icon} className="flex items-center gap-1.5 text-[10px] text-white/35">
                 <span className="text-[10px]">{item.icon}</span>{item.label}

@@ -1130,7 +1130,7 @@ export default function VideomakerDashboard() {
                     <SelectValue placeholder="Atribuição automática" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Atribuição automática</SelectItem>
+                    <SelectItem value="__auto__">Atribuição automática</SelectItem>
                     {editors.map(editor => (
                       <SelectItem key={editor.id} value={editor.id}>
                         {editor.name} {editor.role === 'admin' ? '(Admin)' : '(Editor)'}

@@ -51,6 +51,14 @@ const DATE_TO_DAY: Record<number, DayOfWeek> = {
   0: 'domingo', 1: 'segunda', 2: 'terca', 3: 'quarta', 4: 'quinta', 5: 'sexta', 6: 'sabado',
 };
 
+function timeToMinutes(t: string) {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+function minutesToTime(m: number) {
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+
 export default function Schedule() {
   const {
     clients, users, recordings, scripts, settings, activeRecordings,

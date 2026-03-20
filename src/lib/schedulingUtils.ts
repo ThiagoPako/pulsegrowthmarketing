@@ -90,20 +90,47 @@ export function generateFixedRecordings(
   const dates = getDatesUntilEndOfMonth(client.fixedDay);
   const newRecordings: Recording[] = [];
   let allRecs = [...existingRecordings];
+  const duration = settings.recordingDuration;
 
   for (const date of dates) {
-    if (!hasConflictCheck(client.videomaker, date, client.fixedTime, allRecs, settings.recordingDuration)) {
-      const rec: Recording = {
-        id: crypto.randomUUID(),
-        clientId: client.id,
-        videomakerId: client.videomaker,
-        date,
-        startTime: client.fixedTime,
-        type: 'fixa',
-        status: 'agendada',
-      };
-      newRecordings.push(rec);
-      allRecs.push(rec); // track to avoid self-conflicts
+    if (client.fullShiftRecording) {
+      // Full-shift client: reserve both slots in the preferred shift
+      const shift = client.preferredShift === 'tarde'
+        ? [timeToMinutes(settings.shiftBStart), timeToMinutes(settings.shiftBEnd)]
+        : [timeToMinutes(settings.shiftAStart), timeToMinutes(settings.shiftAEnd)];
+      
+      const [sStart, sEnd] = shift;
+      for (let t = sStart; t + duration <= sEnd; t += duration + BUFFER_BETWEEN_RECORDINGS) {
+        const timeStr = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+        if (!hasConflictCheck(client.videomaker, date, timeStr, allRecs, duration)) {
+          const rec: Recording = {
+            id: crypto.randomUUID(),
+            clientId: client.id,
+            videomakerId: client.videomaker,
+            date,
+            startTime: timeStr,
+            type: 'fixa',
+            status: 'agendada',
+          };
+          newRecordings.push(rec);
+          allRecs.push(rec);
+        }
+      }
+    } else {
+      // Normal client: single slot at fixedTime
+      if (!hasConflictCheck(client.videomaker, date, client.fixedTime, allRecs, duration)) {
+        const rec: Recording = {
+          id: crypto.randomUUID(),
+          clientId: client.id,
+          videomakerId: client.videomaker,
+          date,
+          startTime: client.fixedTime,
+          type: 'fixa',
+          status: 'agendada',
+        };
+        newRecordings.push(rec);
+        allRecs.push(rec);
+      }
     }
   }
 

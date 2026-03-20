@@ -736,6 +736,82 @@ app.post('/api/portal-recordings', async (req, res) => {
       return res.json({ success: true });
     }
 
+    /* ── confirm ── */
+    if (action === 'confirm') {
+      if (!recording_id) return res.status(400).json({ error: 'recording_id required' });
+      await pool.query(`UPDATE recordings SET confirmation_status = 'confirmada' WHERE id = $1 AND client_id = $2`, [recording_id, client_id]);
+      const { rows: [clientInfoConf] } = await pool.query('SELECT company_name FROM clients WHERE id = $1', [client_id]);
+      const { rows: notifUsersConf } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
+      for (const u of notifUsersConf) {
+        await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
+          [u.user_id, 'Gravação confirmada pelo cliente', `${clientInfoConf?.company_name || 'Cliente'} confirmou a gravação`, 'info', '/agenda']);
+      }
+      return res.json({ success: true });
+    }
+
+    /* ── cancel (with backup check) ── */
+    if (action === 'cancel') {
+      if (!recording_id) return res.status(400).json({ error: 'recording_id required' });
+      const { rows: [recCancel] } = await pool.query('SELECT id, date::text, start_time, videomaker_id FROM recordings WHERE id = $1 AND client_id = $2', [recording_id, client_id]);
+      if (!recCancel) return res.status(404).json({ error: 'Gravação não encontrada' });
+      const { rows: [clientCancel] } = await pool.query('SELECT backup_day, backup_time, videomaker_id, company_name, fixed_day FROM clients WHERE id = $1', [client_id]);
+      const { rows: [settingsCancel] } = await pool.query('SELECT * FROM company_settings LIMIT 1');
+      const durationCancel = (settingsCancel?.recording_duration || 2) * 60;
+      const bufferCancel = 30;
+      const dayMapCancel = { domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6 };
+      const targetDayCancel = dayMapCancel[clientCancel?.backup_day] ?? 2;
+      const todayCancel = new Date();
+      let backupDateCancel = null;
+      for (let i = 0; i <= 14; i++) { const d = new Date(todayCancel); d.setDate(d.getDate() + i); if (d.getDay() === targetDayCancel && d >= todayCancel) { backupDateCancel = d.toISOString().split('T')[0]; break; } }
+      let backupAvailable = false;
+      let backupSlot = null;
+      if (backupDateCancel && clientCancel?.backup_time) {
+        const { rows: bConflicts } = await pool.query(`SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`, [clientCancel.videomaker_id, backupDateCancel]);
+        const [bh, bm] = clientCancel.backup_time.split(':').map(Number);
+        const bStart = bh * 60 + bm;
+        const bConflict = bConflicts.some(c => { const [ch, cm] = c.start_time.split(':').map(Number); const cStart = ch * 60 + cm; return bStart < cStart + durationCancel + bufferCancel && bStart + durationCancel + bufferCancel > cStart; });
+        if (!bConflict) { backupAvailable = true; backupSlot = { date: backupDateCancel, time: clientCancel.backup_time }; }
+      }
+      const fixedDayCancel = dayMapCancel[clientCancel?.fixed_day] ?? 1;
+      let nextFixedDate = null;
+      for (let i = 1; i <= 14; i++) { const d = new Date(todayCancel); d.setDate(d.getDate() + i); if (d.getDay() === fixedDayCancel) { nextFixedDate = d.toISOString().split('T')[0]; break; } }
+      await pool.query(`UPDATE recordings SET status = 'cancelada' WHERE id = $1`, [recording_id]);
+      const { rows: notifUsersCancel } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
+      for (const u of notifUsersCancel) {
+        await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
+          [u.user_id, 'Gravação cancelada pelo cliente', `${clientCancel?.company_name || 'Cliente'} cancelou gravação ${recCancel.date} ${recCancel.start_time}`, 'warning', '/agenda']);
+      }
+      return res.json({ success: true, backup_available: backupAvailable, backup_slot: backupSlot, next_fixed_date: nextFixedDate });
+    }
+
+    /* ── accept_backup ── */
+    if (action === 'accept_backup') {
+      const { backup_date, backup_time } = req.body;
+      if (!backup_date || !backup_time) return res.status(400).json({ error: 'backup_date and backup_time required' });
+      const { rows: [clientBackup] } = await pool.query('SELECT videomaker_id FROM clients WHERE id = $1', [client_id]);
+      await pool.query(`INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ($1, $2, $3, $4, 'secundaria', 'agendada', 'confirmada')`, [client_id, clientBackup.videomaker_id, backup_date, backup_time]);
+      return res.json({ success: true });
+    }
+
+    /* ── request_special ── */
+    if (action === 'request_special') {
+      const { requested_date, requested_time, comment } = req.body;
+      if (!requested_date || !comment) return res.status(400).json({ error: 'requested_date and comment required' });
+      const { rows: [clientSpecial] } = await pool.query('SELECT company_name, videomaker_id FROM clients WHERE id = $1', [client_id]);
+      const { rows: [newSpecialRec] } = await pool.query(
+        `INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ($1, $2, $3, $4, 'extra', 'solicitada', 'pendente') RETURNING id`,
+        [client_id, clientSpecial?.videomaker_id, requested_date, requested_time || '09:00']
+      );
+      await pool.query(`INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)`,
+        [client_id, 'Solicitação enviada', `Sua solicitação para ${requested_date} foi enviada para a equipe. Aguarde a confirmação.`, 'info']);
+      const { rows: notifUsersSpecial } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media', 'videomaker')`);
+      for (const u of notifUsersSpecial) {
+        await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
+          [u.user_id, '📹 Solicitação de gravação especial', `${clientSpecial?.company_name || 'Cliente'}: ${comment} — Data: ${requested_date} ${requested_time || ''}`, 'warning', '/agenda']);
+      }
+      return res.json({ success: true, recording_id: newSpecialRec?.id });
+    }
+
     res.status(400).json({ error: 'Invalid action' });
   } catch (err) {
     console.error('Portal recordings error:', err);

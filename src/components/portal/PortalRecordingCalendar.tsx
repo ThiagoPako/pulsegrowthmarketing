@@ -5,7 +5,8 @@ import { pt } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CalendarDays, ChevronLeft, ChevronRight, Clock, Video,
-  ArrowRight, Check, X, Loader2, RefreshCw, Clapperboard, Sparkles
+  ArrowRight, Check, X, Loader2, RefreshCw, Clapperboard, Sparkles,
+  MessageSquarePlus, Send, AlertTriangle
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -26,21 +27,24 @@ interface Props {
   clientColor: string;
 }
 
-const STATUS_MAP: Record<string, { label: string; color: string; bg: string; glow: string }> = {
-  agendado: { label: 'Agendada', color: 'text-sky-300', bg: 'bg-sky-500/20', glow: 'shadow-sky-500/20' },
-  gravado: { label: 'Gravada', color: 'text-emerald-300', bg: 'bg-emerald-500/20', glow: 'shadow-emerald-500/20' },
-  cancelada: { label: 'Cancelada', color: 'text-red-300', bg: 'bg-red-500/20', glow: 'shadow-red-500/20' },
+const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
+  agendada: { label: 'Agendada', color: 'text-amber-300', bg: 'bg-amber-500/20' },
+  agendado: { label: 'Agendada', color: 'text-amber-300', bg: 'bg-amber-500/20' },
+  concluida: { label: 'Gravada', color: 'text-emerald-300', bg: 'bg-emerald-500/20' },
+  gravado: { label: 'Gravada', color: 'text-emerald-300', bg: 'bg-emerald-500/20' },
+  cancelada: { label: 'Cancelada', color: 'text-red-300', bg: 'bg-red-500/20' },
+  solicitada: { label: 'Solicitada', color: 'text-violet-300', bg: 'bg-violet-500/20' },
 };
 
 const TYPE_MAP: Record<string, { label: string; emoji: string }> = {
   fixa: { label: 'Fixa', emoji: '📹' },
   backup: { label: 'Backup', emoji: '🔄' },
+  secundaria: { label: 'Backup', emoji: '🔄' },
   extra: { label: 'Extra', emoji: '⭐' },
 };
 
-/* ── Rocket + Fire particles for recording days ── */
+/* ── Rocket + Fire particles ── */
 function RocketFireIndicator({ small = false }: { small?: boolean }) {
-  const fireEmojis = ['🔥', '🔥', '🔥'];
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
       <motion.div
@@ -51,19 +55,15 @@ function RocketFireIndicator({ small = false }: { small?: boolean }) {
       >
         <span className={small ? 'text-[11px]' : 'text-[14px]'}>🚀</span>
       </motion.div>
-      {fireEmojis.map((emoji, i) => (
+      {[0, 1, 2].map(i => (
         <motion.div
           key={i}
           className="absolute z-0"
           style={{ bottom: small ? '-4px' : '-6px', left: `${20 + i * 25}%` }}
-          animate={{
-            opacity: [0, 0.9, 0.6, 0],
-            y: [0, -8, -16, -24],
-            scale: [0.4, 0.8, 0.6, 0.2],
-          }}
+          animate={{ opacity: [0, 0.9, 0.6, 0], y: [0, -8, -16, -24], scale: [0.4, 0.8, 0.6, 0.2] }}
           transition={{ repeat: Infinity, duration: 1.2 + i * 0.3, delay: i * 0.25, ease: 'easeOut' }}
         >
-          <span className={small ? 'text-[8px]' : 'text-[10px]'}>{emoji}</span>
+          <span className={small ? 'text-[8px]' : 'text-[10px]'}>🔥</span>
         </motion.div>
       ))}
     </div>
@@ -76,10 +76,12 @@ function FireBorder({ color }: { color: string }) {
       className="absolute inset-0 rounded-2xl pointer-events-none z-0"
       animate={{ opacity: [0.4, 0.8, 0.4] }}
       transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
-      style={{ boxShadow: `0 0 15px hsl(${color} / 0.3), 0 0 30px hsl(25 100% 50% / 0.15), inset 0 0 10px hsl(25 100% 50% / 0.05)` }}
+      style={{ boxShadow: `0 0 15px hsl(${color} / 0.3), 0 0 30px hsl(25 100% 50% / 0.15)` }}
     />
   );
 }
+
+type CancelFlow = null | { step: 'confirming'; rec: Recording } | { step: 'result'; rec: Recording; backupAvailable: boolean; backupSlot: { date: string; time: string } | null; nextFixedDate: string | null };
 
 export default function PortalRecordingCalendar({ clientId, clientColor }: Props) {
   const [recordings, setRecordings] = useState<Recording[]>([]);
@@ -88,20 +90,33 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [rescheduleRec, setRescheduleRec] = useState<Recording | null>(null);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
-  const [selectedNewDate, setSelectedNewDate] = useState<string>('');
-  const [selectedNewTime, setSelectedNewTime] = useState<string>('');
+  const [selectedNewDate, setSelectedNewDate] = useState('');
+  const [selectedNewTime, setSelectedNewTime] = useState('');
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
   const [vmName, setVmName] = useState('');
   const [hoveredDay, setHoveredDay] = useState<string | null>(null);
+  const [cancelFlow, setCancelFlow] = useState<CancelFlow>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [acceptingBackup, setAcceptingBackup] = useState(false);
+  // Special request
+  const [showSpecialRequest, setShowSpecialRequest] = useState(false);
+  const [specialDate, setSpecialDate] = useState('');
+  const [specialTime, setSpecialTime] = useState('');
+  const [specialComment, setSpecialComment] = useState('');
+  const [sendingSpecial, setSendingSpecial] = useState(false);
+  // Explore videomaker slots
+  const [showExploreSlots, setShowExploreSlots] = useState(false);
+  const [exploreSlotsDate, setExploreSlotsDate] = useState('');
+  const [exploreSlotsData, setExploreSlotsData] = useState<string[]>([]);
+  const [exploringSlots, setExploringSlots] = useState(false);
+  const [exploreVmName, setExploreVmName] = useState('');
 
   useEffect(() => { loadRecordings(); }, [clientId]);
 
   const loadRecordings = async () => {
     setLoading(true);
-    const { data } = await supabase.functions.invoke('portal-recordings', {
-      body: { action: 'list', client_id: clientId },
-    });
+    const { data } = await supabase.functions.invoke('portal-recordings', { body: { action: 'list', client_id: clientId } });
     if (data?.recordings) setRecordings(data.recordings);
     setLoading(false);
   };
@@ -113,23 +128,19 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
 
   const recordingsByDate = useMemo(() => {
     const map: Record<string, Recording[]> = {};
-    recordings.forEach(r => {
-      if (!map[r.date]) map[r.date] = [];
-      map[r.date].push(r);
-    });
+    recordings.forEach(r => { if (!map[r.date]) map[r.date] = []; map[r.date].push(r); });
     return map;
   }, [recordings]);
 
   const dayRecordings = useMemo(() => {
     if (!selectedDay) return [];
-    const key = format(selectedDay, 'yyyy-MM-dd');
-    return recordingsByDate[key] || [];
+    return recordingsByDate[format(selectedDay, 'yyyy-MM-dd')] || [];
   }, [selectedDay, recordingsByDate]);
 
   const upcomingRecordings = useMemo(() => {
     const today = format(new Date(), 'yyyy-MM-dd');
     return recordings
-      .filter(r => r.date >= today && r.status === 'agendado')
+      .filter(r => r.date >= today && (r.status === 'agendada' || r.status === 'agendado'))
       .sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time))
       .slice(0, 3);
   }, [recordings]);
@@ -139,52 +150,74 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     return recordings.filter(r => r.date.startsWith(prefix)).length;
   }, [recordings, currentMonth]);
 
-  const handleCheckAvailability = async (date: string) => {
-    setCheckingAvailability(true);
-    setAvailableSlots([]);
-    setSelectedNewTime('');
-    setSelectedNewDate(date);
-    const { data } = await supabase.functions.invoke('portal-recordings', {
-      body: { action: 'check_availability', client_id: clientId, new_date: date },
-    });
-    if (data?.available_slots) {
-      setAvailableSlots(data.available_slots);
-      setVmName(data.videomaker_name || '');
-    } else {
-      toast.error(data?.error || 'Erro ao verificar disponibilidade');
+  const nextDays = useMemo(() => {
+    const days: string[] = [];
+    const today = new Date();
+    for (let i = 1; i <= 21; i++) {
+      const d = new Date(today); d.setDate(d.getDate() + i);
+      if (d.getDay() !== 0 && d.getDay() !== 6) days.push(format(d, 'yyyy-MM-dd'));
     }
+    return days;
+  }, []);
+
+  /* ── Actions ── */
+  const handleConfirm = async (rec: Recording) => {
+    const { data } = await supabase.functions.invoke('portal-recordings', { body: { action: 'confirm', client_id: clientId, recording_id: rec.id } });
+    if (data?.success) { toast.success('✅ Gravação confirmada!'); await loadRecordings(); }
+    else toast.error('Erro ao confirmar');
+  };
+
+  const handleCancel = async (rec: Recording) => {
+    setCancelling(true);
+    const { data } = await supabase.functions.invoke('portal-recordings', { body: { action: 'cancel', client_id: clientId, recording_id: rec.id } });
+    if (data?.success) {
+      setCancelFlow({ step: 'result', rec, backupAvailable: data.backup_available, backupSlot: data.backup_slot, nextFixedDate: data.next_fixed_date });
+      await loadRecordings();
+    } else toast.error('Erro ao cancelar');
+    setCancelling(false);
+  };
+
+  const handleAcceptBackup = async () => {
+    if (!cancelFlow || cancelFlow.step !== 'result' || !cancelFlow.backupSlot) return;
+    setAcceptingBackup(true);
+    const { data } = await supabase.functions.invoke('portal-recordings', { body: { action: 'accept_backup', client_id: clientId, backup_date: cancelFlow.backupSlot.date, backup_time: cancelFlow.backupSlot.time } });
+    if (data?.success) { toast.success('🚀 Remarcar para backup confirmado!'); setCancelFlow(null); await loadRecordings(); }
+    else toast.error('Erro ao remarcar');
+    setAcceptingBackup(false);
+  };
+
+  const handleCheckAvailability = async (date: string) => {
+    setCheckingAvailability(true); setAvailableSlots([]); setSelectedNewTime(''); setSelectedNewDate(date);
+    const { data } = await supabase.functions.invoke('portal-recordings', { body: { action: 'check_availability', client_id: clientId, new_date: date } });
+    if (data?.available_slots) { setAvailableSlots(data.available_slots); setVmName(data.videomaker_name || ''); }
+    else toast.error(data?.error || 'Erro ao verificar');
     setCheckingAvailability(false);
+  };
+
+  const handleExploreSlots = async (date: string) => {
+    setExploringSlots(true); setExploreSlotsDate(date); setExploreSlotsData([]);
+    const { data } = await supabase.functions.invoke('portal-recordings', { body: { action: 'check_availability', client_id: clientId, new_date: date } });
+    if (data?.available_slots) { setExploreSlotsData(data.available_slots); setExploreVmName(data.videomaker_name || ''); }
+    setExploringSlots(false);
   };
 
   const handleReschedule = async () => {
     if (!rescheduleRec || !selectedNewDate || !selectedNewTime) return;
     setRescheduling(true);
-    const { data } = await supabase.functions.invoke('portal-recordings', {
-      body: { action: 'reschedule', client_id: clientId, recording_id: rescheduleRec.id, new_date: selectedNewDate, new_time: selectedNewTime },
-    });
-    if (data?.success) {
-      toast.success('🚀 Gravação reagendada com sucesso!');
-      setRescheduleRec(null);
-      setSelectedNewDate('');
-      setSelectedNewTime('');
-      setAvailableSlots([]);
-      await loadRecordings();
-    } else {
-      toast.error(data?.error || 'Erro ao reagendar');
-    }
+    const { data } = await supabase.functions.invoke('portal-recordings', { body: { action: 'reschedule', client_id: clientId, recording_id: rescheduleRec.id, new_date: selectedNewDate, new_time: selectedNewTime } });
+    if (data?.success) { toast.success('🚀 Gravação reagendada!'); setRescheduleRec(null); await loadRecordings(); }
+    else toast.error(data?.error || 'Erro ao reagendar');
     setRescheduling(false);
   };
 
-  const nextDays = useMemo(() => {
-    const days: string[] = [];
-    const today = new Date();
-    for (let i = 1; i <= 21; i++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() + i);
-      if (d.getDay() !== 0 && d.getDay() !== 6) days.push(format(d, 'yyyy-MM-dd'));
-    }
-    return days;
-  }, []);
+  const handleSendSpecialRequest = async () => {
+    if (!specialDate || !specialComment.trim()) { toast.error('Preencha data e comentário'); return; }
+    setSendingSpecial(true);
+    const { data } = await supabase.functions.invoke('portal-recordings', { body: { action: 'request_special', client_id: clientId, requested_date: specialDate, requested_time: specialTime || null, comment: specialComment } });
+    if (data?.success) { toast.success('📹 Solicitação enviada! A equipe vai confirmar em breve.'); setShowSpecialRequest(false); setSpecialDate(''); setSpecialTime(''); setSpecialComment(''); await loadRecordings(); }
+    else toast.error(data?.error || 'Erro ao enviar');
+    setSendingSpecial(false);
+  };
 
   if (loading) {
     return (
@@ -197,31 +230,34 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     );
   }
 
+  const isScheduled = (s: string) => s === 'agendada' || s === 'agendado';
+
   return (
     <div className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8 pb-20">
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-        <div className="flex items-center gap-4 mb-2">
-          <motion.div
-            className="p-3 rounded-2xl relative overflow-hidden"
-            style={{ background: `hsl(${clientColor} / 0.15)` }}
-            whileHover={{ scale: 1.05 }}
-          >
-            <motion.div
-              className="absolute inset-0 rounded-2xl"
-              style={{ background: `hsl(${clientColor} / 0.1)` }}
-              animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0, 0.5] }}
-              transition={{ repeat: Infinity, duration: 3 }}
-            />
-            <CalendarDays size={22} style={{ color: `hsl(${clientColor})` }} className="relative z-10" />
-          </motion.div>
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-              Agenda de Gravações
-              <motion.span animate={{ y: [0, -4, 0], rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2.5 }}>🚀</motion.span>
-            </h2>
-            <p className="text-sm text-white/40">Acompanhe e reagende suas sessões</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <motion.div className="p-3 rounded-2xl relative overflow-hidden" style={{ background: `hsl(${clientColor} / 0.15)` }} whileHover={{ scale: 1.05 }}>
+              <CalendarDays size={22} style={{ color: `hsl(${clientColor})` }} className="relative z-10" />
+            </motion.div>
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                Agenda de Gravações
+                <motion.span animate={{ y: [0, -4, 0], rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2.5 }}>🚀</motion.span>
+              </h2>
+              <p className="text-sm text-white/40">Confirme, cancele ou solicite gravações especiais</p>
+            </div>
           </div>
+          <motion.button
+            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+            onClick={() => setShowSpecialRequest(true)}
+            className="hidden sm:flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all"
+            style={{ background: `linear-gradient(135deg, hsl(${clientColor} / 0.2), hsl(280 80% 60% / 0.15))`, border: `1px solid hsl(${clientColor} / 0.3)`, color: `hsl(${clientColor})` }}
+          >
+            <MessageSquarePlus size={14} />
+            Solicitar gravação especial
+          </motion.button>
         </div>
       </motion.div>
 
@@ -229,25 +265,24 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
       {upcomingRecordings.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <motion.span animate={{ scale: [1, 1.2, 1], rotate: [0, 5, -5, 0] }} transition={{ repeat: Infinity, duration: 1.5 }}>🔥</motion.span>
+            <motion.span animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}>🔥</motion.span>
             <h3 className="text-xs font-bold text-white/50 uppercase tracking-[0.15em]">Próximas gravações</h3>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {upcomingRecordings.map((rec, i) => {
               const typeInfo = TYPE_MAP[rec.type] || { label: rec.type, emoji: '🎬' };
+              const isConfirmed = rec.confirmation_status === 'confirmada';
               return (
                 <motion.div
                   key={rec.id}
                   initial={{ opacity: 0, y: 15, scale: 0.97 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   transition={{ delay: 0.08 * i, type: 'spring', stiffness: 200 }}
-                  whileHover={{ y: -4, scale: 1.02 }}
-                  className="relative group rounded-2xl overflow-hidden cursor-pointer"
+                  className="relative group rounded-2xl overflow-hidden"
                 >
                   <FireBorder color={clientColor} />
                   <div className="absolute inset-0 rounded-2xl p-[1px] z-[1]"
-                    style={{ background: `linear-gradient(135deg, hsl(25 100% 50% / 0.5), hsl(${clientColor} / 0.4), hsl(25 100% 50% / 0.3))` }}
-                  >
+                    style={{ background: `linear-gradient(135deg, hsl(25 100% 50% / 0.5), hsl(${clientColor} / 0.4), hsl(25 100% 50% / 0.3))` }}>
                     <div className="w-full h-full rounded-2xl bg-[#0d0d18]" />
                   </div>
                   <div className="relative p-4 z-[2]">
@@ -257,15 +292,9 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                         <span className="text-lg">{typeInfo.emoji}</span>
                         <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">{typeInfo.label}</span>
                       </div>
-                      <motion.button
-                        onClick={() => { setRescheduleRec(rec); setSelectedNewDate(''); setSelectedNewTime(''); setAvailableSlots([]); }}
-                        whileHover={{ rotate: 180, scale: 1.1 }}
-                        transition={{ duration: 0.3 }}
-                        className="p-1.5 rounded-full hover:bg-white/10 transition-colors text-white/30 hover:text-white/70"
-                        title="Reagendar"
-                      >
-                        <RefreshCw size={13} />
-                      </motion.button>
+                      {isConfirmed && (
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">✓ Confirmada</span>
+                      )}
                     </div>
                     <p className="text-xl font-extrabold capitalize leading-tight">{format(parseISO(rec.date), "dd MMM", { locale: pt })}</p>
                     <p className="text-[11px] text-white/40 capitalize mt-0.5">{format(parseISO(rec.date), "EEEE", { locale: pt })}</p>
@@ -279,15 +308,39 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                         <span>{rec.videomaker_name}</span>
                       </div>
                     </div>
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.97 }}
-                      onClick={() => { setRescheduleRec(rec); setSelectedNewDate(''); setSelectedNewTime(''); setAvailableSlots([]); }}
-                      className="w-full mt-3 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-white/50 hover:text-white/80"
-                    >
-                      <RefreshCw size={10} />
-                      Reagendar
-                    </motion.button>
+                    {/* Confirm / Cancel buttons */}
+                    {!isConfirmed && (
+                      <div className="flex gap-2 mt-3">
+                        <motion.button whileTap={{ scale: 0.95 }}
+                          onClick={() => handleConfirm(rec)}
+                          className="flex-1 py-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/20 hover:bg-emerald-500/25 transition-all"
+                        >
+                          <Check size={12} /> Confirmar
+                        </motion.button>
+                        <motion.button whileTap={{ scale: 0.95 }}
+                          onClick={() => setCancelFlow({ step: 'confirming', rec })}
+                          className="flex-1 py-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 bg-red-500/10 text-red-300 border border-red-500/15 hover:bg-red-500/20 transition-all"
+                        >
+                          <X size={12} /> Cancelar
+                        </motion.button>
+                      </div>
+                    )}
+                    {isConfirmed && (
+                      <div className="flex gap-2 mt-3">
+                        <motion.button whileTap={{ scale: 0.95 }}
+                          onClick={() => { setRescheduleRec(rec); setSelectedNewDate(''); setSelectedNewTime(''); setAvailableSlots([]); }}
+                          className="flex-1 py-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-white/50 hover:text-white/80 transition-all"
+                        >
+                          <RefreshCw size={10} /> Reagendar
+                        </motion.button>
+                        <motion.button whileTap={{ scale: 0.95 }}
+                          onClick={() => setCancelFlow({ step: 'confirming', rec })}
+                          className="py-2 px-3 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 bg-red-500/10 text-red-300 border border-red-500/15 hover:bg-red-500/20 transition-all"
+                        >
+                          <X size={10} />
+                        </motion.button>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               );
@@ -296,20 +349,28 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
         </motion.div>
       )}
 
+      {/* Mobile special request button */}
+      <motion.button
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={() => setShowSpecialRequest(true)}
+        className="sm:hidden w-full mb-6 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-bold transition-all"
+        style={{ background: `linear-gradient(135deg, hsl(${clientColor} / 0.2), hsl(280 80% 60% / 0.15))`, border: `1px solid hsl(${clientColor} / 0.3)`, color: `hsl(${clientColor})` }}
+      >
+        <MessageSquarePlus size={14} /> Solicitar gravação especial
+      </motion.button>
+
       <div className="grid grid-cols-1 lg:grid-cols-[1fr,360px] gap-6">
         {/* Calendar */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-          className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 sm:p-6 relative overflow-hidden"
-        >
-          <div className="absolute -top-20 -right-20 w-40 h-40 rounded-full blur-3xl opacity-[0.05] pointer-events-none" style={{ background: `hsl(${clientColor})` }} />
-
+          className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 sm:p-6 relative overflow-hidden">
           <div className="flex items-center justify-between mb-6">
             <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2.5 rounded-xl hover:bg-white/10 transition-colors">
               <ChevronLeft size={18} />
             </motion.button>
             <div className="text-center">
               <h3 className="text-lg font-bold capitalize">{format(currentMonth, 'MMMM', { locale: pt })}</h3>
-              <p className="text-[11px] text-white/30 font-medium">{format(currentMonth, 'yyyy')} • {totalThisMonth} gravação{totalThisMonth !== 1 ? 'ões' : ''}</p>
+              <p className="text-[11px] text-white/30 font-medium">{format(currentMonth, 'yyyy')} • {totalThisMonth} gravações</p>
             </div>
             <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2.5 rounded-xl hover:bg-white/10 transition-colors">
               <ChevronRight size={18} />
@@ -324,12 +385,11 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
 
           <div className="grid grid-cols-7 gap-1.5">
             {Array.from({ length: startPad }).map((_, i) => <div key={`pad-${i}`} className="aspect-square" />)}
-
             {daysInMonth.map((day, idx) => {
               const dateStr = format(day, 'yyyy-MM-dd');
               const recs = recordingsByDate[dateStr] || [];
               const hasRecording = recs.length > 0;
-              const hasUpcoming = recs.some(r => r.status === 'agendado');
+              const hasUpcoming = recs.some(r => isScheduled(r.status));
               const isSelected = selectedDay && isSameDay(day, selectedDay);
               const isToday = isDateToday(day);
               const isPast = isBefore(day, new Date()) && !isToday;
@@ -339,8 +399,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
               return (
                 <motion.button
                   key={dateStr}
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
+                  initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: idx * 0.008, type: 'spring', stiffness: 300, damping: 25 }}
                   onClick={() => setSelectedDay(day)}
                   onMouseEnter={() => setHoveredDay(dateStr)}
@@ -352,53 +411,38 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                     ${isPast ? 'text-white/20' : 'text-white/70'}
                     ${hasRecording && !isPast ? 'text-white' : ''}`}
                   style={{
-                    background: isSelected
-                      ? `hsl(${clientColor} / 0.25)`
-                      : hasRecording && !isPast
-                        ? hasUpcoming ? `linear-gradient(135deg, hsl(25 100% 50% / 0.12), hsl(${clientColor} / 0.12))` : `hsl(${clientColor} / 0.08)`
-                        : isHovered && !isPast ? 'rgba(255,255,255,0.05)' : 'transparent',
-                    boxShadow: isSelected
-                      ? `0 0 0 2px hsl(${clientColor}), 0 4px 20px hsl(${clientColor} / 0.2)`
-                      : hasRecording && !isPast && hasUpcoming
-                        ? `inset 0 0 0 1px hsl(25 100% 50% / 0.3), 0 0 12px hsl(25 100% 50% / 0.1)`
-                        : hasRecording && !isPast ? `inset 0 0 0 1px hsl(${clientColor} / 0.2)` : 'none',
+                    background: isSelected ? `hsl(${clientColor} / 0.25)`
+                      : hasRecording && !isPast ? hasUpcoming ? `linear-gradient(135deg, hsl(25 100% 50% / 0.12), hsl(${clientColor} / 0.12))` : `hsl(${clientColor} / 0.08)`
+                      : isHovered && !isPast ? 'rgba(255,255,255,0.05)' : 'transparent',
+                    boxShadow: isSelected ? `0 0 0 2px hsl(${clientColor}), 0 4px 20px hsl(${clientColor} / 0.2)`
+                      : hasRecording && !isPast && hasUpcoming ? `inset 0 0 0 1px hsl(25 100% 50% / 0.3), 0 0 12px hsl(25 100% 50% / 0.1)`
+                      : hasRecording && !isPast ? `inset 0 0 0 1px hsl(${clientColor} / 0.2)` : 'none',
                   }}
                 >
                   {hasRecording && !isPast && hasUpcoming && <RocketFireIndicator small />}
-
                   <span className={`text-sm leading-none relative z-10 ${isToday ? 'font-extrabold' : hasRecording ? 'font-bold' : 'font-medium'}`}>
                     {format(day, 'd')}
                   </span>
-
                   {hasRecording && (
                     <motion.div initial={{ opacity: 0, y: 2 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center mt-0.5 relative z-10">
                       <span className="text-[9px] font-bold leading-none tabular-nums"
-                        style={{ color: firstRec.status === 'gravado' ? '#6ee7b7' : firstRec.status === 'agendado' ? '#fb923c' : `hsl(${clientColor})` }}>
+                        style={{ color: recs.some(r => r.status === 'concluida' || r.status === 'gravado') ? '#6ee7b7' : isScheduled(firstRec.status) ? '#fb923c' : `hsl(${clientColor})` }}>
                         {firstRec.start_time}
                       </span>
                       {recs.length > 1 && <span className="text-[7px] text-white/30 font-bold mt-px">+{recs.length - 1}</span>}
                     </motion.div>
                   )}
-
                   {isToday && !hasRecording && (
                     <motion.div className="w-1 h-1 rounded-full bg-white/50 mt-0.5" animate={{ scale: [1, 1.3, 1] }} transition={{ repeat: Infinity, duration: 2 }} />
                   )}
-
+                  {/* Hover tooltip */}
                   <AnimatePresence>
                     {isHovered && hasRecording && !isSelected && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 5, scale: 0.9 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 5, scale: 0.9 }}
-                        className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full z-30 pointer-events-none"
-                      >
+                      <motion.div initial={{ opacity: 0, y: 5, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 5, scale: 0.9 }}
+                        className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full z-30 pointer-events-none">
                         <div className="bg-[#1a1a2e] border border-white/10 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
-                          <p className="text-[10px] font-bold text-white/80 flex items-center gap-1">
-                            <span>🚀</span> {firstRec.start_time} — {firstRec.videomaker_name}
-                          </p>
-                          <p className="text-[9px] text-white/40 mt-0.5">
-                            {(STATUS_MAP[firstRec.status] || STATUS_MAP.agendado).label} • {(TYPE_MAP[firstRec.type] || { label: firstRec.type }).label}
-                          </p>
+                          <p className="text-[10px] font-bold text-white/80 flex items-center gap-1">🚀 {firstRec.start_time} — {firstRec.videomaker_name}</p>
+                          <p className="text-[9px] text-white/40 mt-0.5">{(STATUS_MAP[firstRec.status] || STATUS_MAP.agendada).label} • {(TYPE_MAP[firstRec.type] || { label: firstRec.type }).label}</p>
                         </div>
                       </motion.div>
                     )}
@@ -416,12 +460,10 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
               Agendada
             </div>
             <div className="flex items-center gap-2 text-[11px] text-white/40">
-              <div className="w-3 h-3 rounded-md bg-emerald-500/30" style={{ boxShadow: 'inset 0 0 0 1px rgba(52,211,153,0.4)' }} />
-              Gravada
+              <div className="w-3 h-3 rounded-md bg-emerald-500/30" /> Gravada
             </div>
             <div className="flex items-center gap-2 text-[11px] text-white/40">
-              <div className="w-3 h-3 rounded-md ring-1 ring-white/20" />
-              Hoje
+              <div className="w-3 h-3 rounded-md ring-1 ring-white/20" /> Hoje
             </div>
           </div>
         </motion.div>
@@ -430,20 +472,16 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
           <AnimatePresence mode="wait">
             {selectedDay ? (
-              <motion.div
-                key={format(selectedDay, 'yyyy-MM-dd')}
-                initial={{ opacity: 0, x: 20, scale: 0.97 }}
-                animate={{ opacity: 1, x: 0, scale: 1 }}
-                exit={{ opacity: 0, x: -20, scale: 0.97 }}
+              <motion.div key={format(selectedDay, 'yyyy-MM-dd')}
+                initial={{ opacity: 0, x: 20, scale: 0.97 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, x: -20, scale: 0.97 }}
                 transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-                className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 relative overflow-hidden"
-              >
+                className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 relative overflow-hidden">
                 <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl" style={{ background: `hsl(${clientColor})` }} />
                 <div className="flex items-center gap-3 mb-4 mt-1">
                   <div className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-extrabold relative"
                     style={{ background: `hsl(${clientColor} / 0.15)`, color: `hsl(${clientColor})` }}>
                     {format(selectedDay, 'd')}
-                    {dayRecordings.some(r => r.status === 'agendado') && (
+                    {dayRecordings.some(r => isScheduled(r.status)) && (
                       <motion.span className="absolute -top-1 -right-1 text-[10px]" animate={{ y: [0, -2, 0] }} transition={{ repeat: Infinity, duration: 1.5 }}>🚀</motion.span>
                     )}
                   </div>
@@ -454,36 +492,28 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                 </div>
 
                 {dayRecordings.length === 0 ? (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-10">
-                    <motion.div animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}>
-                      <CalendarDays size={36} className="mx-auto text-white/[0.07] mb-3" />
-                    </motion.div>
+                  <div className="text-center py-10">
+                    <CalendarDays size={36} className="mx-auto text-white/[0.07] mb-3" />
                     <p className="text-sm text-white/25 font-medium">Nenhuma gravação</p>
                     <p className="text-[11px] text-white/15 mt-1">Dia livre 🎉</p>
-                  </motion.div>
+                  </div>
                 ) : (
                   <div className="space-y-3">
                     {dayRecordings.map((rec, i) => {
-                      const st = STATUS_MAP[rec.status] || STATUS_MAP.agendado;
+                      const st = STATUS_MAP[rec.status] || STATUS_MAP.agendada;
                       const typeInfo = TYPE_MAP[rec.type] || { label: rec.type, emoji: '🎬' };
-                      const canReschedule = rec.status === 'agendado' && isAfter(parseISO(rec.date), new Date());
+                      const canAct = isScheduled(rec.status) && isAfter(parseISO(rec.date), new Date());
+                      const isConfirmed = rec.confirmation_status === 'confirmada';
                       return (
                         <motion.div key={rec.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="rounded-xl overflow-hidden relative">
-                          {canReschedule && (
-                            <motion.div className="absolute inset-0 rounded-xl pointer-events-none z-0"
-                              animate={{ opacity: [0.3, 0.6, 0.3] }} transition={{ repeat: Infinity, duration: 2 }}
-                              style={{ boxShadow: '0 0 12px hsl(25 100% 50% / 0.15)' }} />
-                          )}
                           <div className="h-0.5 relative z-[1]" style={{
-                            background: rec.status === 'gravado' ? '#34d399' : rec.status === 'cancelada' ? '#f87171' : `linear-gradient(90deg, hsl(25 100% 50%), hsl(${clientColor}))`
+                            background: rec.status === 'concluida' || rec.status === 'gravado' ? '#34d399' : rec.status === 'cancelada' ? '#f87171' : `linear-gradient(90deg, hsl(25 100% 50%), hsl(${clientColor}))`
                           }} />
                           <div className="bg-white/[0.04] border border-white/[0.06] border-t-0 rounded-b-xl p-4 space-y-3 relative z-[1]">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2.5">
                                 <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg relative" style={{ background: `hsl(${clientColor} / 0.1)` }}>
-                                  {canReschedule ? (
-                                    <motion.span animate={{ rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2 }}>🚀</motion.span>
-                                  ) : typeInfo.emoji}
+                                  {canAct ? <motion.span animate={{ rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2 }}>🚀</motion.span> : typeInfo.emoji}
                                 </div>
                                 <div>
                                   <p className="text-base font-extrabold tabular-nums" style={{ color: `hsl(${clientColor})` }}>{rec.start_time}</p>
@@ -495,19 +525,27 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                             <div className="flex items-center gap-2 text-xs text-white/40 bg-white/[0.03] rounded-lg px-3 py-2">
                               <Video size={12} className="shrink-0" />
                               <span className="font-medium">{rec.videomaker_name}</span>
+                              {isConfirmed && <span className="ml-auto text-[9px] text-emerald-400 font-bold">✓ Confirmada</span>}
                             </div>
-                            {canReschedule && (
-                              <motion.button
-                                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                                onClick={() => { setRescheduleRec(rec); setSelectedNewDate(''); setSelectedNewTime(''); setAvailableSlots([]); }}
-                                className="w-full py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 relative overflow-hidden"
-                                style={{ background: `linear-gradient(135deg, hsl(25 100% 50% / 0.2), hsl(${clientColor} / 0.15))`, color: `hsl(${clientColor})`, border: `1px solid hsl(25 100% 50% / 0.2)` }}
-                              >
-                                <motion.span animate={{ rotate: [0, 360] }} transition={{ repeat: Infinity, duration: 4, ease: 'linear' }}>
-                                  <RefreshCw size={12} />
-                                </motion.span>
-                                🔥 Reagendar esta gravação
-                              </motion.button>
+                            {canAct && (
+                              <div className="flex gap-2">
+                                {!isConfirmed && (
+                                  <motion.button whileTap={{ scale: 0.95 }} onClick={() => handleConfirm(rec)}
+                                    className="flex-1 py-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/20 hover:bg-emerald-500/25 transition-all">
+                                    <Check size={12} /> Confirmar
+                                  </motion.button>
+                                )}
+                                <motion.button whileTap={{ scale: 0.95 }}
+                                  onClick={() => setCancelFlow({ step: 'confirming', rec })}
+                                  className={`${isConfirmed ? 'flex-1' : ''} py-2 px-3 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 bg-red-500/10 text-red-300 border border-red-500/15 hover:bg-red-500/20 transition-all`}>
+                                  <X size={12} /> Cancelar
+                                </motion.button>
+                                <motion.button whileTap={{ scale: 0.95 }}
+                                  onClick={() => { setRescheduleRec(rec); setSelectedNewDate(''); setSelectedNewTime(''); setAvailableSlots([]); }}
+                                  className="py-2 px-3 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-white/50 hover:text-white/80 transition-all">
+                                  <RefreshCw size={10} />
+                                </motion.button>
+                              </div>
                             )}
                           </div>
                         </motion.div>
@@ -518,9 +556,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
               </motion.div>
             ) : (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 text-center py-16">
-                <motion.div animate={{ rotate: [0, 5, -5, 0] }} transition={{ repeat: Infinity, duration: 4, ease: 'easeInOut' }}>
-                  <Clapperboard size={36} className="mx-auto text-white/[0.07] mb-4" />
-                </motion.div>
+                <Clapperboard size={36} className="mx-auto text-white/[0.07] mb-4" />
                 <p className="text-sm text-white/25 font-medium">Selecione um dia</p>
                 <p className="text-[11px] text-white/15 mt-1">Toque em um dia para ver detalhes</p>
               </motion.div>
@@ -529,49 +565,180 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
         </motion.div>
       </div>
 
-      {/* Reschedule Modal */}
+      {/* ── Cancel Flow Modal ── */}
       <AnimatePresence>
-        {rescheduleRec && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
-            onClick={() => setRescheduleRec(null)}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 30 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 30 }}
-              transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-              className="bg-[#12121e] border border-white/[0.08] rounded-2xl p-6 w-full max-w-md max-h-[85vh] overflow-y-auto relative"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl" style={{ background: `linear-gradient(90deg, hsl(25 100% 50%), hsl(${clientColor}))` }} />
+        {cancelFlow && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setCancelFlow(null)}>
+            <motion.div initial={{ opacity: 0, scale: 0.9, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 30 }}
+              className="bg-[#12121e] border border-white/[0.08] rounded-2xl p-6 w-full max-w-md relative" onClick={e => e.stopPropagation()}>
+              <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl bg-gradient-to-r from-red-500 to-orange-500" />
+              <motion.button whileHover={{ rotate: 90 }} onClick={() => setCancelFlow(null)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/10">
+                <X size={16} />
+              </motion.button>
 
-              <div className="flex items-center justify-between mb-6 mt-1">
-                <div className="flex items-center gap-2.5">
-                  <motion.span animate={{ y: [0, -3, 0], rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2 }}>🚀</motion.span>
-                  <h3 className="text-lg font-bold">Reagendar Gravação</h3>
+              {cancelFlow.step === 'confirming' && (
+                <div className="mt-2">
+                  <div className="flex items-center gap-3 mb-4">
+                    <AlertTriangle size={20} className="text-red-400" />
+                    <h3 className="text-lg font-bold">Cancelar gravação?</h3>
+                  </div>
+                  <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-4 mb-6">
+                    <p className="text-sm font-bold capitalize">{format(parseISO(cancelFlow.rec.date), "EEEE, dd 'de' MMMM", { locale: pt })}</p>
+                    <p className="text-xs text-white/40 mt-1">🕐 {cancelFlow.rec.start_time} • 🎬 {cancelFlow.rec.videomaker_name}</p>
+                  </div>
+                  <p className="text-sm text-white/50 mb-6">Ao cancelar, verificaremos se há vaga disponível no seu dia de backup.</p>
+                  <div className="flex gap-3">
+                    <motion.button whileTap={{ scale: 0.95 }} onClick={() => setCancelFlow(null)}
+                      className="flex-1 py-3 rounded-xl text-sm font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition-all">
+                      Manter
+                    </motion.button>
+                    <motion.button whileTap={{ scale: 0.95 }} onClick={() => handleCancel(cancelFlow.rec)} disabled={cancelling}
+                      className="flex-1 py-3 rounded-xl text-sm font-bold bg-red-500/20 text-red-300 border border-red-500/20 hover:bg-red-500/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                      {cancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : <><X size={14} /> Cancelar</>}
+                    </motion.button>
+                  </div>
                 </div>
-                <motion.button whileHover={{ rotate: 90 }} onClick={() => setRescheduleRec(null)} className="p-2 rounded-full hover:bg-white/10 transition-colors">
+              )}
+
+              {cancelFlow.step === 'result' && (
+                <div className="mt-2">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Check size={20} className="text-amber-400" />
+                    <h3 className="text-lg font-bold">Gravação cancelada</h3>
+                  </div>
+
+                  {cancelFlow.backupAvailable && cancelFlow.backupSlot ? (
+                    <div className="space-y-4">
+                      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
+                        <p className="text-sm font-bold text-emerald-300 flex items-center gap-2 mb-2">🎉 Vaga disponível no seu backup!</p>
+                        <p className="text-xs text-white/50">
+                          <strong className="text-white/70">{format(parseISO(cancelFlow.backupSlot.date), "EEEE, dd/MM", { locale: pt })}</strong> às <strong className="text-white/70">{cancelFlow.backupSlot.time}</strong>
+                        </p>
+                      </div>
+                      <div className="flex gap-3">
+                        <motion.button whileTap={{ scale: 0.95 }} onClick={handleAcceptBackup} disabled={acceptingBackup}
+                          className="flex-1 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                          style={{ background: `linear-gradient(135deg, hsl(25 100% 50%), hsl(${clientColor}))` }}>
+                          {acceptingBackup ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check size={14} /> Aceitar backup</>}
+                        </motion.button>
+                        <motion.button whileTap={{ scale: 0.95 }} onClick={() => setCancelFlow(null)}
+                          className="py-3 px-4 rounded-xl text-sm font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition-all text-white/50">
+                          Não
+                        </motion.button>
+                      </div>
+                      <p className="text-[11px] text-white/30 text-center">Se preferir, sua próxima gravação fica para a semana seguinte.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+                        <p className="text-sm text-amber-300 font-medium">Não há vaga disponível no seu dia de backup.</p>
+                        {cancelFlow.nextFixedDate && (
+                          <p className="text-xs text-white/50 mt-2">
+                            Sua próxima gravação será em <strong className="text-white/70">{format(parseISO(cancelFlow.nextFixedDate), "EEEE, dd/MM", { locale: pt })}</strong>.
+                          </p>
+                        )}
+                      </div>
+                      <p className="text-xs text-white/40">Você também pode explorar horários vagos do seu videomaker:</p>
+                      <motion.button whileTap={{ scale: 0.95 }}
+                        onClick={() => { setCancelFlow(null); setShowExploreSlots(true); setExploreSlotsDate(''); setExploreSlotsData([]); }}
+                        className="w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition-all"
+                        style={{ color: `hsl(${clientColor})` }}>
+                        <CalendarDays size={14} /> Explorar agenda do videomaker
+                      </motion.button>
+                      <motion.button whileTap={{ scale: 0.95 }} onClick={() => setCancelFlow(null)}
+                        className="w-full py-2.5 rounded-xl text-xs font-medium text-white/40 hover:text-white/60 transition-all">
+                        Fechar
+                      </motion.button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Explore Videomaker Slots Modal ── */}
+      <AnimatePresence>
+        {showExploreSlots && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setShowExploreSlots(false)}>
+            <motion.div initial={{ opacity: 0, scale: 0.9, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 30 }}
+              className="bg-[#12121e] border border-white/[0.08] rounded-2xl p-6 w-full max-w-md max-h-[85vh] overflow-y-auto relative" onClick={e => e.stopPropagation()}>
+              <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl" style={{ background: `hsl(${clientColor})` }} />
+              <div className="flex items-center justify-between mb-5 mt-1">
+                <div className="flex items-center gap-2">
+                  <CalendarDays size={18} style={{ color: `hsl(${clientColor})` }} />
+                  <h3 className="text-lg font-bold">Horários disponíveis</h3>
+                </div>
+                <motion.button whileHover={{ rotate: 90 }} onClick={() => setShowExploreSlots(false)} className="p-2 rounded-full hover:bg-white/10">
                   <X size={16} />
                 </motion.button>
               </div>
-
-              <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-4 mb-6 relative overflow-hidden">
-                <motion.div className="absolute top-1 right-1" animate={{ scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }} transition={{ repeat: Infinity, duration: 2 }}>
-                  <span className="text-sm">🔥</span>
-                </motion.div>
-                <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-2">Gravação atual</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-xl flex items-center justify-center text-sm font-extrabold"
-                    style={{ background: `hsl(${clientColor} / 0.15)`, color: `hsl(${clientColor})` }}>
-                    {format(parseISO(rescheduleRec.date), 'dd')}
-                  </div>
-                  <div>
-                    <p className="font-bold capitalize text-sm">{format(parseISO(rescheduleRec.date), "EEEE, dd 'de' MMMM", { locale: pt })}</p>
-                    <p className="text-xs text-white/40 mt-0.5">🕐 {rescheduleRec.start_time} • 🎬 {rescheduleRec.videomaker_name}</p>
-                  </div>
+              <p className="text-xs text-white/40 mb-4">Escolha uma data para ver horários vagos do videomaker:</p>
+              <div className="grid grid-cols-3 gap-2 mb-4 max-h-40 overflow-y-auto">
+                {nextDays.map((d, i) => (
+                  <motion.button key={d} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                    onClick={() => handleExploreSlots(d)}
+                    className={`py-2.5 px-2 rounded-xl text-xs font-medium transition-all border ${exploreSlotsDate === d ? 'border-transparent text-white' : 'border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06] text-white/60'}`}
+                    style={exploreSlotsDate === d ? { background: `hsl(${clientColor})` } : {}}>
+                    <div className="capitalize font-bold">{format(parseISO(d), 'EEE', { locale: pt })}</div>
+                    <div className="text-sm font-extrabold mt-0.5">{format(parseISO(d), 'dd/MM')}</div>
+                  </motion.button>
+                ))}
+              </div>
+              {exploringSlots && (
+                <div className="flex items-center justify-center py-8 gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin" style={{ color: `hsl(${clientColor})` }} />
+                  <span className="text-sm text-white/40">Verificando...</span>
                 </div>
+              )}
+              {exploreSlotsDate && !exploringSlots && (
+                <div>
+                  {exploreVmName && <p className="text-xs text-white/40 mb-2">🎬 {exploreVmName}</p>}
+                  {exploreSlotsData.length === 0 ? (
+                    <div className="text-center py-6 bg-white/[0.03] rounded-xl">
+                      <p className="text-sm text-white/30">Sem horários vagos neste dia</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-4 gap-2">
+                      {exploreSlotsData.map(slot => (
+                        <motion.button key={slot} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                          onClick={() => { setShowExploreSlots(false); setShowSpecialRequest(true); setSpecialDate(exploreSlotsDate); setSpecialTime(slot); }}
+                          className="py-3 rounded-xl text-sm font-bold border border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06] text-white/70 hover:text-white transition-all">
+                          {slot}
+                        </motion.button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Reschedule Modal ── */}
+      <AnimatePresence>
+        {rescheduleRec && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setRescheduleRec(null)}>
+            <motion.div initial={{ opacity: 0, scale: 0.9, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 30 }}
+              className="bg-[#12121e] border border-white/[0.08] rounded-2xl p-6 w-full max-w-md max-h-[85vh] overflow-y-auto relative" onClick={e => e.stopPropagation()}>
+              <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl" style={{ background: `linear-gradient(90deg, hsl(25 100% 50%), hsl(${clientColor}))` }} />
+              <div className="flex items-center justify-between mb-6 mt-1">
+                <div className="flex items-center gap-2.5">
+                  <motion.span animate={{ y: [0, -3, 0] }} transition={{ repeat: Infinity, duration: 2 }}>🚀</motion.span>
+                  <h3 className="text-lg font-bold">Reagendar Gravação</h3>
+                </div>
+                <motion.button whileHover={{ rotate: 90 }} onClick={() => setRescheduleRec(null)} className="p-2 rounded-full hover:bg-white/10"><X size={16} /></motion.button>
+              </div>
+
+              <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-4 mb-6">
+                <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-2">Gravação atual</p>
+                <p className="font-bold capitalize text-sm">{format(parseISO(rescheduleRec.date), "EEEE, dd 'de' MMMM", { locale: pt })}</p>
+                <p className="text-xs text-white/40 mt-0.5">🕐 {rescheduleRec.start_time} • 🎬 {rescheduleRec.videomaker_name}</p>
               </div>
 
               <div className="mb-6">
@@ -581,14 +748,11 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                 </p>
                 <div className="grid grid-cols-3 gap-2 max-h-52 overflow-y-auto pr-1">
                   {nextDays.map((d, i) => (
-                    <motion.button
-                      key={d}
-                      initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.02 }}
+                    <motion.button key={d} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.02 }}
                       whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                       onClick={() => { setSelectedNewDate(d); setSelectedNewTime(''); handleCheckAvailability(d); }}
                       className={`py-3 px-2 rounded-xl text-xs font-medium transition-all border ${selectedNewDate === d ? 'border-transparent text-white shadow-lg' : 'border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06] text-white/60'}`}
-                      style={selectedNewDate === d ? { background: `hsl(${clientColor})`, boxShadow: `0 4px 15px hsl(${clientColor} / 0.3)` } : {}}
-                    >
+                      style={selectedNewDate === d ? { background: `hsl(${clientColor})`, boxShadow: `0 4px 15px hsl(${clientColor} / 0.3)` } : {}}>
                       <div className="capitalize font-bold">{format(parseISO(d), 'EEE', { locale: pt })}</div>
                       <div className="text-sm font-extrabold mt-0.5">{format(parseISO(d), 'dd/MM')}</div>
                     </motion.button>
@@ -605,25 +769,21 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                   {checkingAvailability ? (
                     <div className="flex items-center justify-center py-8 gap-2">
                       <Loader2 className="w-5 h-5 animate-spin" style={{ color: `hsl(${clientColor})` }} />
-                      <span className="text-sm text-white/40">Verificando disponibilidade...</span>
+                      <span className="text-sm text-white/40">Verificando...</span>
                     </div>
                   ) : availableSlots.length === 0 ? (
                     <div className="text-center py-8 bg-white/[0.03] rounded-xl">
-                      <X size={24} className="mx-auto text-white/15 mb-2" />
                       <p className="text-sm text-white/35">Nenhum horário disponível</p>
                       <p className="text-[11px] text-white/20 mt-1">Tente outra data</p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-4 gap-2">
                       {availableSlots.map((slot, i) => (
-                        <motion.button
-                          key={slot}
-                          initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.03 }}
+                        <motion.button key={slot} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.03 }}
                           whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                           onClick={() => setSelectedNewTime(slot)}
                           className={`py-3 rounded-xl text-sm font-bold transition-all border ${selectedNewTime === slot ? 'border-transparent text-white shadow-lg' : 'border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06] text-white/60'}`}
-                          style={selectedNewTime === slot ? { background: `hsl(${clientColor})`, boxShadow: `0 4px 15px hsl(${clientColor} / 0.3)` } : {}}
-                        >
+                          style={selectedNewTime === slot ? { background: `hsl(${clientColor})`, boxShadow: `0 4px 15px hsl(${clientColor} / 0.3)` } : {}}>
                           {slot}
                         </motion.button>
                       ))}
@@ -651,25 +811,74 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                       </div>
                     </div>
                   </div>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                    onClick={handleReschedule}
-                    disabled={rescheduling}
-                    className="w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 relative overflow-hidden"
-                    style={{ background: `linear-gradient(135deg, hsl(25 100% 50%), hsl(${clientColor}))`, boxShadow: `0 4px 20px hsl(${clientColor} / 0.3)` }}
-                  >
-                    {rescheduling ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <>
-                        <span>🚀</span>
-                        Confirmar Reagendamento
-                        <span>🔥</span>
-                      </>
-                    )}
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleReschedule} disabled={rescheduling}
+                    className="w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    style={{ background: `linear-gradient(135deg, hsl(25 100% 50%), hsl(${clientColor}))`, boxShadow: `0 4px 20px hsl(${clientColor} / 0.3)` }}>
+                    {rescheduling ? <Loader2 className="w-4 h-4 animate-spin" /> : <>🚀 Confirmar Reagendamento 🔥</>}
                   </motion.button>
                 </motion.div>
               )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Special Request Modal ── */}
+      <AnimatePresence>
+        {showSpecialRequest && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setShowSpecialRequest(false)}>
+            <motion.div initial={{ opacity: 0, scale: 0.9, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 30 }}
+              className="bg-[#12121e] border border-white/[0.08] rounded-2xl p-6 w-full max-w-md relative" onClick={e => e.stopPropagation()}>
+              <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl" style={{ background: `linear-gradient(90deg, hsl(${clientColor}), hsl(280 80% 60%))` }} />
+              <div className="flex items-center justify-between mb-5 mt-1">
+                <div className="flex items-center gap-2.5">
+                  <Sparkles size={18} style={{ color: `hsl(${clientColor})` }} />
+                  <h3 className="text-lg font-bold">Solicitar gravação especial</h3>
+                </div>
+                <motion.button whileHover={{ rotate: 90 }} onClick={() => setShowSpecialRequest(false)} className="p-2 rounded-full hover:bg-white/10">
+                  <X size={16} />
+                </motion.button>
+              </div>
+
+              <p className="text-xs text-white/40 mb-5">Quer gravar algo especial? Um evento, café da manhã, inauguração... Envie sua solicitação e a equipe vai confirmar!</p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-white/50 mb-1.5 block">Data desejada</label>
+                  <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto">
+                    {nextDays.slice(0, 15).map(d => (
+                      <motion.button key={d} whileTap={{ scale: 0.95 }}
+                        onClick={() => setSpecialDate(d)}
+                        className={`py-2 px-2 rounded-xl text-xs font-medium transition-all border ${specialDate === d ? 'border-transparent text-white' : 'border-white/[0.06] bg-white/[0.03] text-white/60'}`}
+                        style={specialDate === d ? { background: `hsl(${clientColor})` } : {}}>
+                        <div className="capitalize font-bold">{format(parseISO(d), 'EEE', { locale: pt })}</div>
+                        <div className="font-extrabold mt-0.5">{format(parseISO(d), 'dd/MM')}</div>
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-white/50 mb-1.5 block">Horário preferido (opcional)</label>
+                  <input type="time" value={specialTime} onChange={e => setSpecialTime(e.target.value)}
+                    className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white/80 focus:outline-none focus:border-white/20" />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-white/50 mb-1.5 block">O que você deseja gravar? *</label>
+                  <textarea value={specialComment} onChange={e => setSpecialComment(e.target.value)} rows={3}
+                    placeholder="Ex: Dia 25 vai ter um café da manhã na loja, gostaria de solicitar a equipe para gravar..."
+                    className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white/80 placeholder:text-white/20 focus:outline-none focus:border-white/20 resize-none" />
+                </div>
+
+                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  onClick={handleSendSpecialRequest} disabled={sendingSpecial || !specialDate || !specialComment.trim()}
+                  className="w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+                  style={{ background: `linear-gradient(135deg, hsl(${clientColor}), hsl(280 80% 60%))`, boxShadow: `0 4px 20px hsl(${clientColor} / 0.3)` }}>
+                  {sendingSpecial ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send size={14} /> Enviar solicitação</>}
+                </motion.button>
+              </div>
             </motion.div>
           </motion.div>
         )}

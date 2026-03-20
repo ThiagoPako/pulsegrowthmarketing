@@ -75,6 +75,7 @@ const navCategories: NavCategory[] = [
       { path: '/whatsapp', label: 'WhatsApp', icon: MessageSquare, roles: ['admin', 'social_media'] },
       { path: '/automacoes', label: 'Automações', icon: Bot, roles: ['admin', 'social_media'] },
       { path: '/panfletagem', label: 'Panfletagem', icon: Car, roles: ['admin'] },
+      { path: '/portal-videos', label: 'Vídeos Portal', icon: Video, roles: ['admin'] },
       { path: '/configuracoes', label: 'Config', icon: Settings, roles: ['admin', 'social_media'] },
     ],
   },

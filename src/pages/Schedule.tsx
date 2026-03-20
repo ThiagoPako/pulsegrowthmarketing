@@ -936,42 +936,232 @@ export default function Schedule() {
         </TabsContent>
       </Tabs>
 
-      {/* New recording dialog */}
-      <Dialog open={newOpen} onOpenChange={setNewOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Nova Gravação</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1">
-              <Label>Cliente</Label>
-              <Select value={form.clientId} onValueChange={v => setForm({ ...form, clientId: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}</SelectContent>
-              </Select>
+      {/* New recording dialog — step-based */}
+      <Dialog open={newOpen} onOpenChange={(v) => { setNewOpen(v); if (!v) setNewStep(0); }}>
+        <DialogContent className="sm:max-w-lg overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus size={18} /> Nova Gravação
+            </DialogTitle>
+            {/* Step indicator */}
+            <div className="flex items-center gap-2 pt-3">
+              {['Cliente', 'Videomaker', 'Data & Horário'].map((label, i) => (
+                <div key={i} className="flex items-center gap-2 flex-1">
+                  <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold transition-all duration-300 ${
+                    newStep === i ? 'bg-primary text-primary-foreground scale-110 shadow-lg' :
+                    newStep > i ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
+                  }`}>
+                    {newStep > i ? <Check size={14} /> : i + 1}
+                  </div>
+                  <span className={`text-xs font-medium hidden sm:block transition-colors ${newStep === i ? 'text-foreground' : 'text-muted-foreground'}`}>{label}</span>
+                  {i < 2 && <div className={`flex-1 h-0.5 rounded transition-colors duration-300 ${newStep > i ? 'bg-primary' : 'bg-muted'}`} />}
+                </div>
+              ))}
             </div>
-            <div className="space-y-1">
-              <Label>Videomaker</Label>
-              <Select value={form.videomakerId} onValueChange={v => setForm({ ...form, videomakerId: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>{videomakers.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1"><Label>Data</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
-              <div className="space-y-1"><Label>Horário</Label><Input type="time" value={form.startTime} onChange={e => setForm({ ...form, startTime: e.target.value })} /></div>
-            </div>
-            <div className="space-y-1">
-              <Label>Tipo</Label>
-              <Select value={form.type} onValueChange={v => setForm({ ...form, type: v as RecordingType })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fixa">Fixa</SelectItem>
-                  <SelectItem value="extra">Extra</SelectItem>
-                  <SelectItem value="secundaria">Secundária</SelectItem>
-                  <SelectItem value="backup">Backup</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button onClick={handleAdd} className="w-full">Agendar</Button>
+          </DialogHeader>
+
+          <div className="relative min-h-[280px]">
+            {/* Step 0: Select Client */}
+            {newStep === 0 && (
+              <motion.div
+                key="step-client"
+                initial={{ opacity: 0, x: 40 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -40 }}
+                transition={{ duration: 0.25 }}
+                className="space-y-3"
+              >
+                <Label className="text-sm font-semibold">Selecione o Cliente</Label>
+                <div className="grid gap-2 max-h-[300px] overflow-y-auto pr-1">
+                  {clients.map(c => {
+                    const isSelected = form.clientId === c.id;
+                    return (
+                      <button key={c.id} onClick={() => { setForm({ ...form, clientId: c.id }); setNewStep(1); }}
+                        className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 hover:scale-[1.01] ${
+                          isSelected ? 'border-primary bg-primary/5 shadow-md' : 'border-border hover:border-primary/40 hover:bg-accent/50'
+                        }`}>
+                        <ClientLogo client={c} size="sm" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{c.companyName}</p>
+                          <p className="text-xs text-muted-foreground">{c.responsiblePerson}</p>
+                        </div>
+                        {c.fullShiftRecording && (
+                          <Badge className="text-[10px] bg-amber-500/20 text-amber-600 border-amber-500/30 shrink-0">
+                            <Star size={10} className="mr-0.5" /> Star
+                          </Badge>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+
+            {/* Step 1: Select Videomaker */}
+            {newStep === 1 && (
+              <motion.div
+                key="step-videomaker"
+                initial={{ opacity: 0, x: 40 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -40 }}
+                transition={{ duration: 0.25 }}
+                className="space-y-3"
+              >
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setNewStep(0)}>
+                    <ChevronLeft size={16} />
+                  </Button>
+                  <Label className="text-sm font-semibold">Selecione o Videomaker</Label>
+                </div>
+                <div className="grid gap-2">
+                  {videomakers.map(v => {
+                    const isSelected = form.videomakerId === v.id;
+                    return (
+                      <button key={v.id} onClick={() => { setForm({ ...form, videomakerId: v.id }); setNewStep(2); }}
+                        className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 hover:scale-[1.01] ${
+                          isSelected ? 'border-primary bg-primary/5 shadow-md' : 'border-border hover:border-primary/40 hover:bg-accent/50'
+                        }`}>
+                        <UserAvatar user={v} size="sm" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm">{v.name}</p>
+                          <p className="text-xs text-muted-foreground">{v.role}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+
+            {/* Step 2: Calendar + Time */}
+            {newStep === 2 && (
+              <motion.div
+                key="step-calendar"
+                initial={{ opacity: 0, x: 40 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -40 }}
+                transition={{ duration: 0.25 }}
+                className="space-y-4"
+              >
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setNewStep(1)}>
+                    <ChevronLeft size={16} />
+                  </Button>
+                  <Label className="text-sm font-semibold">Escolha a Data e Horário</Label>
+                </div>
+
+                {/* Selected client + videomaker summary */}
+                <div className="flex items-center gap-3 p-2.5 rounded-lg bg-accent/50 border">
+                  <div className="flex items-center gap-2 flex-1">
+                    {(() => { const c = clients.find(c => c.id === form.clientId); return c ? <><ClientLogo client={c} size="xs" /><span className="text-xs font-medium">{c.companyName}</span></> : null; })()}
+                  </div>
+                  <div className="h-4 w-px bg-border" />
+                  <div className="flex items-center gap-2 flex-1">
+                    {(() => { const v = videomakers.find(v => v.id === form.videomakerId); return v ? <><UserAvatar user={v} size="xs" /><span className="text-xs font-medium">{v.name}</span></> : null; })()}
+                  </div>
+                </div>
+
+                {/* Calendar date picker */}
+                <div className="space-y-2">
+                  <Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })}
+                    className="w-full" min={format(new Date(), 'yyyy-MM-dd')}
+                  />
+
+                  {/* Available slots for selected date */}
+                  {form.date && form.videomakerId && (() => {
+                    const selectedClient = clients.find(c => c.id === form.clientId);
+                    const isFullShift = selectedClient?.fullShiftRecording;
+
+                    if (isFullShift) {
+                      const shifts = [
+                        { key: 'manha', label: '☀️ Manhã', start: settings.shiftAStart, end: settings.shiftAEnd },
+                        { key: 'tarde', label: '🌙 Tarde', start: settings.shiftBStart, end: settings.shiftBEnd },
+                      ];
+                      return (
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold text-muted-foreground">Selecione o Período</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {shifts.map(s => {
+                              const occupied = hasConflict(form.videomakerId, form.date, s.start);
+                              return (
+                                <button key={s.key} disabled={occupied}
+                                  onClick={() => setForm({ ...form, startTime: s.start })}
+                                  className={`p-3 rounded-xl border text-center transition-all duration-200 ${
+                                    form.startTime === s.start ? 'border-primary bg-primary/10 shadow-md' :
+                                    occupied ? 'opacity-40 cursor-not-allowed bg-muted' :
+                                    'hover:border-primary/40 hover:bg-accent/50'
+                                  }`}>
+                                  <p className="text-lg">{s.key === 'manha' ? '☀️' : '🌙'}</p>
+                                  <p className="text-sm font-medium">{s.label.split(' ')[1]}</p>
+                                  <p className="text-[10px] text-muted-foreground">{s.start} – {s.end}</p>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Normal time slots
+                    const generateSlots = () => {
+                      const slots: string[] = [];
+                      const duration = settings.recordingDuration || 90;
+                      const addSlots = (start: string, end: string) => {
+                        let t = timeToMinutes(start);
+                        const e = timeToMinutes(end);
+                        while (t + duration <= e) {
+                          slots.push(minutesToTime(t));
+                          t += duration + 30;
+                        }
+                      };
+                      addSlots(settings.shiftAStart, settings.shiftAEnd);
+                      addSlots(settings.shiftBStart, settings.shiftBEnd);
+                      return slots;
+                    };
+                    const slots = generateSlots();
+
+                    return (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold text-muted-foreground">Horários Disponíveis</p>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {slots.map(slot => {
+                            const conflict = hasConflict(form.videomakerId, form.date, slot);
+                            return (
+                              <button key={slot} disabled={conflict}
+                                onClick={() => setForm({ ...form, startTime: slot })}
+                                className={`py-2 px-2 rounded-lg border text-xs font-medium transition-all duration-200 ${
+                                  form.startTime === slot ? 'border-primary bg-primary/10 text-primary shadow-md' :
+                                  conflict ? 'opacity-30 cursor-not-allowed line-through bg-muted' :
+                                  'hover:border-primary/40 hover:bg-accent/50'
+                                }`}>
+                                {slot}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Tipo</Label>
+                  <Select value={form.type} onValueChange={v => setForm({ ...form, type: v as RecordingType })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fixa">Fixa</SelectItem>
+                      <SelectItem value="extra">Extra</SelectItem>
+                      <SelectItem value="secundaria">Secundária</SelectItem>
+                      <SelectItem value="backup">Backup</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Button onClick={handleAdd} className="w-full" disabled={!form.date || !form.startTime}>
+                  <CalendarDays size={16} className="mr-2" /> Agendar Gravação
+                </Button>
+              </motion.div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

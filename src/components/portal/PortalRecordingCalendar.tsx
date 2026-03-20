@@ -942,6 +942,53 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
         </motion.div>
       </div>
 
+      {/* Legend — always at the bottom */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+        className="mt-4 sm:mt-6 bg-white/[0.03] border border-white/[0.06] rounded-2xl p-3 sm:p-5 space-y-3">
+        <h4 className="text-[10px] sm:text-xs font-bold text-white/40 uppercase tracking-widest">Legenda dos ícones</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+          <div className="space-y-1.5">
+            <span className="text-[9px] sm:text-[10px] font-bold text-white/30 uppercase tracking-widest">Gravações</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {['agendada', 'gravada', 'cancelada', 'remarcada', 'extra', 'solicitada'].map(k => {
+                const s = EVENT_STYLES[k];
+                return (
+                  <div key={k} className="flex items-center gap-1.5 text-[11px] sm:text-xs text-white/50 font-medium">
+                    <span className="text-sm sm:text-base drop-shadow-md">{s.icon}</span>{s.label.replace('Gravação ', '')}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <span className="text-[9px] sm:text-[10px] font-bold text-white/30 uppercase tracking-widest">Produção</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {['material_sent', 'editing', 'deadline', 'in_review', 'approval_sent', 'approved', 'adjustment', 'completed'].map(k => {
+                const s = EVENT_STYLES[k];
+                return (
+                  <div key={k} className="flex items-center gap-1.5 text-[11px] sm:text-xs text-white/50 font-medium">
+                    <span className="text-sm sm:text-base drop-shadow-md">{s.icon}</span>{s.label.split(' — ')[0]}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <span className="text-[9px] sm:text-[10px] font-bold text-white/30 uppercase tracking-widest">Entrega</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {['delivered', 'posted', 'scheduled_post'].map(k => {
+                const s = EVENT_STYLES[k];
+                return (
+                  <div key={k} className="flex items-center gap-1.5 text-[11px] sm:text-xs text-white/50 font-medium">
+                    <span className="text-sm sm:text-base drop-shadow-md">{s.icon}</span>{s.label}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
       {/* ── Cancel Flow Modal ── */}
       <AnimatePresence>
         {cancelFlow && (

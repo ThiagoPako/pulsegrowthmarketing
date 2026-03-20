@@ -233,7 +233,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       activeRecordings: data.activeRecordings,
       logout, addUser, updateUser, deleteUser,
       addClient, updateClient, deleteClient,
-      addRecording, updateRecording, cancelRecording,
+      addRecording, updateRecording, cancelRecording, deleteRecording,
       cancelAndReschedule, generateScheduleForClient, regenerateScheduleForClient,
       addTask, updateTask, deleteTask,
       addScript, updateScript, deleteScript,

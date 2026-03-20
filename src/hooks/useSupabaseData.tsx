@@ -95,6 +95,8 @@ function rowToRecording(r: any): Recording {
     type: r.type as RecordingType,
     status: r.status as RecordingStatus,
     confirmationStatus: (r.confirmation_status || 'pendente') as ConfirmationStatus,
+    waitStartedAt: r.wait_started_at || undefined,
+    waitEndedAt: r.wait_ended_at || undefined,
   };
 }
 

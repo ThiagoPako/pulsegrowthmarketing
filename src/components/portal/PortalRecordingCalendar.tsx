@@ -170,20 +170,23 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     // Fetch recordings, content tasks, and deliveries in parallel
     const [recResult, ctResult, delResult] = await Promise.all([
       invokeVpsFunction('portal-recordings', { body: { action: 'list', client_id: clientId } }),
-      supabase.from('content_tasks').select('id,title,content_type,kanban_column,scheduled_recording_date,scheduled_recording_time,editing_started_at,approved_at').eq('client_id', clientId),
-      supabase.from('social_media_deliveries').select('id,title,content_type,status,delivered_at,posted_at,scheduled_time').eq('client_id', clientId),
+      supabase.from('content_tasks').select('id,title,content_type,kanban_column,scheduled_recording_date,scheduled_recording_time,editing_started_at,editing_deadline,approval_sent_at,approved_at,adjustment_notes,updated_at,created_at').eq('client_id', clientId),
+      supabase.from('social_media_deliveries').select('id,title,content_type,status,delivered_at,posted_at,scheduled_time,platform').eq('client_id', clientId),
     ]);
     if (recResult.data?.recordings) setRecordings(recResult.data.recordings);
     if (ctResult.data) setContentTasks(ctResult.data.map((ct: any) => ({
       id: ct.id, title: ct.title, content_type: ct.content_type,
       kanban_column: ct.kanban_column, scheduled_date: ct.scheduled_recording_date,
       scheduled_time: ct.scheduled_recording_time, editing_started_at: ct.editing_started_at,
-      approved_at: ct.approved_at,
+      editing_deadline: ct.editing_deadline, approval_sent_at: ct.approval_sent_at,
+      approved_at: ct.approved_at, adjustment_notes: ct.adjustment_notes,
+      updated_at: ct.updated_at, created_at: ct.created_at,
     })));
     if (delResult.data) setDeliveries(delResult.data.map((d: any) => ({
       id: d.id, title: d.title, content_type: d.content_type,
       status: d.status, delivered_at: d.delivered_at,
       posted_at: d.posted_at, scheduled_time: d.scheduled_time,
+      platform: d.platform,
     })));
     setLoading(false);
   };

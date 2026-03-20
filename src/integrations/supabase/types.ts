@@ -578,6 +578,7 @@ export type Database = {
           extra_day: string
           fixed_day: string
           fixed_time: string
+          full_shift_recording: boolean
           has_endomarketing: boolean
           has_photo_shoot: boolean
           has_vehicle_flyer: boolean
@@ -589,6 +590,7 @@ export type Database = {
           phone: string
           photo_preference: string
           plan_id: string | null
+          preferred_shift: string
           presence_days: number
           responsible_person: string
           selected_weeks: number[]
@@ -628,6 +630,7 @@ export type Database = {
           extra_day?: string
           fixed_day?: string
           fixed_time?: string
+          full_shift_recording?: boolean
           has_endomarketing?: boolean
           has_photo_shoot?: boolean
           has_vehicle_flyer?: boolean
@@ -639,6 +642,7 @@ export type Database = {
           phone?: string
           photo_preference?: string
           plan_id?: string | null
+          preferred_shift?: string
           presence_days?: number
           responsible_person?: string
           selected_weeks?: number[]
@@ -678,6 +682,7 @@ export type Database = {
           extra_day?: string
           fixed_day?: string
           fixed_time?: string
+          full_shift_recording?: boolean
           has_endomarketing?: boolean
           has_photo_shoot?: boolean
           has_vehicle_flyer?: boolean
@@ -689,6 +694,7 @@ export type Database = {
           phone?: string
           photo_preference?: string
           plan_id?: string | null
+          preferred_shift?: string
           presence_days?: number
           responsible_person?: string
           selected_weeks?: number[]

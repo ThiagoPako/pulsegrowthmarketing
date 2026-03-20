@@ -37,6 +37,7 @@ const emptyClient = (): Partial<Client> & { clientType?: string } => ({
   monthlyRecordings: 4, niche: '',
   clientLogin: '', clientPassword: '', driveLink: '', driveFotos: '', driveIdentidadeVisual: '',
   editorial: '',
+  fullShiftRecording: false, preferredShift: 'manha',
 });
 
 function timeToMinutes(t: string) {
@@ -1091,8 +1092,38 @@ export default function Clients() {
         </div>
       )}
 
-      {/* Manual day/time selection */}
+      {/* Full shift recording toggle */}
       {form.videomaker && (
+        <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-3">
+          <div className="flex items-center gap-3">
+            <Switch 
+              checked={form.fullShiftRecording || false} 
+              onCheckedChange={v => setForm(prev => ({ ...prev, fullShiftRecording: v, fixedTime: v ? (prev.preferredShift === 'tarde' ? settings.shiftBStart : settings.shiftAStart) : prev.fixedTime }))} 
+            />
+            <div>
+              <Label className="font-medium">⏱️ Gravação por Turno Inteiro</Label>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                O cliente ocupa o turno completo (manhã ou tarde) — reserva todos os horários do período selecionado.
+              </p>
+            </div>
+          </div>
+          {form.fullShiftRecording && (
+            <div className="space-y-1">
+              <Label>Turno Preferido</Label>
+              <Select value={form.preferredShift || 'manha'} onValueChange={v => setForm(prev => ({ ...prev, preferredShift: v as 'manha' | 'tarde', fixedTime: v === 'tarde' ? settings.shiftBStart : settings.shiftAStart }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manha">☀️ Manhã ({settings.shiftAStart} – {settings.shiftAEnd})</SelectItem>
+                  <SelectItem value="tarde">🌙 Tarde ({settings.shiftBStart} – {settings.shiftBEnd})</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Manual day/time selection */}
+      {form.videomaker && !form.fullShiftRecording && (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">Ou selecione manualmente:</p>
           <div className="grid grid-cols-2 gap-3">
@@ -1371,7 +1402,12 @@ export default function Clients() {
           <span className="text-muted-foreground">Videomaker:</span>
           <span className="font-medium">{users.find(u => u.id === form.videomaker)?.name || '—'}</span>
           <span className="text-muted-foreground">Dia fixo:</span>
-          <span className="font-medium">{form.fixedDay ? DAY_LABELS[form.fixedDay] : '—'} às {form.fixedTime || '—'}</span>
+          <span className="font-medium">
+            {form.fixedDay ? DAY_LABELS[form.fixedDay] : '—'} 
+            {form.fullShiftRecording 
+              ? ` · Turno ${form.preferredShift === 'tarde' ? 'Tarde' : 'Manhã'}` 
+              : ` às ${form.fixedTime || '—'}`}
+          </span>
           <span className="text-muted-foreground">Valor:</span>
           <span className="font-medium">{contractValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
           <span className="text-muted-foreground">Vencimento:</span>
@@ -1511,7 +1547,7 @@ export default function Clients() {
                   <p className="font-semibold text-base leading-tight truncate">{c.companyName}</p>
                   {!isDesignerOnly && (
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {DAY_LABELS[c.fixedDay]} · {c.fixedTime} · {users.find(u => u.id === c.videomaker)?.name || '—'}
+                      {DAY_LABELS[c.fixedDay]} · {c.fullShiftRecording ? `Turno ${c.preferredShift === 'tarde' ? 'Tarde' : 'Manhã'}` : c.fixedTime} · {users.find(u => u.id === c.videomaker)?.name || '—'}
                     </p>
                   )}
                   <div className="flex gap-1.5 mt-2 flex-wrap">
@@ -1525,6 +1561,7 @@ export default function Clients() {
                         {(c.weeklyReels ?? 0) > 0 && <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">{c.weeklyReels} reels</Badge>}
                         {(c.weeklyCreatives ?? 0) > 0 && <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">{c.weeklyCreatives} criativos</Badge>}
                         {c.acceptsExtra && <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">Extra{c.extraClientAppears ? ' · Aparece' : ''}</Badge>}
+                        {c.fullShiftRecording && <Badge className="text-[10px] px-1.5 py-0.5 bg-amber-500/20 text-amber-600 border-amber-500/30">⏱️ Turno {c.preferredShift === 'tarde' ? 'Tarde' : 'Manhã'}</Badge>}
                       </>
                     )}
                   </div>

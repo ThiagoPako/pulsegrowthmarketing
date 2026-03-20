@@ -40,6 +40,8 @@ function rowToClient(r: any): Client {
     driveFotos: r.drive_fotos || '',
     driveIdentidadeVisual: r.drive_identidade_visual || '',
     editorial: r.editorial || '',
+    fullShiftRecording: r.full_shift_recording || false,
+    preferredShift: r.preferred_shift || 'manha',
   };
 }
 
@@ -78,6 +80,8 @@ function clientToRow(c: Client) {
     drive_fotos: c.driveFotos || '',
     drive_identidade_visual: c.driveIdentidadeVisual || '',
     editorial: c.editorial || '',
+    full_shift_recording: c.fullShiftRecording || false,
+    preferred_shift: c.preferredShift || 'manha',
   };
 }
 

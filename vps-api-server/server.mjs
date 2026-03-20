@@ -806,6 +806,7 @@ app.post('/api/portal-recordings', async (req, res) => {
           const occupied = vmRecs.map(r => { const [h, m] = r.start_time.split(':').map(Number); return { start: h * 60 + m, end: h * 60 + m + durationCancel }; });
           // Find available slots for this videomaker
           const slots = [];
+          const stepCancel = durationCancel + bufferCancel; // 90 + 30 = 120min
           const generateSlots = (startStr, endStr) => {
             const [sh, sm] = startStr.split(':').map(Number);
             const [eh, em] = endStr.split(':').map(Number);
@@ -814,7 +815,7 @@ app.post('/api/portal-recordings', async (req, res) => {
             while (cursor + durationCancel <= endMin) {
               const conflict = occupied.some(o => cursor < o.end + bufferCancel && cursor + durationCancel + bufferCancel > o.start);
               if (!conflict) slots.push(`${String(Math.floor(cursor / 60)).padStart(2, '0')}:${String(cursor % 60).padStart(2, '0')}`);
-              cursor += 30;
+              cursor += stepCancel;
             }
           };
           generateSlots(shiftAStart, shiftAEnd);

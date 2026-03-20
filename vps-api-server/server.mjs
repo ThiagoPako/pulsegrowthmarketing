@@ -1361,7 +1361,22 @@ app.post('/api/db/query', async (req, res) => {
             const joinTable = sanitizeIdentifier(join.table);
             if (!ALLOWED_TABLES.includes(joinTable)) continue;
             const joinType = join.type === 'inner' ? 'INNER JOIN' : 'LEFT JOIN';
-            query += ` ${joinType} ${joinTable} ON ${sanitizeIdentifier(join.on)}`;
+
+            // Support structured join (leftTable.leftColumn = rightTable.rightColumn)
+            if (join.leftTable && join.leftColumn && join.rightTable && join.rightColumn) {
+              const lt = sanitizeIdentifier(join.leftTable);
+              const lc = sanitizeIdentifier(join.leftColumn);
+              const rt = sanitizeIdentifier(join.rightTable);
+              const rc = sanitizeIdentifier(join.rightColumn);
+              query += ` ${joinType} ${joinTable} ON ${lt}.${lc} = ${rt}.${rc}`;
+            } else if (join.on) {
+              // Legacy: sanitize each part of "table.col = table.col"
+              const onParts = join.on.split('=').map(p => p.trim());
+              if (onParts.length === 2) {
+                const sanitizeQualified = (s) => s.split('.').map(sanitizeIdentifier).join('.');
+                query += ` ${joinType} ${joinTable} ON ${sanitizeQualified(onParts[0])} = ${sanitizeQualified(onParts[1])}`;
+              }
+            }
           }
         }
 

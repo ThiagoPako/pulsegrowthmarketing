@@ -236,10 +236,17 @@ class QueryBuilder {
       const joinTable = match[1];
       const joinColumns = match[2].split(',').map(c => c.trim());
 
-      const fkColumn = `${this._table}.${joinTable.replace(/s$/, '')}_id`;
-      const on = `${fkColumn} = ${joinTable}.id`;
+      // Build structured join — send individual identifiers so server can sanitize each one
+      const fkColumn = `${joinTable.replace(/s$/, '')}_id`;
 
-      joins.push({ table: joinTable, type: 'left', on });
+      joins.push({
+        table: joinTable,
+        type: 'left',
+        leftTable: this._table,
+        leftColumn: fkColumn,
+        rightTable: joinTable,
+        rightColumn: 'id',
+      });
 
       for (const col of joinColumns) {
         extraSelects.push(`${joinTable}.${col} as ${joinTable}_${col}`);

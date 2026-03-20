@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
+import { supabase } from '@/lib/vpsDb';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isSameDay, parseISO, isAfter, isBefore, isToday as isDateToday } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CalendarDays, ChevronLeft, ChevronRight, Clock, Video,
   ArrowRight, Check, X, Loader2, RefreshCw, Clapperboard, Sparkles,
-  MessageSquarePlus, Send, AlertTriangle
+  MessageSquarePlus, Send, AlertTriangle, Film, Palette, Image, Scissors, Upload
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -20,6 +21,36 @@ interface Recording {
   status: string;
   type: string;
   confirmation_status: string;
+}
+
+interface ContentEvent {
+  id: string;
+  title: string;
+  content_type: string;
+  kanban_column: string;
+  scheduled_date: string | null;
+  scheduled_time: string | null;
+  editing_started_at: string | null;
+  approved_at: string | null;
+}
+
+interface DeliveryEvent {
+  id: string;
+  title: string;
+  content_type: string;
+  status: string;
+  delivered_at: string;
+  posted_at: string | null;
+  scheduled_time: string | null;
+}
+
+interface DayEvent {
+  type: 'recording' | 'content' | 'delivery';
+  icon: string;
+  label: string;
+  color: string;
+  time?: string;
+  detail?: string;
 }
 
 interface Props {

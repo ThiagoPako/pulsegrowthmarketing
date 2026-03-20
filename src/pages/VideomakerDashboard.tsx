@@ -82,6 +82,7 @@ export default function VideomakerDashboard() {
   const getClientColor = (id: string) => clients.find(c => c.id === id)?.color || '220 10% 50%';
 
   const typeLabels: Record<string, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.' };
+  const timeToMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 
   // ── Active recording (use local backup to survive polling race conditions) ──
   const [localActiveRecordingId, setLocalActiveRecordingId] = useState<string | null>(null);

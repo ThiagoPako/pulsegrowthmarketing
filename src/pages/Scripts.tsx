@@ -273,14 +273,58 @@ export default function Scripts() {
         await supabase.from('scripts').update({ caption: captionToSave } as any).eq('id', scriptId);
       }
       
+      // Determine kanban column and assignment based on directToEditing
+      let kanbanColumn = 'ideias';
+      let assignedTo: string | null = null;
+
+      if (form.directToEditing) {
+        // Check if there are tasks in editing queue
+        const { data: editingTasks } = await supabase
+          .from('content_tasks')
+          .select('id')
+          .eq('kanban_column', 'edicao');
+        
+        if (!editingTasks || editingTasks.length === 0) {
+          // No tasks in editing → assign to least-busy editor and put in edicao
+          kanbanColumn = 'edicao';
+          const { data: editors } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('role', 'editor');
+          
+          if (editors && editors.length > 0) {
+            // Find editor with fewest content_tasks assigned
+            let minTasks = Infinity;
+            let leastBusyEditor: string | null = null;
+            for (const editor of editors) {
+              const { data: editorTasks } = await supabase
+                .from('content_tasks')
+                .select('id')
+                .eq('assigned_to', (editor as any).id)
+                .in('kanban_column', ['edicao', 'revisao']);
+              const count = editorTasks?.length || 0;
+              if (count < minTasks) {
+                minTasks = count;
+                leastBusyEditor = (editor as any).id;
+              }
+            }
+            assignedTo = leastBusyEditor;
+          }
+        } else {
+          // There are tasks in editing → put in waiting (aguardando_edicao)
+          kanbanColumn = 'aguardando_edicao';
+        }
+      }
+
       const { error } = await supabase.from('content_tasks').insert({
         client_id: form.clientId,
         title: form.title,
         content_type: form.contentFormat || 'reels',
-        kanban_column: 'ideias',
+        kanban_column: kanbanColumn,
         script_id: scriptId,
-        description: null,
+        description: form.directToEditing ? 'Material pronto do cliente — direto para edição' : null,
         created_by: user?.id || null,
+        assigned_to: assignedTo,
       } as any);
       if (error) console.error('Auto content_task creation error:', error);
       

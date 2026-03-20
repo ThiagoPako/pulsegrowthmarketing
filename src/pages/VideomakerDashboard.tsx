@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { useApp } from '@/contexts/AppContext';
 import { highlightQuotes, highlightQuotesForPdf } from '@/lib/highlightQuotes';

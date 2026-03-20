@@ -196,7 +196,7 @@ export default function Clients() {
       }
     }
     return slots;
-  }, [form.videomaker, videomakers, settings, clients, users, editing, preferredShift]);
+  }, [form.videomaker, videomakers, settings, users, preferredShift, getOccupyingClient]);
 
   // Top 2 best slot suggestions for selected videomaker
   const bestSlots = useMemo(() => {

@@ -515,22 +515,22 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
   return (
     <div className="max-w-[1400px] mx-auto px-2 sm:px-8 py-4 sm:py-8 pb-20">
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <motion.div className="p-3 rounded-2xl relative overflow-hidden" style={{ background: `hsl(${clientColor} / 0.15)` }} whileHover={{ scale: 1.05 }}>
-              <CalendarDays size={22} style={{ color: `hsl(${clientColor})` }} className="relative z-10" />
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-4 sm:mb-8">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+            <motion.div className="p-2 sm:p-3 rounded-xl sm:rounded-2xl relative overflow-hidden shrink-0" style={{ background: `hsl(${clientColor} / 0.15)` }} whileHover={{ scale: 1.05 }}>
+              <CalendarDays size={18} style={{ color: `hsl(${clientColor})` }} className="relative z-10 sm:w-[22px] sm:h-[22px]" />
             </motion.div>
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <div className="min-w-0">
+              <h2 className="text-lg sm:text-2xl font-bold tracking-tight flex items-center gap-2">
                 Meu Calendário
-                <motion.span animate={{ y: [0, -4, 0], rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2.5 }}>🚀</motion.span>
+                <motion.span animate={{ y: [0, -4, 0], rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2.5 }} className="text-sm sm:text-base">🚀</motion.span>
               </h2>
-              <p className="text-sm text-white/40">Acompanhe em tempo real toda a operação dos seus conteúdos</p>
+              <p className="text-[10px] sm:text-sm text-white/40 truncate">Acompanhe em tempo real sua operação</p>
             </div>
           </div>
           <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setShowSpecialRequest(true)}
-            className="hidden sm:flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all"
+            className="hidden sm:flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0"
             style={{ background: `linear-gradient(135deg, hsl(${clientColor} / 0.2), hsl(280 80% 60% / 0.15))`, border: `1px solid hsl(${clientColor} / 0.3)`, color: `hsl(${clientColor})` }}>
             <MessageSquarePlus size={14} /> Solicitar gravação especial
           </motion.button>

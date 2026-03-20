@@ -75,8 +75,8 @@ export function getTypeConfig(type: string) {
 }
 
 export default function EditorDashboard() {
-  const { clients, scripts } = useApp();
-  const { user } = useAuth();
+  const { clients, scripts, users } = useApp();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<EditorTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,6 +87,7 @@ export default function EditorDashboard() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [groupByClient, setGroupByClient] = useState(false);
+  const isEditorRole = profile?.role === 'editor';
 
   const fetchTasks = useCallback(async () => {
     const { data } = await supabase.from('content_tasks').select('*')
@@ -113,11 +114,20 @@ export default function EditorDashboard() {
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
 
-  const pendingTasks = tasks.filter(t => t.kanban_column === 'edicao');
-  const inEditTasks = tasks.filter(t => t.kanban_column === 'edicao' && t.editing_started_at);
-  const inReviewTasks = tasks.filter(t => t.kanban_column === 'revisao');
-  const adjustmentTasks = tasks.filter(t => t.kanban_column === 'alteracao');
-  const completedTasks = tasks.filter(t => t.kanban_column === 'envio');
+  // Filter tasks by editor assignment
+  const visibleTasks = useMemo(() => {
+    if (!isEditorRole || !user) return tasks;
+    return tasks.filter(t => {
+      if (t.kanban_column === 'edicao') return !t.assigned_to || t.assigned_to === user.id;
+      return !t.assigned_to || t.assigned_to === user.id;
+    });
+  }, [tasks, isEditorRole, user]);
+
+  const pendingTasks = visibleTasks.filter(t => t.kanban_column === 'edicao');
+  const inEditTasks = visibleTasks.filter(t => t.kanban_column === 'edicao' && t.editing_started_at);
+  const inReviewTasks = visibleTasks.filter(t => t.kanban_column === 'revisao');
+  const adjustmentTasks = visibleTasks.filter(t => t.kanban_column === 'alteracao');
+  const completedTasks = visibleTasks.filter(t => t.kanban_column === 'envio');
 
   const todayCompleted = completedTasks.filter(t => isWithinInterval(parseISO(t.updated_at), { start: todayStart, end: todayEnd }));
   const weekCompleted = completedTasks.filter(t => isWithinInterval(parseISO(t.updated_at), { start: weekStart, end: weekEnd }));
@@ -147,13 +157,13 @@ export default function EditorDashboard() {
 
   // Filtered tasks for editing queue (only edicao + alteracao)
   const editingQueueTasks = useMemo(() => {
-    return tasks.filter(t => t.kanban_column === 'edicao' || t.kanban_column === 'alteracao');
-  }, [tasks]);
+    return visibleTasks.filter(t => t.kanban_column === 'edicao' || t.kanban_column === 'alteracao');
+  }, [visibleTasks]);
 
   // Filtered tasks for review tab (revisao + envio)
   const reviewTasks = useMemo(() => {
-    return tasks.filter(t => t.kanban_column === 'revisao' || t.kanban_column === 'envio');
-  }, [tasks]);
+    return visibleTasks.filter(t => t.kanban_column === 'revisao' || t.kanban_column === 'envio');
+  }, [visibleTasks]);
 
   // Apply filters to editing queue
   const filteredQueueTasks = useMemo(() => {

@@ -74,11 +74,14 @@ function getTypeConfig(type: string) {
   return CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];
 }
 
-function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink, draggedId, onDragStart }: {
+function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink, onClaimTask, draggedId, onDragStart, currentUserId, users }: {
   task: EditorTask; clients: any[]; onOpenScript: (id: string) => void;
   onSendToReview: (task: EditorTask) => void;
   onAddVideoLink: (task: EditorTask) => void;
+  onClaimTask: (task: EditorTask) => void;
   draggedId: string | null; onDragStart: (e: React.DragEvent, task: EditorTask) => void;
+  currentUserId: string | undefined;
+  users: any[];
 }) {
   const client = clients.find(c => c.id === task.client_id);
   const typeConfig = getTypeConfig(task.content_type);
@@ -187,8 +190,22 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
           <DeadlineBadge deadline={task.approval_deadline} label="Aprovação" />
         )}
 
+        {/* Assigned editor badge */}
+        {task.assigned_to && (
+          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground bg-muted/50 rounded-md px-2 py-1">
+            <Scissors size={10} />
+            <span>Editor: <strong className="text-foreground">{users.find(u => u.id === task.assigned_to)?.name || 'Editor'}</strong></span>
+          </div>
+        )}
+
         {/* Action buttons based on column */}
-        {task.kanban_column === 'edicao' && (
+        {task.kanban_column === 'edicao' && !task.assigned_to && (
+          <Button size="sm" className="w-full gap-1.5 h-7 text-xs mt-1 bg-primary hover:bg-primary/90" 
+            onClick={(e) => { e.stopPropagation(); onClaimTask(task); }}>
+            <Scissors size={11} /> Pegar para Editar
+          </Button>
+        )}
+        {task.kanban_column === 'edicao' && task.assigned_to === currentUserId && (
           <Button size="sm" variant={hasVideoLink ? 'default' : 'outline'} 
             className={`w-full gap-1.5 h-7 text-xs mt-1 ${!hasVideoLink ? 'border-dashed' : ''}`} 
             onClick={(e) => { e.stopPropagation(); onAddVideoLink(task); }}>
@@ -220,7 +237,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
 }
 
 export default function EditorKanban() {
-  const { clients, scripts } = useApp();
+  const { clients, scripts, users } = useApp();
   const { user } = useAuth();
   const [tasks, setTasks] = useState<EditorTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -254,6 +271,9 @@ export default function EditorKanban() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchTasks]);
 
+  const { profile } = useAuth();
+  const isEditorRole = profile?.role === 'editor';
+
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
       if (filterClient !== 'all' && t.client_id !== filterClient) return false;
@@ -262,9 +282,19 @@ export default function EditorKanban() {
         const client = clients.find((c: any) => c.id === t.client_id);
         if (!t.title.toLowerCase().includes(q) && !client?.companyName.toLowerCase().includes(q)) return false;
       }
+      // Editor role: only see unassigned tasks or tasks assigned to them
+      if (isEditorRole && user) {
+        if (t.kanban_column === 'edicao') {
+          // Show unassigned or assigned to me
+          if (t.assigned_to && t.assigned_to !== user.id) return false;
+        } else {
+          // For revisao/alteracao/envio: only show tasks I worked on
+          if (t.assigned_to && t.assigned_to !== user.id) return false;
+        }
+      }
       return true;
     });
-  }, [tasks, filterClient, searchQuery, clients]);
+  }, [tasks, filterClient, searchQuery, clients, isEditorRole, user]);
 
   const sortedTasksByColumn = useMemo(() => {
     const map: Record<string, EditorTask[]> = {};
@@ -278,6 +308,17 @@ export default function EditorKanban() {
     });
     return map;
   }, [filteredTasks]);
+
+  const handleClaimTask = async (task: EditorTask) => {
+    if (!user) return;
+    const { error } = await supabase.from('content_tasks').update({
+      assigned_to: user.id,
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', task.id);
+    if (error) { toast.error('Erro ao pegar tarefa'); return; }
+    toast.success('Tarefa atribuída a você!');
+    fetchTasks();
+  };
 
   const handleDragStart = (e: React.DragEvent, task: EditorTask) => {
     setDraggedTask(task);
@@ -320,6 +361,10 @@ export default function EditorKanban() {
     const updateData: any = { kanban_column: targetColumn, updated_at: new Date().toISOString() };
     if (targetColumn === 'edicao' && !draggedTask.editing_started_at) {
       updateData.editing_started_at = new Date().toISOString();
+    }
+    // Auto-assign to current editor if not yet assigned
+    if (!draggedTask.assigned_to && user) {
+      updateData.assigned_to = user.id;
     }
     const { error } = await supabase.from('content_tasks').update(updateData).eq('id', draggedTask.id);
     if (error) {
@@ -395,10 +440,15 @@ export default function EditorKanban() {
       toast.error('Cole o link do vídeo editado');
       return;
     }
-    const { error } = await supabase.from('content_tasks').update({
+    const updatePayload: any = {
       edited_video_link: videoLinkValue.trim(),
       updated_at: new Date().toISOString(),
-    } as any).eq('id', videoLinkTask.id);
+    };
+    // Auto-assign to current editor if not yet assigned
+    if (!videoLinkTask.assigned_to && user) {
+      updatePayload.assigned_to = user.id;
+    }
+    const { error } = await supabase.from('content_tasks').update(updatePayload).eq('id', videoLinkTask.id);
     if (error) { toast.error('Erro ao salvar link'); return; }
 
     toast.success('Link do vídeo salvo!');
@@ -491,6 +541,7 @@ export default function EditorKanban() {
                     {colTasks.map(task => (
                       <TaskCard key={task.id} task={task} clients={clients} onOpenScript={openScript}
                         onSendToReview={handleSendToReview} onAddVideoLink={openVideoLinkDialog}
+                        onClaimTask={handleClaimTask} currentUserId={user?.id} users={users}
                         draggedId={draggedTask?.id || null} onDragStart={handleDragStart} />
                     ))}
                     {colTasks.length === 0 && (

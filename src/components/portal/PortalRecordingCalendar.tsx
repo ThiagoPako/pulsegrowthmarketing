@@ -539,12 +539,13 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
 
       {/* Upcoming recordings */}
       {upcomingRecordings.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mb-4 sm:mb-8">
+          <div className="flex items-center gap-2 mb-3 sm:mb-4">
             <motion.span animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}>🔥</motion.span>
-            <h3 className="text-xs font-bold text-white/50 uppercase tracking-[0.15em]">Próximas gravações</h3>
+            <h3 className="text-[10px] sm:text-xs font-bold text-white/50 uppercase tracking-[0.15em]">Próximas gravações</h3>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="flex gap-3 overflow-x-auto pb-2 sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0 snap-x snap-mandatory"
+            style={{ scrollbarWidth: 'none' }}>
             {upcomingRecordings.map((rec, i) => {
               const typeInfo = TYPE_MAP[rec.type] || { label: rec.type, emoji: '🎬' };
               const isConfirmed = rec.confirmation_status === 'confirmada';

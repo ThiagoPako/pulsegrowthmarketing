@@ -629,13 +629,13 @@ export default function ClientPortal() {
                   <div className="absolute inset-0 bg-gradient-to-r from-[#080810]/90 to-transparent" />
                 </div>
 
-                <div className="relative max-w-[1400px] mx-auto px-4 sm:px-8 py-12 sm:py-20">
+                <div className="relative max-w-[1400px] mx-auto px-4 sm:px-8 py-8 sm:py-20">
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
                     <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.08] border border-white/[0.08] text-xs font-medium text-white/70 mb-4">
                       <Sparkles size={12} style={{ color: `hsl(${clientColor})` }} />
                       <span className="capitalize">Temporada {seasonLabel}</span>
                     </div>
-                    <h2 className="text-3xl sm:text-5xl font-bold tracking-tight max-w-lg leading-tight">
+                    <h2 className="text-2xl sm:text-5xl font-bold tracking-tight max-w-lg leading-tight">
                       Sua biblioteca de conteúdos
                     </h2>
                     <p className="text-white/50 mt-3 max-w-md text-sm sm:text-base">
@@ -684,7 +684,7 @@ export default function ClientPortal() {
             )}
 
             {/* ── CONTENT ROWS ── */}
-            <div className="max-w-[1400px] mx-auto px-4 sm:px-8 pb-20 space-y-10 mt-4">
+            <div className="max-w-[1400px] mx-auto px-3 sm:px-8 pb-20 space-y-6 sm:space-y-10 mt-2 sm:mt-4">
               {seasonContents.length === 0 && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-24">
                   <Film size={48} className="mx-auto mb-4 text-white/15" />
@@ -854,7 +854,7 @@ export default function ClientPortal() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 40 }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="max-w-5xl mx-auto my-4 sm:my-8"
+              className="max-w-5xl mx-auto my-2 sm:my-8"
               onClick={e => e.stopPropagation()}
             >
               {/* Close button */}
@@ -917,7 +917,7 @@ export default function ClientPortal() {
                           onClick={() => void togglePlay()}
                         />
                         {/* Custom controls */}
-                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-12 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-3 sm:p-4 pt-12 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                           {/* Progress bar */}
                           <div className="cursor-pointer h-1 bg-white/20 rounded-full mb-3 group/bar" onClick={handleSeek}>
                             <div
@@ -1249,7 +1249,7 @@ function ReelsCard({ content, clientColor, onSelect }: {
   return (
     <button
       onClick={() => onSelect(content)}
-      className="group relative shrink-0 w-[140px] sm:w-[170px] snap-start rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.04] hover:ring-1 focus:outline-none bg-white/[0.03]"
+      className="group relative shrink-0 w-[120px] sm:w-[170px] snap-start rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.04] hover:ring-1 focus:outline-none bg-white/[0.03]"
       style={{ '--tw-ring-color': `hsl(${clientColor} / 0.5)` } as any}
     >
       <div className="aspect-[9/16] relative overflow-hidden">

@@ -350,7 +350,7 @@ export default function Reports() {
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 23, 42);
-    doc.text('Relatório de Entregas', pageW / 2, y, { align: 'center' });
+    doc.text('Relatorio de Entregas', pageW / 2, y, { align: 'center' });
     y += 7;
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');

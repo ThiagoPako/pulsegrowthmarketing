@@ -729,7 +729,7 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
                     <div
                       className="prose prose-invert prose-sm max-w-none text-white/75 leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: selectedScript.content }}
+                      dangerouslySetInnerHTML={{ __html: highlightQuotes(selectedScript.content) }}
                     />
                   </motion.div>
                 </div>

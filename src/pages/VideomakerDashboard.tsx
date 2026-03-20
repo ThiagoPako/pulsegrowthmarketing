@@ -53,6 +53,66 @@ export default function VideomakerDashboard() {
   const [verbalScripts, setVerbalScripts] = useState<Set<string>>(new Set());
   const [alterationNotes, setAlterationNotes] = useState<Record<string, string>>({});
 
+  // ── Waiting for client state ──
+  const [waitingRecordingId, setWaitingRecordingId] = useState<string | null>(null);
+  const [waitingLogId, setWaitingLogId] = useState<string | null>(null);
+  const [waitingStartedAt, setWaitingStartedAt] = useState<Date | null>(null);
+  const [waitingElapsed, setWaitingElapsed] = useState(0);
+
+  // Timer for waiting elapsed
+  useState(() => {
+    const interval = setInterval(() => {
+      if (waitingStartedAt) {
+        setWaitingElapsed(Math.floor((Date.now() - waitingStartedAt.getTime()) / 1000));
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  });
+
+  const handleStartWaiting = async (rec: Recording) => {
+    const logId = crypto.randomUUID();
+    const now = new Date();
+    const { error } = await supabase.from('recording_wait_logs').insert({
+      id: logId,
+      recording_id: rec.id,
+      videomaker_id: vmId,
+      client_id: rec.clientId,
+      started_at: now.toISOString(),
+    } as any);
+    if (error) {
+      toast.error('Erro ao registrar espera');
+      console.error(error);
+      return;
+    }
+    setWaitingRecordingId(rec.id);
+    setWaitingLogId(logId);
+    setWaitingStartedAt(now);
+    setWaitingElapsed(0);
+    toast.info(`Aguardando cliente ${getClientName(rec.clientId)}...`, { icon: '⏳' });
+  };
+
+  const handleStopWaiting = async () => {
+    if (!waitingLogId || !waitingStartedAt) return;
+    const durationSec = Math.floor((Date.now() - waitingStartedAt.getTime()) / 1000);
+    await supabase.from('recording_wait_logs').update({
+      ended_at: new Date().toISOString(),
+      wait_duration_seconds: durationSec,
+    } as any).eq('id', waitingLogId);
+    const mins = Math.floor(durationSec / 60);
+    const secs = durationSec % 60;
+    toast.success(`Espera encerrada: ${mins}m ${secs}s registrados`);
+    setWaitingRecordingId(null);
+    setWaitingLogId(null);
+    setWaitingStartedAt(null);
+    setWaitingElapsed(0);
+  };
+
+  const formatWaitTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
   const vmId = currentUser?.id || '';
   const today = new Date();
   const todayStr = format(today, 'yyyy-MM-dd');

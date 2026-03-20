@@ -44,7 +44,8 @@ export default function VideomakerDashboard() {
   const [finishDialogOpen, setFinishDialogOpen] = useState(false);
   const [finishRecordingId, setFinishRecordingId] = useState('');
   const [completedScriptIds, setCompletedScriptIds] = useState<Set<string>>(new Set());
-  const [finishStep, setFinishStep] = useState<'scripts' | 'drive'>('scripts');
+  const [finishStep, setFinishStep] = useState<'scripts' | 'alterations' | 'drive'>('scripts');
+  const [selectedEditorId, setSelectedEditorId] = useState<string>('');
   const [driveLinks, setDriveLinks] = useState<Record<string, string>>({});
   // Script status tracking
   const [rejectedScripts, setRejectedScripts] = useState<Set<string>>(new Set());

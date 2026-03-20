@@ -351,7 +351,7 @@ export default function VideomakerDashboard() {
         description = `🗣️ ALTERAÇÃO VERBAL — A alteração do roteiro foi passada presencialmente/verbalmente ao editor. ${altNotes ? `\n\n📝 Notas adicionais: ${altNotes}` : ''}\n\nLink dos materiais: ${scriptDriveLink}`;
       }
 
-      const assignedEditor = selectedEditorId || null;
+      const assignedEditor = (selectedEditorId && selectedEditorId !== '__auto__') ? selectedEditorId : null;
 
       if (existing && existing.length > 0) {
         await supabase.from('content_tasks').update({

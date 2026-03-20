@@ -214,6 +214,7 @@ export interface Script {
   endoClientId?: string;
   scheduledDate?: string; // YYYY-MM-DD
   createdBy?: string; // user id
+  directToEditing?: boolean; // goes straight to editing queue
 }
 
 export interface ActiveRecording {

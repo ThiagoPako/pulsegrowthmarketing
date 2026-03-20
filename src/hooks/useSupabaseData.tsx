@@ -146,6 +146,7 @@ function rowToScript(r: any): Script {
     endoClientId: r.endo_client_id || undefined,
     scheduledDate: r.scheduled_date || undefined,
     createdBy: r.created_by || undefined,
+    directToEditing: r.direct_to_editing || false,
   };
 }
 
@@ -165,6 +166,7 @@ function scriptToRow(s: Script) {
     endo_client_id: s.endoClientId || null,
     scheduled_date: s.scheduledDate || null,
     created_by: s.createdBy || null,
+    direct_to_editing: s.directToEditing || false,
   };
 }
 

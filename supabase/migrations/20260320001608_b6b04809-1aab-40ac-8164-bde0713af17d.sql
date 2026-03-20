@@ -1,0 +1,1 @@
+ALTER TABLE public.scripts ADD COLUMN IF NOT EXISTS direct_to_editing boolean NOT NULL DEFAULT false;

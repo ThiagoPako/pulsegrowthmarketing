@@ -2271,6 +2271,7 @@ export type Database = {
           content_format: string
           created_at: string
           created_by: string | null
+          direct_to_editing: boolean
           endo_client_id: string | null
           id: string
           is_endomarketing: boolean
@@ -2289,6 +2290,7 @@ export type Database = {
           content_format?: string
           created_at?: string
           created_by?: string | null
+          direct_to_editing?: boolean
           endo_client_id?: string | null
           id?: string
           is_endomarketing?: boolean
@@ -2307,6 +2309,7 @@ export type Database = {
           content_format?: string
           created_at?: string
           created_by?: string | null
+          direct_to_editing?: boolean
           endo_client_id?: string | null
           id?: string
           is_endomarketing?: boolean

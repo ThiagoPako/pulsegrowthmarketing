@@ -633,7 +633,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                         </p>
                       </div>
                       <div className="flex gap-3">
-                        <motion.button whileTap={{ scale: 0.95 }} onClick={handleAcceptBackup} disabled={acceptingBackup}
+                         <motion.button whileTap={{ scale: 0.95 }} onClick={() => handleAcceptBackup()} disabled={acceptingBackup}
                           className="flex-1 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                           style={{ background: `linear-gradient(135deg, hsl(25 100% 50%), hsl(${clientColor}))` }}>
                           {acceptingBackup ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check size={14} /> Aceitar backup</>}

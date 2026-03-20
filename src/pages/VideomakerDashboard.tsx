@@ -335,6 +335,7 @@ export default function VideomakerDashboard() {
 
     // Clean up
     setPlannedScripts(prev => { const next = { ...prev }; delete next[finishRecordingId]; return next; });
+    setLocalActiveRecordingId(null);
     setFinishDialogOpen(false);
     setCompletedScriptIds(new Set());
     setRejectedScripts(new Set());

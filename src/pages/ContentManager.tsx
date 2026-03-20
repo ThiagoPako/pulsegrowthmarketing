@@ -222,10 +222,24 @@ export default function ContentManager() {
     setLoading(true);
     const [clientsRes, contentsRes] = await Promise.all([
       supabase.from('clients').select('id, company_name').order('company_name'),
-      supabase.from('client_portal_contents').select('*, clients(company_name)').order('created_at', { ascending: false }).limit(100),
+      supabase.from('client_portal_contents').select('*').order('created_at', { ascending: false }).limit(100),
     ]);
-    if (clientsRes.data) setClients(clientsRes.data);
-    if (contentsRes.data) setContents(contentsRes.data as ContentRow[]);
+
+    const clientList = (clientsRes.data || []) as ClientOption[];
+    if (clientList.length) setClients(clientList);
+
+    if (contentsRes.data) {
+      const clientMap = new Map(clientList.map((client) => [client.id, client.company_name]));
+      const normalizedContents = (contentsRes.data as ContentRow[]).map((content) => ({
+        ...content,
+        clients: content.clients ?? (clientMap.get(content.client_id)
+          ? { company_name: clientMap.get(content.client_id)! }
+          : null),
+        client_name: clientMap.get(content.client_id) || undefined,
+      }));
+      setContents(normalizedContents);
+    }
+
     setLoading(false);
   };
 

@@ -75,8 +75,8 @@ export function getTypeConfig(type: string) {
 }
 
 export default function EditorDashboard() {
-  const { clients, scripts } = useApp();
-  const { user } = useAuth();
+  const { clients, scripts, users } = useApp();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<EditorTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,6 +87,7 @@ export default function EditorDashboard() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [groupByClient, setGroupByClient] = useState(false);
+  const isEditorRole = profile?.role === 'editor';
 
   const fetchTasks = useCallback(async () => {
     const { data } = await supabase.from('content_tasks').select('*')

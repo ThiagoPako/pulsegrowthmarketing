@@ -41,35 +41,36 @@ const NUM_TO_DAYKEY: Record<number, string> = {
 
 /**
  * Add hours to a date, but only count hours that fall on work days.
- * Non-work days are skipped entirely (the clock "pauses").
+ * Work day = 10h (08:00-18:00). Non-work days are skipped entirely.
+ * The result NEVER falls on a weekend or non-work day.
  */
 function addBusinessHours(from: Date, hours: number, workDays: string[]): Date {
-  const result = new Date(from);
+  const HOURS_PER_WORK_DAY = 10; // 08:00 – 18:00
   let remaining = hours;
+  let current = new Date(from);
+
+  // If starting on a non-work day, advance to next work day first
+  while (!workDays.includes(NUM_TO_DAYKEY[getDay(current)])) {
+    current = addDays(current, 1);
+  }
 
   while (remaining > 0) {
-    const dayKey = NUM_TO_DAYKEY[getDay(result)];
+    const dayKey = NUM_TO_DAYKEY[getDay(current)];
     if (workDays.includes(dayKey)) {
-      // This is a work day — consume up to 24h
-      const hoursToConsume = Math.min(remaining, 24);
-      result.setHours(result.getHours() + hoursToConsume);
-      remaining -= hoursToConsume;
-
-      // After adding hours, if we land on a non-work day, jump forward
-      if (remaining <= 0) break;
-    } else {
-      // Skip this entire day
-      result.setDate(result.getDate() + 1);
-      result.setHours(from.getHours(), from.getMinutes(), 0, 0);
+      remaining -= HOURS_PER_WORK_DAY;
+    }
+    if (remaining > 0) {
+      current = addDays(current, 1);
+      // Skip non-work days
+      while (!workDays.includes(NUM_TO_DAYKEY[getDay(current)])) {
+        current = addDays(current, 1);
+      }
     }
   }
 
-  // If we landed on a non-work day, advance to next work day
-  while (!workDays.includes(NUM_TO_DAYKEY[getDay(result)])) {
-    result.setDate(result.getDate() + 1);
-  }
-
-  return result;
+  // Set time to end of work day (18:00)
+  current.setHours(18, 0, 0, 0);
+  return current;
 }
 
 export async function syncContentTaskColumnChange(

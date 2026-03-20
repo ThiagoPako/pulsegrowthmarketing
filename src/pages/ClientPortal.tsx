@@ -591,23 +591,23 @@ export default function ClientPortal() {
       </header>
 
       {/* Mobile tab bar */}
-      <div className="sm:hidden flex border-b border-white/[0.06]">
-        <button onClick={() => setActiveTab('library')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'library' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'library' ? { borderColor: `hsl(${clientColor})` } : {}}>
+      <div className="sm:hidden flex overflow-x-auto border-b border-white/[0.06]" style={{ scrollbarWidth: 'none' }}>
+        <button onClick={() => setActiveTab('library')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'library' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'library' ? { borderColor: `hsl(${clientColor})` } : {}}>
           Biblioteca
         </button>
-        <button onClick={() => setActiveTab('criativa')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'criativa' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'criativa' ? { borderColor: `hsl(${clientColor})` } : {}}>
+        <button onClick={() => setActiveTab('criativa')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'criativa' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'criativa' ? { borderColor: `hsl(${clientColor})` } : {}}>
           Zona Criativa
         </button>
-        <button onClick={() => setActiveTab('agenda')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'agenda' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'agenda' ? { borderColor: `hsl(${clientColor})` } : {}}>
+        <button onClick={() => setActiveTab('agenda')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'agenda' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'agenda' ? { borderColor: `hsl(${clientColor})` } : {}}>
           Agenda
         </button>
         {(client.show_metrics || isTeamMember) && (
-          <button onClick={() => setActiveTab('metrics')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'metrics' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'metrics' ? { borderColor: `hsl(${clientColor})` } : {}}>
+          <button onClick={() => setActiveTab('metrics')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'metrics' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'metrics' ? { borderColor: `hsl(${clientColor})` } : {}}>
             Métricas
           </button>
         )}
         {client.has_vehicle_flyer && (
-          <button onClick={() => setActiveTab('panfletagem')} className={`flex-1 py-3 text-xs font-medium text-center transition-colors ${activeTab === 'panfletagem' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'panfletagem' ? { borderColor: `hsl(${clientColor})` } : {}}>
+          <button onClick={() => setActiveTab('panfletagem')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'panfletagem' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'panfletagem' ? { borderColor: `hsl(${clientColor})` } : {}}>
             🚗 Panfleto
           </button>
         )}

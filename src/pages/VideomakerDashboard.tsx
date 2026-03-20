@@ -10,11 +10,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Square, FileText, Check, Clock, Video, Users as UsersIcon,
   TrendingUp, BarChart3, Undo2, AlertTriangle, Star, Eye, ChevronLeft, Download, Link, ArrowRight,
-  ThumbsDown, Pencil, MessageCircle, Send, UserCheck
+  ThumbsDown, Pencil, MessageCircle, Send, UserCheck, Rocket
 } from 'lucide-react';
 import LiveRecordingCard from '@/components/videomaker/LiveRecordingCard';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -82,6 +82,7 @@ export default function VideomakerDashboard() {
   const getClientColor = (id: string) => clients.find(c => c.id === id)?.color || '220 10% 50%';
 
   const typeLabels: Record<string, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.' };
+  const timeToMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 
   // ── Active recording (use local backup to survive polling race conditions) ──
   const [localActiveRecordingId, setLocalActiveRecordingId] = useState<string | null>(null);
@@ -528,13 +529,22 @@ export default function VideomakerDashboard() {
         const activeRecMeta = activeRecordings.find(a => a.recordingId === activeRecordingId);
         if (!activeRec) return null;
         const planned = plannedScripts[activeRecordingId] || activeRecMeta?.plannedScriptIds || [];
+        const client = clients.find(c => c.id === activeRec.clientId);
+        const isStar = client?.fullShiftRecording || false;
+        // Star clients use full shift (e.g. 08:30-12:00 = 210min), regular = recordingDuration (90min)
+        const durationMin = isStar
+          ? (client?.preferredShift === 'tarde'
+            ? (timeToMin(settings.shiftBEnd) - timeToMin(settings.shiftBStart))
+            : (timeToMin(settings.shiftAEnd) - timeToMin(settings.shiftAStart)))
+          : settings.recordingDuration;
         return (
           <LiveRecordingCard
             clientName={getClientName(activeRec.clientId)}
             clientColor={getClientColor(activeRec.clientId)}
             startedAt={activeRecMeta?.startedAt || new Date().toISOString()}
-            recordingDurationHours={settings.recordingDuration}
+            recordingDurationMinutes={durationMin}
             scriptsCount={planned.length}
+            isStarClient={isStar}
             onFinish={() => handleFinishRecording(activeRec)}
             onViewScripts={() => openScripts(activeRec.clientId)}
           />
@@ -730,7 +740,9 @@ export default function VideomakerDashboard() {
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Check size={18} className="text-success" />
+              <motion.div animate={{ rotate: [0, -15, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                <Rocket size={20} className="text-primary -rotate-45" />
+              </motion.div>
               Finalizar Gravação — {(() => {
                 const rec = recordings.find(r => r.id === finishRecordingId);
                 return rec ? getClientName(rec.clientId) : '';
@@ -738,32 +750,59 @@ export default function VideomakerDashboard() {
             </DialogTitle>
           </DialogHeader>
 
-          {/* Step indicators */}
-          <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
-              finishStep === 'scripts' ? 'bg-primary text-primary-foreground' : 'bg-success/20 text-success'
-            }`}>
-              <span>1</span> Selecionar Roteiros
-            </div>
-            <ArrowRight size={14} className="text-muted-foreground" />
-            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
-              finishStep === 'alterations' ? 'bg-primary text-primary-foreground' :
-              finishStep === 'drive' ? 'bg-success/20 text-success' : 'bg-muted text-muted-foreground'
-            }`}>
-              <span>2</span> Mudanças
-            </div>
-            <ArrowRight size={14} className="text-muted-foreground" />
-            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
-              finishStep === 'drive' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-            }`}>
-              <span>3</span> Links & Envio
-            </div>
+          {/* Animated Step Timeline */}
+          <div className="flex items-center gap-0 mb-4">
+            {[
+              { key: 'scripts', label: 'Roteiros', num: 1 },
+              { key: 'alterations', label: 'Mudanças', num: 2 },
+              { key: 'drive', label: 'Envio', num: 3 },
+            ].map((step, i) => {
+              const steps = ['scripts', 'alterations', 'drive'];
+              const currentIdx = steps.indexOf(finishStep);
+              const stepIdx = steps.indexOf(step.key);
+              const isActive = finishStep === step.key;
+              const isDone = stepIdx < currentIdx;
+              return (
+                <div key={step.key} className="flex items-center flex-1">
+                  <motion.div
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all w-full justify-center ${
+                      isActive
+                        ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
+                        : isDone
+                        ? 'bg-success/20 text-success'
+                        : 'bg-muted text-muted-foreground'
+                    }`}
+                    animate={isActive ? { scale: [1, 1.03, 1] } : {}}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  >
+                    <motion.span
+                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                        isActive ? 'bg-primary-foreground/20' : isDone ? 'bg-success/30' : 'bg-muted-foreground/20'
+                      }`}
+                      animate={isDone ? { scale: [1, 1.2, 1] } : {}}
+                      transition={{ duration: 0.3 }}
+                    >
+                      {isDone ? <Check size={10} /> : step.num}
+                    </motion.span>
+                    <span className="hidden sm:inline">{step.label}</span>
+                  </motion.div>
+                  {i < 2 && (
+                    <motion.div
+                      className={`h-0.5 w-4 mx-1 rounded-full shrink-0 ${isDone ? 'bg-success' : 'bg-muted'}`}
+                      animate={isDone ? { scaleX: [0, 1] } : {}}
+                      transition={{ duration: 0.3 }}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {/* ── STEP 1: Select which scripts were recorded ── */}
+          <AnimatePresence mode="wait">
           {finishStep === 'scripts' && (
-            <>
-              <p className="text-sm text-muted-foreground">
+            <motion.div key="step1" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.25 }}>
+              <p className="text-sm text-muted-foreground mb-3">
                 Selecione quais roteiros foram efetivamente gravados. Os não selecionados voltam para a <strong>Zona de Ideias</strong>.
               </p>
 
@@ -774,15 +813,21 @@ export default function VideomakerDashboard() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {finishClientScripts.map(script => {
+                  {finishClientScripts.map((script, i) => {
                     const isSelected = completedScriptIds.has(script.id);
                     const isRejected = rejectedScripts.has(script.id);
                     return (
-                      <div key={script.id} className={`p-3 rounded-lg border transition-colors ${
-                        isSelected ? 'border-success/40 bg-success/5' :
-                        isRejected ? 'border-destructive/40 bg-destructive/5' :
-                        'border-border hover:bg-muted/30'
-                      }`}>
+                      <motion.div
+                        key={script.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.05 }}
+                        className={`p-3 rounded-xl border-2 transition-all ${
+                          isSelected ? 'border-success/50 bg-success/5 shadow-sm shadow-success/10' :
+                          isRejected ? 'border-destructive/40 bg-destructive/5' :
+                          'border-border hover:border-muted-foreground/30'
+                        }`}
+                      >
                         <div className="flex items-center gap-3">
                           <Checkbox
                             checked={isSelected}
@@ -803,7 +848,9 @@ export default function VideomakerDashboard() {
                               <Badge variant="outline" className="text-[10px] ml-auto shrink-0">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
                             </div>
                           </div>
-                          <button
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
                             onClick={() => {
                               if (isRejected) {
                                 setRejectedScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
@@ -812,38 +859,40 @@ export default function VideomakerDashboard() {
                                 setCompletedScriptIds(prev => { const n = new Set(prev); n.delete(script.id); return n; });
                               }
                             }}
-                            className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border transition-all shrink-0 ${
+                            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium border transition-all shrink-0 ${
                               isRejected ? 'bg-destructive/20 text-destructive border-destructive/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
                             }`}
                           >
                             <ThumbsDown size={10} /> {isRejected ? 'Rejeitado' : 'Não gostou'}
-                          </button>
+                          </motion.button>
                         </div>
-                      </div>
+                      </motion.div>
                     );
                   })}
                 </div>
               )}
 
-              <div className="flex gap-2 mt-3">
+              <div className="flex gap-2 mt-4">
                 <Button variant="outline" onClick={() => setFinishDialogOpen(false)} className="flex-1">Cancelar</Button>
-                <Button onClick={handleGoToAlterationsStep} className="flex-1 gap-1.5">
-                  <ArrowRight size={16} />
-                  Próximo ({completedScriptIds.size} gravado{completedScriptIds.size !== 1 ? 's' : ''})
-                </Button>
+                <motion.div className="flex-1" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                  <Button onClick={handleGoToAlterationsStep} className="w-full gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
+                    <ArrowRight size={16} />
+                    Próximo ({completedScriptIds.size} gravado{completedScriptIds.size !== 1 ? 's' : ''})
+                  </Button>
+                </motion.div>
               </div>
-            </>
+            </motion.div>
           )}
 
-          {/* ── STEP 2: Mark alterations for each recorded script ── */}
+          {/* ── STEP 2: Mark alterations ── */}
           {finishStep === 'alterations' && (
-            <>
-              <p className="text-sm text-muted-foreground">
+            <motion.div key="step2" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.25 }}>
+              <p className="text-sm text-muted-foreground mb-3">
                 Para cada roteiro gravado, indique se houve mudança no roteiro original.
               </p>
 
               <div className="space-y-3">
-                {Array.from(completedScriptIds).map(id => {
+                {Array.from(completedScriptIds).map((id, i) => {
                   const script = scripts.find(s => s.id === id);
                   if (!script) return null;
                   const isAltered = alteredScripts.has(id);
@@ -851,97 +900,112 @@ export default function VideomakerDashboard() {
                   const isNormal = !isAltered && !isVerbal;
 
                   return (
-                    <div key={id} className={`p-3 rounded-lg border transition-colors ${
-                      isAltered ? 'border-warning/40 bg-warning/5' :
-                      isVerbal ? 'border-info/40 bg-info/5' :
-                      'border-success/40 bg-success/5'
-                    }`}>
-                      <div className="flex items-center gap-1.5 mb-2">
+                    <motion.div
+                      key={id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      className={`p-4 rounded-xl border-2 transition-all ${
+                        isAltered ? 'border-warning/50 bg-warning/5' :
+                        isVerbal ? 'border-info/50 bg-info/5' :
+                        'border-success/40 bg-success/5'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-3">
                         <p className="font-medium text-sm">{script.title}</p>
                         <Badge variant="outline" className="text-[10px] ml-auto">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
                       </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        <button
-                          onClick={() => { setAlteredScripts(prev => { const n = new Set(prev); n.delete(id); return n; }); setVerbalScripts(prev => { const n = new Set(prev); n.delete(id); return n; }); }}
-                          className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
-                            isNormal ? 'bg-success/20 text-success border-success/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
-                          }`}
-                        >
-                          <Check size={12} /> Sem mudanças
-                        </button>
-                        <button
-                          onClick={() => { setAlteredScripts(prev => new Set(prev).add(id)); setVerbalScripts(prev => { const n = new Set(prev); n.delete(id); return n; }); }}
-                          className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
-                            isAltered ? 'bg-warning/20 text-warning border-warning/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
-                          }`}
-                        >
-                          <Pencil size={12} /> Roteiro Alterado
-                        </button>
-                        <button
-                          onClick={() => { setVerbalScripts(prev => new Set(prev).add(id)); setAlteredScripts(prev => { const n = new Set(prev); n.delete(id); return n; }); }}
-                          className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
-                            isVerbal ? 'bg-info/20 text-info border-info/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
-                          }`}
-                        >
-                          <MessageCircle size={12} /> Comunicação Verbal
-                        </button>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { active: isNormal, label: 'Sem mudanças', icon: Check, color: 'success', onClick: () => { setAlteredScripts(prev => { const n = new Set(prev); n.delete(id); return n; }); setVerbalScripts(prev => { const n = new Set(prev); n.delete(id); return n; }); }},
+                          { active: isAltered, label: 'Alterado', icon: Pencil, color: 'warning', onClick: () => { setAlteredScripts(prev => new Set(prev).add(id)); setVerbalScripts(prev => { const n = new Set(prev); n.delete(id); return n; }); }},
+                          { active: isVerbal, label: 'Verbal', icon: MessageCircle, color: 'info', onClick: () => { setVerbalScripts(prev => new Set(prev).add(id)); setAlteredScripts(prev => { const n = new Set(prev); n.delete(id); return n; }); }},
+                        ].map(btn => (
+                          <motion.button
+                            key={btn.label}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={btn.onClick}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold border-2 transition-all ${
+                              btn.active ? `bg-${btn.color}/20 text-${btn.color} border-${btn.color}/50 shadow-sm` : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                            }`}
+                          >
+                            <btn.icon size={12} /> {btn.label}
+                          </motion.button>
+                        ))}
                       </div>
 
-                      {/* Notes for altered/verbal */}
-                      {(isAltered || isVerbal) && (
-                        <div className="mt-2">
-                          <label className={`text-[11px] font-medium mb-1 block ${isAltered ? 'text-warning' : 'text-info'}`}>
-                            📝 {isAltered ? 'O que mudou? (ajuda o editor a entender)' : 'Notas adicionais (opcional)'}
-                          </label>
-                          <Textarea
-                            value={alterationNotes[id] || ''}
-                            onChange={e => setAlterationNotes(prev => ({ ...prev, [id]: e.target.value }))}
-                            placeholder={isAltered ? 'Descreva como o roteiro foi alterado...' : 'Observações para o editor...'}
-                            className="min-h-[60px] text-xs"
-                          />
-                        </div>
-                      )}
-                    </div>
+                      <AnimatePresence>
+                        {(isAltered || isVerbal) && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="mt-3"
+                          >
+                            <label className={`text-[11px] font-medium mb-1 block ${isAltered ? 'text-warning' : 'text-info'}`}>
+                              📝 {isAltered ? 'O que mudou?' : 'Notas adicionais (opcional)'}
+                            </label>
+                            <Textarea
+                              value={alterationNotes[id] || ''}
+                              onChange={e => setAlterationNotes(prev => ({ ...prev, [id]: e.target.value }))}
+                              placeholder={isAltered ? 'Descreva como o roteiro foi alterado...' : 'Observações para o editor...'}
+                              className="min-h-[60px] text-xs"
+                            />
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
                   );
                 })}
               </div>
 
-              <div className="flex gap-2 mt-3">
-                <Button variant="outline" onClick={() => setFinishStep('scripts')} className="flex-1 gap-1.5">
-                  <ChevronLeft size={16} /> Voltar
-                </Button>
-                <Button onClick={handleGoToDriveStep} className="flex-1 gap-1.5">
-                  <ArrowRight size={16} /> Próximo
-                </Button>
+              <div className="flex gap-2 mt-4">
+                <motion.div className="flex-1" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                  <Button variant="outline" onClick={() => setFinishStep('scripts')} className="w-full gap-1.5">
+                    <ChevronLeft size={16} /> Voltar
+                  </Button>
+                </motion.div>
+                <motion.div className="flex-1" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                  <Button onClick={handleGoToDriveStep} className="w-full gap-1.5 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
+                    <ArrowRight size={16} /> Próximo
+                  </Button>
+                </motion.div>
               </div>
-            </>
+            </motion.div>
           )}
 
-          {/* ── STEP 3: Drive links + optional editor + send ── */}
+          {/* ── STEP 3: Drive links + send ── */}
           {finishStep === 'drive' && (
-            <>
-              <Alert className="border-warning/40 bg-warning/5">
+            <motion.div key="step3" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.25 }}>
+              <Alert className="border-warning/40 bg-warning/5 mb-3">
                 <AlertTriangle size={16} className="text-warning" />
                 <AlertDescription className="text-xs text-warning">
                   <strong>Importante:</strong> As falas devem estar separadas dos takes no Google Drive. Organize as pastas para facilitar a edição.
                 </AlertDescription>
               </Alert>
 
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground mb-3">
                 Adicione o link do Google Drive com os materiais de cada roteiro. O editor terá <strong>{settings.editingDeadlineHours || 48}h</strong> para editar.
               </p>
 
               <div className="space-y-3">
-                {Array.from(new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts])).map(id => {
+                {Array.from(new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts])).map((id, i) => {
                   const s = scripts.find(s => s.id === id);
                   if (!s) return null;
                   const isAlt = alteredScripts.has(id);
                   const isVerb = verbalScripts.has(id);
                   return (
-                    <div key={id} className={`p-4 rounded-xl border ${
-                      isAlt ? 'bg-warning/5 border-warning/30' :
-                      isVerb ? 'bg-info/5 border-info/30' : 'bg-muted/30 border-border'
-                    }`}>
+                    <motion.div
+                      key={id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      className={`p-4 rounded-xl border-2 ${
+                        isAlt ? 'bg-warning/5 border-warning/30' :
+                        isVerb ? 'bg-info/5 border-info/30' : 'bg-muted/30 border-border'
+                      }`}
+                    >
                       <div className="flex items-center gap-2 mb-2">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                           📁 {s.title}
@@ -958,13 +1022,18 @@ export default function VideomakerDashboard() {
                           className="h-9"
                         />
                       </div>
-                    </div>
+                    </motion.div>
                   );
                 })}
               </div>
 
               {/* Optional editor selection */}
-              <div className="p-4 rounded-xl border border-border bg-muted/20">
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="p-4 rounded-xl border-2 border-border bg-muted/20 mt-3"
+              >
                 <div className="flex items-center gap-2 mb-2">
                   <UserCheck size={16} className="text-muted-foreground" />
                   <p className="text-sm font-medium">Escolher Editor <span className="text-muted-foreground font-normal">(opcional)</span></p>
@@ -982,23 +1051,30 @@ export default function VideomakerDashboard() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
+              </motion.div>
 
-              <div className="flex gap-2 mt-3">
-                <Button variant="outline" onClick={() => setFinishStep('alterations')} className="flex-1 gap-1.5">
-                  <ChevronLeft size={16} /> Voltar
-                </Button>
-                <Button 
-                  onClick={confirmFinish} 
-                  disabled={Array.from(new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts])).some(id => !driveLinks[id]?.trim())}
-                  className="flex-1 gap-1.5 bg-success hover:bg-success/90 text-success-foreground"
-                >
-                  <Send size={16} />
-                  Enviar para Edição
-                </Button>
+              <div className="flex gap-2 mt-4">
+                <motion.div className="flex-1" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                  <Button variant="outline" onClick={() => setFinishStep('alterations')} className="w-full gap-1.5">
+                    <ChevronLeft size={16} /> Voltar
+                  </Button>
+                </motion.div>
+                <motion.div className="flex-1" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                  <Button 
+                    onClick={confirmFinish} 
+                    disabled={Array.from(new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts])).some(id => !driveLinks[id]?.trim())}
+                    className="w-full gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground shadow-lg shadow-primary/25 font-bold py-5 text-base rounded-xl"
+                  >
+                    <motion.div animate={{ y: [0, -2, 0], rotate: [0, -10, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                      <Rocket size={18} className="-rotate-45" />
+                    </motion.div>
+                    Enviar para Edição
+                  </Button>
+                </motion.div>
               </div>
-            </>
+            </motion.div>
           )}
+          </AnimatePresence>
         </DialogContent>
       </Dialog>
 

@@ -697,7 +697,9 @@ app.post('/api/portal-recordings', async (req, res) => {
       }
       if (!vmId) return res.status(400).json({ error: 'Nenhum videomaker atribuído' });
       const { rows: [settings] } = await pool.query('SELECT * FROM company_settings LIMIT 1');
-      const duration = (settings?.recording_duration || 2) * 60;
+      const rawDur = settings?.recording_duration || 2;
+      const duration = rawDur > 10 ? rawDur : rawDur * 60;
+      console.log('[check_availability] recording_duration raw:', rawDur, '-> duration (min):', duration, 'shifts:', settings?.shift_a_start, '-', settings?.shift_a_end, '|', settings?.shift_b_start, '-', settings?.shift_b_end);
       const buffer = 30;
       const { rows: existing } = await pool.query(
         `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,
@@ -717,7 +719,8 @@ app.post('/api/portal-recordings', async (req, res) => {
       const { rows: [rec] } = await pool.query('SELECT id, client_id, videomaker_id, date::text, start_time FROM recordings WHERE id = $1 AND client_id = $2', [recording_id, client_id]);
       if (!rec) return res.status(404).json({ error: 'Gravação não encontrada' });
       const { rows: [settings] } = await pool.query('SELECT recording_duration FROM company_settings LIMIT 1');
-      const duration = (settings?.recording_duration || 2) * 60;
+      const rawDurR = settings?.recording_duration || 2;
+      const duration = rawDurR > 10 ? rawDurR : rawDurR * 60;
       const buffer = 30;
       const { rows: conflicts } = await pool.query(
         `SELECT id, start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada' AND id != $3`,
@@ -764,7 +767,8 @@ app.post('/api/portal-recordings', async (req, res) => {
       if (!recCancel) return res.status(404).json({ error: 'Gravação não encontrada' });
       const { rows: [clientCancel] } = await pool.query('SELECT backup_day, backup_time, videomaker_id, company_name, fixed_day FROM clients WHERE id = $1', [client_id]);
       const { rows: [settingsCancel] } = await pool.query('SELECT * FROM company_settings LIMIT 1');
-      const durationCancel = (settingsCancel?.recording_duration || 2) * 60;
+      const rawDurC = settingsCancel?.recording_duration || 2;
+      const durationCancel = rawDurC > 10 ? rawDurC : rawDurC * 60;
       const bufferCancel = 30;
       const dayMapCancel = { domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6 };
       const targetDayCancel = dayMapCancel[clientCancel?.backup_day] ?? 2;
@@ -859,7 +863,8 @@ app.post('/api/portal-recordings', async (req, res) => {
       if (!vmId) return res.status(400).json({ error: 'Nenhum videomaker encontrado para este cliente' });
       // Verify no conflict for selected videomaker/date/time
       const { rows: [settingsBackup] } = await pool.query('SELECT recording_duration FROM company_settings LIMIT 1');
-      const durationBackup = (settingsBackup?.recording_duration || 2) * 60;
+      const rawDurB = settingsBackup?.recording_duration || 2;
+      const durationBackup = rawDurB > 10 ? rawDurB : rawDurB * 60;
       const bufferBackup = 30;
       const { rows: conflictsBackup } = await pool.query(
         `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,

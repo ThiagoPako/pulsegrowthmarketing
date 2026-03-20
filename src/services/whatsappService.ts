@@ -396,8 +396,7 @@ export async function getConfirmationStats(): Promise<{
 }
 
 export function getWebhookUrl(): string {
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-  return `https://${projectId}.supabase.co/functions/v1/whatsapp-webhook`;
+  return 'https://agenciapulse.tech/api/whatsapp-webhook';
 }
 
 /**

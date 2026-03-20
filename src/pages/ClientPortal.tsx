@@ -71,11 +71,7 @@ function shouldProxyPortalVideo(url: string) {
 async function createPortalVideoObjectUrl(url: string) {
   const response = await fetch(PORTAL_MEDIA_PROXY_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url }),
   });
 

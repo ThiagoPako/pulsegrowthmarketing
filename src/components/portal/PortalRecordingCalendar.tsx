@@ -117,28 +117,19 @@ const EVENT_STYLES: Record<string, { icon: string; label: string; color: string;
   in_review:      { icon: '🔍', label: 'Em revisão interna',    color: 'text-teal-400',     bgColor: 'bg-teal-500/15',     borderColor: 'border-teal-500/30',     animationType: 'pulse' },
 };
 
-/** Calculate business hours deadline: skip weekends, 08:00-18:00 (10h/day).
+/** Calculate business days deadline: 48h = 2 business days (Mon-Fri).
  *  Result NEVER falls on Saturday or Sunday. */
 function addBusinessHoursDate(fromDateStr: string, hours: number): string {
-  const hoursPerDay = 10; // 08-18
-  let remaining = hours;
+  const HOURS_PER_DAY = 24;
+  let daysToAdd = Math.ceil(hours / HOURS_PER_DAY);
   let current = parseISO(fromDateStr.substring(0, 10));
 
-  // If starting on a weekend, advance to Monday first
-  while (getDay(current) === 0 || getDay(current) === 6) {
-    current = addDays(current, 1);
-  }
-
-  while (remaining > 0) {
+  while (daysToAdd > 0) {
     current = addDays(current, 1);
     const dow = getDay(current);
-    if (dow === 0 || dow === 6) continue; // skip weekends
-    remaining -= hoursPerDay;
-  }
-
-  // Final safety: ensure we never land on a weekend
-  while (getDay(current) === 0 || getDay(current) === 6) {
-    current = addDays(current, 1);
+    if (dow !== 0 && dow !== 6) {
+      daysToAdd--;
+    }
   }
   return format(current, 'yyyy-MM-dd');
 }

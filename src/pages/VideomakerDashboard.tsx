@@ -1415,7 +1415,7 @@ export default function VideomakerDashboard() {
 
       {/* ── Scripts Dialog ── */}
       <Dialog open={scriptsOpen} onOpenChange={(open) => { setScriptsOpen(open); if (!open) setViewingScript(null); }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] sm:max-h-[85vh] overflow-y-auto mx-2 sm:mx-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {viewingScript ? (

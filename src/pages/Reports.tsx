@@ -383,7 +383,7 @@ export default function Reports() {
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(100, 116, 139);
-      doc.text(`Responsável: ${selectedClientObj.responsiblePerson}`, infoX, y + 7);
+      doc.text(`Responsavel: ${selectedClientObj.responsiblePerson}`, infoX, y + 7);
       const planId = clientPlans[selectedClient];
       const plan = planId ? plans.find(p => p.id === planId) : null;
       if (plan) doc.text(`Plano: ${plan.name}`, infoX, y + 12);

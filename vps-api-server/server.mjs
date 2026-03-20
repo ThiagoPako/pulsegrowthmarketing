@@ -766,7 +766,8 @@ app.post('/api/portal-recordings', async (req, res) => {
       if (!recCancel) return res.status(404).json({ error: 'Gravação não encontrada' });
       const { rows: [clientCancel] } = await pool.query('SELECT backup_day, backup_time, videomaker_id, company_name, fixed_day FROM clients WHERE id = $1', [client_id]);
       const { rows: [settingsCancel] } = await pool.query('SELECT * FROM company_settings LIMIT 1');
-      const durationCancel = (settingsCancel?.recording_duration || 2) * 60;
+      const rawDurC = settingsCancel?.recording_duration || 2;
+      const durationCancel = rawDurC > 10 ? rawDurC : rawDurC * 60;
       const bufferCancel = 30;
       const dayMapCancel = { domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6 };
       const targetDayCancel = dayMapCancel[clientCancel?.backup_day] ?? 2;

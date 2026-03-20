@@ -942,6 +942,9 @@ export default function Schedule() {
                                 <button onClick={() => handleCancel(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/15 transition-colors flex items-center justify-center gap-1">
                                   <XCircle size={10} /> Cancelar
                                 </button>
+                                <button onClick={() => handleDeleteRecording(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/15 transition-colors flex items-center justify-center gap-1">
+                                  <Trash2 size={10} /> Apagar
+                                </button>
                               </>
                             )}
                           </div>

@@ -181,19 +181,34 @@ export default function VideomakerDashboard() {
       });
   }, [finishRecordingId, recordings, scripts, plannedScripts, activeRecordings]);
 
-  const handleGoToDriveStep = () => {
-    if (completedScriptIds.size === 0 && rejectedScripts.size === 0 && alteredScripts.size === 0 && verbalScripts.size === 0) {
-      toast.error('Marque o status de pelo menos 1 roteiro');
+  const handleGoToAlterationsStep = () => {
+    if (completedScriptIds.size === 0 && rejectedScripts.size === 0) {
+      toast.error('Selecione pelo menos 1 roteiro');
       return;
     }
-    // Only need drive links for completed + altered + verbal scripts
-    if (completedScriptIds.size === 0 && alteredScripts.size === 0 && verbalScripts.size === 0) {
-      // Only rejected scripts, skip drive step and finalize directly
+    // If only rejected scripts, skip to drive/finalize
+    if (completedScriptIds.size === 0) {
+      confirmFinish();
+      return;
+    }
+    setFinishStep('alterations');
+  };
+
+  const handleGoToDriveStep = () => {
+    // All scripts that need drive links: completed + altered + verbal
+    const scriptsNeedingLinks = new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts]);
+    if (scriptsNeedingLinks.size === 0 && rejectedScripts.size > 0) {
       confirmFinish();
       return;
     }
     setFinishStep('drive');
   };
+
+  // Editors list for optional assignment
+  const editors = useMemo(() => 
+    users.filter(u => u.role === 'editor' || u.role === 'admin'),
+    [users]
+  );
 
   const confirmFinish = async () => {
     // All scripts that need drive links: completed + altered + verbal

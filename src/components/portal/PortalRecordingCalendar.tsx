@@ -38,6 +38,49 @@ const TYPE_MAP: Record<string, { label: string; emoji: string }> = {
   extra: { label: 'Extra', emoji: '⭐' },
 };
 
+/* ── Rocket + Fire particles for recording days ── */
+function RocketFireIndicator({ small = false }: { small?: boolean }) {
+  const fireEmojis = ['🔥', '🔥', '🔥'];
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      <motion.div
+        className="absolute z-10"
+        style={{ top: small ? '-6px' : '-8px', right: small ? '-2px' : '-4px' }}
+        animate={{ y: [0, -3, 0], rotate: [0, 5, -5, 0] }}
+        transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+      >
+        <span className={small ? 'text-[11px]' : 'text-[14px]'}>🚀</span>
+      </motion.div>
+      {fireEmojis.map((emoji, i) => (
+        <motion.div
+          key={i}
+          className="absolute z-0"
+          style={{ bottom: small ? '-4px' : '-6px', left: `${20 + i * 25}%` }}
+          animate={{
+            opacity: [0, 0.9, 0.6, 0],
+            y: [0, -8, -16, -24],
+            scale: [0.4, 0.8, 0.6, 0.2],
+          }}
+          transition={{ repeat: Infinity, duration: 1.2 + i * 0.3, delay: i * 0.25, ease: 'easeOut' }}
+        >
+          <span className={small ? 'text-[8px]' : 'text-[10px]'}>{emoji}</span>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+function FireBorder({ color }: { color: string }) {
+  return (
+    <motion.div
+      className="absolute inset-0 rounded-2xl pointer-events-none z-0"
+      animate={{ opacity: [0.4, 0.8, 0.4] }}
+      transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+      style={{ boxShadow: `0 0 15px hsl(${color} / 0.3), 0 0 30px hsl(25 100% 50% / 0.15), inset 0 0 10px hsl(25 100% 50% / 0.05)` }}
+    />
+  );
+}
+
 export default function PortalRecordingCalendar({ clientId, clientColor }: Props) {
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,7 +163,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
       body: { action: 'reschedule', client_id: clientId, recording_id: rescheduleRec.id, new_date: selectedNewDate, new_time: selectedNewTime },
     });
     if (data?.success) {
-      toast.success('Gravação reagendada com sucesso!');
+      toast.success('🚀 Gravação reagendada com sucesso!');
       setRescheduleRec(null);
       setSelectedNewDate('');
       setSelectedNewTime('');
@@ -173,17 +216,20 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
             <CalendarDays size={22} style={{ color: `hsl(${clientColor})` }} className="relative z-10" />
           </motion.div>
           <div>
-            <h2 className="text-2xl font-bold tracking-tight">Agenda de Gravações</h2>
+            <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+              Agenda de Gravações
+              <motion.span animate={{ y: [0, -4, 0], rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2.5 }}>🚀</motion.span>
+            </h2>
             <p className="text-sm text-white/40">Acompanhe e reagende suas sessões</p>
           </div>
         </div>
       </motion.div>
 
-      {/* Upcoming recordings - glass cards */}
+      {/* Upcoming recordings with fire effects */}
       {upcomingRecordings.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <Sparkles size={14} style={{ color: `hsl(${clientColor})` }} />
+            <motion.span animate={{ scale: [1, 1.2, 1], rotate: [0, 5, -5, 0] }} transition={{ repeat: Infinity, duration: 1.5 }}>🔥</motion.span>
             <h3 className="text-xs font-bold text-white/50 uppercase tracking-[0.15em]">Próximas gravações</h3>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -198,28 +244,22 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                   whileHover={{ y: -4, scale: 1.02 }}
                   className="relative group rounded-2xl overflow-hidden cursor-pointer"
                 >
-                  {/* Gradient border */}
-                  <div className="absolute inset-0 rounded-2xl p-[1px]"
-                    style={{ background: `linear-gradient(135deg, hsl(${clientColor} / 0.4), hsl(${clientColor} / 0.05))` }}
+                  <FireBorder color={clientColor} />
+                  <div className="absolute inset-0 rounded-2xl p-[1px] z-[1]"
+                    style={{ background: `linear-gradient(135deg, hsl(25 100% 50% / 0.5), hsl(${clientColor} / 0.4), hsl(25 100% 50% / 0.3))` }}
                   >
                     <div className="w-full h-full rounded-2xl bg-[#0d0d18]" />
                   </div>
-
-                  <div className="relative p-4">
-                    {/* Date pill */}
+                  <div className="relative p-4 z-[2]">
+                    <RocketFireIndicator />
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <span className="text-lg">{typeInfo.emoji}</span>
                         <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">{typeInfo.label}</span>
                       </div>
                       <motion.button
-                        onClick={() => {
-                          setRescheduleRec(rec);
-                          setSelectedNewDate('');
-                          setSelectedNewTime('');
-                          setAvailableSlots([]);
-                        }}
-                        whileHover={{ rotate: 180 }}
+                        onClick={() => { setRescheduleRec(rec); setSelectedNewDate(''); setSelectedNewTime(''); setAvailableSlots([]); }}
+                        whileHover={{ rotate: 180, scale: 1.1 }}
                         transition={{ duration: 0.3 }}
                         className="p-1.5 rounded-full hover:bg-white/10 transition-colors text-white/30 hover:text-white/70"
                         title="Reagendar"
@@ -227,24 +267,27 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                         <RefreshCw size={13} />
                       </motion.button>
                     </div>
-
-                    <p className="text-xl font-extrabold capitalize leading-tight">
-                      {format(parseISO(rec.date), "dd MMM", { locale: pt })}
-                    </p>
-                    <p className="text-[11px] text-white/40 capitalize mt-0.5">
-                      {format(parseISO(rec.date), "EEEE", { locale: pt })}
-                    </p>
-
+                    <p className="text-xl font-extrabold capitalize leading-tight">{format(parseISO(rec.date), "dd MMM", { locale: pt })}</p>
+                    <p className="text-[11px] text-white/40 capitalize mt-0.5">{format(parseISO(rec.date), "EEEE", { locale: pt })}</p>
                     <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/[0.06]">
                       <div className="flex items-center gap-1.5 text-sm font-semibold" style={{ color: `hsl(${clientColor})` }}>
                         <Clock size={13} />
-                        <span>{rec.start_time}</span>
+                        <span className="tabular-nums">{rec.start_time}</span>
                       </div>
                       <div className="flex items-center gap-1.5 text-xs text-white/35">
                         <Video size={11} />
                         <span>{rec.videomaker_name}</span>
                       </div>
                     </div>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => { setRescheduleRec(rec); setSelectedNewDate(''); setSelectedNewTime(''); setAvailableSlots([]); }}
+                      className="w-full mt-3 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-white/50 hover:text-white/80"
+                    >
+                      <RefreshCw size={10} />
+                      Reagendar
+                    </motion.button>
                   </div>
                 </motion.div>
               );
@@ -258,54 +301,35 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
           className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 sm:p-6 relative overflow-hidden"
         >
-          {/* Subtle glow */}
-          <div className="absolute -top-20 -right-20 w-40 h-40 rounded-full blur-3xl opacity-[0.05] pointer-events-none"
-            style={{ background: `hsl(${clientColor})` }}
-          />
+          <div className="absolute -top-20 -right-20 w-40 h-40 rounded-full blur-3xl opacity-[0.05] pointer-events-none" style={{ background: `hsl(${clientColor})` }} />
 
-          {/* Month nav */}
           <div className="flex items-center justify-between mb-6">
-            <motion.button
-              whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-              onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-              className="p-2.5 rounded-xl hover:bg-white/10 transition-colors"
-            >
+            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2.5 rounded-xl hover:bg-white/10 transition-colors">
               <ChevronLeft size={18} />
             </motion.button>
             <div className="text-center">
-              <h3 className="text-lg font-bold capitalize">
-                {format(currentMonth, 'MMMM', { locale: pt })}
-              </h3>
-              <p className="text-[11px] text-white/30 font-medium">
-                {format(currentMonth, 'yyyy')} • {totalThisMonth} gravação{totalThisMonth !== 1 ? 'ões' : ''}
-              </p>
+              <h3 className="text-lg font-bold capitalize">{format(currentMonth, 'MMMM', { locale: pt })}</h3>
+              <p className="text-[11px] text-white/30 font-medium">{format(currentMonth, 'yyyy')} • {totalThisMonth} gravação{totalThisMonth !== 1 ? 'ões' : ''}</p>
             </div>
-            <motion.button
-              whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-              onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-              className="p-2.5 rounded-xl hover:bg-white/10 transition-colors"
-            >
+            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2.5 rounded-xl hover:bg-white/10 transition-colors">
               <ChevronRight size={18} />
             </motion.button>
           </div>
 
-          {/* Weekday headers */}
           <div className="grid grid-cols-7 gap-1.5 mb-2">
             {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
               <div key={d} className="text-center text-[10px] font-bold text-white/25 uppercase tracking-wider py-1.5">{d}</div>
             ))}
           </div>
 
-          {/* Days grid */}
           <div className="grid grid-cols-7 gap-1.5">
-            {Array.from({ length: startPad }).map((_, i) => (
-              <div key={`pad-${i}`} className="aspect-square" />
-            ))}
+            {Array.from({ length: startPad }).map((_, i) => <div key={`pad-${i}`} className="aspect-square" />)}
 
             {daysInMonth.map((day, idx) => {
               const dateStr = format(day, 'yyyy-MM-dd');
               const recs = recordingsByDate[dateStr] || [];
               const hasRecording = recs.length > 0;
+              const hasUpcoming = recs.some(r => r.status === 'agendado');
               const isSelected = selectedDay && isSameDay(day, selectedDay);
               const isToday = isDateToday(day);
               const isPast = isBefore(day, new Date()) && !isToday;
@@ -323,61 +347,43 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                   onMouseLeave={() => setHoveredDay(null)}
                   whileHover={!isPast ? { scale: 1.08 } : {}}
                   whileTap={!isPast ? { scale: 0.95 } : {}}
-                  className={`
-                    aspect-square rounded-xl flex flex-col items-center justify-center relative transition-all duration-200
+                  className={`aspect-square rounded-xl flex flex-col items-center justify-center relative transition-all duration-200
                     ${isToday && !isSelected ? 'ring-1 ring-white/20' : ''}
                     ${isPast ? 'text-white/20' : 'text-white/70'}
-                    ${hasRecording && !isPast ? 'text-white' : ''}
-                  `}
+                    ${hasRecording && !isPast ? 'text-white' : ''}`}
                   style={{
                     background: isSelected
                       ? `hsl(${clientColor} / 0.25)`
                       : hasRecording && !isPast
-                        ? `hsl(${clientColor} / 0.08)`
-                        : isHovered && !isPast
-                          ? 'rgba(255,255,255,0.05)'
-                          : 'transparent',
+                        ? hasUpcoming ? `linear-gradient(135deg, hsl(25 100% 50% / 0.12), hsl(${clientColor} / 0.12))` : `hsl(${clientColor} / 0.08)`
+                        : isHovered && !isPast ? 'rgba(255,255,255,0.05)' : 'transparent',
                     boxShadow: isSelected
                       ? `0 0 0 2px hsl(${clientColor}), 0 4px 20px hsl(${clientColor} / 0.2)`
-                      : hasRecording && !isPast
-                        ? `inset 0 0 0 1px hsl(${clientColor} / 0.2)`
-                        : 'none',
+                      : hasRecording && !isPast && hasUpcoming
+                        ? `inset 0 0 0 1px hsl(25 100% 50% / 0.3), 0 0 12px hsl(25 100% 50% / 0.1)`
+                        : hasRecording && !isPast ? `inset 0 0 0 1px hsl(${clientColor} / 0.2)` : 'none',
                   }}
                 >
-                  {/* Day number */}
-                  <span className={`text-sm leading-none ${isToday ? 'font-extrabold' : hasRecording ? 'font-bold' : 'font-medium'}`}>
+                  {hasRecording && !isPast && hasUpcoming && <RocketFireIndicator small />}
+
+                  <span className={`text-sm leading-none relative z-10 ${isToday ? 'font-extrabold' : hasRecording ? 'font-bold' : 'font-medium'}`}>
                     {format(day, 'd')}
                   </span>
 
-                  {/* Recording time shown directly */}
                   {hasRecording && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 2 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex flex-col items-center mt-0.5"
-                    >
-                      <span
-                        className="text-[9px] font-bold leading-none"
-                        style={{ color: firstRec.status === 'gravado' ? '#6ee7b7' : `hsl(${clientColor})` }}
-                      >
+                    <motion.div initial={{ opacity: 0, y: 2 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center mt-0.5 relative z-10">
+                      <span className="text-[9px] font-bold leading-none tabular-nums"
+                        style={{ color: firstRec.status === 'gravado' ? '#6ee7b7' : firstRec.status === 'agendado' ? '#fb923c' : `hsl(${clientColor})` }}>
                         {firstRec.start_time}
                       </span>
-                      {recs.length > 1 && (
-                        <span className="text-[7px] text-white/30 font-bold mt-px">+{recs.length - 1}</span>
-                      )}
+                      {recs.length > 1 && <span className="text-[7px] text-white/30 font-bold mt-px">+{recs.length - 1}</span>}
                     </motion.div>
                   )}
 
-                  {/* Today indicator dot */}
                   {isToday && !hasRecording && (
-                    <motion.div
-                      className="w-1 h-1 rounded-full bg-white/50 mt-0.5"
-                      animate={{ scale: [1, 1.3, 1] }}
-                      transition={{ repeat: Infinity, duration: 2 }}
-                    />
+                    <motion.div className="w-1 h-1 rounded-full bg-white/50 mt-0.5" animate={{ scale: [1, 1.3, 1] }} transition={{ repeat: Infinity, duration: 2 }} />
                   )}
 
-                  {/* Hover tooltip with recording info */}
                   <AnimatePresence>
                     {isHovered && hasRecording && !isSelected && (
                       <motion.div
@@ -387,8 +393,8 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                         className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full z-30 pointer-events-none"
                       >
                         <div className="bg-[#1a1a2e] border border-white/10 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
-                          <p className="text-[10px] font-bold text-white/80">
-                            {firstRec.start_time} — {firstRec.videomaker_name}
+                          <p className="text-[10px] font-bold text-white/80 flex items-center gap-1">
+                            <span>🚀</span> {firstRec.start_time} — {firstRec.videomaker_name}
                           </p>
                           <p className="text-[9px] text-white/40 mt-0.5">
                             {(STATUS_MAP[firstRec.status] || STATUS_MAP.agendado).label} • {(TYPE_MAP[firstRec.type] || { label: firstRec.type }).label}
@@ -402,10 +408,11 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
             })}
           </div>
 
-          {/* Legend */}
-          <div className="flex items-center gap-5 mt-5 pt-4 border-t border-white/[0.06]">
+          <div className="flex flex-wrap items-center gap-5 mt-5 pt-4 border-t border-white/[0.06]">
             <div className="flex items-center gap-2 text-[11px] text-white/40">
-              <div className="w-3 h-3 rounded-md" style={{ background: `hsl(${clientColor} / 0.3)`, boxShadow: `inset 0 0 0 1px hsl(${clientColor} / 0.4)` }} />
+              <div className="w-3 h-3 rounded-md relative overflow-hidden" style={{ background: `linear-gradient(135deg, hsl(25 100% 50% / 0.4), hsl(${clientColor} / 0.3))` }}>
+                <span className="absolute -top-0.5 -right-0.5 text-[6px]">🚀</span>
+              </div>
               Agendada
             </div>
             <div className="flex items-center gap-2 text-[11px] text-white/40">
@@ -419,7 +426,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
           </div>
         </motion.div>
 
-        {/* Sidebar: selected day detail */}
+        {/* Sidebar */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
           <AnimatePresence mode="wait">
             {selectedDay ? (
@@ -431,35 +438,24 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                 transition={{ type: 'spring', stiffness: 200, damping: 20 }}
                 className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 relative overflow-hidden"
               >
-                {/* Accent stripe */}
                 <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl" style={{ background: `hsl(${clientColor})` }} />
-
                 <div className="flex items-center gap-3 mb-4 mt-1">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-extrabold"
-                    style={{ background: `hsl(${clientColor} / 0.15)`, color: `hsl(${clientColor})` }}
-                  >
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-extrabold relative"
+                    style={{ background: `hsl(${clientColor} / 0.15)`, color: `hsl(${clientColor})` }}>
                     {format(selectedDay, 'd')}
+                    {dayRecordings.some(r => r.status === 'agendado') && (
+                      <motion.span className="absolute -top-1 -right-1 text-[10px]" animate={{ y: [0, -2, 0] }} transition={{ repeat: Infinity, duration: 1.5 }}>🚀</motion.span>
+                    )}
                   </div>
                   <div>
-                    <p className="text-sm font-bold capitalize">
-                      {format(selectedDay, "EEEE", { locale: pt })}
-                    </p>
-                    <p className="text-xs text-white/40 capitalize">
-                      {format(selectedDay, "MMMM 'de' yyyy", { locale: pt })}
-                    </p>
+                    <p className="text-sm font-bold capitalize">{format(selectedDay, "EEEE", { locale: pt })}</p>
+                    <p className="text-xs text-white/40 capitalize">{format(selectedDay, "MMMM 'de' yyyy", { locale: pt })}</p>
                   </div>
                 </div>
 
                 {dayRecordings.length === 0 ? (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="text-center py-10"
-                  >
-                    <motion.div
-                      animate={{ y: [0, -5, 0] }}
-                      transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
-                    >
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-10">
+                    <motion.div animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}>
                       <CalendarDays size={36} className="mx-auto text-white/[0.07] mb-3" />
                     </motion.div>
                     <p className="text-sm text-white/25 font-medium">Nenhuma gravação</p>
@@ -472,58 +468,45 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                       const typeInfo = TYPE_MAP[rec.type] || { label: rec.type, emoji: '🎬' };
                       const canReschedule = rec.status === 'agendado' && isAfter(parseISO(rec.date), new Date());
                       return (
-                        <motion.div
-                          key={rec.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: i * 0.05 }}
-                          className="rounded-xl overflow-hidden"
-                        >
-                          {/* Status color bar */}
-                          <div className="h-0.5" style={{
-                            background: rec.status === 'gravado' ? '#34d399' : rec.status === 'cancelada' ? '#f87171' : `hsl(${clientColor})`
+                        <motion.div key={rec.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="rounded-xl overflow-hidden relative">
+                          {canReschedule && (
+                            <motion.div className="absolute inset-0 rounded-xl pointer-events-none z-0"
+                              animate={{ opacity: [0.3, 0.6, 0.3] }} transition={{ repeat: Infinity, duration: 2 }}
+                              style={{ boxShadow: '0 0 12px hsl(25 100% 50% / 0.15)' }} />
+                          )}
+                          <div className="h-0.5 relative z-[1]" style={{
+                            background: rec.status === 'gravado' ? '#34d399' : rec.status === 'cancelada' ? '#f87171' : `linear-gradient(90deg, hsl(25 100% 50%), hsl(${clientColor}))`
                           }} />
-
-                          <div className="bg-white/[0.04] border border-white/[0.06] border-t-0 rounded-b-xl p-4 space-y-3">
+                          <div className="bg-white/[0.04] border border-white/[0.06] border-t-0 rounded-b-xl p-4 space-y-3 relative z-[1]">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2.5">
-                                <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg"
-                                  style={{ background: `hsl(${clientColor} / 0.1)` }}
-                                >
-                                  {typeInfo.emoji}
+                                <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg relative" style={{ background: `hsl(${clientColor} / 0.1)` }}>
+                                  {canReschedule ? (
+                                    <motion.span animate={{ rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2 }}>🚀</motion.span>
+                                  ) : typeInfo.emoji}
                                 </div>
                                 <div>
-                                  <p className="text-base font-extrabold tabular-nums" style={{ color: `hsl(${clientColor})` }}>
-                                    {rec.start_time}
-                                  </p>
+                                  <p className="text-base font-extrabold tabular-nums" style={{ color: `hsl(${clientColor})` }}>{rec.start_time}</p>
                                   <p className="text-[10px] text-white/35 font-medium">{typeInfo.label}</p>
                                 </div>
                               </div>
-                              <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${st.bg} ${st.color}`}>
-                                {st.label}
-                              </span>
+                              <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${st.bg} ${st.color}`}>{st.label}</span>
                             </div>
-
                             <div className="flex items-center gap-2 text-xs text-white/40 bg-white/[0.03] rounded-lg px-3 py-2">
                               <Video size={12} className="shrink-0" />
                               <span className="font-medium">{rec.videomaker_name}</span>
                             </div>
-
                             {canReschedule && (
                               <motion.button
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                onClick={() => {
-                                  setRescheduleRec(rec);
-                                  setSelectedNewDate('');
-                                  setSelectedNewTime('');
-                                  setAvailableSlots([]);
-                                }}
-                                className="w-full py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
-                                style={{ background: `hsl(${clientColor} / 0.12)`, color: `hsl(${clientColor})` }}
+                                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                                onClick={() => { setRescheduleRec(rec); setSelectedNewDate(''); setSelectedNewTime(''); setAvailableSlots([]); }}
+                                className="w-full py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 relative overflow-hidden"
+                                style={{ background: `linear-gradient(135deg, hsl(25 100% 50% / 0.2), hsl(${clientColor} / 0.15))`, color: `hsl(${clientColor})`, border: `1px solid hsl(25 100% 50% / 0.2)` }}
                               >
-                                <RefreshCw size={12} />
-                                Reagendar esta gravação
+                                <motion.span animate={{ rotate: [0, 360] }} transition={{ repeat: Infinity, duration: 4, ease: 'linear' }}>
+                                  <RefreshCw size={12} />
+                                </motion.span>
+                                🔥 Reagendar esta gravação
                               </motion.button>
                             )}
                           </div>
@@ -534,15 +517,8 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                 )}
               </motion.div>
             ) : (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 text-center py-16"
-              >
-                <motion.div
-                  animate={{ rotate: [0, 5, -5, 0] }}
-                  transition={{ repeat: Infinity, duration: 4, ease: 'easeInOut' }}
-                >
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 text-center py-16">
+                <motion.div animate={{ rotate: [0, 5, -5, 0] }} transition={{ repeat: Infinity, duration: 4, ease: 'easeInOut' }}>
                   <Clapperboard size={36} className="mx-auto text-white/[0.07] mb-4" />
                 </motion.div>
                 <p className="text-sm text-white/25 font-medium">Selecione um dia</p>
@@ -557,9 +533,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
       <AnimatePresence>
         {rescheduleRec && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
             onClick={() => setRescheduleRec(null)}
           >
@@ -571,44 +545,35 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
               className="bg-[#12121e] border border-white/[0.08] rounded-2xl p-6 w-full max-w-md max-h-[85vh] overflow-y-auto relative"
               onClick={e => e.stopPropagation()}
             >
-              {/* Top accent */}
-              <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl" style={{ background: `hsl(${clientColor})` }} />
+              <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl" style={{ background: `linear-gradient(90deg, hsl(25 100% 50%), hsl(${clientColor}))` }} />
 
               <div className="flex items-center justify-between mb-6 mt-1">
                 <div className="flex items-center gap-2.5">
-                  <RefreshCw size={18} style={{ color: `hsl(${clientColor})` }} />
-                  <h3 className="text-lg font-bold">Reagendar</h3>
+                  <motion.span animate={{ y: [0, -3, 0], rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2 }}>🚀</motion.span>
+                  <h3 className="text-lg font-bold">Reagendar Gravação</h3>
                 </div>
-                <motion.button
-                  whileHover={{ rotate: 90 }}
-                  onClick={() => setRescheduleRec(null)}
-                  className="p-2 rounded-full hover:bg-white/10 transition-colors"
-                >
+                <motion.button whileHover={{ rotate: 90 }} onClick={() => setRescheduleRec(null)} className="p-2 rounded-full hover:bg-white/10 transition-colors">
                   <X size={16} />
                 </motion.button>
               </div>
 
-              {/* Current info */}
-              <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-4 mb-6">
+              <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-4 mb-6 relative overflow-hidden">
+                <motion.div className="absolute top-1 right-1" animate={{ scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }} transition={{ repeat: Infinity, duration: 2 }}>
+                  <span className="text-sm">🔥</span>
+                </motion.div>
                 <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-2">Gravação atual</p>
                 <div className="flex items-center gap-3">
                   <div className="w-11 h-11 rounded-xl flex items-center justify-center text-sm font-extrabold"
-                    style={{ background: `hsl(${clientColor} / 0.15)`, color: `hsl(${clientColor})` }}
-                  >
+                    style={{ background: `hsl(${clientColor} / 0.15)`, color: `hsl(${clientColor})` }}>
                     {format(parseISO(rescheduleRec.date), 'dd')}
                   </div>
                   <div>
-                    <p className="font-bold capitalize text-sm">
-                      {format(parseISO(rescheduleRec.date), "EEEE, dd 'de' MMMM", { locale: pt })}
-                    </p>
-                    <p className="text-xs text-white/40 mt-0.5">
-                      {rescheduleRec.start_time} • {rescheduleRec.videomaker_name}
-                    </p>
+                    <p className="font-bold capitalize text-sm">{format(parseISO(rescheduleRec.date), "EEEE, dd 'de' MMMM", { locale: pt })}</p>
+                    <p className="text-xs text-white/40 mt-0.5">🕐 {rescheduleRec.start_time} • 🎬 {rescheduleRec.videomaker_name}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Step 1 */}
               <div className="mb-6">
                 <p className="text-sm font-bold mb-3 flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full text-[11px] font-bold flex items-center justify-center text-white" style={{ background: `hsl(${clientColor})` }}>1</span>
@@ -618,21 +583,10 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                   {nextDays.map((d, i) => (
                     <motion.button
                       key={d}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: i * 0.02 }}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => {
-                        setSelectedNewDate(d);
-                        setSelectedNewTime('');
-                        handleCheckAvailability(d);
-                      }}
-                      className={`py-3 px-2 rounded-xl text-xs font-medium transition-all border ${
-                        selectedNewDate === d
-                          ? 'border-transparent text-white shadow-lg'
-                          : 'border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06] text-white/60'
-                      }`}
+                      initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.02 }}
+                      whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                      onClick={() => { setSelectedNewDate(d); setSelectedNewTime(''); handleCheckAvailability(d); }}
+                      className={`py-3 px-2 rounded-xl text-xs font-medium transition-all border ${selectedNewDate === d ? 'border-transparent text-white shadow-lg' : 'border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06] text-white/60'}`}
                       style={selectedNewDate === d ? { background: `hsl(${clientColor})`, boxShadow: `0 4px 15px hsl(${clientColor} / 0.3)` } : {}}
                     >
                       <div className="capitalize font-bold">{format(parseISO(d), 'EEE', { locale: pt })}</div>
@@ -642,18 +596,16 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                 </div>
               </div>
 
-              {/* Step 2 */}
               {selectedNewDate && (
                 <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
                   <p className="text-sm font-bold mb-3 flex items-center gap-2">
                     <span className="w-6 h-6 rounded-full text-[11px] font-bold flex items-center justify-center text-white" style={{ background: `hsl(${clientColor})` }}>2</span>
-                    Horário {vmName && <span className="font-normal text-white/40">— {vmName}</span>}
+                    Horário {vmName && <span className="font-normal text-white/40">— 🎬 {vmName}</span>}
                   </p>
-
                   {checkingAvailability ? (
                     <div className="flex items-center justify-center py-8 gap-2">
                       <Loader2 className="w-5 h-5 animate-spin" style={{ color: `hsl(${clientColor})` }} />
-                      <span className="text-sm text-white/40">Verificando...</span>
+                      <span className="text-sm text-white/40">Verificando disponibilidade...</span>
                     </div>
                   ) : availableSlots.length === 0 ? (
                     <div className="text-center py-8 bg-white/[0.03] rounded-xl">
@@ -666,17 +618,10 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                       {availableSlots.map((slot, i) => (
                         <motion.button
                           key={slot}
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ delay: i * 0.03 }}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
+                          initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.03 }}
+                          whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                           onClick={() => setSelectedNewTime(slot)}
-                          className={`py-3 rounded-xl text-sm font-bold transition-all border ${
-                            selectedNewTime === slot
-                              ? 'border-transparent text-white shadow-lg'
-                              : 'border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06] text-white/60'
-                          }`}
+                          className={`py-3 rounded-xl text-sm font-bold transition-all border ${selectedNewTime === slot ? 'border-transparent text-white shadow-lg' : 'border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06] text-white/60'}`}
                           style={selectedNewTime === slot ? { background: `hsl(${clientColor})`, boxShadow: `0 4px 15px hsl(${clientColor} / 0.3)` } : {}}
                         >
                           {slot}
@@ -687,7 +632,6 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                 </motion.div>
               )}
 
-              {/* Confirm */}
               {selectedNewDate && selectedNewTime && (
                 <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}>
                   <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-4 mb-4">
@@ -708,19 +652,19 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                     </div>
                   </div>
                   <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                     onClick={handleReschedule}
                     disabled={rescheduling}
-                    className="w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                    style={{ background: `hsl(${clientColor})`, boxShadow: `0 4px 20px hsl(${clientColor} / 0.3)` }}
+                    className="w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 relative overflow-hidden"
+                    style={{ background: `linear-gradient(135deg, hsl(25 100% 50%), hsl(${clientColor}))`, boxShadow: `0 4px 20px hsl(${clientColor} / 0.3)` }}
                   >
                     {rescheduling ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       <>
-                        <Check size={16} />
+                        <span>🚀</span>
                         Confirmar Reagendamento
+                        <span>🔥</span>
                       </>
                     )}
                   </motion.button>

@@ -221,6 +221,38 @@ export default function Clients() {
       .slice(0, 2);
   }, [availableSlots, form.videomaker]);
 
+  const fullShiftPeriods = useMemo(() => {
+    if (!form.videomaker) return [];
+
+    const requestedShifts: Array<'manha' | 'tarde'> = preferredShift === 'turnoA'
+      ? ['manha']
+      : preferredShift === 'turnoB'
+        ? ['tarde']
+        : ['manha', 'tarde'];
+
+    return settings.workDays.flatMap(day =>
+      requestedShifts.map(shift => {
+        const occupyingClient = shiftSlotTimes[shift]
+          .map(time => getOccupyingClient(form.videomaker as string, day, time))
+          .find((client): client is Client => Boolean(client));
+
+        return {
+          day,
+          shift,
+          available: !occupyingClient,
+          occupiedBy: occupyingClient?.companyName || null,
+          label: shift === 'manha'
+            ? `${settings.shiftAStart} – ${settings.shiftAEnd}`
+            : `${settings.shiftBStart} – ${settings.shiftBEnd}`,
+        };
+      })
+    );
+  }, [form.videomaker, preferredShift, settings.workDays, settings.shiftAStart, settings.shiftAEnd, settings.shiftBStart, settings.shiftBEnd, shiftSlotTimes, getOccupyingClient]);
+
+  const bestFullShiftPeriods = useMemo(() => {
+    return fullShiftPeriods.filter(period => period.available).slice(0, 2);
+  }, [fullShiftPeriods]);
+
   // Available times for selected day + videomaker
   const availableTimesForDay = useMemo(() => {
     if (!form.videomaker || !form.fixedDay) return [];

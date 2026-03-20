@@ -34,6 +34,15 @@ interface DeliveryRecord {
   delivery_status: string;
 }
 
+interface WaitLog {
+  id: string;
+  recording_id: string;
+  client_id: string;
+  wait_duration_seconds: number | null;
+  started_at: string;
+  ended_at: string | null;
+}
+
 interface SocialDelivery {
   id: string;
   client_id: string;

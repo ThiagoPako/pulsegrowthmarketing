@@ -62,7 +62,7 @@ function minutesToTime(m: number) {
 export default function Schedule() {
   const {
     clients, users, recordings, scripts, settings, activeRecordings,
-    currentUser, updateScript, addRecording, updateRecording, cancelRecording, cancelAndReschedule,
+    currentUser, updateScript, addRecording, updateRecording, cancelRecording, deleteRecording, cancelAndReschedule,
     regenerateScheduleForClient, startActiveRecording, stopActiveRecording,
     hasConflict, isWithinWorkHours,
   } = useApp();

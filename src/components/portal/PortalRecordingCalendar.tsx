@@ -81,7 +81,15 @@ function FireBorder({ color }: { color: string }) {
   );
 }
 
-type CancelFlow = null | { step: 'confirming'; rec: Recording } | { step: 'result'; rec: Recording; backupAvailable: boolean; backupSlot: { date: string; time: string } | null; nextFixedDate: string | null };
+interface AlternativeVideomaker {
+  id: string;
+  name: string;
+  date: string;
+  available_slots: string[];
+  total_free: number;
+}
+
+type CancelFlow = null | { step: 'confirming'; rec: Recording } | { step: 'result'; rec: Recording; backupAvailable: boolean; backupSlot: { date: string; time: string } | null; nextFixedDate: string | null; alternativeVideomakers: AlternativeVideomaker[] };
 
 export default function PortalRecordingCalendar({ clientId, clientColor }: Props) {
   const [recordings, setRecordings] = useState<Recording[]>([]);

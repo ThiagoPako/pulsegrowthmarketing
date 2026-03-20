@@ -618,16 +618,16 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
         {/* Calendar Grid */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
           className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-3 sm:p-6 relative overflow-hidden">
-          <div className="flex items-center justify-between mb-6">
-            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2.5 rounded-xl hover:bg-white/10 transition-colors">
-              <ChevronLeft size={18} />
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
+            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1.5 sm:p-2.5 rounded-xl hover:bg-white/10 transition-colors">
+              <ChevronLeft size={16} className="sm:w-[18px] sm:h-[18px]" />
             </motion.button>
             <div className="text-center">
-              <h3 className="text-lg font-bold capitalize">{format(currentMonth, 'MMMM', { locale: pt })}</h3>
-              <p className="text-[11px] text-white/30 font-medium">{format(currentMonth, 'yyyy')} • {totalThisMonth} gravações</p>
+              <h3 className="text-base sm:text-lg font-bold capitalize">{format(currentMonth, 'MMMM', { locale: pt })}</h3>
+              <p className="text-[10px] sm:text-[11px] text-white/30 font-medium">{format(currentMonth, 'yyyy')} • {totalThisMonth} gravações</p>
             </div>
-            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2.5 rounded-xl hover:bg-white/10 transition-colors">
-              <ChevronRight size={18} />
+            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-1.5 sm:p-2.5 rounded-xl hover:bg-white/10 transition-colors">
+              <ChevronRight size={16} className="sm:w-[18px] sm:h-[18px]" />
             </motion.button>
           </div>
 

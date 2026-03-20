@@ -207,6 +207,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const updateRecording = useCallback((recording: Recording) => { data.updateRecording(recording); }, [data]);
   const cancelRecording = useCallback((id: string) => { data.cancelRecording(id); }, [data]);
+  const deleteRecording = useCallback(async (id: string) => { return data.deleteRecording(id); }, [data]);
   const addTask = useCallback((task: KanbanTask) => { data.addTask(task); }, [data]);
   const updateTask = useCallback((task: KanbanTask) => { data.updateTask(task); }, [data]);
   const deleteTask = useCallback((id: string) => { data.deleteTask(id); }, [data]);

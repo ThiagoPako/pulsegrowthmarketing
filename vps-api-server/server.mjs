@@ -1674,7 +1674,12 @@ app.put('/api/recordings/:id', async (req, res) => {
 app.delete('/api/recordings/:id', async (req, res) => {
   try {
     await verifyUser(req);
-    await pool.query('DELETE FROM recordings WHERE id = $1', [req.params.id]);
+    const id = req.params.id;
+    // Cascade: remove dependent records first
+    await pool.query('DELETE FROM active_recordings WHERE recording_id = $1', [id]);
+    await pool.query('DELETE FROM delivery_records WHERE recording_id = $1', [id]);
+    await pool.query('DELETE FROM recording_wait_logs WHERE recording_id = $1', [id]);
+    await pool.query('DELETE FROM recordings WHERE id = $1', [id]);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

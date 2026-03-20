@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles, RefreshCw, MessageSquare, Play, Square, Star, Link, ThumbsDown, MessageCircle } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles, RefreshCw, MessageSquare, Play, Square, Star, Link, ThumbsDown, MessageCircle, Trash2 } from 'lucide-react';
 import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
@@ -62,7 +62,7 @@ function minutesToTime(m: number) {
 export default function Schedule() {
   const {
     clients, users, recordings, scripts, settings, activeRecordings,
-    currentUser, updateScript, addRecording, updateRecording, cancelRecording, cancelAndReschedule,
+    currentUser, updateScript, addRecording, updateRecording, cancelRecording, deleteRecording, cancelAndReschedule,
     regenerateScheduleForClient, startActiveRecording, stopActiveRecording,
     hasConflict, isWithinWorkHours,
   } = useApp();
@@ -243,6 +243,18 @@ export default function Schedule() {
   const handleCancel = (rec: Recording) => {
     setCancellingRec(rec);
     setBackupOpen(true);
+  };
+
+  const handleDeleteRecording = async (rec: Recording) => {
+    const client = clients.find(c => c.id === rec.clientId);
+    const confirmed = window.confirm(`Tem certeza que deseja APAGAR permanentemente esta gravação${client ? ` de ${client.companyName}` : ''}?\n\nEsta ação não pode ser desfeita.`);
+    if (!confirmed) return;
+    const success = await deleteRecording(rec.id);
+    if (success) {
+      toast.success('Gravação apagada com sucesso');
+    } else {
+      toast.error('Erro ao apagar gravação');
+    }
   };
 
   const handleCancelWithoutBackup = async () => {
@@ -815,6 +827,7 @@ export default function Schedule() {
                                     <button onClick={() => handleSendConfirmation(evt.recording!)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Enviar Confirmação"><MessageSquare size={10} /></button>
                                     <button onClick={() => handleComplete(evt.recording!)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Gravado"><Check size={10} /></button>
                                     <button onClick={() => handleCancel(evt.recording!)} className="p-0.5 rounded hover:bg-destructive/20 text-destructive" title="Cancelar"><XCircle size={10} /></button>
+                                    <button onClick={() => handleDeleteRecording(evt.recording!)} className="p-0.5 rounded hover:bg-destructive/20 text-destructive" title="Apagar"><Trash2 size={10} /></button>
                                   </>
                                 )}
                               </div>
@@ -929,7 +942,15 @@ export default function Schedule() {
                                 <button onClick={() => handleCancel(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/15 transition-colors flex items-center justify-center gap-1">
                                   <XCircle size={10} /> Cancelar
                                 </button>
+                                <button onClick={() => handleDeleteRecording(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/15 transition-colors flex items-center justify-center gap-1">
+                                  <Trash2 size={10} /> Apagar
+                                </button>
                               </>
+                            )}
+                            {evt.recording.status !== 'agendada' && (
+                              <button onClick={() => handleDeleteRecording(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/15 transition-colors flex items-center justify-center gap-1 col-span-2">
+                                <Trash2 size={10} /> Apagar
+                              </button>
                             )}
                           </div>
                         )}

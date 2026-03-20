@@ -25,6 +25,7 @@ interface AppContextType {
   addRecording: (recording: Recording) => boolean;
   updateRecording: (recording: Recording) => void;
   cancelRecording: (id: string) => void;
+  deleteRecording: (id: string) => Promise<boolean>;
   cancelAndReschedule: (recording: Recording) => { success: boolean; rescheduled?: { date: string; startTime: string; videomakerId: string; type: string } };
   generateScheduleForClient: (client: Client) => Promise<number>;
   regenerateScheduleForClient: (client: Client) => Promise<{ deleted: number; created: number }>;
@@ -206,6 +207,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const updateRecording = useCallback((recording: Recording) => { data.updateRecording(recording); }, [data]);
   const cancelRecording = useCallback((id: string) => { data.cancelRecording(id); }, [data]);
+  const deleteRecording = useCallback(async (id: string) => { return data.deleteRecording(id); }, [data]);
   const addTask = useCallback((task: KanbanTask) => { data.addTask(task); }, [data]);
   const updateTask = useCallback((task: KanbanTask) => { data.updateTask(task); }, [data]);
   const deleteTask = useCallback((id: string) => { data.deleteTask(id); }, [data]);
@@ -231,7 +233,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       activeRecordings: data.activeRecordings,
       logout, addUser, updateUser, deleteUser,
       addClient, updateClient, deleteClient,
-      addRecording, updateRecording, cancelRecording,
+      addRecording, updateRecording, cancelRecording, deleteRecording,
       cancelAndReschedule, generateScheduleForClient, regenerateScheduleForClient,
       addTask, updateTask, deleteTask,
       addScript, updateScript, deleteScript,

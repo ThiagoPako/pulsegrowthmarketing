@@ -375,6 +375,19 @@ export function useSupabaseData() {
     setRecordings(prev => prev.map(r => r.id === id ? { ...r, status: 'cancelada' as const } : r));
   }, []);
 
+  const deleteRecording = useCallback(async (id: string): Promise<boolean> => {
+    try {
+      const { error } = await invokeVpsFunction(`recordings/${id}`, { method: 'DELETE' });
+      if (error) { console.error('deleteRecording error:', error); return false; }
+      setRecordings(prev => prev.filter(r => r.id !== id));
+      setActiveRecordings(prev => prev.filter(a => a.recordingId !== id));
+      return true;
+    } catch (err) {
+      console.error('deleteRecording error:', err);
+      return false;
+    }
+  }, []);
+
   const deleteFutureRecordingsForClient = useCallback(async (clientId: string): Promise<number> => {
     const { data } = await invokeVpsFunction(`recordings/future/${clientId}`, { method: 'DELETE' });
     const deleted = data?.deleted || 0;
@@ -466,7 +479,7 @@ export function useSupabaseData() {
   return {
     clients, recordings, tasks, scripts, settings, activeRecordings, loading,
     addClient, updateClient, deleteClient,
-    addRecording, addRecordingsBulk, updateRecording, cancelRecording, deleteFutureRecordingsForClient,
+    addRecording, addRecordingsBulk, updateRecording, cancelRecording, deleteRecording, deleteFutureRecordingsForClient,
     addTask, updateTask, deleteTask,
     addScript, updateScript, deleteScript,
     updateSettings, startActiveRecording, stopActiveRecording,

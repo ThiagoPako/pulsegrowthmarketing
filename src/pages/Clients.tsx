@@ -124,6 +124,43 @@ export default function Clients() {
 
   const videomakers = users.filter(u => u.role === 'videomaker');
 
+  const shiftSlotTimes = useMemo(() => {
+    const buildSlots = (startTime: string, endTime: string) => {
+      const slots: string[] = [];
+      const start = timeToMinutes(startTime);
+      const end = timeToMinutes(endTime);
+
+      for (let t = start; t + settings.recordingDuration <= end; t += settings.recordingDuration + 30) {
+        slots.push(minutesToTime(t));
+      }
+
+      return slots;
+    };
+
+    return {
+      manha: buildSlots(settings.shiftAStart, settings.shiftAEnd),
+      tarde: buildSlots(settings.shiftBStart, settings.shiftBEnd),
+    };
+  }, [settings]);
+
+  const clientOccupiesSlot = useCallback((client: Client, videomakerId: string, day: DayOfWeek, time: string) => {
+    if (client.videomaker !== videomakerId || client.fixedDay !== day) return false;
+
+    if (client.fullShiftRecording) {
+      const shift = client.preferredShift || 'manha';
+      return shiftSlotTimes[shift].includes(time);
+    }
+
+    return client.fixedTime === time;
+  }, [shiftSlotTimes]);
+
+  const getOccupyingClient = useCallback((videomakerId: string, day: DayOfWeek, time: string) => {
+    return clients.find(c => {
+      if (editing && c.id === editing.id) return false;
+      return clientOccupiesSlot(c, videomakerId, day, time);
+    });
+  }, [clients, editing, clientOccupiesSlot]);
+
   // Calculate available slots per videomaker per day
   const availableSlots = useMemo(() => {
     if (!form.videomaker && videomakers.length === 0) return [];

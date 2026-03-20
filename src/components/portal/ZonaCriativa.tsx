@@ -596,7 +596,7 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
               animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: 40, filter: 'blur(10px)' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="max-w-2xl mx-auto my-8 sm:my-16"
+              className="max-w-2xl mx-auto my-8 sm:my-16 px-4"
               onClick={e => e.stopPropagation()}
             >
               <div className="bg-[#14141f] border border-white/[0.08] rounded-2xl overflow-hidden shadow-2xl">

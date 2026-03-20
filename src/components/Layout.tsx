@@ -12,7 +12,7 @@ import UserAvatar from '@/components/UserAvatar';
 import ProfileDialog from '@/components/ProfileDialog';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
-  LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Bot, Plug, Car, Menu, X
+  LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Bot, Plug, Car, Menu, X, Video
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import BirthdayOverlay from '@/components/BirthdayOverlay';
@@ -75,6 +75,7 @@ const navCategories: NavCategory[] = [
       { path: '/whatsapp', label: 'WhatsApp', icon: MessageSquare, roles: ['admin', 'social_media'] },
       { path: '/automacoes', label: 'Automações', icon: Bot, roles: ['admin', 'social_media'] },
       { path: '/panfletagem', label: 'Panfletagem', icon: Car, roles: ['admin'] },
+      { path: '/portal-videos', label: 'Vídeos Portal', icon: Video, roles: ['admin'] },
       { path: '/configuracoes', label: 'Config', icon: Settings, roles: ['admin', 'social_media'] },
     ],
   },

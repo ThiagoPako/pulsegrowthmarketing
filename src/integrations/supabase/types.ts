@@ -2121,6 +2121,89 @@ export type Database = {
           },
         ]
       }
+      portal_video_views: {
+        Row: {
+          client_id: string
+          id: string
+          video_id: string
+          viewed_at: string
+        }
+        Insert: {
+          client_id: string
+          id?: string
+          video_id: string
+          viewed_at?: string
+        }
+        Update: {
+          client_id?: string
+          id?: string
+          video_id?: string
+          viewed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_video_views_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portal_video_views_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: false
+            referencedRelation: "portal_videos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portal_videos: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          thumbnail_url: string | null
+          title: string
+          updated_at: string
+          video_type: string
+          video_url: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+          video_type?: string
+          video_url?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+          video_type?: string
+          video_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_videos_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null

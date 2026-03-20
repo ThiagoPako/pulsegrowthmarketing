@@ -471,10 +471,7 @@ export default function Clients() {
       const timeStr = minutesToTime(t);
       const row: typeof grid[0] = { time: t, timeStr, days: [] };
       for (const day of workDays) {
-        const occupyingClient = clients.find(c => {
-          if (editing && c.id === editing.id) return false;
-          return c.videomaker === form.videomaker && c.fixedDay === day && c.fixedTime === timeStr;
-        });
+        const occupyingClient = getOccupyingClient(form.videomaker, day, timeStr);
         row.days.push({
           day,
           status: occupyingClient ? 'occupied' : 'free',

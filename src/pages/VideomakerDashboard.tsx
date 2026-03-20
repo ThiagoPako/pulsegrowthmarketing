@@ -426,7 +426,7 @@ export default function VideomakerDashboard() {
     setVerbalScripts(new Set());
     setAlterationNotes({});
     setDriveLinks({});
-    setSelectedEditorId('');
+    setSelectedEditorId('__auto__');
     setFinishStep('scripts');
   };
 

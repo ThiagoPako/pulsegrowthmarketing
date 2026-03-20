@@ -551,7 +551,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
               const isConfirmed = rec.confirmation_status === 'confirmada';
               return (
                 <motion.div key={rec.id} initial={{ opacity: 0, y: 15, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ delay: 0.08 * i, type: 'spring', stiffness: 200 }} className="relative group rounded-2xl overflow-hidden">
+                  transition={{ delay: 0.08 * i, type: 'spring', stiffness: 200 }} className="relative group rounded-2xl overflow-hidden min-w-[260px] sm:min-w-0 snap-center">
                   <FireBorder color={clientColor} />
                   <div className="absolute inset-0 rounded-2xl p-[1px] z-[1]" style={{ background: `linear-gradient(135deg, hsl(25 100% 50% / 0.5), hsl(${clientColor} / 0.4), hsl(25 100% 50% / 0.3))` }}>
                     <div className="w-full h-full rounded-2xl bg-[#0d0d18]" />

@@ -718,7 +718,8 @@ app.post('/api/portal-recordings', async (req, res) => {
       const { rows: [rec] } = await pool.query('SELECT id, client_id, videomaker_id, date::text, start_time FROM recordings WHERE id = $1 AND client_id = $2', [recording_id, client_id]);
       if (!rec) return res.status(404).json({ error: 'Gravação não encontrada' });
       const { rows: [settings] } = await pool.query('SELECT recording_duration FROM company_settings LIMIT 1');
-      const duration = (settings?.recording_duration || 2) * 60;
+      const rawDurR = settings?.recording_duration || 2;
+      const duration = rawDurR > 10 ? rawDurR : rawDurR * 60;
       const buffer = 30;
       const { rows: conflicts } = await pool.query(
         `SELECT id, start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada' AND id != $3`,

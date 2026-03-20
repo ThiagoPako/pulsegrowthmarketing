@@ -604,6 +604,9 @@ export default function VideomakerDashboard() {
             recordingDurationMinutes={durationMin}
             scriptsCount={planned.length}
             isStarClient={isStar}
+            recordingId={activeRec.id}
+            videomakerId={vmId}
+            clientId={activeRec.clientId}
             onFinish={() => handleFinishRecording(activeRec)}
             onViewScripts={() => openScripts(activeRec.clientId)}
           />

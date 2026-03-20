@@ -678,8 +678,8 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                   onClick={() => setSelectedDay(day)}
                   onMouseEnter={() => setHoveredDay(dateStr)} onMouseLeave={() => setHoveredDay(null)}
                   whileHover={!isPast ? { scale: 1.12, zIndex: 20 } : {}} whileTap={!isPast ? { scale: 0.95 } : {}}
-                  className={`aspect-square rounded-2xl flex flex-col items-center justify-center relative transition-all duration-300 overflow-hidden
-                    ${isToday && !isSelected ? 'ring-2 ring-white/30' : ''}
+                  className={`aspect-square rounded-lg sm:rounded-2xl flex flex-col items-center justify-center relative transition-all duration-300 overflow-hidden
+                    ${isToday && !isSelected ? 'ring-1 sm:ring-2 ring-white/30' : ''}
                     ${isPast ? 'text-white/25' : 'text-white/80'}
                     ${hasAnyEvent && !isPast ? 'text-white shadow-lg' : ''}`}
                   style={{

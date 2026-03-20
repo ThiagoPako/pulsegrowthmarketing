@@ -701,7 +701,7 @@ app.post('/api/portal-recordings', async (req, res) => {
       const buffer = 30;
       const { rows: existing } = await pool.query(
         `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,
-        [clientData.videomaker_id, new_date]
+        [vmId, new_date]
       );
       const occupied = existing.map(r => { const [h, m] = r.start_time.split(':').map(Number); const start = h * 60 + m; return { start, end: start + duration + buffer }; });
       const slots = [];

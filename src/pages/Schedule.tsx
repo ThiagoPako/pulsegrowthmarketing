@@ -1057,7 +1057,7 @@ export default function Schedule() {
                   </div>
                   <div className="h-4 w-px bg-border" />
                   <div className="flex items-center gap-2 flex-1">
-                    {(() => { const v = videomakers.find(v => v.id === form.videomakerId); return v ? <><UserAvatar user={v} size="xs" /><span className="text-xs font-medium">{v.name}</span></> : null; })()}
+                    {(() => { const v = videomakers.find(v => v.id === form.videomakerId); return v ? <><UserAvatar user={v} size="sm" /><span className="text-xs font-medium">{v.name}</span></> : null; })()}
                   </div>
                 </div>
 

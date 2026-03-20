@@ -849,34 +849,65 @@ export default function VideomakerDashboard() {
       </div>
 
       {/* ── Kanban Semanal ── */}
-      <div className="glass-card p-5">
-        <h3 className="font-display font-semibold text-sm mb-4">Minha Semana</h3>
-        <div className="grid grid-cols-5 gap-2 min-h-[300px]">
+      <div className="glass-card p-3 sm:p-5">
+        <div className="flex items-center gap-2 mb-3 sm:mb-4">
+          <motion.div
+            animate={{ x: [0, 4, 0] }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <Rocket size={16} className="text-primary -rotate-45" />
+          </motion.div>
+          <h3 className="font-display font-semibold text-sm">Minha Semana</h3>
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0 sm:grid sm:grid-cols-5 sm:overflow-visible snap-x snap-mandatory -mx-1 px-1">
           {weekDays.map(day => {
             const dateStr = format(day, 'yyyy-MM-dd');
             const isToday = isSameDay(day, today);
             const dayRecs = getRecsForDay(day);
 
             return (
-              <div key={dateStr} className={`glass-card p-3 ${isToday ? 'ring-1 ring-primary' : ''}`}>
-                <div className="text-center mb-3">
+              <motion.div
+                key={dateStr}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className={`glass-card p-2.5 sm:p-3 min-w-[150px] sm:min-w-0 snap-center shrink-0 sm:shrink ${
+                  isToday ? 'ring-2 ring-primary shadow-md shadow-primary/10' : ''
+                }`}
+              >
+                <div className="text-center mb-2 sm:mb-3">
                   <p className={`text-xs font-semibold uppercase ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
                     {format(day, 'EEE', { locale: ptBR })}
                   </p>
                   <p className={`text-lg font-display font-bold ${isToday ? 'text-primary' : ''}`}>
                     {format(day, 'd')}
                   </p>
+                  {isToday && (
+                    <motion.div
+                      animate={{ scale: [1, 1.3, 1], opacity: [0.5, 1, 0.5] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                      className="w-1.5 h-1.5 rounded-full bg-primary mx-auto mt-1"
+                    />
+                  )}
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5 sm:space-y-2">
                   {dayRecs.length === 0 && (
-                    <p className="text-[10px] text-muted-foreground text-center py-4">Livre</p>
+                    <div className="text-center py-3 sm:py-4">
+                      <motion.div
+                        animate={{ y: [0, -3, 0], opacity: [0.15, 0.3, 0.15] }}
+                        transition={{ duration: 3, repeat: Infinity }}
+                      >
+                        <Rocket size={14} className="text-muted-foreground/30 -rotate-45 mx-auto" />
+                      </motion.div>
+                      <p className="text-[10px] text-muted-foreground mt-1">Livre</p>
+                    </div>
                   )}
                   {dayRecs.map(rec => {
                     const color = getClientColor(rec.clientId);
                     const isActive = activeRecordingId === rec.id;
                     const isDone = rec.status === 'concluida';
                     return (
-                      <div key={rec.id}
+                      <motion.div key={rec.id}
+                        whileTap={{ scale: 0.97 }}
                         onClick={() => {
                           if (isDone) return;
                           if (isActive) {
@@ -885,30 +916,36 @@ export default function VideomakerDashboard() {
                             handleStartRecording(rec);
                           }
                         }}
-                        className={`rounded-lg border p-2 text-xs space-y-1 cursor-pointer transition-all hover:shadow-md ${
+                        className={`rounded-lg border-2 p-2 text-xs space-y-0.5 cursor-pointer transition-all active:shadow-md ${
                           isActive ? 'border-primary bg-primary/5 ring-1 ring-primary/30' :
                           isDone ? 'border-success/30 bg-success/5 cursor-default' : 'border-border bg-card hover:border-primary/40'
                         }`}
                         style={{ borderLeftWidth: 3, borderLeftColor: `hsl(${color})` }}
                       >
-                        <p className="font-medium truncate">{getClientName(rec.clientId)}</p>
-                        <p className="text-muted-foreground">{rec.startTime}</p>
+                        <p className="font-medium truncate text-[11px]">{getClientName(rec.clientId)}</p>
+                        <p className="text-muted-foreground text-[10px]">{rec.startTime}</p>
                         {isDone && (
-                          <Badge className="bg-success/20 text-success border-success/30 text-[9px]">Gravado</Badge>
+                          <Badge className="bg-success/20 text-success border-success/30 text-[9px]">
+                            <Check size={8} className="mr-0.5" /> Gravado
+                          </Badge>
                         )}
                         {isActive && (
-                          <Badge className="bg-primary/20 text-primary border-primary/30 text-[9px] animate-pulse">● Ao vivo</Badge>
+                          <motion.div animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 1, repeat: Infinity }}>
+                            <Badge className="bg-primary/20 text-primary border-primary/30 text-[9px]">
+                              <Rocket size={8} className="-rotate-45 mr-0.5" /> Ao vivo
+                            </Badge>
+                          </motion.div>
                         )}
                         {!isActive && !isDone && rec.status === 'agendada' && (
                           <div className="flex items-center gap-1 text-primary text-[9px]">
-                            <Play size={9} /> Clique para iniciar
+                            <Play size={8} /> Toque para iniciar
                           </div>
                         )}
-                      </div>
+                      </motion.div>
                     );
                   })}
                 </div>
-              </div>
+              </motion.div>
             );
           })}
         </div>

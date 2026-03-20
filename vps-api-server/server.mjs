@@ -788,8 +788,24 @@ app.post('/api/portal-recordings', async (req, res) => {
     if (action === 'accept_backup') {
       const { backup_date, backup_time } = req.body;
       if (!backup_date || !backup_time) return res.status(400).json({ error: 'backup_date and backup_time required' });
+      // Get videomaker from client or fallback to the most recent cancelled recording's videomaker
       const { rows: [clientBackup] } = await pool.query('SELECT videomaker_id FROM clients WHERE id = $1', [client_id]);
-      await pool.query(`INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ($1, $2, $3, $4, 'secundaria', 'agendada', 'confirmada')`, [client_id, clientBackup.videomaker_id, backup_date, backup_time]);
+      let vmId = clientBackup?.videomaker_id;
+      if (!vmId) {
+        const { rows: [lastRec] } = await pool.query(
+          `SELECT videomaker_id FROM recordings WHERE client_id = $1 AND status = 'cancelada' ORDER BY created_at DESC LIMIT 1`, [client_id]
+        );
+        vmId = lastRec?.videomaker_id;
+      }
+      if (!vmId) {
+        // Ultimate fallback: any videomaker from any recording of this client
+        const { rows: [anyRec] } = await pool.query(
+          `SELECT videomaker_id FROM recordings WHERE client_id = $1 AND videomaker_id IS NOT NULL ORDER BY created_at DESC LIMIT 1`, [client_id]
+        );
+        vmId = anyRec?.videomaker_id;
+      }
+      if (!vmId) return res.status(400).json({ error: 'Nenhum videomaker encontrado para este cliente' });
+      await pool.query(`INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ($1, $2, $3, $4, 'secundaria', 'agendada', 'confirmada')`, [client_id, vmId, backup_date, backup_time]);
       return res.json({ success: true });
     }
 

@@ -529,7 +529,7 @@ export default function VideomakerDashboard() {
             <div className="space-y-2">
               {todayRecs.map((rec, i) => {
                 const color = getClientColor(rec.clientId);
-                const isActive = myActiveRec?.recordingId === rec.id;
+                const isActive = activeRecordingId === rec.id;
                 const isDone = rec.status === 'concluida';
 
                 return (

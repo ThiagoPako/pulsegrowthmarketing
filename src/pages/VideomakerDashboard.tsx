@@ -291,6 +291,8 @@ export default function VideomakerDashboard() {
         description = `🗣️ ALTERAÇÃO VERBAL — A alteração do roteiro foi passada presencialmente/verbalmente ao editor. ${altNotes ? `\n\n📝 Notas adicionais: ${altNotes}` : ''}\n\nLink dos materiais: ${scriptDriveLink}`;
       }
 
+      const assignedEditor = selectedEditorId || null;
+
       if (existing && existing.length > 0) {
         await supabase.from('content_tasks').update({
           kanban_column: 'edicao',
@@ -300,6 +302,7 @@ export default function VideomakerDashboard() {
           description,
           script_alteration_type: altType,
           script_alteration_notes: altNotes,
+          assigned_to: assignedEditor,
         } as any).eq('id', existing[0].id);
       } else {
         await supabase.from('content_tasks').insert({
@@ -310,7 +313,7 @@ export default function VideomakerDashboard() {
           description,
           script_id: scriptId,
           recording_id: rec.id,
-          assigned_to: null,
+          assigned_to: assignedEditor,
           created_by: vmId,
           drive_link: scriptDriveLink,
           editing_deadline: editingDeadline.toISOString(),

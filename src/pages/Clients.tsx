@@ -474,6 +474,17 @@ export default function Clients() {
     setForm(prev => ({ ...prev, videomaker: slot.vmId, fixedDay: slot.day, fixedTime: slot.firstTime }));
   };
 
+  const selectFullShiftSuggestion = (slot: { day: DayOfWeek; shift: 'manha' | 'tarde' }) => {
+    setPreferredShift(slot.shift === 'tarde' ? 'turnoB' : 'turnoA');
+    setForm(prev => ({
+      ...prev,
+      fullShiftRecording: true,
+      fixedDay: slot.day,
+      preferredShift: slot.shift,
+      fixedTime: slot.shift === 'tarde' ? settings.shiftBStart : settings.shiftAStart,
+    }));
+  };
+
   // Build full schedule grid data for selected videomaker
   const scheduleGrid = useMemo(() => {
     if (!form.videomaker) return null;

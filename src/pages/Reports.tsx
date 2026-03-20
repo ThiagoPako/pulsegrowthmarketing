@@ -134,6 +134,14 @@ export default function Reports() {
     });
   }, [socialDeliveries, selectedClient, dateRange]);
 
+  const filteredWaitLogs = useMemo(() => {
+    return waitLogs.filter(w => {
+      if (selectedClient !== 'all' && w.client_id !== selectedClient) return false;
+      const d = w.started_at?.split('T')[0] || '';
+      return d >= dateRange.start && d <= dateRange.end;
+    });
+  }, [waitLogs, selectedClient, dateRange]);
+
   // Recording duration in minutes from company settings
   const recDuration = settings.recordingDuration || 90;
 
@@ -158,6 +166,11 @@ export default function Reports() {
     const totalMinutes = realizadas.length * recDuration;
     const totalHours = (totalMinutes / 60).toFixed(1);
 
+    // Wait time stats
+    const totalWaitSeconds = filteredWaitLogs.reduce((a, w) => a + (w.wait_duration_seconds || 0), 0);
+    const totalWaitMinutes = Math.round(totalWaitSeconds / 60);
+    const waitCount = filteredWaitLogs.length;
+
     // Social media deliveries
     const socialReelsPosted = filteredSocial.filter(d => d.content_type === 'reels' && d.status === 'postado').length;
     const socialCriativosPosted = filteredSocial.filter(d => d.content_type === 'criativo' && d.status === 'postado').length;
@@ -170,9 +183,10 @@ export default function Reports() {
       realizadas: realizadas.length, canceladas: canceladas.length, encaixes: encaixes.length, extras: extras.length, 
       totalVideos, totalReels, totalCreatives, totalStories, totalArts, totalExtras, cancelRate,
       totalContent, avgPerSession, totalHours, totalMinutes,
+      totalWaitSeconds, totalWaitMinutes, waitCount,
       socialReelsPosted, socialCriativosPosted, socialStoriesPosted, socialArtesDelivered, totalPosted, totalSocialDelivered,
     };
-  }, [filteredRecords, filteredSocial, recDuration]);
+  }, [filteredRecords, filteredSocial, filteredWaitLogs, recDuration]);
 
   const comparison = useMemo(() => {
     if (selectedClient === 'all') return null;

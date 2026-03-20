@@ -295,7 +295,55 @@ export async function syncContentTaskColumnChange(
     }
   }
 
-  // 5. Log to task_history
+  // 5. Send portal notification for EVERY content movement (except envio, already handled above)
+  const portalNotifMap: Record<string, { title: string; message: string; type: string }> = {
+    edicao: {
+      title: '✂️ Vídeo em edição',
+      message: `"${ctx.title}" foi enviado para edição. Prazo previsto: 2 dias úteis.`,
+      type: 'editing_started',
+    },
+    revisao: {
+      title: '👁 Revisão interna',
+      message: `"${ctx.title}" está em revisão interna de qualidade.`,
+      type: 'internal_review',
+    },
+    alteracao: {
+      title: '🔧 Ajuste em andamento',
+      message: `"${ctx.title}" está recebendo ajustes solicitados.`,
+      type: 'adjustment',
+    },
+    agendamentos: {
+      title: '✅ Vídeo aprovado',
+      message: `"${ctx.title}" foi aprovado e está sendo preparado para postagem.`,
+      type: 'approved',
+    },
+    acompanhamento: {
+      title: '📅 Vídeo agendado',
+      message: `"${ctx.title}" foi agendado para postagem.`,
+      type: 'scheduled',
+    },
+    arquivado: {
+      title: '📦 Conteúdo concluído',
+      message: `"${ctx.title}" foi finalizado e arquivado.`,
+      type: 'completed',
+    },
+  };
+
+  const portalNotif = portalNotifMap[newColumn];
+  if (portalNotif && newColumn !== 'envio') {
+    try {
+      await supabase.from('client_portal_notifications').insert({
+        client_id: ctx.clientId,
+        title: portalNotif.title,
+        message: portalNotif.message,
+        type: portalNotif.type,
+      } as any);
+    } catch (err) {
+      console.error('Portal movement notification error:', err);
+    }
+  }
+
+  // 6. Log to task_history
   const actionMap: Record<string, string> = {
     ideias: 'Movido para Zona de Ideias',
     captacao: 'Movido para Captação',

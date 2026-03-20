@@ -31,7 +31,12 @@ interface ContentEvent {
   scheduled_date: string | null;
   scheduled_time: string | null;
   editing_started_at: string | null;
+  editing_deadline: string | null;
+  approval_sent_at: string | null;
   approved_at: string | null;
+  adjustment_notes: string | null;
+  updated_at: string;
+  created_at: string;
 }
 
 interface DeliveryEvent {
@@ -42,6 +47,7 @@ interface DeliveryEvent {
   delivered_at: string;
   posted_at: string | null;
   scheduled_time: string | null;
+  platform: string | null;
 }
 
 interface DayEvent {

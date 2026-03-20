@@ -519,13 +519,19 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
             {daysInMonth.map((day, idx) => {
               const dateStr = format(day, 'yyyy-MM-dd');
               const recs = recordingsByDate[dateStr] || [];
+              const dayEvents = eventsByDate[dateStr] || [];
               const hasRecording = recs.length > 0;
+              const hasAnyEvent = hasRecording || dayEvents.length > 0;
               const hasUpcoming = recs.some(r => isScheduled(r.status));
+              const hasCancelled = recs.some(r => r.status === 'cancelada');
+              const hasPosted = dayEvents.some(e => e.icon === '📱');
               const isSelected = selectedDay && isSameDay(day, selectedDay);
               const isToday = isDateToday(day);
               const isPast = isBefore(day, new Date()) && !isToday;
               const isHovered = hoveredDay === dateStr;
-              const firstRec = recs[0];
+
+              // Collect unique icons for this day (max 3 visible)
+              const uniqueIcons = [...new Set(dayEvents.map(e => e.icon))].slice(0, 3);
 
               return (
                 <motion.button
@@ -540,40 +546,54 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                   className={`aspect-square rounded-xl flex flex-col items-center justify-center relative transition-all duration-200
                     ${isToday && !isSelected ? 'ring-1 ring-white/20' : ''}
                     ${isPast ? 'text-white/20' : 'text-white/70'}
-                    ${hasRecording && !isPast ? 'text-white' : ''}`}
+                    ${hasAnyEvent && !isPast ? 'text-white' : ''}`}
                   style={{
                     background: isSelected ? `hsl(${clientColor} / 0.25)`
+                      : hasCancelled && !isPast ? 'rgba(239,68,68,0.1)'
                       : hasRecording && !isPast ? hasUpcoming ? `linear-gradient(135deg, hsl(25 100% 50% / 0.12), hsl(${clientColor} / 0.12))` : `hsl(${clientColor} / 0.08)`
+                      : hasAnyEvent && !isPast ? 'rgba(255,255,255,0.04)'
                       : isHovered && !isPast ? 'rgba(255,255,255,0.05)' : 'transparent',
                     boxShadow: isSelected ? `0 0 0 2px hsl(${clientColor}), 0 4px 20px hsl(${clientColor} / 0.2)`
+                      : hasCancelled && !isPast ? `inset 0 0 0 1px rgba(239,68,68,0.3)`
                       : hasRecording && !isPast && hasUpcoming ? `inset 0 0 0 1px hsl(25 100% 50% / 0.3), 0 0 12px hsl(25 100% 50% / 0.1)`
                       : hasRecording && !isPast ? `inset 0 0 0 1px hsl(${clientColor} / 0.2)` : 'none',
                   }}
                 >
-                  {hasRecording && !isPast && hasUpcoming && <RocketFireIndicator small />}
-                  <span className={`text-sm leading-none relative z-10 ${isToday ? 'font-extrabold' : hasRecording ? 'font-bold' : 'font-medium'}`}>
+                  {/* Big red X for cancelled */}
+                  {hasCancelled && !isPast && (
+                    <motion.span
+                      initial={{ scale: 0 }} animate={{ scale: 1 }}
+                      className="absolute inset-0 flex items-center justify-center text-red-500/30 text-2xl font-black z-0 pointer-events-none"
+                    >✕</motion.span>
+                  )}
+                  {hasRecording && !isPast && hasUpcoming && !hasCancelled && <RocketFireIndicator small />}
+                  <span className={`text-sm leading-none relative z-10 ${isToday ? 'font-extrabold' : hasAnyEvent ? 'font-bold' : 'font-medium'}`}>
                     {format(day, 'd')}
                   </span>
-                  {hasRecording && (
-                    <motion.div initial={{ opacity: 0, y: 2 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center mt-0.5 relative z-10">
-                      <span className="text-[9px] font-bold leading-none tabular-nums"
-                        style={{ color: recs.some(r => r.status === 'concluida' || r.status === 'gravado') ? '#6ee7b7' : isScheduled(firstRec.status) ? '#fb923c' : `hsl(${clientColor})` }}>
-                        {firstRec.start_time}
-                      </span>
-                      {recs.length > 1 && <span className="text-[7px] text-white/30 font-bold mt-px">+{recs.length - 1}</span>}
+                  {/* Event icons row */}
+                  {uniqueIcons.length > 0 && (
+                    <motion.div initial={{ opacity: 0, y: 2 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-px mt-0.5 relative z-10">
+                      {uniqueIcons.map((icon, i) => (
+                        <span key={i} className="text-[8px] leading-none">{icon}</span>
+                      ))}
+                      {dayEvents.length > 3 && <span className="text-[7px] text-white/30 font-bold ml-px">+{dayEvents.length - 3}</span>}
                     </motion.div>
                   )}
-                  {isToday && !hasRecording && (
+                  {isToday && !hasAnyEvent && (
                     <motion.div className="w-1 h-1 rounded-full bg-white/50 mt-0.5" animate={{ scale: [1, 1.3, 1] }} transition={{ repeat: Infinity, duration: 2 }} />
                   )}
                   {/* Hover tooltip */}
                   <AnimatePresence>
-                    {isHovered && hasRecording && !isSelected && (
+                    {isHovered && hasAnyEvent && !isSelected && (
                       <motion.div initial={{ opacity: 0, y: 5, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 5, scale: 0.9 }}
                         className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full z-30 pointer-events-none">
-                        <div className="bg-[#1a1a2e] border border-white/10 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
-                          <p className="text-[10px] font-bold text-white/80 flex items-center gap-1">🚀 {firstRec.start_time} — {firstRec.videomaker_name}</p>
-                          <p className="text-[9px] text-white/40 mt-0.5">{(STATUS_MAP[firstRec.status] || STATUS_MAP.agendada).label} • {(TYPE_MAP[firstRec.type] || { label: firstRec.type }).label}</p>
+                        <div className="bg-[#1a1a2e] border border-white/10 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap space-y-0.5">
+                          {dayEvents.slice(0, 4).map((ev, i) => (
+                            <p key={i} className="text-[10px] font-bold text-white/70 flex items-center gap-1">
+                              <span>{ev.icon}</span> {ev.label}{ev.time ? ` • ${ev.time}` : ''}
+                            </p>
+                          ))}
+                          {dayEvents.length > 4 && <p className="text-[9px] text-white/30">+{dayEvents.length - 4} mais</p>}
                         </div>
                       </motion.div>
                     )}
@@ -583,19 +603,21 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
             })}
           </div>
 
-          <div className="flex flex-wrap items-center gap-5 mt-5 pt-4 border-t border-white/[0.06]">
-            <div className="flex items-center gap-2 text-[11px] text-white/40">
-              <div className="w-3 h-3 rounded-md relative overflow-hidden" style={{ background: `linear-gradient(135deg, hsl(25 100% 50% / 0.4), hsl(${clientColor} / 0.3))` }}>
-                <span className="absolute -top-0.5 -right-0.5 text-[6px]">🚀</span>
+          {/* Legend */}
+          <div className="flex flex-wrap items-center gap-4 mt-5 pt-4 border-t border-white/[0.06]">
+            {[
+              { icon: '📹', label: 'Agendada' },
+              { icon: '🎬', label: 'Gravada' },
+              { icon: '❌', label: 'Cancelada' },
+              { icon: '🔄', label: 'Remarcada' },
+              { icon: '⭐', label: 'Extra' },
+              { icon: '✂️', label: 'Em edição' },
+              { icon: '📱', label: 'Postado' },
+            ].map(item => (
+              <div key={item.icon} className="flex items-center gap-1.5 text-[10px] text-white/35">
+                <span className="text-[10px]">{item.icon}</span>{item.label}
               </div>
-              Agendada
-            </div>
-            <div className="flex items-center gap-2 text-[11px] text-white/40">
-              <div className="w-3 h-3 rounded-md bg-emerald-500/30" /> Gravada
-            </div>
-            <div className="flex items-center gap-2 text-[11px] text-white/40">
-              <div className="w-3 h-3 rounded-md ring-1 ring-white/20" /> Hoje
-            </div>
+            ))}
           </div>
         </motion.div>
 

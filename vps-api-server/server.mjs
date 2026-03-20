@@ -10,6 +10,7 @@
  * Runs on port 3002 (upload-server uses 3001)
  */
 
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
@@ -26,12 +27,14 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 // ─── PostgreSQL local ───────────────────────────────────────
+const pgPassword = process.env.PG_PASSWORD ?? process.env.DB_PASSWORD;
+
 const pool = new Pool({
   host: process.env.PG_HOST || 'localhost',
   port: Number(process.env.PG_PORT) || 5432,
-  database: process.env.PG_DATABASE || 'pulse_db',
-  user: process.env.PG_USER || 'pulse_user',
-  password: process.env.PG_PASSWORD || '',
+  database: process.env.PG_DATABASE || process.env.DB_NAME || 'pulse_db',
+  user: process.env.PG_USER || process.env.DB_USER || 'pulse_user',
+  ...(typeof pgPassword === 'string' && pgPassword.length > 0 ? { password: pgPassword } : {}),
 });
 
 // ─── JWT Config ─────────────────────────────────────────────

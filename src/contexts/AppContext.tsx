@@ -93,15 +93,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return h * 60 + m;
   };
 
+  const BUFFER_BETWEEN_RECORDINGS = 30;
+
   const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string) => {
     const newStart = timeToMinutes(startTime);
-    const newEnd = newStart + data.settings.recordingDuration;
+    const newEndWithBuffer = newStart + data.settings.recordingDuration + BUFFER_BETWEEN_RECORDINGS;
+
     return data.recordings.some(r => {
       if (r.id === excludeId || r.status === 'cancelada') return false;
       if (r.videomakerId !== videomakerId || r.date !== date) return false;
+
       const existStart = timeToMinutes(r.startTime);
-      const existEnd = existStart + data.settings.recordingDuration;
-      return newStart < existEnd && newEnd > existStart;
+      const existEndWithBuffer = existStart + data.settings.recordingDuration + BUFFER_BETWEEN_RECORDINGS;
+
+      return newStart < existEndWithBuffer && newEndWithBuffer > existStart;
     });
   }, [data.recordings, data.settings.recordingDuration]);
 

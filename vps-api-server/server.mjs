@@ -707,7 +707,8 @@ app.post('/api/portal-recordings', async (req, res) => {
       );
       const occupied = existing.map(r => { const [h, m] = r.start_time.split(':').map(Number); const start = h * 60 + m; return { start, end: start + duration + buffer }; });
       const slots = [];
-      const generateSlots = (startStr, endStr) => { const [sh, sm] = startStr.split(':').map(Number); const [eh, em] = endStr.split(':').map(Number); let cursor = sh * 60 + sm; const endMin = eh * 60 + em; while (cursor + duration <= endMin) { const conflict = occupied.some(o => cursor < o.end && cursor + duration + buffer > o.start); if (!conflict) slots.push(`${String(Math.floor(cursor / 60)).padStart(2, '0')}:${String(cursor % 60).padStart(2, '0')}`); cursor += 30; } };
+      const step = duration + buffer; // 90 + 30 = 120min between slot starts
+      const generateSlots = (startStr, endStr) => { const [sh, sm] = startStr.split(':').map(Number); const [eh, em] = endStr.split(':').map(Number); let cursor = sh * 60 + sm; const endMin = eh * 60 + em; while (cursor + duration <= endMin) { const conflict = occupied.some(o => cursor < o.end && cursor + duration + buffer > o.start); if (!conflict) slots.push(`${String(Math.floor(cursor / 60)).padStart(2, '0')}:${String(cursor % 60).padStart(2, '0')}`); cursor += step; } };
       generateSlots(settings?.shift_a_start || '08:30', settings?.shift_a_end || '12:00');
       generateSlots(settings?.shift_b_start || '14:30', settings?.shift_b_end || '18:00');
       const { rows: [vmProfile] } = await pool.query('SELECT name FROM profiles WHERE id = $1', [vmId]);

@@ -862,7 +862,8 @@ app.post('/api/portal-recordings', async (req, res) => {
       if (!vmId) return res.status(400).json({ error: 'Nenhum videomaker encontrado para este cliente' });
       // Verify no conflict for selected videomaker/date/time
       const { rows: [settingsBackup] } = await pool.query('SELECT recording_duration FROM company_settings LIMIT 1');
-      const durationBackup = (settingsBackup?.recording_duration || 2) * 60;
+      const rawDurB = settingsBackup?.recording_duration || 2;
+      const durationBackup = rawDurB > 10 ? rawDurB : rawDurB * 60;
       const bufferBackup = 30;
       const { rows: conflictsBackup } = await pool.query(
         `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,

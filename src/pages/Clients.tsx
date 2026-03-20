@@ -1279,45 +1279,7 @@ export default function Clients() {
         </div>
       )}
 
-      {form.videomaker && (
-        <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-3">
-          <div className="flex items-center gap-3">
-            <Switch
-              checked={form.fullShiftRecording || false}
-              onCheckedChange={v => {
-                setPreferredShift(v ? ((form.preferredShift || 'manha') === 'tarde' ? 'turnoB' : 'turnoA') : 'ambos');
-                setForm(prev => ({
-                  ...prev,
-                  fullShiftRecording: v,
-                  preferredShift: v ? (prev.preferredShift || 'manha') : prev.preferredShift,
-                  fixedTime: v ? ((prev.preferredShift || 'manha') === 'tarde' ? settings.shiftBStart : settings.shiftAStart) : prev.fixedTime,
-                }));
-              }}
-            />
-            <div>
-              <Label className="font-medium">⏱️ Gravação por Turno Inteiro</Label>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                O cliente ocupa o turno completo e a seleção passa a ser por período, não por horário.
-              </p>
-            </div>
-          </div>
-          {form.fullShiftRecording && (
-            <div className="space-y-1">
-              <Label>Turno Preferido</Label>
-              <Select value={form.preferredShift || 'manha'} onValueChange={v => {
-                setPreferredShift(v === 'tarde' ? 'turnoB' : 'turnoA');
-                setForm(prev => ({ ...prev, preferredShift: v as 'manha' | 'tarde', fixedTime: v === 'tarde' ? settings.shiftBStart : settings.shiftAStart }));
-              }}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="manha">☀️ Manhã ({settings.shiftAStart} – {settings.shiftAEnd})</SelectItem>
-                  <SelectItem value="tarde">🌙 Tarde ({settings.shiftBStart} – {settings.shiftBEnd})</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Cliente Star toggle was moved to Step 1 */}
 
       {/* Manual day/time selection */}
       {form.videomaker && !form.fullShiftRecording && (

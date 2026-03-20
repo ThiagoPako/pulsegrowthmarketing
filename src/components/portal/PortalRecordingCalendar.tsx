@@ -639,11 +639,11 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                           {acceptingBackup ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check size={14} /> Aceitar backup</>}
                         </motion.button>
                         <motion.button whileTap={{ scale: 0.95 }} onClick={() => setCancelFlow(null)}
-                          className="py-3 px-4 rounded-xl text-sm font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition-all text-white/50">
-                          Não
+                          className="py-3 px-4 rounded-xl text-sm font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition-all text-white/50 flex items-center gap-2">
+                          <CalendarDays size={13} /> Deixar para a próxima
                         </motion.button>
                       </div>
-                      <p className="text-[11px] text-white/30 text-center">Se preferir, sua próxima gravação fica para a semana seguinte.</p>
+                      <p className="text-[11px] text-white/30 text-center">Ao recusar, sua gravação fica para a próxima data fixa.</p>
                     </div>
                    ) : (
                     <div className="space-y-4">

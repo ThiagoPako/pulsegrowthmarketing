@@ -587,11 +587,25 @@ export default function VideomakerDashboard() {
   }, [myRecordings, todayRecs, clients, today, weekStart, weekEnd]);
 
   return (
-    <div className="space-y-5 max-w-[1400px]">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-display font-bold">Olá, {currentUser?.name} 👋</h1>
-        <p className="text-muted-foreground text-sm">{format(today, "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
+    <div className="space-y-4 sm:space-y-5 max-w-[1400px] px-1 sm:px-0">
+      {/* Header with animated rocket */}
+      <div className="flex items-center gap-3">
+        <motion.div
+          animate={{ y: [0, -6, 0], rotate: [0, -10, 0] }}
+          transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+          className="relative"
+        >
+          <Rocket size={28} className="text-primary -rotate-45" />
+          <motion.div
+            animate={{ opacity: [0.6, 1, 0.4], scale: [0.8, 1.2, 0.6] }}
+            transition={{ duration: 0.5, repeat: Infinity }}
+            className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2.5 h-3 rounded-full bg-gradient-to-t from-warning via-primary to-transparent blur-[2px] rotate-45"
+          />
+        </motion.div>
+        <div>
+          <h1 className="text-xl sm:text-2xl font-display font-bold">Olá, {currentUser?.name} 👋</h1>
+          <p className="text-muted-foreground text-xs sm:text-sm">{format(today, "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
+        </div>
       </div>
 
       {/* ── Live Recording Card ── */}
@@ -625,34 +639,59 @@ export default function VideomakerDashboard() {
         );
       })()}
 
-      {/* ── Quick Stats ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* Quick Stats - animated rocket borders */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
         {[
-          { label: 'Gravações Hoje', value: `${stats.todayDone}/${stats.todayTotal}`, icon: Video, color: 'bg-success/15 text-success' },
-          { label: 'Clientes Atendidos', value: stats.uniqueClients, icon: UsersIcon, color: 'bg-info/15 text-info' },
-          { label: 'Gravações (mês)', value: stats.monthRecordings, icon: TrendingUp, color: 'bg-primary/15 text-primary' },
-          { label: 'Média Reels/Grav.', value: stats.avgReelsPerRec, icon: BarChart3, color: 'bg-warning/15 text-warning' },
+          { label: 'Gravações Hoje', value: `${stats.todayDone}/${stats.todayTotal}`, icon: Video, color: 'bg-success/15 text-success', borderColor: 'border-success/30' },
+          { label: 'Clientes Atendidos', value: stats.uniqueClients, icon: UsersIcon, color: 'bg-info/15 text-info', borderColor: 'border-info/30' },
+          { label: 'Gravações (mês)', value: stats.monthRecordings, icon: TrendingUp, color: 'bg-primary/15 text-primary', borderColor: 'border-primary/30' },
+          { label: 'Média Reels/Grav.', value: stats.avgReelsPerRec, icon: BarChart3, color: 'bg-warning/15 text-warning', borderColor: 'border-warning/30' },
         ].map((s, i) => (
-          <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }} className="stat-card">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${s.color}`}>
-              <s.icon size={16} />
+          <motion.div
+            key={s.label}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            whileHover={{ scale: 1.03 }}
+            className={`stat-card border ${s.borderColor} relative overflow-hidden`}
+          >
+            <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center mb-1.5 sm:mb-2 ${s.color}`}>
+              <s.icon size={15} />
             </div>
-            <p className="text-xl font-display font-bold">{s.value}</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">{s.label}</p>
+            <p className="text-lg sm:text-xl font-display font-bold">{s.value}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">{s.label}</p>
+            {/* Subtle animated rocket particle */}
+            <motion.div
+              animate={{ y: [20, -30], opacity: [0, 0.3, 0], x: [0, 5] }}
+              transition={{ duration: 3, repeat: Infinity, delay: i * 0.8 }}
+              className="absolute top-2 right-2"
+            >
+              <Rocket size={10} className="text-muted-foreground/20 -rotate-45" />
+            </motion.div>
           </motion.div>
         ))}
       </div>
 
-      {/* ── ROW: Today's Recordings + Active ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 glass-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-display font-semibold text-sm">Gravações de Hoje</h3>
-            <span className="text-xs text-muted-foreground">{todayRecs.length} gravações</span>
+      {/* ── ROW: Today's Recordings + Performance ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div className="lg:col-span-2 glass-card p-3 sm:p-5">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="flex items-center gap-2">
+              <motion.div animate={{ rotate: [0, 360] }} transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}>
+                <Video size={16} className="text-primary" />
+              </motion.div>
+              <h3 className="font-display font-semibold text-sm">Gravações de Hoje</h3>
+            </div>
+            <Badge variant="outline" className="text-[10px]">{todayRecs.length} gravações</Badge>
           </div>
 
           {todayRecs.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground text-sm">Nenhuma gravação hoje</div>
+            <div className="py-8 text-center text-muted-foreground text-sm flex flex-col items-center gap-2">
+              <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 3, repeat: Infinity }}>
+                <Rocket size={32} className="text-muted-foreground/30 -rotate-45" />
+              </motion.div>
+              <p>Nenhuma gravação hoje</p>
+            </div>
           ) : (
             <div className="space-y-2">
               {todayRecs.map((rec, i) => {
@@ -661,69 +700,105 @@ export default function VideomakerDashboard() {
                 const isDone = rec.status === 'concluida';
 
                 return (
-                  <motion.div key={rec.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
-                    className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
+                  <motion.div key={rec.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
+                    className={`rounded-xl border-2 transition-all ${
                       isActive ? 'border-primary bg-primary/5 ring-1 ring-primary/30' :
                       waitingRecordingId === rec.id ? 'border-warning bg-warning/5 ring-1 ring-warning/30' :
                       isDone ? 'border-success/30 bg-success/5' : 'border-border bg-secondary/50'
                     }`}>
-                    <div className="w-1.5 h-12 rounded-full shrink-0" style={{ backgroundColor: `hsl(${color})` }} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm truncate">{getClientName(rec.clientId)}</span>
-                        <Badge variant="outline" className="text-[10px]">{typeLabels[rec.type]}</Badge>
-                        {isActive && (
-                          <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px] animate-pulse">
-                            ● Em andamento
-                          </Badge>
-                        )}
-                        {waitingRecordingId === rec.id && (
-                          <motion.div animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
-                            <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-                              <Hourglass size={10} className="mr-0.5 animate-spin" style={{ animationDuration: '3s' }} />
-                              Aguardando · {formatWaitTime(waitingElapsed)}
+                    {/* Main row */}
+                    <div className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3">
+                      <div className="w-1.5 h-10 sm:h-12 rounded-full shrink-0" style={{ backgroundColor: `hsl(${color})` }} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium text-sm truncate max-w-[140px] sm:max-w-none">{getClientName(rec.clientId)}</span>
+                          <Badge variant="outline" className="text-[9px] sm:text-[10px]">{typeLabels[rec.type]}</Badge>
+                          {isActive && (
+                            <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                              <Badge className="bg-primary/20 text-primary border-primary/30 text-[9px] sm:text-[10px]">
+                                <Rocket size={9} className="-rotate-45 mr-0.5" /> Ao vivo
+                              </Badge>
+                            </motion.div>
+                          )}
+                          {waitingRecordingId === rec.id && (
+                            <motion.div animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                              <Badge className="bg-warning/20 text-warning border-warning/30 text-[9px] sm:text-[10px]">
+                                <Hourglass size={9} className="mr-0.5 animate-spin" style={{ animationDuration: '3s' }} />
+                                {formatWaitTime(waitingElapsed)}
+                              </Badge>
+                            </motion.div>
+                          )}
+                          {isDone && (
+                            <Badge className="bg-success/20 text-success border-success/30 text-[9px] sm:text-[10px]">
+                              <Check size={9} className="mr-0.5" /> Concluída
                             </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          <Clock size={10} className="inline mr-1" />{rec.startTime}
+                        </p>
+                      </div>
+                      {/* Desktop buttons */}
+                      <div className="hidden sm:flex gap-1.5 shrink-0">
+                        {rec.status === 'agendada' && !isActive && waitingRecordingId !== rec.id && !waitingRecordingId && (
+                          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                            <Button size="sm" variant="outline" onClick={() => handleStartWaiting(rec)}
+                              className="gap-1 border-warning/50 text-warning hover:bg-warning/10 hover:text-warning">
+                              <Hourglass size={14} /> Aguardar
+                            </Button>
                           </motion.div>
                         )}
-                        {isDone && (
-                          <Badge className="bg-success/20 text-success border-success/30 text-[10px]">
-                            <Check size={10} className="mr-0.5" /> Concluída
-                          </Badge>
+                        {waitingRecordingId === rec.id && (
+                          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                            <Button size="sm" variant="outline" onClick={async () => { await handleStopWaiting(); }}
+                              className="gap-1 border-destructive/50 text-destructive hover:bg-destructive/10">
+                              <Square size={14} /> Parar
+                            </Button>
+                          </motion.div>
+                        )}
+                        {rec.status === 'agendada' && !isActive && (
+                          <Button size="sm" onClick={async () => { if (waitingRecordingId === rec.id) await handleStopWaiting(); handleStartRecording(rec); }} className="gap-1">
+                            <Play size={14} /> Iniciar
+                          </Button>
+                        )}
+                        {isActive && (
+                          <>
+                            <Button size="sm" variant="outline" onClick={() => openScripts(rec.clientId)} className="gap-1">
+                              <FileText size={14} /> Roteiros
+                            </Button>
+                            <Button size="sm" onClick={() => handleFinishRecording(rec)} className="gap-1 bg-success hover:bg-success/90 text-success-foreground">
+                              <Square size={14} /> Finalizar
+                            </Button>
+                          </>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        <Clock size={10} className="inline mr-1" />{rec.startTime}
-                      </p>
                     </div>
-                    <div className="flex gap-1.5 shrink-0">
+                    {/* Mobile action buttons - full width row */}
+                    <div className="flex sm:hidden gap-1.5 px-2.5 pb-2.5 pt-0">
                       {rec.status === 'agendada' && !isActive && waitingRecordingId !== rec.id && !waitingRecordingId && (
-                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                          <Button size="sm" variant="outline" onClick={() => handleStartWaiting(rec)}
-                            className="gap-1 border-warning/50 text-warning hover:bg-warning/10 hover:text-warning">
-                            <Hourglass size={14} /> Aguardar
-                          </Button>
-                        </motion.div>
+                        <Button size="sm" variant="outline" onClick={() => handleStartWaiting(rec)}
+                          className="flex-1 gap-1 text-xs border-warning/50 text-warning hover:bg-warning/10 h-8">
+                          <Hourglass size={12} /> Aguardar
+                        </Button>
                       )}
                       {waitingRecordingId === rec.id && (
-                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                          <Button size="sm" variant="outline" onClick={async () => { await handleStopWaiting(); }}
-                            className="gap-1 border-destructive/50 text-destructive hover:bg-destructive/10">
-                            <Square size={14} /> Parar Espera
-                          </Button>
-                        </motion.div>
+                        <Button size="sm" variant="outline" onClick={async () => { await handleStopWaiting(); }}
+                          className="flex-1 gap-1 text-xs border-destructive/50 text-destructive h-8">
+                          <Square size={12} /> Parar
+                        </Button>
                       )}
                       {rec.status === 'agendada' && !isActive && (
-                        <Button size="sm" onClick={async () => { if (waitingRecordingId === rec.id) await handleStopWaiting(); handleStartRecording(rec); }} className="gap-1">
-                          <Play size={14} /> Iniciar
+                        <Button size="sm" onClick={async () => { if (waitingRecordingId === rec.id) await handleStopWaiting(); handleStartRecording(rec); }} className="flex-1 gap-1 text-xs h-8">
+                          <Rocket size={12} className="-rotate-45" /> Iniciar
                         </Button>
                       )}
                       {isActive && (
                         <>
-                          <Button size="sm" variant="outline" onClick={() => openScripts(rec.clientId)} className="gap-1">
-                            <FileText size={14} /> Roteiros
+                          <Button size="sm" variant="outline" onClick={() => openScripts(rec.clientId)} className="flex-1 gap-1 text-xs h-8">
+                            <FileText size={12} /> Roteiros
                           </Button>
-                          <Button size="sm" onClick={() => handleFinishRecording(rec)} className="gap-1 bg-success hover:bg-success/90 text-success-foreground">
-                            <Square size={14} /> Finalizar
+                          <Button size="sm" onClick={() => handleFinishRecording(rec)} className="flex-1 gap-1 text-xs bg-success hover:bg-success/90 text-success-foreground h-8">
+                            <Square size={12} /> Finalizar
                           </Button>
                         </>
                       )}
@@ -736,9 +811,14 @@ export default function VideomakerDashboard() {
         </div>
 
         {/* Performance card */}
-        <div className="glass-card p-5">
-          <h3 className="font-display font-semibold text-sm mb-4">Meu Desempenho</h3>
-          <div className="space-y-4">
+        <div className="glass-card p-3 sm:p-5">
+          <div className="flex items-center gap-2 mb-3 sm:mb-4">
+            <motion.div animate={{ scale: [1, 1.15, 1] }} transition={{ duration: 2, repeat: Infinity }}>
+              <Rocket size={16} className="text-primary -rotate-45" />
+            </motion.div>
+            <h3 className="font-display font-semibold text-sm">Meu Desempenho</h3>
+          </div>
+          <div className="space-y-3 sm:space-y-4">
             <div>
               <div className="flex justify-between text-xs mb-1">
                 <span className="text-muted-foreground">Semana</span>
@@ -746,21 +826,21 @@ export default function VideomakerDashboard() {
               </div>
               <Progress value={stats.weekTotal > 0 ? (stats.weekDone / stats.weekTotal) * 100 : 0} className="h-2" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg bg-secondary/50 p-3 text-center">
-                <p className="text-lg font-display font-bold">{stats.uniqueClients}</p>
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+              <div className="rounded-lg bg-secondary/50 p-2.5 sm:p-3 text-center">
+                <p className="text-base sm:text-lg font-display font-bold">{stats.uniqueClients}</p>
                 <p className="text-[10px] text-muted-foreground">Clientes atendidos</p>
               </div>
-              <div className="rounded-lg bg-secondary/50 p-3 text-center">
-                <p className="text-lg font-display font-bold">{stats.monthRecordings}</p>
+              <div className="rounded-lg bg-secondary/50 p-2.5 sm:p-3 text-center">
+                <p className="text-base sm:text-lg font-display font-bold">{stats.monthRecordings}</p>
                 <p className="text-[10px] text-muted-foreground">Gravações (mês)</p>
               </div>
-              <div className="rounded-lg bg-secondary/50 p-3 text-center">
-                <p className="text-lg font-display font-bold">{stats.reelsProduced}</p>
+              <div className="rounded-lg bg-secondary/50 p-2.5 sm:p-3 text-center">
+                <p className="text-base sm:text-lg font-display font-bold">{stats.reelsProduced}</p>
                 <p className="text-[10px] text-muted-foreground">Reels produzidos</p>
               </div>
-              <div className="rounded-lg bg-secondary/50 p-3 text-center">
-                <p className="text-lg font-display font-bold">{stats.avgReelsPerRec}</p>
+              <div className="rounded-lg bg-secondary/50 p-2.5 sm:p-3 text-center">
+                <p className="text-base sm:text-lg font-display font-bold">{stats.avgReelsPerRec}</p>
                 <p className="text-[10px] text-muted-foreground">Média reels/grav.</p>
               </div>
             </div>
@@ -769,34 +849,65 @@ export default function VideomakerDashboard() {
       </div>
 
       {/* ── Kanban Semanal ── */}
-      <div className="glass-card p-5">
-        <h3 className="font-display font-semibold text-sm mb-4">Minha Semana</h3>
-        <div className="grid grid-cols-5 gap-2 min-h-[300px]">
+      <div className="glass-card p-3 sm:p-5">
+        <div className="flex items-center gap-2 mb-3 sm:mb-4">
+          <motion.div
+            animate={{ x: [0, 4, 0] }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <Rocket size={16} className="text-primary -rotate-45" />
+          </motion.div>
+          <h3 className="font-display font-semibold text-sm">Minha Semana</h3>
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0 sm:grid sm:grid-cols-5 sm:overflow-visible snap-x snap-mandatory -mx-1 px-1">
           {weekDays.map(day => {
             const dateStr = format(day, 'yyyy-MM-dd');
             const isToday = isSameDay(day, today);
             const dayRecs = getRecsForDay(day);
 
             return (
-              <div key={dateStr} className={`glass-card p-3 ${isToday ? 'ring-1 ring-primary' : ''}`}>
-                <div className="text-center mb-3">
+              <motion.div
+                key={dateStr}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className={`glass-card p-2.5 sm:p-3 min-w-[150px] sm:min-w-0 snap-center shrink-0 sm:shrink ${
+                  isToday ? 'ring-2 ring-primary shadow-md shadow-primary/10' : ''
+                }`}
+              >
+                <div className="text-center mb-2 sm:mb-3">
                   <p className={`text-xs font-semibold uppercase ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
                     {format(day, 'EEE', { locale: ptBR })}
                   </p>
                   <p className={`text-lg font-display font-bold ${isToday ? 'text-primary' : ''}`}>
                     {format(day, 'd')}
                   </p>
+                  {isToday && (
+                    <motion.div
+                      animate={{ scale: [1, 1.3, 1], opacity: [0.5, 1, 0.5] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                      className="w-1.5 h-1.5 rounded-full bg-primary mx-auto mt-1"
+                    />
+                  )}
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5 sm:space-y-2">
                   {dayRecs.length === 0 && (
-                    <p className="text-[10px] text-muted-foreground text-center py-4">Livre</p>
+                    <div className="text-center py-3 sm:py-4">
+                      <motion.div
+                        animate={{ y: [0, -3, 0], opacity: [0.15, 0.3, 0.15] }}
+                        transition={{ duration: 3, repeat: Infinity }}
+                      >
+                        <Rocket size={14} className="text-muted-foreground/30 -rotate-45 mx-auto" />
+                      </motion.div>
+                      <p className="text-[10px] text-muted-foreground mt-1">Livre</p>
+                    </div>
                   )}
                   {dayRecs.map(rec => {
                     const color = getClientColor(rec.clientId);
                     const isActive = activeRecordingId === rec.id;
                     const isDone = rec.status === 'concluida';
                     return (
-                      <div key={rec.id}
+                      <motion.div key={rec.id}
+                        whileTap={{ scale: 0.97 }}
                         onClick={() => {
                           if (isDone) return;
                           if (isActive) {
@@ -805,30 +916,36 @@ export default function VideomakerDashboard() {
                             handleStartRecording(rec);
                           }
                         }}
-                        className={`rounded-lg border p-2 text-xs space-y-1 cursor-pointer transition-all hover:shadow-md ${
+                        className={`rounded-lg border-2 p-2 text-xs space-y-0.5 cursor-pointer transition-all active:shadow-md ${
                           isActive ? 'border-primary bg-primary/5 ring-1 ring-primary/30' :
                           isDone ? 'border-success/30 bg-success/5 cursor-default' : 'border-border bg-card hover:border-primary/40'
                         }`}
                         style={{ borderLeftWidth: 3, borderLeftColor: `hsl(${color})` }}
                       >
-                        <p className="font-medium truncate">{getClientName(rec.clientId)}</p>
-                        <p className="text-muted-foreground">{rec.startTime}</p>
+                        <p className="font-medium truncate text-[11px]">{getClientName(rec.clientId)}</p>
+                        <p className="text-muted-foreground text-[10px]">{rec.startTime}</p>
                         {isDone && (
-                          <Badge className="bg-success/20 text-success border-success/30 text-[9px]">Gravado</Badge>
+                          <Badge className="bg-success/20 text-success border-success/30 text-[9px]">
+                            <Check size={8} className="mr-0.5" /> Gravado
+                          </Badge>
                         )}
                         {isActive && (
-                          <Badge className="bg-primary/20 text-primary border-primary/30 text-[9px] animate-pulse">● Ao vivo</Badge>
+                          <motion.div animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 1, repeat: Infinity }}>
+                            <Badge className="bg-primary/20 text-primary border-primary/30 text-[9px]">
+                              <Rocket size={8} className="-rotate-45 mr-0.5" /> Ao vivo
+                            </Badge>
+                          </motion.div>
                         )}
                         {!isActive && !isDone && rec.status === 'agendada' && (
                           <div className="flex items-center gap-1 text-primary text-[9px]">
-                            <Play size={9} /> Clique para iniciar
+                            <Play size={8} /> Toque para iniciar
                           </div>
                         )}
-                      </div>
+                      </motion.div>
                     );
                   })}
                 </div>
-              </div>
+              </motion.div>
             );
           })}
         </div>
@@ -836,7 +953,7 @@ export default function VideomakerDashboard() {
 
       {/* ── Finish Recording Dialog (Multi-step: 3 steps) ── */}
       <Dialog open={finishDialogOpen} onOpenChange={v => { if (!v) { setFinishDialogOpen(false); setFinishStep('scripts'); setDriveLinks({}); setSelectedEditorId('__auto__'); } }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] sm:max-h-[85vh] overflow-y-auto mx-2 sm:mx-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <motion.div animate={{ rotate: [0, -15, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
@@ -1298,7 +1415,7 @@ export default function VideomakerDashboard() {
 
       {/* ── Scripts Dialog ── */}
       <Dialog open={scriptsOpen} onOpenChange={(open) => { setScriptsOpen(open); if (!open) setViewingScript(null); }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] sm:max-h-[85vh] overflow-y-auto mx-2 sm:mx-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {viewingScript ? (

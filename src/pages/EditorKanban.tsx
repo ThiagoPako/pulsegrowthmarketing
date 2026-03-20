@@ -271,6 +271,9 @@ export default function EditorKanban() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchTasks]);
 
+  const { profile } = useAuth();
+  const isEditorRole = profile?.role === 'editor';
+
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
       if (filterClient !== 'all' && t.client_id !== filterClient) return false;
@@ -279,9 +282,19 @@ export default function EditorKanban() {
         const client = clients.find((c: any) => c.id === t.client_id);
         if (!t.title.toLowerCase().includes(q) && !client?.companyName.toLowerCase().includes(q)) return false;
       }
+      // Editor role: only see unassigned tasks or tasks assigned to them
+      if (isEditorRole && user) {
+        if (t.kanban_column === 'edicao') {
+          // Show unassigned or assigned to me
+          if (t.assigned_to && t.assigned_to !== user.id) return false;
+        } else {
+          // For revisao/alteracao/envio: only show tasks I worked on
+          if (t.assigned_to && t.assigned_to !== user.id) return false;
+        }
+      }
       return true;
     });
-  }, [tasks, filterClient, searchQuery, clients]);
+  }, [tasks, filterClient, searchQuery, clients, isEditorRole, user]);
 
   const sortedTasksByColumn = useMemo(() => {
     const map: Record<string, EditorTask[]> = {};

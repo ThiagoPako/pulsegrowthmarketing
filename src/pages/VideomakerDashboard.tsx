@@ -14,8 +14,11 @@ import { motion } from 'framer-motion';
 import {
   Play, Square, FileText, Check, Clock, Video, Users as UsersIcon,
   TrendingUp, BarChart3, Undo2, AlertTriangle, Star, Eye, ChevronLeft, Download, Link, ArrowRight,
-  ThumbsDown, Pencil, MessageCircle
+  ThumbsDown, Pencil, MessageCircle, Send, UserCheck
 } from 'lucide-react';
+import LiveRecordingCard from '@/components/videomaker/LiveRecordingCard';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import pulseHeader from '@/assets/pulse_header.png';

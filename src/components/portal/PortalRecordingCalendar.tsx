@@ -179,7 +179,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     setCancelling(true);
     const { data } = await invokeVpsFunction('portal-recordings', { body: { action: 'cancel', client_id: clientId, recording_id: rec.id } });
     if (data?.success) {
-      setCancelFlow({ step: 'result', rec, backupAvailable: data.backup_available, backupSlot: data.backup_slot, nextFixedDate: data.next_fixed_date });
+      setCancelFlow({ step: 'result', rec, backupAvailable: data.backup_available, backupSlot: data.backup_slot, nextFixedDate: data.next_fixed_date, alternativeVideomakers: data.alternative_videomakers || [] });
       await loadRecordings();
     } else toast.error('Erro ao cancelar');
     setCancelling(false);

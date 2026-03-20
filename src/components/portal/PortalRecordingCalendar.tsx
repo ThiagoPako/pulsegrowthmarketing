@@ -31,7 +31,12 @@ interface ContentEvent {
   scheduled_date: string | null;
   scheduled_time: string | null;
   editing_started_at: string | null;
+  editing_deadline: string | null;
+  approval_sent_at: string | null;
   approved_at: string | null;
+  adjustment_notes: string | null;
+  updated_at: string;
+  created_at: string;
 }
 
 interface DeliveryEvent {
@@ -42,6 +47,7 @@ interface DeliveryEvent {
   delivered_at: string;
   posted_at: string | null;
   scheduled_time: string | null;
+  platform: string | null;
 }
 
 interface DayEvent {
@@ -164,20 +170,23 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     // Fetch recordings, content tasks, and deliveries in parallel
     const [recResult, ctResult, delResult] = await Promise.all([
       invokeVpsFunction('portal-recordings', { body: { action: 'list', client_id: clientId } }),
-      supabase.from('content_tasks').select('id,title,content_type,kanban_column,scheduled_recording_date,scheduled_recording_time,editing_started_at,approved_at').eq('client_id', clientId),
-      supabase.from('social_media_deliveries').select('id,title,content_type,status,delivered_at,posted_at,scheduled_time').eq('client_id', clientId),
+      supabase.from('content_tasks').select('id,title,content_type,kanban_column,scheduled_recording_date,scheduled_recording_time,editing_started_at,editing_deadline,approval_sent_at,approved_at,adjustment_notes,updated_at,created_at').eq('client_id', clientId),
+      supabase.from('social_media_deliveries').select('id,title,content_type,status,delivered_at,posted_at,scheduled_time,platform').eq('client_id', clientId),
     ]);
     if (recResult.data?.recordings) setRecordings(recResult.data.recordings);
     if (ctResult.data) setContentTasks(ctResult.data.map((ct: any) => ({
       id: ct.id, title: ct.title, content_type: ct.content_type,
       kanban_column: ct.kanban_column, scheduled_date: ct.scheduled_recording_date,
       scheduled_time: ct.scheduled_recording_time, editing_started_at: ct.editing_started_at,
-      approved_at: ct.approved_at,
+      editing_deadline: ct.editing_deadline, approval_sent_at: ct.approval_sent_at,
+      approved_at: ct.approved_at, adjustment_notes: ct.adjustment_notes,
+      updated_at: ct.updated_at, created_at: ct.created_at,
     })));
     if (delResult.data) setDeliveries(delResult.data.map((d: any) => ({
       id: d.id, title: d.title, content_type: d.content_type,
       status: d.status, delivered_at: d.delivered_at,
       posted_at: d.posted_at, scheduled_time: d.scheduled_time,
+      platform: d.platform,
     })));
     setLoading(false);
   };
@@ -228,30 +237,54 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
       }
     });
 
-    // Content task events (editing, scheduled)
+    // Content task events — full lifecycle
     contentTasks.forEach(ct => {
-      if (ct.kanban_column === 'edicao' && ct.editing_started_at) {
+      // Editing started
+      if (ct.editing_started_at) {
         const date = ct.editing_started_at.substring(0, 10);
-        addEvent(date, { type: 'content', icon: '✂️', label: 'Em edição', color: 'text-blue-400', detail: ct.title });
+        addEvent(date, { type: 'content', icon: '✂️', label: 'Edição iniciada', color: 'text-blue-400', detail: ct.title });
       }
-      if (ct.kanban_column === 'revisao') {
-        const date = ct.scheduled_date || (ct.editing_started_at?.substring(0, 10) || '');
-        if (date) addEvent(date, { type: 'content', icon: '👁', label: 'Em revisão', color: 'text-cyan-400', detail: ct.title });
+      // In review (sent for approval)
+      if (ct.approval_sent_at) {
+        const date = ct.approval_sent_at.substring(0, 10);
+        addEvent(date, { type: 'content', icon: '👁', label: 'Enviado p/ revisão', color: 'text-cyan-400', detail: ct.title });
       }
+      // Approved
       if (ct.approved_at) {
         const date = ct.approved_at.substring(0, 10);
         addEvent(date, { type: 'content', icon: '✅', label: 'Aprovado', color: 'text-emerald-400', detail: ct.title });
       }
+      // Adjustment requested
+      if (ct.adjustment_notes && ct.kanban_column === 'alteracao') {
+        const date = ct.updated_at.substring(0, 10);
+        addEvent(date, { type: 'content', icon: '🔧', label: 'Ajuste solicitado', color: 'text-orange-400', detail: ct.title });
+      }
+      // Completed/finished
+      if (ct.kanban_column === 'concluido') {
+        const date = ct.updated_at.substring(0, 10);
+        addEvent(date, { type: 'content', icon: '🏁', label: 'Concluído', color: 'text-emerald-300', detail: ct.title });
+      }
     });
 
-    // Delivery events (posted)
+    // Delivery events
     deliveries.forEach(d => {
+      // Delivered to client
+      if (d.status === 'entregue' && d.delivered_at) {
+        const date = d.delivered_at.substring(0, 10);
+        addEvent(date, { type: 'delivery', icon: '📦', label: 'Entregue', color: 'text-amber-300', detail: d.title });
+      }
+      // Posted
       if (d.posted_at) {
         const date = d.posted_at.substring(0, 10);
-        addEvent(date, { type: 'delivery', icon: '📱', label: 'Postado', color: 'text-pink-400', detail: d.title });
+        addEvent(date, { type: 'delivery', icon: '📱', label: `Postado${d.platform ? ` (${d.platform})` : ''}`, color: 'text-pink-400', detail: d.title });
       } else if (d.status === 'agendado' && d.scheduled_time) {
         const date = d.delivered_at.substring(0, 10);
         addEvent(date, { type: 'delivery', icon: '📅', label: 'Agendado p/ postar', color: 'text-indigo-400', time: d.scheduled_time, detail: d.title });
+      }
+      // In review
+      if (d.status === 'revisao') {
+        const date = d.delivered_at.substring(0, 10);
+        addEvent(date, { type: 'delivery', icon: '👁', label: 'Em revisão', color: 'text-cyan-400', detail: d.title });
       }
     });
 
@@ -604,15 +637,21 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
           </div>
 
           {/* Legend */}
-          <div className="flex flex-wrap items-center gap-4 mt-5 pt-4 border-t border-white/[0.06]">
+          <div className="flex flex-wrap items-center gap-3 mt-5 pt-4 border-t border-white/[0.06]">
             {[
               { icon: '📹', label: 'Agendada' },
               { icon: '🎬', label: 'Gravada' },
               { icon: '❌', label: 'Cancelada' },
               { icon: '🔄', label: 'Remarcada' },
               { icon: '⭐', label: 'Extra' },
-              { icon: '✂️', label: 'Em edição' },
+              { icon: '✂️', label: 'Edição' },
+              { icon: '👁', label: 'Revisão' },
+              { icon: '✅', label: 'Aprovado' },
+              { icon: '🔧', label: 'Ajuste' },
+              { icon: '📦', label: 'Entregue' },
               { icon: '📱', label: 'Postado' },
+              { icon: '📅', label: 'Agendado' },
+              { icon: '🏁', label: 'Concluído' },
             ].map(item => (
               <div key={item.icon} className="flex items-center gap-1.5 text-[10px] text-white/35">
                 <span className="text-[10px]">{item.icon}</span>{item.label}

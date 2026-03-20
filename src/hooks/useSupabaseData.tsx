@@ -479,7 +479,7 @@ export function useSupabaseData() {
   return {
     clients, recordings, tasks, scripts, settings, activeRecordings, loading,
     addClient, updateClient, deleteClient,
-    addRecording, addRecordingsBulk, updateRecording, cancelRecording, deleteFutureRecordingsForClient,
+    addRecording, addRecordingsBulk, updateRecording, cancelRecording, deleteRecording, deleteFutureRecordingsForClient,
     addTask, updateTask, deleteTask,
     addScript, updateScript, deleteScript,
     updateSettings, startActiveRecording, stopActiveRecording,

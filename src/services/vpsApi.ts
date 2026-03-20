@@ -98,10 +98,17 @@ function isBrowserBlockedFetch(error: unknown) {
 async function verifyUploadedFile(url: string, file: File): Promise<void> {
   if (typeof window === 'undefined') return;
 
+  // Skip verification for VPS assets — the upload server already confirmed success
+  // and cross-origin HEAD checks are unreliable due to CORS/ORB policies
+  if (isVpsAssetUrl(url)) {
+    console.info('[vpsApi] Upload confirmado pelo servidor, pulando verificação pública.', { url });
+    return;
+  }
+
   try {
     await verifyWithRetry(url, verifyUrlAccessible);
   } catch (error) {
-    if (isVpsAssetUrl(url) && isBrowserBlockedFetch(error)) {
+    if (isBrowserBlockedFetch(error)) {
       console.warn('[vpsApi] Verificação pública bloqueada pelo navegador; mantendo upload.', {
         url,
         fileType: file.type,

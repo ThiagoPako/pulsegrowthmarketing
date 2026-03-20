@@ -705,7 +705,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                       className="absolute inset-0 flex items-center justify-center text-red-500/30 text-xl sm:text-3xl font-black z-0 pointer-events-none">✕</motion.span>
                   )}
                   {recs.length > 0 && !isPast && hasUpcoming && !hasCancelled && <RocketFireIndicator small />}
-                  <span className={`text-sm leading-none relative z-10 ${isToday ? 'font-extrabold text-white' : hasAnyEvent ? 'font-bold' : 'font-medium'}`}>
+                  <span className={`text-xs sm:text-sm leading-none relative z-10 ${isToday ? 'font-extrabold text-white' : hasAnyEvent ? 'font-bold' : 'font-medium'}`}>
                     {format(day, 'd')}
                   </span>
                   {uniqueEvents.length > 0 && (

@@ -358,13 +358,27 @@ export const supabase = {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(credentials),
         });
-        const result = await response.json();
+
+        const contentType = response.headers.get('content-type') || '';
+        const payload = contentType.includes('application/json')
+          ? await response.json().catch(() => null)
+          : await response.text().catch(() => '');
+
         if (!response.ok) {
-          return { data: null, error: { message: result.error || 'Login failed' } };
+          const message = payload && typeof payload === 'object' && 'error' in payload
+            ? String(payload.error)
+            : response.status === 502 || !contentType.includes('application/json')
+              ? 'Servidor de autenticação indisponível no momento.'
+              : 'Login failed';
+          return { data: null, error: { message } };
         }
-        if (result.token) {
-          localStorage.setItem(TOKEN_KEY, result.token);
+
+        if (!payload || typeof payload !== 'object' || !('token' in payload)) {
+          return { data: null, error: { message: 'Resposta inválida do servidor de autenticação' } };
         }
+
+        const result = payload as { token: string; user?: any; id?: string };
+        localStorage.setItem(TOKEN_KEY, result.token);
         return {
           data: {
             user: result.user || { id: result.id, email: credentials.email },

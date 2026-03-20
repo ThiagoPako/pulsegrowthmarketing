@@ -80,38 +80,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      const payload = contentType.includes('application/json')
+        ? await res.json().catch(() => null)
+        : await res.text().catch(() => '');
+
+      if (res.ok && payload && typeof payload === 'object' && 'token' in payload) {
+        const data = payload as { token: string; user: { id: string; email: string } };
         localStorage.setItem(TOKEN_KEY, data.token);
         const u = { id: data.user.id, email: data.user.email };
         setUser(u);
         setSession({ access_token: data.token });
         await fetchProfile(u.id);
-        return { error: null };
-      }
+        return { error: null };}
 
-      const errData = await res.json().catch(() => ({}));
       if (res.status === 401 || res.status === 400) {
-        return { error: errData.error || 'Email ou senha inválidos' };
+        const message = payload && typeof payload === 'object' && 'error' in payload
+          ? String(payload.error)
+          : 'Email ou senha inválidos';
+        return { error: message };
       }
 
-      throw new Error(errData.error || 'Falha ao conectar com o servidor de autenticação');
-    } catch {
-      try {
-        await supabase.auth.signOut();
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) return { error: error.message || 'Falha no login alternativo' };
-        if (data.user && data.session) {
-          const u = { id: data.user.id, email: data.user.email || '' };
-          setUser(u);
-          setSession({ access_token: data.session.access_token });
-          await fetchProfile(u.id);
-          return { error: null };
-        }
-        return { error: 'Não foi possível autenticar' };
-      } catch {
-        return { error: 'Não foi possível conectar à VPS e o login alternativo também falhou' };
+      if (res.status === 502 || !contentType.includes('application/json')) {
+        return { error: 'Servidor de autenticação indisponível no momento. Tente novamente em instantes.' };
       }
+
+      const message = payload && typeof payload === 'object' && 'error' in payload
+        ? String(payload.error)
+        : 'Falha ao conectar com o servidor de autenticação';
+      return { error: message };
+    } catch {
+      return { error: 'Não foi possível conectar ao servidor de autenticação' };
     }
   };
 

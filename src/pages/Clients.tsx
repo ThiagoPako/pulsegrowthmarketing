@@ -238,6 +238,7 @@ export default function Clients() {
       setEditing(client);
       setForm(client);
       setLogoPreview(client.logoUrl || null);
+      setPreferredShift(client.fullShiftRecording ? (client.preferredShift === 'tarde' ? 'turnoB' : 'turnoA') : 'ambos');
       // Load plan data for editing
       supabase.from('clients').select('plan_id, contract_start_date, auto_renewal, contract_duration_months').eq('id', client.id).single().then(({ data }) => {
         if (data) {

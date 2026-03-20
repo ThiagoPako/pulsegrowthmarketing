@@ -190,8 +190,22 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
           <DeadlineBadge deadline={task.approval_deadline} label="Aprovação" />
         )}
 
+        {/* Assigned editor badge */}
+        {task.assigned_to && (
+          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground bg-muted/50 rounded-md px-2 py-1">
+            <Scissors size={10} />
+            <span>Editor: <strong className="text-foreground">{users.find(u => u.id === task.assigned_to)?.name || 'Editor'}</strong></span>
+          </div>
+        )}
+
         {/* Action buttons based on column */}
-        {task.kanban_column === 'edicao' && (
+        {task.kanban_column === 'edicao' && !task.assigned_to && (
+          <Button size="sm" className="w-full gap-1.5 h-7 text-xs mt-1 bg-primary hover:bg-primary/90" 
+            onClick={(e) => { e.stopPropagation(); onClaimTask(task); }}>
+            <Scissors size={11} /> Pegar para Editar
+          </Button>
+        )}
+        {task.kanban_column === 'edicao' && task.assigned_to === currentUserId && (
           <Button size="sm" variant={hasVideoLink ? 'default' : 'outline'} 
             className={`w-full gap-1.5 h-7 text-xs mt-1 ${!hasVideoLink ? 'border-dashed' : ''}`} 
             onClick={(e) => { e.stopPropagation(); onAddVideoLink(task); }}>

@@ -1070,7 +1070,7 @@ export default function Clients() {
       </div>
 
       {/* Visual schedule grid */}
-      {form.videomaker && scheduleGrid && (
+      {form.videomaker && scheduleGrid && !form.fullShiftRecording && (
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             Agenda de {scheduleGrid.vmName}
@@ -1100,8 +1100,7 @@ export default function Clients() {
                         return (
                           <td key={ci} className="px-0.5 py-0.5">
                             {cell.status === 'occupied' ? (
-                              <div className="rounded-md bg-destructive/12 border border-destructive/20 px-1 py-1 text-center truncate"
-                                title={cell.clientName}>
+                              <div className="rounded-md bg-destructive/12 border border-destructive/20 px-1 py-1 text-center truncate" title={cell.clientName}>
                                 <span className="text-destructive/80 font-medium text-[9px]">{cell.clientName?.substring(0, 6) || 'Ocupado'}</span>
                               </div>
                             ) : (
@@ -1111,8 +1110,8 @@ export default function Clients() {
                                   isSelected
                                     ? 'bg-primary text-primary-foreground ring-2 ring-primary/30'
                                     : isBackup
-                                    ? 'bg-accent border border-accent-foreground/20 text-accent-foreground'
-                                    : 'bg-emerald-500/8 border border-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20'
+                                      ? 'bg-accent border border-accent-foreground/20 text-accent-foreground'
+                                      : 'bg-emerald-500/8 border border-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20'
                                 }`}
                               >
                                 {isSelected ? '✓ Fixo' : isBackup ? 'Backup' : 'Livre'}
@@ -1126,7 +1125,6 @@ export default function Clients() {
                 </tbody>
               </table>
             </div>
-            {/* Legend */}
             <div className="flex gap-3 px-3 py-1.5 bg-muted/30 border-t border-border/50 text-[9px] text-muted-foreground">
               <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-500/20 border border-emerald-500/30" /> Livre</span>
               <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-destructive/15 border border-destructive/25" /> Ocupado</span>
@@ -1136,8 +1134,50 @@ export default function Clients() {
         </div>
       )}
 
-      {/* Best slots suggestions (up to 2) */}
-      {form.videomaker && bestSlots.length > 0 && (
+      {form.videomaker && form.fullShiftRecording && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            Agenda por período de {users.find(u => u.id === form.videomaker)?.name}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {fullShiftPeriods.map((period, index) => {
+              const isSelected = form.fixedDay === period.day && (form.preferredShift || 'manha') === period.shift;
+              return (
+                <button
+                  key={`${period.day}-${period.shift}-${index}`}
+                  type="button"
+                  disabled={!period.available}
+                  onClick={() => period.available && selectFullShiftSuggestion({ day: period.day, shift: period.shift })}
+                  className={`rounded-xl border p-3 text-left transition-all ${
+                    isSelected
+                      ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                      : period.available
+                        ? 'border-border hover:border-primary/40 hover:bg-primary/5'
+                        : 'border-destructive/20 bg-destructive/5 opacity-70 cursor-not-allowed'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">
+                        {DAY_LABELS[period.day]} · {period.shift === 'tarde' ? 'Tarde' : 'Manhã'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{period.label}</p>
+                    </div>
+                    <Badge variant="secondary" className={period.available ? 'bg-primary/15 text-primary border-0' : 'bg-destructive/10 text-destructive border-0'}>
+                      {period.available ? 'Livre' : 'Ocupado'}
+                    </Badge>
+                  </div>
+                  {!period.available && period.occupiedBy && (
+                    <p className="mt-2 text-xs text-muted-foreground">Reservado por {period.occupiedBy}</p>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {!form.fullShiftRecording && form.videomaker && bestSlots.length > 0 && (
         <div className="space-y-2">
           <p className="text-sm font-semibold text-primary flex items-center gap-2">
             <Star size={14} /> Melhores horários disponíveis
@@ -1167,25 +1207,68 @@ export default function Clients() {
         </div>
       )}
 
-      {/* Full shift recording toggle */}
+      {form.fullShiftRecording && form.videomaker && bestFullShiftPeriods.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-primary flex items-center gap-2">
+            <Star size={14} /> Melhores períodos disponíveis
+          </p>
+          <div className="grid grid-cols-1 gap-2">
+            {bestFullShiftPeriods.map((slot, i) => (
+              <button
+                key={`${slot.day}-${slot.shift}-${i}`}
+                type="button"
+                onClick={() => selectFullShiftSuggestion({ day: slot.day, shift: slot.shift })}
+                className={`w-full p-3 rounded-xl border-2 transition-colors text-left flex items-center gap-3 ${
+                  form.fixedDay === slot.day && (form.preferredShift || 'manha') === slot.shift
+                    ? 'border-primary bg-primary/10'
+                    : 'border-dashed border-primary/30 bg-primary/5 hover:bg-primary/10'
+                }`}
+              >
+                <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                  <Star size={16} className="text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">{DAY_LABELS[slot.day]} · {slot.shift === 'tarde' ? 'Tarde' : 'Manhã'}</p>
+                  <p className="text-xs text-muted-foreground">{slot.label}</p>
+                </div>
+                <Badge variant="secondary" className="ml-auto shrink-0 bg-primary/15 text-primary border-0 text-[10px]">
+                  {i === 0 ? 'Melhor opção' : '2ª opção'}
+                </Badge>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {form.videomaker && (
         <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-3">
           <div className="flex items-center gap-3">
-            <Switch 
-              checked={form.fullShiftRecording || false} 
-              onCheckedChange={v => setForm(prev => ({ ...prev, fullShiftRecording: v, fixedTime: v ? (prev.preferredShift === 'tarde' ? settings.shiftBStart : settings.shiftAStart) : prev.fixedTime }))} 
+            <Switch
+              checked={form.fullShiftRecording || false}
+              onCheckedChange={v => {
+                setPreferredShift(v ? ((form.preferredShift || 'manha') === 'tarde' ? 'turnoB' : 'turnoA') : 'ambos');
+                setForm(prev => ({
+                  ...prev,
+                  fullShiftRecording: v,
+                  preferredShift: v ? (prev.preferredShift || 'manha') : prev.preferredShift,
+                  fixedTime: v ? ((prev.preferredShift || 'manha') === 'tarde' ? settings.shiftBStart : settings.shiftAStart) : prev.fixedTime,
+                }));
+              }}
             />
             <div>
               <Label className="font-medium">⏱️ Gravação por Turno Inteiro</Label>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                O cliente ocupa o turno completo (manhã ou tarde) — reserva todos os horários do período selecionado.
+                O cliente ocupa o turno completo e a seleção passa a ser por período, não por horário.
               </p>
             </div>
           </div>
           {form.fullShiftRecording && (
             <div className="space-y-1">
               <Label>Turno Preferido</Label>
-              <Select value={form.preferredShift || 'manha'} onValueChange={v => setForm(prev => ({ ...prev, preferredShift: v as 'manha' | 'tarde', fixedTime: v === 'tarde' ? settings.shiftBStart : settings.shiftAStart }))}>
+              <Select value={form.preferredShift || 'manha'} onValueChange={v => {
+                setPreferredShift(v === 'tarde' ? 'turnoB' : 'turnoA');
+                setForm(prev => ({ ...prev, preferredShift: v as 'manha' | 'tarde', fixedTime: v === 'tarde' ? settings.shiftBStart : settings.shiftAStart }));
+              }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="manha">☀️ Manhã ({settings.shiftAStart} – {settings.shiftAEnd})</SelectItem>

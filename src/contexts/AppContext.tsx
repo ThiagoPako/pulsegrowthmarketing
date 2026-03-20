@@ -58,10 +58,17 @@ function profileToUser(profile: Profile): User {
 const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, loading: authLoading, user } = useAuth();
   const data = useSupabaseData();
 
   const currentUser = profile ? profileToUser(profile) : null;
+
+  // Re-fetch data when auth finishes loading and user is available
+  useEffect(() => {
+    if (!authLoading && user) {
+      data.refetch();
+    }
+  }, [authLoading, user]);
   
   const [users, setUsers] = useState<User[]>([]);
   useEffect(() => {

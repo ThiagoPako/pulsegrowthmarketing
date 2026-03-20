@@ -1402,7 +1402,12 @@ export default function Clients() {
           <span className="text-muted-foreground">Videomaker:</span>
           <span className="font-medium">{users.find(u => u.id === form.videomaker)?.name || '—'}</span>
           <span className="text-muted-foreground">Dia fixo:</span>
-          <span className="font-medium">{form.fixedDay ? DAY_LABELS[form.fixedDay] : '—'} às {form.fixedTime || '—'}</span>
+          <span className="font-medium">
+            {form.fixedDay ? DAY_LABELS[form.fixedDay] : '—'} 
+            {form.fullShiftRecording 
+              ? ` · Turno ${form.preferredShift === 'tarde' ? 'Tarde' : 'Manhã'}` 
+              : ` às ${form.fixedTime || '—'}`}
+          </span>
           <span className="text-muted-foreground">Valor:</span>
           <span className="font-medium">{contractValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
           <span className="text-muted-foreground">Vencimento:</span>

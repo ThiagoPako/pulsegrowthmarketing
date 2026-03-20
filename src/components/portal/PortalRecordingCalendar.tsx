@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
+import { supabase } from '@/lib/vpsDb';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isSameDay, parseISO, isAfter, isBefore, isToday as isDateToday } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CalendarDays, ChevronLeft, ChevronRight, Clock, Video,
   ArrowRight, Check, X, Loader2, RefreshCw, Clapperboard, Sparkles,
-  MessageSquarePlus, Send, AlertTriangle
+  MessageSquarePlus, Send, AlertTriangle, Film, Palette, Image, Scissors, Upload
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -20,6 +21,36 @@ interface Recording {
   status: string;
   type: string;
   confirmation_status: string;
+}
+
+interface ContentEvent {
+  id: string;
+  title: string;
+  content_type: string;
+  kanban_column: string;
+  scheduled_date: string | null;
+  scheduled_time: string | null;
+  editing_started_at: string | null;
+  approved_at: string | null;
+}
+
+interface DeliveryEvent {
+  id: string;
+  title: string;
+  content_type: string;
+  status: string;
+  delivered_at: string;
+  posted_at: string | null;
+  scheduled_time: string | null;
+}
+
+interface DayEvent {
+  type: 'recording' | 'content' | 'delivery';
+  icon: string;
+  label: string;
+  color: string;
+  time?: string;
+  detail?: string;
 }
 
 interface Props {
@@ -122,14 +153,38 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
   const [exploreSlotsData, setExploreSlotsData] = useState<string[]>([]);
   const [exploringSlots, setExploringSlots] = useState(false);
   const [exploreVmName, setExploreVmName] = useState('');
+  // Additional data for activity calendar
+  const [contentTasks, setContentTasks] = useState<ContentEvent[]>([]);
+  const [deliveries, setDeliveries] = useState<DeliveryEvent[]>([]);
 
-  useEffect(() => { loadRecordings(); }, [clientId]);
+  useEffect(() => { loadAllData(); }, [clientId]);
+
+  const loadAllData = async () => {
+    setLoading(true);
+    // Fetch recordings, content tasks, and deliveries in parallel
+    const [recResult, ctResult, delResult] = await Promise.all([
+      invokeVpsFunction('portal-recordings', { body: { action: 'list', client_id: clientId } }),
+      supabase.from('content_tasks').select('id,title,content_type,kanban_column,scheduled_recording_date,scheduled_recording_time,editing_started_at,approved_at').eq('client_id', clientId),
+      supabase.from('social_media_deliveries').select('id,title,content_type,status,delivered_at,posted_at,scheduled_time').eq('client_id', clientId),
+    ]);
+    if (recResult.data?.recordings) setRecordings(recResult.data.recordings);
+    if (ctResult.data) setContentTasks(ctResult.data.map((ct: any) => ({
+      id: ct.id, title: ct.title, content_type: ct.content_type,
+      kanban_column: ct.kanban_column, scheduled_date: ct.scheduled_recording_date,
+      scheduled_time: ct.scheduled_recording_time, editing_started_at: ct.editing_started_at,
+      approved_at: ct.approved_at,
+    })));
+    if (delResult.data) setDeliveries(delResult.data.map((d: any) => ({
+      id: d.id, title: d.title, content_type: d.content_type,
+      status: d.status, delivered_at: d.delivered_at,
+      posted_at: d.posted_at, scheduled_time: d.scheduled_time,
+    })));
+    setLoading(false);
+  };
 
   const loadRecordings = async () => {
-    setLoading(true);
     const { data } = await invokeVpsFunction('portal-recordings', { body: { action: 'list', client_id: clientId } });
     if (data?.recordings) setRecordings(data.recordings);
-    setLoading(false);
   };
 
   const monthStart = startOfMonth(currentMonth);
@@ -142,6 +197,66 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     recordings.forEach(r => { if (!map[r.date]) map[r.date] = []; map[r.date].push(r); });
     return map;
   }, [recordings]);
+
+  // Build unified events map by date
+  const eventsByDate = useMemo(() => {
+    const map: Record<string, DayEvent[]> = {};
+    const addEvent = (date: string, event: DayEvent) => {
+      if (!date) return;
+      const key = date.substring(0, 10);
+      if (!map[key]) map[key] = [];
+      map[key].push(event);
+    };
+
+    // Recording events
+    recordings.forEach(r => {
+      if (r.status === 'cancelada') {
+        addEvent(r.date, { type: 'recording', icon: '❌', label: 'Cancelada', color: 'text-red-400', time: r.start_time, detail: `Gravação cancelada` });
+      } else if (r.status === 'concluida' || r.status === 'gravado') {
+        addEvent(r.date, { type: 'recording', icon: '🎬', label: 'Gravado', color: 'text-emerald-400', time: r.start_time, detail: `Gravação realizada` });
+      } else if (r.status === 'agendada' || r.status === 'agendado') {
+        const typeInfo = TYPE_MAP[r.type] || { label: r.type, emoji: '📹' };
+        if (r.type === 'extra') {
+          addEvent(r.date, { type: 'recording', icon: '⭐', label: 'Extra', color: 'text-yellow-400', time: r.start_time, detail: `Conteúdo extra agendado` });
+        } else if (r.type === 'backup' || r.type === 'secundaria') {
+          addEvent(r.date, { type: 'recording', icon: '🔄', label: 'Remarcada', color: 'text-blue-400', time: r.start_time, detail: `Gravação remarcada` });
+        } else {
+          addEvent(r.date, { type: 'recording', icon: '📹', label: 'Agendada', color: 'text-amber-400', time: r.start_time, detail: `Gravação ${typeInfo.label}` });
+        }
+      } else if (r.status === 'solicitada') {
+        addEvent(r.date, { type: 'recording', icon: '📨', label: 'Solicitada', color: 'text-violet-400', time: r.start_time, detail: `Solicitação especial` });
+      }
+    });
+
+    // Content task events (editing, scheduled)
+    contentTasks.forEach(ct => {
+      if (ct.kanban_column === 'edicao' && ct.editing_started_at) {
+        const date = ct.editing_started_at.substring(0, 10);
+        addEvent(date, { type: 'content', icon: '✂️', label: 'Em edição', color: 'text-blue-400', detail: ct.title });
+      }
+      if (ct.kanban_column === 'revisao') {
+        const date = ct.scheduled_date || (ct.editing_started_at?.substring(0, 10) || '');
+        if (date) addEvent(date, { type: 'content', icon: '👁', label: 'Em revisão', color: 'text-cyan-400', detail: ct.title });
+      }
+      if (ct.approved_at) {
+        const date = ct.approved_at.substring(0, 10);
+        addEvent(date, { type: 'content', icon: '✅', label: 'Aprovado', color: 'text-emerald-400', detail: ct.title });
+      }
+    });
+
+    // Delivery events (posted)
+    deliveries.forEach(d => {
+      if (d.posted_at) {
+        const date = d.posted_at.substring(0, 10);
+        addEvent(date, { type: 'delivery', icon: '📱', label: 'Postado', color: 'text-pink-400', detail: d.title });
+      } else if (d.status === 'agendado' && d.scheduled_time) {
+        const date = d.delivered_at.substring(0, 10);
+        addEvent(date, { type: 'delivery', icon: '📅', label: 'Agendado p/ postar', color: 'text-indigo-400', time: d.scheduled_time, detail: d.title });
+      }
+    });
+
+    return map;
+  }, [recordings, contentTasks, deliveries]);
 
   const dayRecordings = useMemo(() => {
     if (!selectedDay) return [];
@@ -259,10 +374,10 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
             </motion.div>
             <div>
               <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-                Agenda de Gravações
+                Meu Calendário
                 <motion.span animate={{ y: [0, -4, 0], rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2.5 }}>🚀</motion.span>
               </h2>
-              <p className="text-sm text-white/40">Confirme, cancele ou solicite gravações especiais</p>
+              <p className="text-sm text-white/40">Gravações, edições, postagens e mais — tudo em um só lugar</p>
             </div>
           </div>
           <motion.button
@@ -404,13 +519,19 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
             {daysInMonth.map((day, idx) => {
               const dateStr = format(day, 'yyyy-MM-dd');
               const recs = recordingsByDate[dateStr] || [];
+              const dayEvents = eventsByDate[dateStr] || [];
               const hasRecording = recs.length > 0;
+              const hasAnyEvent = hasRecording || dayEvents.length > 0;
               const hasUpcoming = recs.some(r => isScheduled(r.status));
+              const hasCancelled = recs.some(r => r.status === 'cancelada');
+              const hasPosted = dayEvents.some(e => e.icon === '📱');
               const isSelected = selectedDay && isSameDay(day, selectedDay);
               const isToday = isDateToday(day);
               const isPast = isBefore(day, new Date()) && !isToday;
               const isHovered = hoveredDay === dateStr;
-              const firstRec = recs[0];
+
+              // Collect unique icons for this day (max 3 visible)
+              const uniqueIcons = [...new Set(dayEvents.map(e => e.icon))].slice(0, 3);
 
               return (
                 <motion.button
@@ -425,40 +546,54 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                   className={`aspect-square rounded-xl flex flex-col items-center justify-center relative transition-all duration-200
                     ${isToday && !isSelected ? 'ring-1 ring-white/20' : ''}
                     ${isPast ? 'text-white/20' : 'text-white/70'}
-                    ${hasRecording && !isPast ? 'text-white' : ''}`}
+                    ${hasAnyEvent && !isPast ? 'text-white' : ''}`}
                   style={{
                     background: isSelected ? `hsl(${clientColor} / 0.25)`
+                      : hasCancelled && !isPast ? 'rgba(239,68,68,0.1)'
                       : hasRecording && !isPast ? hasUpcoming ? `linear-gradient(135deg, hsl(25 100% 50% / 0.12), hsl(${clientColor} / 0.12))` : `hsl(${clientColor} / 0.08)`
+                      : hasAnyEvent && !isPast ? 'rgba(255,255,255,0.04)'
                       : isHovered && !isPast ? 'rgba(255,255,255,0.05)' : 'transparent',
                     boxShadow: isSelected ? `0 0 0 2px hsl(${clientColor}), 0 4px 20px hsl(${clientColor} / 0.2)`
+                      : hasCancelled && !isPast ? `inset 0 0 0 1px rgba(239,68,68,0.3)`
                       : hasRecording && !isPast && hasUpcoming ? `inset 0 0 0 1px hsl(25 100% 50% / 0.3), 0 0 12px hsl(25 100% 50% / 0.1)`
                       : hasRecording && !isPast ? `inset 0 0 0 1px hsl(${clientColor} / 0.2)` : 'none',
                   }}
                 >
-                  {hasRecording && !isPast && hasUpcoming && <RocketFireIndicator small />}
-                  <span className={`text-sm leading-none relative z-10 ${isToday ? 'font-extrabold' : hasRecording ? 'font-bold' : 'font-medium'}`}>
+                  {/* Big red X for cancelled */}
+                  {hasCancelled && !isPast && (
+                    <motion.span
+                      initial={{ scale: 0 }} animate={{ scale: 1 }}
+                      className="absolute inset-0 flex items-center justify-center text-red-500/30 text-2xl font-black z-0 pointer-events-none"
+                    >✕</motion.span>
+                  )}
+                  {hasRecording && !isPast && hasUpcoming && !hasCancelled && <RocketFireIndicator small />}
+                  <span className={`text-sm leading-none relative z-10 ${isToday ? 'font-extrabold' : hasAnyEvent ? 'font-bold' : 'font-medium'}`}>
                     {format(day, 'd')}
                   </span>
-                  {hasRecording && (
-                    <motion.div initial={{ opacity: 0, y: 2 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center mt-0.5 relative z-10">
-                      <span className="text-[9px] font-bold leading-none tabular-nums"
-                        style={{ color: recs.some(r => r.status === 'concluida' || r.status === 'gravado') ? '#6ee7b7' : isScheduled(firstRec.status) ? '#fb923c' : `hsl(${clientColor})` }}>
-                        {firstRec.start_time}
-                      </span>
-                      {recs.length > 1 && <span className="text-[7px] text-white/30 font-bold mt-px">+{recs.length - 1}</span>}
+                  {/* Event icons row */}
+                  {uniqueIcons.length > 0 && (
+                    <motion.div initial={{ opacity: 0, y: 2 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-px mt-0.5 relative z-10">
+                      {uniqueIcons.map((icon, i) => (
+                        <span key={i} className="text-[8px] leading-none">{icon}</span>
+                      ))}
+                      {dayEvents.length > 3 && <span className="text-[7px] text-white/30 font-bold ml-px">+{dayEvents.length - 3}</span>}
                     </motion.div>
                   )}
-                  {isToday && !hasRecording && (
+                  {isToday && !hasAnyEvent && (
                     <motion.div className="w-1 h-1 rounded-full bg-white/50 mt-0.5" animate={{ scale: [1, 1.3, 1] }} transition={{ repeat: Infinity, duration: 2 }} />
                   )}
                   {/* Hover tooltip */}
                   <AnimatePresence>
-                    {isHovered && hasRecording && !isSelected && (
+                    {isHovered && hasAnyEvent && !isSelected && (
                       <motion.div initial={{ opacity: 0, y: 5, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 5, scale: 0.9 }}
                         className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full z-30 pointer-events-none">
-                        <div className="bg-[#1a1a2e] border border-white/10 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
-                          <p className="text-[10px] font-bold text-white/80 flex items-center gap-1">🚀 {firstRec.start_time} — {firstRec.videomaker_name}</p>
-                          <p className="text-[9px] text-white/40 mt-0.5">{(STATUS_MAP[firstRec.status] || STATUS_MAP.agendada).label} • {(TYPE_MAP[firstRec.type] || { label: firstRec.type }).label}</p>
+                        <div className="bg-[#1a1a2e] border border-white/10 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap space-y-0.5">
+                          {dayEvents.slice(0, 4).map((ev, i) => (
+                            <p key={i} className="text-[10px] font-bold text-white/70 flex items-center gap-1">
+                              <span>{ev.icon}</span> {ev.label}{ev.time ? ` • ${ev.time}` : ''}
+                            </p>
+                          ))}
+                          {dayEvents.length > 4 && <p className="text-[9px] text-white/30">+{dayEvents.length - 4} mais</p>}
                         </div>
                       </motion.div>
                     )}
@@ -468,19 +603,21 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
             })}
           </div>
 
-          <div className="flex flex-wrap items-center gap-5 mt-5 pt-4 border-t border-white/[0.06]">
-            <div className="flex items-center gap-2 text-[11px] text-white/40">
-              <div className="w-3 h-3 rounded-md relative overflow-hidden" style={{ background: `linear-gradient(135deg, hsl(25 100% 50% / 0.4), hsl(${clientColor} / 0.3))` }}>
-                <span className="absolute -top-0.5 -right-0.5 text-[6px]">🚀</span>
+          {/* Legend */}
+          <div className="flex flex-wrap items-center gap-4 mt-5 pt-4 border-t border-white/[0.06]">
+            {[
+              { icon: '📹', label: 'Agendada' },
+              { icon: '🎬', label: 'Gravada' },
+              { icon: '❌', label: 'Cancelada' },
+              { icon: '🔄', label: 'Remarcada' },
+              { icon: '⭐', label: 'Extra' },
+              { icon: '✂️', label: 'Em edição' },
+              { icon: '📱', label: 'Postado' },
+            ].map(item => (
+              <div key={item.icon} className="flex items-center gap-1.5 text-[10px] text-white/35">
+                <span className="text-[10px]">{item.icon}</span>{item.label}
               </div>
-              Agendada
-            </div>
-            <div className="flex items-center gap-2 text-[11px] text-white/40">
-              <div className="w-3 h-3 rounded-md bg-emerald-500/30" /> Gravada
-            </div>
-            <div className="flex items-center gap-2 text-[11px] text-white/40">
-              <div className="w-3 h-3 rounded-md ring-1 ring-white/20" /> Hoje
-            </div>
+            ))}
           </div>
         </motion.div>
 
@@ -507,68 +644,102 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                   </div>
                 </div>
 
-                {dayRecordings.length === 0 ? (
-                  <div className="text-center py-10">
-                    <CalendarDays size={36} className="mx-auto text-white/[0.07] mb-3" />
-                    <p className="text-sm text-white/25 font-medium">Nenhuma gravação</p>
-                    <p className="text-[11px] text-white/15 mt-1">Dia livre 🎉</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {dayRecordings.map((rec, i) => {
-                      const st = STATUS_MAP[rec.status] || STATUS_MAP.agendada;
-                      const typeInfo = TYPE_MAP[rec.type] || { label: rec.type, emoji: '🎬' };
-                      const canAct = isScheduled(rec.status) && isAfter(parseISO(rec.date), new Date());
-                      const isConfirmed = rec.confirmation_status === 'confirmada';
-                      return (
-                        <motion.div key={rec.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="rounded-xl overflow-hidden relative">
-                          <div className="h-0.5 relative z-[1]" style={{
-                            background: rec.status === 'concluida' || rec.status === 'gravado' ? '#34d399' : rec.status === 'cancelada' ? '#f87171' : `linear-gradient(90deg, hsl(25 100% 50%), hsl(${clientColor}))`
-                          }} />
-                          <div className="bg-white/[0.04] border border-white/[0.06] border-t-0 rounded-b-xl p-4 space-y-3 relative z-[1]">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg relative" style={{ background: `hsl(${clientColor} / 0.1)` }}>
-                                  {canAct ? <motion.span animate={{ rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2 }}>🚀</motion.span> : typeInfo.emoji}
+                {(() => {
+                  const dateStr = format(selectedDay, 'yyyy-MM-dd');
+                  const dayEvts = eventsByDate[dateStr] || [];
+                  const nonRecordingEvents = dayEvts.filter(e => e.type !== 'recording');
+                  const hasContent = dayRecordings.length > 0 || nonRecordingEvents.length > 0;
+
+                  if (!hasContent) return (
+                    <div className="text-center py-10">
+                      <CalendarDays size={36} className="mx-auto text-white/[0.07] mb-3" />
+                      <p className="text-sm text-white/25 font-medium">Nenhuma atividade</p>
+                      <p className="text-[11px] text-white/15 mt-1">Dia livre 🎉</p>
+                    </div>
+                  );
+
+                  return (
+                    <div className="space-y-3">
+                      {/* Recording cards with actions */}
+                      {dayRecordings.map((rec, i) => {
+                        const st = STATUS_MAP[rec.status] || STATUS_MAP.agendada;
+                        const typeInfo = TYPE_MAP[rec.type] || { label: rec.type, emoji: '🎬' };
+                        const canAct = isScheduled(rec.status) && isAfter(parseISO(rec.date), new Date());
+                        const isConfirmed = rec.confirmation_status === 'confirmada';
+                        return (
+                          <motion.div key={rec.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="rounded-xl overflow-hidden relative">
+                            <div className="h-0.5 relative z-[1]" style={{
+                              background: rec.status === 'concluida' || rec.status === 'gravado' ? '#34d399' : rec.status === 'cancelada' ? '#f87171' : `linear-gradient(90deg, hsl(25 100% 50%), hsl(${clientColor}))`
+                            }} />
+                            <div className="bg-white/[0.04] border border-white/[0.06] border-t-0 rounded-b-xl p-4 space-y-3 relative z-[1]">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg relative" style={{ background: `hsl(${clientColor} / 0.1)` }}>
+                                    {rec.status === 'cancelada' ? <span className="text-red-400 text-xl font-black">✕</span> : canAct ? <motion.span animate={{ rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2 }}>🚀</motion.span> : typeInfo.emoji}
+                                  </div>
+                                  <div>
+                                    <p className="text-base font-extrabold tabular-nums" style={{ color: rec.status === 'cancelada' ? '#f87171' : `hsl(${clientColor})` }}>{rec.start_time}</p>
+                                    <p className="text-[10px] text-white/35 font-medium">{typeInfo.label}</p>
+                                  </div>
                                 </div>
-                                <div>
-                                  <p className="text-base font-extrabold tabular-nums" style={{ color: `hsl(${clientColor})` }}>{rec.start_time}</p>
-                                  <p className="text-[10px] text-white/35 font-medium">{typeInfo.label}</p>
-                                </div>
+                                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${st.bg} ${st.color}`}>{st.label}</span>
                               </div>
-                              <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${st.bg} ${st.color}`}>{st.label}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-white/40 bg-white/[0.03] rounded-lg px-3 py-2">
-                              <Video size={12} className="shrink-0" />
-                              <span className="font-medium">{rec.videomaker_name}</span>
-                              {isConfirmed && <span className="ml-auto text-[9px] text-emerald-400 font-bold">✓ Confirmada</span>}
-                            </div>
-                            {canAct && (
-                              <div className="flex gap-2">
-                                {!isConfirmed && (
-                                  <motion.button whileTap={{ scale: 0.95 }} onClick={() => handleConfirm(rec)}
-                                    className="flex-1 py-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/20 hover:bg-emerald-500/25 transition-all">
-                                    <Check size={12} /> Confirmar
+                              <div className="flex items-center gap-2 text-xs text-white/40 bg-white/[0.03] rounded-lg px-3 py-2">
+                                <Video size={12} className="shrink-0" />
+                                <span className="font-medium">{rec.videomaker_name}</span>
+                                {isConfirmed && <span className="ml-auto text-[9px] text-emerald-400 font-bold">✓ Confirmada</span>}
+                              </div>
+                              {canAct && (
+                                <div className="flex gap-2">
+                                  {!isConfirmed && (
+                                    <motion.button whileTap={{ scale: 0.95 }} onClick={() => handleConfirm(rec)}
+                                      className="flex-1 py-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/20 hover:bg-emerald-500/25 transition-all">
+                                      <Check size={12} /> Confirmar
+                                    </motion.button>
+                                  )}
+                                  <motion.button whileTap={{ scale: 0.95 }}
+                                    onClick={() => setCancelFlow({ step: 'confirming', rec })}
+                                    className={`${isConfirmed ? 'flex-1' : ''} py-2 px-3 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 bg-red-500/10 text-red-300 border border-red-500/15 hover:bg-red-500/20 transition-all`}>
+                                    <X size={12} /> Cancelar
                                   </motion.button>
-                                )}
-                                <motion.button whileTap={{ scale: 0.95 }}
-                                  onClick={() => setCancelFlow({ step: 'confirming', rec })}
-                                  className={`${isConfirmed ? 'flex-1' : ''} py-2 px-3 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 bg-red-500/10 text-red-300 border border-red-500/15 hover:bg-red-500/20 transition-all`}>
-                                  <X size={12} /> Cancelar
-                                </motion.button>
-                                <motion.button whileTap={{ scale: 0.95 }}
-                                  onClick={() => { setRescheduleRec(rec); setSelectedNewDate(''); setSelectedNewTime(''); setAvailableSlots([]); }}
-                                  className="py-2 px-3 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-white/50 hover:text-white/80 transition-all">
-                                  <RefreshCw size={10} />
-                                </motion.button>
+                                  <motion.button whileTap={{ scale: 0.95 }}
+                                    onClick={() => { setRescheduleRec(rec); setSelectedNewDate(''); setSelectedNewTime(''); setAvailableSlots([]); }}
+                                    className="py-2 px-3 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-white/50 hover:text-white/80 transition-all">
+                                    <RefreshCw size={10} />
+                                  </motion.button>
+                                </div>
+                              )}
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+
+                      {/* Non-recording events (content tasks, deliveries) */}
+                      {nonRecordingEvents.length > 0 && (
+                        <>
+                          {dayRecordings.length > 0 && (
+                            <div className="flex items-center gap-2 pt-2">
+                              <div className="h-px flex-1 bg-white/[0.06]" />
+                              <span className="text-[9px] font-bold text-white/25 uppercase tracking-wider">Conteúdo</span>
+                              <div className="h-px flex-1 bg-white/[0.06]" />
+                            </div>
+                          )}
+                          {nonRecordingEvents.map((evt, i) => (
+                            <motion.div key={`evt-${i}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: (dayRecordings.length + i) * 0.05 }}
+                              className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-3">
+                              <span className="text-lg">{evt.icon}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-xs font-bold ${evt.color}`}>{evt.label}</p>
+                                {evt.detail && <p className="text-[10px] text-white/40 truncate">{evt.detail}</p>}
                               </div>
-                            )}
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-                )}
+                              {evt.time && <span className="text-[10px] font-bold text-white/30 tabular-nums">{evt.time}</span>}
+                            </motion.div>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
               </motion.div>
             ) : (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 text-center py-16">

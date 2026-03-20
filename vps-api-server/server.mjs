@@ -687,21 +687,29 @@ app.post('/api/portal-recordings', async (req, res) => {
     if (action === 'check_availability') {
       if (!new_date) return res.status(400).json({ error: 'new_date required' });
       const { rows: [clientData] } = await pool.query('SELECT videomaker_id FROM clients WHERE id = $1', [client_id]);
-      if (!clientData?.videomaker_id) return res.status(400).json({ error: 'Nenhum videomaker atribuído' });
+      let vmId = clientData?.videomaker_id;
+      if (!vmId) {
+        const { rows: [lastRec] } = await pool.query(
+          `SELECT videomaker_id FROM recordings WHERE client_id = $1 AND videomaker_id IS NOT NULL ORDER BY date DESC LIMIT 1`,
+          [client_id]
+        );
+        vmId = lastRec?.videomaker_id;
+      }
+      if (!vmId) return res.status(400).json({ error: 'Nenhum videomaker atribuído' });
       const { rows: [settings] } = await pool.query('SELECT * FROM company_settings LIMIT 1');
       const duration = (settings?.recording_duration || 2) * 60;
       const buffer = 30;
       const { rows: existing } = await pool.query(
         `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,
-        [clientData.videomaker_id, new_date]
+        [vmId, new_date]
       );
       const occupied = existing.map(r => { const [h, m] = r.start_time.split(':').map(Number); const start = h * 60 + m; return { start, end: start + duration + buffer }; });
       const slots = [];
       const generateSlots = (startStr, endStr) => { const [sh, sm] = startStr.split(':').map(Number); const [eh, em] = endStr.split(':').map(Number); let cursor = sh * 60 + sm; const endMin = eh * 60 + em; while (cursor + duration <= endMin) { const conflict = occupied.some(o => cursor < o.end && cursor + duration + buffer > o.start); if (!conflict) slots.push(`${String(Math.floor(cursor / 60)).padStart(2, '0')}:${String(cursor % 60).padStart(2, '0')}`); cursor += 30; } };
       generateSlots(settings?.shift_a_start || '08:30', settings?.shift_a_end || '12:00');
       generateSlots(settings?.shift_b_start || '14:30', settings?.shift_b_end || '18:00');
-      const { rows: [vmProfile] } = await pool.query('SELECT name FROM profiles WHERE id = $1', [clientData.videomaker_id]);
-      return res.json({ available_slots: slots, videomaker_name: vmProfile?.name || 'Videomaker', videomaker_id: clientData.videomaker_id, date: new_date });
+      const { rows: [vmProfile] } = await pool.query('SELECT name FROM profiles WHERE id = $1', [vmId]);
+      return res.json({ available_slots: slots, videomaker_name: vmProfile?.name || 'Videomaker', videomaker_id: vmId, date: new_date });
     }
 
     if (action === 'reschedule') {

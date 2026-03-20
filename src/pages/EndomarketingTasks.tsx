@@ -12,7 +12,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Zap, CheckCircle, XCircle, Clock, CalendarPlus, Filter, Send, MessageCircle } from 'lucide-react';
+import { Rocket, CheckCircle, XCircle, Clock, CalendarPlus, MessageCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export default function EndomarketingTasks() {
   const { tasks, loading, completeTask, cancelTask, generateTasks } = useEndoTasks();
@@ -39,7 +40,6 @@ export default function EndomarketingTasks() {
     });
   }, [tasks, filterStatus, filterDate]);
 
-  // Group by date
   const grouped = useMemo(() => {
     const map = new Map<string, typeof filtered>();
     filtered.forEach(t => {
@@ -103,48 +103,85 @@ export default function EndomarketingTasks() {
     cancelled: tasks.filter(t => t.status === 'cancelada').length,
   };
 
-  if (loading) return <div className="flex items-center justify-center p-12"><p className="text-muted-foreground">Carregando...</p></div>;
+  if (loading) return (
+    <div className="flex items-center justify-center p-12">
+      <motion.div animate={{ y: [0, -10, 0], rotate: [0, -15, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
+        <Rocket size={32} className="text-primary -rotate-45" />
+      </motion.div>
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-display font-bold">Tarefas Endomarketing</h1>
-          <p className="text-sm text-muted-foreground">{stats.pending} pendentes · {stats.completed} concluídas</p>
+    <div className="space-y-4 sm:space-y-6 px-1 sm:px-0">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <motion.div
+            animate={{ y: [0, -5, 0], rotate: [0, -10, 0] }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+            className="relative"
+          >
+            <Rocket size={24} className="text-primary -rotate-45" />
+            <motion.div
+              animate={{ opacity: [0.5, 1, 0.3], scale: [0.8, 1.2, 0.6] }}
+              transition={{ duration: 0.5, repeat: Infinity }}
+              className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-3 rounded-full bg-gradient-to-t from-warning via-primary to-transparent blur-[2px] rotate-45"
+            />
+          </motion.div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-display font-bold">Tarefas Endomarketing</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">{stats.pending} pendentes · {stats.completed} concluídas</p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleSendDailyNotifications} disabled={sendingNotifications}>
-            <MessageCircle size={16} className="mr-1" />
-            {sendingNotifications ? 'Enviando...' : 'Enviar Tarefas via WhatsApp'}
+        <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0">
+          <Button variant="outline" size="sm" onClick={handleSendDailyNotifications} disabled={sendingNotifications} className="shrink-0 text-xs sm:text-sm">
+            <MessageCircle size={14} className="mr-1" />
+            {sendingNotifications ? 'Enviando...' : 'WhatsApp'}
           </Button>
-          <Button onClick={() => setGenDialogOpen(true)}>
-            <CalendarPlus size={16} className="mr-1" /> Gerar Tarefas
+          <Button size="sm" onClick={() => setGenDialogOpen(true)} className="shrink-0 text-xs sm:text-sm">
+            <CalendarPlus size={14} className="mr-1" /> Gerar Tarefas
           </Button>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-3">
-        <Card className="glass-card"><CardContent className="p-3 text-center">
-          <p className="text-2xl font-bold">{stats.total}</p><p className="text-xs text-muted-foreground">Total</p>
-        </CardContent></Card>
-        <Card className="glass-card"><CardContent className="p-3 text-center">
-          <p className="text-2xl font-bold text-yellow-500">{stats.pending}</p><p className="text-xs text-muted-foreground">Pendentes</p>
-        </CardContent></Card>
-        <Card className="glass-card"><CardContent className="p-3 text-center">
-          <p className="text-2xl font-bold text-emerald-500">{stats.completed}</p><p className="text-xs text-muted-foreground">Concluídas</p>
-        </CardContent></Card>
-        <Card className="glass-card"><CardContent className="p-3 text-center">
-          <p className="text-2xl font-bold text-red-400">{stats.cancelled}</p><p className="text-xs text-muted-foreground">Canceladas</p>
-        </CardContent></Card>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+        {[
+          { label: 'Total', value: stats.total, color: 'text-foreground', border: 'border-border', bg: '' },
+          { label: 'Pendentes', value: stats.pending, color: 'text-warning', border: 'border-warning/30', bg: 'bg-warning/5' },
+          { label: 'Concluídas', value: stats.completed, color: 'text-success', border: 'border-success/30', bg: 'bg-success/5' },
+          { label: 'Canceladas', value: stats.cancelled, color: 'text-destructive', border: 'border-destructive/30', bg: 'bg-destructive/5' },
+        ].map((s, i) => (
+          <motion.div
+            key={s.label}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            whileHover={{ scale: 1.03 }}
+          >
+            <Card className={`glass-card border-2 ${s.border} ${s.bg} relative overflow-hidden`}>
+              <CardContent className="p-3 text-center">
+                <p className={`text-xl sm:text-2xl font-bold ${s.color}`}>{s.value}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground">{s.label}</p>
+                <motion.div
+                  animate={{ y: [10, -20], opacity: [0, 0.15, 0] }}
+                  transition={{ duration: 3, repeat: Infinity, delay: i * 0.5 }}
+                  className="absolute top-1 right-1"
+                >
+                  <Rocket size={8} className="text-muted-foreground/20 -rotate-45" />
+                </motion.div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 items-end">
+      <div className="flex flex-wrap gap-2 sm:gap-3 items-end">
         <div className="space-y-1">
           <Label className="text-xs">Status</Label>
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[120px] sm:w-[140px] h-8 sm:h-9 text-xs sm:text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos</SelectItem>
               <SelectItem value="pendente">Pendente</SelectItem>
@@ -155,64 +192,94 @@ export default function EndomarketingTasks() {
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Data</Label>
-          <Input type="date" className="w-[160px]" value={filterDate} onChange={e => setFilterDate(e.target.value)} />
+          <Input type="date" className="w-[140px] sm:w-[160px] h-8 sm:h-9 text-xs sm:text-sm" value={filterDate} onChange={e => setFilterDate(e.target.value)} />
         </div>
-        {filterDate && <Button variant="ghost" size="sm" onClick={() => setFilterDate('')}>Limpar</Button>}
+        {filterDate && <Button variant="ghost" size="sm" onClick={() => setFilterDate('')} className="text-xs h-8">Limpar</Button>}
       </div>
 
-      {/* Task List grouped by date */}
+      {/* Task List */}
       <div className="space-y-4">
         {grouped.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-8">Nenhuma tarefa encontrada</p>
+          <div className="text-center py-8">
+            <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 3, repeat: Infinity }}>
+              <Rocket size={28} className="text-muted-foreground/30 -rotate-45 mx-auto" />
+            </motion.div>
+            <p className="text-sm text-muted-foreground mt-2">Nenhuma tarefa encontrada</p>
+          </div>
         )}
         {grouped.map(([date, dateTasks]) => (
-          <div key={date}>
-            <h3 className="text-sm font-semibold text-muted-foreground mb-2">
+          <motion.div key={date} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}>
+            <h3 className="text-xs sm:text-sm font-semibold text-muted-foreground mb-2 capitalize">
               {format(new Date(date + 'T12:00:00'), "EEEE, dd 'de' MMMM", { locale: ptBR })}
             </h3>
-            <div className="space-y-2">
-              {dateTasks.map(t => (
-                <div key={t.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-card hover:bg-muted/30 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-8 rounded-full" style={{ backgroundColor: `hsl(${t.clients?.color || '217 91% 60%'})` }} />
-                    <div>
-                      <p className="text-sm font-medium">{t.clients?.company_name}</p>
-                      <div className="flex gap-2 mt-0.5">
-                        <Badge variant="outline" className="text-[10px]">{getTaskTypeLabel(t.task_type)}</Badge>
-                        <span className="text-xs text-muted-foreground">{t.duration_minutes}min</span>
+            <div className="space-y-1.5 sm:space-y-2">
+              {dateTasks.map((t, i) => (
+                <motion.div
+                  key={t.id}
+                  initial={{ opacity: 0, x: -5 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.03 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="rounded-xl border-2 border-border bg-card hover:bg-muted/30 transition-colors"
+                >
+                  {/* Main info row */}
+                  <div className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3">
+                    <div className="w-1.5 h-8 rounded-full shrink-0" style={{ backgroundColor: `hsl(${t.clients?.color || '217 91% 60%'})` }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs sm:text-sm font-medium truncate">{t.clients?.company_name}</p>
+                      <div className="flex gap-1.5 mt-0.5 flex-wrap">
+                        <Badge variant="outline" className="text-[9px] sm:text-[10px]">{getTaskTypeLabel(t.task_type)}</Badge>
+                        <span className="text-[10px] sm:text-xs text-muted-foreground">{t.duration_minutes}min</span>
                       </div>
                     </div>
+                    {/* Desktop actions */}
+                    <div className="hidden sm:flex items-center gap-2 shrink-0">
+                      {t.status === 'pendente' && (
+                        <>
+                          <Button size="sm" variant="ghost" onClick={() => handleCancel(t.id)}>
+                            <XCircle size={14} className="text-destructive" />
+                          </Button>
+                          <Button size="sm" onClick={() => openComplete(t.id)} className="gap-1">
+                            <CheckCircle size={14} /> Concluir
+                          </Button>
+                        </>
+                      )}
+                      {t.status === 'concluida' && <Badge className="bg-success/15 text-success border border-success/30 text-xs">✅ Concluída</Badge>}
+                      {t.status === 'cancelada' && <Badge variant="destructive" className="text-xs">Cancelada</Badge>}
+                    </div>
+                    {/* Mobile status badge */}
+                    <div className="sm:hidden shrink-0">
+                      {t.status === 'concluida' && <Badge className="bg-success/15 text-success border border-success/30 text-[9px]">✅</Badge>}
+                      {t.status === 'cancelada' && <Badge variant="destructive" className="text-[9px]">❌</Badge>}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {t.status === 'pendente' && (
-                      <>
-                        <Button size="sm" variant="ghost" onClick={() => handleCancel(t.id)}>
-                          <XCircle size={14} className="text-red-400" />
-                        </Button>
-                        <Button size="sm" onClick={() => openComplete(t.id)}>
-                          <CheckCircle size={14} className="mr-1" /> Concluir
-                        </Button>
-                      </>
-                    )}
-                    {t.status === 'concluida' && <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">✅ Concluída</Badge>}
-                    {t.status === 'cancelada' && <Badge variant="destructive">Cancelada</Badge>}
-                  </div>
-                </div>
+                  {/* Mobile action buttons */}
+                  {t.status === 'pendente' && (
+                    <div className="flex sm:hidden gap-1.5 px-2.5 pb-2.5">
+                      <Button size="sm" variant="outline" onClick={() => handleCancel(t.id)} className="flex-1 h-8 text-xs gap-1 text-destructive border-destructive/30">
+                        <XCircle size={12} /> Cancelar
+                      </Button>
+                      <Button size="sm" onClick={() => openComplete(t.id)} className="flex-1 h-8 text-xs gap-1">
+                        <CheckCircle size={12} /> Concluir
+                      </Button>
+                    </div>
+                  )}
+                </motion.div>
               ))}
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
 
       {/* Generate Tasks Dialog */}
       <Dialog open={genDialogOpen} onOpenChange={setGenDialogOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Gerar Tarefas Automáticas</DialogTitle></DialogHeader>
-          <div className="space-y-4">
+        <DialogContent className="mx-2 sm:mx-auto p-4 sm:p-6">
+          <DialogHeader><DialogTitle className="text-sm sm:text-base">Gerar Tarefas Automáticas</DialogTitle></DialogHeader>
+          <div className="space-y-3 sm:space-y-4">
             <div className="space-y-1">
-              <Label>Contrato</Label>
+              <Label className="text-xs sm:text-sm">Contrato</Label>
               <Select value={genContractId} onValueChange={setGenContractId}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger className="h-8 sm:h-9 text-xs sm:text-sm"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {activeContracts.map(c => (
                     <SelectItem key={c.id} value={c.id}>
@@ -222,23 +289,24 @@ export default function EndomarketingTasks() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
               <div className="space-y-1">
-                <Label>De</Label>
-                <Input type="date" value={genFrom} onChange={e => setGenFrom(e.target.value)} />
+                <Label className="text-xs sm:text-sm">De</Label>
+                <Input type="date" value={genFrom} onChange={e => setGenFrom(e.target.value)} className="h-8 sm:h-9 text-xs sm:text-sm" />
               </div>
               <div className="space-y-1">
-                <Label>Até</Label>
-                <Input type="date" value={genTo} onChange={e => setGenTo(e.target.value)} />
+                <Label className="text-xs sm:text-sm">Até</Label>
+                <Input type="date" value={genTo} onChange={e => setGenTo(e.target.value)} className="h-8 sm:h-9 text-xs sm:text-sm" />
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
               As tarefas pendentes existentes no período serão substituídas. Tarefas já concluídas serão mantidas.
             </p>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setGenDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleGenerate} disabled={generating}>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setGenDialogOpen(false)} size="sm">Cancelar</Button>
+            <Button onClick={handleGenerate} disabled={generating} size="sm" className="gap-1">
+              <Rocket size={14} className="-rotate-45" />
               {generating ? 'Gerando...' : 'Gerar Tarefas'}
             </Button>
           </DialogFooter>
@@ -247,17 +315,19 @@ export default function EndomarketingTasks() {
 
       {/* Complete Task Dialog */}
       <Dialog open={completeDialogOpen} onOpenChange={setCompleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Concluir Tarefa</DialogTitle></DialogHeader>
+        <DialogContent className="mx-2 sm:mx-auto p-4 sm:p-6">
+          <DialogHeader><DialogTitle className="text-sm sm:text-base">Concluir Tarefa</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">
-              <Label>Observações (opcional)</Label>
-              <Textarea value={completeNotes} onChange={e => setCompleteNotes(e.target.value)} placeholder="Detalhes da execução..." rows={3} />
+              <Label className="text-xs sm:text-sm">Observações (opcional)</Label>
+              <Textarea value={completeNotes} onChange={e => setCompleteNotes(e.target.value)} placeholder="Detalhes da execução..." rows={3} className="text-xs sm:text-sm" />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCompleteDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleComplete}>✅ Confirmar Conclusão</Button>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setCompleteDialogOpen(false)} size="sm">Cancelar</Button>
+            <Button onClick={handleComplete} size="sm" className="gap-1">
+              <CheckCircle size={14} /> Confirmar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

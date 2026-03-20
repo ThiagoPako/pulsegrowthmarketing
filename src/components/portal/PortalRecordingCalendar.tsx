@@ -153,14 +153,38 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
   const [exploreSlotsData, setExploreSlotsData] = useState<string[]>([]);
   const [exploringSlots, setExploringSlots] = useState(false);
   const [exploreVmName, setExploreVmName] = useState('');
+  // Additional data for activity calendar
+  const [contentTasks, setContentTasks] = useState<ContentEvent[]>([]);
+  const [deliveries, setDeliveries] = useState<DeliveryEvent[]>([]);
 
-  useEffect(() => { loadRecordings(); }, [clientId]);
+  useEffect(() => { loadAllData(); }, [clientId]);
+
+  const loadAllData = async () => {
+    setLoading(true);
+    // Fetch recordings, content tasks, and deliveries in parallel
+    const [recResult, ctResult, delResult] = await Promise.all([
+      invokeVpsFunction('portal-recordings', { body: { action: 'list', client_id: clientId } }),
+      supabase.from('content_tasks').select('id,title,content_type,kanban_column,scheduled_recording_date,scheduled_recording_time,editing_started_at,approved_at').eq('client_id', clientId),
+      supabase.from('social_media_deliveries').select('id,title,content_type,status,delivered_at,posted_at,scheduled_time').eq('client_id', clientId),
+    ]);
+    if (recResult.data?.recordings) setRecordings(recResult.data.recordings);
+    if (ctResult.data) setContentTasks(ctResult.data.map((ct: any) => ({
+      id: ct.id, title: ct.title, content_type: ct.content_type,
+      kanban_column: ct.kanban_column, scheduled_date: ct.scheduled_recording_date,
+      scheduled_time: ct.scheduled_recording_time, editing_started_at: ct.editing_started_at,
+      approved_at: ct.approved_at,
+    })));
+    if (delResult.data) setDeliveries(delResult.data.map((d: any) => ({
+      id: d.id, title: d.title, content_type: d.content_type,
+      status: d.status, delivered_at: d.delivered_at,
+      posted_at: d.posted_at, scheduled_time: d.scheduled_time,
+    })));
+    setLoading(false);
+  };
 
   const loadRecordings = async () => {
-    setLoading(true);
     const { data } = await invokeVpsFunction('portal-recordings', { body: { action: 'list', client_id: clientId } });
     if (data?.recordings) setRecordings(data.recordings);
-    setLoading(false);
   };
 
   const monthStart = startOfMonth(currentMonth);
@@ -173,6 +197,66 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     recordings.forEach(r => { if (!map[r.date]) map[r.date] = []; map[r.date].push(r); });
     return map;
   }, [recordings]);
+
+  // Build unified events map by date
+  const eventsByDate = useMemo(() => {
+    const map: Record<string, DayEvent[]> = {};
+    const addEvent = (date: string, event: DayEvent) => {
+      if (!date) return;
+      const key = date.substring(0, 10);
+      if (!map[key]) map[key] = [];
+      map[key].push(event);
+    };
+
+    // Recording events
+    recordings.forEach(r => {
+      if (r.status === 'cancelada') {
+        addEvent(r.date, { type: 'recording', icon: '❌', label: 'Cancelada', color: 'text-red-400', time: r.start_time, detail: `Gravação cancelada` });
+      } else if (r.status === 'concluida' || r.status === 'gravado') {
+        addEvent(r.date, { type: 'recording', icon: '🎬', label: 'Gravado', color: 'text-emerald-400', time: r.start_time, detail: `Gravação realizada` });
+      } else if (r.status === 'agendada' || r.status === 'agendado') {
+        const typeInfo = TYPE_MAP[r.type] || { label: r.type, emoji: '📹' };
+        if (r.type === 'extra') {
+          addEvent(r.date, { type: 'recording', icon: '⭐', label: 'Extra', color: 'text-yellow-400', time: r.start_time, detail: `Conteúdo extra agendado` });
+        } else if (r.type === 'backup' || r.type === 'secundaria') {
+          addEvent(r.date, { type: 'recording', icon: '🔄', label: 'Remarcada', color: 'text-blue-400', time: r.start_time, detail: `Gravação remarcada` });
+        } else {
+          addEvent(r.date, { type: 'recording', icon: '📹', label: 'Agendada', color: 'text-amber-400', time: r.start_time, detail: `Gravação ${typeInfo.label}` });
+        }
+      } else if (r.status === 'solicitada') {
+        addEvent(r.date, { type: 'recording', icon: '📨', label: 'Solicitada', color: 'text-violet-400', time: r.start_time, detail: `Solicitação especial` });
+      }
+    });
+
+    // Content task events (editing, scheduled)
+    contentTasks.forEach(ct => {
+      if (ct.kanban_column === 'edicao' && ct.editing_started_at) {
+        const date = ct.editing_started_at.substring(0, 10);
+        addEvent(date, { type: 'content', icon: '✂️', label: 'Em edição', color: 'text-blue-400', detail: ct.title });
+      }
+      if (ct.kanban_column === 'revisao') {
+        const date = ct.scheduled_date || (ct.editing_started_at?.substring(0, 10) || '');
+        if (date) addEvent(date, { type: 'content', icon: '👁', label: 'Em revisão', color: 'text-cyan-400', detail: ct.title });
+      }
+      if (ct.approved_at) {
+        const date = ct.approved_at.substring(0, 10);
+        addEvent(date, { type: 'content', icon: '✅', label: 'Aprovado', color: 'text-emerald-400', detail: ct.title });
+      }
+    });
+
+    // Delivery events (posted)
+    deliveries.forEach(d => {
+      if (d.posted_at) {
+        const date = d.posted_at.substring(0, 10);
+        addEvent(date, { type: 'delivery', icon: '📱', label: 'Postado', color: 'text-pink-400', detail: d.title });
+      } else if (d.status === 'agendado' && d.scheduled_time) {
+        const date = d.delivered_at.substring(0, 10);
+        addEvent(date, { type: 'delivery', icon: '📅', label: 'Agendado p/ postar', color: 'text-indigo-400', time: d.scheduled_time, detail: d.title });
+      }
+    });
+
+    return map;
+  }, [recordings, contentTasks, deliveries]);
 
   const dayRecordings = useMemo(() => {
     if (!selectedDay) return [];

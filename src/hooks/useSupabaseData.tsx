@@ -109,6 +109,8 @@ function recordingToRow(r: Recording) {
     start_time: r.startTime,
     type: r.type,
     status: r.status,
+    wait_started_at: r.waitStartedAt || null,
+    wait_ended_at: r.waitEndedAt || null,
   };
 }
 

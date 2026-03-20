@@ -136,22 +136,22 @@ function addBusinessHoursDate(fromDateStr: string, hours: number): string {
 
 /* ── Animated event indicator for calendar cells ── */
 function EventIndicator({ event, small = false }: { event: DayEvent; small?: boolean }) {
-  const size = small ? 'text-[7px]' : 'text-[9px]';
+  const size = small ? 'text-sm' : 'text-base';
   
   const animProps = (() => {
     switch (event.animationType) {
-      case 'pulse': return { animate: { scale: [1, 1.3, 1], opacity: [0.7, 1, 0.7] }, transition: { repeat: Infinity, duration: 2 } };
-      case 'bounce': return { animate: { y: [0, -2, 0] }, transition: { repeat: Infinity, duration: 1.5 } };
-      case 'glow': return { animate: { opacity: [0.6, 1, 0.6] }, transition: { repeat: Infinity, duration: 2.5 } };
-      case 'shake': return { animate: { x: [-1, 1, -1, 0] }, transition: { repeat: Infinity, duration: 1.8 } };
+      case 'pulse': return { animate: { scale: [1, 1.35, 1], opacity: [0.8, 1, 0.8] }, transition: { repeat: Infinity, duration: 2 } };
+      case 'bounce': return { animate: { y: [0, -3, 0] }, transition: { repeat: Infinity, duration: 1.2 } };
+      case 'glow': return { animate: { opacity: [0.6, 1, 0.6], scale: [0.95, 1.1, 0.95] }, transition: { repeat: Infinity, duration: 2.5 } };
+      case 'shake': return { animate: { x: [-2, 2, -2, 0] }, transition: { repeat: Infinity, duration: 1.5 } };
       case 'spin': return { animate: { rotate: [0, 360] }, transition: { repeat: Infinity, duration: 3, ease: 'linear' as const } };
-      case 'wave': return { animate: { y: [0, -1, 0, 1, 0] }, transition: { repeat: Infinity, duration: 2 } };
+      case 'wave': return { animate: { y: [0, -2, 0, 2, 0], rotate: [0, 5, 0, -5, 0] }, transition: { repeat: Infinity, duration: 2 } };
       default: return {};
     }
   })();
 
   return (
-    <motion.span className={`${size} leading-none inline-block`} {...animProps}>
+    <motion.span className={`${size} leading-none inline-block drop-shadow-lg`} {...animProps}>
       {event.icon}
     </motion.span>
   );
@@ -636,7 +636,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
             ))}
           </div>
 
-          <div className="grid grid-cols-7 gap-1.5">
+          <div className="grid grid-cols-7 gap-2">
             {Array.from({ length: startPad }).map((_, i) => <div key={`pad-${i}`} className="aspect-square" />)}
             {daysInMonth.map((day, idx) => {
               const dateStr = format(day, 'yyyy-MM-dd');
@@ -651,11 +651,18 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
               const isHovered = hoveredDay === dateStr;
               const dayStyle = getDayStyle(dateStr);
 
-              // Collect unique event indicators (max 4)
               const uniqueEvents = dayEvents.reduce((acc: DayEvent[], e) => {
                 if (!acc.find(a => a.icon === e.icon)) acc.push(e);
                 return acc;
-              }, []).slice(0, 4);
+              }, []).slice(0, 3);
+
+              const glowColor = hasCancelled ? 'rgba(239,68,68,0.4)' 
+                : hasUpcoming ? `hsl(25 100% 50% / 0.4)` 
+                : dayEvents.some(e => e.icon === '✅') ? 'rgba(52,211,153,0.4)'
+                : dayEvents.some(e => e.icon === '📱') ? 'rgba(236,72,153,0.4)'
+                : dayEvents.some(e => e.icon === '⏰') ? 'rgba(249,115,22,0.4)'
+                : dayEvents.some(e => e.icon === '✂️') ? 'rgba(96,165,250,0.4)'
+                : hasAnyEvent ? 'rgba(255,255,255,0.15)' : 'none';
 
               return (
                 <motion.button key={dateStr}
@@ -663,48 +670,68 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                   transition={{ delay: idx * 0.006, type: 'spring', stiffness: 300, damping: 25 }}
                   onClick={() => setSelectedDay(day)}
                   onMouseEnter={() => setHoveredDay(dateStr)} onMouseLeave={() => setHoveredDay(null)}
-                  whileHover={!isPast ? { scale: 1.08 } : {}} whileTap={!isPast ? { scale: 0.95 } : {}}
-                  className={`aspect-square rounded-xl flex flex-col items-center justify-center relative transition-all duration-200
-                    ${isToday && !isSelected ? 'ring-1 ring-white/20' : ''}
-                    ${isPast ? 'text-white/20' : 'text-white/70'}
-                    ${hasAnyEvent && !isPast ? 'text-white' : ''}`}
+                  whileHover={!isPast ? { scale: 1.12, zIndex: 20 } : {}} whileTap={!isPast ? { scale: 0.95 } : {}}
+                  className={`aspect-square rounded-2xl flex flex-col items-center justify-center relative transition-all duration-300 overflow-hidden
+                    ${isToday && !isSelected ? 'ring-2 ring-white/30' : ''}
+                    ${isPast ? 'text-white/25' : 'text-white/80'}
+                    ${hasAnyEvent && !isPast ? 'text-white shadow-lg' : ''}`}
                   style={{
-                    background: isSelected ? `hsl(${clientColor} / 0.25)` : !isPast && hasAnyEvent ? (dayStyle.bg || 'transparent') : isHovered && !isPast ? 'rgba(255,255,255,0.05)' : 'transparent',
-                    boxShadow: isSelected ? `0 0 0 2px hsl(${clientColor}), 0 4px 20px hsl(${clientColor} / 0.2)` : !isPast && hasAnyEvent && dayStyle.border ? `inset 0 0 0 1px ${dayStyle.border}` : 'none',
+                    background: isSelected ? `hsl(${clientColor} / 0.3)` 
+                      : !isPast && hasAnyEvent ? (dayStyle.bg || 'transparent') 
+                      : isHovered && !isPast ? 'rgba(255,255,255,0.06)' : 'transparent',
+                    boxShadow: isSelected 
+                      ? `0 0 0 2px hsl(${clientColor}), 0 4px 25px hsl(${clientColor} / 0.3), 0 0 40px hsl(${clientColor} / 0.15)` 
+                      : !isPast && hasAnyEvent 
+                        ? `inset 0 0 0 1.5px ${dayStyle.border || 'transparent'}, 0 0 20px ${glowColor}` 
+                        : 'none',
                   }}>
-                  {/* Big red X for cancelled */}
+                  {hasAnyEvent && !isPast && (
+                    <motion.div 
+                      className="absolute inset-0 rounded-2xl pointer-events-none"
+                      animate={{ opacity: [0.3, 0.6, 0.3] }}
+                      transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
+                      style={{ background: `radial-gradient(circle at 50% 50%, ${glowColor}, transparent 70%)` }}
+                    />
+                  )}
                   {hasCancelled && !isPast && (
-                    <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
-                      className="absolute inset-0 flex items-center justify-center text-red-500/25 text-2xl font-black z-0 pointer-events-none">✕</motion.span>
+                    <motion.span initial={{ scale: 0, rotate: -45 }} animate={{ scale: 1, rotate: 0 }}
+                      className="absolute inset-0 flex items-center justify-center text-red-500/30 text-3xl font-black z-0 pointer-events-none">✕</motion.span>
                   )}
                   {recs.length > 0 && !isPast && hasUpcoming && !hasCancelled && <RocketFireIndicator small />}
-                  <span className={`text-sm leading-none relative z-10 ${isToday ? 'font-extrabold' : hasAnyEvent ? 'font-bold' : 'font-medium'}`}>
+                  <span className={`text-sm leading-none relative z-10 ${isToday ? 'font-extrabold text-white' : hasAnyEvent ? 'font-bold' : 'font-medium'}`}>
                     {format(day, 'd')}
                   </span>
-                  {/* Animated event icons row */}
                   {uniqueEvents.length > 0 && (
-                    <motion.div initial={{ opacity: 0, y: 2 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-px mt-0.5 relative z-10">
+                    <motion.div initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-0.5 mt-1 relative z-10">
                       {uniqueEvents.map((evt, i) => (
                         <EventIndicator key={i} event={evt} small />
                       ))}
-                      {dayEvents.length > 4 && <span className="text-[6px] text-white/30 font-bold ml-px">+{dayEvents.length - 4}</span>}
+                      {dayEvents.length > 3 && (
+                        <motion.span 
+                          className="text-[9px] text-white/60 font-extrabold ml-0.5 bg-white/10 rounded-full w-4 h-4 flex items-center justify-center"
+                          animate={{ scale: [1, 1.1, 1] }}
+                          transition={{ repeat: Infinity, duration: 2 }}
+                        >+{dayEvents.length - 3}</motion.span>
+                      )}
                     </motion.div>
                   )}
                   {isToday && !hasAnyEvent && (
-                    <motion.div className="w-1 h-1 rounded-full bg-white/50 mt-0.5" animate={{ scale: [1, 1.3, 1] }} transition={{ repeat: Infinity, duration: 2 }} />
+                    <motion.div className="w-1.5 h-1.5 rounded-full mt-1 relative z-10" 
+                      style={{ background: `hsl(${clientColor})` }}
+                      animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }} 
+                      transition={{ repeat: Infinity, duration: 2 }} />
                   )}
-                  {/* Hover tooltip */}
                   <AnimatePresence>
                     {isHovered && hasAnyEvent && !isSelected && (
                       <motion.div initial={{ opacity: 0, y: 5, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 5, scale: 0.9 }}
                         className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full z-30 pointer-events-none">
-                        <div className="bg-[#1a1a2e] border border-white/10 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap space-y-0.5">
+                        <div className="bg-[#12122a]/95 backdrop-blur-xl border border-white/15 rounded-xl px-4 py-2.5 shadow-2xl whitespace-nowrap space-y-1">
                           {dayEvents.slice(0, 5).map((ev, i) => (
-                            <p key={i} className={`text-[10px] font-bold flex items-center gap-1 ${ev.color}`}>
-                              <span>{ev.icon}</span> {ev.label}{ev.time ? ` • ${ev.time}` : ''}
+                            <p key={i} className={`text-xs font-bold flex items-center gap-1.5 ${ev.color}`}>
+                              <span className="text-sm">{ev.icon}</span> {ev.label}{ev.time ? ` • ${ev.time}` : ''}
                             </p>
                           ))}
-                          {dayEvents.length > 5 && <p className="text-[9px] text-white/30">+{dayEvents.length - 5} mais</p>}
+                          {dayEvents.length > 5 && <p className="text-[10px] text-white/40 font-medium">+{dayEvents.length - 5} mais</p>}
                         </div>
                       </motion.div>
                     )}
@@ -715,36 +742,36 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
           </div>
 
           {/* Legend — grouped by category */}
-          <div className="mt-5 pt-4 border-t border-white/[0.06] space-y-2">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span className="text-[9px] font-bold text-white/20 uppercase tracking-wider w-full mb-1">Gravações</span>
+          <div className="mt-6 pt-5 border-t border-white/[0.08] space-y-3">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+              <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest w-full mb-1">Gravações</span>
               {['agendada', 'gravada', 'cancelada', 'remarcada', 'extra', 'solicitada'].map(k => {
                 const s = EVENT_STYLES[k];
                 return (
-                  <div key={k} className="flex items-center gap-1.5 text-[10px] text-white/40">
-                    <span className="text-[10px]">{s.icon}</span>{s.label.replace('Gravação ', '')}
+                  <div key={k} className="flex items-center gap-2 text-xs text-white/50 font-medium">
+                    <span className="text-base drop-shadow-md">{s.icon}</span>{s.label.replace('Gravação ', '')}
                   </div>
                 );
               })}
             </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span className="text-[9px] font-bold text-white/20 uppercase tracking-wider w-full mb-1">Produção</span>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+              <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest w-full mb-1">Produção</span>
               {['material_sent', 'editing', 'deadline', 'in_review', 'approval_sent', 'approved', 'adjustment', 'completed'].map(k => {
                 const s = EVENT_STYLES[k];
                 return (
-                  <div key={k} className="flex items-center gap-1.5 text-[10px] text-white/40">
-                    <span className="text-[10px]">{s.icon}</span>{s.label.split(' — ')[0]}
+                  <div key={k} className="flex items-center gap-2 text-xs text-white/50 font-medium">
+                    <span className="text-base drop-shadow-md">{s.icon}</span>{s.label.split(' — ')[0]}
                   </div>
                 );
               })}
             </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span className="text-[9px] font-bold text-white/20 uppercase tracking-wider w-full mb-1">Entrega</span>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+              <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest w-full mb-1">Entrega</span>
               {['delivered', 'posted', 'scheduled_post'].map(k => {
                 const s = EVENT_STYLES[k];
                 return (
-                  <div key={k} className="flex items-center gap-1.5 text-[10px] text-white/40">
-                    <span className="text-[10px]">{s.icon}</span>{s.label}
+                  <div key={k} className="flex items-center gap-2 text-xs text-white/50 font-medium">
+                    <span className="text-base drop-shadow-md">{s.icon}</span>{s.label}
                   </div>
                 );
               })}

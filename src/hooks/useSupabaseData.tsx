@@ -462,5 +462,6 @@ export function useSupabaseData() {
     addTask, updateTask, deleteTask,
     addScript, updateScript, deleteScript,
     updateSettings, startActiveRecording, stopActiveRecording,
+    refetch: fetchAll,
   };
 }

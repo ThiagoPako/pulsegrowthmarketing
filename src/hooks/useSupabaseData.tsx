@@ -85,12 +85,20 @@ function clientToRow(c: Client) {
   };
 }
 
+function normalizeDate(d: string): string {
+  // API may return ISO timestamps like "2026-03-20T00:00:00.000Z"
+  // Normalize to "YYYY-MM-DD" for consistent comparisons
+  if (!d) return d;
+  if (d.length > 10 && d.includes('T')) return d.split('T')[0];
+  return d;
+}
+
 function rowToRecording(r: any): Recording {
   return {
     id: r.id,
     clientId: r.client_id,
     videomakerId: r.videomaker_id,
-    date: r.date,
+    date: normalizeDate(r.date),
     startTime: r.start_time,
     type: r.type as RecordingType,
     status: r.status as RecordingStatus,

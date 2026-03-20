@@ -107,6 +107,9 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
   const [cancelFlow, setCancelFlow] = useState<CancelFlow>(null);
   const [cancelling, setCancelling] = useState(false);
   const [acceptingBackup, setAcceptingBackup] = useState(false);
+  // Alternative videomaker selection
+  const [selectedAltVm, setSelectedAltVm] = useState<AlternativeVideomaker | null>(null);
+  const [selectedAltTime, setSelectedAltTime] = useState('');
   // Special request
   const [showSpecialRequest, setShowSpecialRequest] = useState(false);
   const [specialDate, setSpecialDate] = useState('');

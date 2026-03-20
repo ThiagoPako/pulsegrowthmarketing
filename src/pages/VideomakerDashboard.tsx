@@ -207,7 +207,7 @@ export default function VideomakerDashboard() {
     setAlterationNotes({});
     setFinishStep('scripts');
     setDriveLinks({});
-    setSelectedEditorId('');
+    setSelectedEditorId('__auto__');
     setFinishDialogOpen(true);
   };
 

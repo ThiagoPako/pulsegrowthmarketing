@@ -45,7 +45,7 @@ export default function VideomakerDashboard() {
   const [finishRecordingId, setFinishRecordingId] = useState('');
   const [completedScriptIds, setCompletedScriptIds] = useState<Set<string>>(new Set());
   const [finishStep, setFinishStep] = useState<'scripts' | 'alterations' | 'drive'>('scripts');
-  const [selectedEditorId, setSelectedEditorId] = useState<string>('');
+  const [selectedEditorId, setSelectedEditorId] = useState<string>('__auto__');
   const [driveLinks, setDriveLinks] = useState<Record<string, string>>({});
   // Script status tracking
   const [rejectedScripts, setRejectedScripts] = useState<Set<string>>(new Set());
@@ -207,7 +207,7 @@ export default function VideomakerDashboard() {
     setAlterationNotes({});
     setFinishStep('scripts');
     setDriveLinks({});
-    setSelectedEditorId('');
+    setSelectedEditorId('__auto__');
     setFinishDialogOpen(true);
   };
 
@@ -351,7 +351,7 @@ export default function VideomakerDashboard() {
         description = `🗣️ ALTERAÇÃO VERBAL — A alteração do roteiro foi passada presencialmente/verbalmente ao editor. ${altNotes ? `\n\n📝 Notas adicionais: ${altNotes}` : ''}\n\nLink dos materiais: ${scriptDriveLink}`;
       }
 
-      const assignedEditor = selectedEditorId || null;
+      const assignedEditor = (selectedEditorId && selectedEditorId !== '__auto__') ? selectedEditorId : null;
 
       if (existing && existing.length > 0) {
         await supabase.from('content_tasks').update({
@@ -426,7 +426,7 @@ export default function VideomakerDashboard() {
     setVerbalScripts(new Set());
     setAlterationNotes({});
     setDriveLinks({});
-    setSelectedEditorId('');
+    setSelectedEditorId('__auto__');
     setFinishStep('scripts');
   };
 
@@ -823,7 +823,7 @@ export default function VideomakerDashboard() {
       </div>
 
       {/* ── Finish Recording Dialog (Multi-step: 3 steps) ── */}
-      <Dialog open={finishDialogOpen} onOpenChange={v => { if (!v) { setFinishDialogOpen(false); setFinishStep('scripts'); setDriveLinks({}); setSelectedEditorId(''); } }}>
+      <Dialog open={finishDialogOpen} onOpenChange={v => { if (!v) { setFinishDialogOpen(false); setFinishStep('scripts'); setDriveLinks({}); setSelectedEditorId('__auto__'); } }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1130,7 +1130,7 @@ export default function VideomakerDashboard() {
                     <SelectValue placeholder="Atribuição automática" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Atribuição automática</SelectItem>
+                    <SelectItem value="__auto__">Atribuição automática</SelectItem>
                     {editors.map(editor => (
                       <SelectItem key={editor.id} value={editor.id}>
                         {editor.name} {editor.role === 'admin' ? '(Admin)' : '(Editor)'}

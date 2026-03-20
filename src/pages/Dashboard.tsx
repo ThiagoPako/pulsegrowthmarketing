@@ -302,48 +302,137 @@ export default function Dashboard() {
       {(activeRecordings.length > 0 || liveEditorTasks.length > 0) && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-3 sm:p-5 border-primary/20">
           <div className="flex items-center gap-2 mb-3 sm:mb-4">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-destructive" />
             </span>
-            <h3 className="font-display font-semibold text-xs sm:text-sm">Atividade em Tempo Real</h3>
+            <h3 className="font-display font-semibold text-sm sm:text-base">Atividade em Tempo Real</h3>
+            <Badge variant="outline" className="text-[9px] ml-auto">{activeRecordings.length + liveEditorTasks.length} ativas</Badge>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
             {/* Videomakers Recording */}
             <div>
               <div className="flex items-center gap-1.5 mb-2 sm:mb-3">
-                <Clapperboard size={14} className="text-red-500" />
+                <Clapperboard size={14} className="text-destructive" />
                 <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">Gravando</p>
                 <Badge variant="destructive" className="text-[9px] h-4 px-1 ml-1">{activeRecordings.length}</Badge>
               </div>
               {activeRecordings.length === 0 ? (
                 <p className="text-xs text-muted-foreground py-2">Nenhum videomaker gravando</p>
               ) : (
-                <div className="space-y-1.5 sm:space-y-2">
+                <div className="space-y-2 sm:space-y-2.5">
                   {activeRecordings.map(ar => {
                     const vm = users.find(u => u.id === ar.videomarkerId);
                     const client = clients.find(c => c.id === ar.clientId);
-                    const elapsed = ar.startedAt ? formatDistanceToNow(parseISO(ar.startedAt), { locale: ptBR, addSuffix: false }) : '';
+                    const startTime = ar.startedAt ? parseISO(ar.startedAt) : null;
+                    const elapsedMin = startTime ? differenceInMinutes(new Date(), startTime) : 0;
+                    const elapsedHrs = startTime ? differenceInHours(new Date(), startTime) : 0;
+                    const elapsedLabel = startTime ? formatDistanceToNow(startTime, { locale: ptBR, addSuffix: false }) : '';
+                    const expectedDuration = (settings?.recordingDuration || 2) * 60;
+                    const progressPct = Math.min((elapsedMin / expectedDuration) * 100, 100);
+                    const isStale = elapsedMin > expectedDuration * 1.5;
+                    const isWarning = elapsedMin > expectedDuration;
+
+                    const handleDemandNotification = async () => {
+                      if (!vm) return;
+                      await supabase.from('notifications').insert({
+                        user_id: vm.id,
+                        title: 'Cobrança de Gravação',
+                        message: `A gravação de ${client?.companyName || 'cliente'} está em andamento há ${elapsedLabel}. Por favor, atualize o status.`,
+                        type: 'warning',
+                        link: '/agenda',
+                      });
+                      const { toast } = await import('@/hooks/use-toast');
+                      toast({ title: 'Notificação enviada', description: `Cobrança enviada para ${vm.name}` });
+                    };
+
                     return (
-                      <motion.div key={ar.recordingId} whileTap={{ scale: 0.97 }} className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg bg-red-500/5 border border-red-500/15">
-                        <div className="relative">
-                          {vm && <UserAvatar user={vm} size="sm" />}
-                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-background animate-pulse" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs sm:text-sm font-semibold truncate">{vm?.name || '—'}</p>
-                          <div className="flex items-center gap-1">
-                            {client && <ClientLogo client={client} size="sm" className="w-3.5 h-3.5" />}
-                            <p className="text-[10px] text-muted-foreground truncate">{client?.companyName || '—'}</p>
+                      <motion.div
+                        key={ar.recordingId}
+                        whileTap={{ scale: 0.97 }}
+                        className={`relative p-2.5 sm:p-3.5 rounded-xl border transition-all ${
+                          isStale ? 'bg-destructive/8 border-destructive/30 shadow-sm shadow-destructive/10' :
+                          isWarning ? 'bg-warning/8 border-warning/30' :
+                          'bg-destructive/5 border-destructive/15'
+                        }`}
+                      >
+                        {/* Stale alert banner */}
+                        {isStale && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="flex items-center gap-1.5 mb-2 px-2 py-1 rounded-md bg-destructive/15 text-destructive"
+                          >
+                            <AlertTriangle size={12} />
+                            <span className="text-[10px] font-semibold">Atividade parada há muito tempo!</span>
+                          </motion.div>
+                        )}
+                        {isWarning && !isStale && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="flex items-center gap-1.5 mb-2 px-2 py-1 rounded-md bg-warning/15 text-warning"
+                          >
+                            <Clock size={12} />
+                            <span className="text-[10px] font-semibold">Tempo acima do esperado</span>
+                          </motion.div>
+                        )}
+
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <div className="relative shrink-0">
+                            {vm && <UserAvatar user={vm} size="sm" />}
+                            <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-destructive rounded-full border-2 border-background animate-pulse" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs sm:text-sm font-semibold truncate">{vm?.name || '—'}</p>
+                            <div className="flex items-center gap-1">
+                              {client && <ClientLogo client={client} size="sm" className="w-3.5 h-3.5" />}
+                              <p className="text-[10px] text-muted-foreground truncate">{client?.companyName || '—'}</p>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                            <Badge variant="destructive" className="text-[9px] gap-0.5 px-1.5">
+                              <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" /> REC
+                            </Badge>
+                            <div className="flex items-center gap-1">
+                              <Clock size={10} className="text-muted-foreground" />
+                              <span className={`text-[10px] font-mono font-bold ${isStale ? 'text-destructive' : isWarning ? 'text-warning' : 'text-muted-foreground'}`}>
+                                {elapsedHrs > 0 ? `${elapsedHrs}h${String(elapsedMin % 60).padStart(2, '0')}` : `${elapsedMin}min`}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                        <div className="text-right shrink-0">
-                          <Badge variant="destructive" className="text-[9px] gap-0.5 px-1">
-                            <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" /> REC
-                          </Badge>
-                          <p className="text-[9px] text-muted-foreground mt-0.5">há {elapsed}</p>
+
+                        {/* Progress bar */}
+                        <div className="mt-2">
+                          <div className="flex justify-between text-[9px] text-muted-foreground mb-0.5">
+                            <span>Tempo dedicado</span>
+                            <span>{Math.round(progressPct)}%</span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                            <motion.div
+                              className={`h-full rounded-full ${isStale ? 'bg-destructive' : isWarning ? 'bg-warning' : 'bg-destructive/70'}`}
+                              initial={{ width: 0 }}
+                              animate={{ width: `${progressPct}%` }}
+                              transition={{ duration: 1, ease: 'easeOut' }}
+                            />
+                          </div>
                         </div>
+
+                        {/* Demand button */}
+                        {(isWarning || isStale) && (
+                          <motion.button
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={handleDemandNotification}
+                            className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-warning/15 hover:bg-warning/25 text-warning text-[10px] font-semibold transition-colors"
+                          >
+                            <Send size={11} />
+                            Cobrar Atualização
+                          </motion.button>
+                        )}
                       </motion.div>
                     );
                   })}
@@ -354,38 +443,129 @@ export default function Dashboard() {
             {/* Editors */}
             <div>
               <div className="flex items-center gap-1.5 mb-2 sm:mb-3">
-                <Film size={14} className="text-blue-500" />
+                <Film size={14} className="text-info" />
                 <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">Editando</p>
-                <Badge className="text-[9px] h-4 px-1 ml-1 bg-blue-500">{liveEditorTasks.length}</Badge>
+                <Badge className="text-[9px] h-4 px-1 ml-1 bg-info">{liveEditorTasks.length}</Badge>
               </div>
               {liveEditorTasks.length === 0 ? (
                 <p className="text-xs text-muted-foreground py-2">Nenhum editor em atividade</p>
               ) : (
-                <div className="space-y-1.5 sm:space-y-2">
+                <div className="space-y-2 sm:space-y-2.5">
                   {liveEditorTasks.map(task => {
                     const editor = users.find(u => u.id === task.assigned_to);
                     const client = clients.find(c => c.id === task.client_id);
-                    const elapsed = task.editing_started_at ? formatDistanceToNow(parseISO(task.editing_started_at), { locale: ptBR, addSuffix: false }) : '';
+                    const startTime = task.editing_started_at ? parseISO(task.editing_started_at) : null;
+                    const elapsedMin = startTime ? differenceInMinutes(new Date(), startTime) : 0;
+                    const elapsedHrs = startTime ? differenceInHours(new Date(), startTime) : 0;
+                    const elapsedLabel = startTime ? formatDistanceToNow(startTime, { locale: ptBR, addSuffix: false }) : '';
                     const columnLabels: Record<string, string> = { em_edicao: 'Editando', revisao: 'Revisão', alteracao: 'Alteração' };
+
+                    // Stale thresholds: editing > 4h warning, > 8h stale
+                    const isWarning = elapsedMin > 240;
+                    const isStale = elapsedMin > 480;
+                    const maxMin = 480;
+                    const progressPct = Math.min((elapsedMin / maxMin) * 100, 100);
+
+                    const handleDemandNotification = async () => {
+                      const targetId = task.assigned_to;
+                      if (!targetId) return;
+                      await supabase.from('notifications').insert({
+                        user_id: targetId,
+                        title: 'Cobrança de Edição',
+                        message: `A tarefa "${task.title}" (${client?.companyName || 'cliente'}) está em ${columnLabels[task.kanban_column] || task.kanban_column} há ${elapsedLabel}. Atualize o status.`,
+                        type: 'warning',
+                        link: '/editor',
+                      });
+                      const { toast } = await import('@/hooks/use-toast');
+                      toast({ title: 'Notificação enviada', description: `Cobrança enviada para ${editor?.name || 'editor'}` });
+                    };
+
                     return (
-                      <motion.div key={task.id} whileTap={{ scale: 0.97 }} className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg bg-blue-500/5 border border-blue-500/15">
-                        <div className="relative">
-                          {editor && <UserAvatar user={editor} size="sm" />}
-                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-blue-500 rounded-full border-2 border-background animate-pulse" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs sm:text-sm font-semibold truncate">{editor?.name || 'Sem editor'}</p>
-                          <div className="flex items-center gap-1">
-                            {client && <ClientLogo client={client} size="sm" className="w-3.5 h-3.5" />}
-                            <p className="text-[10px] text-muted-foreground truncate">{task.title || client?.companyName || '—'}</p>
+                      <motion.div
+                        key={task.id}
+                        whileTap={{ scale: 0.97 }}
+                        className={`relative p-2.5 sm:p-3.5 rounded-xl border transition-all ${
+                          isStale ? 'bg-destructive/8 border-destructive/30 shadow-sm shadow-destructive/10' :
+                          isWarning ? 'bg-warning/8 border-warning/30' :
+                          'bg-info/5 border-info/15'
+                        }`}
+                      >
+                        {/* Stale alert banner */}
+                        {isStale && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="flex items-center gap-1.5 mb-2 px-2 py-1 rounded-md bg-destructive/15 text-destructive"
+                          >
+                            <AlertTriangle size={12} />
+                            <span className="text-[10px] font-semibold">Edição parada há muito tempo!</span>
+                          </motion.div>
+                        )}
+                        {isWarning && !isStale && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="flex items-center gap-1.5 mb-2 px-2 py-1 rounded-md bg-warning/15 text-warning"
+                          >
+                            <Clock size={12} />
+                            <span className="text-[10px] font-semibold">Tempo acima do esperado</span>
+                          </motion.div>
+                        )}
+
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <div className="relative shrink-0">
+                            {editor && <UserAvatar user={editor} size="sm" />}
+                            <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-info rounded-full border-2 border-background animate-pulse" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs sm:text-sm font-semibold truncate">{editor?.name || 'Sem editor'}</p>
+                            <div className="flex items-center gap-1">
+                              {client && <ClientLogo client={client} size="sm" className="w-3.5 h-3.5" />}
+                              <p className="text-[10px] text-muted-foreground truncate">{task.title || client?.companyName || '—'}</p>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                            <Badge className="text-[9px] bg-info px-1.5">
+                              {columnLabels[task.kanban_column] || task.kanban_column}
+                            </Badge>
+                            <div className="flex items-center gap-1">
+                              <Clock size={10} className="text-muted-foreground" />
+                              <span className={`text-[10px] font-mono font-bold ${isStale ? 'text-destructive' : isWarning ? 'text-warning' : 'text-muted-foreground'}`}>
+                                {elapsedHrs > 0 ? `${elapsedHrs}h${String(elapsedMin % 60).padStart(2, '0')}` : `${elapsedMin}min`}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                        <div className="text-right shrink-0">
-                          <Badge className="text-[9px] bg-blue-500 px-1">
-                            {columnLabels[task.kanban_column] || task.kanban_column}
-                          </Badge>
-                          <p className="text-[9px] text-muted-foreground mt-0.5">há {elapsed}</p>
+
+                        {/* Progress bar */}
+                        <div className="mt-2">
+                          <div className="flex justify-between text-[9px] text-muted-foreground mb-0.5">
+                            <span>Tempo dedicado</span>
+                            <span>{Math.round(progressPct)}%</span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                            <motion.div
+                              className={`h-full rounded-full ${isStale ? 'bg-destructive' : isWarning ? 'bg-warning' : 'bg-info/70'}`}
+                              initial={{ width: 0 }}
+                              animate={{ width: `${progressPct}%` }}
+                              transition={{ duration: 1, ease: 'easeOut' }}
+                            />
+                          </div>
                         </div>
+
+                        {/* Demand button */}
+                        {(isWarning || isStale) && (
+                          <motion.button
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={handleDemandNotification}
+                            className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-warning/15 hover:bg-warning/25 text-warning text-[10px] font-semibold transition-colors"
+                          >
+                            <Send size={11} />
+                            Cobrar Atualização
+                          </motion.button>
+                        )}
                       </motion.div>
                     );
                   })}

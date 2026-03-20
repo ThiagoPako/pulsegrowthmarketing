@@ -90,7 +90,21 @@ export default function VideomakerDashboard() {
   // A recording is considered active if either the server says so OR local state says so
   const activeRecordingId = myActiveRec?.recordingId || localActiveRecordingId;
 
-  const handleStartRecording = (rec: Recording) => {
+  // ── Wait for client ──
+  const handleStartWaiting = async (rec: Recording) => {
+    const now = new Date().toISOString();
+    await supabase.from('recordings').update({ wait_started_at: now } as any).eq('id', rec.id);
+    updateRecording({ ...rec, waitStartedAt: now });
+    toast.success(`Aguardando cliente: ${getClientName(rec.clientId)}`);
+  };
+
+  const handleStopWaiting = async (rec: Recording) => {
+    const now = new Date().toISOString();
+    await supabase.from('recordings').update({ wait_ended_at: now } as any).eq('id', rec.id);
+    updateRecording({ ...rec, waitEndedAt: now });
+    toast.success('Espera registrada');
+  };
+
     setScriptsClientId(rec.clientId);
     setScriptsRecordingId(rec.id);
     // Auto-select all urgent scripts (mandatory)

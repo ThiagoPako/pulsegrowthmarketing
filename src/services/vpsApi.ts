@@ -132,14 +132,32 @@ export async function uploadFileToVps(
   if (normalizedFolder) formData.append('folder', normalizedFolder);
   formData.append('file', file);
 
-  const response = await fetch(`${VPS_BASE_URL}/upload`, {
-    method: 'POST',
-    body: formData,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${VPS_BASE_URL}/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+  } catch (e: any) {
+    throw new Error('Servidor de upload indisponível. Verifique sua conexão ou tente novamente.');
+  }
+
+  const contentType = response.headers.get('content-type') || '';
 
   if (!response.ok) {
+    if (!contentType.includes('application/json')) {
+      // 502/503 from Nginx returns HTML — give friendly message
+      throw new Error(
+        `Servidor de upload indisponível (erro ${response.status}). Tente novamente em alguns instantes.`
+      );
+    }
     const err = await response.text();
-    throw new Error(`Upload failed: ${err}`);
+    throw new Error(`Falha no upload: ${err}`);
+  }
+
+  // Guard against Nginx returning HTML on 200 (unlikely but defensive)
+  if (!contentType.includes('application/json')) {
+    throw new Error('Resposta inesperada do servidor de upload. Tente novamente.');
   }
 
   const data = await response.json();

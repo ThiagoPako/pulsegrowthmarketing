@@ -4,8 +4,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Users, DollarSign, TrendingUp, Percent, Receipt, Plus, BarChart3, ArrowRight, CalendarDays } from 'lucide-react';
+import { Users, DollarSign, TrendingUp, Percent, Receipt, Plus, BarChart3, ArrowRight, CalendarDays, Rocket } from 'lucide-react';
 import { format } from 'date-fns';
+import { motion } from 'framer-motion';
 
 export default function EndomarketingDashboard() {
   const { contracts, loading: loadingC } = useEndoContracts();
@@ -22,143 +23,244 @@ export default function EndomarketingDashboard() {
   const ganhoTotal = metrics.monthlyCosts;
 
   const metricCards = [
-    { label: 'Clientes Ativos', value: String(metrics.totalClients), icon: Users, color: 'text-blue-500' },
+    { label: 'Clientes Ativos', value: String(metrics.totalClients), icon: Users, color: 'bg-info/15 text-info', border: 'border-info/30' },
     ...(canSeeFinancials ? (isAdmin ? [
-      { label: 'Faturamento Mensal', value: fmt(metrics.monthlyRevenue), icon: DollarSign, color: 'text-green-500' },
-      { label: 'Custos Parceiros', value: fmt(metrics.monthlyCosts), icon: Receipt, color: 'text-orange-500' },
-      { label: 'Lucro Mensal', value: fmt(metrics.monthlyProfit), icon: TrendingUp, color: metrics.monthlyProfit >= 0 ? 'text-emerald-500' : 'text-red-500' },
-      { label: 'Margem Média', value: `${metrics.avgMargin.toFixed(1)}%`, icon: Percent, color: metrics.avgMargin >= 30 ? 'text-emerald-500' : metrics.avgMargin >= 15 ? 'text-yellow-500' : 'text-red-500' },
+      { label: 'Faturamento Mensal', value: fmt(metrics.monthlyRevenue), icon: DollarSign, color: 'bg-success/15 text-success', border: 'border-success/30' },
+      { label: 'Custos Parceiros', value: fmt(metrics.monthlyCosts), icon: Receipt, color: 'bg-warning/15 text-warning', border: 'border-warning/30' },
+      { label: 'Lucro Mensal', value: fmt(metrics.monthlyProfit), icon: TrendingUp, color: metrics.monthlyProfit >= 0 ? 'bg-success/15 text-success' : 'bg-destructive/15 text-destructive', border: metrics.monthlyProfit >= 0 ? 'border-success/30' : 'border-destructive/30' },
+      { label: 'Margem Média', value: `${metrics.avgMargin.toFixed(1)}%`, icon: Percent, color: metrics.avgMargin >= 30 ? 'bg-success/15 text-success' : metrics.avgMargin >= 15 ? 'bg-warning/15 text-warning' : 'bg-destructive/15 text-destructive', border: 'border-border' },
     ] : [
-      { label: 'Faturamento', value: fmt(metrics.monthlyCosts), icon: DollarSign, color: 'text-green-500' },
-      { label: 'Ticket Médio', value: fmt(ticketMedio), icon: Receipt, color: 'text-orange-500' },
-      { label: 'Ganho Total', value: fmt(ganhoTotal), icon: TrendingUp, color: 'text-emerald-500' },
+      { label: 'Faturamento', value: fmt(metrics.monthlyCosts), icon: DollarSign, color: 'bg-success/15 text-success', border: 'border-success/30' },
+      { label: 'Ticket Médio', value: fmt(ticketMedio), icon: Receipt, color: 'bg-warning/15 text-warning', border: 'border-warning/30' },
+      { label: 'Ganho Total', value: fmt(ganhoTotal), icon: TrendingUp, color: 'bg-success/15 text-success', border: 'border-success/30' },
     ]) : []),
   ];
 
-  // Grid cols based on number of cards
-  const gridCols = isAdmin ? 'grid-cols-2 md:grid-cols-5' : canSeeFinancials ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-1';
+  const gridCols = isAdmin ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5' : canSeeFinancials ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-1';
 
-  if (loadingC || loadingT) return <div className="flex items-center justify-center p-12"><p className="text-muted-foreground">Carregando...</p></div>;
+  if (loadingC || loadingT) return (
+    <div className="flex items-center justify-center p-12">
+      <motion.div animate={{ y: [0, -10, 0], rotate: [0, -15, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
+        <Rocket size={32} className="text-primary -rotate-45" />
+      </motion.div>
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-display font-bold">Endomarketing</h1>
-          <p className="text-sm text-muted-foreground">Gestão de pacotes e parceiros</p>
+    <div className="space-y-4 sm:space-y-6 px-1 sm:px-0">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <motion.div
+            animate={{ y: [0, -5, 0], rotate: [0, -10, 0] }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+            className="relative"
+          >
+            <Rocket size={24} className="text-primary -rotate-45" />
+            <motion.div
+              animate={{ opacity: [0.5, 1, 0.3], scale: [0.8, 1.2, 0.6] }}
+              transition={{ duration: 0.5, repeat: Infinity }}
+              className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-3 rounded-full bg-gradient-to-t from-warning via-primary to-transparent blur-[2px] rotate-45"
+            />
+          </motion.div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-display font-bold">Endomarketing</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">Gestão de pacotes e parceiros</p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => navigate('/endomarketing/calendario')}>
-            <CalendarDays size={16} className="mr-1" /> Calendário
+        <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0">
+          <Button variant="outline" size="sm" onClick={() => navigate('/endomarketing/calendario')} className="shrink-0 text-xs sm:text-sm">
+            <CalendarDays size={14} className="mr-1" /> Calendário
           </Button>
-          <Button variant="outline" size="sm" onClick={() => navigate('/endomarketing/relatorios')}>
-            <BarChart3 size={16} className="mr-1" /> Relatórios
+          <Button variant="outline" size="sm" onClick={() => navigate('/endomarketing/relatorios')} className="shrink-0 text-xs sm:text-sm">
+            <BarChart3 size={14} className="mr-1" /> Relatórios
           </Button>
-          <Button size="sm" onClick={() => navigate('/endomarketing/contratos')}>
-            <Plus size={16} className="mr-1" /> Novo Contrato
+          <Button size="sm" onClick={() => navigate('/endomarketing/contratos')} className="shrink-0 text-xs sm:text-sm">
+            <Plus size={14} className="mr-1" /> Novo Contrato
           </Button>
         </div>
       </div>
 
-      <div className={`grid ${gridCols} gap-3`}>
-        {metricCards.map(m => (
-          <Card key={m.label} className="glass-card">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <m.icon size={16} className={m.color} />
-                <span className="text-xs text-muted-foreground">{m.label}</span>
-              </div>
-              <p className="text-lg font-bold">{m.value}</p>
-            </CardContent>
-          </Card>
+      {/* Metric Cards */}
+      <div className={`grid ${gridCols} gap-2 sm:gap-3`}>
+        {metricCards.map((m, i) => (
+          <motion.div
+            key={m.label}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            whileHover={{ scale: 1.03 }}
+          >
+            <Card className={`glass-card border ${m.border} relative overflow-hidden`}>
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${m.color}`}>
+                    <m.icon size={14} />
+                  </div>
+                  <span className="text-[10px] sm:text-xs text-muted-foreground">{m.label}</span>
+                </div>
+                <p className="text-base sm:text-lg font-bold">{m.value}</p>
+                <motion.div
+                  animate={{ y: [15, -25], opacity: [0, 0.2, 0] }}
+                  transition={{ duration: 4, repeat: Infinity, delay: i * 0.5 }}
+                  className="absolute top-2 right-2"
+                >
+                  <Rocket size={10} className="text-muted-foreground/20 -rotate-45" />
+                </motion.div>
+              </CardContent>
+            </Card>
+          </motion.div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="glass-card">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Contratos Ativos</CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/endomarketing/contratos')}>
-                Ver todos <ArrowRight size={14} className="ml-1" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {metrics.activeContracts.length === 0 && <p className="text-sm text-muted-foreground py-4 text-center">Nenhum contrato ativo</p>}
-            {metrics.activeContracts.slice(0, 6).map(c => {
-              return (
-                <div key={c.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-8 rounded-full" style={{ backgroundColor: `hsl(${c.clients?.color || '217 91% 60%'})` }} />
-                    <div>
-                      <p className="text-sm font-medium">{c.clients?.company_name || 'Cliente'}</p>
-                      <p className="text-xs text-muted-foreground">{c.endomarketing_packages?.package_name}</p>
+      {/* Main Content */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        {/* Active Contracts */}
+        <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}>
+          <Card className="glass-card">
+            <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <motion.div animate={{ rotate: [0, 360] }} transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}>
+                    <Rocket size={14} className="text-primary -rotate-45" />
+                  </motion.div>
+                  <CardTitle className="text-sm sm:text-base">Contratos Ativos</CardTitle>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/endomarketing/contratos')} className="text-xs">
+                  Ver todos <ArrowRight size={12} className="ml-1" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2 px-3 sm:px-6 pb-3 sm:pb-6">
+              {metrics.activeContracts.length === 0 && (
+                <div className="text-center py-6">
+                  <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 3, repeat: Infinity }}>
+                    <Rocket size={24} className="text-muted-foreground/30 -rotate-45 mx-auto" />
+                  </motion.div>
+                  <p className="text-sm text-muted-foreground mt-2">Nenhum contrato ativo</p>
+                </div>
+              )}
+              {metrics.activeContracts.slice(0, 6).map((c, i) => (
+                <motion.div
+                  key={c.id}
+                  initial={{ opacity: 0, x: -5 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="flex items-center justify-between p-2.5 sm:p-3 rounded-xl border-2 border-border bg-muted/20 hover:bg-muted/40 transition-colors"
+                >
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <div className="w-1.5 h-8 rounded-full shrink-0" style={{ backgroundColor: `hsl(${c.clients?.color || '217 91% 60%'})` }} />
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-sm font-medium truncate">{c.clients?.company_name || 'Cliente'}</p>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{c.endomarketing_packages?.package_name}</p>
                     </div>
                   </div>
                   {canSeeFinancials && (
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-emerald-600">{fmt(c.sale_price - c.partner_cost)}</p>
-                      <p className="text-xs text-muted-foreground">Margem: {c.sale_price > 0 ? ((c.sale_price - c.partner_cost) / c.sale_price * 100).toFixed(0) : 0}%</p>
+                    <div className="text-right shrink-0 ml-2">
+                      <p className="text-xs sm:text-sm font-semibold text-success">{fmt(c.sale_price - c.partner_cost)}</p>
+                      <p className="text-[10px] text-muted-foreground">{c.sale_price > 0 ? ((c.sale_price - c.partner_cost) / c.sale_price * 100).toFixed(0) : 0}%</p>
                     </div>
                   )}
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
+                </motion.div>
+              ))}
+            </CardContent>
+          </Card>
+        </motion.div>
 
-        <Card className="glass-card">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Tarefas de Hoje</CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/endomarketing/tarefas')}>
-                Ver todas <ArrowRight size={14} className="ml-1" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {metrics.todayTasks.length === 0 && <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma tarefa para hoje</p>}
-            {metrics.todayTasks.map(t => (
-              <div key={t.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/20">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-8 rounded-full" style={{ backgroundColor: `hsl(${t.clients?.color || '217 91% 60%'})` }} />
-                  <div>
-                    <p className="text-sm font-medium">{t.clients?.company_name}</p>
-                    <p className="text-xs text-muted-foreground">{t.duration_minutes}min</p>
-                  </div>
+        {/* Today's Tasks */}
+        <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}>
+          <Card className="glass-card">
+            <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 2, repeat: Infinity }}>
+                    <Rocket size={14} className="text-warning -rotate-45" />
+                  </motion.div>
+                  <CardTitle className="text-sm sm:text-base">Tarefas de Hoje</CardTitle>
                 </div>
-                <Badge variant={t.status === 'concluida' ? 'default' : t.status === 'cancelada' ? 'destructive' : 'secondary'}>
-                  {t.status === 'concluida' ? '✅ Concluída' : t.status === 'cancelada' ? 'Cancelada' : 'Pendente'}
-                </Badge>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/endomarketing/tarefas')} className="text-xs">
+                  Ver todas <ArrowRight size={12} className="ml-1" />
+                </Button>
               </div>
-            ))}
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent className="space-y-2 px-3 sm:px-6 pb-3 sm:pb-6">
+              {metrics.todayTasks.length === 0 && (
+                <div className="text-center py-6">
+                  <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 3, repeat: Infinity }}>
+                    <Rocket size={24} className="text-muted-foreground/30 -rotate-45 mx-auto" />
+                  </motion.div>
+                  <p className="text-sm text-muted-foreground mt-2">Nenhuma tarefa para hoje</p>
+                </div>
+              )}
+              {metrics.todayTasks.map((t, i) => (
+                <motion.div
+                  key={t.id}
+                  initial={{ opacity: 0, x: 5 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="flex items-center justify-between p-2.5 sm:p-3 rounded-xl border-2 border-border bg-muted/20"
+                >
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <div className="w-1.5 h-8 rounded-full shrink-0" style={{ backgroundColor: `hsl(${t.clients?.color || '217 91% 60%'})` }} />
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-sm font-medium truncate">{t.clients?.company_name}</p>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground">{t.duration_minutes}min</p>
+                    </div>
+                  </div>
+                  <Badge
+                    variant={t.status === 'concluida' ? 'default' : t.status === 'cancelada' ? 'destructive' : 'secondary'}
+                    className="text-[10px] sm:text-xs shrink-0"
+                  >
+                    {t.status === 'concluida' ? '✅ Concluída' : t.status === 'cancelada' ? 'Cancelada' : '⏳ Pendente'}
+                  </Badge>
+                </motion.div>
+              ))}
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
 
+      {/* Ranking */}
       {canSeeFinancials && metrics.activeContracts.length > 0 && (
-        <Card className="glass-card">
-          <CardHeader className="pb-3"><CardTitle className="text-base">🏆 Ranking de Lucratividade</CardTitle></CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {[...metrics.activeContracts].sort((a, b) => (b.sale_price - b.partner_cost) - (a.sale_price - a.partner_cost)).slice(0, 3).map((c, i) => {
-                const profit = c.sale_price - c.partner_cost;
-                const medals = ['🥇', '🥈', '🥉'];
-                return (
-                  <div key={c.id} className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/20">
-                    <span className="text-2xl">{medals[i]}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{c.clients?.company_name}</p>
-                      <p className="text-xs text-muted-foreground">{getCategoryLabel(c.endomarketing_packages?.category || '')}</p>
-                    </div>
-                    <p className="text-sm font-bold text-emerald-600">{fmt(profit)}</p>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          <Card className="glass-card">
+            <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
+              <div className="flex items-center gap-2">
+                <motion.div animate={{ y: [0, -3, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                  <Rocket size={16} className="text-warning -rotate-45" />
+                </motion.div>
+                <CardTitle className="text-sm sm:text-base">Ranking de Lucratividade</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                {[...metrics.activeContracts].sort((a, b) => (b.sale_price - b.partner_cost) - (a.sale_price - a.partner_cost)).slice(0, 3).map((c, i) => {
+                  const profit = c.sale_price - c.partner_cost;
+                  const medals = ['🥇', '🥈', '🥉'];
+                  return (
+                    <motion.div
+                      key={c.id}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.3 + i * 0.1 }}
+                      whileHover={{ scale: 1.03 }}
+                      className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-xl border-2 border-border bg-muted/20"
+                    >
+                      <span className="text-xl sm:text-2xl">{medals[i]}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs sm:text-sm font-medium truncate">{c.clients?.company_name}</p>
+                        <p className="text-[10px] text-muted-foreground">{getCategoryLabel(c.endomarketing_packages?.category || '')}</p>
+                      </div>
+                      <p className="text-xs sm:text-sm font-bold text-success shrink-0">{fmt(profit)}</p>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
       )}
     </div>
   );

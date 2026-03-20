@@ -1067,3 +1067,15 @@ CREATE TABLE IF NOT EXISTS auth_users (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_sign_in TIMESTAMPTZ
 );
+
+-- Table: recording_wait_logs
+CREATE TABLE IF NOT EXISTS recording_wait_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  recording_id UUID NOT NULL,
+  videomaker_id UUID NOT NULL,
+  client_id UUID NOT NULL,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  ended_at TIMESTAMPTZ,
+  wait_duration_seconds INTEGER,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

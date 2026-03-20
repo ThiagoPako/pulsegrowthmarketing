@@ -84,7 +84,8 @@ export default function LiveRecordingCard({
       started_at: now.toISOString(),
     } as any);
     if (error) {
-      toast.error('Erro ao registrar espera');
+      console.error('Wait log insert error:', error);
+      toast.error('Erro ao registrar espera: ' + (error.message || JSON.stringify(error)));
       return;
     }
     setIsWaiting(true);

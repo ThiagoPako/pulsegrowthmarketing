@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { generateClientCardPdf } from '@/lib/clientCardPdf';
 import { NICHE_OPTIONS, getSeasonalAlerts } from '@/lib/seasonalDates';

@@ -2163,6 +2163,39 @@ export type Database = {
         }
         Relationships: []
       }
+      recording_wait_logs: {
+        Row: {
+          client_id: string
+          created_at: string
+          ended_at: string | null
+          id: string
+          recording_id: string
+          started_at: string
+          videomaker_id: string
+          wait_duration_seconds: number | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          recording_id: string
+          started_at?: string
+          videomaker_id: string
+          wait_duration_seconds?: number | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          recording_id?: string
+          started_at?: string
+          videomaker_id?: string
+          wait_duration_seconds?: number | null
+        }
+        Relationships: []
+      }
       recordings: {
         Row: {
           client_id: string
@@ -2174,6 +2207,8 @@ export type Database = {
           status: string
           type: string
           videomaker_id: string
+          wait_ended_at: string | null
+          wait_started_at: string | null
         }
         Insert: {
           client_id: string
@@ -2185,6 +2220,8 @@ export type Database = {
           status?: string
           type?: string
           videomaker_id: string
+          wait_ended_at?: string | null
+          wait_started_at?: string | null
         }
         Update: {
           client_id?: string
@@ -2196,6 +2233,8 @@ export type Database = {
           status?: string
           type?: string
           videomaker_id?: string
+          wait_ended_at?: string | null
+          wait_started_at?: string | null
         }
         Relationships: [
           {

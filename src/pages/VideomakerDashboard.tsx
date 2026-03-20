@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { useApp } from '@/contexts/AppContext';
 import { highlightQuotes, highlightQuotesForPdf } from '@/lib/highlightQuotes';
@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Square, FileText, Check, Clock, Video, Users as UsersIcon,
   TrendingUp, BarChart3, Undo2, AlertTriangle, Star, Eye, ChevronLeft, Download, Link, ArrowRight,
-  ThumbsDown, Pencil, MessageCircle, Send, UserCheck, Rocket
+  ThumbsDown, Pencil, MessageCircle, Send, UserCheck, Rocket, Hourglass
 } from 'lucide-react';
 import LiveRecordingCard from '@/components/videomaker/LiveRecordingCard';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -52,6 +52,65 @@ export default function VideomakerDashboard() {
   const [alteredScripts, setAlteredScripts] = useState<Set<string>>(new Set());
   const [verbalScripts, setVerbalScripts] = useState<Set<string>>(new Set());
   const [alterationNotes, setAlterationNotes] = useState<Record<string, string>>({});
+
+  // ── Waiting for client state ──
+  const [waitingRecordingId, setWaitingRecordingId] = useState<string | null>(null);
+  const [waitingLogId, setWaitingLogId] = useState<string | null>(null);
+  const [waitingStartedAt, setWaitingStartedAt] = useState<Date | null>(null);
+  const [waitingElapsed, setWaitingElapsed] = useState(0);
+
+  // Timer for waiting elapsed
+  useEffect(() => {
+    if (!waitingStartedAt) return;
+    const interval = setInterval(() => {
+      setWaitingElapsed(Math.floor((Date.now() - waitingStartedAt.getTime()) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [waitingStartedAt]);
+
+  const handleStartWaiting = async (rec: Recording) => {
+    const logId = crypto.randomUUID();
+    const now = new Date();
+    const { error } = await supabase.from('recording_wait_logs').insert({
+      id: logId,
+      recording_id: rec.id,
+      videomaker_id: vmId,
+      client_id: rec.clientId,
+      started_at: now.toISOString(),
+    } as any);
+    if (error) {
+      toast.error('Erro ao registrar espera');
+      console.error(error);
+      return;
+    }
+    setWaitingRecordingId(rec.id);
+    setWaitingLogId(logId);
+    setWaitingStartedAt(now);
+    setWaitingElapsed(0);
+    toast.info(`Aguardando cliente ${getClientName(rec.clientId)}...`, { icon: '⏳' });
+  };
+
+  const handleStopWaiting = async () => {
+    if (!waitingLogId || !waitingStartedAt) return;
+    const durationSec = Math.floor((Date.now() - waitingStartedAt.getTime()) / 1000);
+    await supabase.from('recording_wait_logs').update({
+      ended_at: new Date().toISOString(),
+      wait_duration_seconds: durationSec,
+    } as any).eq('id', waitingLogId);
+    const mins = Math.floor(durationSec / 60);
+    const secs = durationSec % 60;
+    toast.success(`Espera encerrada: ${mins}m ${secs}s registrados`);
+    setWaitingRecordingId(null);
+    setWaitingLogId(null);
+    setWaitingStartedAt(null);
+    setWaitingElapsed(0);
+  };
+
+  const formatWaitTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
 
   const vmId = currentUser?.id || '';
   const today = new Date();
@@ -590,6 +649,7 @@ export default function VideomakerDashboard() {
                   <motion.div key={rec.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
                     className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
                       isActive ? 'border-primary bg-primary/5 ring-1 ring-primary/30' :
+                      waitingRecordingId === rec.id ? 'border-warning bg-warning/5 ring-1 ring-warning/30' :
                       isDone ? 'border-success/30 bg-success/5' : 'border-border bg-secondary/50'
                     }`}>
                     <div className="w-1.5 h-12 rounded-full shrink-0" style={{ backgroundColor: `hsl(${color})` }} />
@@ -602,6 +662,14 @@ export default function VideomakerDashboard() {
                             ● Em andamento
                           </Badge>
                         )}
+                        {waitingRecordingId === rec.id && (
+                          <motion.div animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                            <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
+                              <Hourglass size={10} className="mr-0.5 animate-spin" style={{ animationDuration: '3s' }} />
+                              Aguardando · {formatWaitTime(waitingElapsed)}
+                            </Badge>
+                          </motion.div>
+                        )}
                         {isDone && (
                           <Badge className="bg-success/20 text-success border-success/30 text-[10px]">
                             <Check size={10} className="mr-0.5" /> Concluída
@@ -613,8 +681,24 @@ export default function VideomakerDashboard() {
                       </p>
                     </div>
                     <div className="flex gap-1.5 shrink-0">
+                      {rec.status === 'agendada' && !isActive && waitingRecordingId !== rec.id && !waitingRecordingId && (
+                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                          <Button size="sm" variant="outline" onClick={() => handleStartWaiting(rec)}
+                            className="gap-1 border-warning/50 text-warning hover:bg-warning/10 hover:text-warning">
+                            <Hourglass size={14} /> Aguardar
+                          </Button>
+                        </motion.div>
+                      )}
+                      {waitingRecordingId === rec.id && (
+                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                          <Button size="sm" variant="outline" onClick={async () => { await handleStopWaiting(); }}
+                            className="gap-1 border-destructive/50 text-destructive hover:bg-destructive/10">
+                            <Square size={14} /> Parar Espera
+                          </Button>
+                        </motion.div>
+                      )}
                       {rec.status === 'agendada' && !isActive && (
-                        <Button size="sm" onClick={() => handleStartRecording(rec)} className="gap-1">
+                        <Button size="sm" onClick={async () => { if (waitingRecordingId === rec.id) await handleStopWaiting(); handleStartRecording(rec); }} className="gap-1">
                           <Play size={14} /> Iniciar
                         </Button>
                       )}

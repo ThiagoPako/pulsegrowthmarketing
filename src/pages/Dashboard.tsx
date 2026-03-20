@@ -38,6 +38,7 @@ export default function Dashboard() {
   const { currentUser, recordings, clients, users, tasks, cancelRecording, updateRecording, getSuggestionsForCancellation, activeRecordings, settings } = useApp();
   const navigate = useNavigate();
   const today = format(new Date(), 'yyyy-MM-dd');
+  const normalizeDateKey = (value: string) => value?.slice(0, 10) || '';
   const [weekOffset, setWeekOffset] = useState(0);
   const [waStats, setWaStats] = useState({ total: 0, sent: 0, failed: 0 });
   const [deliveryRecords, setDeliveryRecords] = useState<any[]>([]);
@@ -121,7 +122,7 @@ export default function Dashboard() {
 
   // ── Stats ──
   const stats = useMemo(() => {
-    const todayRecs = recordings.filter(r => r.date === today);
+    const todayRecs = recordings.filter(r => normalizeDateKey(r.date) === today);
     const monthStart = startOfMonth(new Date());
     const monthEnd = endOfMonth(new Date());
     const weekRecs = recordings.filter(r => { const d = parseISO(r.date); return isWithinInterval(d, { start: weekStart, end: weekEnd }); });
@@ -142,7 +143,7 @@ export default function Dashboard() {
 
   // ── Today recordings ──
   const todayRecordings = useMemo(() => {
-    let recs = recordings.filter(r => r.date === today && r.status !== 'cancelada');
+    let recs = recordings.filter(r => normalizeDateKey(r.date) === today && r.status !== 'cancelada');
     if (currentUser?.role === 'videomaker') recs = recs.filter(r => r.videomakerId === currentUser.id);
     return recs.sort((a, b) => a.startTime.localeCompare(b.startTime));
   }, [recordings, today, currentUser]);
@@ -154,7 +155,7 @@ export default function Dashboard() {
       const weekRecs = recordings.filter(r => r.videomakerId === vm.id && isWithinInterval(parseISO(r.date), { start: weekStart, end: weekEnd }));
       const done = weekRecs.filter(r => r.status === 'concluida').length;
       const total = weekRecs.length;
-      const todayRecs = weekRecs.filter(r => r.date === today);
+      const todayRecs = weekRecs.filter(r => normalizeDateKey(r.date) === today);
       const todayDone = todayRecs.filter(r => r.status === 'concluida').length;
       const todayTotal = todayRecs.filter(r => r.status !== 'cancelada').length;
       return { vm, weekDone: done, weekTotal: total, todayDone, todayTotal };
@@ -195,7 +196,7 @@ export default function Dashboard() {
   // ── Week agenda ──
   const getRecsForDay = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    return recordings.filter(r => r.date === dateStr && r.status !== 'cancelada').sort((a, b) => a.startTime.localeCompare(b.startTime));
+    return recordings.filter(r => normalizeDateKey(r.date) === dateStr && r.status !== 'cancelada').sort((a, b) => a.startTime.localeCompare(b.startTime));
   };
 
   const getClient = (id: string) => clients.find(c => c.id === id);

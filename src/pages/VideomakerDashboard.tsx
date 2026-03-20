@@ -119,6 +119,7 @@ export default function VideomakerDashboard() {
   const vmId = currentUser?.id || '';
   const today = new Date();
   const todayStr = format(today, 'yyyy-MM-dd');
+  const normalizeDateKey = (value: string) => value?.slice(0, 10) || '';
   const weekStart = startOfWeek(today, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
@@ -130,14 +131,14 @@ export default function VideomakerDashboard() {
   );
 
   const todayRecs = useMemo(() =>
-    myRecordings.filter(r => r.date === todayStr && r.status !== 'cancelada')
+    myRecordings.filter(r => normalizeDateKey(r.date) === todayStr && r.status !== 'cancelada')
       .sort((a, b) => a.startTime.localeCompare(b.startTime)),
     [myRecordings, todayStr]
   );
 
   const getRecsForDay = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    return myRecordings.filter(r => r.date === dateStr && r.status !== 'cancelada')
+    return myRecordings.filter(r => normalizeDateKey(r.date) === dateStr && r.status !== 'cancelada')
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
   };
 

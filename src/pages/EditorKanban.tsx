@@ -440,7 +440,7 @@ export default function EditorKanban() {
       toast.error('Cole o link do vídeo editado');
       return;
     }
-    const { error } = await supabase.from('content_tasks').update({
+    const updatePayload: any = {
       edited_video_link: videoLinkValue.trim(),
       updated_at: new Date().toISOString(),
     } as any).eq('id', videoLinkTask.id);

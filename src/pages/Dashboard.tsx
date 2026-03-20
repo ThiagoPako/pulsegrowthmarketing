@@ -9,7 +9,7 @@ import {
   ChevronLeft, ChevronRight, Clock, Users as UsersIcon, MessageSquare, Trophy, BarChart3,
   Clapperboard, Film, Megaphone, AlertTriangle, Rocket, Bell, Send
 } from 'lucide-react';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, addDays, formatDistanceToNow } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, addDays, formatDistanceToNow, differenceInMinutes, differenceInHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Progress } from '@/components/ui/progress';
 import { useNavigate } from 'react-router-dom';

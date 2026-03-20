@@ -57,7 +57,7 @@ interface ClientData {
 
 type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem';
 
-const PORTAL_MEDIA_PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/portal-media-proxy`;
+const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
 
 function isPortalVideo(content: Pick<PortalContent, 'content_type' | 'file_url'>) {
@@ -71,11 +71,7 @@ function shouldProxyPortalVideo(url: string) {
 async function createPortalVideoObjectUrl(url: string) {
   const response = await fetch(PORTAL_MEDIA_PROXY_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url }),
   });
 

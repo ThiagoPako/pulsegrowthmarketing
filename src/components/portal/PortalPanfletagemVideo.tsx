@@ -53,7 +53,7 @@ const IPVA_OPTIONS = [
   { value: 'nenhum', label: 'Não informar' },
 ];
 
-const PORTAL_MEDIA_PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/portal-media-proxy`;
+const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
 const CANVAS_W = 1080;
 const CANVAS_H = 1920;
@@ -85,11 +85,7 @@ function shouldProxy(url: string) { return url.startsWith(VPS_UPLOADS_URL); }
 async function proxyToBlobUrl(url: string): Promise<string> {
   const res = await fetch(PORTAL_MEDIA_PROXY_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url }),
   });
   if (!res.ok) throw new Error(`Proxy falhou (${res.status})`);

@@ -113,10 +113,8 @@ export default function ClientOnboarding() {
     if (!clientId) return;
     const fetchData = async () => {
       try {
-        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/client-onboarding?clientId=${clientId}`;
-        const response = await fetch(url, {
-          headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY }
-        });
+        const url = `https://agenciapulse.tech/api/client-onboarding?clientId=${clientId}`;
+        const response = await fetch(url);
         const data = await response.json();
         if (data.error) { toast.error('Cliente não encontrado'); return; }
         setClient(data.client);
@@ -231,10 +229,10 @@ export default function ClientOnboarding() {
     }
     setSaving(true);
     try {
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/client-onboarding`;
+      const url = `https://agenciapulse.tech/api/client-onboarding`;
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           clientId,
           videomaker_id: selectedVm,

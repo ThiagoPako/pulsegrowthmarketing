@@ -823,7 +823,7 @@ export default function VideomakerDashboard() {
       </div>
 
       {/* ── Finish Recording Dialog (Multi-step: 3 steps) ── */}
-      <Dialog open={finishDialogOpen} onOpenChange={v => { if (!v) { setFinishDialogOpen(false); setFinishStep('scripts'); setDriveLinks({}); setSelectedEditorId(''); } }}>
+      <Dialog open={finishDialogOpen} onOpenChange={v => { if (!v) { setFinishDialogOpen(false); setFinishStep('scripts'); setDriveLinks({}); setSelectedEditorId('__auto__'); } }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">

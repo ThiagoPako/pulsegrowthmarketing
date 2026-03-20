@@ -1193,7 +1193,55 @@ function ReelsCard({ content, clientColor, onSelect }: {
   const isVideo = isPortalVideo(content);
   const Icon = CONTENT_TYPE_ICONS[content.content_type] || Film;
   const statusStyle = STATUS_COLORS[content.status];
-  const canAutoplayPreview = isVideo && !!content.file_url && !shouldProxyPortalVideo(content.file_url);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewVisible, setPreviewVisible] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrlToRevoke: string | null = null;
+
+    const loadPreview = async () => {
+      setPreviewVisible(false);
+
+      if (!isVideo || !content.file_url) {
+        setPreviewUrl(null);
+        return;
+      }
+
+      if (!shouldProxyPortalVideo(content.file_url)) {
+        setPreviewUrl(content.file_url);
+        return;
+      }
+
+      try {
+        const objectUrl = await createPortalVideoObjectUrl(content.file_url);
+
+        if (cancelled) {
+          URL.revokeObjectURL(objectUrl);
+          return;
+        }
+
+        objectUrlToRevoke = objectUrl;
+        setPreviewUrl(objectUrl);
+      } catch (error) {
+        console.error('[Portal Preview] Failed to load proxied video preview', error);
+        if (!cancelled) {
+          setPreviewUrl(null);
+        }
+      }
+    };
+
+    loadPreview();
+
+    return () => {
+      cancelled = true;
+      if (objectUrlToRevoke) {
+        URL.revokeObjectURL(objectUrlToRevoke);
+      }
+    };
+  }, [content.file_url, isVideo]);
+
+  const canAutoplayPreview = isVideo && !!previewUrl;
 
   return (
     <button
@@ -1214,13 +1262,18 @@ function ReelsCard({ content, clientColor, onSelect }: {
 
         {canAutoplayPreview && (
           <video
-            src={content.file_url!}
+            src={previewUrl!}
             muted
             playsInline
             autoPlay
             loop
             preload="metadata"
-            className="absolute inset-0 w-full h-full object-cover"
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${previewVisible ? 'opacity-100' : 'opacity-0'}`}
+            onLoadedData={() => setPreviewVisible(true)}
+            onError={() => {
+              setPreviewVisible(false);
+              setPreviewUrl(null);
+            }}
             onTimeUpdate={(e) => {
               const vid = e.currentTarget;
               if (vid.currentTime >= 6) {

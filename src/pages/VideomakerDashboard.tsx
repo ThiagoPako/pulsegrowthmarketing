@@ -60,14 +60,13 @@ export default function VideomakerDashboard() {
   const [waitingElapsed, setWaitingElapsed] = useState(0);
 
   // Timer for waiting elapsed
-  useState(() => {
+  useEffect(() => {
+    if (!waitingStartedAt) return;
     const interval = setInterval(() => {
-      if (waitingStartedAt) {
-        setWaitingElapsed(Math.floor((Date.now() - waitingStartedAt.getTime()) / 1000));
-      }
+      setWaitingElapsed(Math.floor((Date.now() - waitingStartedAt.getTime()) / 1000));
     }, 1000);
     return () => clearInterval(interval);
-  });
+  }, [waitingStartedAt]);
 
   const handleStartWaiting = async (rec: Recording) => {
     const logId = crypto.randomUUID();

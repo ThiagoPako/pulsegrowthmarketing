@@ -40,36 +40,25 @@ const NUM_TO_DAYKEY: Record<number, string> = {
 };
 
 /**
- * Add hours to a date, but only count hours that fall on work days.
- * Work day = 10h (08:00-18:00). Non-work days are skipped entirely.
+ * Add hours to a date, but only count business days (Mon-Fri).
+ * 48h = 2 business days, 24h = 1 business day, etc.
  * The result NEVER falls on a weekend or non-work day.
  */
 function addBusinessHours(from: Date, hours: number, workDays: string[]): Date {
-  const HOURS_PER_WORK_DAY = 10; // 08:00 – 18:00
-  let remaining = hours;
+  const HOURS_PER_DAY = 24;
+  let daysToAdd = Math.ceil(hours / HOURS_PER_DAY);
   let current = new Date(from);
 
-  // If starting on a non-work day, advance to next work day first
-  while (!workDays.includes(NUM_TO_DAYKEY[getDay(current)])) {
+  while (daysToAdd > 0) {
     current = addDays(current, 1);
-  }
-
-  while (remaining > 0) {
     const dayKey = NUM_TO_DAYKEY[getDay(current)];
     if (workDays.includes(dayKey)) {
-      remaining -= HOURS_PER_WORK_DAY;
-    }
-    if (remaining > 0) {
-      current = addDays(current, 1);
-      // Skip non-work days
-      while (!workDays.includes(NUM_TO_DAYKEY[getDay(current)])) {
-        current = addDays(current, 1);
-      }
+      daysToAdd--;
     }
   }
 
-  // Set time to end of work day (18:00)
-  current.setHours(18, 0, 0, 0);
+  // Preserve original time
+  current.setHours(from.getHours(), from.getMinutes(), 0, 0);
   return current;
 }
 

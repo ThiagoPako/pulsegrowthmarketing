@@ -1161,12 +1161,33 @@ export default function VideomakerDashboard() {
                   <Button 
                     onClick={confirmFinish} 
                     disabled={Array.from(new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts])).some(id => !driveLinks[id]?.trim())}
-                    className="w-full gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground shadow-lg shadow-primary/25 font-bold py-5 text-base rounded-xl"
+                    className="w-full gap-2 bg-gradient-to-r from-orange-600 via-red-500 to-orange-500 hover:from-orange-500 hover:via-red-400 hover:to-orange-400 text-white shadow-lg shadow-red-500/30 font-bold py-5 text-base rounded-xl relative overflow-hidden group"
                   >
-                    <motion.div animate={{ y: [0, -2, 0], rotate: [0, -10, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
-                      <Rocket size={18} className="-rotate-45" />
+                    <motion.div 
+                      animate={{ y: [0, -4, 0], rotate: [0, -15, 0] }} 
+                      transition={{ duration: 0.8, repeat: Infinity, ease: 'easeInOut' }}
+                      className="relative"
+                    >
+                      <Rocket size={20} className="-rotate-45 relative z-10" />
+                      {/* Fire particles */}
+                      <motion.div
+                        animate={{ opacity: [0.8, 1, 0.6], scale: [1, 1.3, 0.8], y: [0, 6, 2] }}
+                        transition={{ duration: 0.4, repeat: Infinity }}
+                        className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-3 h-4 rounded-full bg-gradient-to-t from-yellow-400 via-orange-400 to-transparent blur-[2px] rotate-45"
+                      />
+                      <motion.div
+                        animate={{ opacity: [0.6, 1, 0.4], scale: [0.8, 1.1, 0.6], y: [0, 8, 4] }}
+                        transition={{ duration: 0.5, repeat: Infinity, delay: 0.15 }}
+                        className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-2 h-3 rounded-full bg-gradient-to-t from-yellow-300 to-transparent blur-[1px] rotate-45"
+                      />
                     </motion.div>
-                    Enviar para Edição
+                    Enviar para Edicao
+                    {/* Button glow effect */}
+                    <motion.div 
+                      animate={{ x: ['-100%', '200%'] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                      className="absolute inset-0 w-1/3 bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12 pointer-events-none"
+                    />
                   </Button>
                 </motion.div>
               </div>
@@ -1175,6 +1196,104 @@ export default function VideomakerDashboard() {
           </AnimatePresence>
         </DialogContent>
       </Dialog>
+
+      {/* ── Celebration Overlay ── */}
+      <AnimatePresence>
+        {showCelebration && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none"
+          >
+            {/* Background dim */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.6 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black"
+            />
+            
+            {/* Particle effects */}
+            {Array.from({ length: 20 }).map((_, i) => (
+              <motion.div
+                key={i}
+                initial={{ 
+                  x: 0, y: 0, opacity: 1, scale: 1 
+                }}
+                animate={{ 
+                  x: (Math.random() - 0.5) * 500,
+                  y: (Math.random() - 0.5) * 500 - 100,
+                  opacity: 0,
+                  scale: 0,
+                  rotate: Math.random() * 720
+                }}
+                transition={{ duration: 2 + Math.random(), delay: Math.random() * 0.3 }}
+                className="absolute text-2xl"
+                style={{ zIndex: 10000 }}
+              >
+                {['🔥', '⭐', '✨', '🚀', '💫'][i % 5]}
+              </motion.div>
+            ))}
+
+            {/* Main celebration card */}
+            <motion.div
+              initial={{ scale: 0, rotate: -10 }}
+              animate={{ scale: 1, rotate: 0 }}
+              exit={{ scale: 0, y: -100, opacity: 0 }}
+              transition={{ type: 'spring', damping: 12, stiffness: 200 }}
+              className="relative z-[10001] flex flex-col items-center gap-4 bg-gradient-to-br from-[#1a1a2e] to-[#16213e] border border-orange-500/30 rounded-3xl px-12 py-10 shadow-2xl shadow-orange-500/20"
+            >
+              {/* Rocket flying up */}
+              <motion.div
+                animate={{ y: [10, -20, 10] }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                className="relative"
+              >
+                <span className="text-6xl">🚀</span>
+                <motion.div
+                  animate={{ opacity: [0.5, 1, 0.3], scale: [1, 1.4, 0.8] }}
+                  transition={{ duration: 0.4, repeat: Infinity }}
+                  className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-3xl"
+                >
+                  🔥
+                </motion.div>
+              </motion.div>
+
+              <motion.p
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="text-white/60 text-sm font-medium uppercase tracking-widest"
+              >
+                Gravacao Finalizada!
+              </motion.p>
+
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.5, type: 'spring', damping: 8 }}
+                className="flex items-baseline gap-2"
+              >
+                <span className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-yellow-300 to-orange-400">
+                  +{celebrationScore}
+                </span>
+                <span className="text-xl font-bold text-orange-300">pts</span>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.8 }}
+                className="flex items-center gap-2 text-white/40 text-xs"
+              >
+                <TrendingUp size={14} />
+                <span>Conteudo enviado para edicao</span>
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Scripts Dialog ── */}
       <Dialog open={scriptsOpen} onOpenChange={(open) => { setScriptsOpen(open); if (!open) setViewingScript(null); }}>

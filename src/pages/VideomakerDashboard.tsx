@@ -725,8 +725,8 @@ export default function VideomakerDashboard() {
         </div>
       </div>
 
-      {/* ── Finish Recording Dialog (Multi-step) ── */}
-      <Dialog open={finishDialogOpen} onOpenChange={v => { if (!v) { setFinishDialogOpen(false); setFinishStep('scripts'); setDriveLinks({}); } }}>
+      {/* ── Finish Recording Dialog (Multi-step: 3 steps) ── */}
+      <Dialog open={finishDialogOpen} onOpenChange={v => { if (!v) { setFinishDialogOpen(false); setFinishStep('scripts'); setDriveLinks({}); setSelectedEditorId(''); } }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -739,24 +739,32 @@ export default function VideomakerDashboard() {
           </DialogHeader>
 
           {/* Step indicators */}
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-1.5 mb-2 flex-wrap">
             <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
               finishStep === 'scripts' ? 'bg-primary text-primary-foreground' : 'bg-success/20 text-success'
             }`}>
-              <span>1</span> Roteiros Gravados
+              <span>1</span> Selecionar Roteiros
+            </div>
+            <ArrowRight size={14} className="text-muted-foreground" />
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
+              finishStep === 'alterations' ? 'bg-primary text-primary-foreground' :
+              finishStep === 'drive' ? 'bg-success/20 text-success' : 'bg-muted text-muted-foreground'
+            }`}>
+              <span>2</span> Mudanças
             </div>
             <ArrowRight size={14} className="text-muted-foreground" />
             <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
               finishStep === 'drive' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
             }`}>
-              <span>2</span> Link do Drive
+              <span>3</span> Links & Envio
             </div>
           </div>
 
-          {finishStep === 'scripts' ? (
+          {/* ── STEP 1: Select which scripts were recorded ── */}
+          {finishStep === 'scripts' && (
             <>
               <p className="text-sm text-muted-foreground">
-                Defina o status de cada roteiro. Os não marcados permanecerão no banco de roteiros pendentes.
+                Selecione quais roteiros foram efetivamente gravados. Os não selecionados voltam para a <strong>Zona de Ideias</strong>.
               </p>
 
               {finishClientScripts.length === 0 ? (
@@ -765,102 +773,52 @@ export default function VideomakerDashboard() {
                   <p className="text-sm">Nenhum roteiro planejado para esta sessão</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {finishClientScripts.map(script => {
-                    const isCompleted = completedScriptIds.has(script.id);
+                    const isSelected = completedScriptIds.has(script.id);
                     const isRejected = rejectedScripts.has(script.id);
-                    const isAltered = alteredScripts.has(script.id);
-                    const isVerbal = verbalScripts.has(script.id);
-                    const hasStatus = isCompleted || isRejected || isAltered || isVerbal;
-
-                    const setScriptStatus = (status: 'completed' | 'rejected' | 'altered' | 'verbal' | null) => {
-                      // Remove from all sets first
-                      setCompletedScriptIds(prev => { const n = new Set(prev); n.delete(script.id); return n; });
-                      setRejectedScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
-                      setAlteredScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
-                      setVerbalScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
-                      // Add to the right set
-                      if (status === 'completed') setCompletedScriptIds(prev => new Set(prev).add(script.id));
-                      if (status === 'rejected') setRejectedScripts(prev => new Set(prev).add(script.id));
-                      if (status === 'altered') setAlteredScripts(prev => new Set(prev).add(script.id));
-                      if (status === 'verbal') setVerbalScripts(prev => new Set(prev).add(script.id));
-                    };
-
                     return (
                       <div key={script.id} className={`p-3 rounded-lg border transition-colors ${
-                        isCompleted ? 'border-success/40 bg-success/5' :
+                        isSelected ? 'border-success/40 bg-success/5' :
                         isRejected ? 'border-destructive/40 bg-destructive/5' :
-                        isAltered ? 'border-amber-500/40 bg-amber-500/5' :
-                        isVerbal ? 'border-blue-500/40 bg-blue-500/5' :
                         'border-border hover:bg-muted/30'
                       }`}>
-                        <div className="flex items-center gap-1.5 mb-2">
-                          {script.priority === 'urgent' && <AlertTriangle size={13} className="text-destructive shrink-0" />}
-                          {script.priority === 'priority' && <Star size={13} className="text-warning shrink-0" />}
-                          <p className="font-medium text-sm">{script.title}</p>
-                          <Badge variant="outline" className="text-[10px] ml-auto">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="flex items-center gap-3">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={checked => {
+                              if (checked) {
+                                setCompletedScriptIds(prev => new Set(prev).add(script.id));
+                                setRejectedScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                              } else {
+                                setCompletedScriptIds(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                              }
+                            }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              {script.priority === 'urgent' && <AlertTriangle size={13} className="text-destructive shrink-0" />}
+                              {script.priority === 'priority' && <Star size={13} className="text-warning shrink-0" />}
+                              <p className="font-medium text-sm truncate">{script.title}</p>
+                              <Badge variant="outline" className="text-[10px] ml-auto shrink-0">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                            </div>
+                          </div>
                           <button
-                            onClick={() => setScriptStatus(isCompleted ? null : 'completed')}
-                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
-                              isCompleted ? 'bg-success/20 text-success border-success/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
-                            }`}
-                          >
-                            <Check size={12} /> Gravado
-                          </button>
-                          <button
-                            onClick={() => setScriptStatus(isRejected ? null : 'rejected')}
-                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                            onClick={() => {
+                              if (isRejected) {
+                                setRejectedScripts(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                              } else {
+                                setRejectedScripts(prev => new Set(prev).add(script.id));
+                                setCompletedScriptIds(prev => { const n = new Set(prev); n.delete(script.id); return n; });
+                              }
+                            }}
+                            className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border transition-all shrink-0 ${
                               isRejected ? 'bg-destructive/20 text-destructive border-destructive/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
                             }`}
                           >
-                            <ThumbsDown size={12} /> Não gostou
-                          </button>
-                          <button
-                            onClick={() => setScriptStatus(isAltered ? null : 'altered')}
-                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
-                              isAltered ? 'bg-amber-500/20 text-amber-600 border-amber-500/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
-                            }`}
-                          >
-                            <Pencil size={12} /> Alterado
-                          </button>
-                          <button
-                            onClick={() => setScriptStatus(isVerbal ? null : 'verbal')}
-                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
-                              isVerbal ? 'bg-blue-500/20 text-blue-600 border-blue-500/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
-                            }`}
-                          >
-                            <MessageCircle size={12} /> Verbal
+                            <ThumbsDown size={10} /> {isRejected ? 'Rejeitado' : 'Não gostou'}
                           </button>
                         </div>
-                        {/* Notes box for altered scripts */}
-                        {isAltered && (
-                          <div className="mt-2">
-                            <label className="text-[11px] text-amber-600 font-medium mb-1 block">
-                              📝 O que mudou? (opcional — ajuda o editor a entender)
-                            </label>
-                            <Textarea
-                              value={alterationNotes[script.id] || ''}
-                              onChange={e => setAlterationNotes(prev => ({ ...prev, [script.id]: e.target.value }))}
-                              placeholder="Descreva a ideia do vídeo e como o editor deve editar..."
-                              className="min-h-[60px] text-xs"
-                            />
-                          </div>
-                        )}
-                        {isVerbal && (
-                          <div className="mt-2">
-                            <label className="text-[11px] text-blue-600 font-medium mb-1 block">
-                              📝 Notas adicionais (opcional)
-                            </label>
-                            <Textarea
-                              value={alterationNotes[script.id] || ''}
-                              onChange={e => setAlterationNotes(prev => ({ ...prev, [script.id]: e.target.value }))}
-                              placeholder="Alguma observação extra para o editor..."
-                              className="min-h-[60px] text-xs"
-                            />
-                          </div>
-                        )}
                       </div>
                     );
                   })}
@@ -868,19 +826,109 @@ export default function VideomakerDashboard() {
               )}
 
               <div className="flex gap-2 mt-3">
-                <Button variant="outline" onClick={() => setFinishDialogOpen(false)} className="flex-1">
-                  Cancelar
-                </Button>
-                <Button onClick={handleGoToDriveStep} className="flex-1 gap-1.5">
+                <Button variant="outline" onClick={() => setFinishDialogOpen(false)} className="flex-1">Cancelar</Button>
+                <Button onClick={handleGoToAlterationsStep} className="flex-1 gap-1.5">
                   <ArrowRight size={16} />
-                  Próximo ({completedScriptIds.size + alteredScripts.size + verbalScripts.size} gravado{(completedScriptIds.size + alteredScripts.size + verbalScripts.size) !== 1 ? 's' : ''}{rejectedScripts.size > 0 ? ` · ${rejectedScripts.size} rejeitado${rejectedScripts.size !== 1 ? 's' : ''}` : ''})
+                  Próximo ({completedScriptIds.size} gravado{completedScriptIds.size !== 1 ? 's' : ''})
                 </Button>
               </div>
             </>
-          ) : (
+          )}
+
+          {/* ── STEP 2: Mark alterations for each recorded script ── */}
+          {finishStep === 'alterations' && (
             <>
               <p className="text-sm text-muted-foreground">
-                Adicione o link da pasta do Google Drive para cada roteiro gravado. O editor terá <strong>2 dias úteis</strong> para editar os vídeos.
+                Para cada roteiro gravado, indique se houve mudança no roteiro original.
+              </p>
+
+              <div className="space-y-3">
+                {Array.from(completedScriptIds).map(id => {
+                  const script = scripts.find(s => s.id === id);
+                  if (!script) return null;
+                  const isAltered = alteredScripts.has(id);
+                  const isVerbal = verbalScripts.has(id);
+                  const isNormal = !isAltered && !isVerbal;
+
+                  return (
+                    <div key={id} className={`p-3 rounded-lg border transition-colors ${
+                      isAltered ? 'border-warning/40 bg-warning/5' :
+                      isVerbal ? 'border-info/40 bg-info/5' :
+                      'border-success/40 bg-success/5'
+                    }`}>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <p className="font-medium text-sm">{script.title}</p>
+                        <Badge variant="outline" className="text-[10px] ml-auto">{SCRIPT_VIDEO_TYPE_LABELS[script.videoType]}</Badge>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          onClick={() => { setAlteredScripts(prev => { const n = new Set(prev); n.delete(id); return n; }); setVerbalScripts(prev => { const n = new Set(prev); n.delete(id); return n; }); }}
+                          className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                            isNormal ? 'bg-success/20 text-success border-success/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                          }`}
+                        >
+                          <Check size={12} /> Sem mudanças
+                        </button>
+                        <button
+                          onClick={() => { setAlteredScripts(prev => new Set(prev).add(id)); setVerbalScripts(prev => { const n = new Set(prev); n.delete(id); return n; }); }}
+                          className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                            isAltered ? 'bg-warning/20 text-warning border-warning/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                          }`}
+                        >
+                          <Pencil size={12} /> Roteiro Alterado
+                        </button>
+                        <button
+                          onClick={() => { setVerbalScripts(prev => new Set(prev).add(id)); setAlteredScripts(prev => { const n = new Set(prev); n.delete(id); return n; }); }}
+                          className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                            isVerbal ? 'bg-info/20 text-info border-info/40' : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                          }`}
+                        >
+                          <MessageCircle size={12} /> Comunicação Verbal
+                        </button>
+                      </div>
+
+                      {/* Notes for altered/verbal */}
+                      {(isAltered || isVerbal) && (
+                        <div className="mt-2">
+                          <label className={`text-[11px] font-medium mb-1 block ${isAltered ? 'text-warning' : 'text-info'}`}>
+                            📝 {isAltered ? 'O que mudou? (ajuda o editor a entender)' : 'Notas adicionais (opcional)'}
+                          </label>
+                          <Textarea
+                            value={alterationNotes[id] || ''}
+                            onChange={e => setAlterationNotes(prev => ({ ...prev, [id]: e.target.value }))}
+                            placeholder={isAltered ? 'Descreva como o roteiro foi alterado...' : 'Observações para o editor...'}
+                            className="min-h-[60px] text-xs"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex gap-2 mt-3">
+                <Button variant="outline" onClick={() => setFinishStep('scripts')} className="flex-1 gap-1.5">
+                  <ChevronLeft size={16} /> Voltar
+                </Button>
+                <Button onClick={handleGoToDriveStep} className="flex-1 gap-1.5">
+                  <ArrowRight size={16} /> Próximo
+                </Button>
+              </div>
+            </>
+          )}
+
+          {/* ── STEP 3: Drive links + optional editor + send ── */}
+          {finishStep === 'drive' && (
+            <>
+              <Alert className="border-warning/40 bg-warning/5">
+                <AlertTriangle size={16} className="text-warning" />
+                <AlertDescription className="text-xs text-warning">
+                  <strong>Importante:</strong> As falas devem estar separadas dos takes no Google Drive. Organize as pastas para facilitar a edição.
+                </AlertDescription>
+              </Alert>
+
+              <p className="text-sm text-muted-foreground">
+                Adicione o link do Google Drive com os materiais de cada roteiro. O editor terá <strong>{settings.editingDeadlineHours || 48}h</strong> para editar.
               </p>
 
               <div className="space-y-3">
@@ -891,15 +939,15 @@ export default function VideomakerDashboard() {
                   const isVerb = verbalScripts.has(id);
                   return (
                     <div key={id} className={`p-4 rounded-xl border ${
-                      isAlt ? 'bg-amber-500/5 border-amber-500/30' :
-                      isVerb ? 'bg-blue-500/5 border-blue-500/30' : 'bg-muted/30 border-border'
+                      isAlt ? 'bg-warning/5 border-warning/30' :
+                      isVerb ? 'bg-info/5 border-info/30' : 'bg-muted/30 border-border'
                     }`}>
                       <div className="flex items-center gap-2 mb-2">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                           📁 {s.title}
                         </p>
-                        {isAlt && <Badge className="text-[9px] bg-amber-500/20 text-amber-600 border-amber-500/40">✏️ Alterado</Badge>}
-                        {isVerb && <Badge className="text-[9px] bg-blue-500/20 text-blue-600 border-blue-500/40">🗣️ Verbal</Badge>}
+                        {isAlt && <Badge className="text-[9px] bg-warning/20 text-warning border-warning/40">✏️ Alterado</Badge>}
+                        {isVerb && <Badge className="text-[9px] bg-info/20 text-info border-info/40">🗣️ Verbal</Badge>}
                       </div>
                       <div className="flex items-center gap-2">
                         <Link size={16} className="text-muted-foreground shrink-0" />
@@ -915,8 +963,29 @@ export default function VideomakerDashboard() {
                 })}
               </div>
 
+              {/* Optional editor selection */}
+              <div className="p-4 rounded-xl border border-border bg-muted/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <UserCheck size={16} className="text-muted-foreground" />
+                  <p className="text-sm font-medium">Escolher Editor <span className="text-muted-foreground font-normal">(opcional)</span></p>
+                </div>
+                <Select value={selectedEditorId} onValueChange={setSelectedEditorId}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Atribuição automática" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Atribuição automática</SelectItem>
+                    {editors.map(editor => (
+                      <SelectItem key={editor.id} value={editor.id}>
+                        {editor.name} {editor.role === 'admin' ? '(Admin)' : '(Editor)'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="flex gap-2 mt-3">
-                <Button variant="outline" onClick={() => setFinishStep('scripts')} className="flex-1 gap-1.5">
+                <Button variant="outline" onClick={() => setFinishStep('alterations')} className="flex-1 gap-1.5">
                   <ChevronLeft size={16} /> Voltar
                 </Button>
                 <Button 
@@ -924,8 +993,8 @@ export default function VideomakerDashboard() {
                   disabled={Array.from(new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts])).some(id => !driveLinks[id]?.trim())}
                   className="flex-1 gap-1.5 bg-success hover:bg-success/90 text-success-foreground"
                 >
-                  <Check size={16} />
-                  Finalizar e Enviar para Edição
+                  <Send size={16} />
+                  Enviar para Edição
                 </Button>
               </div>
             </>

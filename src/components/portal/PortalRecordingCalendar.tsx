@@ -614,10 +614,10 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
         <MessageSquarePlus size={14} /> Solicitar gravação especial
       </motion.button>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr,380px] gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr,380px] gap-4 sm:gap-6">
         {/* Calendar Grid */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-          className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 sm:p-6 relative overflow-hidden">
+          className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-3 sm:p-6 relative overflow-hidden">
           <div className="flex items-center justify-between mb-6">
             <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2.5 rounded-xl hover:bg-white/10 transition-colors">
               <ChevronLeft size={18} />

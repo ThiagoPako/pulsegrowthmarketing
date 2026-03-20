@@ -672,16 +672,26 @@ export default function VideomakerDashboard() {
         ))}
       </div>
 
-      {/* ── ROW: Today's Recordings + Active ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 glass-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-display font-semibold text-sm">Gravações de Hoje</h3>
-            <span className="text-xs text-muted-foreground">{todayRecs.length} gravações</span>
+      {/* ── ROW: Today's Recordings + Performance ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div className="lg:col-span-2 glass-card p-3 sm:p-5">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="flex items-center gap-2">
+              <motion.div animate={{ rotate: [0, 360] }} transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}>
+                <Video size={16} className="text-primary" />
+              </motion.div>
+              <h3 className="font-display font-semibold text-sm">Gravações de Hoje</h3>
+            </div>
+            <Badge variant="outline" className="text-[10px]">{todayRecs.length} gravações</Badge>
           </div>
 
           {todayRecs.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground text-sm">Nenhuma gravação hoje</div>
+            <div className="py-8 text-center text-muted-foreground text-sm flex flex-col items-center gap-2">
+              <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 3, repeat: Infinity }}>
+                <Rocket size={32} className="text-muted-foreground/30 -rotate-45" />
+              </motion.div>
+              <p>Nenhuma gravação hoje</p>
+            </div>
           ) : (
             <div className="space-y-2">
               {todayRecs.map((rec, i) => {
@@ -690,69 +700,105 @@ export default function VideomakerDashboard() {
                 const isDone = rec.status === 'concluida';
 
                 return (
-                  <motion.div key={rec.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
-                    className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
+                  <motion.div key={rec.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
+                    className={`rounded-xl border-2 transition-all ${
                       isActive ? 'border-primary bg-primary/5 ring-1 ring-primary/30' :
                       waitingRecordingId === rec.id ? 'border-warning bg-warning/5 ring-1 ring-warning/30' :
                       isDone ? 'border-success/30 bg-success/5' : 'border-border bg-secondary/50'
                     }`}>
-                    <div className="w-1.5 h-12 rounded-full shrink-0" style={{ backgroundColor: `hsl(${color})` }} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm truncate">{getClientName(rec.clientId)}</span>
-                        <Badge variant="outline" className="text-[10px]">{typeLabels[rec.type]}</Badge>
-                        {isActive && (
-                          <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px] animate-pulse">
-                            ● Em andamento
-                          </Badge>
-                        )}
-                        {waitingRecordingId === rec.id && (
-                          <motion.div animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
-                            <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-                              <Hourglass size={10} className="mr-0.5 animate-spin" style={{ animationDuration: '3s' }} />
-                              Aguardando · {formatWaitTime(waitingElapsed)}
+                    {/* Main row */}
+                    <div className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3">
+                      <div className="w-1.5 h-10 sm:h-12 rounded-full shrink-0" style={{ backgroundColor: `hsl(${color})` }} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium text-sm truncate max-w-[140px] sm:max-w-none">{getClientName(rec.clientId)}</span>
+                          <Badge variant="outline" className="text-[9px] sm:text-[10px]">{typeLabels[rec.type]}</Badge>
+                          {isActive && (
+                            <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                              <Badge className="bg-primary/20 text-primary border-primary/30 text-[9px] sm:text-[10px]">
+                                <Rocket size={9} className="-rotate-45 mr-0.5" /> Ao vivo
+                              </Badge>
+                            </motion.div>
+                          )}
+                          {waitingRecordingId === rec.id && (
+                            <motion.div animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                              <Badge className="bg-warning/20 text-warning border-warning/30 text-[9px] sm:text-[10px]">
+                                <Hourglass size={9} className="mr-0.5 animate-spin" style={{ animationDuration: '3s' }} />
+                                {formatWaitTime(waitingElapsed)}
+                              </Badge>
+                            </motion.div>
+                          )}
+                          {isDone && (
+                            <Badge className="bg-success/20 text-success border-success/30 text-[9px] sm:text-[10px]">
+                              <Check size={9} className="mr-0.5" /> Concluída
                             </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          <Clock size={10} className="inline mr-1" />{rec.startTime}
+                        </p>
+                      </div>
+                      {/* Desktop buttons */}
+                      <div className="hidden sm:flex gap-1.5 shrink-0">
+                        {rec.status === 'agendada' && !isActive && waitingRecordingId !== rec.id && !waitingRecordingId && (
+                          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                            <Button size="sm" variant="outline" onClick={() => handleStartWaiting(rec)}
+                              className="gap-1 border-warning/50 text-warning hover:bg-warning/10 hover:text-warning">
+                              <Hourglass size={14} /> Aguardar
+                            </Button>
                           </motion.div>
                         )}
-                        {isDone && (
-                          <Badge className="bg-success/20 text-success border-success/30 text-[10px]">
-                            <Check size={10} className="mr-0.5" /> Concluída
-                          </Badge>
+                        {waitingRecordingId === rec.id && (
+                          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                            <Button size="sm" variant="outline" onClick={async () => { await handleStopWaiting(); }}
+                              className="gap-1 border-destructive/50 text-destructive hover:bg-destructive/10">
+                              <Square size={14} /> Parar
+                            </Button>
+                          </motion.div>
+                        )}
+                        {rec.status === 'agendada' && !isActive && (
+                          <Button size="sm" onClick={async () => { if (waitingRecordingId === rec.id) await handleStopWaiting(); handleStartRecording(rec); }} className="gap-1">
+                            <Play size={14} /> Iniciar
+                          </Button>
+                        )}
+                        {isActive && (
+                          <>
+                            <Button size="sm" variant="outline" onClick={() => openScripts(rec.clientId)} className="gap-1">
+                              <FileText size={14} /> Roteiros
+                            </Button>
+                            <Button size="sm" onClick={() => handleFinishRecording(rec)} className="gap-1 bg-success hover:bg-success/90 text-success-foreground">
+                              <Square size={14} /> Finalizar
+                            </Button>
+                          </>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        <Clock size={10} className="inline mr-1" />{rec.startTime}
-                      </p>
                     </div>
-                    <div className="flex gap-1.5 shrink-0">
+                    {/* Mobile action buttons - full width row */}
+                    <div className="flex sm:hidden gap-1.5 px-2.5 pb-2.5 pt-0">
                       {rec.status === 'agendada' && !isActive && waitingRecordingId !== rec.id && !waitingRecordingId && (
-                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                          <Button size="sm" variant="outline" onClick={() => handleStartWaiting(rec)}
-                            className="gap-1 border-warning/50 text-warning hover:bg-warning/10 hover:text-warning">
-                            <Hourglass size={14} /> Aguardar
-                          </Button>
-                        </motion.div>
+                        <Button size="sm" variant="outline" onClick={() => handleStartWaiting(rec)}
+                          className="flex-1 gap-1 text-xs border-warning/50 text-warning hover:bg-warning/10 h-8">
+                          <Hourglass size={12} /> Aguardar
+                        </Button>
                       )}
                       {waitingRecordingId === rec.id && (
-                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                          <Button size="sm" variant="outline" onClick={async () => { await handleStopWaiting(); }}
-                            className="gap-1 border-destructive/50 text-destructive hover:bg-destructive/10">
-                            <Square size={14} /> Parar Espera
-                          </Button>
-                        </motion.div>
+                        <Button size="sm" variant="outline" onClick={async () => { await handleStopWaiting(); }}
+                          className="flex-1 gap-1 text-xs border-destructive/50 text-destructive h-8">
+                          <Square size={12} /> Parar
+                        </Button>
                       )}
                       {rec.status === 'agendada' && !isActive && (
-                        <Button size="sm" onClick={async () => { if (waitingRecordingId === rec.id) await handleStopWaiting(); handleStartRecording(rec); }} className="gap-1">
-                          <Play size={14} /> Iniciar
+                        <Button size="sm" onClick={async () => { if (waitingRecordingId === rec.id) await handleStopWaiting(); handleStartRecording(rec); }} className="flex-1 gap-1 text-xs h-8">
+                          <Rocket size={12} className="-rotate-45" /> Iniciar
                         </Button>
                       )}
                       {isActive && (
                         <>
-                          <Button size="sm" variant="outline" onClick={() => openScripts(rec.clientId)} className="gap-1">
-                            <FileText size={14} /> Roteiros
+                          <Button size="sm" variant="outline" onClick={() => openScripts(rec.clientId)} className="flex-1 gap-1 text-xs h-8">
+                            <FileText size={12} /> Roteiros
                           </Button>
-                          <Button size="sm" onClick={() => handleFinishRecording(rec)} className="gap-1 bg-success hover:bg-success/90 text-success-foreground">
-                            <Square size={14} /> Finalizar
+                          <Button size="sm" onClick={() => handleFinishRecording(rec)} className="flex-1 gap-1 text-xs bg-success hover:bg-success/90 text-success-foreground h-8">
+                            <Square size={12} /> Finalizar
                           </Button>
                         </>
                       )}
@@ -765,9 +811,14 @@ export default function VideomakerDashboard() {
         </div>
 
         {/* Performance card */}
-        <div className="glass-card p-5">
-          <h3 className="font-display font-semibold text-sm mb-4">Meu Desempenho</h3>
-          <div className="space-y-4">
+        <div className="glass-card p-3 sm:p-5">
+          <div className="flex items-center gap-2 mb-3 sm:mb-4">
+            <motion.div animate={{ scale: [1, 1.15, 1] }} transition={{ duration: 2, repeat: Infinity }}>
+              <Rocket size={16} className="text-primary -rotate-45" />
+            </motion.div>
+            <h3 className="font-display font-semibold text-sm">Meu Desempenho</h3>
+          </div>
+          <div className="space-y-3 sm:space-y-4">
             <div>
               <div className="flex justify-between text-xs mb-1">
                 <span className="text-muted-foreground">Semana</span>
@@ -775,21 +826,21 @@ export default function VideomakerDashboard() {
               </div>
               <Progress value={stats.weekTotal > 0 ? (stats.weekDone / stats.weekTotal) * 100 : 0} className="h-2" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg bg-secondary/50 p-3 text-center">
-                <p className="text-lg font-display font-bold">{stats.uniqueClients}</p>
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+              <div className="rounded-lg bg-secondary/50 p-2.5 sm:p-3 text-center">
+                <p className="text-base sm:text-lg font-display font-bold">{stats.uniqueClients}</p>
                 <p className="text-[10px] text-muted-foreground">Clientes atendidos</p>
               </div>
-              <div className="rounded-lg bg-secondary/50 p-3 text-center">
-                <p className="text-lg font-display font-bold">{stats.monthRecordings}</p>
+              <div className="rounded-lg bg-secondary/50 p-2.5 sm:p-3 text-center">
+                <p className="text-base sm:text-lg font-display font-bold">{stats.monthRecordings}</p>
                 <p className="text-[10px] text-muted-foreground">Gravações (mês)</p>
               </div>
-              <div className="rounded-lg bg-secondary/50 p-3 text-center">
-                <p className="text-lg font-display font-bold">{stats.reelsProduced}</p>
+              <div className="rounded-lg bg-secondary/50 p-2.5 sm:p-3 text-center">
+                <p className="text-base sm:text-lg font-display font-bold">{stats.reelsProduced}</p>
                 <p className="text-[10px] text-muted-foreground">Reels produzidos</p>
               </div>
-              <div className="rounded-lg bg-secondary/50 p-3 text-center">
-                <p className="text-lg font-display font-bold">{stats.avgReelsPerRec}</p>
+              <div className="rounded-lg bg-secondary/50 p-2.5 sm:p-3 text-center">
+                <p className="text-base sm:text-lg font-display font-bold">{stats.avgReelsPerRec}</p>
                 <p className="text-[10px] text-muted-foreground">Média reels/grav.</p>
               </div>
             </div>

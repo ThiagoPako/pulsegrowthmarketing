@@ -74,11 +74,14 @@ function getTypeConfig(type: string) {
   return CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];
 }
 
-function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink, draggedId, onDragStart }: {
+function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink, onClaimTask, draggedId, onDragStart, currentUserId, users }: {
   task: EditorTask; clients: any[]; onOpenScript: (id: string) => void;
   onSendToReview: (task: EditorTask) => void;
   onAddVideoLink: (task: EditorTask) => void;
+  onClaimTask: (task: EditorTask) => void;
   draggedId: string | null; onDragStart: (e: React.DragEvent, task: EditorTask) => void;
+  currentUserId: string | undefined;
+  users: any[];
 }) {
   const client = clients.find(c => c.id === task.client_id);
   const typeConfig = getTypeConfig(task.content_type);

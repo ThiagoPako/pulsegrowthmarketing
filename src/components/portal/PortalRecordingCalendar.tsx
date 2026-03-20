@@ -374,10 +374,10 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
             </motion.div>
             <div>
               <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-                Agenda de Gravações
+                Meu Calendário
                 <motion.span animate={{ y: [0, -4, 0], rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2.5 }}>🚀</motion.span>
               </h2>
-              <p className="text-sm text-white/40">Confirme, cancele ou solicite gravações especiais</p>
+              <p className="text-sm text-white/40">Gravações, edições, postagens e mais — tudo em um só lugar</p>
             </div>
           </div>
           <motion.button

@@ -443,7 +443,12 @@ export default function EditorKanban() {
     const updatePayload: any = {
       edited_video_link: videoLinkValue.trim(),
       updated_at: new Date().toISOString(),
-    } as any).eq('id', videoLinkTask.id);
+    };
+    // Auto-assign to current editor if not yet assigned
+    if (!videoLinkTask.assigned_to && user) {
+      updatePayload.assigned_to = user.id;
+    }
+    const { error } = await supabase.from('content_tasks').update(updatePayload).eq('id', videoLinkTask.id);
     if (error) { toast.error('Erro ao salvar link'); return; }
 
     toast.success('Link do vídeo salvo!');

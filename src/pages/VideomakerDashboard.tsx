@@ -105,6 +105,7 @@ export default function VideomakerDashboard() {
     toast.success('Espera registrada');
   };
 
+  const handleStartRecording = (rec: Recording) => {
     setScriptsClientId(rec.clientId);
     setScriptsRecordingId(rec.id);
     // Auto-select all urgent scripts (mandatory)

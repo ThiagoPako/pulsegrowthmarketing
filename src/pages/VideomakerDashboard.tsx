@@ -640,7 +640,7 @@ export default function VideomakerDashboard() {
                   )}
                   {dayRecs.map(rec => {
                     const color = getClientColor(rec.clientId);
-                    const isActive = myActiveRec?.recordingId === rec.id;
+                    const isActive = activeRecordingId === rec.id;
                     const isDone = rec.status === 'concluida';
                     return (
                       <div key={rec.id}

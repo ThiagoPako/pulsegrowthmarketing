@@ -114,11 +114,20 @@ export default function EditorDashboard() {
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
 
-  const pendingTasks = tasks.filter(t => t.kanban_column === 'edicao');
-  const inEditTasks = tasks.filter(t => t.kanban_column === 'edicao' && t.editing_started_at);
-  const inReviewTasks = tasks.filter(t => t.kanban_column === 'revisao');
-  const adjustmentTasks = tasks.filter(t => t.kanban_column === 'alteracao');
-  const completedTasks = tasks.filter(t => t.kanban_column === 'envio');
+  // Filter tasks by editor assignment
+  const visibleTasks = useMemo(() => {
+    if (!isEditorRole || !user) return tasks;
+    return tasks.filter(t => {
+      if (t.kanban_column === 'edicao') return !t.assigned_to || t.assigned_to === user.id;
+      return !t.assigned_to || t.assigned_to === user.id;
+    });
+  }, [tasks, isEditorRole, user]);
+
+  const pendingTasks = visibleTasks.filter(t => t.kanban_column === 'edicao');
+  const inEditTasks = visibleTasks.filter(t => t.kanban_column === 'edicao' && t.editing_started_at);
+  const inReviewTasks = visibleTasks.filter(t => t.kanban_column === 'revisao');
+  const adjustmentTasks = visibleTasks.filter(t => t.kanban_column === 'alteracao');
+  const completedTasks = visibleTasks.filter(t => t.kanban_column === 'envio');
 
   const todayCompleted = completedTasks.filter(t => isWithinInterval(parseISO(t.updated_at), { start: todayStart, end: todayEnd }));
   const weekCompleted = completedTasks.filter(t => isWithinInterval(parseISO(t.updated_at), { start: weekStart, end: weekEnd }));

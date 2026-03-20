@@ -699,6 +699,7 @@ app.post('/api/portal-recordings', async (req, res) => {
       const { rows: [settings] } = await pool.query('SELECT * FROM company_settings LIMIT 1');
       const rawDur = settings?.recording_duration || 2;
       const duration = rawDur > 10 ? rawDur : rawDur * 60;
+      console.log('[check_availability] recording_duration raw:', rawDur, '-> duration (min):', duration, 'shifts:', settings?.shift_a_start, '-', settings?.shift_a_end, '|', settings?.shift_b_start, '-', settings?.shift_b_end);
       const buffer = 30;
       const { rows: existing } = await pool.query(
         `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,

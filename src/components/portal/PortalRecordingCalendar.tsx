@@ -513,7 +513,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8 pb-20">
+    <div className="max-w-[1400px] mx-auto px-2 sm:px-8 py-4 sm:py-8 pb-20">
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
         <div className="flex items-center justify-between">

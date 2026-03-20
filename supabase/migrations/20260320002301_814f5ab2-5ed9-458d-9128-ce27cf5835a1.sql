@@ -1,0 +1,2 @@
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS full_shift_recording boolean NOT NULL DEFAULT false;
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS preferred_shift text NOT NULL DEFAULT 'manha';

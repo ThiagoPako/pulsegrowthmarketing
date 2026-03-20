@@ -65,6 +65,7 @@ export default function Schedule() {
 
   const [monthOffset, setMonthOffset] = useState(0);
   const [newOpen, setNewOpen] = useState(false);
+  const [newStep, setNewStep] = useState(0); // 0=client, 1=videomaker, 2=calendar+time
   const [editOpen, setEditOpen] = useState(false);
   const [editingRec, setEditingRec] = useState<Recording | null>(null);
   const [scriptsOpen, setScriptsOpen] = useState(false);

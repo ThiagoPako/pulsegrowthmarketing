@@ -52,6 +52,10 @@ export default function VideomakerDashboard() {
   const [alteredScripts, setAlteredScripts] = useState<Set<string>>(new Set());
   const [verbalScripts, setVerbalScripts] = useState<Set<string>>(new Set());
   const [alterationNotes, setAlterationNotes] = useState<Record<string, string>>({});
+  
+  // Celebration state
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationScore, setCelebrationScore] = useState(0);
 
   // ── Waiting for client state ──
   const [waitingRecordingId, setWaitingRecordingId] = useState<string | null>(null);

@@ -392,26 +392,26 @@ export default function Reports() {
     }
 
     // ── Resumo de Captação ──
-    y = drawSectionTitle('Resumo de Captação (Gravações)', y); y += 8;
+    y = drawSectionTitle('Resumo de Captacao (Gravacoes)', y); y += 8;
     y = drawKpiGrid([
-      { label: 'Gravações Realizadas', value: String(stats.realizadas) },
+      { label: 'Gravacoes Realizadas', value: String(stats.realizadas) },
       { label: 'Cancelamentos', value: String(stats.canceladas) },
       { label: 'Encaixes', value: String(stats.encaixes) },
       { label: 'Horas Dedicadas', value: `${stats.totalHours}h` },
-      { label: 'Média Conteúdo/Gravação', value: stats.avgPerSession },
+      { label: 'Media Conteudo/Gravacao', value: stats.avgPerSession },
       { label: 'Taxa Cancelamento', value: `${stats.cancelRate}%` },
     ], y);
     drawLine(y); y += 8;
 
-    // ── Produção de Conteúdo (gravado) ──
+    // ── Producao de Conteudo (gravado) ──
     checkPageBreak(50);
-    y = drawSectionTitle('Produção de Conteúdo (Gravados)', y); y += 8;
+    y = drawSectionTitle('Producao de Conteudo (Gravados)', y); y += 8;
     y = drawKpiGrid([
       { label: 'Reels Gravados', value: String(stats.totalReels) },
       { label: 'Criativos Gravados', value: String(stats.totalCreatives) },
       { label: 'Stories Gravados', value: String(stats.totalStories) },
       { label: 'Artes Produzidas', value: String(stats.totalArts) },
-      { label: 'Conteúdos Extras', value: String(stats.totalExtras) },
+      { label: 'Conteudos Extras', value: String(stats.totalExtras) },
       { label: 'Total Produzido', value: String(stats.totalContent) },
     ], y);
     drawLine(y); y += 8;

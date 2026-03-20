@@ -258,6 +258,7 @@ export default function Scripts() {
       caption: captionToSave,
       endoClientId: form.endoClientId || undefined,
       scheduledDate: form.scheduledDate || undefined,
+      directToEditing: form.directToEditing,
     };
     if (editing) {
       updateScript({ ...editing, ...scriptData, updatedAt: now });

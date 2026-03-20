@@ -522,6 +522,25 @@ export default function VideomakerDashboard() {
         <p className="text-muted-foreground text-sm">{format(today, "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
       </div>
 
+      {/* ── Live Recording Card ── */}
+      {activeRecordingId && (() => {
+        const activeRec = recordings.find(r => r.id === activeRecordingId);
+        const activeRecMeta = activeRecordings.find(a => a.recordingId === activeRecordingId);
+        if (!activeRec) return null;
+        const planned = plannedScripts[activeRecordingId] || activeRecMeta?.plannedScriptIds || [];
+        return (
+          <LiveRecordingCard
+            clientName={getClientName(activeRec.clientId)}
+            clientColor={getClientColor(activeRec.clientId)}
+            startedAt={activeRecMeta?.startedAt || new Date().toISOString()}
+            recordingDurationHours={settings.recordingDuration}
+            scriptsCount={planned.length}
+            onFinish={() => handleFinishRecording(activeRec)}
+            onViewScripts={() => openScripts(activeRec.clientId)}
+          />
+        );
+      })()}
+
       {/* ── Quick Stats ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[

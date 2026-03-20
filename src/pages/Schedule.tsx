@@ -1053,7 +1053,7 @@ export default function Schedule() {
                 {/* Selected client + videomaker summary */}
                 <div className="flex items-center gap-3 p-2.5 rounded-lg bg-accent/50 border">
                   <div className="flex items-center gap-2 flex-1">
-                    {(() => { const c = clients.find(c => c.id === form.clientId); return c ? <><ClientLogo client={c} size="xs" /><span className="text-xs font-medium">{c.companyName}</span></> : null; })()}
+                    {(() => { const c = clients.find(c => c.id === form.clientId); return c ? <><ClientLogo client={c} size="sm" /><span className="text-xs font-medium">{c.companyName}</span></> : null; })()}
                   </div>
                   <div className="h-4 w-px bg-border" />
                   <div className="flex items-center gap-2 flex-1">

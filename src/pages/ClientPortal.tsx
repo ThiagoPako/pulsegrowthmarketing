@@ -684,7 +684,7 @@ export default function ClientPortal() {
             )}
 
             {/* ── CONTENT ROWS ── */}
-            <div className="max-w-[1400px] mx-auto px-4 sm:px-8 pb-20 space-y-10 mt-4">
+            <div className="max-w-[1400px] mx-auto px-3 sm:px-8 pb-20 space-y-6 sm:space-y-10 mt-2 sm:mt-4">
               {seasonContents.length === 0 && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-24">
                   <Film size={48} className="mx-auto mb-4 text-white/15" />

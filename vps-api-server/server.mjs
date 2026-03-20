@@ -665,55 +665,74 @@ app.post('/api/client-portal-auth', async (req, res) => {
   }
 });
 
-// ─── 6. Portal Recordings ───────────────────────────────────
+// ─── 6. Portal Recordings (uses local PostgreSQL) ───────────
 app.post('/api/portal-recordings', async (req, res) => {
   try {
-    const admin = getAdminClient();
     const { action, client_id, recording_id, new_date, new_time } = req.body;
     if (!client_id) return res.status(400).json({ error: 'client_id required' });
 
     if (action === 'list') {
-      const { data: recordings } = await admin.from('recordings').select('id, client_id, videomaker_id, date, start_time, status, type, confirmation_status').eq('client_id', client_id).neq('status', 'cancelada').order('date', { ascending: true });
-      const vmIds = [...new Set((recordings || []).map(r => r.videomaker_id))];
-      let vmNames = {};
-      if (vmIds.length > 0) { const { data: profiles } = await admin.from('profiles').select('id, name, avatar_url').in('id', vmIds); if (profiles) profiles.forEach(p => { vmNames[p.id] = p.name; }); }
-      return res.json({ recordings: (recordings || []).map(r => ({ ...r, videomaker_name: vmNames[r.videomaker_id] || 'Videomaker' })) });
+      const { rows: recordings } = await pool.query(
+        `SELECT r.id, r.client_id, r.videomaker_id, r.date::text, r.start_time, r.status, r.type, r.confirmation_status,
+                p.name as videomaker_name
+         FROM recordings r
+         LEFT JOIN profiles p ON p.id = r.videomaker_id
+         WHERE r.client_id = $1 AND r.status != 'cancelada'
+         ORDER BY r.date ASC, r.start_time ASC`,
+        [client_id]
+      );
+      return res.json({ recordings: recordings.map(r => ({ ...r, videomaker_name: r.videomaker_name || 'Videomaker' })) });
     }
 
     if (action === 'check_availability') {
       if (!new_date) return res.status(400).json({ error: 'new_date required' });
-      const { data: clientData } = await admin.from('clients').select('videomaker_id').eq('id', client_id).single();
+      const { rows: [clientData] } = await pool.query('SELECT videomaker_id FROM clients WHERE id = $1', [client_id]);
       if (!clientData?.videomaker_id) return res.status(400).json({ error: 'Nenhum videomaker atribuído' });
-      const { data: settings } = await admin.from('company_settings').select('*').limit(1).single();
+      const { rows: [settings] } = await pool.query('SELECT * FROM company_settings LIMIT 1');
       const duration = (settings?.recording_duration || 2) * 60;
       const buffer = 30;
-      const { data: existing } = await admin.from('recordings').select('start_time, date').eq('videomaker_id', clientData.videomaker_id).eq('date', new_date).neq('status', 'cancelada');
-      const occupied = (existing || []).map(r => { const [h, m] = r.start_time.split(':').map(Number); const start = h * 60 + m; return { start, end: start + duration + buffer }; });
+      const { rows: existing } = await pool.query(
+        `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,
+        [clientData.videomaker_id, new_date]
+      );
+      const occupied = existing.map(r => { const [h, m] = r.start_time.split(':').map(Number); const start = h * 60 + m; return { start, end: start + duration + buffer }; });
       const slots = [];
       const generateSlots = (startStr, endStr) => { const [sh, sm] = startStr.split(':').map(Number); const [eh, em] = endStr.split(':').map(Number); let cursor = sh * 60 + sm; const endMin = eh * 60 + em; while (cursor + duration <= endMin) { const conflict = occupied.some(o => cursor < o.end && cursor + duration + buffer > o.start); if (!conflict) slots.push(`${String(Math.floor(cursor / 60)).padStart(2, '0')}:${String(cursor % 60).padStart(2, '0')}`); cursor += 30; } };
       generateSlots(settings?.shift_a_start || '08:30', settings?.shift_a_end || '12:00');
       generateSlots(settings?.shift_b_start || '14:30', settings?.shift_b_end || '18:00');
-      const { data: vmProfile } = await admin.from('profiles').select('name').eq('id', clientData.videomaker_id).single();
+      const { rows: [vmProfile] } = await pool.query('SELECT name FROM profiles WHERE id = $1', [clientData.videomaker_id]);
       return res.json({ available_slots: slots, videomaker_name: vmProfile?.name || 'Videomaker', videomaker_id: clientData.videomaker_id, date: new_date });
     }
 
     if (action === 'reschedule') {
       if (!recording_id || !new_date || !new_time) return res.status(400).json({ error: 'recording_id, new_date, new_time required' });
-      const { data: rec } = await admin.from('recordings').select('id, client_id, videomaker_id, date, start_time').eq('id', recording_id).eq('client_id', client_id).single();
+      const { rows: [rec] } = await pool.query('SELECT id, client_id, videomaker_id, date::text, start_time FROM recordings WHERE id = $1 AND client_id = $2', [recording_id, client_id]);
       if (!rec) return res.status(404).json({ error: 'Gravação não encontrada' });
-      const { data: settings } = await admin.from('company_settings').select('recording_duration').limit(1).single();
+      const { rows: [settings] } = await pool.query('SELECT recording_duration FROM company_settings LIMIT 1');
       const duration = (settings?.recording_duration || 2) * 60;
       const buffer = 30;
-      const { data: conflicts } = await admin.from('recordings').select('id, start_time').eq('videomaker_id', rec.videomaker_id).eq('date', new_date).neq('status', 'cancelada').neq('id', recording_id);
+      const { rows: conflicts } = await pool.query(
+        `SELECT id, start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada' AND id != $3`,
+        [rec.videomaker_id, new_date, recording_id]
+      );
       const [nh, nm] = new_time.split(':').map(Number);
       const newStart = nh * 60 + nm;
       const newEnd = newStart + duration + buffer;
-      const hasConflict = (conflicts || []).some(c => { const [ch, cm] = c.start_time.split(':').map(Number); const cStart = ch * 60 + cm; return newStart < cStart + duration + buffer && newEnd > cStart; });
+      const hasConflict = conflicts.some(c => { const [ch, cm] = c.start_time.split(':').map(Number); const cStart = ch * 60 + cm; return newStart < cStart + duration + buffer && newEnd > cStart; });
       if (hasConflict) return res.status(409).json({ error: 'Horário não está mais disponível' });
-      await admin.from('recordings').update({ date: new_date, start_time: new_time, confirmation_status: 'pendente' }).eq('id', recording_id);
-      const { data: clientInfo } = await admin.from('clients').select('company_name').eq('id', client_id).single();
-      await admin.rpc('notify_role', { _role: 'admin', _title: 'Reagendamento pelo cliente', _message: `${clientInfo?.company_name} reagendou gravação de ${rec.date} ${rec.start_time} para ${new_date} ${new_time}`, _type: 'warning', _link: '/agenda' });
-      await admin.rpc('notify_role', { _role: 'social_media', _title: 'Reagendamento pelo cliente', _message: `${clientInfo?.company_name} reagendou gravação de ${rec.date} ${rec.start_time} para ${new_date} ${new_time}`, _type: 'warning', _link: '/agenda' });
+      await pool.query(`UPDATE recordings SET date = $1, start_time = $2, confirmation_status = 'pendente' WHERE id = $3`, [new_date, new_time, recording_id]);
+      const { rows: [clientInfo] } = await pool.query('SELECT company_name FROM clients WHERE id = $1', [client_id]);
+      const notifMsg = `${clientInfo?.company_name || 'Cliente'} reagendou gravação de ${rec.date} ${rec.start_time} para ${new_date} ${new_time}`;
+      // Notify admins and social_media via local notifications table
+      const { rows: notifUsers } = await pool.query(
+        `SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`
+      );
+      for (const u of notifUsers) {
+        await pool.query(
+          `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
+          [u.user_id, 'Reagendamento pelo cliente', notifMsg, 'warning', '/agenda']
+        );
+      }
       return res.json({ success: true });
     }
 

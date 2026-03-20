@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/vpsDb';
 import { useAuth } from '@/hooks/useAuth';
-import { Bell } from 'lucide-react';
+import { Bell, Eye, Pencil, CheckCircle2, Film, FileText, BellRing, CheckCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Notification {
   id: string;
@@ -23,6 +24,15 @@ interface Notification {
   read: boolean;
   created_at: string;
 }
+
+const TYPE_CONFIG: Record<string, { icon: typeof Bell; color: string; bg: string }> = {
+  review: { icon: Eye, color: 'text-info', bg: 'bg-info/10' },
+  alteration: { icon: Pencil, color: 'text-warning', bg: 'bg-warning/10' },
+  approval: { icon: CheckCircle2, color: 'text-success', bg: 'bg-success/10' },
+  video_ready: { icon: Film, color: 'text-primary', bg: 'bg-primary/10' },
+  script_low: { icon: FileText, color: 'text-destructive', bg: 'bg-destructive/10' },
+  default: { icon: BellRing, color: 'text-muted-foreground', bg: 'bg-muted' },
+};
 
 export default function NotificationBell() {
   const { user } = useAuth();
@@ -43,7 +53,6 @@ export default function NotificationBell() {
 
   useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
 
-  // Realtime
   useEffect(() => {
     if (!user?.id) return;
     const channel = supabase
@@ -78,70 +87,93 @@ export default function NotificationBell() {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'review': return '👁';
-      case 'alteration': return '✏️';
-      case 'approval': return '✅';
-      case 'video_ready': return '🎬';
-      case 'script_low': return '📝';
-      default: return '🔔';
-    }
-  };
+  const getTypeConfig = (type: string) => TYPE_CONFIG[type] || TYPE_CONFIG.default;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button className="relative w-9 h-9 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary transition-colors">
+        <button className="relative w-9 h-9 rounded-xl flex items-center justify-center text-muted-foreground hover:bg-secondary hover:text-foreground transition-all duration-200">
           <Bell size={18} />
           {unreadCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1 animate-pulse">
+            <motion.span
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-primary text-primary-foreground text-[10px] font-bold px-1"
+            >
               {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
+            </motion.span>
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="end">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <h3 className="text-sm font-semibold text-foreground">Notificações</h3>
+      <PopoverContent className="w-[340px] sm:w-[380px] p-0 rounded-xl shadow-xl border-border/60" align="end" sideOffset={8}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/60 bg-muted/30">
+          <div className="flex items-center gap-2">
+            <Bell size={15} className="text-primary" />
+            <h3 className="text-sm font-semibold text-foreground">Notificações</h3>
+            {unreadCount > 0 && (
+              <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-bold">
+                {unreadCount}
+              </Badge>
+            )}
+          </div>
           {unreadCount > 0 && (
-            <Button variant="ghost" size="sm" className="text-xs h-7" onClick={markAllRead}>
-              Marcar todas como lidas
+            <Button variant="ghost" size="sm" className="text-[11px] h-7 gap-1 text-primary hover:text-primary" onClick={markAllRead}>
+              <CheckCheck size={13} />
+              Ler todas
             </Button>
           )}
         </div>
-        <ScrollArea className="max-h-[400px]">
+
+        <ScrollArea className="max-h-[420px]">
           {notifications.length === 0 ? (
-            <div className="py-12 text-center text-sm text-muted-foreground">
-              Nenhuma notificação
+            <div className="py-14 text-center flex flex-col items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                <Bell size={20} className="text-muted-foreground/50" />
+              </div>
+              <p className="text-sm text-muted-foreground">Nenhuma notificação</p>
             </div>
           ) : (
-            <div className="divide-y divide-border">
-              {notifications.map(n => (
-                <button
-                  key={n.id}
-                  onClick={() => handleClick(n)}
-                  className={`w-full text-left px-4 py-3 hover:bg-accent/50 transition-colors ${
-                    !n.read ? 'bg-primary/5' : ''
-                  }`}
-                >
-                  <div className="flex items-start gap-2.5">
-                    <span className="text-base mt-0.5">{getTypeIcon(n.type)}</span>
+            <div>
+              {notifications.map((n, i) => {
+                const config = getTypeConfig(n.type);
+                const Icon = config.icon;
+                return (
+                  <motion.button
+                    key={n.id}
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.02 }}
+                    onClick={() => handleClick(n)}
+                    className={`w-full text-left px-4 py-3 flex items-start gap-3 transition-colors duration-150 border-b border-border/30 last:border-b-0 ${
+                      !n.read
+                        ? 'bg-primary/[0.04] hover:bg-primary/[0.08]'
+                        : 'hover:bg-muted/50'
+                    }`}
+                  >
+                    {/* Icon */}
+                    <div className={`w-8 h-8 rounded-lg ${config.bg} flex items-center justify-center shrink-0 mt-0.5`}>
+                      <Icon size={15} className={config.color} />
+                    </div>
+
+                    {/* Content */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className={`text-sm truncate ${!n.read ? 'font-semibold text-foreground' : 'text-foreground/80'}`}>
+                      <div className="flex items-center gap-1.5">
+                        <p className={`text-[13px] leading-tight truncate ${!n.read ? 'font-semibold text-foreground' : 'text-foreground/80'}`}>
                           {n.title}
                         </p>
-                        {!n.read && <span className="w-2 h-2 rounded-full bg-primary shrink-0" />}
+                        {!n.read && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                        )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
-                      <p className="text-[10px] text-muted-foreground/70 mt-1">
+                      <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">{n.message}</p>
+                      <p className="text-[10px] text-muted-foreground/60 mt-1 font-medium">
                         {formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: ptBR })}
                       </p>
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </motion.button>
+                );
+              })}
             </div>
           )}
         </ScrollArea>

@@ -142,7 +142,7 @@ function EventIndicator({ event, small = false }: { event: DayEvent; small?: boo
       case 'bounce': return { animate: { y: [0, -2, 0] }, transition: { repeat: Infinity, duration: 1.5 } };
       case 'glow': return { animate: { opacity: [0.6, 1, 0.6] }, transition: { repeat: Infinity, duration: 2.5 } };
       case 'shake': return { animate: { x: [-1, 1, -1, 0] }, transition: { repeat: Infinity, duration: 1.8 } };
-      case 'spin': return { animate: { rotate: [0, 360] }, transition: { repeat: Infinity, duration: 3, ease: 'linear' } };
+      case 'spin': return { animate: { rotate: [0, 360] }, transition: { repeat: Infinity, duration: 3, ease: 'linear' as const } };
       case 'wave': return { animate: { y: [0, -1, 0, 1, 0] }, transition: { repeat: Infinity, duration: 2 } };
       default: return {};
     }

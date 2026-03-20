@@ -3,11 +3,11 @@ import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/vpsDb';
 import { DAY_LABELS } from '@/types';
 import { getSeasonalAlerts, NICHE_OPTIONS } from '@/lib/seasonalDates';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Video, Plus, XCircle, RefreshCw, TrendingUp, Calendar, Check,
   ChevronLeft, ChevronRight, Clock, Users as UsersIcon, MessageSquare, Trophy, BarChart3,
-  Clapperboard, Film, Megaphone, AlertTriangle
+  Clapperboard, Film, Megaphone, AlertTriangle, Rocket
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, addDays, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -20,6 +20,7 @@ import ClientLogo from '@/components/ClientLogo';
 import { getMessageStats } from '@/services/whatsappService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
 import { Badge } from '@/components/ui/badge';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface LiveEditorTask {
   id: string;
@@ -34,9 +35,21 @@ interface LiveEditorTask {
 const SCORE_WEIGHTS = { reel: 10, criativo: 5, story: 3, arte: 2, extra: 8 };
 const BAR_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
 
+/* Floating rocket mascot */
+const FloatingRocket = ({ className = '', size = 20 }: { className?: string; size?: number }) => (
+  <motion.div
+    className={className}
+    animate={{ y: [0, -6, 0], rotate: [0, 5, -5, 0] }}
+    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+  >
+    <Rocket size={size} className="text-primary" />
+  </motion.div>
+);
+
 export default function Dashboard() {
   const { currentUser, recordings, clients, users, tasks, cancelRecording, updateRecording, getSuggestionsForCancellation, activeRecordings, settings } = useApp();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const today = format(new Date(), 'yyyy-MM-dd');
   const normalizeDateKey = (value: string) => value?.slice(0, 10) || '';
   const [weekOffset, setWeekOffset] = useState(0);
@@ -45,13 +58,13 @@ export default function Dashboard() {
   const [liveEditorTasks, setLiveEditorTasks] = useState<LiveEditorTask[]>([]);
   const [endoMetrics, setEndoMetrics] = useState({ totalClients: 0, revenue: 0, costs: 0, profit: 0, margin: 0, topClients: [] as { name: string; profit: number }[] });
   const [contractAlerts, setContractAlerts] = useState<{ clientName: string; daysLeft: number; endDate: string }[]>([]);
+  const [expandedWeekDay, setExpandedWeekDay] = useState<string | null>(null);
 
   useEffect(() => { getMessageStats().then(setWaStats); }, []);
   useEffect(() => {
     supabase.from('delivery_records').select('*').then(({ data }) => { if (data) setDeliveryRecords(data); });
   }, []);
 
-  // Fetch contract expiration alerts (60 and 30 days)
   useEffect(() => {
     const fetchContractAlerts = async () => {
       const { data } = await supabase.from('clients').select('company_name, contract_start_date, contract_duration_months').not('contract_start_date', 'is', null);
@@ -74,7 +87,6 @@ export default function Dashboard() {
     fetchContractAlerts();
   }, []);
 
-  // Fetch editor tasks in active editing
   useEffect(() => {
     const fetchLiveTasks = async () => {
       const { data } = await supabase
@@ -85,7 +97,6 @@ export default function Dashboard() {
       if (data) setLiveEditorTasks(data);
     };
     fetchLiveTasks();
-
     const channel = supabase
       .channel('live-editor-tasks')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'content_tasks' }, () => fetchLiveTasks())
@@ -93,7 +104,6 @@ export default function Dashboard() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // Fetch endomarketing metrics
   useEffect(() => {
     const fetchEndo = async () => {
       const { data: contracts } = await (supabase as any)
@@ -120,14 +130,12 @@ export default function Dashboard() {
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const currentWeekStr = format(weekStart, 'yyyy-MM-dd');
 
-  // ── Stats ──
   const stats = useMemo(() => {
     const todayRecs = recordings.filter(r => normalizeDateKey(r.date) === today);
     const monthStart = startOfMonth(new Date());
     const monthEnd = endOfMonth(new Date());
     const weekRecs = recordings.filter(r => { const d = parseISO(r.date); return isWithinInterval(d, { start: weekStart, end: weekEnd }); });
     const monthRecs = recordings.filter(r => { const d = parseISO(r.date); return isWithinInterval(d, { start: monthStart, end: monthEnd }); });
-
     return {
       todayDone: todayRecs.filter(r => r.status === 'concluida').length,
       todayExtras: todayRecs.filter(r => r.type === 'extra' && r.status !== 'cancelada').length,
@@ -141,14 +149,12 @@ export default function Dashboard() {
     };
   }, [recordings, today, weekStart, weekEnd, clients]);
 
-  // ── Today recordings ──
   const todayRecordings = useMemo(() => {
     let recs = recordings.filter(r => normalizeDateKey(r.date) === today && r.status !== 'cancelada');
     if (currentUser?.role === 'videomaker') recs = recs.filter(r => r.videomakerId === currentUser.id);
     return recs.sort((a, b) => a.startTime.localeCompare(b.startTime));
   }, [recordings, today, currentUser]);
 
-  // ── Videomaker progress ──
   const videomakers = users.filter(u => u.role === 'videomaker');
   const videomakerStats = useMemo(() => {
     return videomakers.map(vm => {
@@ -162,7 +168,6 @@ export default function Dashboard() {
     });
   }, [videomakers, recordings, weekStart, weekEnd, today]);
 
-  // ── Videomaker scoring ──
   const vmScoring = useMemo(() => {
     const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
     const monthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
@@ -180,7 +185,6 @@ export default function Dashboard() {
     }).sort((a, b) => b.score - a.score);
   }, [videomakers, deliveryRecords]);
 
-  // ── Client progress ──
   const clientProgress = useMemo(() => {
     return clients.map(client => {
       const weekTasks = tasks.filter(t => t.clientId === client.id && t.weekStart === currentWeekStr);
@@ -193,7 +197,6 @@ export default function Dashboard() {
     });
   }, [clients, tasks, recordings, currentWeekStr, weekStart, weekEnd]);
 
-  // ── Week agenda ──
   const getRecsForDay = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     return recordings.filter(r => normalizeDateKey(r.date) === dateStr && r.status !== 'cancelada').sort((a, b) => a.startTime.localeCompare(b.startTime));
@@ -210,154 +213,180 @@ export default function Dashboard() {
     concluida: <Check size={12} className="text-success" />,
   };
 
-  return (
-    <div className="space-y-5 max-w-[1400px]">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-display font-bold">
-            {currentUser?.role === 'videomaker' ? `Olá, ${currentUser.name} 👋` : 'Painel de Controle'}
-          </h1>
-          <p className="text-muted-foreground text-sm">{format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
-        </div>
-      </div>
+  const statItems = [
+    { label: 'Gravados', value: stats.todayDone, icon: Video, color: 'bg-success/15 text-success' },
+    { label: 'Agendados', value: stats.todayScheduled, icon: Clock, color: 'bg-info/15 text-info' },
+    { label: 'Extras', value: stats.todayExtras, icon: Plus, color: 'bg-warning/15 text-warning' },
+    { label: 'Cancelados', value: stats.todayCancelled, icon: XCircle, color: 'bg-destructive/15 text-destructive' },
+    { label: 'Semana', value: stats.weekDone, icon: TrendingUp, color: 'bg-primary/15 text-primary' },
+    { label: 'Clientes', value: stats.totalClients, icon: UsersIcon, color: 'bg-info/15 text-info' },
+    { label: 'WhatsApp', value: waStats.sent, icon: MessageSquare, color: 'bg-success/15 text-success' },
+  ];
 
-      {/* Birthday Widget */}
+  return (
+    <div className="space-y-4 sm:space-y-5 max-w-[1400px]">
+      {/* Header with rocket */}
+      <motion.div
+        className="flex items-center justify-between"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="flex items-center gap-2 sm:gap-3">
+          <FloatingRocket size={isMobile ? 22 : 28} />
+          <div>
+            <h1 className="text-lg sm:text-2xl font-display font-bold">
+              {currentUser?.role === 'videomaker' ? `Olá, ${currentUser.name} 👋` : 'Painel de Controle'}
+            </h1>
+            <p className="text-muted-foreground text-xs sm:text-sm">{format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
+          </div>
+        </div>
+        {/* Mini rocket exhaust on desktop */}
+        {!isMobile && (
+          <motion.div
+            animate={{ scale: [1, 1.1, 1], opacity: [0.5, 1, 0.5] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            className="text-primary/30"
+          >
+            <Rocket size={40} />
+          </motion.div>
+        )}
+      </motion.div>
+
       <BirthdayCountdown />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-        {[
-          { label: 'Gravados Hoje', value: stats.todayDone, icon: Video, color: 'bg-success/15 text-success' },
-          { label: 'Agendados Hoje', value: stats.todayScheduled, icon: Clock, color: 'bg-info/15 text-info' },
-          { label: 'Extras', value: stats.todayExtras, icon: Plus, color: 'bg-warning/15 text-warning' },
-          { label: 'Cancelados', value: stats.todayCancelled, icon: XCircle, color: 'bg-destructive/15 text-destructive' },
-          { label: 'Semana', value: stats.weekDone, icon: TrendingUp, color: 'bg-primary/15 text-primary' },
-          { label: 'Clientes', value: stats.totalClients, icon: UsersIcon, color: 'bg-info/15 text-info' },
-          { label: 'WhatsApp', value: waStats.sent, icon: MessageSquare, color: 'bg-success/15 text-success' },
-        ].map((s, i) => (
-          <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }} className="stat-card">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${s.color}`}>
-              <s.icon size={16} />
+      {/* Stats grid — 4 cols mobile, 7 cols desktop */}
+      <div className="grid grid-cols-4 sm:grid-cols-4 lg:grid-cols-7 gap-1.5 sm:gap-3">
+        {statItems.map((s, i) => (
+          <motion.div
+            key={s.label}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: i * 0.03 }}
+            whileTap={{ scale: 0.95 }}
+            className="stat-card p-2 sm:p-3"
+          >
+            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center mb-1 sm:mb-2 ${s.color}`}>
+              <s.icon size={isMobile ? 12 : 16} />
             </div>
-            <p className="text-xl font-display font-bold">{s.value}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
+            <p className="text-base sm:text-xl font-display font-bold">{s.value}</p>
+            <p className="text-[9px] sm:text-xs text-muted-foreground mt-0.5 truncate">{s.label}</p>
           </motion.div>
         ))}
       </div>
 
-      {/* ── CONTRACT EXPIRATION ALERTS ── */}
+      {/* CONTRACT EXPIRATION ALERTS */}
       {contractAlerts.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-4 border-warning/30 bg-warning/5">
-          <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle size={16} className="text-warning" />
-            <h3 className="font-display font-semibold text-sm">Contratos Próximos do Vencimento</h3>
-            <Badge variant="outline" className="text-[10px] h-5 px-1.5 border-warning/50 text-warning">{contractAlerts.length}</Badge>
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-3 sm:p-4 border-warning/30 bg-warning/5">
+          <div className="flex items-center gap-2 mb-2 sm:mb-3">
+            <AlertTriangle size={14} className="text-warning" />
+            <h3 className="font-display font-semibold text-xs sm:text-sm">Contratos Vencendo</h3>
+            <Badge variant="outline" className="text-[9px] h-4 px-1 border-warning/50 text-warning">{contractAlerts.length}</Badge>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 sm:gap-2">
             {contractAlerts.map((alert, i) => (
-              <div key={i} className={`flex items-center justify-between p-3 rounded-lg border ${alert.daysLeft <= 30 ? 'bg-destructive/10 border-destructive/30' : 'bg-warning/10 border-warning/30'}`}>
+              <motion.div key={i} whileTap={{ scale: 0.97 }} className={`flex items-center justify-between p-2 sm:p-3 rounded-lg border ${alert.daysLeft <= 30 ? 'bg-destructive/10 border-destructive/30' : 'bg-warning/10 border-warning/30'}`}>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{alert.clientName}</p>
-                  <p className="text-xs text-muted-foreground">Vence em {alert.endDate}</p>
+                  <p className="text-xs sm:text-sm font-medium truncate">{alert.clientName}</p>
+                  <p className="text-[10px] text-muted-foreground">Vence {alert.endDate}</p>
                 </div>
-                <Badge variant={alert.daysLeft <= 30 ? 'destructive' : 'outline'} className="text-xs shrink-0 ml-2">
+                <Badge variant={alert.daysLeft <= 30 ? 'destructive' : 'outline'} className="text-[10px] shrink-0 ml-1">
                   {alert.daysLeft}d
                 </Badge>
-              </div>
+              </motion.div>
             ))}
           </div>
         </motion.div>
       )}
 
-      {/* ── LIVE ACTIVITY: Videomakers Gravando + Editores Editando ── */}
+      {/* LIVE ACTIVITY */}
       {(activeRecordings.length > 0 || liveEditorTasks.length > 0) && (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-5 border-primary/20">
-          <div className="flex items-center gap-2 mb-4">
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-3 sm:p-5 border-primary/20">
+          <div className="flex items-center gap-2 mb-3 sm:mb-4">
             <span className="relative flex h-2.5 w-2.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
             </span>
-            <h3 className="font-display font-semibold text-sm">Atividade em Tempo Real</h3>
+            <h3 className="font-display font-semibold text-xs sm:text-sm">Atividade em Tempo Real</h3>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
             {/* Videomakers Recording */}
             <div>
-              <div className="flex items-center gap-1.5 mb-3">
+              <div className="flex items-center gap-1.5 mb-2 sm:mb-3">
                 <Clapperboard size={14} className="text-red-500" />
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Gravando Agora</p>
-                <Badge variant="destructive" className="text-[10px] h-4 px-1.5 ml-1">{activeRecordings.length}</Badge>
+                <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">Gravando</p>
+                <Badge variant="destructive" className="text-[9px] h-4 px-1 ml-1">{activeRecordings.length}</Badge>
               </div>
               {activeRecordings.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-3">Nenhum videomaker gravando</p>
+                <p className="text-xs text-muted-foreground py-2">Nenhum videomaker gravando</p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-1.5 sm:space-y-2">
                   {activeRecordings.map(ar => {
                     const vm = users.find(u => u.id === ar.videomarkerId);
                     const client = clients.find(c => c.id === ar.clientId);
                     const elapsed = ar.startedAt ? formatDistanceToNow(parseISO(ar.startedAt), { locale: ptBR, addSuffix: false }) : '';
                     return (
-                      <div key={ar.recordingId} className="flex items-center gap-3 p-3 rounded-lg bg-red-500/5 border border-red-500/15">
+                      <motion.div key={ar.recordingId} whileTap={{ scale: 0.97 }} className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg bg-red-500/5 border border-red-500/15">
                         <div className="relative">
                           {vm && <UserAvatar user={vm} size="sm" />}
-                          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-background animate-pulse" />
+                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-background animate-pulse" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold truncate">{vm?.name || '—'}</p>
-                          <div className="flex items-center gap-1.5">
-                            {client && <ClientLogo client={client} size="sm" className="w-4 h-4" />}
-                            <p className="text-xs text-muted-foreground truncate">{client?.companyName || '—'}</p>
+                          <p className="text-xs sm:text-sm font-semibold truncate">{vm?.name || '—'}</p>
+                          <div className="flex items-center gap-1">
+                            {client && <ClientLogo client={client} size="sm" className="w-3.5 h-3.5" />}
+                            <p className="text-[10px] text-muted-foreground truncate">{client?.companyName || '—'}</p>
                           </div>
                         </div>
                         <div className="text-right shrink-0">
-                          <Badge variant="destructive" className="text-[10px] gap-1">
+                          <Badge variant="destructive" className="text-[9px] gap-0.5 px-1">
                             <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" /> REC
                           </Badge>
-                          <p className="text-[10px] text-muted-foreground mt-1">há {elapsed}</p>
+                          <p className="text-[9px] text-muted-foreground mt-0.5">há {elapsed}</p>
                         </div>
-                      </div>
+                      </motion.div>
                     );
                   })}
                 </div>
               )}
             </div>
 
-            {/* Editors Editing */}
+            {/* Editors */}
             <div>
-              <div className="flex items-center gap-1.5 mb-3">
+              <div className="flex items-center gap-1.5 mb-2 sm:mb-3">
                 <Film size={14} className="text-blue-500" />
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Editando Agora</p>
-                <Badge className="text-[10px] h-4 px-1.5 ml-1 bg-blue-500">{liveEditorTasks.length}</Badge>
+                <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">Editando</p>
+                <Badge className="text-[9px] h-4 px-1 ml-1 bg-blue-500">{liveEditorTasks.length}</Badge>
               </div>
               {liveEditorTasks.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-3">Nenhum editor em atividade</p>
+                <p className="text-xs text-muted-foreground py-2">Nenhum editor em atividade</p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-1.5 sm:space-y-2">
                   {liveEditorTasks.map(task => {
                     const editor = users.find(u => u.id === task.assigned_to);
                     const client = clients.find(c => c.id === task.client_id);
                     const elapsed = task.editing_started_at ? formatDistanceToNow(parseISO(task.editing_started_at), { locale: ptBR, addSuffix: false }) : '';
-                    const columnLabels: Record<string, string> = { em_edicao: 'Editando', revisao: 'Em Revisão', alteracao: 'Alteração' };
+                    const columnLabels: Record<string, string> = { em_edicao: 'Editando', revisao: 'Revisão', alteracao: 'Alteração' };
                     return (
-                      <div key={task.id} className="flex items-center gap-3 p-3 rounded-lg bg-blue-500/5 border border-blue-500/15">
+                      <motion.div key={task.id} whileTap={{ scale: 0.97 }} className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg bg-blue-500/5 border border-blue-500/15">
                         <div className="relative">
                           {editor && <UserAvatar user={editor} size="sm" />}
-                          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-blue-500 rounded-full border-2 border-background animate-pulse" />
+                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-blue-500 rounded-full border-2 border-background animate-pulse" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold truncate">{editor?.name || 'Sem editor'}</p>
-                          <div className="flex items-center gap-1.5">
-                            {client && <ClientLogo client={client} size="sm" className="w-4 h-4" />}
-                            <p className="text-xs text-muted-foreground truncate">{task.title || client?.companyName || '—'}</p>
+                          <p className="text-xs sm:text-sm font-semibold truncate">{editor?.name || 'Sem editor'}</p>
+                          <div className="flex items-center gap-1">
+                            {client && <ClientLogo client={client} size="sm" className="w-3.5 h-3.5" />}
+                            <p className="text-[10px] text-muted-foreground truncate">{task.title || client?.companyName || '—'}</p>
                           </div>
                         </div>
                         <div className="text-right shrink-0">
-                          <Badge className="text-[10px] bg-blue-500 gap-1">
+                          <Badge className="text-[9px] bg-blue-500 px-1">
                             {columnLabels[task.kanban_column] || task.kanban_column}
                           </Badge>
-                          <p className="text-[10px] text-muted-foreground mt-1">há {elapsed}</p>
+                          <p className="text-[9px] text-muted-foreground mt-0.5">há {elapsed}</p>
                         </div>
-                      </div>
+                      </motion.div>
                     );
                   })}
                 </div>
@@ -367,112 +396,112 @@ export default function Dashboard() {
         </motion.div>
       )}
 
-      {/* ── SEASONAL DATES ALERTS ── */}
+      {/* SEASONAL DATES */}
       {(() => {
         const allAlerts: { clientName: string; clientColor: string; label: string; date: Date; daysUntil: number; urgency: 'high' | 'medium' | 'low' }[] = [];
         clients.forEach(c => {
           if (!c.niche || c.niche === 'outro') return;
           const alerts = getSeasonalAlerts(c.niche);
           alerts.forEach(a => {
-            // Avoid duplicate dates across clients
             if (!allAlerts.some(x => x.label === a.label && x.clientName === c.companyName)) {
               allAlerts.push({ ...a, clientName: c.companyName, clientColor: c.color });
             }
           });
         });
-        // Deduplicate by date label, group clients
         const grouped = new Map<string, { label: string; date: Date; daysUntil: number; urgency: 'high' | 'medium' | 'low'; clients: { name: string; color: string }[] }>();
         allAlerts.forEach(a => {
           const key = a.label;
-          if (!grouped.has(key)) {
-            grouped.set(key, { label: a.label, date: a.date, daysUntil: a.daysUntil, urgency: a.urgency, clients: [] });
-          }
+          if (!grouped.has(key)) grouped.set(key, { label: a.label, date: a.date, daysUntil: a.daysUntil, urgency: a.urgency, clients: [] });
           grouped.get(key)!.clients.push({ name: a.clientName, color: a.clientColor });
         });
         const sortedAlerts = Array.from(grouped.values()).sort((a, b) => a.daysUntil - b.daysUntil);
         if (sortedAlerts.length === 0) return null;
         return (
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-5 border-warning/30">
-            <div className="flex items-center gap-2 mb-4">
-              <AlertTriangle size={16} className="text-warning" />
-              <h3 className="font-display font-semibold text-sm">📅 Datas Sazonais — Criar Conteúdo</h3>
-              <Badge variant="outline" className="text-[10px] h-5 border-warning/40 text-warning">{sortedAlerts.length}</Badge>
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-3 sm:p-5 border-warning/30">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle size={14} className="text-warning" />
+              <h3 className="font-display font-semibold text-xs sm:text-sm">📅 Datas Sazonais</h3>
+              <Badge variant="outline" className="text-[9px] h-4 px-1 border-warning/40 text-warning">{sortedAlerts.length}</Badge>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 sm:gap-2">
               {sortedAlerts.slice(0, 6).map((alert, i) => (
-                <div key={i} className={`p-3 rounded-lg border transition-all ${
+                <motion.div key={i} whileTap={{ scale: 0.97 }} className={`p-2 sm:p-3 rounded-lg border transition-all ${
                   alert.urgency === 'high' ? 'bg-destructive/5 border-destructive/30' :
                   alert.urgency === 'medium' ? 'bg-warning/5 border-warning/30' :
                   'bg-secondary/50 border-border'
                 }`}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-semibold">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] sm:text-xs font-semibold truncate">
                       {alert.urgency === 'high' ? '🔴' : alert.urgency === 'medium' ? '🟡' : '🟢'} {alert.label}
                     </span>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                    <span className={`text-[9px] font-bold px-1 py-0.5 rounded shrink-0 ml-1 ${
                       alert.urgency === 'high' ? 'bg-destructive/15 text-destructive' :
                       alert.urgency === 'medium' ? 'bg-warning/15 text-warning' :
                       'bg-muted text-muted-foreground'
-                    }`}>
-                      {alert.daysUntil}d
-                    </span>
+                    }`}>{alert.daysUntil}d</span>
                   </div>
-                  <p className="text-[10px] text-muted-foreground mb-1.5">
-                    {alert.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                  <p className="text-[9px] text-muted-foreground mb-1">
+                    {alert.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })}
                   </p>
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-wrap gap-0.5">
                     {alert.clients.slice(0, 3).map((c, j) => (
-                      <span key={j} className="text-[9px] px-1.5 py-0.5 rounded font-medium"
+                      <span key={j} className="text-[8px] px-1 py-0.5 rounded font-medium"
                         style={{ backgroundColor: `hsl(${c.color} / 0.12)`, color: `hsl(${c.color})` }}>
                         {c.name}
                       </span>
                     ))}
                     {alert.clients.length > 3 && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                        +{alert.clients.length - 3}
-                      </span>
+                      <span className="text-[8px] px-1 py-0.5 rounded bg-muted text-muted-foreground">+{alert.clients.length - 3}</span>
                     )}
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           </motion.div>
         );
       })()}
 
-      {/* ── ROW 2: Today Schedule + Videomaker Progress ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Today schedule - 2 cols */}
-        <div className="lg:col-span-2 glass-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-display font-semibold text-sm">Gravações de Hoje</h3>
-            <span className="text-xs text-muted-foreground">{todayRecordings.length} gravações</span>
+      {/* TODAY SCHEDULE + VM PROGRESS */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div className="lg:col-span-2 glass-card p-3 sm:p-5">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="flex items-center gap-2">
+              <FloatingRocket size={16} />
+              <h3 className="font-display font-semibold text-xs sm:text-sm">Gravações de Hoje</h3>
+            </div>
+            <span className="text-[10px] sm:text-xs text-muted-foreground">{todayRecordings.length} gravações</span>
           </div>
           {todayRecordings.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground text-sm">Nenhuma gravação hoje</div>
+            <div className="py-6 text-center text-muted-foreground text-xs sm:text-sm flex flex-col items-center gap-2">
+              <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 2, repeat: Infinity }}>
+                <Rocket size={28} className="text-muted-foreground/40" />
+              </motion.div>
+              Nenhuma gravação hoje
+            </div>
           ) : (
-            <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+            <div className="space-y-1.5 sm:space-y-2 max-h-[280px] overflow-y-auto pr-1">
               {todayRecordings.map((rec, i) => {
                 const clientColor = getClientColor(rec.clientId);
                 return (
                   <motion.div key={rec.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
-                    className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50 group">
-                    {(() => { const cl = getClient(rec.clientId); return cl ? <ClientLogo client={cl} size="sm" /> : <div className="w-1 h-10 rounded-full shrink-0" style={{ backgroundColor: `hsl(${clientColor})` }} />; })()}
+                    whileTap={{ scale: 0.97 }}
+                    className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg bg-secondary/50 group">
+                    {(() => { const cl = getClient(rec.clientId); return cl ? <ClientLogo client={cl} size="sm" /> : <div className="w-1 h-8 rounded-full shrink-0" style={{ backgroundColor: `hsl(${clientColor})` }} />; })()}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm truncate">{getClientName(rec.clientId)}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium text-xs sm:text-sm truncate">{getClientName(rec.clientId)}</span>
+                        <span className="text-[9px] px-1 py-0.5 rounded font-medium shrink-0"
                           style={{ backgroundColor: `hsl(${clientColor} / 0.12)`, color: `hsl(${clientColor})` }}>
                           {typeLabels[rec.type]}
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground">{getVideomakerName(rec.videomakerId)}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{getVideomakerName(rec.videomakerId)}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="font-display font-bold text-sm">{rec.startTime}</p>
-                      <div className="flex items-center justify-end gap-1 mt-0.5">{statusIcons[rec.status]}<span className="text-[10px] text-muted-foreground capitalize">{rec.status}</span></div>
+                      <p className="font-display font-bold text-xs sm:text-sm">{rec.startTime}</p>
+                      <div className="flex items-center justify-end gap-0.5 mt-0.5">{statusIcons[rec.status]}<span className="text-[9px] text-muted-foreground capitalize">{rec.status}</span></div>
                     </div>
-                    {rec.status === 'agendada' && (
+                    {rec.status === 'agendada' && !isMobile && (
                       <div className="hidden group-hover:flex gap-1 shrink-0">
                         <button onClick={() => updateRecording({ ...rec, status: 'concluida' })} className="w-7 h-7 rounded-md bg-success/15 text-success flex items-center justify-center hover:bg-success/25"><Check size={14} /></button>
                         <button onClick={() => cancelRecording(rec.id)} className="w-7 h-7 rounded-md bg-destructive/15 text-destructive flex items-center justify-center hover:bg-destructive/25"><XCircle size={14} /></button>
@@ -485,33 +514,36 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Videomaker progress - 1 col */}
-        <div className="glass-card p-5">
-          <h3 className="font-display font-semibold text-sm mb-4">Progresso do Time</h3>
+        {/* Videomaker progress */}
+        <div className="glass-card p-3 sm:p-5">
+          <div className="flex items-center gap-2 mb-3 sm:mb-4">
+            <FloatingRocket size={16} />
+            <h3 className="font-display font-semibold text-xs sm:text-sm">Progresso do Time</h3>
+          </div>
           {videomakerStats.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">Cadastre videomakers</p>
+            <p className="text-xs text-muted-foreground text-center py-4">Cadastre videomakers</p>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {videomakerStats.map(({ vm, weekDone, weekTotal, todayDone, todayTotal }) => {
                 const activeRec = activeRecordings.find(a => a.videomarkerId === vm.id);
                 const activeClientName = activeRec ? getClientName(activeRec.clientId) : null;
                 return (
-                  <div key={vm.id} className="space-y-2">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full overflow-hidden flex items-center justify-center shrink-0 ${activeRec ? 'ring-2 ring-success/40 animate-pulse' : ''}`}>
+                  <motion.div key={vm.id} className="space-y-1.5" whileTap={{ scale: 0.97 }}>
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden flex items-center justify-center shrink-0 ${activeRec ? 'ring-2 ring-success/40 animate-pulse' : ''}`}>
                         <UserAvatar user={vm} size="sm" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{vm.name}</p>
+                        <p className="text-xs sm:text-sm font-medium truncate">{vm.name}</p>
                         {activeRec ? (
-                          <p className="text-[11px] text-success font-medium">● Gravando — {activeClientName}</p>
+                          <p className="text-[10px] text-success font-medium truncate">● Gravando — {activeClientName}</p>
                         ) : (
-                          <p className="text-[11px] text-muted-foreground">Hoje: {todayDone}/{todayTotal} · Semana: {weekDone}/{weekTotal}</p>
+                          <p className="text-[10px] text-muted-foreground">Hoje: {todayDone}/{todayTotal} · Sem: {weekDone}/{weekTotal}</p>
                         )}
                       </div>
                     </div>
                     <Progress value={weekTotal > 0 ? (weekDone / weekTotal) * 100 : 0} className="h-1.5" />
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>
@@ -519,26 +551,25 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── ROW 2.5: Scoring Chart ── */}
+      {/* SCORING */}
       {vmScoring.length > 0 && (
-        <div className="glass-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-              <Trophy size={16} className="text-primary" /> Pontuação do Mês
+        <div className="glass-card p-3 sm:p-5">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <h3 className="font-display font-semibold text-xs sm:text-sm flex items-center gap-2">
+              <Trophy size={14} className="text-primary" /> Pontuação do Mês
             </h3>
-            <button onClick={() => navigate('/desempenho')} className="text-[11px] text-primary font-semibold hover:underline">
-              VER DETALHES
+            <button onClick={() => navigate('/desempenho')} className="text-[10px] sm:text-[11px] text-primary font-semibold hover:underline">
+              DETALHES
             </button>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Bar chart */}
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={vmScoring} barSize={28}>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+            <ResponsiveContainer width="100%" height={isMobile ? 160 : 200}>
+              <BarChart data={vmScoring} barSize={isMobile ? 20 : 28}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
+                <XAxis dataKey="name" tick={{ fontSize: isMobile ? 9 : 11 }} />
+                <YAxis tick={{ fontSize: isMobile ? 9 : 11 }} width={isMobile ? 30 : 40} />
                 <Tooltip
-                  contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
+                  contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 11 }}
                   formatter={(value: number) => [`${value} pts`, 'Pontuação']}
                 />
                 <Bar dataKey="score" name="Pontos" radius={[6, 6, 0, 0]}>
@@ -546,70 +577,63 @@ export default function Dashboard() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-            {/* Mini ranking */}
-            <div className="space-y-2">
+            <div className="space-y-1.5 sm:space-y-2">
               {vmScoring.slice(0, 5).map((s, i) => (
-                <div key={s.vm.id} className={`flex items-center gap-3 p-2.5 rounded-lg ${i < 3 ? 'bg-primary/5' : 'bg-secondary/40'}`}>
-                  <span className="text-sm font-bold w-6 text-center">
+                <motion.div key={s.vm.id} whileTap={{ scale: 0.97 }} className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 rounded-lg ${i < 3 ? 'bg-primary/5' : 'bg-secondary/40'}`}>
+                  <span className="text-xs sm:text-sm font-bold w-5 text-center">
                     {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}º`}
                   </span>
                   <UserAvatar user={s.vm} size="sm" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{s.vm.name}</p>
-                    <p className="text-[10px] text-muted-foreground">{s.reels} reels</p>
+                    <p className="text-xs sm:text-sm font-medium truncate">{s.vm.name}</p>
+                    <p className="text-[9px] text-muted-foreground">{s.reels} reels</p>
                   </div>
-                  <p className="text-lg font-display font-bold text-primary">{s.score}</p>
-                </div>
+                  <p className="text-sm sm:text-lg font-display font-bold text-primary">{s.score}</p>
+                </motion.div>
               ))}
             </div>
           </div>
         </div>
       )}
-      {/* ── ROW 2.8: Agency Capacity ── */}
+
       <AgencyCapacityWidget clients={clients} users={users} recordings={recordings} settings={settings} />
 
-      {/* ── ROW 2.9: Endomarketing Metrics (admin only) ── */}
+      {/* ENDOMARKETING */}
       {endoMetrics.totalClients > 0 && currentUser?.role === 'admin' && (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-              <Megaphone size={16} className="text-primary" /> Endomarketing
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-3 sm:p-5">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <h3 className="font-display font-semibold text-xs sm:text-sm flex items-center gap-2">
+              <Megaphone size={14} className="text-primary" /> Endomarketing
             </h3>
-            <button onClick={() => navigate('/endomarketing')} className="text-[11px] text-primary font-semibold hover:underline">
+            <button onClick={() => navigate('/endomarketing')} className="text-[10px] sm:text-[11px] text-primary font-semibold hover:underline">
               VER MÓDULO
             </button>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl p-4 bg-primary/5 border border-primary/10">
-                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Faturamento</p>
-                <p className="text-xl font-display font-bold text-primary mt-1">R$ {endoMetrics.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">{endoMetrics.totalClients} cliente{endoMetrics.totalClients !== 1 ? 's' : ''} ativo{endoMetrics.totalClients !== 1 ? 's' : ''}</p>
-              </div>
-              <div className="rounded-xl p-4 bg-destructive/5 border border-destructive/10">
-                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Custos</p>
-                <p className="text-xl font-display font-bold text-destructive mt-1">R$ {endoMetrics.costs.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Parceiros</p>
-              </div>
-              <div className="rounded-xl p-4 bg-success/5 border border-success/10">
-                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Lucro</p>
-                <p className="text-xl font-display font-bold text-success mt-1">R$ {endoMetrics.profit.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
-              </div>
-              <div className="rounded-xl p-4 bg-info/5 border border-info/10">
-                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Margem</p>
-                <p className="text-xl font-display font-bold text-info mt-1">{endoMetrics.margin.toFixed(1)}%</p>
-              </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+            <div className="grid grid-cols-2 gap-1.5 sm:gap-3">
+              {[
+                { label: 'Faturamento', value: `R$ ${endoMetrics.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`, sub: `${endoMetrics.totalClients} ativo${endoMetrics.totalClients !== 1 ? 's' : ''}`, cls: 'bg-primary/5 border-primary/10 text-primary' },
+                { label: 'Custos', value: `R$ ${endoMetrics.costs.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`, sub: 'Parceiros', cls: 'bg-destructive/5 border-destructive/10 text-destructive' },
+                { label: 'Lucro', value: `R$ ${endoMetrics.profit.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`, sub: '', cls: 'bg-success/5 border-success/10 text-success' },
+                { label: 'Margem', value: `${endoMetrics.margin.toFixed(1)}%`, sub: '', cls: 'bg-info/5 border-info/10 text-info' },
+              ].map((m, i) => (
+                <motion.div key={i} whileTap={{ scale: 0.97 }} className={`rounded-xl p-2.5 sm:p-4 border ${m.cls.split(' ').slice(0, 2).join(' ')}`}>
+                  <p className="text-[9px] sm:text-[11px] text-muted-foreground font-medium uppercase tracking-wide">{m.label}</p>
+                  <p className={`text-sm sm:text-xl font-display font-bold mt-0.5 sm:mt-1 ${m.cls.split(' ')[2]}`}>{m.value}</p>
+                  {m.sub && <p className="text-[9px] text-muted-foreground mt-0.5">{m.sub}</p>}
+                </motion.div>
+              ))}
             </div>
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Clientes Mais Lucrativos</p>
-              <div className="space-y-2">
+              <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 sm:mb-3">Top Lucrativos</p>
+              <div className="space-y-1.5 sm:space-y-2">
                 {endoMetrics.topClients.map((c, i) => (
-                  <div key={i} className={`flex items-center justify-between p-2.5 rounded-lg ${i < 3 ? 'bg-primary/5' : 'bg-secondary/40'}`}>
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-sm font-bold w-6 text-center">{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}º`}</span>
-                      <p className="text-sm font-medium">{c.name}</p>
+                  <div key={i} className={`flex items-center justify-between p-2 sm:p-2.5 rounded-lg ${i < 3 ? 'bg-primary/5' : 'bg-secondary/40'}`}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold w-5 text-center">{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}º`}</span>
+                      <p className="text-xs sm:text-sm font-medium truncate">{c.name}</p>
                     </div>
-                    <p className="text-sm font-display font-bold text-success">R$ {c.profit.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+                    <p className="text-xs sm:text-sm font-display font-bold text-success">R$ {c.profit.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
                   </div>
                 ))}
               </div>
@@ -618,82 +642,155 @@ export default function Dashboard() {
         </motion.div>
       )}
 
-      {/* ── ROW 3: Week Agenda ── */}
-      <div className="glass-card p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display font-semibold text-sm">Agenda Semanal</h3>
+      {/* WEEK AGENDA — mobile: vertical list, desktop: 7-col grid */}
+      <div className="glass-card p-3 sm:p-5">
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
           <div className="flex items-center gap-2">
-            <button onClick={() => setWeekOffset(w => w - 1)} className="w-7 h-7 rounded-md bg-secondary flex items-center justify-center hover:bg-secondary/80"><ChevronLeft size={14} /></button>
-            <span className="text-xs font-medium min-w-[160px] text-center">
+            <FloatingRocket size={16} />
+            <h3 className="font-display font-semibold text-xs sm:text-sm">Agenda Semanal</h3>
+          </div>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <button onClick={() => setWeekOffset(w => w - 1)} className="w-6 h-6 sm:w-7 sm:h-7 rounded-md bg-secondary flex items-center justify-center hover:bg-secondary/80"><ChevronLeft size={12} /></button>
+            <span className="text-[10px] sm:text-xs font-medium min-w-[100px] sm:min-w-[160px] text-center">
               {format(weekDays[0], "d MMM", { locale: ptBR })} — {format(weekDays[6], "d MMM", { locale: ptBR })}
             </span>
-            <button onClick={() => setWeekOffset(w => w + 1)} className="w-7 h-7 rounded-md bg-secondary flex items-center justify-center hover:bg-secondary/80"><ChevronRight size={14} /></button>
-            {weekOffset !== 0 && <button onClick={() => setWeekOffset(0)} className="text-[11px] text-primary font-medium ml-1">Hoje</button>}
+            <button onClick={() => setWeekOffset(w => w + 1)} className="w-6 h-6 sm:w-7 sm:h-7 rounded-md bg-secondary flex items-center justify-center hover:bg-secondary/80"><ChevronRight size={12} /></button>
+            {weekOffset !== 0 && <button onClick={() => setWeekOffset(0)} className="text-[10px] text-primary font-medium ml-0.5">Hoje</button>}
           </div>
         </div>
 
-        <div className="grid grid-cols-7 gap-1.5 min-h-[160px]">
-          {weekDays.map(day => {
-            const dateStr = format(day, 'yyyy-MM-dd');
-            const isToday = dateStr === today;
-            const dayRecs = getRecsForDay(day);
-            return (
-              <div key={dateStr} className={`rounded-lg p-2 min-h-[140px] ${isToday ? 'bg-primary/5 ring-1 ring-primary/30' : 'bg-secondary/40'}`}>
-                <p className={`text-[11px] font-semibold mb-1.5 ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
-                  {format(day, 'EEE d', { locale: ptBR })}
-                </p>
-                <div className="space-y-1">
-                  {dayRecs.slice(0, 5).map(rec => {
-                    const color = getClientColor(rec.clientId);
-                    return (
-                      <div key={rec.id} className="rounded px-1.5 py-1 text-[10px] leading-tight group relative cursor-pointer flex items-center gap-1" style={{ backgroundColor: `hsl(${color} / 0.1)`, borderLeft: `2px solid hsl(${color})` }}>
-                        {(() => { const cl = getClient(rec.clientId); return cl?.logoUrl ? <img src={cl.logoUrl} alt="" className="w-3.5 h-3.5 rounded object-cover shrink-0" /> : null; })()}
-                        <p className="font-medium truncate" style={{ color: `hsl(${color})` }}>{getClientName(rec.clientId)}</p>
-                        <p className="text-muted-foreground">{rec.startTime}</p>
-                        <div className="absolute left-0 top-full mt-0.5 hidden group-hover:flex items-center gap-1.5 bg-card rounded-lg p-2 shadow-lg border border-border z-20 min-w-[120px]">
-                          {(() => { const vm = users.find(u => u.id === rec.videomakerId); return vm ? <UserAvatar user={vm} size="sm" className="w-5 h-5 text-[8px]" /> : null; })()}
-                          <span className="text-[10px] font-medium truncate">{getVideomakerName(rec.videomakerId)}</span>
-                        </div>
+        {/* Mobile: compact day rows */}
+        {isMobile ? (
+          <div className="space-y-1.5">
+            {weekDays.map(day => {
+              const dateStr = format(day, 'yyyy-MM-dd');
+              const isToday = dateStr === today;
+              const dayRecs = getRecsForDay(day);
+              const isExpanded = expandedWeekDay === dateStr;
+              return (
+                <motion.div key={dateStr} whileTap={{ scale: 0.98 }}>
+                  <button
+                    onClick={() => setExpandedWeekDay(isExpanded ? null : dateStr)}
+                    className={`w-full flex items-center justify-between p-2.5 rounded-lg text-left ${isToday ? 'bg-primary/10 ring-1 ring-primary/30' : 'bg-secondary/40'}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-semibold ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
+                        {format(day, 'EEE d', { locale: ptBR })}
+                      </span>
+                      {dayRecs.length > 0 && (
+                        <Badge variant={isToday ? 'default' : 'secondary'} className="text-[9px] h-4 px-1">
+                          {dayRecs.length}
+                        </Badge>
+                      )}
+                    </div>
+                    {dayRecs.length > 0 && (
+                      <div className="flex -space-x-1">
+                        {dayRecs.slice(0, 4).map(rec => {
+                          const color = getClientColor(rec.clientId);
+                          return <div key={rec.id} className="w-3 h-3 rounded-full border border-background" style={{ backgroundColor: `hsl(${color})` }} />;
+                        })}
                       </div>
-                    );
-                  })}
-                  {dayRecs.length > 5 && <p className="text-[10px] text-muted-foreground text-center">+{dayRecs.length - 5}</p>}
+                    )}
+                  </button>
+                  <AnimatePresence>
+                    {isExpanded && dayRecs.length > 0 && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="space-y-1 pt-1 pl-2">
+                          {dayRecs.map(rec => {
+                            const color = getClientColor(rec.clientId);
+                            return (
+                              <div key={rec.id} className="flex items-center gap-2 p-1.5 rounded text-[10px]" style={{ backgroundColor: `hsl(${color} / 0.08)`, borderLeft: `2px solid hsl(${color})` }}>
+                                <span className="font-medium truncate" style={{ color: `hsl(${color})` }}>{getClientName(rec.clientId)}</span>
+                                <span className="text-muted-foreground ml-auto shrink-0">{rec.startTime}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              );
+            })}
+          </div>
+        ) : (
+          /* Desktop: 7-col grid */
+          <div className="grid grid-cols-7 gap-1.5 min-h-[160px]">
+            {weekDays.map(day => {
+              const dateStr = format(day, 'yyyy-MM-dd');
+              const isToday = dateStr === today;
+              const dayRecs = getRecsForDay(day);
+              return (
+                <div key={dateStr} className={`rounded-lg p-2 min-h-[140px] ${isToday ? 'bg-primary/5 ring-1 ring-primary/30' : 'bg-secondary/40'}`}>
+                  <p className={`text-[11px] font-semibold mb-1.5 ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
+                    {format(day, 'EEE d', { locale: ptBR })}
+                  </p>
+                  <div className="space-y-1">
+                    {dayRecs.slice(0, 5).map(rec => {
+                      const color = getClientColor(rec.clientId);
+                      return (
+                        <div key={rec.id} className="rounded px-1.5 py-1 text-[10px] leading-tight group relative cursor-pointer flex items-center gap-1" style={{ backgroundColor: `hsl(${color} / 0.1)`, borderLeft: `2px solid hsl(${color})` }}>
+                          {(() => { const cl = getClient(rec.clientId); return cl?.logoUrl ? <img src={cl.logoUrl} alt="" className="w-3.5 h-3.5 rounded object-cover shrink-0" /> : null; })()}
+                          <p className="font-medium truncate" style={{ color: `hsl(${color})` }}>{getClientName(rec.clientId)}</p>
+                          <p className="text-muted-foreground">{rec.startTime}</p>
+                          <div className="absolute left-0 top-full mt-0.5 hidden group-hover:flex items-center gap-1.5 bg-card rounded-lg p-2 shadow-lg border border-border z-20 min-w-[120px]">
+                            {(() => { const vm = users.find(u => u.id === rec.videomakerId); return vm ? <UserAvatar user={vm} size="sm" className="w-5 h-5 text-[8px]" /> : null; })()}
+                            <span className="text-[10px] font-medium truncate">{getVideomakerName(rec.videomakerId)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {dayRecs.length > 5 && <p className="text-[10px] text-muted-foreground text-center">+{dayRecs.length - 5}</p>}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* ── ROW 4: Client Progress ── */}
-      <div className="glass-card p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display font-semibold text-sm">Progresso por Cliente</h3>
-          <button onClick={() => navigate('/metas')} className="text-[11px] text-primary font-semibold hover:underline">VER METAS</button>
+      {/* CLIENT PROGRESS */}
+      <div className="glass-card p-3 sm:p-5">
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
+          <div className="flex items-center gap-2">
+            <FloatingRocket size={16} />
+            <h3 className="font-display font-semibold text-xs sm:text-sm">Progresso por Cliente</h3>
+          </div>
+          <button onClick={() => navigate('/metas')} className="text-[10px] sm:text-[11px] text-primary font-semibold hover:underline">METAS</button>
         </div>
         {clientProgress.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-6">Nenhum cliente cadastrado</p>
+          <div className="py-6 text-center text-muted-foreground text-xs flex flex-col items-center gap-2">
+            <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 2, repeat: Infinity }}>
+              <Rocket size={28} className="text-muted-foreground/40" />
+            </motion.div>
+            Nenhum cliente cadastrado
+          </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
             {clientProgress.map(({ client, tasksDone, goal, recsDone, recsTotal, progress }) => (
-              <div key={client.id} className="rounded-xl p-4 border border-border bg-secondary/30" style={{ borderLeftWidth: 3, borderLeftColor: `hsl(${client.color || '220 10% 50%'})` }}>
-                <div className="flex items-center gap-3 mb-3">
+              <motion.div key={client.id} whileTap={{ scale: 0.97 }} className="rounded-xl p-3 sm:p-4 border border-border bg-secondary/30" style={{ borderLeftWidth: 3, borderLeftColor: `hsl(${client.color || '220 10% 50%'})` }}>
+                <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
                   <ClientLogo client={client} size="sm" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate">{client.companyName}</p>
-                    <p className="text-[11px] text-muted-foreground">{DAY_LABELS[client.fixedDay]} · {client.fixedTime}</p>
+                    <p className="text-xs sm:text-sm font-semibold truncate">{client.companyName}</p>
+                    <p className="text-[9px] sm:text-[11px] text-muted-foreground">{DAY_LABELS[client.fixedDay]} · {client.fixedTime}</p>
                   </div>
-                  <span className="text-lg font-display font-bold" style={{ color: progress >= 80 ? 'hsl(var(--success))' : progress >= 40 ? 'hsl(var(--warning))' : 'hsl(var(--destructive))' }}>
+                  <span className="text-sm sm:text-lg font-display font-bold" style={{ color: progress >= 80 ? 'hsl(var(--success))' : progress >= 40 ? 'hsl(var(--warning))' : 'hsl(var(--destructive))' }}>
                     {progress}%
                   </span>
                 </div>
-                <Progress value={progress} className="h-1.5 mb-2" />
-                <div className="flex gap-3 text-[11px] text-muted-foreground">
+                <Progress value={progress} className="h-1.5 mb-1.5 sm:mb-2" />
+                <div className="flex gap-2 sm:gap-3 text-[9px] sm:text-[11px] text-muted-foreground">
                   <span>Meta: {goal}</span>
                   <span>Feitas: {tasksDone}</span>
-                  <span>Gravações: {recsDone}/{recsTotal}</span>
+                  <span>Grav: {recsDone}/{recsTotal}</span>
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
         )}

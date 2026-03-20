@@ -407,25 +407,18 @@ export default function EditorKanban() {
     // If user was trying to send to review, do it now
     if (sendToReviewAfterLink) {
       const updatedTask = { ...videoLinkTask, edited_video_link: videoLinkValue.trim() };
-      // Check if from edicao (drag) or alteracao (button)
-      if (videoLinkTask.kanban_column === 'edicao') {
-        // Move to revisao
-        await supabase.from('content_tasks').update({
-          kanban_column: 'revisao', updated_at: new Date().toISOString(),
-        } as any).eq('id', videoLinkTask.id);
-        await createOrUpdateDelivery(updatedTask, 'revisao');
-        const clientName = clients.find(c => c.id === videoLinkTask.client_id)?.companyName || '';
-        await supabase.rpc('notify_role', {
-          _role: 'social_media',
-          _title: 'Vídeo para Revisão',
-          _message: `${videoLinkTask.title} (${clientName}) está pronto para revisão`,
-          _type: 'review',
-          _link: '/entregas-social',
-        });
-        toast.success('Enviado para revisão!');
-      } else if (videoLinkTask.kanban_column === 'alteracao') {
-        await handleSendToReview(updatedTask);
-      }
+      // Use shared sync for ALL transitions (edicao→revisao or alteracao→revisao)
+      await supabase.from('content_tasks').update({
+        kanban_column: 'revisao', updated_at: new Date().toISOString(),
+      } as any).eq('id', videoLinkTask.id);
+      const client = clients.find(c => c.id === videoLinkTask.client_id);
+      const ctx = buildSyncContext(updatedTask as any, {
+        userId: user?.id,
+        clientName: client?.companyName,
+        clientWhatsapp: (client as any)?.whatsapp,
+      });
+      await syncContentTaskColumnChange('revisao', ctx);
+      toast.success('Enviado para revisão!');
     }
 
     setVideoLinkTask(null);

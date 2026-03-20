@@ -185,11 +185,8 @@ export default function Clients() {
           for (let t = sStart; t + duration <= sEnd; t += duration + 30) {
             totalSlots++;
             const timeStr = minutesToTime(t);
-            const isOccupied = clients.some(c => {
-              if (editing && c.id === editing.id) return false;
-              return c.videomaker === vmId && c.fixedDay === day && c.fixedTime === timeStr;
-            });
-            if (!isOccupied) {
+            const occupyingClient = getOccupyingClient(vmId, day, timeStr);
+            if (!occupyingClient) {
               slots.push({ day, time: timeStr, videomakerId: vmId, videomkerName: vm.name, occupiedSlots, totalSlots, freeSlots: totalSlots - occupiedSlots });
             } else {
               occupiedSlots++;

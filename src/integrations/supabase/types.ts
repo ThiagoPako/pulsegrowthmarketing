@@ -2174,6 +2174,8 @@ export type Database = {
           status: string
           type: string
           videomaker_id: string
+          wait_ended_at: string | null
+          wait_started_at: string | null
         }
         Insert: {
           client_id: string
@@ -2185,6 +2187,8 @@ export type Database = {
           status?: string
           type?: string
           videomaker_id: string
+          wait_ended_at?: string | null
+          wait_started_at?: string | null
         }
         Update: {
           client_id?: string
@@ -2196,6 +2200,8 @@ export type Database = {
           status?: string
           type?: string
           videomaker_id?: string
+          wait_ended_at?: string | null
+          wait_started_at?: string | null
         }
         Relationships: [
           {

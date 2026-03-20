@@ -828,11 +828,14 @@ app.post('/api/portal-recordings', async (req, res) => {
 
     /* ── accept_backup ── */
     if (action === 'accept_backup') {
-      const { backup_date, backup_time } = req.body;
+      const { backup_date, backup_time, videomaker_id: requestedVmId } = req.body;
       if (!backup_date || !backup_time) return res.status(400).json({ error: 'backup_date and backup_time required' });
-      // Get videomaker from client or fallback to the most recent cancelled recording's videomaker
-      const { rows: [clientBackup] } = await pool.query('SELECT videomaker_id FROM clients WHERE id = $1', [client_id]);
-      let vmId = clientBackup?.videomaker_id;
+      // Use requested videomaker_id (alternative) or fallback to client's default
+      let vmId = requestedVmId || null;
+      if (!vmId) {
+        const { rows: [clientBackup] } = await pool.query('SELECT videomaker_id FROM clients WHERE id = $1', [client_id]);
+        vmId = clientBackup?.videomaker_id;
+      }
       if (!vmId) {
         const { rows: [lastRec] } = await pool.query(
           `SELECT videomaker_id FROM recordings WHERE client_id = $1 AND status = 'cancelada' ORDER BY created_at DESC LIMIT 1`, [client_id]
@@ -840,13 +843,28 @@ app.post('/api/portal-recordings', async (req, res) => {
         vmId = lastRec?.videomaker_id;
       }
       if (!vmId) {
-        // Ultimate fallback: any videomaker from any recording of this client
         const { rows: [anyRec] } = await pool.query(
           `SELECT videomaker_id FROM recordings WHERE client_id = $1 AND videomaker_id IS NOT NULL ORDER BY created_at DESC LIMIT 1`, [client_id]
         );
         vmId = anyRec?.videomaker_id;
       }
       if (!vmId) return res.status(400).json({ error: 'Nenhum videomaker encontrado para este cliente' });
+      // Verify no conflict for selected videomaker/date/time
+      const { rows: [settingsBackup] } = await pool.query('SELECT recording_duration FROM company_settings LIMIT 1');
+      const durationBackup = (settingsBackup?.recording_duration || 2) * 60;
+      const bufferBackup = 30;
+      const { rows: conflictsBackup } = await pool.query(
+        `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,
+        [vmId, backup_date]
+      );
+      const [nbh, nbm] = backup_time.split(':').map(Number);
+      const newStartBackup = nbh * 60 + nbm;
+      const hasConflictBackup = conflictsBackup.some(c => {
+        const [ch, cm] = c.start_time.split(':').map(Number);
+        const cStart = ch * 60 + cm;
+        return newStartBackup < cStart + durationBackup + bufferBackup && newStartBackup + durationBackup + bufferBackup > cStart;
+      });
+      if (hasConflictBackup) return res.status(409).json({ error: 'Horário não está mais disponível' });
       await pool.query(`INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ($1, $2, $3, $4, 'secundaria', 'agendada', 'confirmada')`, [client_id, vmId, backup_date, backup_time]);
       return res.json({ success: true });
     }

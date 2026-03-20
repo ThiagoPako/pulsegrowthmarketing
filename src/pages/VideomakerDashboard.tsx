@@ -528,13 +528,22 @@ export default function VideomakerDashboard() {
         const activeRecMeta = activeRecordings.find(a => a.recordingId === activeRecordingId);
         if (!activeRec) return null;
         const planned = plannedScripts[activeRecordingId] || activeRecMeta?.plannedScriptIds || [];
+        const client = clients.find(c => c.id === activeRec.clientId);
+        const isStar = client?.fullShiftRecording || false;
+        // Star clients use full shift (e.g. 08:30-12:00 = 210min), regular = recordingDuration (90min)
+        const durationMin = isStar
+          ? (client?.preferredShift === 'tarde'
+            ? (timeToMin(settings.shiftBEnd) - timeToMin(settings.shiftBStart))
+            : (timeToMin(settings.shiftAEnd) - timeToMin(settings.shiftAStart)))
+          : settings.recordingDuration;
         return (
           <LiveRecordingCard
             clientName={getClientName(activeRec.clientId)}
             clientColor={getClientColor(activeRec.clientId)}
             startedAt={activeRecMeta?.startedAt || new Date().toISOString()}
-            recordingDurationHours={settings.recordingDuration}
+            recordingDurationMinutes={durationMin}
             scriptsCount={planned.length}
+            isStarClient={isStar}
             onFinish={() => handleFinishRecording(activeRec)}
             onViewScripts={() => openScripts(activeRec.clientId)}
           />

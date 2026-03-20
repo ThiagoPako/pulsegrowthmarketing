@@ -221,35 +221,75 @@ export function useSupabaseData() {
   const [settingsId, setSettingsId] = useState<string>('');
   const [activeRecordings, setActiveRecordings] = useState<ActiveRecording[]>([]);
   const [loading, setLoading] = useState(true);
+  const hasFetched = useRef(false);
 
-  // ── Initial fetch via VPS API ──
-  useEffect(() => {
-    async function fetchAll() {
-      const [cRes, rRes, tRes, sRes, setRes, arRes] = await Promise.all([
-        invokeVpsFunction('clients', { method: 'GET' }),
-        invokeVpsFunction('recordings', { method: 'GET' }),
-        invokeVpsFunction('kanban-tasks', { method: 'GET' }),
-        invokeVpsFunction('scripts', { method: 'GET' }),
-        invokeVpsFunction('company-settings', { method: 'GET' }),
-        invokeVpsFunction('active-recordings', { method: 'GET' }),
-      ]);
-      if (cRes.data && !cRes.error) setClients((Array.isArray(cRes.data) ? cRes.data : []).map(rowToClient));
-      if (rRes.data && !rRes.error) setRecordings((Array.isArray(rRes.data) ? rRes.data : []).map(rowToRecording));
-      if (tRes.data && !tRes.error) setTasks((Array.isArray(tRes.data) ? tRes.data : []).map(rowToTask));
-      if (sRes.data && !sRes.error) setScripts((Array.isArray(sRes.data) ? sRes.data : []).map(rowToScript));
-      if (setRes.data && !setRes.error && setRes.data) {
-        setSettings(rowToSettings(setRes.data));
-        setSettingsId(setRes.data.id);
-      }
-      if (arRes.data && !arRes.error) setActiveRecordings((Array.isArray(arRes.data) ? arRes.data : []).map(rowToActiveRecording));
-      setLoading(false);
+  // Wait for auth token before fetching
+  const hasToken = !!localStorage.getItem('pulse_jwt');
+
+  const fetchAll = useCallback(async () => {
+    const token = localStorage.getItem('pulse_jwt');
+    if (!token) { setLoading(false); return; }
+    const [cRes, rRes, tRes, sRes, setRes, arRes] = await Promise.all([
+      invokeVpsFunction('clients', { method: 'GET' }),
+      invokeVpsFunction('recordings', { method: 'GET' }),
+      invokeVpsFunction('kanban-tasks', { method: 'GET' }),
+      invokeVpsFunction('scripts', { method: 'GET' }),
+      invokeVpsFunction('company-settings', { method: 'GET' }),
+      invokeVpsFunction('active-recordings', { method: 'GET' }),
+    ]);
+    if (cRes.data && !cRes.error) setClients((Array.isArray(cRes.data) ? cRes.data : []).map(rowToClient));
+    if (rRes.data && !rRes.error) setRecordings((Array.isArray(rRes.data) ? rRes.data : []).map(rowToRecording));
+    if (tRes.data && !tRes.error) setTasks((Array.isArray(tRes.data) ? tRes.data : []).map(rowToTask));
+    if (sRes.data && !sRes.error) setScripts((Array.isArray(sRes.data) ? sRes.data : []).map(rowToScript));
+    if (setRes.data && !setRes.error && setRes.data) {
+      setSettings(rowToSettings(setRes.data));
+      setSettingsId(setRes.data.id);
     }
-    fetchAll();
+    if (arRes.data && !arRes.error) setActiveRecordings((Array.isArray(arRes.data) ? arRes.data : []).map(rowToActiveRecording));
+    setLoading(false);
+    hasFetched.current = true;
   }, []);
+
+  // ── Initial fetch — only when token exists ──
+  useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
+
+  // ── Listen for auth changes (login/logout) and re-fetch ──
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'pulse_jwt') {
+        if (e.newValue) {
+          // Token was set (login) — re-fetch data
+          setTimeout(() => fetchAll(), 100);
+        } else {
+          // Token was removed (logout) — clear data
+          setClients([]);
+          setRecordings([]);
+          setTasks([]);
+          setScripts([]);
+          setActiveRecordings([]);
+          setLoading(false);
+          hasFetched.current = false;
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [fetchAll]);
+
+  // ── Re-fetch after login in same tab (storage event doesn't fire for same-tab changes) ──
+  useEffect(() => {
+    if (!hasFetched.current && hasToken) {
+      fetchAll();
+    }
+  }, [hasToken, fetchAll]);
 
   // ── Polling for data changes (replaces Supabase Realtime) ──
   useEffect(() => {
     const interval = setInterval(async () => {
+      const token = localStorage.getItem('pulse_jwt');
+      if (!token) return;
       const [cRes, rRes, tRes, sRes, arRes] = await Promise.all([
         invokeVpsFunction('clients', { method: 'GET' }),
         invokeVpsFunction('recordings', { method: 'GET' }),
@@ -262,7 +302,7 @@ export function useSupabaseData() {
       if (tRes.data && !tRes.error) setTasks((Array.isArray(tRes.data) ? tRes.data : []).map(rowToTask));
       if (sRes.data && !sRes.error) setScripts((Array.isArray(sRes.data) ? sRes.data : []).map(rowToScript));
       if (arRes.data && !arRes.error) setActiveRecordings((Array.isArray(arRes.data) ? arRes.data : []).map(rowToActiveRecording));
-    }, 30000); // Poll every 30 seconds
+    }, 30000);
 
     return () => clearInterval(interval);
   }, []);

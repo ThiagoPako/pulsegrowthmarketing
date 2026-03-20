@@ -756,6 +756,7 @@ export default function Scripts() {
               </div>
             </div>
 
+            <div className="space-y-1">
               <Label>Título do Roteiro *</Label>
               <Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Ex: Roteiro de Vendas - Black Friday" />
             </div>

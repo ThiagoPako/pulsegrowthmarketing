@@ -237,30 +237,54 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
       }
     });
 
-    // Content task events (editing, scheduled)
+    // Content task events — full lifecycle
     contentTasks.forEach(ct => {
-      if (ct.kanban_column === 'edicao' && ct.editing_started_at) {
+      // Editing started
+      if (ct.editing_started_at) {
         const date = ct.editing_started_at.substring(0, 10);
-        addEvent(date, { type: 'content', icon: '✂️', label: 'Em edição', color: 'text-blue-400', detail: ct.title });
+        addEvent(date, { type: 'content', icon: '✂️', label: 'Edição iniciada', color: 'text-blue-400', detail: ct.title });
       }
-      if (ct.kanban_column === 'revisao') {
-        const date = ct.scheduled_date || (ct.editing_started_at?.substring(0, 10) || '');
-        if (date) addEvent(date, { type: 'content', icon: '👁', label: 'Em revisão', color: 'text-cyan-400', detail: ct.title });
+      // In review (sent for approval)
+      if (ct.approval_sent_at) {
+        const date = ct.approval_sent_at.substring(0, 10);
+        addEvent(date, { type: 'content', icon: '👁', label: 'Enviado p/ revisão', color: 'text-cyan-400', detail: ct.title });
       }
+      // Approved
       if (ct.approved_at) {
         const date = ct.approved_at.substring(0, 10);
         addEvent(date, { type: 'content', icon: '✅', label: 'Aprovado', color: 'text-emerald-400', detail: ct.title });
       }
+      // Adjustment requested
+      if (ct.adjustment_notes && ct.kanban_column === 'alteracao') {
+        const date = ct.updated_at.substring(0, 10);
+        addEvent(date, { type: 'content', icon: '🔧', label: 'Ajuste solicitado', color: 'text-orange-400', detail: ct.title });
+      }
+      // Completed/finished
+      if (ct.kanban_column === 'concluido') {
+        const date = ct.updated_at.substring(0, 10);
+        addEvent(date, { type: 'content', icon: '🏁', label: 'Concluído', color: 'text-emerald-300', detail: ct.title });
+      }
     });
 
-    // Delivery events (posted)
+    // Delivery events
     deliveries.forEach(d => {
+      // Delivered to client
+      if (d.status === 'entregue' && d.delivered_at) {
+        const date = d.delivered_at.substring(0, 10);
+        addEvent(date, { type: 'delivery', icon: '📦', label: 'Entregue', color: 'text-amber-300', detail: d.title });
+      }
+      // Posted
       if (d.posted_at) {
         const date = d.posted_at.substring(0, 10);
-        addEvent(date, { type: 'delivery', icon: '📱', label: 'Postado', color: 'text-pink-400', detail: d.title });
+        addEvent(date, { type: 'delivery', icon: '📱', label: `Postado${d.platform ? ` (${d.platform})` : ''}`, color: 'text-pink-400', detail: d.title });
       } else if (d.status === 'agendado' && d.scheduled_time) {
         const date = d.delivered_at.substring(0, 10);
         addEvent(date, { type: 'delivery', icon: '📅', label: 'Agendado p/ postar', color: 'text-indigo-400', time: d.scheduled_time, detail: d.title });
+      }
+      // In review
+      if (d.status === 'revisao') {
+        const date = d.delivered_at.substring(0, 10);
+        addEvent(date, { type: 'delivery', icon: '👁', label: 'Em revisão', color: 'text-cyan-400', detail: d.title });
       }
     });
 

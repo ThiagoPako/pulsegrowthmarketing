@@ -644,68 +644,102 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                   </div>
                 </div>
 
-                {dayRecordings.length === 0 ? (
-                  <div className="text-center py-10">
-                    <CalendarDays size={36} className="mx-auto text-white/[0.07] mb-3" />
-                    <p className="text-sm text-white/25 font-medium">Nenhuma gravação</p>
-                    <p className="text-[11px] text-white/15 mt-1">Dia livre 🎉</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {dayRecordings.map((rec, i) => {
-                      const st = STATUS_MAP[rec.status] || STATUS_MAP.agendada;
-                      const typeInfo = TYPE_MAP[rec.type] || { label: rec.type, emoji: '🎬' };
-                      const canAct = isScheduled(rec.status) && isAfter(parseISO(rec.date), new Date());
-                      const isConfirmed = rec.confirmation_status === 'confirmada';
-                      return (
-                        <motion.div key={rec.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="rounded-xl overflow-hidden relative">
-                          <div className="h-0.5 relative z-[1]" style={{
-                            background: rec.status === 'concluida' || rec.status === 'gravado' ? '#34d399' : rec.status === 'cancelada' ? '#f87171' : `linear-gradient(90deg, hsl(25 100% 50%), hsl(${clientColor}))`
-                          }} />
-                          <div className="bg-white/[0.04] border border-white/[0.06] border-t-0 rounded-b-xl p-4 space-y-3 relative z-[1]">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg relative" style={{ background: `hsl(${clientColor} / 0.1)` }}>
-                                  {canAct ? <motion.span animate={{ rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2 }}>🚀</motion.span> : typeInfo.emoji}
+                {(() => {
+                  const dateStr = format(selectedDay, 'yyyy-MM-dd');
+                  const dayEvts = eventsByDate[dateStr] || [];
+                  const nonRecordingEvents = dayEvts.filter(e => e.type !== 'recording');
+                  const hasContent = dayRecordings.length > 0 || nonRecordingEvents.length > 0;
+
+                  if (!hasContent) return (
+                    <div className="text-center py-10">
+                      <CalendarDays size={36} className="mx-auto text-white/[0.07] mb-3" />
+                      <p className="text-sm text-white/25 font-medium">Nenhuma atividade</p>
+                      <p className="text-[11px] text-white/15 mt-1">Dia livre 🎉</p>
+                    </div>
+                  );
+
+                  return (
+                    <div className="space-y-3">
+                      {/* Recording cards with actions */}
+                      {dayRecordings.map((rec, i) => {
+                        const st = STATUS_MAP[rec.status] || STATUS_MAP.agendada;
+                        const typeInfo = TYPE_MAP[rec.type] || { label: rec.type, emoji: '🎬' };
+                        const canAct = isScheduled(rec.status) && isAfter(parseISO(rec.date), new Date());
+                        const isConfirmed = rec.confirmation_status === 'confirmada';
+                        return (
+                          <motion.div key={rec.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="rounded-xl overflow-hidden relative">
+                            <div className="h-0.5 relative z-[1]" style={{
+                              background: rec.status === 'concluida' || rec.status === 'gravado' ? '#34d399' : rec.status === 'cancelada' ? '#f87171' : `linear-gradient(90deg, hsl(25 100% 50%), hsl(${clientColor}))`
+                            }} />
+                            <div className="bg-white/[0.04] border border-white/[0.06] border-t-0 rounded-b-xl p-4 space-y-3 relative z-[1]">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg relative" style={{ background: `hsl(${clientColor} / 0.1)` }}>
+                                    {rec.status === 'cancelada' ? <span className="text-red-400 text-xl font-black">✕</span> : canAct ? <motion.span animate={{ rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2 }}>🚀</motion.span> : typeInfo.emoji}
+                                  </div>
+                                  <div>
+                                    <p className="text-base font-extrabold tabular-nums" style={{ color: rec.status === 'cancelada' ? '#f87171' : `hsl(${clientColor})` }}>{rec.start_time}</p>
+                                    <p className="text-[10px] text-white/35 font-medium">{typeInfo.label}</p>
+                                  </div>
                                 </div>
-                                <div>
-                                  <p className="text-base font-extrabold tabular-nums" style={{ color: `hsl(${clientColor})` }}>{rec.start_time}</p>
-                                  <p className="text-[10px] text-white/35 font-medium">{typeInfo.label}</p>
-                                </div>
+                                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${st.bg} ${st.color}`}>{st.label}</span>
                               </div>
-                              <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${st.bg} ${st.color}`}>{st.label}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-white/40 bg-white/[0.03] rounded-lg px-3 py-2">
-                              <Video size={12} className="shrink-0" />
-                              <span className="font-medium">{rec.videomaker_name}</span>
-                              {isConfirmed && <span className="ml-auto text-[9px] text-emerald-400 font-bold">✓ Confirmada</span>}
-                            </div>
-                            {canAct && (
-                              <div className="flex gap-2">
-                                {!isConfirmed && (
-                                  <motion.button whileTap={{ scale: 0.95 }} onClick={() => handleConfirm(rec)}
-                                    className="flex-1 py-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/20 hover:bg-emerald-500/25 transition-all">
-                                    <Check size={12} /> Confirmar
+                              <div className="flex items-center gap-2 text-xs text-white/40 bg-white/[0.03] rounded-lg px-3 py-2">
+                                <Video size={12} className="shrink-0" />
+                                <span className="font-medium">{rec.videomaker_name}</span>
+                                {isConfirmed && <span className="ml-auto text-[9px] text-emerald-400 font-bold">✓ Confirmada</span>}
+                              </div>
+                              {canAct && (
+                                <div className="flex gap-2">
+                                  {!isConfirmed && (
+                                    <motion.button whileTap={{ scale: 0.95 }} onClick={() => handleConfirm(rec)}
+                                      className="flex-1 py-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/20 hover:bg-emerald-500/25 transition-all">
+                                      <Check size={12} /> Confirmar
+                                    </motion.button>
+                                  )}
+                                  <motion.button whileTap={{ scale: 0.95 }}
+                                    onClick={() => setCancelFlow({ step: 'confirming', rec })}
+                                    className={`${isConfirmed ? 'flex-1' : ''} py-2 px-3 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 bg-red-500/10 text-red-300 border border-red-500/15 hover:bg-red-500/20 transition-all`}>
+                                    <X size={12} /> Cancelar
                                   </motion.button>
-                                )}
-                                <motion.button whileTap={{ scale: 0.95 }}
-                                  onClick={() => setCancelFlow({ step: 'confirming', rec })}
-                                  className={`${isConfirmed ? 'flex-1' : ''} py-2 px-3 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 bg-red-500/10 text-red-300 border border-red-500/15 hover:bg-red-500/20 transition-all`}>
-                                  <X size={12} /> Cancelar
-                                </motion.button>
-                                <motion.button whileTap={{ scale: 0.95 }}
-                                  onClick={() => { setRescheduleRec(rec); setSelectedNewDate(''); setSelectedNewTime(''); setAvailableSlots([]); }}
-                                  className="py-2 px-3 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-white/50 hover:text-white/80 transition-all">
-                                  <RefreshCw size={10} />
-                                </motion.button>
+                                  <motion.button whileTap={{ scale: 0.95 }}
+                                    onClick={() => { setRescheduleRec(rec); setSelectedNewDate(''); setSelectedNewTime(''); setAvailableSlots([]); }}
+                                    className="py-2 px-3 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-white/50 hover:text-white/80 transition-all">
+                                    <RefreshCw size={10} />
+                                  </motion.button>
+                                </div>
+                              )}
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+
+                      {/* Non-recording events (content tasks, deliveries) */}
+                      {nonRecordingEvents.length > 0 && (
+                        <>
+                          {dayRecordings.length > 0 && (
+                            <div className="flex items-center gap-2 pt-2">
+                              <div className="h-px flex-1 bg-white/[0.06]" />
+                              <span className="text-[9px] font-bold text-white/25 uppercase tracking-wider">Conteúdo</span>
+                              <div className="h-px flex-1 bg-white/[0.06]" />
+                            </div>
+                          )}
+                          {nonRecordingEvents.map((evt, i) => (
+                            <motion.div key={`evt-${i}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: (dayRecordings.length + i) * 0.05 }}
+                              className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-3">
+                              <span className="text-lg">{evt.icon}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-xs font-bold ${evt.color}`}>{evt.label}</p>
+                                {evt.detail && <p className="text-[10px] text-white/40 truncate">{evt.detail}</p>}
                               </div>
-                            )}
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-                )}
+                              {evt.time && <span className="text-[10px] font-bold text-white/30 tabular-nums">{evt.time}</span>}
+                            </motion.div>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
               </motion.div>
             ) : (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 text-center py-16">

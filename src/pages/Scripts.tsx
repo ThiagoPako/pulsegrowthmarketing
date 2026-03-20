@@ -191,6 +191,7 @@ export default function Scripts() {
           isEndomarketing: script.isEndomarketing || false,
           endoClientId: script.endoClientId || '',
           scheduledDate: script.scheduledDate || '',
+          directToEditing: script.directToEditing || false,
         });
       });
     } else {

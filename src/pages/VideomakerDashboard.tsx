@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Square, FileText, Check, Clock, Video, Users as UsersIcon,
   TrendingUp, BarChart3, Undo2, AlertTriangle, Star, Eye, ChevronLeft, Download, Link, ArrowRight,
-  ThumbsDown, Pencil, MessageCircle, Send, UserCheck, Rocket
+  ThumbsDown, Pencil, MessageCircle, Send, UserCheck, Rocket, Hourglass
 } from 'lucide-react';
 import LiveRecordingCard from '@/components/videomaker/LiveRecordingCard';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';

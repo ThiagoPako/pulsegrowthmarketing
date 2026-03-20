@@ -639,20 +639,35 @@ export default function VideomakerDashboard() {
         );
       })()}
 
-      {/* ── Quick Stats ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* Quick Stats - animated rocket borders */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
         {[
-          { label: 'Gravações Hoje', value: `${stats.todayDone}/${stats.todayTotal}`, icon: Video, color: 'bg-success/15 text-success' },
-          { label: 'Clientes Atendidos', value: stats.uniqueClients, icon: UsersIcon, color: 'bg-info/15 text-info' },
-          { label: 'Gravações (mês)', value: stats.monthRecordings, icon: TrendingUp, color: 'bg-primary/15 text-primary' },
-          { label: 'Média Reels/Grav.', value: stats.avgReelsPerRec, icon: BarChart3, color: 'bg-warning/15 text-warning' },
+          { label: 'Gravações Hoje', value: `${stats.todayDone}/${stats.todayTotal}`, icon: Video, color: 'bg-success/15 text-success', borderColor: 'border-success/30' },
+          { label: 'Clientes Atendidos', value: stats.uniqueClients, icon: UsersIcon, color: 'bg-info/15 text-info', borderColor: 'border-info/30' },
+          { label: 'Gravações (mês)', value: stats.monthRecordings, icon: TrendingUp, color: 'bg-primary/15 text-primary', borderColor: 'border-primary/30' },
+          { label: 'Média Reels/Grav.', value: stats.avgReelsPerRec, icon: BarChart3, color: 'bg-warning/15 text-warning', borderColor: 'border-warning/30' },
         ].map((s, i) => (
-          <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }} className="stat-card">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${s.color}`}>
-              <s.icon size={16} />
+          <motion.div
+            key={s.label}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            whileHover={{ scale: 1.03 }}
+            className={`stat-card border ${s.borderColor} relative overflow-hidden`}
+          >
+            <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center mb-1.5 sm:mb-2 ${s.color}`}>
+              <s.icon size={15} />
             </div>
-            <p className="text-xl font-display font-bold">{s.value}</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">{s.label}</p>
+            <p className="text-lg sm:text-xl font-display font-bold">{s.value}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">{s.label}</p>
+            {/* Subtle animated rocket particle */}
+            <motion.div
+              animate={{ y: [20, -30], opacity: [0, 0.3, 0], x: [0, 5] }}
+              transition={{ duration: 3, repeat: Infinity, delay: i * 0.8 }}
+              className="absolute top-2 right-2"
+            >
+              <Rocket size={10} className="text-muted-foreground/20 -rotate-45" />
+            </motion.div>
           </motion.div>
         ))}
       </div>

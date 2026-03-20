@@ -687,7 +687,15 @@ app.post('/api/portal-recordings', async (req, res) => {
     if (action === 'check_availability') {
       if (!new_date) return res.status(400).json({ error: 'new_date required' });
       const { rows: [clientData] } = await pool.query('SELECT videomaker_id FROM clients WHERE id = $1', [client_id]);
-      if (!clientData?.videomaker_id) return res.status(400).json({ error: 'Nenhum videomaker atribuído' });
+      let vmId = clientData?.videomaker_id;
+      if (!vmId) {
+        const { rows: [lastRec] } = await pool.query(
+          `SELECT videomaker_id FROM recordings WHERE client_id = $1 AND videomaker_id IS NOT NULL ORDER BY date DESC LIMIT 1`,
+          [client_id]
+        );
+        vmId = lastRec?.videomaker_id;
+      }
+      if (!vmId) return res.status(400).json({ error: 'Nenhum videomaker atribuído' });
       const { rows: [settings] } = await pool.query('SELECT * FROM company_settings LIMIT 1');
       const duration = (settings?.recording_duration || 2) * 60;
       const buffer = 30;

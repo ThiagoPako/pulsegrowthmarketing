@@ -631,13 +631,19 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
             </motion.button>
           </div>
 
-          <div className="grid grid-cols-7 gap-1.5 mb-2">
-            {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
-              <div key={d} className="text-center text-[10px] font-bold text-white/25 uppercase tracking-wider py-1.5">{d}</div>
-            ))}
+          <div className="grid grid-cols-7 gap-0.5 sm:gap-1.5 mb-1 sm:mb-2">
+            {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => {
+              const fullNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+              return (
+                <div key={`${d}-${i}`} className="text-center text-[9px] sm:text-[10px] font-bold text-white/25 uppercase tracking-wider py-1 sm:py-1.5">
+                  <span className="hidden sm:inline">{fullNames[i]}</span>
+                  <span className="sm:hidden">{d}</span>
+                </div>
+              );
+            })}
           </div>
 
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-1 sm:gap-2">
             {Array.from({ length: startPad }).map((_, i) => <div key={`pad-${i}`} className="aspect-square" />)}
             {daysInMonth.map((day, idx) => {
               const dateStr = format(day, 'yyyy-MM-dd');

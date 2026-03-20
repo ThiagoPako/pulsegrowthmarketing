@@ -79,8 +79,11 @@ export default function VideomakerDashboard() {
 
   const typeLabels: Record<string, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.' };
 
-  // ── Active recording ──
+  // ── Active recording (use local backup to survive polling race conditions) ──
+  const [localActiveRecordingId, setLocalActiveRecordingId] = useState<string | null>(null);
   const myActiveRec = activeRecordings.find(a => a.videomarkerId === vmId);
+  // A recording is considered active if either the server says so OR local state says so
+  const activeRecordingId = myActiveRec?.recordingId || localActiveRecordingId;
 
   const handleStartRecording = (rec: Recording) => {
     setScriptsClientId(rec.clientId);
@@ -108,8 +111,9 @@ export default function VideomakerDashboard() {
       toast.error('Selecione pelo menos 1 roteiro para iniciar a gravação');
       return;
     }
-    // Store planned scripts for this recording session
+    // Store planned scripts and mark recording as locally active
     setPlannedScripts(prev => ({ ...prev, [rec.id]: Array.from(selectedScriptIds) }));
+    setLocalActiveRecordingId(rec.id);
     startActiveRecording({
       recordingId: rec.id,
       videomarkerId: vmId,
@@ -331,6 +335,7 @@ export default function VideomakerDashboard() {
 
     // Clean up
     setPlannedScripts(prev => { const next = { ...prev }; delete next[finishRecordingId]; return next; });
+    setLocalActiveRecordingId(null);
     setFinishDialogOpen(false);
     setCompletedScriptIds(new Set());
     setRejectedScripts(new Set());
@@ -525,7 +530,7 @@ export default function VideomakerDashboard() {
             <div className="space-y-2">
               {todayRecs.map((rec, i) => {
                 const color = getClientColor(rec.clientId);
-                const isActive = myActiveRec?.recordingId === rec.id;
+                const isActive = activeRecordingId === rec.id;
                 const isDone = rec.status === 'concluida';
 
                 return (
@@ -636,7 +641,7 @@ export default function VideomakerDashboard() {
                   )}
                   {dayRecs.map(rec => {
                     const color = getClientColor(rec.clientId);
-                    const isActive = myActiveRec?.recordingId === rec.id;
+                    const isActive = activeRecordingId === rec.id;
                     const isDone = rec.status === 'concluida';
                     return (
                       <div key={rec.id}

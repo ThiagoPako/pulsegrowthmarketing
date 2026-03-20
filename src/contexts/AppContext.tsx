@@ -206,7 +206,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateScript = useCallback((script: Script) => { data.updateScript(script); }, [data]);
   const deleteScript = useCallback((id: string) => { data.deleteScript(id); }, [data]);
   const updateSettings = useCallback((s: CompanySettings) => { data.updateSettings(s); }, [data]);
-  const startActiveRecording = useCallback((rec: ActiveRecording) => { data.startActiveRecording(rec); }, [data]);
+  const startActiveRecording = useCallback(async (rec: ActiveRecording) => { await data.startActiveRecording(rec); }, [data]);
   const stopActiveRecording = useCallback((recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]) => { data.stopActiveRecording(recordingId, deliveryOverrides, completedScriptIds); }, [data]);
 
   const getSuggestionsForCancellation = useCallback((recording: Recording) => {

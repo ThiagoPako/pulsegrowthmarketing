@@ -58,7 +58,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
         .then(res => res.ok ? res.json() : Promise.reject())
         .then(data => {
-          const u = { id: data.user.id, email: data.user.email };
+          // Server returns { id, email, ... } directly (no .user wrapper)
+          const userData = data.user || data;
+          const u = { id: userData.id, email: userData.email };
           setUser(u);
           setSession({ access_token: token });
           fetchProfile(u.id);

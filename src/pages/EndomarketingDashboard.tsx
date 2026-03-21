@@ -150,9 +150,7 @@ export default function EndomarketingDashboard() {
             <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 2, repeat: Infinity }}>
-                    <Rocket size={14} className="text-warning -rotate-45" />
-                  </motion.div>
+                  <CalendarDays size={14} className="text-warning" />
                   <CardTitle className="text-sm sm:text-base">Tarefas de Hoje</CardTitle>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => navigate('/endomarketing/tarefas')} className="text-xs">

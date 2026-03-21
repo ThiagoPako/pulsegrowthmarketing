@@ -498,19 +498,49 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     setRescheduling(false);
   };
 
+  const handleCheckSpecialAvailability = async (date: string, time?: string) => {
+    setSpecialStep('checking');
+    const { data, error } = await invokeVpsFunction('portal-recordings', {
+      body: { action: 'check_special_availability', client_id: clientId, requested_date: date, requested_time: time || null }
+    });
+    if (data?.outside_hours) {
+      setSpecialAvailability(data);
+      setSpecialStep('outside_hours');
+    } else if (data) {
+      setSpecialAvailability(data);
+      // Pre-select main videomaker if available
+      if (data.main_videomaker && !data.main_videomaker.busy_at_time && data.main_videomaker.available_slots.length > 0) {
+        setSelectedSpecialVm(data.main_videomaker.id);
+        if (time && data.main_videomaker.available_slots.includes(time)) {
+          setSelectedSpecialSlot(time);
+        }
+      }
+      setSpecialStep('availability');
+    } else {
+      toast.error(error?.message || data?.error || 'Erro ao verificar disponibilidade');
+      setSpecialStep('date');
+    }
+  };
+
   const handleSendSpecialRequest = async () => {
     if (!specialDate || !specialComment.trim()) {
       toast.error('Preencha data e comentário');
       return;
     }
     setSendingSpecial(true);
-    const { data, error } = await invokeVpsFunction('portal-recordings', { body: { action: 'request_special', client_id: clientId, requested_date: specialDate, requested_time: specialTime || null, comment: specialComment } });
+    const { data, error } = await invokeVpsFunction('portal-recordings', {
+      body: {
+        action: 'request_special', client_id: clientId,
+        requested_date: specialDate, requested_time: selectedSpecialSlot || specialTime || null,
+        comment: specialComment, selected_videomaker_id: selectedSpecialVm || null,
+      }
+    });
     if (data?.success) {
-      toast.success('📹 Solicitação enviada!');
+      toast.success('📨 Solicitação enviada para aprovação!');
       setShowSpecialRequest(false);
-      setSpecialDate('');
-      setSpecialTime('');
-      setSpecialComment('');
+      setSpecialDate(''); setSpecialTime(''); setSpecialComment('');
+      setSpecialStep('date'); setSpecialAvailability(null);
+      setSelectedSpecialVm(''); setSelectedSpecialSlot('');
       await loadRecordings();
     } else {
       toast.error(error?.message || data?.error || 'Erro ao enviar');

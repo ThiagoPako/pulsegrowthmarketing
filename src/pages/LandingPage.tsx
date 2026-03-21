@@ -116,7 +116,7 @@ function Hero() {
           </motion.h1>
 
           <motion.p variants={fadeUp} custom={2} className="mt-6 text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Produzimos vídeos, artes e estratégias de marketing digital completas para sua empresa crescer no digital com consistência e profissionalismo.
+            Gravamos, editamos, criamos a estratégia, gerenciamos suas redes sociais e acompanhamos sua equipe comercial até fechar a venda. Somos sua agência de growth marketing de vendas completa.
           </motion.p>
 
           <motion.div variants={fadeUp} custom={3} className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">

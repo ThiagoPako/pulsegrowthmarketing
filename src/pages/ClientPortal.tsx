@@ -286,16 +286,14 @@ export default function ClientPortal() {
   const handleRequestAdjustment = async () => {
     if (!selectedContent || !adjustmentNote.trim() || !client) return;
     const author = getCommentAuthor();
-    await supabase.functions.invoke('portal-actions', {
-      body: {
-        action: 'request_adjustment',
-        content_id: selectedContent.id,
-        client_id: client.id,
-        author_name: author.name,
-        author_type: author.type,
-        author_id: author.id,
-        message: adjustmentNote,
-      },
+    await portalAction({
+      action: 'request_adjustment',
+      content_id: selectedContent.id,
+      client_id: client.id,
+      author_name: author.name,
+      author_type: author.type,
+      author_id: author.id,
+      message: adjustmentNote,
     });
     setContents(prev => prev.map(c => c.id === selectedContent.id ? { ...c, status: 'ajuste_solicitado' } : c));
     setSelectedContent(prev => prev ? { ...prev, status: 'ajuste_solicitado' } : null);

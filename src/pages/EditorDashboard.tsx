@@ -74,48 +74,13 @@ export function getTypeConfig(type: string) {
   return CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];
 }
 
-/* ─── Animated Rocket Mascot ──────────────────────────────── */
-function RocketMascot({ size = 48, className = '' }: { size?: number; className?: string }) {
+/* ─── Subtle Section Icon ──────────────────────────────── */
+function SectionIcon({ icon: Icon, size = 24, className = '' }: { icon: any; size?: number; className?: string }) {
   return (
     <motion.div className={className}
-      animate={{ y: [0, -6, 0], rotate: [0, 3, -3, 0] }}
-      transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}>
-      <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
-        {/* Flame */}
-        <motion.ellipse cx="32" cy="58" rx="6" ry="4"
-          animate={{ ry: [4, 6, 4], opacity: [0.8, 1, 0.8] }}
-          transition={{ duration: 0.4, repeat: Infinity }}
-          fill="url(#flameGrad)" />
-        {/* Body */}
-        <path d="M32 8C26 8 22 18 22 32V46C22 49 26 52 32 52C38 52 42 49 42 46V32C42 18 38 8 32 8Z" fill="url(#bodyGrad)" />
-        {/* Window */}
-        <circle cx="32" cy="28" r="7" fill="#1a1a2e" stroke="#e0e0e0" strokeWidth="1.5" />
-        {/* Eye whites */}
-        <ellipse cx="30" cy="27" rx="3" ry="3.5" fill="white" />
-        <ellipse cx="35" cy="27" rx="2.5" ry="3" fill="white" />
-        {/* Pupils */}
-        <motion.circle cx="30.5" cy="27.5" r="1.5" fill="#1a1a2e"
-          animate={{ cx: [30.5, 31, 30, 30.5] }}
-          transition={{ duration: 2.5, repeat: Infinity }} />
-        <motion.circle cx="35" cy="27.5" r="1.2" fill="#1a1a2e"
-          animate={{ cx: [35, 35.5, 34.5, 35] }}
-          transition={{ duration: 2.5, repeat: Infinity }} />
-        {/* Fins */}
-        <path d="M22 38L16 46C16 46 18 48 22 46V38Z" fill="hsl(var(--primary))" />
-        <path d="M42 38L48 46C48 46 46 48 42 46V38Z" fill="hsl(var(--primary))" />
-        {/* Nose */}
-        <path d="M28 8C28 8 32 2 36 8" fill="hsl(var(--destructive))" />
-        <defs>
-          <linearGradient id="bodyGrad" x1="32" y1="8" x2="32" y2="52">
-            <stop stopColor="hsl(var(--primary))" />
-            <stop offset="1" stopColor="hsl(var(--primary)/0.7)" />
-          </linearGradient>
-          <radialGradient id="flameGrad">
-            <stop stopColor="#fbbf24" />
-            <stop offset="1" stopColor="#ef4444" />
-          </radialGradient>
-        </defs>
-      </svg>
+      animate={{ opacity: [0.7, 1, 0.7] }}
+      transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}>
+      <Icon size={size} className="text-primary" />
     </motion.div>
   );
 }

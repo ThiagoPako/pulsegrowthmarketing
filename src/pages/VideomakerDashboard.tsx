@@ -828,12 +828,7 @@ export default function VideomakerDashboard() {
       {/* ── Kanban Semanal ── */}
       <div className="glass-card p-3 sm:p-5">
         <div className="flex items-center gap-2 mb-3 sm:mb-4">
-          <motion.div
-            animate={{ x: [0, 4, 0] }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-          >
-            <Rocket size={16} className="text-primary -rotate-45" />
-          </motion.div>
+          <Calendar size={16} className="text-primary" />
           <h3 className="font-display font-semibold text-sm">Minha Semana</h3>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0 sm:grid sm:grid-cols-5 sm:overflow-visible snap-x snap-mandatory -mx-1 px-1">

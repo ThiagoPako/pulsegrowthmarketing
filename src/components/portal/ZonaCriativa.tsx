@@ -214,7 +214,7 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
     const current = scripts.find(s => s.id === scriptId);
     const finalPriority = current?.client_priority === newPriority ? 'normal' : newPriority;
     
-    await supabase.from('scripts').update({ client_priority: finalPriority } as any).eq('id', scriptId);
+    const result = await portalAction({ action: 'set_script_priority', client_id: clientId, script_id: scriptId, priority: finalPriority });
     setScripts(prev => prev.map(s => s.id === scriptId ? { ...s, client_priority: finalPriority } : s));
     if (selectedScript?.id === scriptId) {
       setSelectedScript(prev => prev ? { ...prev, client_priority: finalPriority } : null);
@@ -222,8 +222,7 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
     toast.success(finalPriority === 'normal' ? 'Prioridade removida' : `Marcado como ${finalPriority === 'urgent' ? 'Urgente 🔥' : 'Prioridade 🚀'}`);
     
     if (current) {
-      const { data: clientData } = await supabase.from('clients').select('company_name').eq('id', clientId).single();
-      syncPortalScriptPriority(clientId, current.title, finalPriority, clientData?.company_name || '').catch(console.error);
+      syncPortalScriptPriority(clientId, current.title, finalPriority, result?.company_name || '').catch(console.error);
     }
   };
 

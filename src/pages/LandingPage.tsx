@@ -402,7 +402,7 @@ function Hero() {
               <Button
                 size="lg"
                 onClick={() => window.open(WHATSAPP_LINK, '_blank')}
-                className="gap-2 text-base px-8 py-6 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xl shadow-primary/25 hover:shadow-2xl hover:shadow-primary/35 transition-all duration-300 relative overflow-hidden group"
+                className="gap-2 text-sm sm:text-base px-6 sm:px-8 py-5 sm:py-6 w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground shadow-xl shadow-primary/25 hover:shadow-2xl hover:shadow-primary/35 transition-all duration-300 relative overflow-hidden group"
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
                 Quero crescer no digital <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />

@@ -1160,11 +1160,11 @@ function FAQ() {
   ];
 
   return (
-    <section id="faq" className="py-24 relative">
+    <section id="faq" className="py-16 sm:py-24 relative">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} variants={staggerContainer} className="text-center mb-16">
-          <motion.span variants={fadeUp} className="text-sm font-semibold text-primary uppercase tracking-wider">Perguntas Frequentes</motion.span>
-          <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3">
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }} variants={staggerContainer} className="text-center mb-10 sm:mb-16">
+          <motion.span variants={fadeUp} className="text-xs sm:text-sm font-semibold text-primary uppercase tracking-wider">Perguntas Frequentes</motion.span>
+          <motion.h2 variants={fadeUp} custom={1} className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mt-2 sm:mt-3">
             Tire suas dúvidas
           </motion.h2>
         </motion.div>

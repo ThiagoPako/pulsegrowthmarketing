@@ -1358,33 +1358,36 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
           <div className="space-y-1.5">
             {/* Captação: Add Drive link */}
             {onAddDriveLink && !task.drive_link && (
-              <button onClick={e => { e.stopPropagation(); onAddDriveLink(); }}
-                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-600 transition-colors text-[10px] font-semibold">
-                <Link2 size={11} /> Adicionar Link Drive
-              </button>
+              <motion.button whileTap={{ scale: 0.95 }} whileHover={{ scale: 1.02 }}
+                onClick={e => { e.stopPropagation(); onAddDriveLink(); }}
+                className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-600 transition-all text-[10px] font-bold shadow-sm hover:shadow-blue-500/10">
+                <Link2 size={12} /> Adicionar Link Drive
+              </motion.button>
             )}
             {/* Drive link exists indicator */}
             {task.drive_link && (task.kanban_column === 'captacao' || task.kanban_column === 'edicao') && (
               <a href={task.drive_link} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-colors w-full text-left group/drive">
-                <Link2 size={11} className="text-blue-600 shrink-0" />
-                <span className="text-[10px] font-medium text-blue-700 truncate flex-1">Materiais (Drive)</span>
+                className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-all w-full text-left group/drive shadow-sm hover:shadow-blue-500/10">
+                <Link2 size={12} className="text-blue-600 shrink-0" />
+                <span className="text-[10px] font-bold text-blue-700 truncate flex-1">Materiais (Drive)</span>
                 <ExternalLink size={10} className="text-blue-500/60 shrink-0" />
               </a>
             )}
             {/* Edição/Alteração: Add video link */}
             {onAddVideoLink && !task.edited_video_link && (
-              <button onClick={e => { e.stopPropagation(); onAddVideoLink(); }}
-                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 text-teal-600 transition-colors text-[10px] font-semibold">
-                <Film size={11} /> Adicionar Link Vídeo
-              </button>
+              <motion.button whileTap={{ scale: 0.95 }} whileHover={{ scale: 1.02 }}
+                onClick={e => { e.stopPropagation(); onAddVideoLink(); }}
+                className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 text-teal-600 transition-all text-[10px] font-bold shadow-sm hover:shadow-teal-500/10">
+                <Film size={12} /> Adicionar Link Vídeo
+              </motion.button>
             )}
             {/* Move to next column */}
             {onMoveToNext && (
-              <button onClick={e => { e.stopPropagation(); onMoveToNext(); }}
-                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary transition-colors text-[10px] font-semibold">
-                <ArrowRight size={11} /> Mover para {nextColumnLabel}
-              </button>
+              <motion.button whileTap={{ scale: 0.93 }} whileHover={{ scale: 1.02 }}
+                onClick={e => { e.stopPropagation(); onMoveToNext(); }}
+                className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-xl bg-gradient-to-r from-primary/10 to-primary/20 hover:from-primary/20 hover:to-primary/30 border border-primary/25 text-primary transition-all text-[10px] font-bold shadow-sm hover:shadow-primary/15">
+                <Rocket size={12} /> Mover para {nextColumnLabel}
+              </motion.button>
             )}
             {/* Agendamentos: Schedule */}
             {onSchedule && (

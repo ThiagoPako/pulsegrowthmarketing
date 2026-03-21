@@ -307,15 +307,13 @@ export default function ClientPortal() {
   const handleSendComment = async () => {
     if (!selectedContent || !newComment.trim() || !client) return;
     const author = getCommentAuthor();
-    await supabase.functions.invoke('portal-actions', {
-      body: {
-        action: 'add_comment',
-        content_id: selectedContent.id,
-        author_name: author.name,
-        author_type: author.type,
-        author_id: author.id,
-        message: newComment,
-      },
+    await portalAction({
+      action: 'add_comment',
+      content_id: selectedContent.id,
+      author_name: author.name,
+      author_type: author.type,
+      author_id: author.id,
+      message: newComment,
     });
     const commentText = newComment;
     setNewComment('');

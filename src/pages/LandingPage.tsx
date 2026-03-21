@@ -416,7 +416,7 @@ function Hero() {
           </motion.div>
 
           {/* Animated Counters */}
-          <motion.div variants={fadeUp} custom={4} className="mt-20 grid grid-cols-2 sm:grid-cols-4 gap-8 max-w-3xl mx-auto">
+          <motion.div variants={fadeUp} custom={4} className="mt-14 sm:mt-20 grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-8 max-w-3xl mx-auto">
             {[
               { value: '100+', label: 'Clientes atendidos' },
               { value: '5.000+', label: 'Vídeos produzidos' },

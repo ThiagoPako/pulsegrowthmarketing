@@ -60,7 +60,7 @@ export default function PortalNotifications({ clientId, clientColor, onSelectCon
   const markAllRead = async () => {
     const unread = notifications.filter(n => !n.read).map(n => n.id);
     if (unread.length === 0) return;
-    await supabase.from('client_portal_notifications').update({ read: true } as any).in('id', unread);
+    await portalAction({ action: 'mark_notification_read', notification_ids: unread });
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 

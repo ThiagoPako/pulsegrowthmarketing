@@ -1334,54 +1334,274 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
         )}
       </AnimatePresence>
 
-      {/* ── Special Request Modal ── */}
+      {/* ── Special Request Modal — Smart Wizard ── */}
       <AnimatePresence>
         {showSpecialRequest && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setShowSpecialRequest(false)}>
+            className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+            onClick={() => { setShowSpecialRequest(false); setSpecialStep('date'); setSpecialAvailability(null); setSelectedSpecialVm(''); setSelectedSpecialSlot(''); }}>
             <motion.div initial={{ opacity: 0, scale: 0.9, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 30 }}
-              className="bg-[#12121e] border border-white/[0.08] rounded-2xl p-6 w-full max-w-md relative" onClick={e => e.stopPropagation()}>
+              className="bg-[#12121e] border border-white/[0.08] rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto relative" onClick={e => e.stopPropagation()}>
               <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl" style={{ background: `linear-gradient(90deg, hsl(${clientColor}), hsl(280 80% 60%))` }} />
               <div className="flex items-center justify-between mb-5 mt-1">
                 <div className="flex items-center gap-2.5">
                   <Sparkles size={18} style={{ color: `hsl(${clientColor})` }} />
-                  <h3 className="text-lg font-bold">Solicitar gravação especial</h3>
+                  <h3 className="text-lg font-bold">Gravação especial</h3>
                 </div>
-                <motion.button whileHover={{ rotate: 90 }} onClick={() => setShowSpecialRequest(false)} className="p-2 rounded-full hover:bg-white/10"><X size={16} /></motion.button>
+                <motion.button whileHover={{ rotate: 90 }} onClick={() => { setShowSpecialRequest(false); setSpecialStep('date'); setSpecialAvailability(null); }} className="p-2 rounded-full hover:bg-white/10"><X size={16} /></motion.button>
               </div>
-              <p className="text-xs text-white/40 mb-5">Quer gravar algo especial? Envie sua solicitação e a equipe vai confirmar!</p>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs font-bold text-white/50 mb-1.5 block">Data desejada</label>
-                  <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto">
-                    {nextDays.slice(0, 15).map(d => (
-                      <motion.button key={d} whileTap={{ scale: 0.95 }} onClick={() => setSpecialDate(d)}
-                        className={`py-2 px-2 rounded-xl text-xs font-medium transition-all border ${specialDate === d ? 'border-transparent text-white' : 'border-white/[0.06] bg-white/[0.03] text-white/60'}`}
-                        style={specialDate === d ? { background: `hsl(${clientColor})` } : {}}>
-                        <div className="capitalize font-bold">{format(parseISO(d), 'EEE', { locale: pt })}</div>
-                        <div className="font-extrabold mt-0.5">{format(parseISO(d), 'dd/MM')}</div>
+
+              {/* Step indicators */}
+              <div className="flex items-center gap-2 mb-5">
+                {['Data', 'Disponibilidade', 'Solicitação'].map((label, i) => {
+                  const stepOrder = ['date', 'availability', 'comment'];
+                  const currentIdx = specialStep === 'checking' ? 0 : specialStep === 'outside_hours' ? 1 : stepOrder.indexOf(specialStep);
+                  const isActive = i <= currentIdx;
+                  return (
+                    <div key={label} className="flex items-center gap-2 flex-1">
+                      <div className={`w-6 h-6 rounded-full text-[10px] font-bold flex items-center justify-center transition-all ${isActive ? 'text-white' : 'bg-white/[0.06] text-white/25'}`}
+                        style={isActive ? { background: `hsl(${clientColor})` } : {}}>{i + 1}</div>
+                      <span className={`text-[10px] font-medium ${isActive ? 'text-white/70' : 'text-white/25'} hidden sm:inline`}>{label}</span>
+                      {i < 2 && <div className={`h-px flex-1 ${isActive ? 'bg-white/20' : 'bg-white/[0.06]'}`} />}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <AnimatePresence mode="wait">
+                {/* STEP 1: Date & Time selection */}
+                {specialStep === 'date' && (
+                  <motion.div key="date" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+                    <p className="text-xs text-white/40">Escolha a data e horário desejados para sua gravação especial:</p>
+                    <div>
+                      <label className="text-xs font-bold text-white/50 mb-1.5 block">📅 Data desejada</label>
+                      <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto">
+                        {nextDays.slice(0, 15).map(d => (
+                          <motion.button key={d} whileTap={{ scale: 0.95 }} onClick={() => setSpecialDate(d)}
+                            className={`py-2 px-2 rounded-xl text-xs font-medium transition-all border ${specialDate === d ? 'border-transparent text-white' : 'border-white/[0.06] bg-white/[0.03] text-white/60'}`}
+                            style={specialDate === d ? { background: `hsl(${clientColor})` } : {}}>
+                            <div className="capitalize font-bold">{format(parseISO(d), 'EEE', { locale: pt })}</div>
+                            <div className="font-extrabold mt-0.5">{format(parseISO(d), 'dd/MM')}</div>
+                          </motion.button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-white/50 mb-1.5 block">🕐 Horário preferido (opcional)</label>
+                      <input type="time" value={specialTime} onChange={e => setSpecialTime(e.target.value)}
+                        className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white/80 focus:outline-none focus:border-white/20" />
+                    </div>
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                      onClick={() => handleCheckSpecialAvailability(specialDate, specialTime || undefined)}
+                      disabled={!specialDate}
+                      className="w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+                      style={{ background: `linear-gradient(135deg, hsl(${clientColor}), hsl(280 80% 60%))` }}>
+                      <CalendarDays size={14} /> Verificar disponibilidade
+                    </motion.button>
+                  </motion.div>
+                )}
+
+                {/* CHECKING */}
+                {specialStep === 'checking' && (
+                  <motion.div key="checking" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center py-12 gap-3">
+                    <Loader2 className="w-8 h-8 animate-spin" style={{ color: `hsl(${clientColor})` }} />
+                    <p className="text-sm text-white/40">Verificando disponibilidade...</p>
+                  </motion.div>
+                )}
+
+                {/* OUTSIDE HOURS */}
+                {specialStep === 'outside_hours' && (
+                  <motion.div key="outside" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-5 text-center space-y-3">
+                      <AlertTriangle size={28} className="mx-auto text-amber-400" />
+                      <h4 className="text-base font-bold text-amber-300">Fora do horário comercial</h4>
+                      <p className="text-sm text-white/50 leading-relaxed">
+                        {specialAvailability?.message || 'Este horário está fora do expediente da agência.'}
+                      </p>
+                      <div className="bg-white/[0.05] border border-white/[0.08] rounded-xl p-4 mt-4">
+                        <p className="text-xs font-bold text-white/60 mb-2">📞 Entre em contato diretamente:</p>
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center gap-2 text-sm text-white/80 font-medium"><span className="text-base">👤</span> Thiago</div>
+                          <div className="flex items-center gap-2 text-sm text-white/80 font-medium"><span className="text-base">👤</span> Victor</div>
+                        </div>
+                      </div>
+                    </div>
+                    <motion.button whileTap={{ scale: 0.95 }} onClick={() => { setSpecialStep('date'); setSpecialTime(''); }}
+                      className="w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition-all text-white/50">
+                      <ChevronLeft size={14} /> Escolher outro horário
+                    </motion.button>
+                  </motion.div>
+                )}
+
+                {/* STEP 2: Availability results */}
+                {specialStep === 'availability' && specialAvailability && (
+                  <motion.div key="avail" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+                    
+                    {/* Main videomaker info */}
+                    {specialAvailability.main_videomaker && (
+                      <div className="space-y-3">
+                        {specialAvailability.main_videomaker.busy_at_time && specialTime && (
+                          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <AlertTriangle size={16} className="text-amber-400 shrink-0" />
+                              <p className="text-sm font-bold text-amber-300">Videomaker ocupado</p>
+                            </div>
+                            <p className="text-xs text-white/50">
+                              <strong className="text-white/70">{specialAvailability.main_videomaker.name}</strong> já tem agenda às <strong className="text-white/70">{specialTime}</strong> no dia selecionado.
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Main VM available slots */}
+                        {specialAvailability.main_videomaker.available_slots.length > 0 ? (
+                          <div className={`rounded-xl border p-4 transition-all cursor-pointer ${selectedSpecialVm === specialAvailability.main_videomaker.id ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-white/[0.08] bg-white/[0.03]'}`}
+                            onClick={() => { setSelectedSpecialVm(specialAvailability.main_videomaker.id); setSelectedSpecialSlot(''); }}>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <Video size={14} style={{ color: `hsl(${clientColor})` }} />
+                                <span className="text-sm font-bold text-white/80">{specialAvailability.main_videomaker.name}</span>
+                                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 font-bold">Seu videomaker</span>
+                              </div>
+                            </div>
+                            {selectedSpecialVm === specialAvailability.main_videomaker.id && (
+                              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-3 space-y-2">
+                                <p className="text-[11px] text-white/40">Horários disponíveis em {format(parseISO(specialDate), 'dd/MM', { locale: pt })}:</p>
+                                <div className="grid grid-cols-4 gap-1.5">
+                                  {specialAvailability.main_videomaker.available_slots.map((slot: string) => (
+                                    <motion.button key={slot} whileTap={{ scale: 0.95 }}
+                                      onClick={(e) => { e.stopPropagation(); setSelectedSpecialSlot(slot); }}
+                                      className={`py-2 rounded-lg text-xs font-bold transition-all ${selectedSpecialSlot === slot ? 'text-white' : 'bg-white/[0.05] text-white/60 hover:bg-white/[0.1] border border-white/[0.06]'}`}
+                                      style={selectedSpecialSlot === slot ? { background: `hsl(${clientColor})` } : {}}>{slot}</motion.button>
+                                  ))}
+                                </div>
+                              </motion.div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 space-y-2">
+                            <p className="text-sm font-bold text-red-300 flex items-center gap-2">
+                              <X size={14} /> Sem vaga neste dia
+                            </p>
+                            <p className="text-xs text-white/50">
+                              <strong className="text-white/70">{specialAvailability.main_videomaker.name}</strong> não tem horários disponíveis em {format(parseISO(specialDate), 'dd/MM')}.
+                            </p>
+                            {specialAvailability.main_videomaker.nearest_available_date && (
+                              <motion.button whileTap={{ scale: 0.95 }}
+                                onClick={() => { setSpecialDate(specialAvailability.main_videomaker.nearest_available_date); setSpecialStep('date'); setSpecialTime(''); }}
+                                className="mt-2 w-full py-2 rounded-lg text-xs font-bold bg-white/[0.06] text-white/60 hover:bg-white/[0.1] transition-all flex items-center justify-center gap-1.5 border border-white/[0.08]">
+                                <CalendarDays size={12} /> Próxima data: {format(parseISO(specialAvailability.main_videomaker.nearest_available_date), "EEE dd/MM", { locale: pt })}
+                              </motion.button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Alternative videomakers */}
+                    {specialAvailability.alternative_videomakers?.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <div className="h-px flex-1 bg-white/[0.06]" />
+                          <span className="text-[9px] font-bold text-white/25 uppercase tracking-wider">Outros videomakers</span>
+                          <div className="h-px flex-1 bg-white/[0.06]" />
+                        </div>
+                        {specialAvailability.alternative_videomakers.map((vm: any) => (
+                          <div key={vm.id} className={`rounded-xl border p-3 transition-all cursor-pointer ${selectedSpecialVm === vm.id ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06]'}`}
+                            onClick={() => { setSelectedSpecialVm(vm.id); setSelectedSpecialSlot(''); }}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm font-bold text-white/80 flex items-center gap-2">
+                                <Video size={13} className="text-white/30" />{vm.name}
+                              </span>
+                              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300">{vm.total_free} horário{vm.total_free > 1 ? 's' : ''}</span>
+                            </div>
+                            {selectedSpecialVm === vm.id && (
+                              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-2 space-y-2">
+                                <p className="text-[11px] text-white/40">Escolha o horário:</p>
+                                <div className="grid grid-cols-4 gap-1.5">
+                                  {vm.available_slots.map((slot: string) => (
+                                    <motion.button key={slot} whileTap={{ scale: 0.95 }}
+                                      onClick={(e) => { e.stopPropagation(); setSelectedSpecialSlot(slot); }}
+                                      className={`py-2 rounded-lg text-xs font-bold transition-all ${selectedSpecialSlot === slot ? 'text-white' : 'bg-white/[0.05] text-white/60 hover:bg-white/[0.1] border border-white/[0.06]'}`}
+                                      style={selectedSpecialSlot === slot ? { background: `hsl(${clientColor})` } : {}}>{slot}</motion.button>
+                                  ))}
+                                </div>
+                              </motion.div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 pt-2">
+                      <motion.button whileTap={{ scale: 0.95 }} onClick={() => setSpecialStep('date')}
+                        className="py-3 px-4 rounded-xl text-sm font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition-all text-white/50">
+                        <ChevronLeft size={14} />
                       </motion.button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-white/50 mb-1.5 block">Horário preferido (opcional)</label>
-                  <input type="time" value={specialTime} onChange={e => setSpecialTime(e.target.value)}
-                    className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white/80 focus:outline-none focus:border-white/20" />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-white/50 mb-1.5 block">O que você deseja gravar? *</label>
-                  <textarea value={specialComment} onChange={e => setSpecialComment(e.target.value)} rows={3}
-                    placeholder="Ex: Dia 25 vai ter um café da manhã na loja..."
-                    className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white/80 placeholder:text-white/20 focus:outline-none focus:border-white/20 resize-none" />
-                </div>
-                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                  onClick={handleSendSpecialRequest} disabled={sendingSpecial || !specialDate || !specialComment.trim()}
-                  className="w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40 flex items-center justify-center gap-2"
-                  style={{ background: `linear-gradient(135deg, hsl(${clientColor}), hsl(280 80% 60%))`, boxShadow: `0 4px 20px hsl(${clientColor} / 0.3)` }}>
-                  {sendingSpecial ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send size={14} /> Enviar solicitação</>}
-                </motion.button>
-              </div>
+                      <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                        onClick={() => setSpecialStep('comment')}
+                        disabled={!selectedSpecialSlot}
+                        className="flex-1 py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+                        style={{ background: `linear-gradient(135deg, hsl(${clientColor}), hsl(280 80% 60%))` }}>
+                        Continuar <ArrowRight size={14} />
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* STEP 3: Comment & send */}
+                {specialStep === 'comment' && (
+                  <motion.div key="comment" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+                    {/* Summary */}
+                    <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-4 space-y-2">
+                      <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Resumo da solicitação</p>
+                      <div className="flex items-center gap-3 text-sm">
+                        <span className="text-base">📅</span>
+                        <span className="text-white/70 font-bold capitalize">{specialDate && format(parseISO(specialDate), "EEEE, dd/MM", { locale: pt })}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-sm">
+                        <span className="text-base">🕐</span>
+                        <span className="text-white/70 font-bold">{selectedSpecialSlot || specialTime || 'A definir'}</span>
+                      </div>
+                      {selectedSpecialVm && specialAvailability && (
+                        <div className="flex items-center gap-3 text-sm">
+                          <span className="text-base">🎬</span>
+                          <span className="text-white/70 font-bold">
+                            {specialAvailability.main_videomaker?.id === selectedSpecialVm
+                              ? specialAvailability.main_videomaker.name
+                              : specialAvailability.alternative_videomakers?.find((v: any) => v.id === selectedSpecialVm)?.name || 'Videomaker'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+                      <p className="text-[11px] text-amber-300 font-medium flex items-center gap-1.5">
+                        <AlertTriangle size={12} /> Esta solicitação será enviada para aprovação da equipe
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-white/50 mb-1.5 block">O que você deseja gravar? *</label>
+                      <textarea value={specialComment} onChange={e => setSpecialComment(e.target.value)} rows={3}
+                        placeholder="Ex: Dia 25 vai ter um café da manhã na loja e quero registrar..."
+                        className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white/80 placeholder:text-white/20 focus:outline-none focus:border-white/20 resize-none" />
+                    </div>
+
+                    <div className="flex gap-2">
+                      <motion.button whileTap={{ scale: 0.95 }} onClick={() => setSpecialStep('availability')}
+                        className="py-3 px-4 rounded-xl text-sm font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition-all text-white/50">
+                        <ChevronLeft size={14} />
+                      </motion.button>
+                      <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                        onClick={handleSendSpecialRequest} disabled={sendingSpecial || !specialComment.trim()}
+                        className="flex-1 py-3.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+                        style={{ background: `linear-gradient(135deg, hsl(${clientColor}), hsl(280 80% 60%))`, boxShadow: `0 4px 20px hsl(${clientColor} / 0.3)` }}>
+                        {sendingSpecial ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send size={14} /> Enviar para aprovação</>}
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           </motion.div>
         )}

@@ -75,7 +75,7 @@ export default function ClientPortalRegister() {
             )}
             <h1 className="text-lg font-bold text-white mt-4">Conta já criada</h1>
             <p className="text-sm text-white/40 mt-2">Você já possui uma conta. Faça login para acessar seu portal.</p>
-            <button onClick={() => navigate(`/portal-login/${portalSlug}`)} className="w-full mt-6 py-3 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90" style={{ background: `hsl(${clientColor})` }}>
+            <button onClick={() => navigate(`/portal-login/${clientId}`)} className="w-full mt-6 py-3 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90" style={{ background: `hsl(${clientColor})` }}>
               Ir para Login
             </button>
           </div>

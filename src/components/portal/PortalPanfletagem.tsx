@@ -842,7 +842,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       }
       setGenerating(false);
 
-      const { data: item, error } = await supabase.from('flyer_items').insert({
+      const result = await portalAction({
+        action: 'create_flyer_item',
         client_id: clientId,
         template_id: selectedTemplate || null,
         vehicle_model: model.trim(),
@@ -853,13 +854,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         price: price ? formatPrice(price) : '',
         extra_info: extraInfo.trim() || null,
         media_urls: uploadedUrls,
-        generated_image_url: generatedUrl || null,
-        status: generatedUrl ? 'gerado' : 'rascunho',
-      }).select().single();
+      });
 
-      if (error) throw error;
+      if (result?.error) throw new Error(result.error);
       toast.success('Panfleto criado com sucesso!');
-      if (item) { setItems(prev => [item as FlyerItem, ...prev]); setPreviewItem(item as FlyerItem); }
+      if (result?.item) { setItems(prev => [result.item as FlyerItem, ...prev]); setPreviewItem(result.item as FlyerItem); }
       setModel(''); setYear(''); setTransmission('manual'); setFuelType('flex');
       setTireCondition('bom'); setPrice(''); setExtraInfo('');
       setMediaFiles([]); setMediaPreviews([]);

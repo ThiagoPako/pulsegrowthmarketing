@@ -405,11 +405,11 @@ function FAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const faqs = [
     { q: 'Como funciona o processo de gravação?', a: 'Nossos videomakers vão até sua empresa nos dias agendados, gravam os conteúdos planejados e enviam para nossa equipe de edição. Todo o processo é acompanhado pelo Portal do Cliente.' },
-    { q: 'Vocês atendem em qual região?', a: 'Atendemos empresas em todo o Norte de Minas Gerais, com foco nas cidades de Montes Claros e região. Para outras localidades, entre em contato para verificar a disponibilidade.' },
+    { q: 'Vocês atendem em qual região?', a: 'Somos de Minaçu - GO, mas atendemos empresas em todo o Brasil! Para clientes de outras cidades, adaptamos nosso modelo de produção para garantir a mesma qualidade.' },
     { q: 'Quanto tempo leva para os resultados aparecerem?', a: 'Os primeiros resultados começam a aparecer entre 30 e 90 dias, dependendo do nicho e do investimento. O marketing digital é um trabalho contínuo que cresce com consistência.' },
     { q: 'Posso aprovar os conteúdos antes de serem publicados?', a: 'Sim! Todos os conteúdos são enviados para sua aprovação através do nosso Portal do Cliente. Você pode assistir, aprovar ou solicitar ajustes diretamente pela plataforma.' },
-    { q: 'Qual é o prazo mínimo de contrato?', a: 'Trabalhamos com contratos a partir de 6 meses, pois o marketing digital requer consistência para gerar resultados sólidos. Oferecemos condições especiais para contratos mais longos.' },
-    { q: 'Vocês fazem tráfego pago também?', a: 'Sim! Gerenciamos campanhas no Meta Ads (Instagram/Facebook) e Google Ads. O investimento em mídia é definido conforme seu orçamento e objetivos.' },
+    { q: 'O que diferencia a Pulse de outras agências?', a: 'Nós não fazemos só o tráfego pago. Cuidamos de todo o processo: gravamos, editamos, gerenciamos suas redes e ainda acompanhamos sua equipe comercial até fechar a venda, criando métodos e orientando como converter mais clientes.' },
+    { q: 'Vocês fazem assessoria comercial?', a: 'Sim! Temos uma equipe de assessoria comercial completa. Acompanhamos seu time de atendimento, criamos scripts de abordagem e orientamos como fechar mais negócios a partir dos leads gerados.' },
   ];
 
   return (

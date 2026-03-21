@@ -34,6 +34,7 @@ export default function CompanySettings() {
   const [confirmText, setConfirmText] = useState('');
   const [resetting, setResetting] = useState(false);
   const [showDangerZone, setShowDangerZone] = useState(false);
+  const [assistantEnabled, setAssistantEnabled] = useState(() => localStorage.getItem(ASSISTANT_KEY) !== 'false');
 
   const isAdmin = currentUser?.role === 'admin';
 

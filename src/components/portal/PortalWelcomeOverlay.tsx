@@ -314,45 +314,33 @@ export function PortalVideoButtons({ hasNews, hasWelcome, isNewClient = false }:
         </motion.button>
       )}
 
-      {/* Bem-vindo: always visible, but glowing only for new clients */}
-      <motion.button
-        onClick={() => triggerVideo('welcome')}
-        className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold overflow-hidden ${
-          !hasWelcome ? 'opacity-50 pointer-events-none' : ''
-        }`}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-      >
-        {isNewClient ? (
-          <>
-            <motion.div
-              className="absolute inset-0 rounded-full bg-gradient-to-r from-violet-500 via-purple-400 to-fuchsia-500"
-              animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
-              transition={{ duration: 3, repeat: Infinity }}
-              style={{ backgroundSize: '200% 200%' }}
-            />
-            <div className="absolute -inset-[2px] rounded-full bg-gradient-to-r from-violet-500 via-purple-400 to-fuchsia-500 opacity-50 blur-md animate-pulse" />
-            <span className="relative z-10 flex items-center gap-1.5 text-white">
-              <motion.span animate={{ scale: [1, 1.3, 1] }} transition={{ duration: 2, repeat: Infinity }}>
-                🌟
-              </motion.span>
-              <span className="hidden sm:inline">Bem-vindo</span>
-            </span>
-            <motion.div className="absolute top-0 left-2 w-1 h-1 rounded-full bg-white"
-              animate={{ scale: [0, 1, 0], opacity: [0, 1, 0] }}
-              transition={{ duration: 1.2, repeat: Infinity, delay: 0.5 }}
-            />
-          </>
-        ) : (
-          <>
-            <div className="absolute inset-0 rounded-full bg-white/[0.08] border border-white/[0.1]" />
-            <span className="relative z-10 flex items-center gap-1.5 text-white/60">
+      {/* Bem-vindo: always visible and active like news button */}
+      {hasWelcome && (
+        <motion.button
+          onClick={() => triggerVideo('welcome')}
+          className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold overflow-hidden"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          <motion.div
+            className="absolute inset-0 rounded-full bg-gradient-to-r from-violet-500 via-purple-400 to-fuchsia-500"
+            animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+            transition={{ duration: 3, repeat: Infinity }}
+            style={{ backgroundSize: '200% 200%' }}
+          />
+          <div className="absolute -inset-[2px] rounded-full bg-gradient-to-r from-violet-500 via-purple-400 to-fuchsia-500 opacity-50 blur-md animate-pulse" />
+          <span className="relative z-10 flex items-center gap-1.5 text-white">
+            <motion.span animate={{ scale: [1, 1.3, 1] }} transition={{ duration: 2, repeat: Infinity }}>
               🌟
-              <span className="hidden sm:inline">Bem-vindo</span>
-            </span>
-          </>
-        )}
-      </motion.button>
+            </motion.span>
+            <span className="hidden sm:inline">Bem-vindo</span>
+          </span>
+          <motion.div className="absolute top-0 left-2 w-1 h-1 rounded-full bg-white"
+            animate={{ scale: [0, 1, 0], opacity: [0, 1, 0] }}
+            transition={{ duration: 1.2, repeat: Infinity, delay: 0.5 }}
+          />
+        </motion.button>
+      )}
     </div>
   );
 }

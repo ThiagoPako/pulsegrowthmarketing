@@ -114,7 +114,7 @@ export default function ClientPortal() {
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoLoadError, setVideoLoadError] = useState<string | null>(null);
   const commentsEndRef = useRef<HTMLDivElement>(null);
-  const [portalVideoState, setPortalVideoState] = useState({ hasNews: false, hasWelcome: false });
+  const [portalVideoState, setPortalVideoState] = useState({ hasNews: false, hasWelcome: false, isNewClient: false });
 
   // Auth state: team member or client login
   const isTeamMember = !!user && !!profile;
@@ -470,7 +470,7 @@ export default function ClientPortal() {
       {/* Welcome / News video overlay */}
       <PortalWelcomeOverlay
         clientId={client.id}
-        onVideosLoaded={(data) => setPortalVideoState({ hasNews: data.hasNews, hasWelcome: data.hasWelcome })}
+        onVideosLoaded={(data) => setPortalVideoState({ hasNews: data.hasNews, hasWelcome: data.hasWelcome, isNewClient: data.isNewClient })}
       />
       {/* ── HEADER ── */}
       <header className="sticky top-0 z-50 bg-[#080810]/80 backdrop-blur-xl border-b border-white/[0.06]">
@@ -538,7 +538,7 @@ export default function ClientPortal() {
                 </button>
               )}
             </div>
-            <PortalVideoButtons hasNews={portalVideoState.hasNews} hasWelcome={portalVideoState.hasWelcome} />
+            <PortalVideoButtons hasNews={portalVideoState.hasNews} hasWelcome={portalVideoState.hasWelcome} isNewClient={portalVideoState.isNewClient} />
             <PortalNotifications
               clientId={client.id}
               clientColor={clientColor}

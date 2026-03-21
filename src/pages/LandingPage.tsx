@@ -220,7 +220,7 @@ function Servicos() {
             Tudo que sua marca precisa para crescer
           </motion.h2>
           <motion.p variants={fadeUp} custom={2} className="text-muted-foreground mt-4 max-w-xl mx-auto">
-            Oferecemos soluções completas de marketing digital — da produção à publicação — para que sua empresa tenha presença profissional e constante.
+            Do conteúdo à venda fechada — cuidamos de tudo para sua empresa crescer no digital com resultados reais.
           </motion.p>
         </motion.div>
 

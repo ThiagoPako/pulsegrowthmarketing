@@ -320,6 +320,7 @@ async function callAi(ai, model, messages, options = {}) {
 
 // WhatsApp helper
 const WHATSAPP_API_URL = 'https://api.atendeclique.com.br/api/messages/send';
+const PORTAL_BASE_URL = 'https://pulsegrowthmarketing.lovable.app/portal';
 
 async function sendWhatsAppDirect(config, number, message, supabase, clientId, triggerType) {
   try {

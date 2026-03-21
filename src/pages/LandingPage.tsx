@@ -709,20 +709,20 @@ function ComoFunciona() {
       </section>
 
       {/* Portal */}
-      <section id="portal" className="py-24 relative overflow-hidden">
-        <div className="absolute top-1/2 right-0 -translate-y-1/2 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[120px]" />
+      <section id="portal" className="py-16 sm:py-24 relative overflow-hidden">
+        <div className="absolute top-1/2 right-0 -translate-y-1/2 w-[300px] sm:w-[500px] h-[300px] sm:h-[500px] bg-primary/5 rounded-full blur-[80px] sm:blur-[120px]" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} variants={staggerContainer} className="text-center mb-16">
-            <motion.span variants={fadeUp} className="text-sm font-semibold text-primary uppercase tracking-wider">Exclusivo para Clientes</motion.span>
-            <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }} variants={staggerContainer} className="text-center mb-10 sm:mb-16">
+            <motion.span variants={fadeUp} className="text-xs sm:text-sm font-semibold text-primary uppercase tracking-wider">Exclusivo para Clientes</motion.span>
+            <motion.h2 variants={fadeUp} custom={1} className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mt-2 sm:mt-3">
               Portal do Cliente — Pulse Club
             </motion.h2>
-            <motion.p variants={fadeUp} custom={2} className="text-muted-foreground mt-4 max-w-2xl mx-auto">
+            <motion.p variants={fadeUp} custom={2} className="text-sm sm:text-base text-muted-foreground mt-3 sm:mt-4 max-w-2xl mx-auto">
               Todos os nossos clientes têm acesso exclusivo ao <strong className="text-foreground">Portal Pulse Club</strong> — sua área de membros onde você acompanha tudo em tempo real: agenda de gravações, aprovação de conteúdos, comunicação com a equipe e muito mais.
             </motion.p>
           </motion.div>
 
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-40px' }} variants={staggerContainer} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 max-w-5xl mx-auto">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-30px' }} variants={staggerContainer} className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 max-w-5xl mx-auto">
             {portalFeatures.map((f, i) => (
               <motion.div
                 key={f.label}

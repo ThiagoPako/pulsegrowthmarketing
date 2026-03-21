@@ -91,11 +91,23 @@ export default function PortalWelcomeOverlay({ clientId }: { clientId: string })
   const [phase, setPhase] = useState<'idle' | 'animation' | 'video' | 'done'>('idle');
   const [muted, setMuted] = useState(false);
   const [videoType, setVideoType] = useState<'welcome' | 'news'>('welcome');
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     checkForVideos();
   }, [clientId]);
+
+  // Resolve video URL through proxy when video is set
+  useEffect(() => {
+    if (!video) return;
+    let cancelled = false;
+    setResolvedUrl(null);
+    resolveVideoUrl(video.video_url)
+      .then(url => { if (!cancelled) setResolvedUrl(url); })
+      .catch(err => console.error('[WelcomeOverlay] proxy error:', err));
+    return () => { cancelled = true; };
+  }, [video]);
 
   const checkForVideos = async () => {
     const result = await portalAction({ action: 'get_portal_videos', client_id: clientId });

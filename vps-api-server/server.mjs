@@ -886,6 +886,126 @@ app.post('/api/portal-actions', async (req, res) => {
       return res.json({ success: true });
     }
 
+    // ── Get single content by ID ──
+    if (action === 'get_content_by_id') {
+      if (!content_id) return res.status(400).json({ error: 'content_id required' });
+      const { rows: [content] } = await pool.query('SELECT * FROM client_portal_contents WHERE id = $1', [content_id]);
+      if (!content) return res.status(404).json({ error: 'Content not found' });
+      return res.json({ content });
+    }
+
+    // ── Create portal content ──
+    if (action === 'create_portal_content') {
+      const { title, content_type, file_url, season_month, season_year, status } = req.body;
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      await pool.query(
+        `INSERT INTO client_portal_contents (client_id, title, content_type, file_url, season_month, season_year, status) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [client_id, title || '', content_type || 'reel', file_url || null, season_month || new Date().getMonth() + 1, season_year || new Date().getFullYear(), status || 'pendente']
+      );
+      return res.json({ success: true });
+    }
+
+    // ── Portal videos (welcome/news) ──
+    if (action === 'get_portal_videos') {
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      const { rows: videos } = await pool.query('SELECT * FROM portal_videos WHERE is_active = true ORDER BY created_at DESC');
+      const { rows: views } = await pool.query('SELECT video_id FROM portal_video_views WHERE client_id = $1', [client_id]);
+      return res.json({ videos, viewed_ids: views.map(v => v.video_id) });
+    }
+
+    if (action === 'mark_video_viewed') {
+      const { video_id } = req.body;
+      if (!client_id || !video_id) return res.status(400).json({ error: 'client_id and video_id required' });
+      await pool.query('INSERT INTO portal_video_views (video_id, client_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [video_id, client_id]);
+      return res.json({ success: true });
+    }
+
+    // ── Sync: Approval ──
+    if (action === 'sync_approval') {
+      const { content_title } = req.body;
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      // Find matching content_task
+      const { rows: [task] } = await pool.query(
+        `SELECT id, assigned_to, script_id FROM content_tasks WHERE client_id = $1 AND title = $2 AND kanban_column IN ('envio', 'revisao', 'agendamentos') ORDER BY created_at DESC LIMIT 1`,
+        [client_id, content_title]
+      );
+      if (task) {
+        await pool.query(`UPDATE content_tasks SET kanban_column = 'agendamentos', approved_at = NOW(), updated_at = NOW() WHERE id = $1`, [task.id]);
+        await pool.query(`INSERT INTO task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, $4)`,
+          [task.id, '✅ Aprovado pelo cliente via Pulse Club', null, null]);
+      }
+      // Notify social_media and admin
+      const { rows: notifUsers } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
+      for (const u of notifUsers) {
+        await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
+          [u.user_id, '✅ Conteúdo aprovado pelo cliente', `"${content_title}" foi aprovado no Pulse Club`, 'approval', '/conteudo']);
+      }
+      return res.json({ success: true });
+    }
+
+    // ── Sync: Adjustment ──
+    if (action === 'sync_adjustment') {
+      const { content_title, adjustment_note } = req.body;
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      const { rows: [task] } = await pool.query(
+        `SELECT id, assigned_to FROM content_tasks WHERE client_id = $1 AND title = $2 AND kanban_column IN ('envio', 'revisao', 'agendamentos') ORDER BY created_at DESC LIMIT 1`,
+        [client_id, content_title]
+      );
+      if (task) {
+        await pool.query(`UPDATE content_tasks SET kanban_column = 'alteracao', adjustment_notes = $1, updated_at = NOW() WHERE id = $2`, [adjustment_note, task.id]);
+        await pool.query(`INSERT INTO task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, $4)`,
+          [task.id, '🔧 Ajuste solicitado pelo cliente via Pulse Club', adjustment_note, null]);
+        if (task.assigned_to) {
+          await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
+            [task.assigned_to, '🔧 Ajuste solicitado pelo cliente', `"${content_title}" precisa de ajustes: ${(adjustment_note || '').substring(0, 80)}`, 'adjustment', '/edicao/kanban']);
+        }
+      }
+      const { rows: notifUsers } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
+      for (const u of notifUsers) {
+        await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
+          [u.user_id, '🔧 Ajuste solicitado no Pulse Club', `Cliente solicitou ajuste em "${content_title}": ${(adjustment_note || '').substring(0, 80)}`, 'adjustment', '/entregas-social']);
+      }
+      return res.json({ success: true });
+    }
+
+    // ── Sync: Comment notification ──
+    if (action === 'sync_comment') {
+      const { content_title, author_name: syncAuthorName, author_type: syncAuthorType, message: syncMessage } = req.body;
+      if (syncAuthorType === 'client') {
+        const { rows: notifUsers } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
+        for (const u of notifUsers) {
+          await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
+            [u.user_id, '💬 Comentário do cliente', `${syncAuthorName} comentou em "${content_title}": ${(syncMessage || '').substring(0, 60)}`, 'comment', '/conteudos-portal']);
+        }
+      }
+      if (syncAuthorType === 'team' && client_id) {
+        await pool.query(`INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)`,
+          [client_id, '💬 Nova mensagem da equipe', `${syncAuthorName} comentou em "${content_title}"`, 'comment']);
+      }
+      return res.json({ success: true });
+    }
+
+    // ── Sync: Script priority ──
+    if (action === 'sync_script_priority') {
+      const { script_title, new_priority, client_name } = req.body;
+      const emoji = new_priority === 'urgent' ? '🚨' : '⭐';
+      const label = new_priority === 'urgent' ? 'URGENTE' : 'Prioridade';
+      const { rows: notifUsers } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
+      for (const u of notifUsers) {
+        await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
+          [u.user_id, `${emoji} Roteiro marcado como ${label}`, `${client_name} marcou "${script_title}" como ${label} no Pulse Club`, 'priority', '/roteiros']);
+      }
+      // Create portal notification
+      if (client_id) {
+        const { rows: [script] } = await pool.query('SELECT id FROM scripts WHERE client_id = $1 AND title = $2 LIMIT 1', [client_id, script_title]);
+        if (script) {
+          await pool.query(`INSERT INTO client_portal_notifications (client_id, title, message, type, link_script_id) VALUES ($1, $2, $3, $4, $5)`,
+            [client_id, `${emoji} Roteiro ${label}`, `"${script_title}" foi marcado como ${label}`, 'priority', script.id]);
+        }
+      }
+      return res.json({ success: true });
+    }
+
     res.status(400).json({ error: 'Invalid action' });
   } catch (err) {
     console.error('Portal actions error:', err);

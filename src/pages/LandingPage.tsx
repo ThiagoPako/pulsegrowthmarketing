@@ -28,6 +28,7 @@ function Navbar() {
   const navigate = useNavigate();
   const links = [
     { label: 'Serviços', href: '#servicos' },
+    { label: 'Como Funciona', href: '#portal' },
     { label: 'Planos', href: '#planos' },
     { label: 'Cases', href: '#cases' },
     { label: 'Depoimentos', href: '#depoimentos' },
@@ -237,6 +238,100 @@ function Servicos() {
         </motion.div>
       </div>
     </section>
+  );
+}
+
+// ─── Como Funciona + Portal ────────────────────────────────
+function ComoFunciona() {
+  const steps = [
+    { num: '01', title: 'Briefing & Estratégia', desc: 'Entendemos seu negócio, definimos metas e criamos o calendário editorial personalizado para sua marca.', icon: Target },
+    { num: '02', title: 'Gravação Profissional', desc: 'Nosso videomaker vai até sua empresa nos dias agendados. Você confirma a agenda pelo Portal do Cliente.', icon: Camera },
+    { num: '03', title: 'Edição & Design', desc: 'Editamos os vídeos e criamos as artes com qualidade profissional. Tudo passa pelo controle de qualidade interno.', icon: Film },
+    { num: '04', title: 'Aprovação no Portal', desc: 'Você recebe os conteúdos no Portal do Cliente, assiste, aprova ou solicita ajustes — tudo online.', icon: CheckCircle2 },
+    { num: '05', title: 'Publicação & Gestão', desc: 'Nosso social media publica nos melhores horários, responde interações e gerencia seus perfis diariamente.', icon: Instagram },
+    { num: '06', title: 'Vendas & Resultados', desc: 'Rodamos tráfego pago, geramos leads e nossa assessoria acompanha sua equipe até fechar a venda.', icon: TrendingUp },
+  ];
+
+  const portalFeatures = [
+    { icon: Calendar, label: 'Agenda de Gravações', desc: 'Veja suas datas de gravação e confirme presença direto pelo portal.' },
+    { icon: Play, label: 'Biblioteca de Conteúdos', desc: 'Assista, aprove ou peça ajustes em todos seus vídeos e artes.' },
+    { icon: MessageCircle, label: 'Chat em Tempo Real', desc: 'Comunique-se com a equipe por comentários diretos em cada conteúdo.' },
+    { icon: Sparkles, label: 'Zona Criativa', desc: 'Envie referências, ideias e inspirações para a equipe.' },
+    { icon: BarChart3, label: 'Métricas de Entrega', desc: 'Acompanhe quantos reels, stories e artes já foram entregues.' },
+    { icon: Shield, label: 'Acesso Seguro', desc: 'Cada cliente tem login exclusivo com acesso apenas aos seus conteúdos.' },
+  ];
+
+  return (
+    <>
+      {/* Como funciona - Processo */}
+      <section className="py-20 bg-card border-y border-border/50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-100px' }} variants={staggerContainer} className="text-center mb-16">
+            <motion.span variants={fadeUp} className="text-sm font-semibold text-primary uppercase tracking-wider">Como Funciona</motion.span>
+            <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3">
+              Nosso processo de A a Z
+            </motion.h2>
+            <motion.p variants={fadeUp} custom={2} className="text-muted-foreground mt-4 max-w-xl mx-auto">
+              Da estratégia ao fechamento da venda — cada etapa é organizada, transparente e acompanhada por você.
+            </motion.p>
+          </motion.div>
+
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }} variants={staggerContainer} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {steps.map((s, i) => (
+              <motion.div key={s.num} variants={fadeUp} custom={i} className="relative p-6 rounded-2xl border border-border/60 bg-background hover:border-primary/30 transition-all group">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-3xl font-display font-black text-primary/20 group-hover:text-primary/40 transition-colors">{s.num}</span>
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <s.icon size={20} className="text-primary" />
+                  </div>
+                </div>
+                <h3 className="font-display text-base font-bold text-foreground">{s.title}</h3>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{s.desc}</p>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Portal do Cliente */}
+      <section id="portal" className="py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-100px' }} variants={staggerContainer} className="text-center mb-16">
+            <motion.span variants={fadeUp} className="text-sm font-semibold text-primary uppercase tracking-wider">Exclusivo para Clientes</motion.span>
+            <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3">
+              Portal do Cliente — Pulse Club
+            </motion.h2>
+            <motion.p variants={fadeUp} custom={2} className="text-muted-foreground mt-4 max-w-2xl mx-auto">
+              Todos os nossos clientes têm acesso exclusivo ao <strong className="text-foreground">Portal Pulse Club</strong> — sua área de membros onde você acompanha tudo em tempo real: agenda de gravações, aprovação de conteúdos, comunicação com a equipe e muito mais.
+            </motion.p>
+          </motion.div>
+
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }} variants={staggerContainer} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 max-w-5xl mx-auto">
+            {portalFeatures.map((f, i) => (
+              <motion.div key={f.label} variants={fadeUp} custom={i} className="p-5 rounded-2xl border border-primary/20 bg-primary/[0.02] hover:bg-primary/[0.05] transition-all">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
+                  <f.icon size={20} className="text-primary" />
+                </div>
+                <h3 className="font-display text-sm font-bold text-foreground">{f.label}</h3>
+                <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{f.desc}</p>
+              </motion.div>
+            ))}
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.4 }} className="mt-12 text-center">
+            <div className="inline-flex items-center gap-3 px-6 py-4 rounded-2xl border border-primary/20 bg-primary/[0.03]">
+              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
+                <Rocket size={20} className="text-primary-foreground" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-bold text-foreground">Incluso em todos os planos</p>
+                <p className="text-xs text-muted-foreground">Acesso ao portal com login exclusivo para cada cliente</p>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -566,6 +661,7 @@ export default function LandingPage() {
       <Hero />
       <Sobre />
       <Servicos />
+      <ComoFunciona />
       <Planos />
       <Cases />
       <Depoimentos />

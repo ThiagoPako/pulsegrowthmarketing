@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, Send, Eye, Maximize2 } from 'lucide-react';
+import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, Send, Eye, Maximize2, Rocket } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
@@ -22,6 +22,30 @@ import { getWhatsAppConfig, sendWhatsAppMessage } from '@/services/whatsappServi
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 import ContentTaskDetailSheet from '@/components/content/ContentTaskDetailSheet';
 import { motion, AnimatePresence } from 'framer-motion';
+
+/* ─── Mini Rocket Icon for headers ─────────────────────────── */
+function MiniRocket({ size = 18 }: { size?: number }) {
+  return (
+    <motion.svg width={size} height={size} viewBox="0 0 64 64" fill="none"
+      animate={{ y: [0, -2, 0] }} transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}>
+      <motion.ellipse cx="32" cy="56" rx="5" ry="3"
+        animate={{ ry: [3, 5, 3], opacity: [0.7, 1, 0.7] }}
+        transition={{ duration: 0.4, repeat: Infinity }}
+        fill="url(#miniFlame)" />
+      <path d="M32 10C27 10 24 18 24 30V42C24 44.5 27 47 32 47C37 47 40 44.5 40 42V30C40 18 37 10 32 10Z" fill="white" fillOpacity="0.95" />
+      <circle cx="32" cy="28" r="5" fill="rgba(0,0,0,0.7)" />
+      <ellipse cx="31" cy="27.5" rx="2" ry="2.5" fill="white" />
+      <ellipse cx="34" cy="27.5" rx="1.5" ry="2" fill="white" />
+      <motion.circle cx="31.5" cy="28" r="1" fill="rgba(0,0,0,0.8)"
+        animate={{ cx: [31.5, 32, 31, 31.5] }} transition={{ duration: 2.5, repeat: Infinity }} />
+      <path d="M24 36L20 42C20 42 22 43.5 24 42.5V36Z" fill="white" fillOpacity="0.7" />
+      <path d="M40 36L44 42C44 42 42 43.5 40 42.5V36Z" fill="white" fillOpacity="0.7" />
+      <defs>
+        <radialGradient id="miniFlame"><stop stopColor="#fbbf24" /><stop offset="1" stopColor="#ef4444" /></radialGradient>
+      </defs>
+    </motion.svg>
+  );
+}
 
 // Drag-to-scroll container
 function DragScrollContainer({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -74,14 +98,14 @@ function DragScrollContainer({ children, className }: { children: React.ReactNod
 
 // ─── COLUMN DEFINITIONS ───────────────────────────────────────
 const KANBAN_COLUMNS = [
-  { id: 'ideias', label: 'Zona de Ideias', icon: '💡', gradient: 'from-violet-500 to-purple-600' },
-  { id: 'captacao', label: 'Captação', icon: '📹', gradient: 'from-orange-400 to-orange-600' },
-  { id: 'edicao', label: 'Edição de Vídeo', icon: '🎬', gradient: 'from-blue-400 to-blue-600' },
-  { id: 'revisao', label: 'Revisão', icon: '👁', gradient: 'from-teal-400 to-emerald-600' },
-  { id: 'alteracao', label: 'Alteração', icon: '✏️', gradient: 'from-amber-400 to-yellow-500' },
-  { id: 'envio', label: 'Enviado p/ Cliente', icon: '📤', gradient: 'from-emerald-400 to-green-600' },
-  { id: 'agendamentos', label: 'Agendamentos', icon: '📅', gradient: 'from-rose-400 to-red-500' },
-  { id: 'acompanhamento', label: 'Acompanhamento', icon: '👀', gradient: 'from-rose-500 to-red-600' },
+  { id: 'ideias', label: 'Zona de Ideias', lucideIcon: 'lightbulb', gradient: 'from-violet-500 to-purple-600', glow: 'shadow-violet-500/20' },
+  { id: 'captacao', label: 'Captação', lucideIcon: 'video', gradient: 'from-orange-400 to-orange-600', glow: 'shadow-orange-500/20' },
+  { id: 'edicao', label: 'Edição de Vídeo', lucideIcon: 'film', gradient: 'from-blue-400 to-blue-600', glow: 'shadow-blue-500/20' },
+  { id: 'revisao', label: 'Revisão', lucideIcon: 'eye', gradient: 'from-teal-400 to-emerald-600', glow: 'shadow-teal-500/20' },
+  { id: 'alteracao', label: 'Alteração', lucideIcon: 'edit', gradient: 'from-amber-400 to-yellow-500', glow: 'shadow-amber-500/20' },
+  { id: 'envio', label: 'Enviado p/ Cliente', lucideIcon: 'send', gradient: 'from-emerald-400 to-green-600', glow: 'shadow-emerald-500/20' },
+  { id: 'agendamentos', label: 'Agendamentos', lucideIcon: 'calendar', gradient: 'from-rose-400 to-red-500', glow: 'shadow-rose-500/20' },
+  { id: 'acompanhamento', label: 'Acompanhamento', lucideIcon: 'rocket', gradient: 'from-primary to-blue-600', glow: 'shadow-primary/20' },
 ] as const;
 
 type KanbanColumnId = typeof KANBAN_COLUMNS[number]['id'];
@@ -604,16 +628,42 @@ export default function ContentKanban() {
 
   // ─── RENDER ────────────────────────────────────────────────
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Carregando...</p></div>;
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <motion.svg width={64} height={64} viewBox="0 0 64 64" fill="none"
+          animate={{ y: [0, -8, 0], rotate: [0, 5, -5, 0] }}
+          transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}>
+          <motion.ellipse cx="32" cy="58" rx="6" ry="4"
+            animate={{ ry: [4, 7, 4], opacity: [0.7, 1, 0.7] }}
+            transition={{ duration: 0.4, repeat: Infinity }}
+            fill="url(#loadFlame)" />
+          <path d="M32 8C26 8 22 18 22 32V46C22 49 26 52 32 52C38 52 42 49 42 46V32C42 18 38 8 32 8Z" fill="hsl(var(--primary))" />
+          <circle cx="32" cy="28" r="7" fill="#1a1a2e" stroke="#e0e0e0" strokeWidth="1.5" />
+          <ellipse cx="30" cy="27" rx="3" ry="3.5" fill="white" />
+          <ellipse cx="35" cy="27" rx="2.5" ry="3" fill="white" />
+          <motion.circle cx="30.5" cy="27.5" r="1.5" fill="#1a1a2e"
+            animate={{ cx: [30.5, 31.5, 30, 30.5] }} transition={{ duration: 2, repeat: Infinity }} />
+          <motion.circle cx="35" cy="27.5" r="1.2" fill="#1a1a2e"
+            animate={{ cx: [35, 35.5, 34.5, 35] }} transition={{ duration: 2, repeat: Infinity }} />
+          <path d="M22 38L16 46C16 46 18 48 22 46V38Z" fill="hsl(var(--primary))" />
+          <path d="M42 38L48 46C48 46 46 48 42 46V38Z" fill="hsl(var(--primary))" />
+          <defs><radialGradient id="loadFlame"><stop stopColor="#fbbf24" /><stop offset="1" stopColor="#ef4444" /></radialGradient></defs>
+        </motion.svg>
+        <p className="text-muted-foreground animate-pulse font-medium">Carregando pipeline...</p>
+      </div>
+    );
   }
 
   return (
     <div className="flex flex-col h-[calc(100vh-7rem)]">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold text-foreground tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>Criação de Conteúdo</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{tasks.length} cartões no pipeline</p>
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <MiniRocket size={28} />
+          <div>
+            <h1 className="text-xl font-bold text-foreground tracking-tight">Criação de Conteúdo</h1>
+            <p className="text-xs text-muted-foreground">{tasks.length} cartões no pipeline</p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -648,9 +698,12 @@ export default function ContentKanban() {
               ))}
             </SelectContent>
           </Select>
-          <Button size="sm" onClick={() => openNew()} className="gap-1.5 rounded-xl h-9 px-4 font-semibold shadow-sm">
-            <Plus size={14} /> Novo Conteúdo
-          </Button>
+          <motion.div whileTap={{ scale: 0.95 }} whileHover={{ scale: 1.03 }}>
+            <Button size="sm" onClick={() => openNew()}
+              className="gap-1.5 rounded-xl h-9 px-4 font-semibold shadow-md bg-gradient-to-r from-primary to-primary/80 hover:shadow-lg hover:shadow-primary/25 transition-shadow">
+              <Rocket size={14} /> Novo Conteúdo
+            </Button>
+          </motion.div>
         </div>
       </div>
 
@@ -676,18 +729,12 @@ export default function ContentKanban() {
               >
                 {/* Column header - gradient bar */}
                 <motion.div
-                  className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-t-2xl bg-gradient-to-r ${col.gradient} relative overflow-hidden`}
+                  className={`flex items-center gap-2 px-3.5 py-2.5 rounded-t-2xl bg-gradient-to-r ${col.gradient} relative overflow-hidden`}
                   whileHover={{ scale: 1.01 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <motion.span
-                    className="text-base leading-none"
-                    animate={{ rotate: [0, -8, 8, 0] }}
-                    transition={{ duration: 2, repeat: Infinity, repeatDelay: 5 + colIdx, ease: 'easeInOut' }}
-                  >
-                    {col.icon}
-                  </motion.span>
-                  <span className="text-[13px] font-bold text-white flex-1 truncate" style={{ fontFamily: 'var(--font-display)' }}>{col.label}</span>
+                  <MiniRocket size={16} />
+                  <span className="text-[13px] font-bold text-white flex-1 truncate">{col.label}</span>
                   <motion.span
                     className="text-[11px] font-bold text-white/90 bg-white/25 backdrop-blur-sm rounded-full px-2.5 py-0.5 min-w-[26px] text-center shadow-sm"
                     key={colTasks.length}
@@ -697,7 +744,6 @@ export default function ContentKanban() {
                   >
                     {colTasks.length}
                   </motion.span>
-                  {/* Animated shimmer effect */}
                   <motion.div
                     className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
                     initial={{ x: '-100%' }}
@@ -754,18 +800,12 @@ export default function ContentKanban() {
                         <motion.div
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
-                          className="text-center py-12 text-xs text-muted-foreground/50 italic flex flex-col items-center gap-2"
+                          className="text-center py-10 text-xs text-muted-foreground/50 italic flex flex-col items-center gap-3"
                         >
-                          <motion.span
-                            className="text-2xl"
-                            animate={{ y: [0, -4, 0] }}
-                            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-                          >
-                            {col.icon}
-                          </motion.span>
-                          {col.id === 'alteracao' ? 'Etapa para a alteração do conteúdo' :
+                          <MiniRocket size={24} />
+                          <span>{col.id === 'alteracao' ? 'Etapa para a alteração do conteúdo' :
                            col.id === 'revisao' ? 'Etapa para a revisão do conteúdo criado' :
-                           'Arraste cartões para cá'}
+                           'Arraste cartões para cá'}</span>
                         </motion.div>
                       )}
                     </div>
@@ -1105,11 +1145,11 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
         draggable
         onDragStart={onDragStart}
         onClick={onCardClick}
-        className={`group relative bg-card rounded-xl cursor-grab active:cursor-grabbing transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 overflow-hidden ${
-          isDragging ? 'opacity-40 scale-95 shadow-none' : 'shadow-sm'
+        className={`group relative bg-card rounded-xl cursor-grab active:cursor-grabbing transition-all duration-300 overflow-hidden ${
+          isDragging ? 'opacity-40 scale-95 shadow-none' : 'shadow-sm hover:shadow-xl hover:shadow-primary/10'
         } ${isOverdue ? 'ring-1 ring-destructive/40' : ''} ${
           isCaptacao ? 'ring-1 ring-orange-400/30' : ''
-        }`}
+        } hover:-translate-y-1`}
         style={{ borderLeft: `3px solid ${isOverdue ? 'hsl(var(--destructive))' : `hsl(${clientColor})`}` }}
       >
         {/* Recording indicator */}
@@ -1294,22 +1334,20 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
           {task.kanban_column === 'revisao' && (onApprove || onRequestAdjustments) && (
             <div className="grid grid-cols-2 gap-1.5">
               {onApprove && (
-                <button
+                <motion.button whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.03 }}
                   onClick={e => { e.stopPropagation(); onApprove(); }}
-                  className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-success/10 hover:bg-success/20 border border-success/20 text-success transition-colors text-[10px] font-semibold"
-                  style={{ fontFamily: 'var(--font-display)' }}
+                  className="flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-gradient-to-r from-green-500/10 to-emerald-500/15 hover:from-green-500/20 hover:to-emerald-500/25 border border-green-500/25 text-green-600 transition-all text-[10px] font-bold shadow-sm hover:shadow-green-500/15"
                 >
-                  <ThumbsUp size={11} /> Aprovar
-                </button>
+                  <ThumbsUp size={12} /> Aprovar
+                </motion.button>
               )}
               {onRequestAdjustments && (
-                <button
+                <motion.button whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.03 }}
                   onClick={e => { e.stopPropagation(); onRequestAdjustments(); }}
-                  className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-600 transition-colors text-[10px] font-semibold"
-                  style={{ fontFamily: 'var(--font-display)' }}
+                  className="flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-600 transition-all text-[10px] font-bold shadow-sm hover:shadow-amber-500/10"
                 >
-                  <MessageSquareWarning size={11} /> Ajustes
-                </button>
+                  <MessageSquareWarning size={12} /> Ajustes
+                </motion.button>
               )}
             </div>
           )}
@@ -1318,73 +1356,78 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
           <div className="space-y-1.5">
             {/* Captação: Add Drive link */}
             {onAddDriveLink && !task.drive_link && (
-              <button onClick={e => { e.stopPropagation(); onAddDriveLink(); }}
-                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-600 transition-colors text-[10px] font-semibold">
-                <Link2 size={11} /> Adicionar Link Drive
-              </button>
+              <motion.button whileTap={{ scale: 0.95 }} whileHover={{ scale: 1.02 }}
+                onClick={e => { e.stopPropagation(); onAddDriveLink(); }}
+                className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-600 transition-all text-[10px] font-bold shadow-sm hover:shadow-blue-500/10">
+                <Link2 size={12} /> Adicionar Link Drive
+              </motion.button>
             )}
             {/* Drive link exists indicator */}
             {task.drive_link && (task.kanban_column === 'captacao' || task.kanban_column === 'edicao') && (
               <a href={task.drive_link} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-colors w-full text-left group/drive">
-                <Link2 size={11} className="text-blue-600 shrink-0" />
-                <span className="text-[10px] font-medium text-blue-700 truncate flex-1">Materiais (Drive)</span>
+                className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-all w-full text-left group/drive shadow-sm hover:shadow-blue-500/10">
+                <Link2 size={12} className="text-blue-600 shrink-0" />
+                <span className="text-[10px] font-bold text-blue-700 truncate flex-1">Materiais (Drive)</span>
                 <ExternalLink size={10} className="text-blue-500/60 shrink-0" />
               </a>
             )}
             {/* Edição/Alteração: Add video link */}
             {onAddVideoLink && !task.edited_video_link && (
-              <button onClick={e => { e.stopPropagation(); onAddVideoLink(); }}
-                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 text-teal-600 transition-colors text-[10px] font-semibold">
-                <Film size={11} /> Adicionar Link Vídeo
-              </button>
+              <motion.button whileTap={{ scale: 0.95 }} whileHover={{ scale: 1.02 }}
+                onClick={e => { e.stopPropagation(); onAddVideoLink(); }}
+                className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 text-teal-600 transition-all text-[10px] font-bold shadow-sm hover:shadow-teal-500/10">
+                <Film size={12} /> Adicionar Link Vídeo
+              </motion.button>
             )}
             {/* Move to next column */}
             {onMoveToNext && (
-              <button onClick={e => { e.stopPropagation(); onMoveToNext(); }}
-                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary transition-colors text-[10px] font-semibold">
-                <ArrowRight size={11} /> Mover para {nextColumnLabel}
-              </button>
+              <motion.button whileTap={{ scale: 0.93 }} whileHover={{ scale: 1.02 }}
+                onClick={e => { e.stopPropagation(); onMoveToNext(); }}
+                className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-xl bg-gradient-to-r from-primary/10 to-primary/20 hover:from-primary/20 hover:to-primary/30 border border-primary/25 text-primary transition-all text-[10px] font-bold shadow-sm hover:shadow-primary/15">
+                <Rocket size={12} /> Mover para {nextColumnLabel}
+              </motion.button>
             )}
             {/* Agendamentos: Schedule */}
             {onSchedule && (
-              <button onClick={e => { e.stopPropagation(); onSchedule(); }}
-                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary transition-colors text-[10px] font-semibold">
-                <Calendar size={11} /> Agendar Postagem
-              </button>
+              <motion.button whileTap={{ scale: 0.95 }} whileHover={{ scale: 1.02 }}
+                onClick={e => { e.stopPropagation(); onSchedule(); }}
+                className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-xl bg-gradient-to-r from-primary/10 to-primary/20 hover:from-primary/20 hover:to-primary/30 border border-primary/25 text-primary transition-all text-[10px] font-bold shadow-sm hover:shadow-primary/15">
+                <Calendar size={12} /> Agendar Postagem
+              </motion.button>
             )}
             {/* Alteração: Resubmit */}
             {onResubmit && (
-              <button onClick={e => { e.stopPropagation(); onResubmit(); }}
-                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 text-teal-600 transition-colors text-[10px] font-semibold">
-                <Send size={11} /> Reenviar para Revisão
-              </button>
+              <motion.button whileTap={{ scale: 0.93 }} whileHover={{ scale: 1.02 }}
+                onClick={e => { e.stopPropagation(); onResubmit(); }}
+                className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 text-teal-600 transition-all text-[10px] font-bold shadow-sm hover:shadow-teal-500/10">
+                <Send size={12} /> Reenviar para Revisão
+              </motion.button>
             )}
             {/* Adjustment notes viewer */}
             {task.adjustment_notes && task.kanban_column === 'alteracao' && (
-              <div className="px-2.5 py-1.5 rounded-lg bg-amber-500/5 border border-amber-500/15 text-[10px] text-amber-700 dark:text-amber-400">
-                <span className="font-semibold">Ajustes:</span> {task.adjustment_notes}
+              <div className="px-2.5 py-2 rounded-xl bg-amber-500/5 border border-amber-500/15 text-[10px] text-amber-700 dark:text-amber-400">
+                <span className="font-bold">Ajustes:</span> {task.adjustment_notes}
               </div>
             )}
-            {/* Acompanhamento: Confirm posted (always, not just overdue) */}
+            {/* Acompanhamento: Confirm posted */}
             {onConfirmPosted && !isOverdue && (
-              <button onClick={e => { e.stopPropagation(); onConfirmPosted(); }}
-                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-success/10 hover:bg-success/20 border border-success/20 text-success transition-colors text-[10px] font-semibold">
-                <CheckCircle2 size={11} /> Confirmar Postagem
-              </button>
+              <motion.button whileTap={{ scale: 0.93 }} whileHover={{ scale: 1.02 }}
+                onClick={e => { e.stopPropagation(); onConfirmPosted(); }}
+                className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-xl bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-green-600 transition-all text-[10px] font-bold shadow-sm hover:shadow-green-500/10">
+                <CheckCircle2 size={12} /> Confirmar Postagem
+              </motion.button>
             )}
           </div>
 
           {/* Overdue confirm posted (prominent) */}
           {isOverdue && onConfirmPosted && (
-            <button
+            <motion.button whileTap={{ scale: 0.93 }} whileHover={{ scale: 1.03 }}
               onClick={e => { e.stopPropagation(); onConfirmPosted(); }}
-              className="flex items-center justify-center gap-1.5 w-full px-3 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-200 text-xs font-bold shadow-sm hover:shadow"
-              style={{ fontFamily: 'var(--font-display)' }}
+              className="flex items-center justify-center gap-1.5 w-full px-3 py-2.5 rounded-xl bg-gradient-to-r from-primary to-primary/80 text-primary-foreground transition-all text-xs font-bold shadow-md hover:shadow-lg hover:shadow-primary/25"
             >
-              <CheckCircle2 size={13} />
+              <Rocket size={14} />
               Confirmar Postagem
-            </button>
+            </motion.button>
           )}
         </div>
       </div>

@@ -1007,6 +1007,52 @@ function Planos() {
           <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer" className="text-primary font-semibold hover:underline">Fale conosco →</a>
         </motion.p>
       </div>
+
+      {/* Video Modal */}
+      <AnimatePresence>
+        {activeVideo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setActiveVideo(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              className="relative w-full max-w-3xl bg-card rounded-2xl overflow-hidden shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between p-4 border-b border-border">
+                <h3 className="font-display font-bold text-foreground">Plano {activeVideo.name}</h3>
+                <button onClick={() => setActiveVideo(null)} className="w-8 h-8 rounded-full bg-muted flex items-center justify-center hover:bg-muted-foreground/20 transition-colors">
+                  <X size={16} className="text-foreground" />
+                </button>
+              </div>
+              <div className="aspect-video">
+                {activeVideo.url.includes('youtube.com') || activeVideo.url.includes('youtu.be') ? (
+                  <iframe
+                    src={activeVideo.url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')}
+                    className="w-full h-full"
+                    allowFullScreen
+                    allow="autoplay"
+                  />
+                ) : (
+                  <video src={activeVideo.url} controls autoPlay className="w-full h-full object-cover" />
+                )}
+              </div>
+              <div className="p-4 flex justify-center">
+                <Button onClick={() => { setActiveVideo(null); window.open(WHATSAPP_LINK, '_blank'); }} className="gap-2">
+                  <MessageCircle size={14} /> Quero esse plano
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }

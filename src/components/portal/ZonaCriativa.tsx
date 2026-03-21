@@ -188,11 +188,9 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
   useEffect(() => { loadScripts(); }, [clientId]);
 
   useEffect(() => {
-    const channel = supabase
-      .channel(`scripts_portal_${clientId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'scripts', filter: `client_id=eq.${clientId}` }, () => loadScripts())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    // Poll for script changes every 30s
+    const interval = setInterval(loadScripts, 30000);
+    return () => clearInterval(interval);
   }, [clientId]);
 
   const loadScripts = async () => {

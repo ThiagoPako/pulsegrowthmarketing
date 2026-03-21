@@ -330,8 +330,6 @@ function Planos() {
             </motion.div>
           ))}
         </motion.div>
-          ))}
-        </motion.div>
 
         <motion.p initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} className="text-center text-sm text-muted-foreground mt-8">
           Valores personalizados de acordo com a necessidade da sua empresa. <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer" className="text-primary font-semibold hover:underline">Fale conosco →</a>

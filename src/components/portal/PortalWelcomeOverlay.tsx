@@ -134,7 +134,7 @@ export default function PortalWelcomeOverlay({ clientId, onVideosLoaded }: Porta
     const hasActiveNews = result.videos.some((v: any) => v.video_type === 'news' && v.is_active);
     const hasActiveWelcome = result.videos.some((v: any) => v.video_type === 'welcome' && v.is_active);
 
-    onVideosLoaded?.({ hasNews: hasActiveNews, hasWelcome: hasActiveWelcome && clientIsNew, isNewClient: clientIsNew });
+    onVideosLoaded?.({ hasNews: hasActiveNews, hasWelcome: hasActiveWelcome, isNewClient: clientIsNew });
 
     // Auto-play unseen videos
     const unseenWelcome = result.videos.find((v: any) => v.video_type === 'welcome' && !viewedIds.has(v.id));

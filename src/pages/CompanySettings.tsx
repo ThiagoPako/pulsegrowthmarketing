@@ -12,6 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from 'sonner';
 import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
+import { supabase as supabaseCloud } from '@/integrations/supabase/client';
 import { ASSISTANT_KEY } from '@/components/ProductionAssistant';
 
 const ALL_DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];

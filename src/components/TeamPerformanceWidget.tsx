@@ -161,7 +161,7 @@ export default function TeamPerformanceWidget() {
         const userDeliveries = smDeliveries.filter(d => d.created_by === user.id);
         const posted = userDeliveries.filter(d => d.status === 'posted' || d.posted_at).length;
         const scheduled = userDeliveries.filter(d => d.status === 'scheduled').length;
-        const scriptsCreated = (useApp as any)?.scripts?.filter?.((s: any) => s.created_by === user.id)?.length || 0;
+        const scriptsCreated = scripts.filter(s => s.createdBy === user.id).length;
         // Publicado = 10pts (resultado final), Agendado = 5pts (planejamento), Gerenciado = 2pts
         // Postado em rede social = 8pts (execução), Roteiro criado = 6pts (esforço criativo)
         score = published * 10 + posted * 8 + scheduled * 5 + managed * 2;

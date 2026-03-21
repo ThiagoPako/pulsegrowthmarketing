@@ -429,10 +429,10 @@ function Hero() {
                 transition={{ type: 'spring', stiffness: 300 }}
                 className="text-center group"
               >
-                <p className="font-display text-3xl sm:text-4xl font-bold text-foreground group-hover:text-primary transition-colors">
+                <p className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-foreground group-hover:text-primary transition-colors">
                   <AnimatedCounter target={s.value} />
                 </p>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-1.5">{s.label}</p>
+                <p className="text-[10px] sm:text-xs md:text-sm text-muted-foreground mt-1 sm:mt-1.5">{s.label}</p>
               </motion.div>
             ))}
           </motion.div>

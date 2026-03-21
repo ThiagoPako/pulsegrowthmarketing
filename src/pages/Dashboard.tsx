@@ -232,24 +232,14 @@ export default function Dashboard() {
         animate={{ opacity: 1, y: 0 }}
       >
         <div className="flex items-center gap-2 sm:gap-3">
-          <FloatingRocket size={isMobile ? 22 : 28} />
+          <PulseIcon icon={BarChart3} size={isMobile ? 20 : 24} />
           <div>
             <h1 className="text-lg sm:text-2xl font-display font-bold">
-              {currentUser?.role === 'videomaker' ? `Olá, ${currentUser.name} 👋` : 'Painel de Controle'}
+              {currentUser?.role === 'videomaker' ? `Olá, ${currentUser.name}` : 'Painel de Controle'}
             </h1>
             <p className="text-muted-foreground text-xs sm:text-sm">{format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
           </div>
         </div>
-        {/* Mini rocket exhaust on desktop */}
-        {!isMobile && (
-          <motion.div
-            animate={{ scale: [1, 1.1, 1], opacity: [0.5, 1, 0.5] }}
-            transition={{ duration: 2, repeat: Infinity }}
-            className="text-primary/30"
-          >
-            <Rocket size={40} />
-          </motion.div>
-        )}
       </motion.div>
 
       <BirthdayCountdown />

@@ -661,6 +661,7 @@ export default function LandingPage() {
       <Hero />
       <Sobre />
       <Servicos />
+      <ComoFunciona />
       <Planos />
       <Cases />
       <Depoimentos />

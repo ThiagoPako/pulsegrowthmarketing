@@ -131,6 +131,7 @@ function Navbar() {
   }, []);
 
   const links = [
+    { label: 'Quem Somos', href: '#quem-somos' },
     { label: 'Serviços', href: '#servicos' },
     { label: 'Como Funciona', href: '#portal' },
     { label: 'Planos', href: '#planos' },

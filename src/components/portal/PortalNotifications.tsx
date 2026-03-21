@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { portalAction } from '@/lib/portalApi';
-import { Bell, X, Film, FileText, Sparkles } from 'lucide-react';
+import { Bell, X, Film, FileText, Sparkles, Calendar, CheckCircle2, XCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';

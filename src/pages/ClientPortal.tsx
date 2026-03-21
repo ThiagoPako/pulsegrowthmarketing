@@ -114,6 +114,7 @@ export default function ClientPortal() {
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoLoadError, setVideoLoadError] = useState<string | null>(null);
   const commentsEndRef = useRef<HTMLDivElement>(null);
+  const [portalVideoState, setPortalVideoState] = useState({ hasNews: false, hasWelcome: false });
 
   // Auth state: team member or client login
   const isTeamMember = !!user && !!profile;

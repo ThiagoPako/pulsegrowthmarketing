@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Users, DollarSign, TrendingUp, Percent, Receipt, Plus, BarChart3, ArrowRight, CalendarDays, Megaphone } from 'lucide-react';
+import { Users, DollarSign, TrendingUp, Percent, Receipt, Plus, BarChart3, ArrowRight, CalendarDays, Rocket } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
 
@@ -40,7 +40,9 @@ export default function EndomarketingDashboard() {
 
   if (loadingC || loadingT) return (
     <div className="flex items-center justify-center p-12">
-      <Megaphone size={28} className="text-primary animate-pulse" />
+      <motion.div animate={{ y: [0, -10, 0], rotate: [0, -15, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
+        <Rocket size={32} className="text-primary -rotate-45" />
+      </motion.div>
     </div>
   );
 
@@ -49,7 +51,18 @@ export default function EndomarketingDashboard() {
       {/* Header */}
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <Megaphone size={20} className="text-primary shrink-0" />
+          <motion.div
+            animate={{ y: [0, -5, 0], rotate: [0, -10, 0] }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+            className="relative shrink-0"
+          >
+            <Rocket size={22} className="text-primary -rotate-45" />
+            <motion.div
+              animate={{ opacity: [0.5, 1, 0.3], scale: [0.8, 1.2, 0.6] }}
+              transition={{ duration: 0.5, repeat: Infinity }}
+              className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-3 rounded-full bg-gradient-to-t from-warning via-primary to-transparent blur-[2px] rotate-45"
+            />
+          </motion.div>
           <div className="min-w-0">
             <h1 className="text-lg sm:text-2xl font-display font-bold truncate">Endomarketing</h1>
             <p className="text-[10px] sm:text-sm text-muted-foreground">Gestão de pacotes e parceiros</p>
@@ -87,6 +100,13 @@ export default function EndomarketingDashboard() {
                   <span className="text-[10px] sm:text-xs text-muted-foreground">{m.label}</span>
                 </div>
                 <p className="text-base sm:text-lg font-bold">{m.value}</p>
+                <motion.div
+                  animate={{ y: [15, -25], opacity: [0, 0.2, 0] }}
+                  transition={{ duration: 4, repeat: Infinity, delay: i * 0.5 }}
+                  className="absolute top-2 right-2"
+                >
+                  <Rocket size={10} className="text-muted-foreground/20 -rotate-45" />
+                </motion.div>
               </CardContent>
             </Card>
           </motion.div>
@@ -101,7 +121,9 @@ export default function EndomarketingDashboard() {
             <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Receipt size={14} className="text-primary" />
+                  <motion.div animate={{ rotate: [0, 360] }} transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}>
+                    <Rocket size={14} className="text-primary -rotate-45" />
+                  </motion.div>
                   <CardTitle className="text-sm sm:text-base">Contratos Ativos</CardTitle>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => navigate('/endomarketing/contratos')} className="text-xs">
@@ -112,8 +134,10 @@ export default function EndomarketingDashboard() {
             <CardContent className="space-y-2 px-3 sm:px-6 pb-3 sm:pb-6">
               {metrics.activeContracts.length === 0 && (
                 <div className="text-center py-6">
-                  <Receipt size={20} className="text-muted-foreground/30 mx-auto" />
-                  <p className="text-xs text-muted-foreground mt-2">Nenhum contrato ativo</p>
+                  <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 3, repeat: Infinity }}>
+                    <Rocket size={24} className="text-muted-foreground/30 -rotate-45 mx-auto" />
+                  </motion.div>
+                  <p className="text-sm text-muted-foreground mt-2">Nenhum contrato ativo</p>
                 </div>
               )}
               {metrics.activeContracts.slice(0, 6).map((c, i) => (
@@ -150,7 +174,9 @@ export default function EndomarketingDashboard() {
             <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <CalendarDays size={14} className="text-warning" />
+                  <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 2, repeat: Infinity }}>
+                    <Rocket size={14} className="text-warning -rotate-45" />
+                  </motion.div>
                   <CardTitle className="text-sm sm:text-base">Tarefas de Hoje</CardTitle>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => navigate('/endomarketing/tarefas')} className="text-xs">
@@ -161,8 +187,10 @@ export default function EndomarketingDashboard() {
             <CardContent className="space-y-2 px-3 sm:px-6 pb-3 sm:pb-6">
               {metrics.todayTasks.length === 0 && (
                 <div className="text-center py-6">
-                  <CalendarDays size={20} className="text-muted-foreground/30 mx-auto" />
-                  <p className="text-xs text-muted-foreground mt-2">Nenhuma tarefa para hoje</p>
+                  <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 3, repeat: Infinity }}>
+                    <Rocket size={24} className="text-muted-foreground/30 -rotate-45 mx-auto" />
+                  </motion.div>
+                  <p className="text-sm text-muted-foreground mt-2">Nenhuma tarefa para hoje</p>
                 </div>
               )}
               {metrics.todayTasks.map((t, i) => (
@@ -200,7 +228,9 @@ export default function EndomarketingDashboard() {
           <Card className="glass-card">
             <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
               <div className="flex items-center gap-2">
-                <TrendingUp size={16} className="text-warning" />
+                <motion.div animate={{ y: [0, -3, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                  <Rocket size={16} className="text-warning -rotate-45" />
+                </motion.div>
                 <CardTitle className="text-sm sm:text-base">Ranking de Lucratividade</CardTitle>
               </div>
             </CardHeader>

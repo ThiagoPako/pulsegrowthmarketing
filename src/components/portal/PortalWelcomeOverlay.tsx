@@ -256,17 +256,20 @@ export default function PortalWelcomeOverlay({ clientId }: { clientId: string })
               </div>
 
               {/* Video player */}
-              <div className="aspect-video bg-black">
-                <video
-                  ref={videoRef}
-                  src={video.video_url}
-                  className="w-full h-full object-contain"
-                  autoPlay
-                  playsInline
-                  muted={muted}
-                  onEnded={handleVideoEnd}
-                />
-              </div>
+              <div className="aspect-video bg-black flex items-center justify-center">
+                {!resolvedUrl ? (
+                  <Loader2 className="h-8 w-8 text-white/60 animate-spin" />
+                ) : (
+                  <video
+                    ref={videoRef}
+                    src={resolvedUrl}
+                    className="w-full h-full object-contain"
+                    autoPlay
+                    playsInline
+                    muted={muted}
+                    onEnded={handleVideoEnd}
+                  />
+                )}
 
               {video.description && (
                 <div className="p-3 bg-gradient-to-r from-amber-900/30 to-transparent">

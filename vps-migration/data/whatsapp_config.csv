@@ -6,36 +6,45 @@ Data: {data_gravacao}
 Horário: {hora_gravacao}
 Videomaker: {videomaker}
 
+📱 Acesse sua Área do Cliente para acompanhar:
+{link_portal}
+
 Equipe Pulse Growth Marketing","Lembrete da sua gravação amanhã.
 
 Cliente: {nome_cliente}
 Horário: {hora_gravacao}
 
-Equipe Pulse Growth Marketing","Seu vídeo está pronto para aprovação.
+📱 Confirme sua presença acessando o portal:
+{link_portal}
 
-Acesse o link abaixo para assistir:
-{link_video}
+Equipe Pulse Growth Marketing","Olá, {nome_cliente}! 😊
 
-Se precisar de ajustes nos avise.
+Seu conteúdo *""{titulo}""* ficou pronto e está disponível para aprovação! 🎬
 
-Equipe Pulse Growth Marketing","Seu vídeo foi aprovado e será publicado em breve.
+📱 Acesse sua Área do Cliente Pulse para assistir e aprovar:
+{link_portal}
 
-Obrigado pela confiança na Pulse Growth Marketing.","Olá, {nome_cliente}!
+Lá você pode assistir ao vídeo, aprovar ou solicitar ajustes diretamente.
 
-Aqui é a equipe da Pulse Growth Marketing 🚀
+Equipe Pulse Growth Marketing 🚀","Seu vídeo *""{titulo}""* foi aprovado e será publicado em breve! ✅
 
-Passando para confirmar sua gravação agendada.
+📱 Acompanhe o status na sua Área do Cliente:
+{link_portal}
+
+Obrigado pela confiança na Pulse Growth Marketing.","Olá, {nome_cliente}! 🚀
+
+Passando para confirmar sua gravação agendada para amanhã.
 
 📅 Data: {data_gravacao}
 ⏰ Horário: {hora_gravacao}
 🎥 Videomaker: {videomaker}
 
-Por favor responda com uma das opções abaixo:
+📱 *Confirme sua gravação acessando o portal:*
+{link_portal}
 
-1️⃣ Confirmar gravação
-2️⃣ Cancelar gravação
+Acesse o link acima e confirme na aba Agenda para que nosso videomaker se desloque até o local.
 
-Assim conseguimos organizar nossa agenda da melhor forma para você.","Perfeito, {nome_cliente}!
+Equipe Pulse Growth Marketing","Perfeito, {nome_cliente}! ✅
 
 Sua gravação está confirmada para:
 
@@ -43,6 +52,9 @@ Sua gravação está confirmada para:
 ⏰ {hora_gravacao}
 
 Nossa equipe estará pronta para criar conteúdos incríveis para sua marca 🚀
+
+📱 Acompanhe tudo na sua Área do Cliente:
+{link_portal}
 
 Até breve!
 
@@ -52,29 +64,35 @@ Sua gravação foi marcada como cancelada.
 
 Se surgir uma nova vaga na agenda entraremos em contato com você.
 
-Equipe Pulse Growth Marketing","Olá, {nome_cliente}!
+Equipe Pulse Growth Marketing","Olá, {nome_cliente}! 🚀
 
-Surgiu uma vaga extra de gravação na agenda da Pulse 🚀
+Surgiu uma vaga extra de gravação na agenda da Pulse!
 
 📅 Data: {data_gravacao}
 ⏰ Horário: {hora_gravacao}
 
-Gostaria de aproveitar essa oportunidade para gravar conteúdos extras?
+📱 *Acesse o portal para confirmar a vaga:*
+{link_portal}
 
-Responda:
+Entre na aba Agenda e confirme sua presença para garantir a gravação.
 
-1️⃣ Quero aproveitar
-2️⃣ Não posso dessa vez","Perfeito, {nome_cliente}!
+Equipe Pulse Growth Marketing","Perfeito, {nome_cliente}!
 
-Sua gravação extra foi confirmada.
+Sua gravação extra foi confirmada. ✅
 
 Nossa equipe estará indo até você no horário combinado.
 
+📱 Acompanhe na sua Área do Cliente:
+{link_portal}
+
 Equipe Pulse Growth Marketing",t,"Olá, {nome_cliente}! 😊
 
-Para manter o fluxo de conteúdos em dia e não atrasar suas publicações, o vídeo ""{titulo}"" foi encaminhado para agendamento pela nossa equipe.
+Para manter o fluxo de conteúdos em dia e não atrasar suas publicações, o vídeo *""{titulo}""* foi encaminhado para agendamento pela nossa equipe.
 
 Pode ficar tranquilo(a)! Foi feita uma revisão interna cuidadosa no vídeo antes de seguir para a postagem. 👍
+
+📱 Acompanhe o status na sua Área do Cliente:
+{link_portal}
 
 Se precisar de algum ajuste, é só nos avisar!
 
@@ -82,13 +100,19 @@ Equipe Pulse Growth Marketing 🚀",t,"Olá, {nome_cliente}! 🎬
 
 Hoje gravamos o vídeo *""{titulo}""* e ele já está com o nosso time de edição! ✂️
 
-Assim que estiver pronto, enviaremos o link aqui para sua aprovação. 📲
+Assim que estiver pronto, enviaremos para sua aprovação na Área do Cliente. 📲
+
+📱 Acesse seu portal para acompanhar:
+{link_portal}
 
 Agradecemos pela confiança!
 
 Equipe Pulse Growth Marketing 🚀",t,"Olá, {nome_cliente}! ✅
 
 Seu vídeo *""{titulo}""* foi aprovado com sucesso e já está sendo encaminhado para agendamento! 📅
+
+📱 Acompanhe na sua Área do Cliente:
+{link_portal}
 
 Obrigado pela confiança!
 

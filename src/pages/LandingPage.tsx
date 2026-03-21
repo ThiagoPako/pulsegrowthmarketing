@@ -665,39 +665,39 @@ function ComoFunciona() {
   return (
     <>
       {/* Processo */}
-      <section className="py-24 bg-card border-y border-border/50 relative overflow-hidden">
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-primary/5 rounded-full blur-[100px]" />
+      <section className="py-16 sm:py-24 bg-card border-y border-border/50 relative overflow-hidden">
+        <div className="absolute bottom-0 left-0 w-64 sm:w-96 h-64 sm:h-96 bg-primary/5 rounded-full blur-[80px] sm:blur-[100px]" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} variants={staggerContainer} className="text-center mb-16">
-            <motion.span variants={fadeUp} className="text-sm font-semibold text-primary uppercase tracking-wider">Como Funciona</motion.span>
-            <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }} variants={staggerContainer} className="text-center mb-10 sm:mb-16">
+            <motion.span variants={fadeUp} className="text-xs sm:text-sm font-semibold text-primary uppercase tracking-wider">Como Funciona</motion.span>
+            <motion.h2 variants={fadeUp} custom={1} className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mt-2 sm:mt-3">
               Nosso processo de A a Z
             </motion.h2>
-            <motion.p variants={fadeUp} custom={2} className="text-muted-foreground mt-4 max-w-xl mx-auto">
+            <motion.p variants={fadeUp} custom={2} className="text-sm sm:text-base text-muted-foreground mt-3 sm:mt-4 max-w-xl mx-auto">
               Da estratégia ao fechamento da venda — cada etapa é organizada, transparente e acompanhada por você.
             </motion.p>
           </motion.div>
 
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-40px' }} variants={staggerContainer} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-30px' }} variants={staggerContainer} className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
             {steps.map((s, i) => (
               <motion.div
                 key={s.num}
                 variants={fadeUp}
                 custom={i}
                 whileHover={{ y: -4 }}
-                className="relative p-7 rounded-2xl border border-border/60 bg-background hover:border-primary/30 hover:shadow-lg transition-all duration-300 group"
+                className="relative p-4 sm:p-7 rounded-xl sm:rounded-2xl border border-border/60 bg-background hover:border-primary/30 hover:shadow-lg transition-all duration-300 group"
               >
-                {/* Connector line */}
                 {i < steps.length - 1 && i % 3 !== 2 && (
                   <div className="hidden lg:block absolute top-1/2 -right-3 w-6 h-px bg-gradient-to-r from-primary/30 to-transparent" />
                 )}
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="text-4xl font-display font-black text-primary/10 group-hover:text-primary/25 transition-colors duration-300">{s.num}</span>
+                <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-4">
+                  <span className="text-2xl sm:text-4xl font-display font-black text-primary/10 group-hover:text-primary/25 transition-colors duration-300">{s.num}</span>
                   <motion.div
                     whileHover={{ rotate: 10 }}
-                    className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"
+                    className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-primary/10 flex items-center justify-center"
                   >
-                    <s.icon size={20} className="text-primary" />
+                    <s.icon size={16} className="text-primary sm:hidden" />
+                    <s.icon size={20} className="text-primary hidden sm:block" />
                   </motion.div>
                 </div>
                 <h3 className="font-display text-base font-bold text-foreground">{s.title}</h3>

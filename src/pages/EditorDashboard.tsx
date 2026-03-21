@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
@@ -6,22 +6,22 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
   Film, Megaphone, Image, Palette, ExternalLink, Clock, AlertTriangle,
-  Eye, Star, TrendingUp, BarChart3, Timer, Scissors, Kanban, ArrowRight, Check,
-  Search, Filter, Users, Calendar, MessageSquare, Upload, Send, History, Zap, Flame,
-  Play, Rocket, Trophy, Pause
+  Eye, Star, TrendingUp, BarChart3, Timer, Scissors, ArrowRight, Check,
+  Search, Users, Upload, Send, History, Zap, Flame,
+  Play, Rocket, Trophy, FileText, FolderOpen, X, Link2, Video
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
 import { highlightQuotes } from '@/lib/highlightQuotes';
-import { format, differenceInHours, isPast, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, isToday, startOfDay, endOfDay, differenceInSeconds } from 'date-fns';
+import { format, differenceInHours, isPast, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import EditorTaskDetail from '@/components/editor/EditorTaskDetail';
+import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
+import { uploadFileToVps } from '@/services/vpsApi';
 
 const CONTENT_TYPES = [
   { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400', points: 10 },
@@ -81,36 +81,29 @@ function RocketMascot({ size = 48, className = '' }: { size?: number; className?
       animate={{ y: [0, -6, 0], rotate: [0, 3, -3, 0] }}
       transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}>
       <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
-        {/* Flame */}
         <motion.ellipse cx="32" cy="58" rx="6" ry="4"
           animate={{ ry: [4, 6, 4], opacity: [0.8, 1, 0.8] }}
           transition={{ duration: 0.4, repeat: Infinity }}
-          fill="url(#flameGrad)" />
-        {/* Body */}
-        <path d="M32 8C26 8 22 18 22 32V46C22 49 26 52 32 52C38 52 42 49 42 46V32C42 18 38 8 32 8Z" fill="url(#bodyGrad)" />
-        {/* Window */}
+          fill="url(#flameGradE)" />
+        <path d="M32 8C26 8 22 18 22 32V46C22 49 26 52 32 52C38 52 42 49 42 46V32C42 18 38 8 32 8Z" fill="url(#bodyGradE)" />
         <circle cx="32" cy="28" r="7" fill="#1a1a2e" stroke="#e0e0e0" strokeWidth="1.5" />
-        {/* Eye whites */}
         <ellipse cx="30" cy="27" rx="3" ry="3.5" fill="white" />
         <ellipse cx="35" cy="27" rx="2.5" ry="3" fill="white" />
-        {/* Pupils */}
         <motion.circle cx="30.5" cy="27.5" r="1.5" fill="#1a1a2e"
           animate={{ cx: [30.5, 31, 30, 30.5] }}
           transition={{ duration: 2.5, repeat: Infinity }} />
         <motion.circle cx="35" cy="27.5" r="1.2" fill="#1a1a2e"
           animate={{ cx: [35, 35.5, 34.5, 35] }}
           transition={{ duration: 2.5, repeat: Infinity }} />
-        {/* Fins */}
         <path d="M22 38L16 46C16 46 18 48 22 46V38Z" fill="hsl(var(--primary))" />
         <path d="M42 38L48 46C48 46 46 48 42 46V38Z" fill="hsl(var(--primary))" />
-        {/* Nose */}
         <path d="M28 8C28 8 32 2 36 8" fill="hsl(var(--destructive))" />
         <defs>
-          <linearGradient id="bodyGrad" x1="32" y1="8" x2="32" y2="52">
+          <linearGradient id="bodyGradE" x1="32" y1="8" x2="32" y2="52">
             <stop stopColor="hsl(var(--primary))" />
             <stop offset="1" stopColor="hsl(var(--primary)/0.7)" />
           </linearGradient>
-          <radialGradient id="flameGrad">
+          <radialGradient id="flameGradE">
             <stop stopColor="#fbbf24" />
             <stop offset="1" stopColor="#ef4444" />
           </radialGradient>
@@ -121,7 +114,7 @@ function RocketMascot({ size = 48, className = '' }: { size?: number; className?
 }
 
 /* ─── Live Timer ──────────────────────────────────────────── */
-function LiveTimer({ startedAt }: { startedAt: string }) {
+function LiveTimer({ startedAt, large }: { startedAt: string; large?: boolean }) {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const start = new Date(startedAt).getTime();
@@ -134,30 +127,50 @@ function LiveTimer({ startedAt }: { startedAt: string }) {
   const m = Math.floor((elapsed % 3600) / 60);
   const s = elapsed % 60;
   return (
-    <motion.span className="font-mono text-xs font-bold text-primary tabular-nums"
+    <motion.span className={`font-mono font-bold text-primary tabular-nums ${large ? 'text-3xl' : 'text-xs'}`}
       animate={{ opacity: [1, 0.6, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
-      {h > 0 && `${h}h `}{String(m).padStart(2, '0')}:{String(s).padStart(2, '0')}
+      {h > 0 && `${h}:`}{String(m).padStart(2, '0')}:{String(s).padStart(2, '0')}
     </motion.span>
   );
 }
 
-/* ─── Score Burst Animation ───────────────────────────────── */
-function ScoreBurst({ points, show }: { points: number; show: boolean }) {
+/* ─── Score Celebration ───────────────────────────────────── */
+function ScoreCelebration({ points, show, onDone }: { points: number; show: boolean; onDone: () => void }) {
+  useEffect(() => {
+    if (show) { const t = setTimeout(onDone, 2500); return () => clearTimeout(t); }
+  }, [show, onDone]);
   if (!show) return null;
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ scale: 0, opacity: 0, y: 0 }}
-        animate={{ scale: [0, 1.4, 1], opacity: [0, 1, 0], y: -40 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 1.2 }}
-        className="absolute top-0 left-1/2 -translate-x-1/2 z-50 pointer-events-none"
-      >
-        <div className="flex items-center gap-1 bg-amber-500 text-white font-black text-lg px-3 py-1 rounded-full shadow-lg">
-          <Star size={16} /> +{points}
-        </div>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-background/60 backdrop-blur-sm pointer-events-none">
+      <motion.div initial={{ scale: 0, rotate: -20 }} animate={{ scale: [0, 1.3, 1], rotate: [-20, 10, 0] }}
+        transition={{ duration: 0.6 }} className="flex flex-col items-center gap-3">
+        <motion.svg width="80" height="80" viewBox="0 0 64 64" fill="none"
+          animate={{ y: [0, -30, -60] }} transition={{ duration: 1.5, ease: 'easeIn' }}>
+          <motion.ellipse cx="32" cy="58" rx="8" ry="5"
+            animate={{ ry: [5, 8, 5], opacity: [0.8, 1, 0.8] }}
+            transition={{ duration: 0.3, repeat: Infinity }}
+            fill="url(#cFlameGradE)" />
+          <path d="M32 8C26 8 22 18 22 32V46C22 49 26 52 32 52C38 52 42 49 42 46V32C42 18 38 8 32 8Z" fill="hsl(var(--primary))" />
+          <circle cx="32" cy="28" r="7" fill="#1a1a2e" stroke="#e0e0e0" strokeWidth="1.5" />
+          <ellipse cx="30" cy="27" rx="3" ry="3.5" fill="white" />
+          <ellipse cx="35" cy="27" rx="2.5" ry="3" fill="white" />
+          <circle cx="30.5" cy="27.5" r="1.5" fill="#1a1a2e" />
+          <circle cx="35" cy="27.5" r="1.2" fill="#1a1a2e" />
+          <path d="M22 38L16 46C16 46 18 48 22 46V38Z" fill="hsl(var(--primary))" />
+          <path d="M42 38L48 46C48 46 46 48 42 46V38Z" fill="hsl(var(--primary))" />
+          <defs>
+            <radialGradient id="cFlameGradE"><stop stopColor="#fbbf24" /><stop offset="1" stopColor="#ef4444" /></radialGradient>
+          </defs>
+        </motion.svg>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="text-center">
+          <div className="flex items-center gap-2 bg-amber-500 text-white font-black text-2xl px-5 py-2 rounded-full shadow-xl">
+            <Star size={20} /> +{points} pts
+          </div>
+          <p className="text-sm text-foreground font-semibold mt-2">Mandou bem!</p>
+        </motion.div>
       </motion.div>
-    </AnimatePresence>
+    </motion.div>
   );
 }
 
@@ -167,25 +180,40 @@ export default function EditorDashboard() {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<EditorTask[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedTask, setSelectedTask] = useState<EditorTask | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterClient, setFilterClient] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
-  const [groupByClient, setGroupByClient] = useState(false);
-  const [scoreBurst, setScoreBurst] = useState<{ id: string; pts: number } | null>(null);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationPoints, setCelebrationPoints] = useState(0);
+  const [showPerformance, setShowPerformance] = useState(false);
+  // Active editing overlay state
+  const [activeEditTask, setActiveEditTask] = useState<EditorTask | null>(null);
+  const [scriptData, setScriptData] = useState<any>(null);
+  const [showScript, setShowScript] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
+  const [videoLink, setVideoLink] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
+  const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const isEditorRole = profile?.role === 'editor';
 
   const fetchTasks = useCallback(async () => {
     const { data } = await supabase.from('content_tasks').select('*')
       .in('kanban_column', ['edicao', 'revisao', 'alteracao', 'envio'])
       .order('position', { ascending: true });
-    if (data) setTasks(data as EditorTask[]);
+    if (data) {
+      setTasks(data as EditorTask[]);
+      // Refresh active task if exists
+      if (activeEditTask) {
+        const refreshed = (data as EditorTask[]).find(t => t.id === activeEditTask.id);
+        if (refreshed) setActiveEditTask(refreshed);
+      }
+    }
     setLoading(false);
-  }, []);
+  }, [activeEditTask?.id]);
 
-  useEffect(() => { fetchTasks(); }, [fetchTasks]);
+  useEffect(() => { fetchTasks(); }, []);
 
   useEffect(() => {
     const channel = supabase.channel('editor_dash_rt')
@@ -193,6 +221,17 @@ export default function EditorDashboard() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetchTasks]);
+
+  // Fetch script when active task changes
+  useEffect(() => {
+    if (!activeEditTask?.script_id) { setScriptData(null); return; }
+    const contextScript = scripts.find(s => s.id === activeEditTask.script_id);
+    if (contextScript) { setScriptData(contextScript); return; }
+    (async () => {
+      const { data } = await supabase.from('scripts').select('*').eq('id', activeEditTask.script_id!).single();
+      if (data) setScriptData({ id: data.id, title: data.title, content: data.content, videoType: data.video_type });
+    })();
+  }, [activeEditTask?.script_id, scripts]);
 
   const now = new Date();
   const weekStart = startOfWeek(now, { weekStartsOn: 1 });
@@ -212,47 +251,27 @@ export default function EditorDashboard() {
 
   const pendingTasks = visibleTasks.filter(t => t.kanban_column === 'edicao' && !t.editing_started_at);
   const inEditTasks = visibleTasks.filter(t => t.kanban_column === 'edicao' && t.editing_started_at);
-  const inReviewTasks = visibleTasks.filter(t => t.kanban_column === 'revisao');
-  const adjustmentTasks = visibleTasks.filter(t => t.kanban_column === 'alteracao');
   const completedTasks = visibleTasks.filter(t => t.kanban_column === 'envio');
+  const overdueCount = visibleTasks.filter(t => t.kanban_column === 'edicao' && getDeadlineStatus(t.editing_deadline).variant === 'destructive').length;
 
   const todayCompleted = completedTasks.filter(t => isWithinInterval(parseISO(t.updated_at), { start: todayStart, end: todayEnd }));
   const weekCompleted = completedTasks.filter(t => isWithinInterval(parseISO(t.updated_at), { start: weekStart, end: weekEnd }));
   const monthCompleted = completedTasks.filter(t => isWithinInterval(parseISO(t.updated_at), { start: monthStart, end: monthEnd }));
 
-  const overdueCount = visibleTasks.filter(t => t.kanban_column === 'edicao' && getDeadlineStatus(t.editing_deadline).variant === 'destructive').length;
-
   const calcPoints = (list: EditorTask[]) => list.reduce((sum, t) => sum + (getTypeConfig(t.content_type).points || 0), 0);
   const weekPoints = calcPoints(weekCompleted);
   const monthPoints = calcPoints(monthCompleted);
 
-  const avgTimes = useMemo(() => {
-    const byType: Record<string, number[]> = {};
-    completedTasks.forEach(t => {
-      if (t.editing_started_at && t.updated_at) {
-        const hours = (new Date(t.updated_at).getTime() - new Date(t.editing_started_at).getTime()) / (1000 * 60 * 60);
-        if (hours > 0 && hours < 200) {
-          if (!byType[t.content_type]) byType[t.content_type] = [];
-          byType[t.content_type].push(hours);
-        }
-      }
-    });
-    return Object.entries(byType).map(([type, times]) => ({
-      type, avg: times.reduce((a, b) => a + b, 0) / times.length, count: times.length,
-    }));
-  }, [completedTasks]);
-
-  const editingQueueTasks = useMemo(() => {
-    return visibleTasks.filter(t => t.kanban_column === 'edicao' || t.kanban_column === 'alteracao');
+  // Queue tasks (edição + alteração, excluding actively editing ones shown in hero)
+  const queueTasks = useMemo(() => {
+    return visibleTasks.filter(t =>
+      (t.kanban_column === 'edicao' && !t.editing_started_at) ||
+      t.kanban_column === 'alteracao'
+    );
   }, [visibleTasks]);
 
-  const reviewTasks = useMemo(() => {
-    return visibleTasks.filter(t => t.kanban_column === 'revisao' || t.kanban_column === 'envio');
-  }, [visibleTasks]);
-
-  const filteredQueueTasks = useMemo(() => {
-    return editingQueueTasks.filter(t => {
-      if (filterStatus !== 'all' && t.kanban_column !== filterStatus) return false;
+  const filteredQueue = useMemo(() => {
+    return queueTasks.filter(t => {
       if (filterClient !== 'all' && t.client_id !== filterClient) return false;
       if (filterType !== 'all' && t.content_type !== filterType) return false;
       if (searchQuery) {
@@ -261,55 +280,23 @@ export default function EditorDashboard() {
         if (!t.title.toLowerCase().includes(q) && !(client?.companyName || '').toLowerCase().includes(q)) return false;
       }
       return true;
+    }).sort((a, b) => {
+      if (a.immediate_alteration && !b.immediate_alteration) return -1;
+      if (b.immediate_alteration && !a.immediate_alteration) return 1;
+      if (a.editing_priority && !b.editing_priority) return -1;
+      if (b.editing_priority && !a.editing_priority) return 1;
+      const aS = getDeadlineStatus(a.editing_deadline);
+      const bS = getDeadlineStatus(b.editing_deadline);
+      if (aS.variant === 'destructive' && bS.variant !== 'destructive') return -1;
+      if (bS.variant === 'destructive' && aS.variant !== 'destructive') return 1;
+      if (!a.editing_deadline && !b.editing_deadline) return 0;
+      if (!a.editing_deadline) return 1;
+      if (!b.editing_deadline) return -1;
+      return new Date(a.editing_deadline).getTime() - new Date(b.editing_deadline).getTime();
     });
-  }, [editingQueueTasks, filterStatus, filterClient, filterType, searchQuery, clients]);
+  }, [queueTasks, filterClient, filterType, searchQuery, clients]);
 
-  const filteredReviewTasks = useMemo(() => {
-    return reviewTasks.filter(t => {
-      if (filterClient !== 'all' && t.client_id !== filterClient) return false;
-      if (filterType !== 'all' && t.content_type !== filterType) return false;
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        const client = clients.find((c: any) => c.id === t.client_id);
-        if (!t.title.toLowerCase().includes(q) && !(client?.companyName || '').toLowerCase().includes(q)) return false;
-      }
-      return true;
-    });
-  }, [reviewTasks, filterClient, filterType, searchQuery, clients]);
-
-  const sortedFiltered = [...filteredQueueTasks].sort((a, b) => {
-    if (a.immediate_alteration && !b.immediate_alteration) return -1;
-    if (b.immediate_alteration && !a.immediate_alteration) return 1;
-    if (a.editing_priority && !b.editing_priority) return -1;
-    if (b.editing_priority && !a.editing_priority) return 1;
-    const aStatus = getDeadlineStatus(a.editing_deadline);
-    const bStatus = getDeadlineStatus(b.editing_deadline);
-    if (aStatus.variant === 'destructive' && bStatus.variant !== 'destructive') return -1;
-    if (bStatus.variant === 'destructive' && aStatus.variant !== 'destructive') return 1;
-    if (!a.editing_deadline && !b.editing_deadline) return 0;
-    if (!a.editing_deadline) return 1;
-    if (!b.editing_deadline) return -1;
-    return new Date(a.editing_deadline).getTime() - new Date(b.editing_deadline).getTime();
-  });
-
-  const groupedTasks = useMemo(() => {
-    if (!groupByClient) return null;
-    const groups: Record<string, EditorTask[]> = {};
-    sortedFiltered.forEach(t => {
-      const client = clients.find(c => c.id === t.client_id);
-      const name = client?.companyName || 'Sem cliente';
-      if (!groups[name]) groups[name] = [];
-      groups[name].push(t);
-    });
-    return groups;
-  }, [groupByClient, sortedFiltered, clients]);
-
-  const openTaskDetail = (task: EditorTask) => {
-    setSelectedTask(task);
-    setDetailOpen(true);
-  };
-
-  /* ─── Claim + Start Editing ─────────────────────────────── */
+  /* ─── Actions ──────────────────────────────────────────── */
   const handleStartEditing = async (task: EditorTask) => {
     if (!user) return;
     const { error } = await supabase.from('content_tasks').update({
@@ -319,8 +306,75 @@ export default function EditorDashboard() {
     } as any).eq('id', task.id);
     if (error) { toast.error('Erro ao iniciar edição'); return; }
     await supabase.from('task_history').insert({ task_id: task.id, user_id: user.id, action: 'Edição iniciada' });
-    toast.success('Edição iniciada! O timer está rodando.');
+    toast.success('Edição iniciada!');
+    const updated = { ...task, assigned_to: user.id, editing_started_at: new Date().toISOString() };
+    setActiveEditTask(updated);
+    setShowUpload(false);
+    setShowScript(false);
+    setVideoLink('');
     fetchTasks();
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeEditTask) return;
+    if (file.size > 500 * 1024 * 1024) { toast.error('Máximo: 500MB'); return; }
+    setUploading(true);
+    setUploadProgress(`Enviando ${file.name}...`);
+    try {
+      const folder = `content/${activeEditTask.client_id}/${activeEditTask.id}`;
+      const url = await uploadFileToVps(file, folder);
+      await supabase.from('content_tasks').update({
+        edited_video_link: url, edited_video_type: 'upload', updated_at: new Date().toISOString()
+      }).eq('id', activeEditTask.id);
+      setVideoLink(url);
+      await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo enviado via upload', details: url });
+      toast.success('Vídeo enviado!');
+      fetchTasks();
+    } catch (err: any) {
+      toast.error(`Erro: ${err.message}`);
+    } finally {
+      setUploading(false);
+      setUploadProgress('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const saveVideoLink = async () => {
+    if (!videoLink.trim() || !activeEditTask) return;
+    setSaving(true);
+    await supabase.from('content_tasks').update({
+      edited_video_link: videoLink.trim(), edited_video_type: 'link', updated_at: new Date().toISOString()
+    }).eq('id', activeEditTask.id);
+    toast.success('Link salvo!');
+    fetchTasks();
+    setSaving(false);
+  };
+
+  const sendForReview = async () => {
+    if (!activeEditTask) return;
+    const link = videoLink.trim() || activeEditTask.edited_video_link;
+    if (!link) { toast.error('Adicione o vídeo primeiro'); return; }
+    setSaving(true);
+    await supabase.from('content_tasks').update({
+      kanban_column: 'revisao', updated_at: new Date().toISOString(),
+    }).eq('id', activeEditTask.id);
+    const cl = clients.find(c => c.id === activeEditTask.client_id);
+    const ctx = buildSyncContext({ ...activeEditTask, edited_video_link: link } as any, {
+      userId: user?.id, clientName: cl?.companyName, clientWhatsapp: (cl as any)?.whatsapp,
+    });
+    await syncContentTaskColumnChange('revisao', ctx);
+    await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Enviado para revisão' });
+
+    const pts = getTypeConfig(activeEditTask.content_type).points || 5;
+    setCelebrationPoints(pts);
+    setShowCelebration(true);
+    setActiveEditTask(null);
+    setShowUpload(false);
+    setShowScript(false);
+    toast.success('Enviado para revisão!');
+    fetchTasks();
+    setSaving(false);
   };
 
   if (loading) return (
@@ -330,21 +384,25 @@ export default function EditorDashboard() {
     </div>
   );
 
+  const activeClient = activeEditTask ? clients.find(c => c.id === activeEditTask.client_id) : null;
+  const activeCfg = activeEditTask ? getTypeConfig(activeEditTask.content_type) : null;
+  const hasVideo = !!(videoLink.trim() || activeEditTask?.edited_video_link);
+
   return (
-    <div className="space-y-6">
-      {/* Header with Rocket */}
+    <div className="space-y-5">
+      <AnimatePresence>
+        <ScoreCelebration points={celebrationPoints} show={showCelebration} onDone={() => setShowCelebration(false)} />
+      </AnimatePresence>
+
+      {/* ═══════ HEADER ═══════ */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
         className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <RocketMascot size={40} />
+          <RocketMascot size={36} />
           <div>
-            <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-              Bancada de Edição
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {inEditTasks.length > 0 && (
-                <span className="text-primary font-semibold">{inEditTasks.length} editando agora</span>
-              )}
+            <h1 className="text-lg font-bold text-foreground">Bancada de Edição</h1>
+            <p className="text-xs text-muted-foreground">
+              {inEditTasks.length > 0 && <span className="text-primary font-semibold">{inEditTasks.length} editando</span>}
               {inEditTasks.length > 0 && pendingTasks.length > 0 && ' · '}
               {pendingTasks.length > 0 && `${pendingTasks.length} na fila`}
               {overdueCount > 0 && <span className="text-destructive font-semibold"> · {overdueCount} atrasado{overdueCount !== 1 ? 's' : ''}</span>}
@@ -352,297 +410,345 @@ export default function EditorDashboard() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* Score badge */}
-          <motion.div whileHover={{ scale: 1.05 }} className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 rounded-full px-3 py-1.5">
+          <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+            onClick={() => setShowPerformance(!showPerformance)}
+            className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 rounded-full px-3 py-1.5 cursor-pointer">
             <Trophy size={14} className="text-amber-500" />
             <span className="text-sm font-black text-amber-600">{weekPoints}</span>
-            <span className="text-[10px] text-muted-foreground">pts/sem</span>
-          </motion.div>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate('/edicao/kanban')}>
-            <Kanban size={14} /> Kanban <ArrowRight size={12} />
-          </Button>
+            <span className="text-[10px] text-muted-foreground">pts</span>
+          </motion.button>
         </div>
       </motion.div>
 
-      <Tabs defaultValue="queue" className="space-y-4">
-        <TabsList className="flex flex-wrap h-auto gap-1">
-          <TabsTrigger value="queue" className="gap-1.5">
-            <Scissors size={13} /> Fila de Edição
-            {editingQueueTasks.length > 0 && (
-              <Badge variant="destructive" className="text-[9px] px-1.5 py-0 ml-1">{editingQueueTasks.length}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="editing" className="gap-1.5">
-            <Play size={13} /> Editando Agora
-            {inEditTasks.length > 0 && (
-              <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
-                <Badge className="text-[9px] px-1.5 py-0 ml-1 bg-primary">{inEditTasks.length}</Badge>
-              </motion.div>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="review" className="gap-1.5">
-            <Eye size={13} /> Em Revisão
-            {inReviewTasks.length > 0 && (
-              <Badge variant="outline" className="text-[9px] px-1.5 py-0 ml-1 bg-teal-500/10 text-teal-600 border-teal-500/30">{inReviewTasks.length}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="performance" className="gap-1.5">
-            <TrendingUp size={13} /> Desempenho
-          </TabsTrigger>
-        </TabsList>
+      {/* ═══════ PERFORMANCE STATS (toggle) ═══════ */}
+      <AnimatePresence>
+        {showPerformance && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pb-2">
+              {[
+                { label: 'Hoje', value: todayCompleted.length, icon: Scissors, color: 'text-primary', bg: 'bg-primary/10' },
+                { label: 'Semana', value: weekCompleted.length, icon: TrendingUp, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+                { label: 'Mês', value: monthCompleted.length, icon: BarChart3, color: 'text-green-500', bg: 'bg-green-500/10' },
+                { label: 'Pontos', value: monthPoints, icon: Star, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+              ].map((s, i) => (
+                <motion.div key={s.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                  className={`${s.bg} rounded-xl p-3 border border-border/50`}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <s.icon size={14} className={s.color} />
+                    <span className="text-[11px] text-muted-foreground">{s.label}</span>
+                  </div>
+                  <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-        {/* ═══════ EDITING NOW TAB ═══════ */}
-        <TabsContent value="editing" className="space-y-4">
-          {inEditTasks.length === 0 ? (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              className="bg-card border border-border rounded-xl p-8 text-center">
-              <RocketMascot size={56} className="mx-auto mb-3" />
-              <p className="text-foreground font-semibold">Nenhuma edição em andamento</p>
-              <p className="text-sm text-muted-foreground mt-1">Pegue uma tarefa na Fila de Edição para começar!</p>
-            </motion.div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {inEditTasks.map((task, i) => {
-                const client = clients.find(c => c.id === task.client_id);
-                const cfg = getTypeConfig(task.content_type);
-                return (
-                  <motion.div key={task.id}
-                    initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: i * 0.05 }}
-                    className="relative bg-card border-2 border-primary/30 rounded-xl overflow-hidden cursor-pointer hover:shadow-lg transition-all"
-                    onClick={() => openTaskDetail(task)}
-                  >
-                    {/* Glow top bar */}
-                    <div className="h-1.5 w-full bg-gradient-to-r from-primary via-primary/60 to-primary" />
-                    <div className="p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          {client && <ClientLogo client={client as any} size="sm" />}
-                          <div className="min-w-0">
-                            <p className="text-sm font-bold text-foreground truncate">{client?.companyName}</p>
-                            <Badge className={`text-[10px] px-1.5 py-0 ${cfg.color} border-0`}>
-                              <cfg.icon size={10} className="mr-0.5" />{cfg.label}
-                            </Badge>
-                          </div>
-                        </div>
-                        {/* Live timer */}
-                        <div className="flex items-center gap-1.5 bg-primary/10 border border-primary/30 rounded-full px-2.5 py-1">
-                          <motion.div className="w-2 h-2 rounded-full bg-primary"
-                            animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1, repeat: Infinity }} />
-                          {task.editing_started_at && <LiveTimer startedAt={task.editing_started_at} />}
-                        </div>
-                      </div>
-                      <p className="text-sm font-semibold text-foreground leading-tight">{task.title}</p>
-                      {task.editing_deadline && <DeadlineBadge deadline={task.editing_deadline} label="Prazo" />}
-                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                        {task.script_id && <span className="flex items-center gap-0.5"><Eye size={10} /> Roteiro</span>}
-                        {task.drive_link && <span className="flex items-center gap-0.5"><ExternalLink size={10} /> Drive</span>}
-                        {task.edited_video_link && <span className="flex items-center gap-0.5 text-green-600"><Check size={10} /> Vídeo anexado</span>}
-                      </div>
-                    </div>
+      {/* ═══════ ACTIVE EDITING HERO CARD ═══════ */}
+      <AnimatePresence>
+        {activeEditTask && activeEditTask.editing_started_at && (
+          <motion.div
+            key={activeEditTask.id}
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="relative rounded-2xl overflow-hidden"
+          >
+            {/* Animated glowing border */}
+            <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary via-blue-500 to-primary bg-[length:200%_100%] animate-[shimmer_3s_linear_infinite] p-[2px]">
+              <div className="w-full h-full bg-card rounded-2xl" />
+            </div>
+            <div className="relative z-10 p-5 space-y-4">
+              {/* Top bar */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <motion.div animate={{ rotate: [0, 10, -10, 0] }} transition={{ duration: 2, repeat: Infinity }}>
+                    <RocketMascot size={36} />
                   </motion.div>
-                );
-              })}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ═══════ QUEUE TAB ═══════ */}
-        <TabsContent value="queue" className="space-y-4">
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 min-w-[160px] max-w-[280px]">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Buscar..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                className="pl-8 h-8 text-sm" />
-            </div>
-            <Select value={filterClient} onValueChange={setFilterClient}>
-              <SelectTrigger className="h-8 w-36 text-sm"><SelectValue placeholder="Cliente" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="h-8 w-28 text-sm"><SelectValue placeholder="Tipo" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {CONTENT_TYPES.map(ct => <SelectItem key={ct.value} value={ct.value}>{ct.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Button variant={groupByClient ? 'default' : 'outline'} size="sm" className="h-8 gap-1 text-xs"
-              onClick={() => setGroupByClient(!groupByClient)}>
-              <Users size={12} /> Agrupar
-            </Button>
-          </div>
-
-          <p className="text-xs text-muted-foreground">{sortedFiltered.length} conteúdo{sortedFiltered.length !== 1 ? 's' : ''}</p>
-
-          {sortedFiltered.length === 0 ? (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              className="bg-card border border-border rounded-xl p-8 text-center">
-              <RocketMascot size={56} className="mx-auto mb-3" />
-              <p className="text-foreground font-semibold">Fila limpa!</p>
-              <p className="text-sm text-muted-foreground">Todos os conteúdos foram editados</p>
-            </motion.div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {sortedFiltered.map((task, i) => (
-                <QueueCard key={task.id} task={task} clients={clients} index={i}
-                  onClick={() => openTaskDetail(task)}
-                  onStartEditing={() => handleStartEditing(task)}
-                  currentUserId={user?.id}
-                  users={users} />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ═══════ REVIEW TAB ═══════ */}
-        <TabsContent value="review" className="space-y-4">
-          {filteredReviewTasks.length === 0 ? (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              className="bg-card border border-border rounded-xl p-8 text-center">
-              <Eye size={32} className="mx-auto mb-2 text-muted-foreground/40" />
-              <p className="text-muted-foreground">Nenhum conteúdo em revisão</p>
-            </motion.div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filteredReviewTasks.map((task, i) => (
-                <QueueCard key={task.id} task={task} clients={clients} index={i}
-                  onClick={() => openTaskDetail(task)} currentUserId={user?.id} users={users} />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ═══════ PERFORMANCE TAB ═══════ */}
-        <TabsContent value="performance" className="space-y-5">
-          {/* Quick Stats with Rocket */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[
-              { label: 'Hoje', value: todayCompleted.length, icon: Scissors, color: 'text-primary', bg: 'bg-primary/10' },
-              { label: 'Semana', value: weekCompleted.length, icon: TrendingUp, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-              { label: 'Mês', value: monthCompleted.length, icon: BarChart3, color: 'text-green-500', bg: 'bg-green-500/10' },
-              { label: 'Pontos (Mês)', value: monthPoints, icon: Star, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-            ].map((s, i) => (
-              <motion.div key={s.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-                className={`${s.bg} rounded-xl p-4 border border-border/50`}>
-                <div className="flex items-center gap-2 mb-2">
-                  <s.icon size={16} className={s.color} />
-                  <span className="text-xs text-muted-foreground font-medium">{s.label}</span>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-primary font-bold">Edição em andamento</p>
+                    <p className="text-base font-bold text-foreground leading-tight">{activeEditTask.title}</p>
+                  </div>
                 </div>
-                <p className={`text-3xl font-black ${s.color}`}>{s.value}</p>
-              </motion.div>
-            ))}
-          </div>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setActiveEditTask(null)}>
+                  <X size={14} />
+                </Button>
+              </div>
 
-          {/* Score + Avg Time */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-              className="bg-card border border-border rounded-xl p-4">
-              <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
-                <Trophy size={14} className="text-amber-500" /> Pontuação
-              </h3>
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className="text-center p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-                  <p className="text-[11px] text-muted-foreground mb-1">Semana</p>
-                  <p className="text-2xl font-black text-amber-600">{weekPoints}</p>
+              {/* Client + Timer row */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  {activeClient && <ClientLogo client={activeClient as any} size="sm" />}
+                  <span className="text-sm font-semibold text-foreground">{activeClient?.companyName}</span>
+                  {activeCfg && (
+                    <Badge className={`text-[10px] px-1.5 py-0 ${activeCfg.color} border-0`}>
+                      <activeCfg.icon size={10} className="mr-0.5" />{activeCfg.label}
+                    </Badge>
+                  )}
                 </div>
-                <div className="text-center p-3 rounded-lg bg-primary/5 border border-primary/20">
-                  <p className="text-[11px] text-muted-foreground mb-1">Mês</p>
-                  <p className="text-2xl font-black text-primary">{monthPoints}</p>
+                {/* Live timer */}
+                <div className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-xl px-4 py-2">
+                  <motion.div className="w-2.5 h-2.5 rounded-full bg-primary"
+                    animate={{ scale: [1, 1.4, 1], opacity: [1, 0.4, 1] }}
+                    transition={{ duration: 1.2, repeat: Infinity }} />
+                  <LiveTimer startedAt={activeEditTask.editing_started_at!} large />
                 </div>
               </div>
-              <div className="space-y-1.5">
-                {CONTENT_TYPES.map(ct => {
-                  const count = monthCompleted.filter(t => t.content_type === ct.value).length;
-                  return (
-                    <div key={ct.value} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <ct.icon size={12} className={ct.color.split(' ')[0]} />
-                        <span className="text-xs text-foreground">{ct.label}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold">{count}</span>
-                        <span className="text-[10px] text-muted-foreground">({count * ct.points} pts)</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </motion.div>
 
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
-              className="bg-card border border-border rounded-xl p-4">
-              <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
-                <Timer size={14} className="text-primary" /> Tempo Médio de Edição
-              </h3>
-              {avgTimes.length > 0 ? (
-                <div className="space-y-2">
-                  {avgTimes.map(at => {
-                    const cfg = getTypeConfig(at.type);
-                    const hours = Math.floor(at.avg);
-                    const mins = Math.round((at.avg - hours) * 60);
-                    return (
-                      <div key={at.type} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <cfg.icon size={14} className={cfg.color.split(' ')[0]} />
-                          <span className="text-sm text-foreground">{cfg.label}</span>
-                        </div>
-                        <span className="text-sm font-bold text-foreground">{hours > 0 ? `${hours}h ` : ''}{mins}min</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-6">
-                  <RocketMascot size={40} className="mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">Dados insuficientes</p>
+              {/* Deadline warning */}
+              {activeEditTask.editing_deadline && (
+                <DeadlineBadge deadline={activeEditTask.editing_deadline} label="Prazo de edição" />
+              )}
+
+              {/* Adjustment notes */}
+              {activeEditTask.kanban_column === 'alteracao' && activeEditTask.adjustment_notes && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                  <p className="text-xs font-bold text-amber-600 mb-1 flex items-center gap-1"><AlertTriangle size={12} /> Ajustes solicitados</p>
+                  <p className="text-sm text-foreground">{activeEditTask.adjustment_notes}</p>
                 </div>
               )}
-            </motion.div>
-          </div>
-        </TabsContent>
-      </Tabs>
 
-      {/* Task Detail */}
-      {selectedTask && (
-        <EditorTaskDetail
-          task={selectedTask}
-          open={detailOpen}
-          onOpenChange={(open) => { setDetailOpen(open); if (!open) setSelectedTask(null); }}
-          onRefresh={fetchTasks}
-        />
+              {/* Quick action buttons */}
+              <div className="flex flex-wrap gap-2">
+                {/* Materiais */}
+                <motion.div whileTap={{ scale: 0.93 }}>
+                  <Button variant="outline" size="sm" className="gap-1.5 text-xs"
+                    disabled={!activeEditTask.drive_link}
+                    onClick={() => activeEditTask.drive_link && window.open(activeEditTask.drive_link, '_blank')}>
+                    <FolderOpen size={14} /> Materiais
+                  </Button>
+                </motion.div>
+
+                {/* Roteiro */}
+                <motion.div whileTap={{ scale: 0.93 }}>
+                  <Button variant="outline" size="sm" className="gap-1.5 text-xs"
+                    disabled={!activeEditTask.script_id}
+                    onClick={() => setShowScript(!showScript)}>
+                    <FileText size={14} /> Roteiro
+                  </Button>
+                </motion.div>
+
+                {/* Vídeo anexado indicator */}
+                {hasVideo && (
+                  <Badge className="text-xs bg-green-500/10 text-green-600 border-green-500/30 gap-1">
+                    <Check size={12} /> Vídeo pronto
+                  </Badge>
+                )}
+
+                {/* Spacer */}
+                <div className="flex-1" />
+
+                {/* FINALIZAR — main CTA */}
+                <motion.div whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.03 }}>
+                  <Button
+                    onClick={() => {
+                      if (hasVideo) { sendForReview(); }
+                      else { setShowUpload(true); }
+                    }}
+                    disabled={saving}
+                    className="gap-2 text-sm font-bold bg-gradient-to-r from-primary via-blue-500 to-primary bg-[length:200%_100%] animate-[shimmer_3s_linear_infinite] text-primary-foreground shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-shadow"
+                  >
+                    <Rocket size={16} />
+                    {hasVideo ? 'Enviar para Revisão' : 'Finalizar'}
+                  </Button>
+                </motion.div>
+              </div>
+
+              {/* ─── Script overlay ──────────────────────── */}
+              <AnimatePresence>
+                {showScript && scriptData && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                    <div className="bg-muted/30 border border-border rounded-xl p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                          <FileText size={13} className="text-primary" /> {scriptData.title}
+                        </p>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowScript(false)}>
+                          <X size={12} />
+                        </Button>
+                      </div>
+                      <div className="prose prose-sm max-w-none text-foreground max-h-[300px] overflow-y-auto rounded-lg bg-background p-3 border border-border"
+                        dangerouslySetInnerHTML={{ __html: highlightQuotes(scriptData.content) || '<em>Sem conteúdo</em>' }} />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* ─── Upload overlay ──────────────────────── */}
+              <AnimatePresence>
+                {showUpload && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                    <div className="bg-muted/30 border border-border rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                          <Upload size={13} className="text-primary" /> Enviar vídeo editado
+                        </p>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowUpload(false)}>
+                          <X size={12} />
+                        </Button>
+                      </div>
+
+                      {/* File upload */}
+                      <div className="border-2 border-dashed border-border rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
+                        <input ref={fileInputRef} type="file" accept="video/*" onChange={handleFileUpload} className="hidden" id="hero-video-upload" />
+                        <label htmlFor="hero-video-upload" className="cursor-pointer flex flex-col items-center gap-2">
+                          <Video size={24} className="text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">{uploading ? uploadProgress : 'Clique para enviar vídeo'}</span>
+                          <span className="text-[10px] text-muted-foreground/60">MP4, MOV — até 500MB</span>
+                        </label>
+                        {uploading && (
+                          <div className="mt-2 flex items-center justify-center gap-2">
+                            <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                            <span className="text-xs text-primary font-medium">Enviando...</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-px bg-border" />
+                        <span className="text-[10px] text-muted-foreground">OU COLE O LINK</span>
+                        <div className="flex-1 h-px bg-border" />
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Input placeholder="Cole o link do vídeo..." value={videoLink} onChange={e => setVideoLink(e.target.value)} className="flex-1 h-9" />
+                        <Button size="sm" onClick={saveVideoLink} disabled={saving || !videoLink.trim()} className="gap-1 h-9">
+                          <Link2 size={13} /> Salvar
+                        </Button>
+                      </div>
+
+                      {hasVideo && (
+                        <>
+                          <div className="flex items-center gap-2 text-sm text-green-600 bg-green-500/10 rounded-lg px-3 py-2 border border-green-500/30">
+                            <Check size={14} /> Vídeo pronto
+                          </div>
+                          <motion.div whileTap={{ scale: 0.93 }}>
+                            <Button onClick={sendForReview} disabled={saving}
+                              className="w-full gap-2 font-bold bg-gradient-to-r from-primary to-blue-500 text-primary-foreground shadow-md">
+                              <Send size={14} /> Enviar para Revisão
+                            </Button>
+                          </motion.div>
+                        </>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ═══════ ALSO EDITING (other in-edit tasks, small cards) ═══════ */}
+      {inEditTasks.filter(t => t.id !== activeEditTask?.id).length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Também em edição</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {inEditTasks.filter(t => t.id !== activeEditTask?.id).map(task => {
+              const cl = clients.find(c => c.id === task.client_id);
+              const cfg = getTypeConfig(task.content_type);
+              return (
+                <motion.div key={task.id} whileTap={{ scale: 0.97 }}
+                  onClick={() => { setActiveEditTask(task); setShowUpload(false); setShowScript(false); setVideoLink(task.edited_video_link || ''); }}
+                  className="bg-card border border-primary/20 rounded-xl p-3 flex items-center justify-between gap-3 cursor-pointer hover:border-primary/40 transition-colors">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {cl && <ClientLogo client={cl as any} size="sm" />}
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-foreground truncate">{task.title}</p>
+                      <Badge className={`text-[9px] px-1 py-0 ${cfg.color} border-0`}>{cfg.label}</Badge>
+                    </div>
+                  </div>
+                  {task.editing_started_at && (
+                    <div className="flex items-center gap-1 bg-primary/10 rounded-full px-2 py-0.5 shrink-0">
+                      <motion.div className="w-1.5 h-1.5 rounded-full bg-primary" animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1, repeat: Infinity }} />
+                      <LiveTimer startedAt={task.editing_started_at} />
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
       )}
+
+      {/* ═══════ EDITING QUEUE ═══════ */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+            <Scissors size={15} className="text-primary" />
+            Fila de Edição
+            {filteredQueue.length > 0 && (
+              <Badge variant="destructive" className="text-[10px] px-1.5 py-0">{filteredQueue.length}</Badge>
+            )}
+          </h2>
+        </div>
+
+        {/* Compact filters */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[140px] max-w-[240px]">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input placeholder="Buscar..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              className="pl-8 h-8 text-xs" />
+          </div>
+          <Select value={filterClient} onValueChange={setFilterClient}>
+            <SelectTrigger className="h-8 w-32 text-xs"><SelectValue placeholder="Cliente" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterType} onValueChange={setFilterType}>
+            <SelectTrigger className="h-8 w-28 text-xs"><SelectValue placeholder="Tipo" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              {CONTENT_TYPES.map(ct => <SelectItem key={ct.value} value={ct.value}>{ct.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {filteredQueue.length === 0 ? (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            className="bg-card border border-border rounded-xl p-8 text-center">
+            <RocketMascot size={48} className="mx-auto mb-2" />
+            <p className="text-foreground font-semibold text-sm">Fila limpa!</p>
+            <p className="text-xs text-muted-foreground">Todos os conteúdos foram editados</p>
+          </motion.div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {filteredQueue.map((task, i) => (
+              <QueueCard key={task.id} task={task} clients={clients} index={i}
+                onStartEditing={() => handleStartEditing(task)}
+                currentUserId={user?.id}
+                users={users} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Shimmer animation keyframe */}
+      <style>{`
+        @keyframes shimmer {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+        }
+      `}</style>
     </div>
   );
 }
 
 /* ─── Queue Card ──────────────────────────────────────────── */
-function QueueCard({ task, clients, index, onClick, onStartEditing, currentUserId, users }: {
-  task: EditorTask; clients: any[]; index: number; onClick: () => void;
-  onStartEditing?: () => void; currentUserId?: string; users?: any[];
+function QueueCard({ task, clients, index, onStartEditing, currentUserId, users }: {
+  task: EditorTask; clients: any[]; index: number;
+  onStartEditing: () => void; currentUserId?: string; users?: any[];
 }) {
   const client = clients.find(c => c.id === task.client_id);
   const cfg = getTypeConfig(task.content_type);
   const deadline = getDeadlineStatus(task.editing_deadline);
   const clientColor = client?.color || '217 91% 60%';
-  const isEditing = !!task.editing_started_at;
-  const isMyTask = task.assigned_to === currentUserId;
-
-  const statusColors: Record<string, string> = {
-    edicao: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
-    revisao: 'bg-teal-500/10 text-teal-600 border-teal-500/30',
-    alteracao: 'bg-amber-500/10 text-amber-600 border-amber-500/30',
-    envio: 'bg-green-500/10 text-green-600 border-green-500/30',
-  };
-  const statusLabels: Record<string, string> = {
-    edicao: isEditing ? 'Editando' : 'Aguardando',
-    revisao: 'Em Revisão',
-    alteracao: 'Ajuste',
-    envio: 'Finalizado',
-  };
 
   return (
     <motion.div
@@ -650,54 +756,41 @@ function QueueCard({ task, clients, index, onClick, onStartEditing, currentUserI
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.02 }}
       whileHover={{ scale: 1.01 }}
-      className={`relative bg-card border border-border rounded-xl overflow-hidden cursor-pointer transition-all ${
-        deadline.variant === 'destructive' && task.kanban_column === 'edicao' ? 'ring-1 ring-destructive/40' : ''
+      className={`relative bg-card border border-border rounded-xl overflow-hidden transition-all ${
+        deadline.variant === 'destructive' ? 'ring-1 ring-destructive/40' : ''
       } ${task.immediate_alteration ? 'ring-1 ring-red-500/60' : ''} ${task.editing_priority && !task.immediate_alteration ? 'ring-1 ring-amber-500/40' : ''}`}
-      onClick={onClick}
     >
       {/* Priority banner */}
       {(task.immediate_alteration || task.editing_priority) && (
         <div className={`px-3 py-1 flex items-center gap-1.5 text-[10px] font-bold ${
           task.immediate_alteration ? 'bg-red-500/15 text-red-600' : 'bg-amber-500/15 text-amber-600'
         }`}>
-          {task.immediate_alteration ? (
-            <><Zap size={10} className="animate-pulse" /> ALTERAÇÃO IMEDIATA</>
-          ) : (
-            <><Flame size={10} /> PRIORIDADE</>
-          )}
+          {task.immediate_alteration ? <><Zap size={10} className="animate-pulse" /> ALTERAÇÃO IMEDIATA</> : <><Flame size={10} /> PRIORIDADE</>}
         </div>
       )}
 
-      <div className="h-1.5 w-full" style={{ backgroundColor: `hsl(${clientColor})` }} />
-      <div className="p-4 space-y-3">
+      <div className="h-1" style={{ backgroundColor: `hsl(${clientColor})` }} />
+      <div className="p-3 space-y-2.5">
         <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
             {client && <ClientLogo client={client as any} size="sm" />}
             <div className="min-w-0">
-              <p className="text-sm font-bold text-foreground truncate">{client?.companyName || 'Cliente'}</p>
-              <Badge className={`text-[10px] px-1.5 py-0 ${cfg.color} border-0`}>
-                <cfg.icon size={10} className="mr-0.5" />{cfg.label}
+              <p className="text-xs font-bold text-foreground truncate">{client?.companyName || 'Cliente'}</p>
+              <Badge className={`text-[9px] px-1 py-0 ${cfg.color} border-0`}>
+                <cfg.icon size={9} className="mr-0.5" />{cfg.label}
               </Badge>
             </div>
           </div>
-          <div className="flex flex-col items-end gap-1">
-            <Badge variant="outline" className={`text-[9px] ${statusColors[task.kanban_column] || ''}`}>
-              {statusLabels[task.kanban_column]}
-            </Badge>
-            {isEditing && task.editing_started_at && (
-              <div className="flex items-center gap-1 bg-primary/10 rounded-full px-2 py-0.5">
-                <motion.div className="w-1.5 h-1.5 rounded-full bg-primary" animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1, repeat: Infinity }} />
-                <LiveTimer startedAt={task.editing_started_at} />
-              </div>
-            )}
-          </div>
+          <Badge variant="outline" className={`text-[9px] shrink-0 ${
+            task.kanban_column === 'alteracao' ? 'bg-amber-500/10 text-amber-600 border-amber-500/30' : 'bg-blue-500/10 text-blue-600 border-blue-500/30'
+          }`}>
+            {task.kanban_column === 'alteracao' ? 'Ajuste' : 'Na fila'}
+          </Badge>
         </div>
 
         <p className="text-sm font-semibold text-foreground leading-tight">{task.title}</p>
 
-        {task.kanban_column === 'edicao' && task.editing_deadline && <DeadlineBadge deadline={task.editing_deadline} label="Edição" />}
-        {task.kanban_column === 'revisao' && task.review_deadline && <DeadlineBadge deadline={task.review_deadline} label="Revisão" />}
-        {task.kanban_column === 'alteracao' && task.alteration_deadline && !task.immediate_alteration && <DeadlineBadge deadline={task.alteration_deadline} label="Alteração" />}
+        {task.editing_deadline && <DeadlineBadge deadline={task.editing_deadline} label="Edição" />}
 
         {/* Assigned editor */}
         {task.assigned_to && users && (
@@ -710,11 +803,10 @@ function QueueCard({ task, clients, index, onClick, onStartEditing, currentUserI
         <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
           {task.script_id && <span className="flex items-center gap-0.5"><Eye size={10} /> Roteiro</span>}
           {task.drive_link && <span className="flex items-center gap-0.5"><ExternalLink size={10} /> Drive</span>}
-          {task.edited_video_link && <span className="flex items-center gap-0.5 text-green-600"><Check size={10} /> Vídeo</span>}
         </div>
 
         {/* Start Editing CTA */}
-        {task.kanban_column === 'edicao' && !task.editing_started_at && !task.assigned_to && onStartEditing && (
+        {!task.assigned_to && (
           <motion.div whileTap={{ scale: 0.95 }}>
             <Button size="sm" className="w-full gap-1.5 h-8 text-xs bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-md"
               onClick={(e) => { e.stopPropagation(); onStartEditing(); }}>

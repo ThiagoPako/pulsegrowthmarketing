@@ -301,7 +301,7 @@ export default function EditorDashboard() {
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
         className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <RocketMascot size={40} />
+          <SectionIcon icon={Scissors} size={24} />
           <div>
             <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
               Bancada de Edição

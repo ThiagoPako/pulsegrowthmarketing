@@ -1212,23 +1212,23 @@ function FAQ() {
 // ─── Contato / CTA ──────────────────────────────────────────
 function Contato() {
   return (
-    <section id="contato" className="py-24 bg-card border-t border-border/50 relative overflow-hidden">
+    <section id="contato" className="py-16 sm:py-24 bg-card border-t border-border/50 relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/[0.02] to-primary/[0.05]" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} variants={staggerContainer} className="text-center max-w-2xl mx-auto">
-          <motion.span variants={fadeUp} className="text-sm font-semibold text-primary uppercase tracking-wider">Vamos conversar?</motion.span>
-          <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3">
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }} variants={staggerContainer} className="text-center max-w-2xl mx-auto">
+          <motion.span variants={fadeUp} className="text-xs sm:text-sm font-semibold text-primary uppercase tracking-wider">Vamos conversar?</motion.span>
+          <motion.h2 variants={fadeUp} custom={1} className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mt-2 sm:mt-3">
             Pronto para transformar sua presença digital?
           </motion.h2>
-          <motion.p variants={fadeUp} custom={2} className="text-muted-foreground mt-4">
+          <motion.p variants={fadeUp} custom={2} className="text-sm sm:text-base text-muted-foreground mt-3 sm:mt-4">
             Entre em contato conosco e descubra como podemos ajudar sua empresa a crescer nas redes sociais com conteúdo profissional e estratégico.
           </motion.p>
-          <motion.div variants={fadeUp} custom={3} className="mt-8">
+          <motion.div variants={fadeUp} custom={3} className="mt-6 sm:mt-8">
             <motion.div whileHover={{ scale: 1.05, y: -2 }} whileTap={{ scale: 0.95 }}>
               <Button
                 size="lg"
                 onClick={() => window.open(WHATSAPP_LINK, '_blank')}
-                className="gap-2 text-base px-10 py-7 bg-primary hover:bg-primary/90 text-primary-foreground shadow-2xl shadow-primary/30 relative overflow-hidden group"
+                className="gap-2 text-sm sm:text-base px-8 sm:px-10 py-6 sm:py-7 bg-primary hover:bg-primary/90 text-primary-foreground shadow-2xl shadow-primary/30 relative overflow-hidden group w-full sm:w-auto"
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
                 <MessageCircle size={18} /> Falar pelo WhatsApp

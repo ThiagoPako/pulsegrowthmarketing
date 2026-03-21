@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   Play, Pause, Maximize, Check, MessageSquare, X, ChevronLeft, ChevronRight,
   BarChart3, Send, Clock, Film, Image, Palette, Video, Award, Bell, Volume2,
-  VolumeX, Eye, TrendingUp, Sparkles, ChevronDown, Loader2, LogOut, Shield
+  VolumeX, Eye, TrendingUp, Sparkles, ChevronDown, Loader2, LogOut, Shield, Download
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';
@@ -1007,6 +1007,21 @@ export default function ClientPortal() {
                         em {format(new Date(selectedContent.approved_at), "dd/MM/yyyy 'às' HH:mm")}
                       </span>
                     )}
+                  </div>
+                )}
+
+                {/* Download button */}
+                {selectedContent.file_url && (
+                  <div>
+                    <a
+                      href={selectedContent.file_url}
+                      download
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-sm bg-white/10 hover:bg-white/15 text-white transition-all hover:scale-105 active:scale-95 border border-white/[0.08]"
+                    >
+                      <Download size={16} /> Baixar conteúdo
+                    </a>
                   </div>
                 )}
 

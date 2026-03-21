@@ -112,7 +112,7 @@ export default function NotificationBell() {
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-[340px] sm:w-[380px] p-0 rounded-xl shadow-xl border-border/60" align="end" sideOffset={8}>
+      <PopoverContent className="w-[340px] sm:w-[380px] p-0 rounded-xl shadow-xl border-border/60 z-[100]" align="end" sideOffset={8} portal={true}>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border/60 bg-muted/30">
           <div className="flex items-center gap-2">

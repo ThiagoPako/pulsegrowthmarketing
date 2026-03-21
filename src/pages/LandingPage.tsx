@@ -467,15 +467,15 @@ function Contato() {
           <motion.div variants={fadeUp} custom={4} className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-6 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <Phone size={14} className="text-primary" />
-              (38) 99926-6863
+              (62) 9 8538-2981
             </div>
-            <div className="flex items-center gap-2">
-              <Mail size={14} className="text-primary" />
-              contato@agenciapulse.tech
-            </div>
+            <a href={INSTAGRAM_LINK} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-foreground transition-colors">
+              <Instagram size={14} className="text-primary" />
+              @ag.pulse
+            </a>
             <div className="flex items-center gap-2">
               <MapPin size={14} className="text-primary" />
-              Montes Claros - MG
+              Minaçu - GO | Atendemos todo o Brasil
             </div>
           </motion.div>
         </motion.div>

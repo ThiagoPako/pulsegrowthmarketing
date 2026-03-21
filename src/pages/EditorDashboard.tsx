@@ -74,48 +74,13 @@ export function getTypeConfig(type: string) {
   return CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];
 }
 
-/* ─── Animated Rocket Mascot ──────────────────────────────── */
-function RocketMascot({ size = 48, className = '' }: { size?: number; className?: string }) {
+/* ─── Subtle Section Icon ──────────────────────────────── */
+function SectionIcon({ icon: Icon, size = 24, className = '' }: { icon: any; size?: number; className?: string }) {
   return (
     <motion.div className={className}
-      animate={{ y: [0, -6, 0], rotate: [0, 3, -3, 0] }}
-      transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}>
-      <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
-        {/* Flame */}
-        <motion.ellipse cx="32" cy="58" rx="6" ry="4"
-          animate={{ ry: [4, 6, 4], opacity: [0.8, 1, 0.8] }}
-          transition={{ duration: 0.4, repeat: Infinity }}
-          fill="url(#flameGrad)" />
-        {/* Body */}
-        <path d="M32 8C26 8 22 18 22 32V46C22 49 26 52 32 52C38 52 42 49 42 46V32C42 18 38 8 32 8Z" fill="url(#bodyGrad)" />
-        {/* Window */}
-        <circle cx="32" cy="28" r="7" fill="#1a1a2e" stroke="#e0e0e0" strokeWidth="1.5" />
-        {/* Eye whites */}
-        <ellipse cx="30" cy="27" rx="3" ry="3.5" fill="white" />
-        <ellipse cx="35" cy="27" rx="2.5" ry="3" fill="white" />
-        {/* Pupils */}
-        <motion.circle cx="30.5" cy="27.5" r="1.5" fill="#1a1a2e"
-          animate={{ cx: [30.5, 31, 30, 30.5] }}
-          transition={{ duration: 2.5, repeat: Infinity }} />
-        <motion.circle cx="35" cy="27.5" r="1.2" fill="#1a1a2e"
-          animate={{ cx: [35, 35.5, 34.5, 35] }}
-          transition={{ duration: 2.5, repeat: Infinity }} />
-        {/* Fins */}
-        <path d="M22 38L16 46C16 46 18 48 22 46V38Z" fill="hsl(var(--primary))" />
-        <path d="M42 38L48 46C48 46 46 48 42 46V38Z" fill="hsl(var(--primary))" />
-        {/* Nose */}
-        <path d="M28 8C28 8 32 2 36 8" fill="hsl(var(--destructive))" />
-        <defs>
-          <linearGradient id="bodyGrad" x1="32" y1="8" x2="32" y2="52">
-            <stop stopColor="hsl(var(--primary))" />
-            <stop offset="1" stopColor="hsl(var(--primary)/0.7)" />
-          </linearGradient>
-          <radialGradient id="flameGrad">
-            <stop stopColor="#fbbf24" />
-            <stop offset="1" stopColor="#ef4444" />
-          </radialGradient>
-        </defs>
-      </svg>
+      animate={{ opacity: [0.7, 1, 0.7] }}
+      transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}>
+      <Icon size={size} className="text-primary" />
     </motion.div>
   );
 }
@@ -324,9 +289,9 @@ export default function EditorDashboard() {
   };
 
   if (loading) return (
-    <div className="flex flex-col items-center justify-center h-64 gap-4">
-      <RocketMascot size={64} />
-      <p className="text-muted-foreground animate-pulse">Carregando sua bancada...</p>
+    <div className="flex flex-col items-center justify-center h-64 gap-3">
+      <Scissors size={32} className="text-primary animate-pulse" />
+      <p className="text-muted-foreground text-sm">Carregando sua bancada...</p>
     </div>
   );
 
@@ -336,7 +301,7 @@ export default function EditorDashboard() {
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
         className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <RocketMascot size={40} />
+          <SectionIcon icon={Scissors} size={24} />
           <div>
             <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
               Bancada de Edição
@@ -395,10 +360,10 @@ export default function EditorDashboard() {
         <TabsContent value="editing" className="space-y-4">
           {inEditTasks.length === 0 ? (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              className="bg-card border border-border rounded-xl p-8 text-center">
-              <RocketMascot size={56} className="mx-auto mb-3" />
-              <p className="text-foreground font-semibold">Nenhuma edição em andamento</p>
-              <p className="text-sm text-muted-foreground mt-1">Pegue uma tarefa na Fila de Edição para começar!</p>
+              className="bg-card border border-border rounded-xl p-6 text-center">
+              <Scissors size={28} className="mx-auto mb-2 text-muted-foreground/40" />
+              <p className="text-foreground font-semibold text-sm">Nenhuma edição em andamento</p>
+              <p className="text-xs text-muted-foreground mt-1">Pegue uma tarefa na Fila de Edição para começar!</p>
             </motion.div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -480,10 +445,10 @@ export default function EditorDashboard() {
 
           {sortedFiltered.length === 0 ? (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              className="bg-card border border-border rounded-xl p-8 text-center">
-              <RocketMascot size={56} className="mx-auto mb-3" />
-              <p className="text-foreground font-semibold">Fila limpa!</p>
-              <p className="text-sm text-muted-foreground">Todos os conteúdos foram editados</p>
+              className="bg-card border border-border rounded-xl p-6 text-center">
+              <Check size={28} className="mx-auto mb-2 text-success/40" />
+              <p className="text-foreground font-semibold text-sm">Fila limpa!</p>
+              <p className="text-xs text-muted-foreground">Todos os conteúdos foram editados</p>
             </motion.div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -596,9 +561,9 @@ export default function EditorDashboard() {
                   })}
                 </div>
               ) : (
-                <div className="text-center py-6">
-                  <RocketMascot size={40} className="mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">Dados insuficientes</p>
+                <div className="text-center py-4">
+                  <Timer size={24} className="mx-auto mb-2 text-muted-foreground/30" />
+                  <p className="text-xs text-muted-foreground">Dados insuficientes</p>
                 </div>
               )}
             </motion.div>
@@ -718,7 +683,7 @@ function QueueCard({ task, clients, index, onClick, onStartEditing, currentUserI
           <motion.div whileTap={{ scale: 0.95 }}>
             <Button size="sm" className="w-full gap-1.5 h-8 text-xs bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-md"
               onClick={(e) => { e.stopPropagation(); onStartEditing(); }}>
-              <Rocket size={13} /> Iniciar Edição
+              <Play size={13} /> Iniciar Edição
             </Button>
           </motion.div>
         )}

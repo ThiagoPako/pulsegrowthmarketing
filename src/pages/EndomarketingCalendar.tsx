@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ChevronLeft, ChevronRight, CalendarDays, Columns3, Rocket, Check, Play } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CalendarDays, Columns3, Check, Play } from 'lucide-react';
 import { format, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameMonth, isSameDay, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -50,27 +50,14 @@ export default function EndomarketingCalendar() {
 
   if (loadingT || loadingC) return (
     <div className="flex items-center justify-center p-12">
-      <motion.div animate={{ y: [0, -10, 0], rotate: [0, -15, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
-        <Rocket size={32} className="text-primary -rotate-45" />
-      </motion.div>
+      <CalendarDays size={28} className="text-primary animate-pulse" />
     </div>
   );
 
   return (
     <div className="space-y-4 sm:space-y-6 px-1 sm:px-0">
       <div className="flex items-center gap-3">
-        <motion.div
-          animate={{ y: [0, -5, 0], rotate: [0, -10, 0] }}
-          transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-          className="relative"
-        >
-          <Rocket size={24} className="text-primary -rotate-45" />
-          <motion.div
-            animate={{ opacity: [0.5, 1, 0.3], scale: [0.8, 1.2, 0.6] }}
-            transition={{ duration: 0.5, repeat: Infinity }}
-            className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-3 rounded-full bg-gradient-to-t from-warning via-primary to-transparent blur-[2px] rotate-45"
-          />
-        </motion.div>
+        <CalendarDays size={22} className="text-primary shrink-0" />
         <div>
           <h1 className="text-xl sm:text-2xl font-display font-bold">Calendário Endomarketing</h1>
           <p className="text-xs sm:text-sm text-muted-foreground">Visualização de tarefas e capacidade</p>
@@ -174,15 +161,11 @@ export default function EndomarketingCalendar() {
                         <div className="text-[9px] text-muted-foreground text-center">+{dayTasks.length - 3}</div>
                       )}
                     </div>
-                    {/* Today rocket indicator */}
+                    {/* Today indicator */}
                     {isToday && hasTasks && (
-                      <motion.div
-                        animate={{ y: [0, -2, 0] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                        className="hidden sm:block mt-0.5"
-                      >
-                        <Rocket size={8} className="text-primary -rotate-45 mx-auto" />
-                      </motion.div>
+                      <div className="hidden sm:block mt-0.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary mx-auto" />
+                      </div>
                     )}
                   </motion.div>
                 );
@@ -202,9 +185,7 @@ export default function EndomarketingCalendar() {
                 <Card className="glass-card p-3 sm:p-4 border-2 border-primary/20">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <motion.div animate={{ rotate: [0, 360] }} transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}>
-                        <Rocket size={14} className="text-primary -rotate-45" />
-                      </motion.div>
+                      <CalendarDays size={14} className="text-primary" />
                       <h3 className="text-sm font-semibold capitalize">
                         {format(selectedDay, "EEEE, d 'de' MMMM", { locale: ptBR })}
                       </h3>
@@ -213,9 +194,7 @@ export default function EndomarketingCalendar() {
                   </div>
                   {selectedDayTasks.length === 0 ? (
                     <div className="text-center py-4">
-                      <motion.div animate={{ y: [0, -5, 0] }} transition={{ duration: 3, repeat: Infinity }}>
-                        <Rocket size={20} className="text-muted-foreground/30 -rotate-45 mx-auto" />
-                      </motion.div>
+                      <CalendarDays size={18} className="text-muted-foreground/20 mx-auto" />
                       <p className="text-xs text-muted-foreground mt-2">Sem tarefas neste dia</p>
                     </div>
                   ) : (
@@ -331,12 +310,7 @@ export default function EndomarketingCalendar() {
                     ))}
                     {dayTasks.length === 0 && (
                       <div className="text-center py-3 sm:py-4">
-                        <motion.div
-                          animate={{ y: [0, -3, 0], opacity: [0.15, 0.3, 0.15] }}
-                          transition={{ duration: 3, repeat: Infinity }}
-                        >
-                          <Rocket size={12} className="text-muted-foreground/30 -rotate-45 mx-auto" />
-                        </motion.div>
+                        <CalendarDays size={12} className="text-muted-foreground/15 mx-auto" />
                         <p className="text-[10px] text-muted-foreground mt-1">Sem tarefas</p>
                       </div>
                     )}

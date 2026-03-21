@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Video, Plus, XCircle, RefreshCw, TrendingUp, Calendar, Check,
   ChevronLeft, ChevronRight, Clock, Users as UsersIcon, MessageSquare, Trophy, BarChart3,
-  Clapperboard, Film, Megaphone, AlertTriangle, Rocket, Bell, Send
+  Clapperboard, Film, Megaphone, AlertTriangle, Bell, Send, Target
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, addDays, formatDistanceToNow, differenceInMinutes, differenceInHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -35,14 +35,14 @@ interface LiveEditorTask {
 const SCORE_WEIGHTS = { reel: 10, criativo: 5, story: 3, arte: 2, extra: 8 };
 const BAR_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
 
-/* Floating rocket mascot */
-const FloatingRocket = ({ className = '', size = 20 }: { className?: string; size?: number }) => (
+/* Subtle pulsing icon — professional, not childish */
+const PulseIcon = ({ icon: Icon, size = 16, className = '' }: { icon: any; size?: number; className?: string }) => (
   <motion.div
     className={className}
-    animate={{ y: [0, -6, 0], rotate: [0, 5, -5, 0] }}
-    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+    animate={{ opacity: [0.7, 1, 0.7] }}
+    transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
   >
-    <Rocket size={size} className="text-primary" />
+    <Icon size={size} className="text-primary" />
   </motion.div>
 );
 
@@ -232,24 +232,14 @@ export default function Dashboard() {
         animate={{ opacity: 1, y: 0 }}
       >
         <div className="flex items-center gap-2 sm:gap-3">
-          <FloatingRocket size={isMobile ? 22 : 28} />
+          <PulseIcon icon={BarChart3} size={isMobile ? 20 : 24} />
           <div>
             <h1 className="text-lg sm:text-2xl font-display font-bold">
-              {currentUser?.role === 'videomaker' ? `Olá, ${currentUser.name} 👋` : 'Painel de Controle'}
+              {currentUser?.role === 'videomaker' ? `Olá, ${currentUser.name}` : 'Painel de Controle'}
             </h1>
             <p className="text-muted-foreground text-xs sm:text-sm">{format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
           </div>
         </div>
-        {/* Mini rocket exhaust on desktop */}
-        {!isMobile && (
-          <motion.div
-            animate={{ scale: [1, 1.1, 1], opacity: [0.5, 1, 0.5] }}
-            transition={{ duration: 2, repeat: Infinity }}
-            className="text-primary/30"
-          >
-            <Rocket size={40} />
-          </motion.div>
-        )}
       </motion.div>
 
       <BirthdayCountdown />
@@ -646,16 +636,14 @@ export default function Dashboard() {
         <div className="lg:col-span-2 glass-card p-3 sm:p-5">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <div className="flex items-center gap-2">
-              <FloatingRocket size={16} />
+              <Clapperboard size={16} className="text-primary" />
               <h3 className="font-display font-semibold text-xs sm:text-sm">Gravações de Hoje</h3>
             </div>
             <span className="text-[10px] sm:text-xs text-muted-foreground">{todayRecordings.length} gravações</span>
           </div>
           {todayRecordings.length === 0 ? (
-            <div className="py-6 text-center text-muted-foreground text-xs sm:text-sm flex flex-col items-center gap-2">
-              <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 2, repeat: Infinity }}>
-                <Rocket size={28} className="text-muted-foreground/40" />
-              </motion.div>
+            <div className="py-4 text-center text-muted-foreground text-xs sm:text-sm flex flex-col items-center gap-2">
+              <Video size={24} className="text-muted-foreground/30" />
               Nenhuma gravação hoje
             </div>
           ) : (
@@ -697,7 +685,7 @@ export default function Dashboard() {
         {/* Videomaker progress */}
         <div className="glass-card p-3 sm:p-5">
           <div className="flex items-center gap-2 mb-3 sm:mb-4">
-            <FloatingRocket size={16} />
+            <UsersIcon size={16} className="text-primary" />
             <h3 className="font-display font-semibold text-xs sm:text-sm">Progresso do Time</h3>
           </div>
           {videomakerStats.length === 0 ? (
@@ -826,7 +814,7 @@ export default function Dashboard() {
       <div className="glass-card p-3 sm:p-5">
         <div className="flex items-center justify-between mb-3 sm:mb-4">
           <div className="flex items-center gap-2">
-            <FloatingRocket size={16} />
+            <Calendar size={16} className="text-primary" />
             <h3 className="font-display font-semibold text-xs sm:text-sm">Agenda Semanal</h3>
           </div>
           <div className="flex items-center gap-1 sm:gap-2">
@@ -938,16 +926,14 @@ export default function Dashboard() {
       <div className="glass-card p-3 sm:p-5">
         <div className="flex items-center justify-between mb-3 sm:mb-4">
           <div className="flex items-center gap-2">
-            <FloatingRocket size={16} />
+            <Target size={16} className="text-primary" />
             <h3 className="font-display font-semibold text-xs sm:text-sm">Progresso por Cliente</h3>
           </div>
           <button onClick={() => navigate('/metas')} className="text-[10px] sm:text-[11px] text-primary font-semibold hover:underline">METAS</button>
         </div>
         {clientProgress.length === 0 ? (
-          <div className="py-6 text-center text-muted-foreground text-xs flex flex-col items-center gap-2">
-            <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 2, repeat: Infinity }}>
-              <Rocket size={28} className="text-muted-foreground/40" />
-            </motion.div>
+          <div className="py-4 text-center text-muted-foreground text-xs flex flex-col items-center gap-2">
+            <UsersIcon size={24} className="text-muted-foreground/30" />
             Nenhum cliente cadastrado
           </div>
         ) : (

@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Square, FileText, Check, Clock, Video, Users as UsersIcon,
   TrendingUp, BarChart3, Undo2, AlertTriangle, Star, Eye, ChevronLeft, Download, Link, ArrowRight,
-  ThumbsDown, Pencil, MessageCircle, Send, UserCheck, Rocket, Hourglass
+  ThumbsDown, Pencil, MessageCircle, Send, UserCheck, Rocket, Hourglass, Calendar
 } from 'lucide-react';
 import LiveRecordingCard from '@/components/videomaker/LiveRecordingCard';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -588,22 +588,11 @@ export default function VideomakerDashboard() {
 
   return (
     <div className="space-y-4 sm:space-y-5 max-w-[1400px] px-1 sm:px-0">
-      {/* Header with animated rocket */}
+      {/* Header */}
       <div className="flex items-center gap-3">
-        <motion.div
-          animate={{ y: [0, -6, 0], rotate: [0, -10, 0] }}
-          transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-          className="relative"
-        >
-          <Rocket size={28} className="text-primary -rotate-45" />
-          <motion.div
-            animate={{ opacity: [0.6, 1, 0.4], scale: [0.8, 1.2, 0.6] }}
-            transition={{ duration: 0.5, repeat: Infinity }}
-            className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2.5 h-3 rounded-full bg-gradient-to-t from-warning via-primary to-transparent blur-[2px] rotate-45"
-          />
-        </motion.div>
+        <Video size={24} className="text-primary shrink-0" />
         <div>
-          <h1 className="text-xl sm:text-2xl font-display font-bold">Olá, {currentUser?.name} 👋</h1>
+          <h1 className="text-xl sm:text-2xl font-display font-bold">Olá, {currentUser?.name}</h1>
           <p className="text-muted-foreground text-xs sm:text-sm">{format(today, "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
         </div>
       </div>
@@ -660,14 +649,6 @@ export default function VideomakerDashboard() {
             </div>
             <p className="text-lg sm:text-xl font-display font-bold">{s.value}</p>
             <p className="text-[10px] text-muted-foreground mt-0.5">{s.label}</p>
-            {/* Subtle animated rocket particle */}
-            <motion.div
-              animate={{ y: [20, -30], opacity: [0, 0.3, 0], x: [0, 5] }}
-              transition={{ duration: 3, repeat: Infinity, delay: i * 0.8 }}
-              className="absolute top-2 right-2"
-            >
-              <Rocket size={10} className="text-muted-foreground/20 -rotate-45" />
-            </motion.div>
           </motion.div>
         ))}
       </div>
@@ -686,10 +667,8 @@ export default function VideomakerDashboard() {
           </div>
 
           {todayRecs.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground text-sm flex flex-col items-center gap-2">
-              <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 3, repeat: Infinity }}>
-                <Rocket size={32} className="text-muted-foreground/30 -rotate-45" />
-              </motion.div>
+            <div className="py-6 text-center text-muted-foreground text-sm flex flex-col items-center gap-2">
+              <Video size={24} className="text-muted-foreground/30" />
               <p>Nenhuma gravação hoje</p>
             </div>
           ) : (
@@ -813,9 +792,7 @@ export default function VideomakerDashboard() {
         {/* Performance card */}
         <div className="glass-card p-3 sm:p-5">
           <div className="flex items-center gap-2 mb-3 sm:mb-4">
-            <motion.div animate={{ scale: [1, 1.15, 1] }} transition={{ duration: 2, repeat: Infinity }}>
-              <Rocket size={16} className="text-primary -rotate-45" />
-            </motion.div>
+            <TrendingUp size={16} className="text-primary" />
             <h3 className="font-display font-semibold text-sm">Meu Desempenho</h3>
           </div>
           <div className="space-y-3 sm:space-y-4">
@@ -851,12 +828,7 @@ export default function VideomakerDashboard() {
       {/* ── Kanban Semanal ── */}
       <div className="glass-card p-3 sm:p-5">
         <div className="flex items-center gap-2 mb-3 sm:mb-4">
-          <motion.div
-            animate={{ x: [0, 4, 0] }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-          >
-            <Rocket size={16} className="text-primary -rotate-45" />
-          </motion.div>
+          <Calendar size={16} className="text-primary" />
           <h3 className="font-display font-semibold text-sm">Minha Semana</h3>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0 sm:grid sm:grid-cols-5 sm:overflow-visible snap-x snap-mandatory -mx-1 px-1">
@@ -890,14 +862,9 @@ export default function VideomakerDashboard() {
                   )}
                 </div>
                 <div className="space-y-1.5 sm:space-y-2">
-                  {dayRecs.length === 0 && (
+                    {dayRecs.length === 0 && (
                     <div className="text-center py-3 sm:py-4">
-                      <motion.div
-                        animate={{ y: [0, -3, 0], opacity: [0.15, 0.3, 0.15] }}
-                        transition={{ duration: 3, repeat: Infinity }}
-                      >
-                        <Rocket size={14} className="text-muted-foreground/30 -rotate-45 mx-auto" />
-                      </motion.div>
+                      <Calendar size={12} className="text-muted-foreground/15 mx-auto" />
                       <p className="text-[10px] text-muted-foreground mt-1">Livre</p>
                     </div>
                   )}
@@ -956,9 +923,7 @@ export default function VideomakerDashboard() {
         <DialogContent className="max-w-2xl max-h-[90vh] sm:max-h-[85vh] overflow-y-auto mx-2 sm:mx-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <motion.div animate={{ rotate: [0, -15, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
-                <Rocket size={20} className="text-primary -rotate-45" />
-              </motion.div>
+              <Check size={20} className="text-primary" />
               Finalizar Gravação — {(() => {
                 const rec = recordings.find(r => r.id === finishRecordingId);
                 return rec ? getClientName(rec.clientId) : '';
@@ -1281,24 +1246,7 @@ export default function VideomakerDashboard() {
                     disabled={Array.from(new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts])).some(id => !driveLinks[id]?.trim())}
                     className="w-full gap-2 bg-gradient-to-r from-orange-600 via-red-500 to-orange-500 hover:from-orange-500 hover:via-red-400 hover:to-orange-400 text-white shadow-lg shadow-red-500/30 font-bold py-5 text-base rounded-xl relative overflow-hidden group"
                   >
-                    <motion.div 
-                      animate={{ y: [0, -4, 0], rotate: [0, -15, 0] }} 
-                      transition={{ duration: 0.8, repeat: Infinity, ease: 'easeInOut' }}
-                      className="relative"
-                    >
-                      <Rocket size={20} className="-rotate-45 relative z-10" />
-                      {/* Fire particles */}
-                      <motion.div
-                        animate={{ opacity: [0.8, 1, 0.6], scale: [1, 1.3, 0.8], y: [0, 6, 2] }}
-                        transition={{ duration: 0.4, repeat: Infinity }}
-                        className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-3 h-4 rounded-full bg-gradient-to-t from-yellow-400 via-orange-400 to-transparent blur-[2px] rotate-45"
-                      />
-                      <motion.div
-                        animate={{ opacity: [0.6, 1, 0.4], scale: [0.8, 1.1, 0.6], y: [0, 8, 4] }}
-                        transition={{ duration: 0.5, repeat: Infinity, delay: 0.15 }}
-                        className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-2 h-3 rounded-full bg-gradient-to-t from-yellow-300 to-transparent blur-[1px] rotate-45"
-                      />
-                    </motion.div>
+                    <Send size={18} />
                     Enviar para Edicao
                     {/* Button glow effect */}
                     <motion.div 

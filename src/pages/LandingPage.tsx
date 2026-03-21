@@ -246,26 +246,33 @@ function Planos() {
     {
       name: 'Starter',
       subtitle: 'Para quem está começando no digital',
-      features: ['2 criativos por semana', '4 artes para feed', 'Social media dedicado', 'Calendário editorial'],
+      features: ['2 criativos/mês', '4 artes para feed/mês', 'Tráfego pago', 'Social media dedicado', 'Calendário editorial'],
       popular: false,
     },
     {
       name: 'Boost',
       subtitle: 'Presença semanal estratégica',
-      features: ['4 reels por semana', '2 criativos por semana', '3 gravações/mês', 'Social media + designer', 'Conteúdo extra incluso'],
+      features: ['4 reels/mês', '2 criativos/mês', 'Até 3 gravações/mês', 'Tráfego pago', 'Social media + designer', 'Conteúdo extra incluso'],
       popular: false,
     },
     {
       name: 'Premium',
       subtitle: 'O mais escolhido',
-      features: ['8 reels por semana', '3 criativos por semana', '20 stories/mês', '4 artes para feed', '4 gravações/mês', 'Social media + designer dedicado', 'Assessoria comercial', 'Conteúdo extra incluso'],
+      features: ['8 reels/mês', '3 criativos/mês', '20 stories/mês', '4 artes para feed/mês', '4 gravações/mês', 'Tráfego pago', 'Social media + designer dedicado', 'Assessoria comercial', 'Conteúdo extra incluso'],
       popular: true,
     },
     {
       name: 'Elite',
       subtitle: 'Para dominar e vender',
-      features: ['12 reels por semana', '4 criativos por semana', '40 stories/mês', '4 artes para feed', '5 gravações/mês', 'Social media + designer exclusivo', 'Assessoria comercial completa', 'Treinamento da equipe de vendas', 'Conteúdo extra incluso', 'Portal do cliente'],
+      features: ['12 reels/mês', '4 criativos/mês', '40 stories/mês', '4 artes para feed/mês', '5 gravações/mês', 'Tráfego pago', 'Social media + designer exclusivo', 'Assessoria comercial completa', 'Treinamento da equipe de vendas', 'Conteúdo extra incluso', 'Portal do cliente'],
       popular: false,
+    },
+    {
+      name: 'Endomarketing',
+      subtitle: '🆕 Novidade — Presença diária com apresentadora',
+      features: ['Stories diários com apresentadora', 'Gravação presencial na empresa', 'Edição profissional diária', 'Postagem direta no perfil', 'Conteúdo humanizado e autêntico', 'Aumento de engajamento orgânico'],
+      popular: false,
+      isNew: true,
     },
   ];
 
@@ -282,16 +289,23 @@ function Planos() {
           </motion.p>
         </motion.div>
 
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }} variants={staggerContainer} className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 max-w-6xl mx-auto">
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }} variants={staggerContainer} className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 max-w-7xl mx-auto">
           {plans.map((p, i) => (
             <motion.div key={p.name} variants={fadeUp} custom={i} className={`relative p-6 rounded-2xl border transition-all duration-300 flex flex-col ${
               p.popular
                 ? 'border-primary bg-primary/[0.03] shadow-lg shadow-primary/10 scale-[1.02]'
-                : 'border-border/60 bg-background hover:border-primary/30'
+                : (p as any).isNew
+                  ? 'border-emerald-500/50 bg-emerald-500/[0.03] shadow-lg shadow-emerald-500/10'
+                  : 'border-border/60 bg-background hover:border-primary/30'
             }`}>
               {p.popular && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-primary text-primary-foreground text-xs font-bold whitespace-nowrap">
                   Mais Popular
+                </div>
+              )}
+              {(p as any).isNew && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-emerald-500 text-white text-xs font-bold whitespace-nowrap">
+                  ✨ Novidade
                 </div>
               )}
               <div className="text-center mb-5 pt-2">
@@ -301,15 +315,15 @@ function Planos() {
               <ul className="space-y-2.5 mb-6 flex-1">
                 {p.features.map(f => (
                   <li key={f} className="flex items-start gap-2 text-sm text-foreground">
-                    <CheckCircle2 size={15} className="text-success shrink-0 mt-0.5" />
+                    <CheckCircle2 size={15} className={`${(p as any).isNew ? 'text-emerald-500' : 'text-success'} shrink-0 mt-0.5`} />
                     {f}
                   </li>
                 ))}
               </ul>
               <Button
                 onClick={() => window.open(WHATSAPP_LINK, '_blank')}
-                className={`w-full gap-2 ${p.popular ? 'bg-primary hover:bg-primary/90 text-primary-foreground' : ''}`}
-                variant={p.popular ? 'default' : 'outline'}
+                className={`w-full gap-2 ${p.popular ? 'bg-primary hover:bg-primary/90 text-primary-foreground' : (p as any).isNew ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : ''}`}
+                variant={p.popular || (p as any).isNew ? 'default' : 'outline'}
               >
                 <MessageCircle size={14} /> Solicitar proposta
               </Button>

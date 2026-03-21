@@ -368,7 +368,7 @@ function Hero() {
           </motion.div>
 
           {/* Headline */}
-          <motion.h1 variants={fadeUp} custom={1} className="font-display text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[1.08] tracking-tight text-foreground">
+          <motion.h1 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-extrabold leading-[1.1] sm:leading-[1.08] tracking-tight text-foreground">
             Do conteúdo ao{' '}
             <span className="text-primary relative inline-block">
               <motion.span

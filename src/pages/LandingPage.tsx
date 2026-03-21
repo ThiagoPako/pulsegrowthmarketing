@@ -979,7 +979,7 @@ function Planos() {
                   );
                 })}
               </ul>
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="space-y-2">
                 <Button
                   onClick={() => window.open(WHATSAPP_LINK, '_blank')}
                   className={`w-full gap-2 ${p.popular ? 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shadow-primary/20' : (p as any).isNew ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/20' : ''}`}
@@ -987,6 +987,16 @@ function Planos() {
                 >
                   <MessageCircle size={14} /> Solicitar proposta
                 </Button>
+                {planVideos[p.name] && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setActiveVideo({ name: p.name, url: planVideos[p.name] })}
+                    className="w-full gap-2 text-primary hover:text-primary"
+                  >
+                    <Play size={14} /> Entender melhor
+                  </Button>
+                )}
               </motion.div>
             </motion.div>
           ))}

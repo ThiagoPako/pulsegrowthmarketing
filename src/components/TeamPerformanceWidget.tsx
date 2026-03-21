@@ -2,10 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/vpsDb';
 import { ROLE_LABELS } from '@/types';
-import { motion } from 'framer-motion';
-import { Trophy, Video, Palette, Film, Megaphone, Users, ChevronDown, ChevronUp } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Trophy, Video, Palette, Film, Megaphone, Users, ChevronDown, ChevronUp, TrendingUp, Star } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isWithinInterval, parseISO } from 'date-fns';
-import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import UserAvatar from '@/components/UserAvatar';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -21,30 +20,32 @@ interface MemberPerformance {
 }
 
 const ROLE_ICONS: Record<string, any> = {
-  videomaker: Video,
-  editor: Film,
-  designer: Palette,
-  social_media: Megaphone,
-  fotografo: Palette,
-  parceiro: Users,
+  videomaker: Video, editor: Film, designer: Palette,
+  social_media: Megaphone, fotografo: Palette, parceiro: Users,
 };
 
-const ROLE_COLORS: Record<string, string> = {
-  videomaker: 'text-destructive',
-  editor: 'text-info',
-  designer: 'text-warning',
-  social_media: 'text-primary',
-  fotografo: 'text-accent-foreground',
-  parceiro: 'text-success',
+const ROLE_GRADIENT: Record<string, string> = {
+  videomaker: 'from-red-500/20 to-orange-500/10',
+  editor: 'from-blue-500/20 to-cyan-500/10',
+  designer: 'from-amber-500/20 to-yellow-500/10',
+  social_media: 'from-violet-500/20 to-purple-500/10',
+  fotografo: 'from-pink-500/20 to-rose-500/10',
+  parceiro: 'from-emerald-500/20 to-green-500/10',
 };
 
-const ROLE_BG: Record<string, string> = {
-  videomaker: 'bg-destructive/10 border-destructive/20',
-  editor: 'bg-info/10 border-info/20',
-  designer: 'bg-warning/10 border-warning/20',
-  social_media: 'bg-primary/10 border-primary/20',
-  fotografo: 'bg-accent/10 border-accent/20',
-  parceiro: 'bg-success/10 border-success/20',
+const ROLE_ACCENT: Record<string, string> = {
+  videomaker: 'bg-red-500', editor: 'bg-blue-500', designer: 'bg-amber-500',
+  social_media: 'bg-violet-500', fotografo: 'bg-pink-500', parceiro: 'bg-emerald-500',
+};
+
+const ROLE_TEXT: Record<string, string> = {
+  videomaker: 'text-red-400', editor: 'text-blue-400', designer: 'text-amber-400',
+  social_media: 'text-violet-400', fotografo: 'text-pink-400', parceiro: 'text-emerald-400',
+};
+
+const ROLE_BORDER: Record<string, string> = {
+  videomaker: 'border-red-500/20', editor: 'border-blue-500/20', designer: 'border-amber-500/20',
+  social_media: 'border-violet-500/20', fotografo: 'border-pink-500/20', parceiro: 'border-emerald-500/20',
 };
 
 export default function TeamPerformanceWidget() {
@@ -58,7 +59,6 @@ export default function TeamPerformanceWidget() {
   useEffect(() => {
     const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
     const monthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
-
     Promise.all([
       supabase.from('delivery_records').select('*').gte('date', monthStart).lte('date', monthEnd),
       supabase.from('content_tasks').select('*'),
@@ -70,8 +70,6 @@ export default function TeamPerformanceWidget() {
     });
   }, []);
 
-  const monthStart = startOfMonth(new Date());
-  const monthEnd = endOfMonth(new Date());
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });
 
@@ -91,18 +89,16 @@ export default function TeamPerformanceWidget() {
         const stories = vmDeliveries.reduce((a, r) => a + (r.stories_produced || 0), 0);
         const extras = vmDeliveries.reduce((a, r) => a + (r.extras_produced || 0), 0);
         score = reels * 10 + creatives * 5 + stories * 3 + extras * 8;
-
         const weekRecs = recordings.filter(r =>
           r.videomakerId === user.id &&
           isWithinInterval(parseISO(r.date), { start: weekStart, end: weekEnd })
         );
         const weekDone = weekRecs.filter(r => r.status === 'concluida').length;
-
         metrics.push(
           { label: 'Reels', value: reels },
           { label: 'Criativos', value: creatives },
           { label: 'Stories', value: stories },
-          { label: 'Gravações Sem.', value: weekDone },
+          { label: 'Grav. Sem.', value: weekDone },
         );
         maxScore = Math.max(score, 200);
       } else if (user.role === 'editor') {
@@ -114,7 +110,7 @@ export default function TeamPerformanceWidget() {
         metrics.push(
           { label: 'Finalizados', value: completed },
           { label: 'Em progresso', value: inProgress },
-          { label: 'Total tarefas', value: total },
+          { label: 'Total', value: total },
         );
         maxScore = Math.max(score, 100);
       } else if (user.role === 'designer' || user.role === 'fotografo') {
@@ -148,13 +144,8 @@ export default function TeamPerformanceWidget() {
       }
 
       members.push({
-        id: user.id,
-        name: user.name,
-        role: user.role,
-        avatarUrl: user.avatarUrl,
-        score,
-        maxScore,
-        metrics,
+        id: user.id, name: user.name, role: user.role,
+        avatarUrl: user.avatarUrl, score, maxScore, metrics,
       });
     }
 
@@ -174,9 +165,10 @@ export default function TeamPerformanceWidget() {
     });
   }, [teamMembers]);
 
-  const globalMax = useMemo(() => Math.max(...teamMembers.map(m => m.score), 1), [teamMembers]);
-
   if (teamMembers.length === 0) return null;
+
+  const monthLabel = format(new Date(), 'MMMM');
+  const capitalMonth = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
 
   return (
     <motion.div
@@ -184,142 +176,155 @@ export default function TeamPerformanceWidget() {
       animate={{ opacity: 1, y: 0 }}
       className="glass-card p-3 sm:p-5"
     >
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-display font-semibold text-xs sm:text-sm flex items-center gap-2">
-          <Trophy size={14} className="text-primary" />
-          Desempenho do Time — {format(new Date(), 'MMMM', { locale: undefined }).charAt(0).toUpperCase() + format(new Date(), 'MMMM').slice(1)}
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="font-display font-semibold text-sm sm:text-base flex items-center gap-2">
+          <Trophy size={16} className="text-primary" />
+          Desempenho por Função — {capitalMonth}
         </h3>
         <Badge variant="outline" className="text-[9px]">{teamMembers.length} membros</Badge>
       </div>
 
-      {/* Top 3 ranking */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
-        {teamMembers.slice(0, 3).map((m, i) => {
-          const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
-          const user = users.find(u => u.id === m.id);
-          const pct = Math.round((m.score / globalMax) * 100);
-          return (
-            <motion.div
-              key={m.id}
-              whileTap={{ scale: 0.97 }}
-              className={`relative flex flex-col items-center p-2 sm:p-3 rounded-xl border ${
-                i === 0 ? 'bg-primary/5 border-primary/20' : 'bg-secondary/50 border-border'
-              }`}
-            >
-              <span className="text-sm sm:text-lg mb-1">{medal}</span>
-              {user && <UserAvatar user={user} size="sm" />}
-              <p className="text-[10px] sm:text-xs font-semibold mt-1 truncate max-w-full">{m.name.split(' ')[0]}</p>
-              <Badge variant="secondary" className="text-[8px] mt-0.5 px-1">
-                {ROLE_LABELS[m.role as keyof typeof ROLE_LABELS] || m.role}
-              </Badge>
-              <p className="text-sm sm:text-lg font-display font-bold text-primary mt-1">{m.score}</p>
-              <p className="text-[8px] text-muted-foreground">pts</p>
-              <div className="w-full mt-1.5">
-                <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-                  <motion.div
-                    className="h-full rounded-full bg-primary"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${pct}%` }}
-                    transition={{ duration: 1, delay: i * 0.15 }}
-                  />
-                </div>
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
-
-      {/* Role groups */}
-      <div className="space-y-2">
+      {/* Category cards */}
+      <div className="space-y-3">
         {roleGroups.map(([role, members]) => {
           const RoleIcon = ROLE_ICONS[role] || Users;
-          const isExpanded = expandedRole === role || expandedRole === null;
-          const roleColor = ROLE_COLORS[role] || 'text-foreground';
-          const roleBg = ROLE_BG[role] || 'bg-secondary/50 border-border';
+          const isExpanded = expandedRole === role;
+          const accent = ROLE_ACCENT[role] || 'bg-primary';
+          const textColor = ROLE_TEXT[role] || 'text-primary';
+          const borderColor = ROLE_BORDER[role] || 'border-border';
+          const gradient = ROLE_GRADIENT[role] || 'from-primary/20 to-primary/5';
           const groupMax = Math.max(...members.map(m => m.score), 1);
+          const totalScore = members.reduce((s, m) => s + m.score, 0);
+          const leader = members[0];
 
           return (
-            <div key={role} className={`rounded-xl border overflow-hidden ${roleBg}`}>
+            <div key={role} className={`rounded-xl border overflow-hidden ${borderColor} bg-card/50`}>
+              {/* Category header with summary */}
               <button
-                onClick={() => setExpandedRole(expandedRole === role ? null : role)}
-                className="w-full flex items-center justify-between p-2.5 sm:p-3"
+                onClick={() => setExpandedRole(isExpanded ? null : role)}
+                className={`w-full bg-gradient-to-r ${gradient} p-3 sm:p-4 transition-colors`}
               >
-                <div className="flex items-center gap-2">
-                  <RoleIcon size={14} className={roleColor} />
-                  <span className="text-xs sm:text-sm font-semibold">
-                    {ROLE_LABELS[role as keyof typeof ROLE_LABELS] || role}
-                  </span>
-                  <Badge variant="secondary" className="text-[9px] h-4 px-1">{members.length}</Badge>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-8 h-8 rounded-lg ${accent} flex items-center justify-center`}>
+                      <RoleIcon size={16} className="text-white" />
+                    </div>
+                    <div className="text-left">
+                      <span className="text-xs sm:text-sm font-bold block">
+                        {ROLE_LABELS[role as keyof typeof ROLE_LABELS] || role}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {members.length} {members.length === 1 ? 'membro' : 'membros'} · {totalScore} pts total
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {/* Mini leader indicator */}
+                    {leader && (
+                      <div className="hidden sm:flex items-center gap-1.5 bg-background/60 rounded-full pl-1 pr-2.5 py-1">
+                        <Star size={10} className={textColor} />
+                        <span className="text-[10px] font-medium">{leader.name.split(' ')[0]}</span>
+                        <span className={`text-[10px] font-bold ${textColor}`}>{leader.score}pts</span>
+                      </div>
+                    )}
+                    {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground">
-                    Total: {members.reduce((s, m) => s + m.score, 0)} pts
-                  </span>
-                  {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+
+                {/* Mini comparison bars (always visible) */}
+                <div className="mt-3 space-y-1.5">
+                  {members.map((m, idx) => {
+                    const pct = groupMax > 0 ? Math.round((m.score / groupMax) * 100) : 0;
+                    return (
+                      <div key={m.id} className="flex items-center gap-2">
+                        <span className="text-[9px] w-16 sm:w-20 truncate text-left text-muted-foreground font-medium">
+                          {m.name.split(' ')[0]}
+                        </span>
+                        <div className="flex-1 h-2 rounded-full bg-background/50 overflow-hidden">
+                          <motion.div
+                            className={`h-full rounded-full ${accent}`}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${pct}%` }}
+                            transition={{ duration: 0.6, delay: idx * 0.08 }}
+                          />
+                        </div>
+                        <span className={`text-[9px] font-bold w-8 text-right ${textColor}`}>{m.score}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </button>
 
-              {isExpanded && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  className="px-2.5 pb-2.5 sm:px-3 sm:pb-3 space-y-2"
-                >
-                  {members.map((m, idx) => {
-                    const user = users.find(u => u.id === m.id);
-                    const pct = Math.round((m.score / globalMax) * 100);
-                    return (
-                      <motion.div
-                        key={m.id}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: idx * 0.05 }}
-                        className="bg-background/60 rounded-lg p-2 sm:p-3"
-                      >
-                        <div className="flex items-center gap-2 sm:gap-3">
-                          <span className="text-[10px] font-bold w-4 text-center text-muted-foreground">
-                            {idx + 1}º
-                          </span>
-                          {user && <UserAvatar user={user} size="sm" />}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs sm:text-sm font-medium truncate">{m.name}</p>
-                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
-                              {m.metrics.map((mt, j) => (
-                                <span key={j} className="text-[9px] text-muted-foreground">
-                                  {mt.label}: <strong className="text-foreground">{mt.value}</strong>
-                                </span>
-                              ))}
+              {/* Expanded detail */}
+              <AnimatePresence>
+                {isExpanded && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="p-2.5 sm:p-3 space-y-2 border-t border-border/50">
+                      {members.map((m, idx) => {
+                        const user = users.find(u => u.id === m.id);
+                        const pct = groupMax > 0 ? Math.round((m.score / groupMax) * 100) : 0;
+                        const isLeader = idx === 0;
+                        return (
+                          <motion.div
+                            key={m.id}
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: idx * 0.06 }}
+                            className={`rounded-lg p-3 ${isLeader ? `bg-gradient-to-r ${gradient} border ${borderColor}` : 'bg-background/40'}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className={`text-xs font-bold w-5 text-center ${isLeader ? textColor : 'text-muted-foreground'}`}>
+                                {idx + 1}º
+                              </span>
+                              {user && <UserAvatar user={user} size="sm" />}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-xs sm:text-sm font-semibold truncate">{m.name}</p>
+                                  {isLeader && <Star size={12} className={`${textColor} shrink-0`} fill="currentColor" />}
+                                </div>
+                                {/* Metrics grid */}
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-0.5 mt-1">
+                                  {m.metrics.map((mt, j) => (
+                                    <span key={j} className="text-[10px] text-muted-foreground">
+                                      {mt.label}: <strong className={isLeader ? textColor : 'text-foreground'}>{mt.value}</strong>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className={`text-base sm:text-xl font-display font-bold ${textColor}`}>{m.score}</p>
+                                <p className="text-[8px] text-muted-foreground">pts</p>
+                              </div>
                             </div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <p className={`text-sm sm:text-lg font-display font-bold ${roleColor}`}>{m.score}</p>
-                            <p className="text-[8px] text-muted-foreground">pts</p>
-                          </div>
-                        </div>
-                        <div className="mt-2">
-                          <div className="flex justify-between text-[8px] text-muted-foreground mb-0.5">
-                            <span>Desempenho relativo</span>
-                            <span>{pct}%</span>
-                          </div>
-                          <div className="h-2 rounded-full bg-secondary overflow-hidden">
-                            <motion.div
-                              className={`h-full rounded-full ${
-                                pct >= 75 ? 'bg-success' :
-                                pct >= 50 ? 'bg-primary' :
-                                pct >= 25 ? 'bg-warning' :
-                                'bg-destructive'
-                              }`}
-                              initial={{ width: 0 }}
-                              animate={{ width: `${pct}%` }}
-                              transition={{ duration: 0.8, delay: idx * 0.1 }}
-                            />
-                          </div>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                </motion.div>
-              )}
+                            {/* Performance bar within category */}
+                            <div className="mt-2">
+                              <div className="flex justify-between text-[8px] text-muted-foreground mb-0.5">
+                                <span>Comparativo na função</span>
+                                <span>{pct}%</span>
+                              </div>
+                              <div className="h-2 rounded-full bg-secondary overflow-hidden">
+                                <motion.div
+                                  className={`h-full rounded-full ${accent}`}
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${pct}%` }}
+                                  transition={{ duration: 0.8, delay: idx * 0.1 }}
+                                />
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           );
         })}

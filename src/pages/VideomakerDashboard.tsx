@@ -667,10 +667,8 @@ export default function VideomakerDashboard() {
           </div>
 
           {todayRecs.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground text-sm flex flex-col items-center gap-2">
-              <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 3, repeat: Infinity }}>
-                <Rocket size={32} className="text-muted-foreground/30 -rotate-45" />
-              </motion.div>
+            <div className="py-6 text-center text-muted-foreground text-sm flex flex-col items-center gap-2">
+              <Video size={24} className="text-muted-foreground/30" />
               <p>Nenhuma gravação hoje</p>
             </div>
           ) : (

@@ -199,7 +199,7 @@ export default function TeamPerformanceWidget() {
     }
 
     return members.sort((a, b) => b.score - a.score);
-  }, [users, deliveryRecords, contentTasks, designTasks, recordings, weekStart, weekEnd]);
+  }, [users, deliveryRecords, contentTasks, designTasks, smDeliveries, partnerTasks, scripts, recordings, weekStart, weekEnd]);
 
   const roleGroups = useMemo(() => {
     const groups: Record<string, MemberPerformance[]> = {};

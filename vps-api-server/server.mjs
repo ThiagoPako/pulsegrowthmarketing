@@ -618,13 +618,15 @@ async function hashPassword(password) {
 
 app.post('/api/client-portal-auth', async (req, res) => {
   try {
-    const admin = getAdminClient();
     const { action, login, password, client_id, slug } = req.body;
 
     if (action === 'login') {
       if (!login || !password) return res.status(400).json({ error: 'Login e senha obrigatórios' });
-      const { data: client, error } = await admin.from('clients').select('id, company_name, client_login, client_password_hash, color, logo_url').eq('client_login', login.trim()).single();
-      if (error || !client) return res.status(404).json({ error: 'Login não encontrado' });
+      const { rows: [client] } = await pool.query(
+        `SELECT id, company_name, client_login, client_password_hash, color, logo_url FROM clients WHERE client_login = $1`,
+        [login.trim()]
+      );
+      if (!client) return res.status(404).json({ error: 'Login não encontrado' });
       const passwordHash = await hashPassword(password);
       if (client.client_password_hash !== passwordHash) return res.status(401).json({ error: 'Senha incorreta' });
       return res.json({ success: true, client_id: client.id, company_name: client.company_name, color: client.color, logo_url: client.logo_url });
@@ -632,30 +634,45 @@ app.post('/api/client-portal-auth', async (req, res) => {
 
     if (action === 'register') {
       if (!client_id || !login || !password) return res.status(400).json({ error: 'Dados incompletos' });
-      const { data: existing } = await admin.from('clients').select('client_login, client_password_hash').eq('id', client_id).single();
-      if (existing?.client_login && existing?.client_password_hash) return res.status(409).json({ error: 'Conta já existe' });
-      const { data: taken } = await admin.from('clients').select('id').eq('client_login', login.trim()).neq('id', client_id).maybeSingle();
-      if (taken) return res.status(409).json({ error: 'Login já em uso' });
+      const { rows: [existing] } = await pool.query(
+        `SELECT client_login, client_password_hash FROM clients WHERE id = $1`, [client_id]
+      );
+      if (!existing) return res.status(404).json({ error: 'Cliente não encontrado' });
+      if (existing.client_login && existing.client_password_hash) return res.status(409).json({ error: 'Conta já existe' });
+      const { rows: taken } = await pool.query(
+        `SELECT id FROM clients WHERE client_login = $1 AND id != $2`, [login.trim(), client_id]
+      );
+      if (taken.length > 0) return res.status(409).json({ error: 'Login já em uso' });
       const passwordHash = await hashPassword(password);
-      const { error } = await admin.from('clients').update({ client_login: login.trim(), client_password_hash: passwordHash }).eq('id', client_id);
-      if (error) return res.status(500).json({ error: 'Erro ao criar conta' });
-      const { data: clientData } = await admin.from('clients').select('company_name').eq('id', client_id).single();
+      await pool.query(
+        `UPDATE clients SET client_login = $1, client_password_hash = $2 WHERE id = $3`,
+        [login.trim(), passwordHash, client_id]
+      );
+      const { rows: [clientData] } = await pool.query(`SELECT company_name FROM clients WHERE id = $1`, [client_id]);
       return res.json({ success: true, client_id, company_name: clientData?.company_name });
     }
 
     if (action === 'get_info') {
       if (!client_id && !slug) return res.status(400).json({ error: 'client_id or slug required' });
-      let query = admin.from('clients').select('id, company_name, color, logo_url, client_login, client_password_hash, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics');
-      if (client_id) query = query.eq('id', client_id); else query = query.ilike('company_name', slug.replace(/-/g, ' '));
-      const { data, error } = await query.single();
-      if (error || !data) return res.status(404).json({ error: 'Cliente não encontrado' });
+      let query, params;
+      if (client_id) {
+        query = `SELECT id, company_name, color, logo_url, client_login, client_password_hash, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics FROM clients WHERE id = $1`;
+        params = [client_id];
+      } else {
+        query = `SELECT id, company_name, color, logo_url, client_login, client_password_hash, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics FROM clients WHERE LOWER(REPLACE(company_name, ' ', '-')) = LOWER($1)`;
+        params = [slug.replace(/-/g, ' ')];
+      }
+      const { rows: [data] } = await pool.query(query, params);
+      if (!data) return res.status(404).json({ error: 'Cliente não encontrado' });
       return res.json({ id: data.id, company_name: data.company_name, color: data.color, logo_url: data.logo_url, has_credentials: !!(data.client_login && data.client_password_hash), weekly_reels: data.weekly_reels, weekly_creatives: data.weekly_creatives, weekly_stories: data.weekly_stories, monthly_recordings: data.monthly_recordings, plan_id: data.plan_id, show_metrics: data.show_metrics });
     }
 
     if (action === 'get_contents') {
       if (!client_id) return res.status(400).json({ error: 'client_id required' });
-      const { data } = await admin.from('client_portal_contents').select('*').eq('client_id', client_id).order('created_at', { ascending: false });
-      return res.json({ contents: data || [] });
+      const { rows } = await pool.query(
+        `SELECT * FROM client_portal_contents WHERE client_id = $1 ORDER BY created_at DESC`, [client_id]
+      );
+      return res.json({ contents: rows || [] });
     }
 
     res.status(400).json({ error: 'Invalid action' });

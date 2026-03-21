@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { motion, useScroll, useTransform, useMotionValue, useSpring, AnimatePresence, useInView } from 'framer-motion';
 import {
   Rocket, Video, BarChart3, Palette, Users, Calendar, CheckCircle2,
   ArrowRight, Play, Star, ChevronDown, MessageCircle, Instagram,
@@ -12,20 +12,124 @@ import { Button } from '@/components/ui/button';
 const WHATSAPP_LINK = 'https://wa.me/5562985382981?text=Olá!%20Vim%20pelo%20site%20e%20gostaria%20de%20saber%20mais%20sobre%20os%20serviços%20da%20Pulse.';
 const INSTAGRAM_LINK = 'https://instagram.com/ag.pulse';
 
+// ─── Animation variants ────────────────────────────────────
 const fadeUp = {
-  hidden: { opacity: 0, y: 40 },
-  visible: (i = 0) => ({ opacity: 1, y: 0, transition: { delay: i * 0.1, duration: 0.6, ease: 'easeOut' as const } }),
+  hidden: { opacity: 0, y: 30 },
+  visible: (i = 0) => ({
+    opacity: 1, y: 0,
+    transition: { delay: i * 0.12, duration: 0.7, ease: [0.25, 0.46, 0.45, 0.94] },
+  }),
+};
+
+const fadeScale = {
+  hidden: { opacity: 0, scale: 0.9 },
+  visible: (i = 0) => ({
+    opacity: 1, scale: 1,
+    transition: { delay: i * 0.1, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] },
+  }),
 };
 
 const staggerContainer = {
   hidden: {},
-  visible: { transition: { staggerChildren: 0.08 } },
+  visible: { transition: { staggerChildren: 0.1, delayChildren: 0.05 } },
 };
+
+const slideInLeft = {
+  hidden: { opacity: 0, x: -60 },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] } },
+};
+
+const slideInRight = {
+  hidden: { opacity: 0, x: 60 },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] } },
+};
+
+// ─── Animated Counter ──────────────────────────────────────
+function AnimatedCounter({ target, suffix = '' }: { target: string; suffix?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const isInView = useInView(ref, { once: true, margin: '-50px' });
+  const [display, setDisplay] = useState('0');
+
+  useEffect(() => {
+    if (!isInView) return;
+    const numericPart = target.replace(/[^0-9.]/g, '');
+    const prefix = target.replace(/[0-9.,+]+/g, '').trim();
+    const hasPlus = target.includes('+');
+    const num = parseFloat(numericPart.replace(',', ''));
+    if (isNaN(num)) { setDisplay(target); return; }
+
+    const duration = 2000;
+    const steps = 60;
+    const increment = num / steps;
+    let current = 0;
+    let step = 0;
+
+    const timer = setInterval(() => {
+      step++;
+      current = Math.min(current + increment, num);
+      const formatted = num >= 1000
+        ? Math.floor(current).toLocaleString('pt-BR')
+        : num % 1 !== 0
+          ? current.toFixed(0)
+          : Math.floor(current).toString();
+      setDisplay(`${hasPlus && step === steps ? '+' : ''}${formatted}${suffix}`);
+      if (step >= steps) {
+        setDisplay(target);
+        clearInterval(timer);
+      }
+    }, duration / steps);
+
+    return () => clearInterval(timer);
+  }, [isInView, target, suffix]);
+
+  return <span ref={ref}>{display}</span>;
+}
+
+// ─── Floating CTA ──────────────────────────────────────────
+function FloatingCTA() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setVisible(window.scrollY > 600);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          initial={{ y: 100, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 100, opacity: 0 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          className="fixed bottom-6 right-6 z-50"
+        >
+          <Button
+            size="lg"
+            onClick={() => window.open(WHATSAPP_LINK, '_blank')}
+            className="gap-2 rounded-full shadow-2xl shadow-primary/30 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-6 animate-[pulse_3s_ease-in-out_infinite]"
+          >
+            <MessageCircle size={20} /> Fale conosco
+          </Button>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
 
 // ─── Navbar ─────────────────────────────────────────────────
 function Navbar() {
   const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   const links = [
     { label: 'Serviços', href: '#servicos' },
     { label: 'Como Funciona', href: '#portal' },
@@ -37,20 +141,37 @@ function Navbar() {
   ];
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50">
+    <motion.nav
+      initial={{ y: -100 }}
+      animate={{ y: 0 }}
+      transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
+        scrolled
+          ? 'bg-background/90 backdrop-blur-2xl border-b border-border/50 shadow-sm'
+          : 'bg-transparent'
+      }`}
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          <a href="#" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+          <a href="#" className="flex items-center gap-2 group">
+            <motion.div
+              whileHover={{ rotate: 15, scale: 1.1 }}
+              transition={{ type: 'spring', stiffness: 400 }}
+              className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center"
+            >
               <Rocket size={18} className="text-primary-foreground" />
-            </div>
+            </motion.div>
             <span className="font-display font-bold text-lg text-foreground tracking-tight">Pulse</span>
             <span className="text-xs text-muted-foreground font-medium hidden sm:inline">Growth Marketing de Vendas</span>
           </a>
 
           <div className="hidden md:flex items-center gap-6">
             {links.map(l => (
-              <a key={l.href} href={l.href} className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">
+              <a
+                key={l.href}
+                href={l.href}
+                className="relative text-sm text-muted-foreground hover:text-foreground transition-colors font-medium after:content-[''] after:absolute after:w-full after:scale-x-0 after:h-0.5 after:bottom-[-4px] after:left-0 after:bg-primary after:origin-bottom-right after:transition-transform after:duration-300 hover:after:scale-x-100 hover:after:origin-bottom-left"
+              >
                 {l.label}
               </a>
             ))}
@@ -60,9 +181,11 @@ function Navbar() {
             <Button variant="ghost" size="sm" onClick={() => navigate('/login')} className="hidden sm:inline-flex text-sm">
               Área da Equipe
             </Button>
-            <Button size="sm" onClick={() => window.open(WHATSAPP_LINK, '_blank')} className="gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground">
-              <MessageCircle size={14} /> Falar conosco
-            </Button>
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button size="sm" onClick={() => window.open(WHATSAPP_LINK, '_blank')} className="gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shadow-primary/20">
+                <MessageCircle size={14} /> Falar conosco
+              </Button>
+            </motion.div>
             <button className="md:hidden p-2" onClick={() => setOpen(!open)}>
               {open ? <X size={20} /> : <Menu size={20} />}
             </button>
@@ -70,91 +193,195 @@ function Navbar() {
         </div>
       </div>
 
-      {open && (
-        <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} className="md:hidden border-t border-border/50 bg-background">
-          <div className="px-4 py-4 space-y-3">
-            {links.map(l => (
-              <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="block text-sm text-muted-foreground hover:text-foreground py-1">
-                {l.label}
-              </a>
-            ))}
-            <Button variant="outline" size="sm" onClick={() => navigate('/login')} className="w-full mt-2">
-              Área da Equipe
-            </Button>
-          </div>
-        </motion.div>
-      )}
-    </nav>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="md:hidden border-t border-border/50 bg-background/95 backdrop-blur-xl overflow-hidden"
+          >
+            <div className="px-4 py-4 space-y-3">
+              {links.map((l, i) => (
+                <motion.a
+                  key={l.href}
+                  href={l.href}
+                  onClick={() => setOpen(false)}
+                  initial={{ x: -20, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ delay: i * 0.05 }}
+                  className="block text-sm text-muted-foreground hover:text-foreground py-1"
+                >
+                  {l.label}
+                </motion.a>
+              ))}
+              <Button variant="outline" size="sm" onClick={() => navigate('/login')} className="w-full mt-2">
+                Área da Equipe
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.nav>
   );
 }
 
 // ─── Hero ───────────────────────────────────────────────────
 function Hero() {
-  return (
-    <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden pt-16">
-      {/* Gradient background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-accent/30" />
-      <div className="absolute top-20 right-[10%] w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
-      <div className="absolute bottom-20 left-[10%] w-72 h-72 bg-warning/10 rounded-full blur-3xl" />
+  const ref = useRef<HTMLElement>(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] });
+  const bgY = useTransform(scrollYProgress, [0, 1], ['0%', '30%']);
+  const opacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+  return (
+    <section ref={ref} className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
+      {/* Animated gradient blobs */}
+      <motion.div style={{ y: bgY }} className="absolute inset-0">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-accent/20" />
+        <motion.div
+          animate={{ x: [0, 30, 0], y: [0, -20, 0], scale: [1, 1.1, 1] }}
+          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute top-20 right-[10%] w-[500px] h-[500px] bg-primary/8 rounded-full blur-[100px]"
+        />
+        <motion.div
+          animate={{ x: [0, -20, 0], y: [0, 30, 0], scale: [1, 1.2, 1] }}
+          transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+          className="absolute bottom-20 left-[5%] w-96 h-96 bg-warning/8 rounded-full blur-[80px]"
+        />
+        <motion.div
+          animate={{ x: [0, 15, 0], y: [0, 15, 0] }}
+          transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/4 rounded-full blur-[120px]"
+        />
+      </motion.div>
+
+      {/* Grid pattern overlay */}
+      <div className="absolute inset-0 opacity-[0.015]" style={{
+        backgroundImage: `radial-gradient(circle at 1px 1px, hsl(var(--foreground)) 1px, transparent 0)`,
+        backgroundSize: '40px 40px',
+      }} />
+
+      <motion.div style={{ opacity }} className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="text-center max-w-4xl mx-auto">
-          <motion.div variants={fadeUp} custom={0} className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-semibold mb-8">
-            <Sparkles size={14} /> Marketing de performance para crescimento real
+          {/* Badge */}
+          <motion.div variants={fadeScale} custom={0}>
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-semibold mb-8 backdrop-blur-sm"
+            >
+              <motion.span
+                animate={{ rotate: [0, 15, -15, 0] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <Sparkles size={14} />
+              </motion.span>
+              Marketing de performance para crescimento real
+            </motion.div>
           </motion.div>
 
+          {/* Headline */}
           <motion.h1 variants={fadeUp} custom={1} className="font-display text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[1.08] tracking-tight text-foreground">
             Do conteúdo ao{' '}
-            <span className="text-primary relative">
-              fechamento
-              <svg className="absolute -bottom-2 left-0 w-full" viewBox="0 0 200 12" fill="none">
-                <path d="M2 8C50 2 150 2 198 8" stroke="hsl(16 82% 51%)" strokeWidth="3" strokeLinecap="round" />
-              </svg>
+            <span className="text-primary relative inline-block">
+              <motion.span
+                initial={{ backgroundSize: '0% 3px' }}
+                animate={{ backgroundSize: '100% 3px' }}
+                transition={{ delay: 1.2, duration: 0.8, ease: 'easeOut' }}
+                className="bg-gradient-to-r from-primary to-primary bg-no-repeat bg-bottom pb-1"
+              >
+                fechamento
+              </motion.span>
             </span>
             ,<br />
             a gente cuida de{' '}
-            <span className="text-primary">tudo</span>
+            <motion.span
+              className="text-primary"
+              animate={{ opacity: [1, 0.7, 1] }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              tudo
+            </motion.span>
           </motion.h1>
 
+          {/* Subheadline */}
           <motion.p variants={fadeUp} custom={2} className="mt-6 text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
             Gravamos, editamos, criamos a estratégia, gerenciamos suas redes sociais e acompanhamos sua equipe comercial até fechar a venda. Somos sua agência de growth marketing de vendas completa.
           </motion.p>
 
+          {/* CTA Buttons */}
           <motion.div variants={fadeUp} custom={3} className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Button size="lg" onClick={() => window.open(WHATSAPP_LINK, '_blank')} className="gap-2 text-base px-8 py-6 bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all">
-              Quero crescer no digital <ArrowRight size={18} />
-            </Button>
-            <Button size="lg" variant="outline" onClick={() => document.getElementById('servicos')?.scrollIntoView({ behavior: 'smooth' })} className="gap-2 text-base px-8 py-6">
-              <Play size={16} /> Ver serviços
-            </Button>
+            <motion.div whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }}>
+              <Button
+                size="lg"
+                onClick={() => window.open(WHATSAPP_LINK, '_blank')}
+                className="gap-2 text-base px-8 py-6 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xl shadow-primary/25 hover:shadow-2xl hover:shadow-primary/35 transition-all duration-300 relative overflow-hidden group"
+              >
+                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+                Quero crescer no digital <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+              </Button>
+            </motion.div>
+            <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+              <Button size="lg" variant="outline" onClick={() => document.getElementById('servicos')?.scrollIntoView({ behavior: 'smooth' })} className="gap-2 text-base px-8 py-6 border-border/80 hover:border-primary/40 transition-colors">
+                <Play size={16} /> Ver serviços
+              </Button>
+            </motion.div>
           </motion.div>
 
-          <motion.div variants={fadeUp} custom={4} className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-3xl mx-auto">
+          {/* Animated Counters */}
+          <motion.div variants={fadeUp} custom={4} className="mt-20 grid grid-cols-2 sm:grid-cols-4 gap-8 max-w-3xl mx-auto">
             {[
               { value: '100+', label: 'Clientes atendidos' },
               { value: '5.000+', label: 'Vídeos produzidos' },
               { value: '98%', label: 'Satisfação' },
               { value: '3x', label: 'Mais engajamento' },
-            ].map(s => (
-              <div key={s.label} className="text-center">
-                <p className="font-display text-2xl sm:text-3xl font-bold text-foreground">{s.value}</p>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-1">{s.label}</p>
-              </div>
+            ].map((s, i) => (
+              <motion.div
+                key={s.label}
+                whileHover={{ y: -4 }}
+                transition={{ type: 'spring', stiffness: 300 }}
+                className="text-center group"
+              >
+                <p className="font-display text-3xl sm:text-4xl font-bold text-foreground group-hover:text-primary transition-colors">
+                  <AnimatedCounter target={s.value} />
+                </p>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1.5">{s.label}</p>
+              </motion.div>
             ))}
           </motion.div>
         </motion.div>
-      </div>
+      </motion.div>
+
+      {/* Scroll indicator */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 2 }}
+        className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10"
+      >
+        <motion.div
+          animate={{ y: [0, 8, 0] }}
+          transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+          className="w-6 h-10 rounded-full border-2 border-muted-foreground/30 flex items-start justify-center p-1.5"
+        >
+          <motion.div className="w-1.5 h-1.5 rounded-full bg-primary" />
+        </motion.div>
+      </motion.div>
     </section>
   );
 }
 
 // ─── Sobre ──────────────────────────────────────────────────
 function Sobre() {
+  const ref = useRef<HTMLElement>(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] });
+  const imgY = useTransform(scrollYProgress, [0, 1], ['5%', '-5%']);
+
   return (
-    <section className="py-20 bg-card border-y border-border/50">
+    <section ref={ref} className="py-24 bg-card border-y border-border/50 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-100px' }} variants={staggerContainer} className="grid md:grid-cols-2 gap-12 items-center">
-          <motion.div variants={fadeUp}>
+        <div className="grid md:grid-cols-2 gap-16 items-center">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} variants={slideInLeft}>
             <span className="text-sm font-semibold text-primary uppercase tracking-wider">Sobre a Pulse</span>
             <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3 leading-tight">
               Mais do que marketing: somos parceiros do seu crescimento em vendas
@@ -165,7 +392,11 @@ function Sobre() {
             <p className="mt-4 text-muted-foreground leading-relaxed">
               E vai além: temos uma assessoria comercial completa de vendas. Acompanhamos sua equipe de atendimento, criamos métodos e orientamos como fechar mais clientes. Do conteúdo ao fechamento, estamos com você.
             </p>
-            <div className="mt-8 grid grid-cols-2 gap-4">
+            <motion.div
+              initial="hidden" whileInView="visible" viewport={{ once: true }}
+              variants={staggerContainer}
+              className="mt-8 grid grid-cols-2 gap-3"
+            >
               {[
                 { icon: Camera, label: 'Gravação profissional' },
                 { icon: Film, label: 'Edição de vídeo' },
@@ -173,29 +404,56 @@ function Sobre() {
                 { icon: Megaphone, label: 'Gestão de redes' },
                 { icon: Users, label: 'Assessoria comercial' },
                 { icon: Target, label: 'Fechamento de vendas' },
-              ].map(({ icon: Icon, label }) => (
-                <div key={label} className="flex items-center gap-3 p-3 rounded-xl bg-accent/50">
+              ].map(({ icon: Icon, label }, i) => (
+                <motion.div
+                  key={label}
+                  variants={fadeScale}
+                  custom={i}
+                  whileHover={{ scale: 1.03, x: 4 }}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-accent/50 hover:bg-accent/80 transition-colors cursor-default"
+                >
                   <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                     <Icon size={18} className="text-primary" />
                   </div>
                   <span className="text-sm font-medium text-foreground">{label}</span>
-                </div>
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
           </motion.div>
-          <motion.div variants={fadeUp} custom={2} className="relative">
-            <div className="aspect-[4/3] rounded-2xl bg-gradient-to-br from-primary/20 via-primary/10 to-accent/30 flex items-center justify-center overflow-hidden">
-              <div className="text-center p-8">
-                <div className="w-20 h-20 mx-auto rounded-2xl bg-primary/20 flex items-center justify-center mb-6">
+
+          <motion.div
+            initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }}
+            variants={slideInRight}
+            className="relative"
+          >
+            <motion.div style={{ y: imgY }} className="aspect-[4/3] rounded-3xl bg-gradient-to-br from-primary/20 via-primary/10 to-accent/30 flex items-center justify-center overflow-hidden relative">
+              {/* Decorative rings */}
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+                className="absolute w-64 h-64 rounded-full border border-primary/10"
+              />
+              <motion.div
+                animate={{ rotate: -360 }}
+                transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
+                className="absolute w-48 h-48 rounded-full border border-primary/15 border-dashed"
+              />
+              <div className="text-center p-8 relative z-10">
+                <motion.div
+                  animate={{ y: [0, -8, 0] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                  className="w-20 h-20 mx-auto rounded-2xl bg-primary/20 backdrop-blur-sm flex items-center justify-center mb-6"
+                >
                   <Rocket size={40} className="text-primary" />
-                </div>
+                </motion.div>
                 <h3 className="font-display text-2xl font-bold text-foreground">Pulse Growth</h3>
                 <p className="text-muted-foreground mt-2">Marketing de vendas completo</p>
               </div>
-            </div>
-            <div className="absolute -bottom-4 -right-4 w-32 h-32 bg-warning/20 rounded-2xl blur-2xl" />
+            </motion.div>
+            <div className="absolute -bottom-6 -right-6 w-40 h-40 bg-warning/15 rounded-3xl blur-3xl" />
+            <div className="absolute -top-4 -left-4 w-24 h-24 bg-primary/10 rounded-2xl blur-2xl" />
           </motion.div>
-        </motion.div>
+        </div>
       </div>
     </section>
   );
@@ -204,18 +462,19 @@ function Sobre() {
 // ─── Serviços ───────────────────────────────────────────────
 function Servicos() {
   const services = [
-    { icon: Video, title: 'Produção de Vídeos', desc: 'Vamos até sua empresa, gravamos reels, stories e vídeos profissionais. Tudo pensado para engajar e vender.', color: 'text-primary' },
-    { icon: Palette, title: 'Design & Artes', desc: 'Designer dedicado para criar artes de feed, stories, banners e materiais gráficos com sua identidade visual.', color: 'text-info' },
-    { icon: Instagram, title: 'Social Media', desc: 'Social media exclusivo para gerenciar seus perfis, planejar conteúdo, responder interações e manter sua marca ativa.', color: 'text-success' },
-    { icon: BarChart3, title: 'Tráfego Pago', desc: 'Campanhas no Meta Ads e Google Ads com estratégia focada em gerar leads qualificados para sua equipe comercial.', color: 'text-warning' },
-    { icon: Users, title: 'Assessoria Comercial', desc: 'Acompanhamos sua equipe de atendimento, criamos métodos de abordagem e orientamos como fechar mais vendas.', color: 'text-destructive' },
-    { icon: Target, title: 'Estratégia Completa', desc: 'Não fazemos só o tráfego — acompanhamos do primeiro contato até o fechamento, garantindo que o lead vire cliente.', color: 'text-primary' },
+    { icon: Video, title: 'Produção de Vídeos', desc: 'Vamos até sua empresa, gravamos reels, stories e vídeos profissionais. Tudo pensado para engajar e vender.' },
+    { icon: Palette, title: 'Design & Artes', desc: 'Designer dedicado para criar artes de feed, stories, banners e materiais gráficos com sua identidade visual.' },
+    { icon: Instagram, title: 'Social Media', desc: 'Social media exclusivo para gerenciar seus perfis, planejar conteúdo, responder interações e manter sua marca ativa.' },
+    { icon: BarChart3, title: 'Tráfego Pago', desc: 'Campanhas no Meta Ads e Google Ads com estratégia focada em gerar leads qualificados para sua equipe comercial.' },
+    { icon: Users, title: 'Assessoria Comercial', desc: 'Acompanhamos sua equipe de atendimento, criamos métodos de abordagem e orientamos como fechar mais vendas.' },
+    { icon: Target, title: 'Estratégia Completa', desc: 'Não fazemos só o tráfego — acompanhamos do primeiro contato até o fechamento, garantindo que o lead vire cliente.' },
   ];
 
   return (
-    <section id="servicos" className="py-20">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-100px' }} variants={staggerContainer} className="text-center mb-16">
+    <section id="servicos" className="py-24 relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-[100px]" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} variants={staggerContainer} className="text-center mb-16">
           <motion.span variants={fadeUp} className="text-sm font-semibold text-primary uppercase tracking-wider">Nossos Serviços</motion.span>
           <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3">
             Tudo que sua marca precisa para crescer
@@ -225,14 +484,28 @@ function Servicos() {
           </motion.p>
         </motion.div>
 
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }} variants={staggerContainer} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-40px' }} variants={staggerContainer} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {services.map((s, i) => (
-            <motion.div key={s.title} variants={fadeUp} custom={i} className="group p-6 rounded-2xl border border-border/60 bg-card hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300">
-              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                <s.icon size={24} className={s.color} />
+            <motion.div
+              key={s.title}
+              variants={fadeUp}
+              custom={i}
+              whileHover={{ y: -6, scale: 1.02 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+              className="group p-7 rounded-2xl border border-border/60 bg-card hover:border-primary/40 hover:shadow-xl hover:shadow-primary/8 transition-all duration-300 relative overflow-hidden"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.02] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <div className="relative z-10">
+                <motion.div
+                  whileHover={{ rotate: [0, -10, 10, 0] }}
+                  transition={{ duration: 0.5 }}
+                  className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-5 group-hover:bg-primary/15 transition-colors"
+                >
+                  <s.icon size={24} className="text-primary" />
+                </motion.div>
+                <h3 className="font-display text-lg font-bold text-foreground">{s.title}</h3>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{s.desc}</p>
               </div>
-              <h3 className="font-display text-lg font-bold text-foreground">{s.title}</h3>
-              <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{s.desc}</p>
             </motion.div>
           ))}
         </motion.div>
@@ -263,10 +536,11 @@ function ComoFunciona() {
 
   return (
     <>
-      {/* Como funciona - Processo */}
-      <section className="py-20 bg-card border-y border-border/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-100px' }} variants={staggerContainer} className="text-center mb-16">
+      {/* Processo */}
+      <section className="py-24 bg-card border-y border-border/50 relative overflow-hidden">
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-primary/5 rounded-full blur-[100px]" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} variants={staggerContainer} className="text-center mb-16">
             <motion.span variants={fadeUp} className="text-sm font-semibold text-primary uppercase tracking-wider">Como Funciona</motion.span>
             <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3">
               Nosso processo de A a Z
@@ -276,14 +550,27 @@ function ComoFunciona() {
             </motion.p>
           </motion.div>
 
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }} variants={staggerContainer} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-40px' }} variants={staggerContainer} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {steps.map((s, i) => (
-              <motion.div key={s.num} variants={fadeUp} custom={i} className="relative p-6 rounded-2xl border border-border/60 bg-background hover:border-primary/30 transition-all group">
+              <motion.div
+                key={s.num}
+                variants={fadeUp}
+                custom={i}
+                whileHover={{ y: -4 }}
+                className="relative p-7 rounded-2xl border border-border/60 bg-background hover:border-primary/30 hover:shadow-lg transition-all duration-300 group"
+              >
+                {/* Connector line */}
+                {i < steps.length - 1 && i % 3 !== 2 && (
+                  <div className="hidden lg:block absolute top-1/2 -right-3 w-6 h-px bg-gradient-to-r from-primary/30 to-transparent" />
+                )}
                 <div className="flex items-center gap-3 mb-4">
-                  <span className="text-3xl font-display font-black text-primary/20 group-hover:text-primary/40 transition-colors">{s.num}</span>
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <span className="text-4xl font-display font-black text-primary/10 group-hover:text-primary/25 transition-colors duration-300">{s.num}</span>
+                  <motion.div
+                    whileHover={{ rotate: 10 }}
+                    className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"
+                  >
                     <s.icon size={20} className="text-primary" />
-                  </div>
+                  </motion.div>
                 </div>
                 <h3 className="font-display text-base font-bold text-foreground">{s.title}</h3>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{s.desc}</p>
@@ -293,10 +580,11 @@ function ComoFunciona() {
         </div>
       </section>
 
-      {/* Portal do Cliente */}
-      <section id="portal" className="py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-100px' }} variants={staggerContainer} className="text-center mb-16">
+      {/* Portal */}
+      <section id="portal" className="py-24 relative overflow-hidden">
+        <div className="absolute top-1/2 right-0 -translate-y-1/2 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[120px]" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} variants={staggerContainer} className="text-center mb-16">
             <motion.span variants={fadeUp} className="text-sm font-semibold text-primary uppercase tracking-wider">Exclusivo para Clientes</motion.span>
             <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3">
               Portal do Cliente — Pulse Club
@@ -306,28 +594,47 @@ function ComoFunciona() {
             </motion.p>
           </motion.div>
 
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }} variants={staggerContainer} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 max-w-5xl mx-auto">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-40px' }} variants={staggerContainer} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 max-w-5xl mx-auto">
             {portalFeatures.map((f, i) => (
-              <motion.div key={f.label} variants={fadeUp} custom={i} className="p-5 rounded-2xl border border-primary/20 bg-primary/[0.02] hover:bg-primary/[0.05] transition-all">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
+              <motion.div
+                key={f.label}
+                variants={fadeScale}
+                custom={i}
+                whileHover={{ y: -4, scale: 1.02 }}
+                className="p-5 rounded-2xl border border-primary/20 bg-primary/[0.02] hover:bg-primary/[0.06] hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300"
+              >
+                <motion.div
+                  whileHover={{ scale: 1.1, rotate: -5 }}
+                  className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center mb-4"
+                >
                   <f.icon size={20} className="text-primary" />
-                </div>
+                </motion.div>
                 <h3 className="font-display text-sm font-bold text-foreground">{f.label}</h3>
                 <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{f.desc}</p>
               </motion.div>
             ))}
           </motion.div>
 
-          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.4 }} className="mt-12 text-center">
-            <div className="inline-flex items-center gap-3 px-6 py-4 rounded-2xl border border-primary/20 bg-primary/[0.03]">
-              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.5, duration: 0.6 }}
+            className="mt-14 text-center"
+          >
+            <motion.div whileHover={{ scale: 1.03 }} className="inline-flex items-center gap-4 px-8 py-5 rounded-2xl border border-primary/20 bg-primary/[0.03] hover:bg-primary/[0.06] transition-colors">
+              <motion.div
+                animate={{ y: [0, -4, 0] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                className="w-11 h-11 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/25"
+              >
                 <Rocket size={20} className="text-primary-foreground" />
-              </div>
+              </motion.div>
               <div className="text-left">
                 <p className="text-sm font-bold text-foreground">Incluso em todos os planos</p>
                 <p className="text-xs text-muted-foreground">Acesso ao portal com login exclusivo para cada cliente</p>
               </div>
-            </div>
+            </motion.div>
           </motion.div>
         </div>
       </section>
@@ -364,7 +671,7 @@ function Planos() {
     },
     {
       name: 'Endomarketing',
-      subtitle: '🆕 Novidade — Presença diária com apresentadora',
+      subtitle: 'Presença diária com apresentadora',
       features: ['Stories diários com apresentadora', 'Gravação presencial na empresa', 'Edição profissional diária', 'Postagem direta no perfil', 'Conteúdo humanizado e autêntico', 'Aumento de engajamento orgânico'],
       popular: false,
       isNew: true,
@@ -372,9 +679,10 @@ function Planos() {
   ];
 
   return (
-    <section id="planos" className="py-20 bg-card border-y border-border/50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-100px' }} variants={staggerContainer} className="text-center mb-16">
+    <section id="planos" className="py-24 bg-card border-y border-border/50 relative overflow-hidden">
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-primary/5 rounded-full blur-[120px]" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} variants={staggerContainer} className="text-center mb-16">
           <motion.span variants={fadeUp} className="text-sm font-semibold text-primary uppercase tracking-wider">Planos</motion.span>
           <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3">
             Escolha o plano ideal para sua empresa
@@ -384,24 +692,43 @@ function Planos() {
           </motion.p>
         </motion.div>
 
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }} variants={staggerContainer} className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 max-w-7xl mx-auto">
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-40px' }} variants={staggerContainer} className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 max-w-7xl mx-auto">
           {plans.map((p, i) => (
-            <motion.div key={p.name} variants={fadeUp} custom={i} className={`relative p-6 rounded-2xl border transition-all duration-300 flex flex-col ${
-              p.popular
-                ? 'border-primary bg-primary/[0.03] shadow-lg shadow-primary/10 scale-[1.02]'
-                : (p as any).isNew
-                  ? 'border-emerald-500/50 bg-emerald-500/[0.03] shadow-lg shadow-emerald-500/10'
-                  : 'border-border/60 bg-background hover:border-primary/30'
-            }`}>
+            <motion.div
+              key={p.name}
+              variants={fadeUp}
+              custom={i}
+              whileHover={{ y: -8, scale: 1.02 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+              className={`relative p-6 rounded-2xl border transition-all duration-300 flex flex-col ${
+                p.popular
+                  ? 'border-primary bg-primary/[0.04] shadow-xl shadow-primary/10'
+                  : (p as any).isNew
+                    ? 'border-emerald-500/50 bg-emerald-500/[0.03] shadow-lg shadow-emerald-500/10'
+                    : 'border-border/60 bg-background hover:border-primary/30 hover:shadow-lg'
+              }`}
+            >
               {p.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-primary text-primary-foreground text-xs font-bold whitespace-nowrap">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  whileInView={{ scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ type: 'spring', delay: 0.3 }}
+                  className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-primary text-primary-foreground text-xs font-bold whitespace-nowrap shadow-lg shadow-primary/30"
+                >
                   Mais Popular
-                </div>
+                </motion.div>
               )}
               {(p as any).isNew && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-emerald-500 text-white text-xs font-bold whitespace-nowrap">
-                  ✨ Novidade
-                </div>
+                <motion.div
+                  initial={{ scale: 0 }}
+                  whileInView={{ scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ type: 'spring', delay: 0.4 }}
+                  className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-emerald-500 text-white text-xs font-bold whitespace-nowrap shadow-lg shadow-emerald-500/30"
+                >
+                  Novidade
+                </motion.div>
               )}
               <div className="text-center mb-5 pt-2">
                 <h3 className="font-display text-xl font-bold text-foreground">{p.name}</h3>
@@ -411,12 +738,12 @@ function Planos() {
                 {p.features.map(f => {
                   const isTrafego = f.toLowerCase().includes('tráfego pago');
                   return (
-                    <li key={f} className={`flex items-start gap-2 text-sm ${isTrafego ? 'relative' : ''}`}>
+                    <li key={f} className="flex items-start gap-2 text-sm">
                       {isTrafego ? (
                         <>
                           <Rocket size={15} className="shrink-0 mt-0.5 text-orange-500 animate-pulse" />
-                          <span className="font-bold bg-gradient-to-r from-orange-400 via-red-500 to-yellow-400 bg-clip-text text-transparent animate-pulse drop-shadow-[0_0_6px_rgba(251,146,60,0.6)]">
-                            🔥 {f}
+                          <span className="font-bold bg-gradient-to-r from-orange-400 via-red-500 to-yellow-400 bg-clip-text text-transparent drop-shadow-[0_0_6px_rgba(251,146,60,0.4)]">
+                            {f}
                           </span>
                         </>
                       ) : (
@@ -429,19 +756,22 @@ function Planos() {
                   );
                 })}
               </ul>
-              <Button
-                onClick={() => window.open(WHATSAPP_LINK, '_blank')}
-                className={`w-full gap-2 ${p.popular ? 'bg-primary hover:bg-primary/90 text-primary-foreground' : (p as any).isNew ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : ''}`}
-                variant={p.popular || (p as any).isNew ? 'default' : 'outline'}
-              >
-                <MessageCircle size={14} /> Solicitar proposta
-              </Button>
+              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                <Button
+                  onClick={() => window.open(WHATSAPP_LINK, '_blank')}
+                  className={`w-full gap-2 ${p.popular ? 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shadow-primary/20' : (p as any).isNew ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/20' : ''}`}
+                  variant={p.popular || (p as any).isNew ? 'default' : 'outline'}
+                >
+                  <MessageCircle size={14} /> Solicitar proposta
+                </Button>
+              </motion.div>
             </motion.div>
           ))}
         </motion.div>
 
-        <motion.p initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} className="text-center text-sm text-muted-foreground mt-8">
-          Valores personalizados de acordo com a necessidade da sua empresa. <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer" className="text-primary font-semibold hover:underline">Fale conosco →</a>
+        <motion.p initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.5 }} className="text-center text-sm text-muted-foreground mt-10">
+          Valores personalizados de acordo com a necessidade da sua empresa.{' '}
+          <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer" className="text-primary font-semibold hover:underline">Fale conosco →</a>
         </motion.p>
       </div>
     </section>
@@ -458,22 +788,32 @@ function Cases() {
   ];
 
   return (
-    <section id="cases" className="py-20">
+    <section id="cases" className="py-24 relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-100px' }} variants={staggerContainer} className="text-center mb-16">
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} variants={staggerContainer} className="text-center mb-16">
           <motion.span variants={fadeUp} className="text-sm font-semibold text-primary uppercase tracking-wider">Cases de Sucesso</motion.span>
           <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3">
             Resultados reais de clientes reais
           </motion.h2>
         </motion.div>
 
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }} variants={staggerContainer} className="grid sm:grid-cols-2 gap-6 max-w-4xl mx-auto">
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-40px' }} variants={staggerContainer} className="grid sm:grid-cols-2 gap-6 max-w-4xl mx-auto">
           {cases.map((c, i) => (
-            <motion.div key={c.name} variants={fadeUp} custom={i} className="p-6 rounded-2xl border border-border/60 bg-card hover:shadow-lg transition-all">
+            <motion.div
+              key={c.name}
+              variants={fadeUp}
+              custom={i}
+              whileHover={{ y: -6, scale: 1.02 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+              className="p-7 rounded-2xl border border-border/60 bg-card hover:shadow-xl hover:border-primary/20 transition-all duration-300 group"
+            >
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                <motion.div
+                  whileHover={{ rotate: 15 }}
+                  className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/15 transition-colors"
+                >
                   <TrendingUp size={20} className="text-primary" />
-                </div>
+                </motion.div>
                 <div>
                   <h3 className="font-display font-bold text-foreground">{c.name}</h3>
                   <span className="text-xs text-muted-foreground">{c.niche}</span>
@@ -492,6 +832,7 @@ function Cases() {
 // ─── Depoimentos ────────────────────────────────────────────
 function Depoimentos() {
   const [testimonials, setTestimonials] = useState<Array<{ client_name: string; client_role: string; message: string; rating: number }>>([]);
+  const [current, setCurrent] = useState(0);
 
   useEffect(() => {
     import('@/integrations/supabase/client').then(({ supabase }) => {
@@ -505,7 +846,6 @@ function Depoimentos() {
           if (data && data.length > 0) {
             setTestimonials(data);
           } else {
-            // Fallback estáticos
             setTestimonials([
               { client_name: 'Maria Clara', client_role: 'Dona de restaurante', message: 'A Pulse transformou minha presença no Instagram. Em 3 meses, triplicamos as reservas online. O conteúdo é impecável!', rating: 5 },
               { client_name: 'Carlos Eduardo', client_role: 'Empresário automotivo', message: 'Profissionalismo e pontualidade. Os vídeos são de altíssima qualidade e o portal do cliente é incrível.', rating: 5 },
@@ -516,37 +856,96 @@ function Depoimentos() {
     });
   }, []);
 
+  // Auto-rotate
+  useEffect(() => {
+    if (testimonials.length <= 1) return;
+    const timer = setInterval(() => setCurrent(c => (c + 1) % testimonials.length), 5000);
+    return () => clearInterval(timer);
+  }, [testimonials.length]);
+
   return (
-    <section id="depoimentos" className="py-20 bg-card border-y border-border/50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-100px' }} variants={staggerContainer} className="text-center mb-16">
+    <section id="depoimentos" className="py-24 bg-card border-y border-border/50 relative overflow-hidden">
+      <div className="absolute bottom-0 right-0 w-96 h-96 bg-warning/5 rounded-full blur-[100px]" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} variants={staggerContainer} className="text-center mb-16">
           <motion.span variants={fadeUp} className="text-sm font-semibold text-primary uppercase tracking-wider">Depoimentos</motion.span>
           <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3">
             O que nossos clientes dizem
           </motion.h2>
         </motion.div>
 
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }} variants={staggerContainer} className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-          {testimonials.map((t, i) => (
-            <motion.div key={i} variants={fadeUp} custom={i} className="p-6 rounded-2xl border border-border/60 bg-background">
-              <div className="flex gap-1 mb-4">
-                {[...Array(5)].map((_, j) => (
-                  <Star key={j} size={14} className={j < t.rating ? 'text-warning fill-warning' : 'text-muted-foreground/20'} />
-                ))}
-              </div>
-              <p className="text-sm text-muted-foreground leading-relaxed italic">"{t.message}"</p>
-              <div className="mt-5 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <span className="text-sm font-bold text-primary">{t.client_name[0]}</span>
+        {/* Desktop: grid / Mobile: slider */}
+        <div className="hidden md:block">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-40px' }} variants={staggerContainer} className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            {testimonials.slice(0, 3).map((t, i) => (
+              <motion.div
+                key={i}
+                variants={fadeUp}
+                custom={i}
+                whileHover={{ y: -4 }}
+                className="p-7 rounded-2xl border border-border/60 bg-background hover:shadow-lg transition-all duration-300"
+              >
+                <div className="flex gap-1 mb-4">
+                  {[...Array(5)].map((_, j) => (
+                    <Star key={j} size={14} className={j < t.rating ? 'text-warning fill-warning' : 'text-muted-foreground/20'} />
+                  ))}
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-foreground">{t.client_name}</p>
-                  <p className="text-xs text-muted-foreground">{t.client_role}</p>
+                <p className="text-sm text-muted-foreground leading-relaxed italic">"{t.message}"</p>
+                <div className="mt-5 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                    <span className="text-sm font-bold text-primary">{t.client_name[0]}</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{t.client_name}</p>
+                    <p className="text-xs text-muted-foreground">{t.client_role}</p>
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          ))}
-        </motion.div>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+
+        {/* Mobile slider */}
+        <div className="md:hidden max-w-sm mx-auto">
+          <AnimatePresence mode="wait">
+            {testimonials.length > 0 && (
+              <motion.div
+                key={current}
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -30 }}
+                transition={{ duration: 0.4 }}
+                className="p-7 rounded-2xl border border-border/60 bg-background"
+              >
+                <div className="flex gap-1 mb-4">
+                  {[...Array(5)].map((_, j) => (
+                    <Star key={j} size={14} className={j < testimonials[current].rating ? 'text-warning fill-warning' : 'text-muted-foreground/20'} />
+                  ))}
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed italic">"{testimonials[current].message}"</p>
+                <div className="mt-5 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                    <span className="text-sm font-bold text-primary">{testimonials[current].client_name[0]}</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{testimonials[current].client_name}</p>
+                    <p className="text-xs text-muted-foreground">{testimonials[current].client_role}</p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {/* Dots */}
+          <div className="flex justify-center gap-2 mt-6">
+            {testimonials.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setCurrent(i)}
+                className={`w-2 h-2 rounded-full transition-all duration-300 ${i === current ? 'bg-primary w-6' : 'bg-muted-foreground/20'}`}
+              />
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -565,30 +964,47 @@ function FAQ() {
   ];
 
   return (
-    <section id="faq" className="py-20">
+    <section id="faq" className="py-24 relative">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-100px' }} variants={staggerContainer} className="text-center mb-16">
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} variants={staggerContainer} className="text-center mb-16">
           <motion.span variants={fadeUp} className="text-sm font-semibold text-primary uppercase tracking-wider">Perguntas Frequentes</motion.span>
           <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3">
             Tire suas dúvidas
           </motion.h2>
         </motion.div>
 
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }} variants={staggerContainer} className="space-y-3">
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-40px' }} variants={staggerContainer} className="space-y-3">
           {faqs.map((f, i) => (
-            <motion.div key={i} variants={fadeUp} custom={i} className="border border-border/60 rounded-xl overflow-hidden">
+            <motion.div
+              key={i}
+              variants={fadeUp}
+              custom={i}
+              className={`border rounded-xl overflow-hidden transition-all duration-300 ${
+                openIndex === i ? 'border-primary/30 shadow-md shadow-primary/5' : 'border-border/60'
+              }`}
+            >
               <button
                 onClick={() => setOpenIndex(openIndex === i ? null : i)}
                 className="w-full flex items-center justify-between p-5 text-left hover:bg-accent/30 transition-colors"
               >
                 <span className="text-sm font-semibold text-foreground pr-4">{f.q}</span>
-                <ChevronDown size={16} className={`shrink-0 text-muted-foreground transition-transform ${openIndex === i ? 'rotate-180' : ''}`} />
-              </button>
-              {openIndex === i && (
-                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="px-5 pb-5">
-                  <p className="text-sm text-muted-foreground leading-relaxed">{f.a}</p>
+                <motion.div animate={{ rotate: openIndex === i ? 180 : 0 }} transition={{ duration: 0.3 }}>
+                  <ChevronDown size={16} className="shrink-0 text-muted-foreground" />
                 </motion.div>
-              )}
+              </button>
+              <AnimatePresence>
+                {openIndex === i && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.3, ease: 'easeInOut' }}
+                    className="overflow-hidden"
+                  >
+                    <p className="text-sm text-muted-foreground leading-relaxed px-5 pb-5">{f.a}</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           ))}
         </motion.div>
@@ -600,9 +1016,10 @@ function FAQ() {
 // ─── Contato / CTA ──────────────────────────────────────────
 function Contato() {
   return (
-    <section id="contato" className="py-20 bg-card border-t border-border/50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-100px' }} variants={staggerContainer} className="text-center max-w-2xl mx-auto">
+    <section id="contato" className="py-24 bg-card border-t border-border/50 relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/[0.02] to-primary/[0.05]" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} variants={staggerContainer} className="text-center max-w-2xl mx-auto">
           <motion.span variants={fadeUp} className="text-sm font-semibold text-primary uppercase tracking-wider">Vamos conversar?</motion.span>
           <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3">
             Pronto para transformar sua presença digital?
@@ -611,24 +1028,37 @@ function Contato() {
             Entre em contato conosco e descubra como podemos ajudar sua empresa a crescer nas redes sociais com conteúdo profissional e estratégico.
           </motion.p>
           <motion.div variants={fadeUp} custom={3} className="mt-8">
-            <Button size="lg" onClick={() => window.open(WHATSAPP_LINK, '_blank')} className="gap-2 text-base px-10 py-6 bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25">
-              <MessageCircle size={18} /> Falar pelo WhatsApp
-            </Button>
+            <motion.div whileHover={{ scale: 1.05, y: -2 }} whileTap={{ scale: 0.95 }}>
+              <Button
+                size="lg"
+                onClick={() => window.open(WHATSAPP_LINK, '_blank')}
+                className="gap-2 text-base px-10 py-7 bg-primary hover:bg-primary/90 text-primary-foreground shadow-2xl shadow-primary/30 relative overflow-hidden group"
+              >
+                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+                <MessageCircle size={18} /> Falar pelo WhatsApp
+              </Button>
+            </motion.div>
           </motion.div>
 
-          <motion.div variants={fadeUp} custom={4} className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-6 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
+          <motion.div variants={fadeUp} custom={4} className="mt-14 flex flex-col sm:flex-row items-center justify-center gap-6 text-sm text-muted-foreground">
+            <motion.div whileHover={{ y: -2 }} className="flex items-center gap-2">
               <Phone size={14} className="text-primary" />
               (62) 9 8538-2981
-            </div>
-            <a href={INSTAGRAM_LINK} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-foreground transition-colors">
+            </motion.div>
+            <motion.a
+              href={INSTAGRAM_LINK}
+              target="_blank"
+              rel="noopener noreferrer"
+              whileHover={{ y: -2 }}
+              className="flex items-center gap-2 hover:text-foreground transition-colors"
+            >
               <Instagram size={14} className="text-primary" />
               @ag.pulse
-            </a>
-            <div className="flex items-center gap-2">
+            </motion.a>
+            <motion.div whileHover={{ y: -2 }} className="flex items-center gap-2">
               <MapPin size={14} className="text-primary" />
               Minaçu - GO | Atendemos todo o Brasil
-            </div>
+            </motion.div>
           </motion.div>
         </motion.div>
       </div>
@@ -668,6 +1098,7 @@ export default function LandingPage() {
       <FAQ />
       <Contato />
       <Footer />
+      <FloatingCTA />
     </div>
   );
 }

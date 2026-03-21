@@ -410,18 +410,24 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
 
   /* ── Actions ── */
   const handleConfirm = async (rec: Recording) => {
-    const { data } = await invokeVpsFunction('portal-recordings', { body: { action: 'confirm', client_id: clientId, recording_id: rec.id } });
-    if (data?.success) { toast.success('✅ Gravação confirmada!'); await loadRecordings(); }
-    else toast.error('Erro ao confirmar');
+    const { data, error } = await invokeVpsFunction('portal-recordings', { body: { action: 'confirm', client_id: clientId, recording_id: rec.id } });
+    if (data?.success) {
+      toast.success('✅ Gravação confirmada!');
+      await loadRecordings();
+      return;
+    }
+    toast.error(error?.message || data?.error || 'Erro ao confirmar');
   };
 
   const handleCancel = async (rec: Recording) => {
     setCancelling(true);
-    const { data } = await invokeVpsFunction('portal-recordings', { body: { action: 'cancel', client_id: clientId, recording_id: rec.id } });
+    const { data, error } = await invokeVpsFunction('portal-recordings', { body: { action: 'cancel', client_id: clientId, recording_id: rec.id } });
     if (data?.success) {
       setCancelFlow({ step: 'result', rec, backupAvailable: data.backup_available, backupSlot: data.backup_slot, nextFixedDate: data.next_fixed_date, alternativeVideomakers: data.alternative_videomakers || [] });
       await loadRecordings();
-    } else toast.error('Erro ao cancelar');
+    } else {
+      toast.error(error?.message || data?.error || 'Erro ao cancelar');
+    }
     setCancelling(false);
   };
 
@@ -432,42 +438,79 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     setAcceptingBackup(true);
     const body: any = { action: 'accept_backup', client_id: clientId, backup_date: date, backup_time: time };
     if (altVmId) body.videomaker_id = altVmId;
-    const { data } = await invokeVpsFunction('portal-recordings', { body });
-    if (data?.success) { toast.success('🚀 Gravação remarcada!'); setCancelFlow(null); setSelectedAltVm(null); setSelectedAltTime(''); await loadRecordings(); }
-    else toast.error(data?.error || 'Erro ao remarcar');
+    const { data, error } = await invokeVpsFunction('portal-recordings', { body });
+    if (data?.success) {
+      toast.success('🚀 Gravação remarcada!');
+      setCancelFlow(null);
+      setSelectedAltVm(null);
+      setSelectedAltTime('');
+      await loadRecordings();
+    } else {
+      toast.error(error?.message || data?.error || 'Erro ao remarcar');
+    }
     setAcceptingBackup(false);
   };
 
   const handleCheckAvailability = async (date: string) => {
-    setCheckingAvailability(true); setAvailableSlots([]); setSelectedNewTime(''); setSelectedNewDate(date);
-    const { data } = await invokeVpsFunction('portal-recordings', { body: { action: 'check_availability', client_id: clientId, new_date: date } });
-    if (data?.available_slots) { setAvailableSlots(data.available_slots); setVmName(data.videomaker_name || ''); }
-    else toast.error(data?.error || 'Erro ao verificar');
+    setCheckingAvailability(true);
+    setAvailableSlots([]);
+    setSelectedNewTime('');
+    setSelectedNewDate(date);
+    const { data, error } = await invokeVpsFunction('portal-recordings', { body: { action: 'check_availability', client_id: clientId, new_date: date } });
+    if (data?.available_slots) {
+      setAvailableSlots(data.available_slots);
+      setVmName(data.videomaker_name || '');
+    } else {
+      toast.error(error?.message || data?.error || 'Erro ao verificar');
+    }
     setCheckingAvailability(false);
   };
 
   const handleExploreSlots = async (date: string) => {
-    setExploringSlots(true); setExploreSlotsDate(date); setExploreSlotsData([]);
-    const { data } = await invokeVpsFunction('portal-recordings', { body: { action: 'check_availability', client_id: clientId, new_date: date } });
-    if (data?.available_slots) { setExploreSlotsData(data.available_slots); setExploreVmName(data.videomaker_name || ''); }
+    setExploringSlots(true);
+    setExploreSlotsDate(date);
+    setExploreSlotsData([]);
+    const { data, error } = await invokeVpsFunction('portal-recordings', { body: { action: 'check_availability', client_id: clientId, new_date: date } });
+    if (data?.available_slots) {
+      setExploreSlotsData(data.available_slots);
+      setExploreVmName(data.videomaker_name || '');
+    } else {
+      toast.error(error?.message || data?.error || 'Erro ao verificar horários');
+    }
     setExploringSlots(false);
   };
 
   const handleReschedule = async () => {
     if (!rescheduleRec || !selectedNewDate || !selectedNewTime) return;
     setRescheduling(true);
-    const { data } = await invokeVpsFunction('portal-recordings', { body: { action: 'reschedule', client_id: clientId, recording_id: rescheduleRec.id, new_date: selectedNewDate, new_time: selectedNewTime } });
-    if (data?.success) { toast.success('🚀 Gravação reagendada!'); setRescheduleRec(null); await loadRecordings(); }
-    else toast.error(data?.error || 'Erro ao reagendar');
+    const { data, error } = await invokeVpsFunction('portal-recordings', { body: { action: 'reschedule', client_id: clientId, recording_id: rescheduleRec.id, new_date: selectedNewDate, new_time: selectedNewTime } });
+    if (data?.success) {
+      toast.success('🚀 Gravação reagendada!');
+      setRescheduleRec(null);
+      await loadRecordings();
+    } else {
+      toast.error(error?.message || data?.error || 'Erro ao reagendar');
+    }
     setRescheduling(false);
   };
 
   const handleSendSpecialRequest = async () => {
-    if (!specialDate || !specialComment.trim()) { toast.error('Preencha data e comentário'); return; }
+    if (!specialDate || !specialComment.trim()) {
+      toast.error('Preencha data e comentário');
+      return;
+    }
     setSendingSpecial(true);
-    const { data } = await invokeVpsFunction('portal-recordings', { body: { action: 'request_special', client_id: clientId, requested_date: specialDate, requested_time: specialTime || null, comment: specialComment } });
-    if (data?.success) { toast.success('📹 Solicitação enviada!'); setShowSpecialRequest(false); setSpecialDate(''); setSpecialTime(''); setSpecialComment(''); await loadRecordings(); }
-    else toast.error(data?.error || 'Erro ao enviar');
+    const { data, error } = await invokeVpsFunction('portal-recordings', { body: { action: 'request_special', client_id: clientId, requested_date: specialDate, requested_time: specialTime || null, comment: specialComment } });
+    if (data?.success) {
+      toast.success('📹 Solicitação enviada!');
+      setShowSpecialRequest(false);
+      setSpecialDate('');
+      setSpecialTime('');
+      setSpecialComment('');
+      await loadRecordings();
+    } else {
+      toast.error(error?.message || data?.error || 'Erro ao enviar');
+    }
     setSendingSpecial(false);
   };
 

@@ -588,22 +588,11 @@ export default function VideomakerDashboard() {
 
   return (
     <div className="space-y-4 sm:space-y-5 max-w-[1400px] px-1 sm:px-0">
-      {/* Header with animated rocket */}
+      {/* Header */}
       <div className="flex items-center gap-3">
-        <motion.div
-          animate={{ y: [0, -6, 0], rotate: [0, -10, 0] }}
-          transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-          className="relative"
-        >
-          <Rocket size={28} className="text-primary -rotate-45" />
-          <motion.div
-            animate={{ opacity: [0.6, 1, 0.4], scale: [0.8, 1.2, 0.6] }}
-            transition={{ duration: 0.5, repeat: Infinity }}
-            className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2.5 h-3 rounded-full bg-gradient-to-t from-warning via-primary to-transparent blur-[2px] rotate-45"
-          />
-        </motion.div>
+        <Video size={24} className="text-primary shrink-0" />
         <div>
-          <h1 className="text-xl sm:text-2xl font-display font-bold">Olá, {currentUser?.name} 👋</h1>
+          <h1 className="text-xl sm:text-2xl font-display font-bold">Olá, {currentUser?.name}</h1>
           <p className="text-muted-foreground text-xs sm:text-sm">{format(today, "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
         </div>
       </div>

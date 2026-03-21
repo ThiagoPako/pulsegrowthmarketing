@@ -289,9 +289,9 @@ export default function EditorDashboard() {
   };
 
   if (loading) return (
-    <div className="flex flex-col items-center justify-center h-64 gap-4">
-      <RocketMascot size={64} />
-      <p className="text-muted-foreground animate-pulse">Carregando sua bancada...</p>
+    <div className="flex flex-col items-center justify-center h-64 gap-3">
+      <Scissors size={32} className="text-primary animate-pulse" />
+      <p className="text-muted-foreground text-sm">Carregando sua bancada...</p>
     </div>
   );
 

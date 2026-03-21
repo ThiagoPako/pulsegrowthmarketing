@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Users, DollarSign, TrendingUp, Percent, Receipt, Plus, BarChart3, ArrowRight, CalendarDays, Rocket } from 'lucide-react';
+import { Users, DollarSign, TrendingUp, Percent, Receipt, Plus, BarChart3, ArrowRight, CalendarDays, Megaphone } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
 

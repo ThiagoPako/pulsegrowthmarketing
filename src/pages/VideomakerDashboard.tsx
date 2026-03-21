@@ -923,9 +923,7 @@ export default function VideomakerDashboard() {
         <DialogContent className="max-w-2xl max-h-[90vh] sm:max-h-[85vh] overflow-y-auto mx-2 sm:mx-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <motion.div animate={{ rotate: [0, -15, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
-                <Rocket size={20} className="text-primary -rotate-45" />
-              </motion.div>
+              <Check size={20} className="text-primary" />
               Finalizar Gravação — {(() => {
                 const rec = recordings.find(r => r.id === finishRecordingId);
                 return rec ? getClientName(rec.clientId) : '';

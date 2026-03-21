@@ -1734,7 +1734,7 @@ export default function Clients() {
                 <Button variant="ghost" size="icon" className="h-8 w-8" title="Banco de Artes" onClick={() => setArtDbClient(c)}>
                   <Database size={15} />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" title="Pulse Club" onClick={() => window.open(`/portal/${encodeURIComponent(c.companyName.replace(/\s+/g, '-').toLowerCase())}`, '_blank')}>
+                <Button variant="ghost" size="icon" className="h-8 w-8" title="Pulse Club" onClick={() => window.open(`/portal/${c.id}`, '_blank')}>
                   <MonitorPlay size={15} />
                 </Button>
                 {!isDesignerOnly && (

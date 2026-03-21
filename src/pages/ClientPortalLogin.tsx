@@ -56,8 +56,7 @@ export default function ClientPortalLogin() {
     sessionStorage.setItem('portal_client_name', data.company_name);
     sessionStorage.setItem('portal_auth_type', 'client');
 
-    const portalSlug = encodeURIComponent(data.company_name.replace(/\s+/g, '-').toLowerCase());
-    navigate(`/portal/${portalSlug}`);
+    navigate(`/portal/${data.client_id}`);
   };
 
   return (

@@ -797,18 +797,12 @@ export default function ContentKanban() {
                         <motion.div
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
-                          className="text-center py-12 text-xs text-muted-foreground/50 italic flex flex-col items-center gap-2"
+                          className="text-center py-10 text-xs text-muted-foreground/50 italic flex flex-col items-center gap-3"
                         >
-                          <motion.span
-                            className="text-2xl"
-                            animate={{ y: [0, -4, 0] }}
-                            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-                          >
-                            {col.icon}
-                          </motion.span>
-                          {col.id === 'alteracao' ? 'Etapa para a alteração do conteúdo' :
+                          <MiniRocket size={24} />
+                          <span>{col.id === 'alteracao' ? 'Etapa para a alteração do conteúdo' :
                            col.id === 'revisao' ? 'Etapa para a revisão do conteúdo criado' :
-                           'Arraste cartões para cá'}
+                           'Arraste cartões para cá'}</span>
                         </motion.div>
                       )}
                     </div>

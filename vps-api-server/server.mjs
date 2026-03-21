@@ -688,6 +688,58 @@ app.post('/api/client-portal-auth', async (req, res) => {
   }
 });
 
+// ─── 5b. Portal Actions (no JWT required — client-facing) ───
+app.post('/api/portal-actions', async (req, res) => {
+  try {
+    const { action, client_id, content_id, author_name, author_type, author_id, message } = req.body;
+
+    if (action === 'get_comments') {
+      if (!content_id) return res.status(400).json({ error: 'content_id required' });
+      const { rows } = await pool.query(
+        `SELECT c.*, p.avatar_url FROM client_portal_comments c LEFT JOIN profiles p ON p.id = c.author_id WHERE c.content_id = $1 ORDER BY c.created_at ASC`,
+        [content_id]
+      );
+      return res.json({ comments: rows });
+    }
+
+    if (action === 'add_comment') {
+      if (!content_id || !message) return res.status(400).json({ error: 'content_id and message required' });
+      await pool.query(
+        `INSERT INTO client_portal_comments (content_id, author_name, author_type, author_id, message) VALUES ($1, $2, $3, $4, $5)`,
+        [content_id, author_name || 'Cliente', author_type || 'client', author_id || null, message]
+      );
+      return res.json({ success: true });
+    }
+
+    if (action === 'approve') {
+      if (!content_id) return res.status(400).json({ error: 'content_id required' });
+      await pool.query(
+        `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW() WHERE id = $1`,
+        [content_id]
+      );
+      return res.json({ success: true });
+    }
+
+    if (action === 'request_adjustment') {
+      if (!content_id || !message) return res.status(400).json({ error: 'content_id and message required' });
+      await pool.query(
+        `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW() WHERE id = $1`,
+        [content_id]
+      );
+      await pool.query(
+        `INSERT INTO client_portal_comments (content_id, author_name, author_type, author_id, message) VALUES ($1, $2, $3, $4, $5)`,
+        [content_id, author_name || 'Cliente', author_type || 'client', author_id || null, `🔧 Ajuste solicitado: ${message}`]
+      );
+      return res.json({ success: true });
+    }
+
+    res.status(400).json({ error: 'Invalid action' });
+  } catch (err) {
+    console.error('Portal actions error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── 6. Portal Recordings (uses local PostgreSQL) ───────────
 app.post('/api/portal-recordings', async (req, res) => {
   try {

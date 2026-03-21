@@ -551,6 +551,45 @@ export type Database = {
           },
         ]
       }
+      client_testimonials: {
+        Row: {
+          approved_at: string | null
+          client_name: string
+          client_role: string
+          created_at: string
+          id: string
+          message: string
+          rating: number
+          status: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          client_name?: string
+          client_role?: string
+          created_at?: string
+          id?: string
+          message?: string
+          rating?: number
+          status?: string
+          token?: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          client_name?: string
+          client_role?: string
+          created_at?: string
+          id?: string
+          message?: string
+          rating?: number
+          status?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       clients: {
         Row: {
           accepts_extra: boolean

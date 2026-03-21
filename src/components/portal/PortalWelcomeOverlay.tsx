@@ -270,8 +270,9 @@ export default function PortalWelcomeOverlay({ clientId }: { clientId: string })
                     onEnded={handleVideoEnd}
                   />
                 )}
+              </div>
 
-              {video.description && (
+
                 <div className="p-3 bg-gradient-to-r from-amber-900/30 to-transparent">
                   <p className="text-white/70 text-sm">{video.description}</p>
                 </div>

@@ -185,7 +185,7 @@ export default function ProductionAssistant() {
         setMessages(prev => [msg, ...prev].slice(0, 20));
         setCurrentMsg(msg);
         setShowBubble(true);
-        setMinimized(false);
+        setHasMessage(true);
       }
     } catch (err) {
       console.error('Production assistant error:', err);

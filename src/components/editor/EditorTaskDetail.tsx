@@ -109,7 +109,7 @@ function ScoreCelebration({ points, show, onDone }: { points: number; show: bool
     >
       <motion.div
         initial={{ scale: 0, rotate: -20 }}
-        animate={{ scale: [0, 1.3, 1], rotate: [−20, 10, 0] }}
+        animate={{ scale: [0, 1.3, 1], rotate: [-20, 10, 0] }}
         transition={{ duration: 0.6, ease: 'easeOut' }}
         className="flex flex-col items-center gap-3"
       >

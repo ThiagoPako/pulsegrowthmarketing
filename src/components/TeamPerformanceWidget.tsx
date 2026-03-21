@@ -49,7 +49,7 @@ const ROLE_BORDER: Record<string, string> = {
 };
 
 export default function TeamPerformanceWidget() {
-  const { users, recordings, clients } = useApp();
+  const { users, recordings, clients, scripts } = useApp();
   const isMobile = useIsMobile();
   const [deliveryRecords, setDeliveryRecords] = useState<any[]>([]);
   const [contentTasks, setContentTasks] = useState<any[]>([]);

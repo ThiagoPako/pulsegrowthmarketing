@@ -726,18 +726,12 @@ export default function ContentKanban() {
               >
                 {/* Column header - gradient bar */}
                 <motion.div
-                  className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-t-2xl bg-gradient-to-r ${col.gradient} relative overflow-hidden`}
+                  className={`flex items-center gap-2 px-3.5 py-2.5 rounded-t-2xl bg-gradient-to-r ${col.gradient} relative overflow-hidden`}
                   whileHover={{ scale: 1.01 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <motion.span
-                    className="text-base leading-none"
-                    animate={{ rotate: [0, -8, 8, 0] }}
-                    transition={{ duration: 2, repeat: Infinity, repeatDelay: 5 + colIdx, ease: 'easeInOut' }}
-                  >
-                    {col.icon}
-                  </motion.span>
-                  <span className="text-[13px] font-bold text-white flex-1 truncate" style={{ fontFamily: 'var(--font-display)' }}>{col.label}</span>
+                  <MiniRocket size={16} />
+                  <span className="text-[13px] font-bold text-white flex-1 truncate">{col.label}</span>
                   <motion.span
                     className="text-[11px] font-bold text-white/90 bg-white/25 backdrop-blur-sm rounded-full px-2.5 py-0.5 min-w-[26px] text-center shadow-sm"
                     key={colTasks.length}
@@ -747,7 +741,6 @@ export default function ContentKanban() {
                   >
                     {colTasks.length}
                   </motion.span>
-                  {/* Animated shimmer effect */}
                   <motion.div
                     className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
                     initial={{ x: '-100%' }}

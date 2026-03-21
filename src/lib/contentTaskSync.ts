@@ -256,11 +256,12 @@ export async function syncContentTaskColumnChange(
         let msg = whatsConfig.msgVideoApproval
           .replace('{nome_cliente}', ctx.clientName || '')
           .replace('{link_video}', portalUrl)
-          .replace('{titulo}', ctx.title);
+          .replace('{titulo}', ctx.title)
+          .replace('{link_portal}', portalUrl);
 
         // If template still has the old drive link pattern, override with portal message
         if (!msg.includes('portal') && !msg.includes('Área do Cliente')) {
-          msg = `Olá, ${ctx.clientName || ''}! 😊\n\nSeu conteúdo "${ctx.title}" ficou pronto! 🎬\n\n📱 Acesse a Área do Cliente Pulse para assistir e aprovar:\n${portalUrl}\n\nEquipe Pulse Growth Marketing 🚀`;
+          msg = `Olá, ${ctx.clientName || ''}! 😊\n\nSeu conteúdo "${ctx.title}" ficou pronto! 🎬\n\n📱 Acesse sua Área do Cliente Pulse para assistir e aprovar:\n${portalUrl}\n\nEquipe Pulse Growth Marketing 🚀`;
         }
 
         await sendWhatsAppMessage({

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 import BirthdayOverlay from '@/components/BirthdayOverlay';
+import ProductionAssistant from '@/components/ProductionAssistant';
 
 type NavCategory = {
   label: string;

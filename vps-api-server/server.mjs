@@ -2103,6 +2103,55 @@ app.post('/api/active-recordings/:recordingId/stop', async (req, res) => {
   } catch (e) { console.error('POST /api/active-recordings/stop error:', e); res.status(500).json({ error: e.message }); }
 });
 
+// ─── Production Assistant (AI Mascot) ──────────────────────
+app.post('/api/production-assistant', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    const admin = getAdminClient();
+    if (!admin) return res.status(500).json({ error: 'DB not available' });
+    const { context, aiModel, aiProvider } = req.body;
+    if (!context) return res.status(400).json({ error: 'Context is required' });
+
+    const selectedModel = aiModel || 'gemini-2.5-flash-lite';
+    const dbApiKey = await fetchDbApiKey(admin, aiProvider);
+    const ai = getAiConfig(aiProvider, dbApiKey);
+
+    const systemPrompt = `Você é o "Foguetinho", o mascote animado da Agência Pulse — um foguetinho com olhos expressivos.
+Sua missão é manter a produção fluindo! Você monitora prazos, deadlines e cobranças de maneira LEVE, DIVERTIDA e MOTIVACIONAL.
+Regras:
+- Fale em 1ª pessoa como personagem vivo do sistema ("Ei, percebi que...")
+- Use linguagem informal brasileira, com gírias leves
+- Máximo 3-4 frases curtas
+- Use emojis de foguete 🚀 e fogo 🔥 com moderação
+- Seja encorajador, nunca agressivo
+- Mencione dados concretos quando disponíveis (ex: "tem 3 vídeos atrasados")
+- Na sexta-feira, lembre que final de semana não trabalha e incentive finalizar pendências
+- Se não houver nada urgente, dê uma mensagem motivacional rápida`;
+
+    const userPrompt = `Contexto atual:
+- Usuário: ${context.userName} (${context.userRole})
+- Dia da semana: ${context.isFriday ? 'SEXTA-FEIRA' : new Date().toLocaleDateString('pt-BR', { weekday: 'long' })}
+- Tarefas atrasadas na agência: ${context.overdueCount}
+- Títulos atrasados: ${context.overdueTitles?.join(', ') || 'nenhum'}
+- Minhas tarefas de conteúdo pendentes: ${context.myPendingContent}
+- Minhas tarefas de design pendentes: ${context.myPendingDesign}
+- Total de tarefas em produção: ${context.totalPending}
+
+Gere uma mensagem curta e divertida para este momento.`;
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ];
+
+    const message = await callAi(ai, selectedModel, messages, { temperature: 0.8, max_tokens: 300 });
+    res.json({ message });
+  } catch (error) {
+    console.error('Production assistant error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ─── Health check ───────────────────────────────────────────
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 

@@ -485,24 +485,24 @@ function Sobre() {
   }, []);
 
   return (
-    <section ref={ref} id="quem-somos" className="py-24 bg-card border-y border-border/50 overflow-hidden">
+    <section ref={ref} id="quem-somos" className="py-16 sm:py-24 bg-card border-y border-border/50 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid md:grid-cols-2 gap-16 items-center">
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} variants={slideInLeft}>
-            <span className="text-sm font-semibold text-primary uppercase tracking-wider">Quem Somos</span>
-            <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3 leading-tight">
+        <div className="grid md:grid-cols-2 gap-10 md:gap-16 items-center">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }} variants={slideInLeft}>
+            <span className="text-xs sm:text-sm font-semibold text-primary uppercase tracking-wider">Quem Somos</span>
+            <h2 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mt-2 sm:mt-3 leading-tight">
               Mais do que marketing: somos parceiros do seu crescimento em vendas
             </h2>
-            <p className="mt-5 text-muted-foreground leading-relaxed">
+            <p className="mt-4 sm:mt-5 text-sm sm:text-base text-muted-foreground leading-relaxed">
               Somos uma agência de growth marketing de vendas de Minaçu - GO que atende todo o Brasil. Nosso diferencial? A gente não faz só o tráfego pago — a gente cuida de todo o processo: gravamos, editamos, criamos a estratégia, gerenciamos suas redes sociais com social media dedicado e designer exclusivo.
             </p>
-            <p className="mt-4 text-muted-foreground leading-relaxed">
+            <p className="mt-3 sm:mt-4 text-sm sm:text-base text-muted-foreground leading-relaxed">
               E vai além: temos uma assessoria comercial completa de vendas. Acompanhamos sua equipe de atendimento, criamos métodos e orientamos como fechar mais clientes. Do conteúdo ao fechamento, estamos com você.
             </p>
             <motion.div
               initial="hidden" whileInView="visible" viewport={{ once: true }}
               variants={staggerContainer}
-              className="mt-8 grid grid-cols-2 gap-3"
+              className="mt-6 sm:mt-8 grid grid-cols-2 gap-2 sm:gap-3"
             >
               {[
                 { icon: Camera, label: 'Gravação profissional' },

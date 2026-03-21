@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { portalAction } from '@/lib/portalApi';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Volume2, VolumeX, Sparkles } from 'lucide-react';
+import { X, Volume2, VolumeX, Sparkles, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface PortalVideo {
@@ -11,6 +11,22 @@ interface PortalVideo {
   description: string | null;
   video_url: string;
   is_active: boolean;
+}
+
+const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
+const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
+
+async function resolveVideoUrl(url: string): Promise<string> {
+  if (!url.startsWith(VPS_UPLOADS_URL)) return url;
+  const response = await fetch(PORTAL_MEDIA_PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  });
+  if (!response.ok) throw new Error(`Proxy error ${response.status}`);
+  const blob = await response.blob();
+  if (!blob.size) throw new Error('Video empty');
+  return URL.createObjectURL(blob);
 }
 
 const PARTICLE_COUNT = 30;

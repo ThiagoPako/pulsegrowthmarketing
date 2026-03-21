@@ -15,6 +15,7 @@ import { Progress } from '@/components/ui/progress';
 import { useNavigate } from 'react-router-dom';
 import UserAvatar from '@/components/UserAvatar';
 import AgencyCapacityWidget from '@/components/AgencyCapacityWidget';
+import TeamPerformanceWidget from '@/components/TeamPerformanceWidget';
 import BirthdayCountdown from '@/components/BirthdayCountdown';
 import ClientLogo from '@/components/ClientLogo';
 import { getMessageStats } from '@/services/whatsappService';
@@ -775,6 +776,8 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {currentUser?.role === 'admin' && <TeamPerformanceWidget />}
 
       <AgencyCapacityWidget clients={clients} users={users} recordings={recordings} settings={settings} />
 

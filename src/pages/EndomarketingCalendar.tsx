@@ -185,9 +185,7 @@ export default function EndomarketingCalendar() {
                 <Card className="glass-card p-3 sm:p-4 border-2 border-primary/20">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <motion.div animate={{ rotate: [0, 360] }} transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}>
-                        <Rocket size={14} className="text-primary -rotate-45" />
-                      </motion.div>
+                      <CalendarDays size={14} className="text-primary" />
                       <h3 className="text-sm font-semibold capitalize">
                         {format(selectedDay, "EEEE, d 'de' MMMM", { locale: ptBR })}
                       </h3>

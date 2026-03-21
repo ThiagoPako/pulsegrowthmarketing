@@ -1236,10 +1236,47 @@ app.post('/api/portal-recordings', async (req, res) => {
     if (action === 'request_special') {
       const { requested_date, requested_time, comment } = req.body;
       if (!requested_date || !comment) return res.status(400).json({ error: 'requested_date and comment required' });
+
       const { rows: [clientSpecial] } = await pool.query('SELECT company_name, videomaker_id FROM clients WHERE id = $1', [client_id]);
+      let specialVmId = clientSpecial?.videomaker_id || null;
+
+      if (!specialVmId) {
+        const { rows: [lastClientRec] } = await pool.query(
+          `SELECT videomaker_id
+           FROM recordings
+           WHERE client_id = $1 AND videomaker_id IS NOT NULL
+           ORDER BY date DESC, created_at DESC
+           LIMIT 1`,
+          [client_id]
+        );
+        specialVmId = lastClientRec?.videomaker_id || null;
+      }
+
+      if (!specialVmId) {
+        const { rows: [fallbackVm] } = await pool.query(
+          `SELECT p.id
+           FROM profiles p
+           JOIN user_roles ur ON ur.user_id = p.id
+           LEFT JOIN recordings r
+             ON r.videomaker_id = p.id
+            AND r.date = $1
+            AND r.status != 'cancelada'
+           WHERE ur.role = 'videomaker'
+           GROUP BY p.id, p.name
+           ORDER BY COUNT(r.id) ASC, p.name ASC
+           LIMIT 1`,
+          [requested_date]
+        );
+        specialVmId = fallbackVm?.id || null;
+      }
+
+      if (!specialVmId) {
+        return res.status(400).json({ error: 'Nenhum videomaker disponível para esta solicitação' });
+      }
+
       const { rows: [newSpecialRec] } = await pool.query(
         `INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ($1, $2, $3, $4, 'extra', 'solicitada', 'pendente') RETURNING id`,
-        [client_id, clientSpecial?.videomaker_id, requested_date, requested_time || '09:00']
+        [client_id, specialVmId, requested_date, requested_time || '09:00']
       );
       await pool.query(`INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)`,
         [client_id, 'Solicitação enviada', `Sua solicitação para ${requested_date} foi enviada para a equipe. Aguarde a confirmação.`, 'info']);

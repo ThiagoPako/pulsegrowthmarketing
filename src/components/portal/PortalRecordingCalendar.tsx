@@ -653,7 +653,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
       <div className="grid grid-cols-1 lg:grid-cols-[1fr,380px] gap-4 sm:gap-6">
         {/* Calendar Grid */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-          className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-3 sm:p-6 relative overflow-hidden">
+          className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-3 sm:p-6 relative overflow-visible">
           <div className="flex items-center justify-between mb-4 sm:mb-6">
             <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1.5 sm:p-2.5 rounded-xl hover:bg-white/10 transition-colors">
               <ChevronLeft size={16} className="sm:w-[18px] sm:h-[18px]" />
@@ -679,7 +679,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
             })}
           </div>
 
-          <div className="grid grid-cols-7 gap-1 sm:gap-2">
+          <div className="grid grid-cols-7 gap-1 sm:gap-2 relative z-10 overflow-visible">
             {Array.from({ length: startPad }).map((_, i) => <div key={`pad-${i}`} className="aspect-square" />)}
             {daysInMonth.map((day, idx) => {
               const dateStr = format(day, 'yyyy-MM-dd');
@@ -693,14 +693,23 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
               const isPast = isBefore(day, new Date()) && !isToday;
               const isHovered = hoveredDay === dateStr;
               const dayStyle = getDayStyle(dateStr);
+              const rowIndex = Math.floor((startPad + idx) / 7);
+              const columnIndex = (startPad + idx) % 7;
+              const tooltipOnTop = rowIndex >= 3;
+              const tooltipVerticalClass = tooltipOnTop ? 'bottom-full mb-2' : 'top-full mt-2';
+              const tooltipHorizontalClass = columnIndex <= 1
+                ? 'left-0'
+                : columnIndex >= 5
+                  ? 'right-0'
+                  : 'left-1/2 -translate-x-1/2';
 
               const uniqueEvents = dayEvents.reduce((acc: DayEvent[], e) => {
                 if (!acc.find(a => a.icon === e.icon)) acc.push(e);
                 return acc;
               }, []).slice(0, 3);
 
-              const glowColor = hasCancelled ? 'rgba(239,68,68,0.4)' 
-                : hasUpcoming ? `hsl(25 100% 50% / 0.4)` 
+              const glowColor = hasCancelled ? 'rgba(239,68,68,0.4)'
+                : hasUpcoming ? `hsl(25 100% 50% / 0.4)`
                 : dayEvents.some(e => e.icon === '✅') ? 'rgba(52,211,153,0.4)'
                 : dayEvents.some(e => e.icon === '📱') ? 'rgba(236,72,153,0.4)'
                 : dayEvents.some(e => e.icon === '⏰') ? 'rgba(249,115,22,0.4)'
@@ -713,23 +722,23 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                   transition={{ delay: idx * 0.006, type: 'spring', stiffness: 300, damping: 25 }}
                   onClick={() => setSelectedDay(day)}
                   onMouseEnter={() => setHoveredDay(dateStr)} onMouseLeave={() => setHoveredDay(null)}
-                  whileHover={!isPast ? { scale: 1.12, zIndex: 20 } : {}} whileTap={!isPast ? { scale: 0.95 } : {}}
-                  className={`aspect-square rounded-lg sm:rounded-2xl flex flex-col items-center justify-center relative transition-all duration-300 overflow-hidden
+                  whileHover={!isPast ? { scale: 1.06, zIndex: 20 } : {}} whileTap={!isPast ? { scale: 0.95 } : {}}
+                  className={`aspect-square rounded-lg sm:rounded-2xl flex flex-col items-center justify-center relative transition-all duration-300 overflow-visible
                     ${isToday && !isSelected ? 'ring-1 sm:ring-2 ring-white/30' : ''}
                     ${isPast ? 'text-white/25' : 'text-white/80'}
                     ${hasAnyEvent && !isPast ? 'text-white shadow-lg' : ''}`}
                   style={{
-                    background: isSelected ? `hsl(${clientColor} / 0.3)` 
-                      : !isPast && hasAnyEvent ? (dayStyle.bg || 'transparent') 
+                    background: isSelected ? `hsl(${clientColor} / 0.3)`
+                      : !isPast && hasAnyEvent ? (dayStyle.bg || 'transparent')
                       : isHovered && !isPast ? 'rgba(255,255,255,0.06)' : 'transparent',
-                    boxShadow: isSelected 
-                      ? `0 0 0 2px hsl(${clientColor}), 0 4px 25px hsl(${clientColor} / 0.3), 0 0 40px hsl(${clientColor} / 0.15)` 
-                      : !isPast && hasAnyEvent 
-                        ? `inset 0 0 0 1.5px ${dayStyle.border || 'transparent'}, 0 0 20px ${glowColor}` 
+                    boxShadow: isSelected
+                      ? `0 0 0 2px hsl(${clientColor}), 0 4px 25px hsl(${clientColor} / 0.3), 0 0 40px hsl(${clientColor} / 0.15)`
+                      : !isPast && hasAnyEvent
+                        ? `inset 0 0 0 1.5px ${dayStyle.border || 'transparent'}, 0 0 20px ${glowColor}`
                         : 'none',
                   }}>
                   {hasAnyEvent && !isPast && (
-                    <motion.div 
+                    <motion.div
                       className="absolute inset-0 rounded-2xl pointer-events-none"
                       animate={{ opacity: [0.3, 0.6, 0.3] }}
                       transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
@@ -750,7 +759,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                         <EventIndicator key={i} event={evt} small />
                       ))}
                       {dayEvents.length > 3 && (
-                        <motion.span 
+                        <motion.span
                           className="text-[9px] text-white/60 font-extrabold ml-0.5 bg-white/10 rounded-full w-4 h-4 flex items-center justify-center"
                           animate={{ scale: [1, 1.1, 1] }}
                           transition={{ repeat: Infinity, duration: 2 }}
@@ -759,19 +768,20 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                     </motion.div>
                   )}
                   {isToday && !hasAnyEvent && (
-                    <motion.div className="w-1.5 h-1.5 rounded-full mt-1 relative z-10" 
+                    <motion.div className="w-1.5 h-1.5 rounded-full mt-1 relative z-10"
                       style={{ background: `hsl(${clientColor})` }}
-                      animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }} 
+                      animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }}
                       transition={{ repeat: Infinity, duration: 2 }} />
                   )}
                   <AnimatePresence>
                     {isHovered && hasAnyEvent && !isSelected && (
                       <motion.div initial={{ opacity: 0, y: 5, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 5, scale: 0.9 }}
-                        className="hidden sm:block absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full z-30 pointer-events-none">
-                        <div className="bg-[#12122a]/95 backdrop-blur-xl border border-white/15 rounded-xl px-4 py-2.5 shadow-2xl whitespace-nowrap space-y-1">
+                        className={`hidden sm:block absolute ${tooltipVerticalClass} ${tooltipHorizontalClass} z-40 pointer-events-none`}>
+                        <div className="bg-[#12122a]/95 backdrop-blur-xl border border-white/15 rounded-xl px-4 py-2.5 shadow-2xl max-w-[220px] sm:max-w-[280px] whitespace-normal text-left space-y-1">
                           {dayEvents.slice(0, 5).map((ev, i) => (
-                            <p key={i} className={`text-xs font-bold flex items-center gap-1.5 ${ev.color}`}>
-                              <span className="text-sm">{ev.icon}</span> {ev.label}{ev.time ? ` • ${ev.time}` : ''}
+                            <p key={i} className={`text-xs font-bold flex items-start gap-1.5 ${ev.color}`}>
+                              <span className="text-sm leading-none mt-0.5">{ev.icon}</span>
+                              <span>{ev.label}{ev.time ? ` • ${ev.time}` : ''}</span>
                             </p>
                           ))}
                           {dayEvents.length > 5 && <p className="text-[10px] text-white/40 font-medium">+{dayEvents.length - 5} mais</p>}

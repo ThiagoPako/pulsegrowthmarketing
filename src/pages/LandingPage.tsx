@@ -808,20 +808,86 @@ function Planos() {
   ];
 
   return (
-    <section id="planos" className="py-24 bg-card border-y border-border/50 relative overflow-hidden">
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-primary/5 rounded-full blur-[120px]" />
+    <section id="planos" className="py-16 sm:py-24 bg-card border-y border-border/50 relative overflow-hidden">
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] sm:w-[800px] h-[200px] sm:h-[400px] bg-primary/5 rounded-full blur-[80px] sm:blur-[120px]" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} variants={staggerContainer} className="text-center mb-16">
-          <motion.span variants={fadeUp} className="text-sm font-semibold text-primary uppercase tracking-wider">Planos</motion.span>
-          <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3">
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }} variants={staggerContainer} className="text-center mb-10 sm:mb-16">
+          <motion.span variants={fadeUp} className="text-xs sm:text-sm font-semibold text-primary uppercase tracking-wider">Planos</motion.span>
+          <motion.h2 variants={fadeUp} custom={1} className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mt-2 sm:mt-3">
             Escolha o plano ideal para sua empresa
           </motion.h2>
-          <motion.p variants={fadeUp} custom={2} className="text-muted-foreground mt-4 max-w-xl mx-auto">
+          <motion.p variants={fadeUp} custom={2} className="text-sm sm:text-base text-muted-foreground mt-3 sm:mt-4 max-w-xl mx-auto">
             Planos flexíveis que se adaptam ao tamanho e necessidade do seu negócio. Todos incluem gravação profissional e edição de alta qualidade.
           </motion.p>
         </motion.div>
 
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-40px' }} variants={staggerContainer} className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 max-w-7xl mx-auto">
+        {/* Mobile: horizontal scroll / Desktop: grid */}
+        <div className="sm:hidden -mx-4 px-4 overflow-x-auto scrollbar-hide">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={staggerContainer} className="flex gap-3 pb-4" style={{ width: 'max-content' }}>
+            {plans.map((p, i) => (
+              <motion.div
+                key={p.name}
+                variants={fadeUp}
+                custom={i}
+                className={`relative p-5 rounded-xl border transition-all duration-300 flex flex-col w-[260px] shrink-0 ${
+                  p.popular
+                    ? 'border-primary bg-primary/[0.04] shadow-xl shadow-primary/10'
+                    : (p as any).isNew
+                      ? 'border-emerald-500/50 bg-emerald-500/[0.03] shadow-lg shadow-emerald-500/10'
+                      : 'border-border/60 bg-background'
+                }`}
+              >
+                {p.popular && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold whitespace-nowrap shadow-lg shadow-primary/30">
+                    Mais Popular
+                  </div>
+                )}
+                {(p as any).isNew && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold whitespace-nowrap shadow-lg shadow-emerald-500/30">
+                    Novidade
+                  </div>
+                )}
+                <div className="text-center mb-4 pt-2">
+                  <h3 className="font-display text-lg font-bold text-foreground">{p.name}</h3>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{p.subtitle}</p>
+                </div>
+                <ul className="space-y-2 mb-5 flex-1">
+                  {p.features.map(f => {
+                    const isTrafego = f.toLowerCase().includes('tráfego pago');
+                    return (
+                      <li key={f} className="flex items-start gap-1.5 text-xs">
+                        {isTrafego ? (
+                          <>
+                            <Rocket size={13} className="shrink-0 mt-0.5 text-orange-500 animate-pulse" />
+                            <span className="font-bold bg-gradient-to-r from-orange-400 via-red-500 to-yellow-400 bg-clip-text text-transparent drop-shadow-[0_0_6px_rgba(251,146,60,0.4)]">
+                              {f}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 size={13} className={`${(p as any).isNew ? 'text-emerald-500' : 'text-success'} shrink-0 mt-0.5`} />
+                            <span className="text-foreground">{f}</span>
+                          </>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <Button
+                  size="sm"
+                  onClick={() => window.open(WHATSAPP_LINK, '_blank')}
+                  className={`w-full gap-1.5 ${p.popular ? 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shadow-primary/20' : (p as any).isNew ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/20' : ''}`}
+                  variant={p.popular || (p as any).isNew ? 'default' : 'outline'}
+                >
+                  <MessageCircle size={12} /> Solicitar proposta
+                </Button>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+
+        {/* Tablet/Desktop grid */}
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-40px' }} variants={staggerContainer} className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 max-w-7xl mx-auto">
           {plans.map((p, i) => (
             <motion.div
               key={p.name}

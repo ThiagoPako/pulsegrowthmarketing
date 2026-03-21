@@ -36,8 +36,21 @@ export default function CompanySettings() {
   const [resetting, setResetting] = useState(false);
   const [showDangerZone, setShowDangerZone] = useState(false);
   const [assistantEnabled, setAssistantEnabled] = useState(() => localStorage.getItem(ASSISTANT_KEY) !== 'false');
+  const [pixelId, setPixelId] = useState('');
 
   const isAdmin = currentUser?.role === 'admin';
+
+  // Load pixel ID on mount
+  useState(() => {
+    supabaseCloud
+      .from('landing_page_settings')
+      .select('title')
+      .eq('section', 'facebook_pixel')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.title) setPixelId(data.title);
+      });
+  });
 
   const handleSystemReset = async () => {
     if (confirmText !== 'RESETAR TUDO') return;

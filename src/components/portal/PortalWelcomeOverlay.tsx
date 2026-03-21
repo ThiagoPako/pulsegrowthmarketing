@@ -276,14 +276,13 @@ export default function PortalWelcomeOverlay({ clientId, onVideosLoaded }: Porta
 interface PortalVideoButtonsProps {
   hasNews: boolean;
   hasWelcome: boolean;
+  isNewClient?: boolean;
 }
 
-export function PortalVideoButtons({ hasNews, hasWelcome }: PortalVideoButtonsProps) {
+export function PortalVideoButtons({ hasNews, hasWelcome, isNewClient = false }: PortalVideoButtonsProps) {
   const triggerVideo = (type: 'welcome' | 'news') => {
     (window as any).__portalPlayVideo?.(type);
   };
-
-  if (!hasNews && !hasWelcome) return null;
 
   return (
     <div className="flex items-center gap-1.5">
@@ -294,64 +293,66 @@ export function PortalVideoButtons({ hasNews, hasWelcome }: PortalVideoButtonsPr
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
         >
-          {/* Animated glowing background */}
           <motion.div
             className="absolute inset-0 rounded-full bg-gradient-to-r from-orange-500 via-amber-400 to-yellow-500"
-            animate={{
-              backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
-            }}
+            animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
             transition={{ duration: 3, repeat: Infinity }}
             style={{ backgroundSize: '200% 200%' }}
           />
-          {/* Outer glow */}
           <div className="absolute -inset-[2px] rounded-full bg-gradient-to-r from-orange-500 via-amber-400 to-yellow-500 opacity-60 blur-md animate-pulse" />
-          {/* Inner content */}
           <span className="relative z-10 flex items-center gap-1.5 text-black">
-            <motion.span
-              animate={{ rotate: [0, -15, 15, 0], y: [0, -2, 0] }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-            >
+            <motion.span animate={{ rotate: [0, -15, 15, 0], y: [0, -2, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
               <Rocket size={13} />
             </motion.span>
             <span className="hidden sm:inline">Novidades</span>
             <span className="sm:hidden">🔥</span>
           </span>
-          {/* Sparkle dots */}
-          <motion.div
-            className="absolute top-0 right-1 w-1.5 h-1.5 rounded-full bg-white"
+          <motion.div className="absolute top-0 right-1 w-1.5 h-1.5 rounded-full bg-white"
             animate={{ scale: [0, 1, 0], opacity: [0, 1, 0] }}
             transition={{ duration: 1.2, repeat: Infinity, delay: 0.3 }}
-          />
-          <motion.div
-            className="absolute bottom-0 left-2 w-1 h-1 rounded-full bg-white"
-            animate={{ scale: [0, 1, 0], opacity: [0, 1, 0] }}
-            transition={{ duration: 1.2, repeat: Infinity, delay: 0.7 }}
           />
         </motion.button>
       )}
 
-      {hasWelcome && (
-        <motion.button
-          onClick={() => triggerVideo('welcome')}
-          className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold overflow-hidden"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          <motion.div
-            className="absolute inset-0 rounded-full bg-gradient-to-r from-violet-500 via-purple-400 to-fuchsia-500"
-            animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
-            transition={{ duration: 3, repeat: Infinity }}
-            style={{ backgroundSize: '200% 200%' }}
-          />
-          <div className="absolute -inset-[2px] rounded-full bg-gradient-to-r from-violet-500 via-purple-400 to-fuchsia-500 opacity-50 blur-md animate-pulse" />
-          <span className="relative z-10 flex items-center gap-1.5 text-white">
-            <motion.span animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 2, repeat: Infinity }}>
+      {/* Bem-vindo: always visible, but glowing only for new clients */}
+      <motion.button
+        onClick={() => triggerVideo('welcome')}
+        className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold overflow-hidden ${
+          !hasWelcome ? 'opacity-50 pointer-events-none' : ''
+        }`}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+      >
+        {isNewClient ? (
+          <>
+            <motion.div
+              className="absolute inset-0 rounded-full bg-gradient-to-r from-violet-500 via-purple-400 to-fuchsia-500"
+              animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+              transition={{ duration: 3, repeat: Infinity }}
+              style={{ backgroundSize: '200% 200%' }}
+            />
+            <div className="absolute -inset-[2px] rounded-full bg-gradient-to-r from-violet-500 via-purple-400 to-fuchsia-500 opacity-50 blur-md animate-pulse" />
+            <span className="relative z-10 flex items-center gap-1.5 text-white">
+              <motion.span animate={{ scale: [1, 1.3, 1] }} transition={{ duration: 2, repeat: Infinity }}>
+                🌟
+              </motion.span>
+              <span className="hidden sm:inline">Bem-vindo</span>
+            </span>
+            <motion.div className="absolute top-0 left-2 w-1 h-1 rounded-full bg-white"
+              animate={{ scale: [0, 1, 0], opacity: [0, 1, 0] }}
+              transition={{ duration: 1.2, repeat: Infinity, delay: 0.5 }}
+            />
+          </>
+        ) : (
+          <>
+            <div className="absolute inset-0 rounded-full bg-white/[0.08] border border-white/[0.1]" />
+            <span className="relative z-10 flex items-center gap-1.5 text-white/60">
               🌟
-            </motion.span>
-            <span className="hidden sm:inline">Bem-vindo</span>
-          </span>
-        </motion.button>
-      )}
+              <span className="hidden sm:inline">Bem-vindo</span>
+            </span>
+          </>
+        )}
+      </motion.button>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { supabase } from '@/lib/vpsDb';
+import { portalAction } from '@/lib/portalApi';
 import { uploadFileToVps } from '@/services/vpsApi';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -321,16 +321,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
 
   const loadData = async () => {
     setLoading(true);
-    const [templatesRes, itemsRes] = await Promise.all([
-      supabase.from('flyer_templates').select('*').eq('is_active', true).order('created_at', { ascending: false }),
-      supabase.from('flyer_items').select('*').eq('client_id', clientId).order('created_at', { ascending: false }),
-    ]);
-    if (templatesRes.data) {
-      setTemplates(templatesRes.data as FlyerTemplate[]);
-      const fr = templatesRes.data.filter((t: any) => t.template_type === 'frame');
+    const result = await portalAction({ action: 'get_flyer_data', client_id: clientId });
+    if (result?.templates) {
+      setTemplates(result.templates as FlyerTemplate[]);
+      const fr = result.templates.filter((t: any) => t.template_type === 'frame');
       if (fr.length > 0 && !selectedTemplate) setSelectedTemplate(fr[0].id);
     }
-    if (itemsRes.data) setItems(itemsRes.data as FlyerItem[]);
+    if (result?.items) setItems(result.items as FlyerItem[]);
     setLoading(false);
   };
 
@@ -845,7 +842,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       }
       setGenerating(false);
 
-      const { data: item, error } = await supabase.from('flyer_items').insert({
+      const result = await portalAction({
+        action: 'create_flyer_item',
         client_id: clientId,
         template_id: selectedTemplate || null,
         vehicle_model: model.trim(),
@@ -856,13 +854,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         price: price ? formatPrice(price) : '',
         extra_info: extraInfo.trim() || null,
         media_urls: uploadedUrls,
-        generated_image_url: generatedUrl || null,
-        status: generatedUrl ? 'gerado' : 'rascunho',
-      }).select().single();
+      });
 
-      if (error) throw error;
+      if (result?.error) throw new Error(result.error);
       toast.success('Panfleto criado com sucesso!');
-      if (item) { setItems(prev => [item as FlyerItem, ...prev]); setPreviewItem(item as FlyerItem); }
+      if (result?.item) { setItems(prev => [result.item as FlyerItem, ...prev]); setPreviewItem(result.item as FlyerItem); }
       setModel(''); setYear(''); setTransmission('manual'); setFuelType('flex');
       setTireCondition('bom'); setPrice(''); setExtraInfo('');
       setMediaFiles([]); setMediaPreviews([]);
@@ -877,14 +873,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     link.href = item.generated_image_url;
     link.download = `${item.vehicle_model}-${item.vehicle_year}.jpg`;
     link.click();
-    supabase.from('flyer_items').update({ status: 'baixado' }).eq('id', item.id).then(() => {
+    portalAction({ action: 'update_flyer_item', item_id: item.id, status: 'baixado' }).then(() => {
       setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'baixado' } : i));
     });
   };
 
   const handleDeleteItem = async (itemId: string) => {
-    const { error } = await supabase.from('flyer_items').delete().eq('id', itemId);
-    if (error) { toast.error('Erro ao apagar'); return; }
+    const result = await portalAction({ action: 'delete_flyer_item', item_id: itemId });
+    if (result?.error) { toast.error('Erro ao apagar'); return; }
     setItems(prev => prev.filter(i => i.id !== itemId));
     if (previewItem?.id === itemId) setPreviewItem(null);
     toast.success('Panfleto apagado!');

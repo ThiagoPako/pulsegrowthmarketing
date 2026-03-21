@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
-import { supabase } from '@/lib/vpsDb';
+import { portalAction } from '@/lib/portalApi';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isSameDay, parseISO, isAfter, isBefore, isToday as isDateToday, addDays } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -228,16 +228,14 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     setLoading(true);
     const [recResult, ctResult, delResult] = await Promise.all([
       invokeVpsFunction('portal-recordings', { body: { action: 'list', client_id: clientId } }),
-      supabase.from('content_tasks').select('id,title,content_type,kanban_column,scheduled_recording_date,scheduled_recording_time,editing_started_at,editing_deadline,approval_sent_at,approved_at,adjustment_notes,recording_id,script_id,drive_link,updated_at,created_at').eq('client_id', clientId),
-      supabase.from('social_media_deliveries').select('id,title,content_type,status,delivered_at,posted_at,scheduled_time,platform').eq('client_id', clientId),
+      portalAction({ action: 'get_content_tasks', client_id: clientId }),
+      portalAction({ action: 'get_deliveries', client_id: clientId }),
     ]);
     if (recResult.data?.recordings) setRecordings(recResult.data.recordings);
     
     const tasks: ContentEvent[] = [];
-    if (ctResult.data) {
-      const taskIds: string[] = [];
-      ctResult.data.forEach((ct: any) => {
-        taskIds.push(ct.id);
+    if (ctResult?.tasks) {
+      ctResult.tasks.forEach((ct: any) => {
         tasks.push({
           id: ct.id, title: ct.title, content_type: ct.content_type,
           kanban_column: ct.kanban_column, scheduled_date: ct.scheduled_recording_date,
@@ -249,15 +247,10 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
         });
       });
       setContentTasks(tasks);
-      
-      // Fetch task history for these tasks
-      if (taskIds.length > 0) {
-        const { data: histData } = await supabase.from('task_history').select('id,task_id,action,details,created_at').in('task_id', taskIds).order('created_at', { ascending: true });
-        if (histData) setTaskHistory(histData);
-      }
+      if (ctResult.history) setTaskHistory(ctResult.history);
     }
     
-    if (delResult.data) setDeliveries(delResult.data.map((d: any) => ({
+    if (delResult?.deliveries) setDeliveries(delResult.deliveries.map((d: any) => ({
       id: d.id, title: d.title, content_type: d.content_type,
       status: d.status, delivered_at: d.delivered_at,
       posted_at: d.posted_at, scheduled_time: d.scheduled_time, platform: d.platform,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/vpsDb';
+import { portalAction } from '@/lib/portalApi';
 import { Bell, X, Film, FileText, Sparkles } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -29,37 +29,24 @@ export default function PortalNotifications({ clientId, clientColor, onSelectCon
   const [open, setOpen] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
-    const { data } = await supabase
-      .from('client_portal_notifications')
-      .select('*')
-      .eq('client_id', clientId)
-      .order('created_at', { ascending: false })
-      .limit(30);
-    if (data) setNotifications(data as PortalNotification[]);
+    const result = await portalAction({ action: 'get_notifications', client_id: clientId });
+    if (result?.notifications) setNotifications(result.notifications as PortalNotification[]);
   }, [clientId]);
 
   useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
 
-  // Realtime
+  // Poll for new notifications every 30s
   useEffect(() => {
-    const channel = supabase
-      .channel('portal_notifs_rt')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'client_portal_notifications',
-        filter: `client_id=eq.${clientId}`,
-      }, () => fetchNotifications())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [clientId, fetchNotifications]);
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const handleClick = async (n: PortalNotification) => {
     if (!n.read) {
       setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x));
-      await supabase.from('client_portal_notifications').update({ read: true } as any).eq('id', n.id);
+      await portalAction({ action: 'mark_notification_read', notification_id: n.id });
     }
     setOpen(false);
     if (n.link_content_id && onSelectContent) {
@@ -73,7 +60,7 @@ export default function PortalNotifications({ clientId, clientColor, onSelectCon
   const markAllRead = async () => {
     const unread = notifications.filter(n => !n.read).map(n => n.id);
     if (unread.length === 0) return;
-    await supabase.from('client_portal_notifications').update({ read: true } as any).in('id', unread);
+    await portalAction({ action: 'mark_notification_read', notification_ids: unread });
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 

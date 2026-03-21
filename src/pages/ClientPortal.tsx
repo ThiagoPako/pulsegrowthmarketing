@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/vpsDb';
+import { portalAction } from '@/lib/portalApi';
 import { useAuth } from '@/hooks/useAuth';
 import {
   Play, Pause, Maximize, Check, MessageSquare, X, ChevronLeft, ChevronRight,
@@ -169,64 +170,36 @@ export default function ClientPortal() {
 
     let clientData: ClientData | null = null;
 
-    if (!isUUID && storedClientId && portalAuthType === 'client') {
-      const { data: storedClient } = await supabase.functions.invoke('client-portal-auth', {
-        body: { action: 'get_info', client_id: storedClientId },
-      });
-
-      if (storedClient?.id) {
-        clientData = mapClientData(storedClient);
-      }
+    // Try stored client ID first for logged-in clients
+    const lookupId = (!isUUID && storedClientId && portalAuthType === 'client') ? storedClientId : slug;
+    
+    const clientResult = await portalAction({ action: 'get_client', client_id: lookupId });
+    if (clientResult?.client) {
+      clientData = mapClientData(clientResult.client);
     }
 
+    // Fallback: try edge function
     if (!clientData) {
-      let clientQuery;
-      if (isUUID) {
-        clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city').eq('id', slug).single();
-      } else {
-        const companySearch = slug.replace(/-/g, ' ');
-        clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city').ilike('company_name', companySearch).single();
-      }
-
-      const clientRes = await clientQuery;
-
-      if (clientRes.data) {
-        clientData = clientRes.data as ClientData;
-      } else {
-        const { data: edgeData } = await supabase.functions.invoke('client-portal-auth', {
-          body: {
-            action: 'get_info',
-            ...(isUUID ? { client_id: slug } : { slug }),
-          },
-        });
-
-        if (edgeData?.id) {
-          clientData = mapClientData(edgeData);
-        }
-      }
+      const { data: edgeData } = await supabase.functions.invoke('client-portal-auth', {
+        body: { action: 'get_info', ...(isUUID ? { client_id: slug } : { slug }) },
+      });
+      if (edgeData?.id) clientData = mapClientData(edgeData);
     }
 
     if (clientData) {
       setClient(clientData);
-      const { data: contData } = await supabase.from('client_portal_contents').select('*').eq('client_id', clientData.id).order('created_at', { ascending: false });
-      if (contData && contData.length > 0) {
-        setContents(contData as PortalContent[]);
-      } else {
-        const { data: edgeContents } = await supabase.functions.invoke('client-portal-auth', {
-          body: { action: 'get_contents', client_id: clientData.id },
-        });
-        if (edgeContents?.contents) setContents(edgeContents.contents as PortalContent[]);
+      const contResult = await portalAction({ action: 'get_contents', client_id: clientData.id });
+      if (contResult?.contents && contResult.contents.length > 0) {
+        setContents(contResult.contents as PortalContent[]);
       }
     }
     setLoading(false);
   };
 
   const loadComments = async (contentId: string) => {
-    const { data } = await supabase.functions.invoke('portal-actions', {
-      body: { action: 'get_comments', content_id: contentId },
-    });
-    if (data?.comments) {
-      setComments(data.comments as PortalComment[]);
+    const result = await portalAction({ action: 'get_comments', content_id: contentId });
+    if (result?.comments) {
+      setComments(result.comments as PortalComment[]);
     }
   };
 
@@ -303,10 +276,7 @@ export default function ClientPortal() {
 
   const handleApprove = async () => {
     if (!selectedContent || !client) return;
-    const author = getCommentAuthor();
-    await supabase.functions.invoke('portal-actions', {
-      body: { action: 'approve', content_id: selectedContent.id, client_id: client.id },
-    });
+    await portalAction({ action: 'approve', content_id: selectedContent.id, client_id: client.id });
     setContents(prev => prev.map(c => c.id === selectedContent.id ? { ...c, status: 'aprovado', approved_at: new Date().toISOString() } : c));
     setSelectedContent(prev => prev ? { ...prev, status: 'aprovado' } : null);
     toast.success('Conteúdo aprovado com sucesso!');
@@ -316,16 +286,14 @@ export default function ClientPortal() {
   const handleRequestAdjustment = async () => {
     if (!selectedContent || !adjustmentNote.trim() || !client) return;
     const author = getCommentAuthor();
-    await supabase.functions.invoke('portal-actions', {
-      body: {
-        action: 'request_adjustment',
-        content_id: selectedContent.id,
-        client_id: client.id,
-        author_name: author.name,
-        author_type: author.type,
-        author_id: author.id,
-        message: adjustmentNote,
-      },
+    await portalAction({
+      action: 'request_adjustment',
+      content_id: selectedContent.id,
+      client_id: client.id,
+      author_name: author.name,
+      author_type: author.type,
+      author_id: author.id,
+      message: adjustmentNote,
     });
     setContents(prev => prev.map(c => c.id === selectedContent.id ? { ...c, status: 'ajuste_solicitado' } : c));
     setSelectedContent(prev => prev ? { ...prev, status: 'ajuste_solicitado' } : null);
@@ -339,15 +307,13 @@ export default function ClientPortal() {
   const handleSendComment = async () => {
     if (!selectedContent || !newComment.trim() || !client) return;
     const author = getCommentAuthor();
-    await supabase.functions.invoke('portal-actions', {
-      body: {
-        action: 'add_comment',
-        content_id: selectedContent.id,
-        author_name: author.name,
-        author_type: author.type,
-        author_id: author.id,
-        message: newComment,
-      },
+    await portalAction({
+      action: 'add_comment',
+      content_id: selectedContent.id,
+      author_name: author.name,
+      author_type: author.type,
+      author_id: author.id,
+      message: newComment,
     });
     const commentText = newComment;
     setNewComment('');

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/lib/vpsDb';
+import { portalAction } from '@/lib/portalApi';
 import { FileText, Film, Palette, Video, Image, Sparkles, User, Tag, AlertTriangle, Flame, Rocket, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -188,37 +188,23 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
   useEffect(() => { loadScripts(); }, [clientId]);
 
   useEffect(() => {
-    const channel = supabase
-      .channel(`scripts_portal_${clientId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'scripts', filter: `client_id=eq.${clientId}` }, () => loadScripts())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    // Poll for script changes every 30s
+    const interval = setInterval(loadScripts, 30000);
+    return () => clearInterval(interval);
   }, [clientId]);
 
   const loadScripts = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('scripts')
-      .select('id, title, content, caption, content_format, video_type, created_at, created_by, priority, client_priority')
-      .eq('client_id', clientId)
-      .eq('is_endomarketing', false)
-      .order('created_at', { ascending: false });
-
-    if (error) { console.error('Error loading scripts for portal:', error); setLoading(false); return; }
-
-    if (data) {
-      setScripts(data as Script[]);
-      const authorIds = [...new Set(data.filter(s => s.created_by).map(s => s.created_by!))];
-      if (authorIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, name, display_name, avatar_url, job_title')
-          .in('id', authorIds);
-        if (profiles) {
-          const map: Record<string, Author> = {};
-          profiles.forEach(p => { map[p.id] = p as Author; });
-          setAuthors(map);
-        }
+    const result = await portalAction({ action: 'get_scripts', client_id: clientId });
+    
+    if (result?.error) { console.error('Error loading scripts for portal:', result.error); setLoading(false); return; }
+    
+    if (result?.scripts) {
+      setScripts(result.scripts as Script[]);
+      if (result.authors) {
+        const map: Record<string, Author> = {};
+        Object.entries(result.authors).forEach(([id, p]: [string, any]) => { map[id] = p as Author; });
+        setAuthors(map);
       }
     }
     setLoading(false);
@@ -228,7 +214,7 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
     const current = scripts.find(s => s.id === scriptId);
     const finalPriority = current?.client_priority === newPriority ? 'normal' : newPriority;
     
-    await supabase.from('scripts').update({ client_priority: finalPriority } as any).eq('id', scriptId);
+    const result = await portalAction({ action: 'set_script_priority', client_id: clientId, script_id: scriptId, priority: finalPriority });
     setScripts(prev => prev.map(s => s.id === scriptId ? { ...s, client_priority: finalPriority } : s));
     if (selectedScript?.id === scriptId) {
       setSelectedScript(prev => prev ? { ...prev, client_priority: finalPriority } : null);
@@ -236,8 +222,7 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
     toast.success(finalPriority === 'normal' ? 'Prioridade removida' : `Marcado como ${finalPriority === 'urgent' ? 'Urgente 🔥' : 'Prioridade 🚀'}`);
     
     if (current) {
-      const { data: clientData } = await supabase.from('clients').select('company_name').eq('id', clientId).single();
-      syncPortalScriptPriority(clientId, current.title, finalPriority, clientData?.company_name || '').catch(console.error);
+      syncPortalScriptPriority(clientId, current.title, finalPriority, result?.company_name || '').catch(console.error);
     }
   };
 

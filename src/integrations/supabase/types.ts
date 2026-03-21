@@ -2113,6 +2113,27 @@ export type Database = {
         }
         Relationships: []
       }
+      plan_videos: {
+        Row: {
+          id: string
+          plan_name: string
+          updated_at: string
+          video_url: string | null
+        }
+        Insert: {
+          id?: string
+          plan_name: string
+          updated_at?: string
+          video_url?: string | null
+        }
+        Update: {
+          id?: string
+          plan_name?: string
+          updated_at?: string
+          video_url?: string | null
+        }
+        Relationships: []
+      }
       plans: {
         Row: {
           accepts_extra_content: boolean

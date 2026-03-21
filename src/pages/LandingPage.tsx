@@ -8,6 +8,8 @@ import {
   Menu, X, Sparkles, Target, Megaphone, Camera, Film, PenTool,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
+import FacebookPixel from '@/components/FacebookPixel';
 
 const WHATSAPP_LINK = 'https://wa.me/5562985382981?text=Olá!%20Vim%20pelo%20site%20e%20gostaria%20de%20saber%20mais%20sobre%20os%20serviços%20da%20Pulse.';
 const INSTAGRAM_LINK = 'https://instagram.com/ag.pulse';
@@ -773,6 +775,22 @@ function ComoFunciona() {
 
 // ─── Planos ─────────────────────────────────────────────────
 function Planos() {
+  const [planVideos, setPlanVideos] = useState<Record<string, string>>({});
+  const [activeVideo, setActiveVideo] = useState<{ name: string; url: string } | null>(null);
+
+  useEffect(() => {
+    supabase
+      .from('plan_videos')
+      .select('plan_name, video_url')
+      .then(({ data }) => {
+        if (data) {
+          const map: Record<string, string> = {};
+          data.forEach((r: any) => { if (r.video_url) map[r.plan_name] = r.video_url; });
+          setPlanVideos(map);
+        }
+      });
+  }, []);
+
   const plans = [
     {
       name: 'Starter',
@@ -881,6 +899,16 @@ function Planos() {
                 >
                   <MessageCircle size={12} /> Solicitar proposta
                 </Button>
+                {planVideos[p.name] && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setActiveVideo({ name: p.name, url: planVideos[p.name] })}
+                    className="w-full gap-1.5 mt-1.5 text-primary hover:text-primary"
+                  >
+                    <Play size={12} /> Entender melhor
+                  </Button>
+                )}
               </motion.div>
             ))}
           </motion.div>
@@ -951,7 +979,7 @@ function Planos() {
                   );
                 })}
               </ul>
-              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="space-y-2">
                 <Button
                   onClick={() => window.open(WHATSAPP_LINK, '_blank')}
                   className={`w-full gap-2 ${p.popular ? 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shadow-primary/20' : (p as any).isNew ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/20' : ''}`}
@@ -959,6 +987,16 @@ function Planos() {
                 >
                   <MessageCircle size={14} /> Solicitar proposta
                 </Button>
+                {planVideos[p.name] && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setActiveVideo({ name: p.name, url: planVideos[p.name] })}
+                    className="w-full gap-2 text-primary hover:text-primary"
+                  >
+                    <Play size={14} /> Entender melhor
+                  </Button>
+                )}
               </motion.div>
             </motion.div>
           ))}
@@ -969,6 +1007,52 @@ function Planos() {
           <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer" className="text-primary font-semibold hover:underline">Fale conosco →</a>
         </motion.p>
       </div>
+
+      {/* Video Modal */}
+      <AnimatePresence>
+        {activeVideo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setActiveVideo(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              className="relative w-full max-w-3xl bg-card rounded-2xl overflow-hidden shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between p-4 border-b border-border">
+                <h3 className="font-display font-bold text-foreground">Plano {activeVideo.name}</h3>
+                <button onClick={() => setActiveVideo(null)} className="w-8 h-8 rounded-full bg-muted flex items-center justify-center hover:bg-muted-foreground/20 transition-colors">
+                  <X size={16} className="text-foreground" />
+                </button>
+              </div>
+              <div className="aspect-video">
+                {activeVideo.url.includes('youtube.com') || activeVideo.url.includes('youtu.be') ? (
+                  <iframe
+                    src={activeVideo.url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')}
+                    className="w-full h-full"
+                    allowFullScreen
+                    allow="autoplay"
+                  />
+                ) : (
+                  <video src={activeVideo.url} controls autoPlay className="w-full h-full object-cover" />
+                )}
+              </div>
+              <div className="p-4 flex justify-center">
+                <Button onClick={() => { setActiveVideo(null); window.open(WHATSAPP_LINK, '_blank'); }} className="gap-2">
+                  <MessageCircle size={14} /> Quero esse plano
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }
@@ -1283,6 +1367,7 @@ function Footer() {
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-background">
+      <FacebookPixel />
       <Navbar />
       <Hero />
       <Sobre />

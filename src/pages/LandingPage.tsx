@@ -376,13 +376,33 @@ function Sobre() {
   const ref = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] });
   const imgY = useTransform(scrollYProgress, [0, 1], ['5%', '-5%']);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadVideo() {
+      try {
+        const { createClient } = await import('@supabase/supabase-js');
+        const url = import.meta.env.VITE_SUPABASE_URL;
+        const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        if (!url || !key) return;
+        const sb = createClient(url, key);
+        const { data } = await sb
+          .from('landing_page_settings')
+          .select('video_url')
+          .eq('section', 'quem_somos')
+          .maybeSingle();
+        if (data?.video_url) setVideoUrl(data.video_url);
+      } catch {}
+    }
+    loadVideo();
+  }, []);
 
   return (
-    <section ref={ref} className="py-24 bg-card border-y border-border/50 overflow-hidden">
+    <section ref={ref} id="quem-somos" className="py-24 bg-card border-y border-border/50 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid md:grid-cols-2 gap-16 items-center">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} variants={slideInLeft}>
-            <span className="text-sm font-semibold text-primary uppercase tracking-wider">Sobre a Pulse</span>
+            <span className="text-sm font-semibold text-primary uppercase tracking-wider">Quem Somos</span>
             <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3 leading-tight">
               Mais do que marketing: somos parceiros do seu crescimento em vendas
             </h2>

@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   Play, Pause, Maximize, Check, MessageSquare, X, ChevronLeft, ChevronRight,
   BarChart3, Send, Clock, Film, Image, Palette, Video, Award, Bell, Volume2,
-  VolumeX, Eye, TrendingUp, Sparkles, ChevronDown, Loader2, LogOut, Shield
+  VolumeX, Eye, TrendingUp, Sparkles, ChevronDown, Loader2, LogOut, Shield, Download
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';

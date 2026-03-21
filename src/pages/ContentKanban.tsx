@@ -1334,22 +1334,20 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
           {task.kanban_column === 'revisao' && (onApprove || onRequestAdjustments) && (
             <div className="grid grid-cols-2 gap-1.5">
               {onApprove && (
-                <button
+                <motion.button whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.03 }}
                   onClick={e => { e.stopPropagation(); onApprove(); }}
-                  className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-success/10 hover:bg-success/20 border border-success/20 text-success transition-colors text-[10px] font-semibold"
-                  style={{ fontFamily: 'var(--font-display)' }}
+                  className="flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-gradient-to-r from-green-500/10 to-emerald-500/15 hover:from-green-500/20 hover:to-emerald-500/25 border border-green-500/25 text-green-600 transition-all text-[10px] font-bold shadow-sm hover:shadow-green-500/15"
                 >
-                  <ThumbsUp size={11} /> Aprovar
-                </button>
+                  <ThumbsUp size={12} /> Aprovar
+                </motion.button>
               )}
               {onRequestAdjustments && (
-                <button
+                <motion.button whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.03 }}
                   onClick={e => { e.stopPropagation(); onRequestAdjustments(); }}
-                  className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-600 transition-colors text-[10px] font-semibold"
-                  style={{ fontFamily: 'var(--font-display)' }}
+                  className="flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-600 transition-all text-[10px] font-bold shadow-sm hover:shadow-amber-500/10"
                 >
-                  <MessageSquareWarning size={11} /> Ajustes
-                </button>
+                  <MessageSquareWarning size={12} /> Ajustes
+                </motion.button>
               )}
             </div>
           )}

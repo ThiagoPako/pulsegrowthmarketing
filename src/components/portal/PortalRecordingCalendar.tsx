@@ -213,6 +213,10 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
   const [specialTime, setSpecialTime] = useState('');
   const [specialComment, setSpecialComment] = useState('');
   const [sendingSpecial, setSendingSpecial] = useState(false);
+  const [specialStep, setSpecialStep] = useState<'date' | 'checking' | 'availability' | 'outside_hours' | 'comment'>('date');
+  const [specialAvailability, setSpecialAvailability] = useState<any>(null);
+  const [selectedSpecialVm, setSelectedSpecialVm] = useState<string>('');
+  const [selectedSpecialSlot, setSelectedSpecialSlot] = useState('');
   const [showExploreSlots, setShowExploreSlots] = useState(false);
   const [exploreSlotsDate, setExploreSlotsDate] = useState('');
   const [exploreSlotsData, setExploreSlotsData] = useState<string[]>([]);

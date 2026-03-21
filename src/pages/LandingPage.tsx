@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-const WHATSAPP_LINK = 'https://wa.me/5538999266863?text=Olá!%20Vim%20pelo%20site%20e%20gostaria%20de%20saber%20mais%20sobre%20os%20serviços%20da%20Pulse.';
+const WHATSAPP_LINK = 'https://wa.me/5562985382981?text=Olá!%20Vim%20pelo%20site%20e%20gostaria%20de%20saber%20mais%20sobre%20os%20serviços%20da%20Pulse.';
+const INSTAGRAM_LINK = 'https://instagram.com/ag.pulse';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 40 },
@@ -43,7 +44,7 @@ function Navbar() {
               <Rocket size={18} className="text-primary-foreground" />
             </div>
             <span className="font-display font-bold text-lg text-foreground tracking-tight">Pulse</span>
-            <span className="text-xs text-muted-foreground font-medium hidden sm:inline">Growth Marketing</span>
+            <span className="text-xs text-muted-foreground font-medium hidden sm:inline">Growth Marketing de Vendas</span>
           </a>
 
           <div className="hidden md:flex items-center gap-6">
@@ -102,20 +103,20 @@ function Hero() {
           </motion.div>
 
           <motion.h1 variants={fadeUp} custom={1} className="font-display text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[1.08] tracking-tight text-foreground">
-            Conteúdo que{' '}
+            Do conteúdo ao{' '}
             <span className="text-primary relative">
-              converte
+              fechamento
               <svg className="absolute -bottom-2 left-0 w-full" viewBox="0 0 200 12" fill="none">
                 <path d="M2 8C50 2 150 2 198 8" stroke="hsl(16 82% 51%)" strokeWidth="3" strokeLinecap="round" />
               </svg>
             </span>
             ,<br />
-            resultados que{' '}
-            <span className="text-primary">aparecem</span>
+            a gente cuida de{' '}
+            <span className="text-primary">tudo</span>
           </motion.h1>
 
           <motion.p variants={fadeUp} custom={2} className="mt-6 text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Produzimos vídeos, artes e estratégias de marketing digital completas para sua empresa crescer no digital com consistência e profissionalismo.
+            Gravamos, editamos, criamos a estratégia, gerenciamos suas redes sociais e acompanhamos sua equipe comercial até fechar a venda. Somos sua agência de growth marketing de vendas completa.
           </motion.p>
 
           <motion.div variants={fadeUp} custom={3} className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -155,13 +156,13 @@ function Sobre() {
           <motion.div variants={fadeUp}>
             <span className="text-sm font-semibold text-primary uppercase tracking-wider">Sobre a Pulse</span>
             <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3 leading-tight">
-              A agência que entende o seu negócio e entrega resultado
+              Mais do que marketing: somos parceiros do seu crescimento em vendas
             </h2>
             <p className="mt-5 text-muted-foreground leading-relaxed">
-              Somos uma agência de marketing digital focada em produção de conteúdo audiovisual e gestão estratégica de redes sociais. Nossa missão é transformar a presença digital de empresas locais com conteúdo profissional, consistente e orientado a resultados.
+              Somos uma agência de growth marketing de vendas de Minaçu - GO que atende todo o Brasil. Nosso diferencial? A gente não faz só o tráfego pago — a gente cuida de todo o processo: gravamos, editamos, criamos a estratégia, gerenciamos suas redes sociais com social media dedicado e designer exclusivo.
             </p>
             <p className="mt-4 text-muted-foreground leading-relaxed">
-              Com uma equipe especializada em videomakers, editores, designers e social media, oferecemos um fluxo completo de produção — da gravação à publicação — garantindo que sua marca esteja sempre ativa e gerando valor.
+              E vai além: temos uma assessoria comercial completa de vendas. Acompanhamos sua equipe de atendimento, criamos métodos e orientamos como fechar mais clientes. Do conteúdo ao fechamento, estamos com você.
             </p>
             <div className="mt-8 grid grid-cols-2 gap-4">
               {[
@@ -169,6 +170,8 @@ function Sobre() {
                 { icon: Film, label: 'Edição de vídeo' },
                 { icon: PenTool, label: 'Design gráfico' },
                 { icon: Megaphone, label: 'Gestão de redes' },
+                { icon: Users, label: 'Assessoria comercial' },
+                { icon: Target, label: 'Fechamento de vendas' },
               ].map(({ icon: Icon, label }) => (
                 <div key={label} className="flex items-center gap-3 p-3 rounded-xl bg-accent/50">
                   <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
@@ -186,7 +189,7 @@ function Sobre() {
                   <Rocket size={40} className="text-primary" />
                 </div>
                 <h3 className="font-display text-2xl font-bold text-foreground">Pulse Growth</h3>
-                <p className="text-muted-foreground mt-2">Marketing que impulsiona</p>
+                <p className="text-muted-foreground mt-2">Marketing de vendas completo</p>
               </div>
             </div>
             <div className="absolute -bottom-4 -right-4 w-32 h-32 bg-warning/20 rounded-2xl blur-2xl" />
@@ -200,12 +203,12 @@ function Sobre() {
 // ─── Serviços ───────────────────────────────────────────────
 function Servicos() {
   const services = [
-    { icon: Video, title: 'Produção de Vídeos', desc: 'Gravamos e editamos reels, stories e vídeos institucionais profissionais para suas redes sociais.', color: 'text-primary' },
-    { icon: Palette, title: 'Design & Artes', desc: 'Criação de artes para feed, stories, banners e materiais gráficos alinhados à identidade visual.', color: 'text-info' },
-    { icon: Instagram, title: 'Gestão de Redes Sociais', desc: 'Planejamento estratégico, calendário editorial e publicação recorrente nas plataformas.', color: 'text-success' },
-    { icon: BarChart3, title: 'Tráfego Pago', desc: 'Gerenciamento de campanhas no Meta Ads e Google Ads com foco em resultados mensuráveis.', color: 'text-warning' },
-    { icon: Calendar, title: 'Calendário de Conteúdo', desc: 'Planejamento mensal completo com datas sazonais, tendências e conteúdo estratégico.', color: 'text-destructive' },
-    { icon: Target, title: 'Endomarketing', desc: 'Marketing interno e produção de conteúdo para colaboradores e cultura organizacional.', color: 'text-primary' },
+    { icon: Video, title: 'Produção de Vídeos', desc: 'Vamos até sua empresa, gravamos reels, stories e vídeos profissionais. Tudo pensado para engajar e vender.', color: 'text-primary' },
+    { icon: Palette, title: 'Design & Artes', desc: 'Designer dedicado para criar artes de feed, stories, banners e materiais gráficos com sua identidade visual.', color: 'text-info' },
+    { icon: Instagram, title: 'Social Media', desc: 'Social media exclusivo para gerenciar seus perfis, planejar conteúdo, responder interações e manter sua marca ativa.', color: 'text-success' },
+    { icon: BarChart3, title: 'Tráfego Pago', desc: 'Campanhas no Meta Ads e Google Ads com estratégia focada em gerar leads qualificados para sua equipe comercial.', color: 'text-warning' },
+    { icon: Users, title: 'Assessoria Comercial', desc: 'Acompanhamos sua equipe de atendimento, criamos métodos de abordagem e orientamos como fechar mais vendas.', color: 'text-destructive' },
+    { icon: Target, title: 'Estratégia Completa', desc: 'Não fazemos só o tráfego — acompanhamos do primeiro contato até o fechamento, garantindo que o lead vire cliente.', color: 'text-primary' },
   ];
 
   return (
@@ -217,7 +220,7 @@ function Servicos() {
             Tudo que sua marca precisa para crescer
           </motion.h2>
           <motion.p variants={fadeUp} custom={2} className="text-muted-foreground mt-4 max-w-xl mx-auto">
-            Oferecemos soluções completas de marketing digital — da produção à publicação — para que sua empresa tenha presença profissional e constante.
+            Do conteúdo à venda fechada — cuidamos de tudo para sua empresa crescer no digital com resultados reais.
           </motion.p>
         </motion.div>
 
@@ -243,19 +246,19 @@ function Planos() {
     {
       name: 'Starter',
       subtitle: 'Para quem está começando',
-      features: ['4 gravações/mês', '8 reels editados', '4 artes para feed', 'Gestão de 1 rede social', 'Calendário editorial'],
+      features: ['4 gravações/mês', '8 reels editados', '4 artes para feed', 'Social media dedicado', 'Calendário editorial'],
       popular: false,
     },
     {
       name: 'Growth',
       subtitle: 'O mais escolhido',
-      features: ['8 gravações/mês', '16 reels editados', '8 artes para feed', 'Gestão de 2 redes sociais', 'Calendário editorial', 'Tráfego pago incluso', 'Relatórios mensais'],
+      features: ['8 gravações/mês', '16 reels editados', '8 artes para feed', 'Social media + designer', 'Tráfego pago incluso', 'Assessoria comercial básica', 'Relatórios mensais'],
       popular: true,
     },
     {
       name: 'Scale',
-      subtitle: 'Para dominar o digital',
-      features: ['12 gravações/mês', '24 reels editados', '12 artes para feed', 'Gestão completa de redes', 'Tráfego pago avançado', 'Endomarketing', 'Suporte prioritário', 'Portal do cliente'],
+      subtitle: 'Para dominar e vender',
+      features: ['12 gravações/mês', '24 reels editados', '12 artes para feed', 'Social media + designer', 'Tráfego pago avançado', 'Assessoria comercial completa', 'Treinamento de equipe de vendas', 'Portal do cliente'],
       popular: false,
     },
   ];
@@ -402,11 +405,11 @@ function FAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const faqs = [
     { q: 'Como funciona o processo de gravação?', a: 'Nossos videomakers vão até sua empresa nos dias agendados, gravam os conteúdos planejados e enviam para nossa equipe de edição. Todo o processo é acompanhado pelo Portal do Cliente.' },
-    { q: 'Vocês atendem em qual região?', a: 'Atendemos empresas em todo o Norte de Minas Gerais, com foco nas cidades de Montes Claros e região. Para outras localidades, entre em contato para verificar a disponibilidade.' },
+    { q: 'Vocês atendem em qual região?', a: 'Somos de Minaçu - GO, mas atendemos empresas em todo o Brasil! Para clientes de outras cidades, adaptamos nosso modelo de produção para garantir a mesma qualidade.' },
     { q: 'Quanto tempo leva para os resultados aparecerem?', a: 'Os primeiros resultados começam a aparecer entre 30 e 90 dias, dependendo do nicho e do investimento. O marketing digital é um trabalho contínuo que cresce com consistência.' },
     { q: 'Posso aprovar os conteúdos antes de serem publicados?', a: 'Sim! Todos os conteúdos são enviados para sua aprovação através do nosso Portal do Cliente. Você pode assistir, aprovar ou solicitar ajustes diretamente pela plataforma.' },
-    { q: 'Qual é o prazo mínimo de contrato?', a: 'Trabalhamos com contratos a partir de 6 meses, pois o marketing digital requer consistência para gerar resultados sólidos. Oferecemos condições especiais para contratos mais longos.' },
-    { q: 'Vocês fazem tráfego pago também?', a: 'Sim! Gerenciamos campanhas no Meta Ads (Instagram/Facebook) e Google Ads. O investimento em mídia é definido conforme seu orçamento e objetivos.' },
+    { q: 'O que diferencia a Pulse de outras agências?', a: 'Nós não fazemos só o tráfego pago. Cuidamos de todo o processo: gravamos, editamos, gerenciamos suas redes e ainda acompanhamos sua equipe comercial até fechar a venda, criando métodos e orientando como converter mais clientes.' },
+    { q: 'Vocês fazem assessoria comercial?', a: 'Sim! Temos uma equipe de assessoria comercial completa. Acompanhamos seu time de atendimento, criamos scripts de abordagem e orientamos como fechar mais negócios a partir dos leads gerados.' },
   ];
 
   return (
@@ -464,15 +467,15 @@ function Contato() {
           <motion.div variants={fadeUp} custom={4} className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-6 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <Phone size={14} className="text-primary" />
-              (38) 99926-6863
+              (62) 9 8538-2981
             </div>
-            <div className="flex items-center gap-2">
-              <Mail size={14} className="text-primary" />
-              contato@agenciapulse.tech
-            </div>
+            <a href={INSTAGRAM_LINK} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-foreground transition-colors">
+              <Instagram size={14} className="text-primary" />
+              @ag.pulse
+            </a>
             <div className="flex items-center gap-2">
               <MapPin size={14} className="text-primary" />
-              Montes Claros - MG
+              Minaçu - GO | Atendemos todo o Brasil
             </div>
           </motion.div>
         </motion.div>

@@ -313,12 +313,26 @@ function Planos() {
                 <p className="text-xs text-muted-foreground mt-1">{p.subtitle}</p>
               </div>
               <ul className="space-y-2.5 mb-6 flex-1">
-                {p.features.map(f => (
-                  <li key={f} className="flex items-start gap-2 text-sm text-foreground">
-                    <CheckCircle2 size={15} className={`${(p as any).isNew ? 'text-emerald-500' : 'text-success'} shrink-0 mt-0.5`} />
-                    {f}
-                  </li>
-                ))}
+                {p.features.map(f => {
+                  const isTrafego = f.toLowerCase().includes('tráfego pago');
+                  return (
+                    <li key={f} className={`flex items-start gap-2 text-sm ${isTrafego ? 'relative' : ''}`}>
+                      {isTrafego ? (
+                        <>
+                          <Rocket size={15} className="shrink-0 mt-0.5 text-orange-500 animate-pulse" />
+                          <span className="font-bold bg-gradient-to-r from-orange-400 via-red-500 to-yellow-400 bg-clip-text text-transparent animate-pulse drop-shadow-[0_0_6px_rgba(251,146,60,0.6)]">
+                            🔥 {f}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 size={15} className={`${(p as any).isNew ? 'text-emerald-500' : 'text-success'} shrink-0 mt-0.5`} />
+                          <span className="text-foreground">{f}</span>
+                        </>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
               <Button
                 onClick={() => window.open(WHATSAPP_LINK, '_blank')}

@@ -156,13 +156,13 @@ function Sobre() {
           <motion.div variants={fadeUp}>
             <span className="text-sm font-semibold text-primary uppercase tracking-wider">Sobre a Pulse</span>
             <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3 leading-tight">
-              A agência que entende o seu negócio e entrega resultado
+              Mais do que marketing: somos parceiros do seu crescimento em vendas
             </h2>
             <p className="mt-5 text-muted-foreground leading-relaxed">
-              Somos uma agência de marketing digital focada em produção de conteúdo audiovisual e gestão estratégica de redes sociais. Nossa missão é transformar a presença digital de empresas locais com conteúdo profissional, consistente e orientado a resultados.
+              Somos uma agência de growth marketing de vendas de Minaçu - GO que atende todo o Brasil. Nosso diferencial? A gente não faz só o tráfego pago — a gente cuida de todo o processo: gravamos, editamos, criamos a estratégia, gerenciamos suas redes sociais com social media dedicado e designer exclusivo.
             </p>
             <p className="mt-4 text-muted-foreground leading-relaxed">
-              Com uma equipe especializada em videomakers, editores, designers e social media, oferecemos um fluxo completo de produção — da gravação à publicação — garantindo que sua marca esteja sempre ativa e gerando valor.
+              E vai além: temos uma assessoria comercial completa de vendas. Acompanhamos sua equipe de atendimento, criamos métodos e orientamos como fechar mais clientes. Do conteúdo ao fechamento, estamos com você.
             </p>
             <div className="mt-8 grid grid-cols-2 gap-4">
               {[

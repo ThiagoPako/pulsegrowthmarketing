@@ -321,16 +321,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
 
   const loadData = async () => {
     setLoading(true);
-    const [templatesRes, itemsRes] = await Promise.all([
-      supabase.from('flyer_templates').select('*').eq('is_active', true).order('created_at', { ascending: false }),
-      supabase.from('flyer_items').select('*').eq('client_id', clientId).order('created_at', { ascending: false }),
-    ]);
-    if (templatesRes.data) {
-      setTemplates(templatesRes.data as FlyerTemplate[]);
-      const fr = templatesRes.data.filter((t: any) => t.template_type === 'frame');
+    const result = await portalAction({ action: 'get_flyer_data', client_id: clientId });
+    if (result?.templates) {
+      setTemplates(result.templates as FlyerTemplate[]);
+      const fr = result.templates.filter((t: any) => t.template_type === 'frame');
       if (fr.length > 0 && !selectedTemplate) setSelectedTemplate(fr[0].id);
     }
-    if (itemsRes.data) setItems(itemsRes.data as FlyerItem[]);
+    if (result?.items) setItems(result.items as FlyerItem[]);
     setLoading(false);
   };
 

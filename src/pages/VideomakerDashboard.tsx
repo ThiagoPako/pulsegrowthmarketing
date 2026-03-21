@@ -649,14 +649,6 @@ export default function VideomakerDashboard() {
             </div>
             <p className="text-lg sm:text-xl font-display font-bold">{s.value}</p>
             <p className="text-[10px] text-muted-foreground mt-0.5">{s.label}</p>
-            {/* Subtle animated rocket particle */}
-            <motion.div
-              animate={{ y: [20, -30], opacity: [0, 0.3, 0], x: [0, 5] }}
-              transition={{ duration: 3, repeat: Infinity, delay: i * 0.8 }}
-              className="absolute top-2 right-2"
-            >
-              <Rocket size={10} className="text-muted-foreground/20 -rotate-45" />
-            </motion.div>
           </motion.div>
         ))}
       </div>

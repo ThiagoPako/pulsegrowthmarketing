@@ -1232,60 +1232,212 @@ app.post('/api/portal-recordings', async (req, res) => {
       return res.json({ success: true });
     }
 
+    /* ── check_special_availability — smart wizard step ── */
+    if (action === 'check_special_availability') {
+      const { requested_date, requested_time } = req.body;
+      if (!requested_date) return res.status(400).json({ error: 'requested_date required' });
+
+      const { rows: [settings] } = await pool.query('SELECT * FROM company_settings LIMIT 1');
+      const rawDur = settings?.recording_duration || 2;
+      const duration = rawDur > 10 ? rawDur : rawDur * 60;
+      const buffer = 30;
+      const workDays = settings?.work_days || ['segunda','terca','quarta','quinta','sexta'];
+      const shiftAStart = settings?.shift_a_start || '08:30';
+      const shiftAEnd = settings?.shift_a_end || '12:00';
+      const shiftBStart = settings?.shift_b_start || '14:30';
+      const shiftBEnd = settings?.shift_b_end || '18:00';
+
+      const dayMap = { 0:'domingo',1:'segunda',2:'terca',3:'quarta',4:'quinta',5:'sexta',6:'sabado' };
+      const reqDow = dayMap[new Date(requested_date + 'T12:00:00').getDay()];
+
+      // Check if outside business hours
+      let outsideHours = false;
+      if (!workDays.includes(reqDow)) {
+        outsideHours = true;
+      }
+      if (requested_time) {
+        const [rh, rm] = requested_time.split(':').map(Number);
+        const reqMin = rh * 60 + rm;
+        const [sah, sam] = shiftAStart.split(':').map(Number);
+        const [saeh, saem] = shiftAEnd.split(':').map(Number);
+        const [sbh, sbm] = shiftBStart.split(':').map(Number);
+        const [sbeh, sbem] = shiftBEnd.split(':').map(Number);
+        const inA = reqMin >= (sah*60+sam) && reqMin + duration <= (saeh*60+saem);
+        const inB = reqMin >= (sbh*60+sbm) && reqMin + duration <= (sbeh*60+sbem);
+        if (!inA && !inB) outsideHours = true;
+      }
+
+      if (outsideHours) {
+        return res.json({
+          outside_hours: true,
+          message: 'Este horário está fora do horário comercial da agência. Entre em contato diretamente com Thiago ou Victor para verificar a disponibilidade.',
+          contact_names: ['Thiago', 'Victor']
+        });
+      }
+
+      // Check responsible videomaker availability
+      const { rows: [clientData] } = await pool.query('SELECT videomaker_id, company_name FROM clients WHERE id = $1', [client_id]);
+      let mainVmId = clientData?.videomaker_id;
+      if (!mainVmId) {
+        const { rows: [lastRec] } = await pool.query(`SELECT videomaker_id FROM recordings WHERE client_id = $1 AND videomaker_id IS NOT NULL ORDER BY date DESC LIMIT 1`, [client_id]);
+        mainVmId = lastRec?.videomaker_id;
+      }
+
+      let mainVmBusy = false;
+      let mainVmName = '';
+      let mainVmSlots = [];
+      let nearestAvailableDate = null;
+
+      if (mainVmId) {
+        const { rows: [vmProfile] } = await pool.query('SELECT name FROM profiles WHERE id = $1', [mainVmId]);
+        mainVmName = vmProfile?.name || 'Videomaker';
+
+        // Check if main VM has conflict at requested time
+        if (requested_time) {
+          const { rows: conflicts } = await pool.query(`SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`, [mainVmId, requested_date]);
+          const [rh, rm] = requested_time.split(':').map(Number);
+          const reqStart = rh * 60 + rm;
+          mainVmBusy = conflicts.some(c => {
+            const [ch, cm] = c.start_time.split(':').map(Number);
+            const cStart = ch * 60 + cm;
+            return reqStart < cStart + duration + buffer && reqStart + duration + buffer > cStart;
+          });
+        }
+
+        // Get available slots for main VM on requested date
+        const { rows: existing } = await pool.query(`SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`, [mainVmId, requested_date]);
+        const occupied = existing.map(r => { const [h, m] = r.start_time.split(':').map(Number); return { start: h*60+m, end: h*60+m+duration+buffer }; });
+        const step = duration + buffer;
+        const genSlots = (s, e) => {
+          const [sh, sm] = s.split(':').map(Number); const [eh, em] = e.split(':').map(Number);
+          let cur = sh*60+sm; const end = eh*60+em; const sl = [];
+          while (cur + duration <= end) {
+            if (!occupied.some(o => cur < o.end && cur + duration + buffer > o.start))
+              sl.push(`${String(Math.floor(cur/60)).padStart(2,'0')}:${String(cur%60).padStart(2,'0')}`);
+            cur += step;
+          }
+          return sl;
+        };
+        mainVmSlots = [...genSlots(shiftAStart, shiftAEnd), ...genSlots(shiftBStart, shiftBEnd)];
+
+        // If no slots on requested date, find nearest date with availability
+        if (mainVmSlots.length === 0) {
+          for (let i = 1; i <= 14; i++) {
+            const d = new Date(requested_date + 'T12:00:00');
+            d.setDate(d.getDate() + i);
+            const dow = dayMap[d.getDay()];
+            if (!workDays.includes(dow)) continue;
+            const dateStr = d.toISOString().split('T')[0];
+            const { rows: futureRecs } = await pool.query(`SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`, [mainVmId, dateStr]);
+            const occ = futureRecs.map(r => { const [h, m] = r.start_time.split(':').map(Number); return { start: h*60+m, end: h*60+m+duration+buffer }; });
+            const checkSlots = (s, e) => {
+              const [sh, sm] = s.split(':').map(Number); const [eh, em] = e.split(':').map(Number);
+              let cur = sh*60+sm; const end = eh*60+em;
+              while (cur + duration <= end) {
+                if (!occ.some(o => cur < o.end && cur + duration + buffer > o.start)) return true;
+                cur += step;
+              }
+              return false;
+            };
+            if (checkSlots(shiftAStart, shiftAEnd) || checkSlots(shiftBStart, shiftBEnd)) {
+              nearestAvailableDate = dateStr;
+              break;
+            }
+          }
+        }
+      }
+
+      // Get alternative videomakers
+      const alternativeVideomakers = [];
+      const { rows: allVms } = await pool.query(
+        `SELECT p.id, p.name FROM profiles p JOIN user_roles ur ON ur.user_id = p.id WHERE ur.role = 'videomaker'${mainVmId ? ' AND p.id != $1' : ''}`,
+        mainVmId ? [mainVmId] : []
+      );
+      for (const vm of allVms) {
+        const { rows: vmRecs } = await pool.query(`SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`, [vm.id, requested_date]);
+        const occ = vmRecs.map(r => { const [h, m] = r.start_time.split(':').map(Number); return { start: h*60+m, end: h*60+m+duration+buffer }; });
+        const sl = [];
+        const genAltSlots = (s, e) => {
+          const [sh, sm] = s.split(':').map(Number); const [eh, em] = e.split(':').map(Number);
+          let cur = sh*60+sm; const end = eh*60+em;
+          while (cur + duration <= end) {
+            if (!occ.some(o => cur < o.end && cur + duration + buffer > o.start))
+              sl.push(`${String(Math.floor(cur/60)).padStart(2,'0')}:${String(cur%60).padStart(2,'0')}`);
+            cur += duration + buffer;
+          }
+        };
+        genAltSlots(shiftAStart, shiftAEnd);
+        genAltSlots(shiftBStart, shiftBEnd);
+        if (sl.length > 0) alternativeVideomakers.push({ id: vm.id, name: vm.name, available_slots: sl, total_free: sl.length });
+      }
+      alternativeVideomakers.sort((a, b) => b.total_free - a.total_free);
+
+      return res.json({
+        outside_hours: false,
+        main_videomaker: mainVmId ? { id: mainVmId, name: mainVmName, busy_at_time: mainVmBusy, available_slots: mainVmSlots, nearest_available_date: nearestAvailableDate } : null,
+        alternative_videomakers: alternativeVideomakers,
+      });
+    }
+
     /* ── request_special ── */
     if (action === 'request_special') {
-      const { requested_date, requested_time, comment } = req.body;
+      const { requested_date, requested_time, comment, selected_videomaker_id } = req.body;
       if (!requested_date || !comment) return res.status(400).json({ error: 'requested_date and comment required' });
 
       const { rows: [clientSpecial] } = await pool.query('SELECT company_name, videomaker_id FROM clients WHERE id = $1', [client_id]);
-      let specialVmId = clientSpecial?.videomaker_id || null;
+      let specialVmId = selected_videomaker_id || clientSpecial?.videomaker_id || null;
 
       if (!specialVmId) {
-        const { rows: [lastClientRec] } = await pool.query(
-          `SELECT videomaker_id
-           FROM recordings
-           WHERE client_id = $1 AND videomaker_id IS NOT NULL
-           ORDER BY date DESC, created_at DESC
-           LIMIT 1`,
-          [client_id]
-        );
+        const { rows: [lastClientRec] } = await pool.query(`SELECT videomaker_id FROM recordings WHERE client_id = $1 AND videomaker_id IS NOT NULL ORDER BY date DESC, created_at DESC LIMIT 1`, [client_id]);
         specialVmId = lastClientRec?.videomaker_id || null;
       }
-
       if (!specialVmId) {
         const { rows: [fallbackVm] } = await pool.query(
-          `SELECT p.id
-           FROM profiles p
-           JOIN user_roles ur ON ur.user_id = p.id
-           LEFT JOIN recordings r
-             ON r.videomaker_id = p.id
-            AND r.date = $1
-            AND r.status != 'cancelada'
-           WHERE ur.role = 'videomaker'
-           GROUP BY p.id, p.name
-           ORDER BY COUNT(r.id) ASC, p.name ASC
-           LIMIT 1`,
+          `SELECT p.id FROM profiles p JOIN user_roles ur ON ur.user_id = p.id LEFT JOIN recordings r ON r.videomaker_id = p.id AND r.date = $1 AND r.status != 'cancelada' WHERE ur.role = 'videomaker' GROUP BY p.id, p.name ORDER BY COUNT(r.id) ASC, p.name ASC LIMIT 1`,
           [requested_date]
         );
         specialVmId = fallbackVm?.id || null;
       }
-
-      if (!specialVmId) {
-        return res.status(400).json({ error: 'Nenhum videomaker disponível para esta solicitação' });
-      }
+      if (!specialVmId) return res.status(400).json({ error: 'Nenhum videomaker disponível para esta solicitação' });
 
       const { rows: [newSpecialRec] } = await pool.query(
         `INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ($1, $2, $3, $4, 'extra', 'solicitada', 'pendente') RETURNING id`,
         [client_id, specialVmId, requested_date, requested_time || '09:00']
       );
       await pool.query(`INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)`,
-        [client_id, 'Solicitação enviada', `Sua solicitação para ${requested_date} foi enviada para a equipe. Aguarde a confirmação.`, 'info']);
-      const { rows: notifUsersSpecial } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media', 'videomaker')`);
+        [client_id, '📨 Solicitação enviada', `Sua solicitação de gravação especial para ${requested_date} foi enviada para aprovação. Aguarde a confirmação da equipe.`, 'info']);
+      const { rows: notifUsersSpecial } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
       for (const u of notifUsersSpecial) {
         await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, '📹 Solicitação de gravação especial', `${clientSpecial?.company_name || 'Cliente'}: ${comment} — Data: ${requested_date} ${requested_time || ''}`, 'warning', '/agenda']);
+          [u.user_id, '📹 Solicitação de gravação especial', `${clientSpecial?.company_name || 'Cliente'}: ${comment} — Data: ${requested_date} ${requested_time || ''} — AGUARDANDO APROVAÇÃO`, 'warning', '/agenda']);
       }
       return res.json({ success: true, recording_id: newSpecialRec?.id });
+    }
+
+    /* ── approve_special ── */
+    if (action === 'approve_special') {
+      const { recording_id: approveRecId } = req.body;
+      if (!approveRecId) return res.status(400).json({ error: 'recording_id required' });
+      await pool.query(`UPDATE recordings SET status = 'agendada', confirmation_status = 'pendente' WHERE id = $1 AND status = 'solicitada'`, [approveRecId]);
+      const { rows: [recApprove] } = await pool.query('SELECT client_id, date::text, start_time FROM recordings WHERE id = $1', [approveRecId]);
+      if (recApprove) {
+        await pool.query(`INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)`,
+          [recApprove.client_id, '✅ Gravação aprovada!', `Sua solicitação de gravação especial para ${recApprove.date} às ${recApprove.start_time} foi aprovada pela equipe! Confirme sua presença.`, 'success']);
+      }
+      return res.json({ success: true });
+    }
+
+    /* ── reject_special ── */
+    if (action === 'reject_special') {
+      const { recording_id: rejectRecId, rejection_reason } = req.body;
+      if (!rejectRecId || !rejection_reason) return res.status(400).json({ error: 'recording_id and rejection_reason required' });
+      await pool.query(`UPDATE recordings SET status = 'cancelada' WHERE id = $1 AND status = 'solicitada'`, [rejectRecId]);
+      const { rows: [recReject] } = await pool.query('SELECT client_id, date::text, start_time FROM recordings WHERE id = $1', [rejectRecId]);
+      if (recReject) {
+        await pool.query(`INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)`,
+          [recReject.client_id, '❌ Solicitação não aprovada', `Sua solicitação de gravação para ${recReject.date} não pôde ser atendida: ${rejection_reason}`, 'warning']);
+      }
+      return res.json({ success: true });
     }
 
     res.status(400).json({ error: 'Invalid action' });

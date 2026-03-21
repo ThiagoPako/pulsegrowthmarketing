@@ -93,6 +93,7 @@ export default function TrafficManagement() {
       supabase.from('design_tasks')
         .select('id, client_id, title, format_type, attachment_url, mockup_url, client_approved_at, completed_at')
         .or('kanban_column.eq.aprovado_cliente,kanban_column.eq.concluido')
+        .in('format_type', ['feed', 'story'])
         .order('completed_at', { ascending: false }),
     ]);
 

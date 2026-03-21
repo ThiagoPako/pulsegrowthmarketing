@@ -1060,7 +1060,7 @@ function Depoimentos() {
   }, [testimonials.length]);
 
   return (
-    <section id="depoimentos" className="py-24 bg-card border-y border-border/50 relative overflow-hidden">
+    <section id="depoimentos" className="py-16 sm:py-24 bg-card border-y border-border/50 relative overflow-hidden">
       <div className="absolute bottom-0 right-0 w-96 h-96 bg-warning/5 rounded-full blur-[100px]" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} variants={staggerContainer} className="text-center mb-16">

@@ -303,40 +303,56 @@ export default function ClientPortal() {
 
   const handleApprove = async () => {
     if (!selectedContent || !client) return;
-    await supabase.from('client_portal_contents').update({ status: 'aprovado', approved_at: new Date().toISOString() }).eq('id', selectedContent.id);
+    const author = getCommentAuthor();
+    await supabase.functions.invoke('portal-actions', {
+      body: { action: 'approve', content_id: selectedContent.id, client_id: client.id },
+    });
     setContents(prev => prev.map(c => c.id === selectedContent.id ? { ...c, status: 'aprovado', approved_at: new Date().toISOString() } : c));
     setSelectedContent(prev => prev ? { ...prev, status: 'aprovado' } : null);
     toast.success('Conteúdo aprovado com sucesso!');
-    // Sync with internal system
     syncPortalApproval(selectedContent.id, client.id, selectedContent.title).catch(console.error);
   };
 
   const handleRequestAdjustment = async () => {
     if (!selectedContent || !adjustmentNote.trim() || !client) return;
     const author = getCommentAuthor();
-    await Promise.all([
-      supabase.from('client_portal_contents').update({ status: 'ajuste_solicitado' }).eq('id', selectedContent.id),
-      supabase.from('client_portal_comments').insert({ content_id: selectedContent.id, author_name: author.name, author_type: author.type, author_id: author.id, message: `🔧 Ajuste solicitado: ${adjustmentNote}` }),
-    ]);
+    await supabase.functions.invoke('portal-actions', {
+      body: {
+        action: 'request_adjustment',
+        content_id: selectedContent.id,
+        client_id: client.id,
+        author_name: author.name,
+        author_type: author.type,
+        author_id: author.id,
+        message: adjustmentNote,
+      },
+    });
     setContents(prev => prev.map(c => c.id === selectedContent.id ? { ...c, status: 'ajuste_solicitado' } : c));
     setSelectedContent(prev => prev ? { ...prev, status: 'ajuste_solicitado' } : null);
     setShowAdjustment(false);
     setAdjustmentNote('');
     loadComments(selectedContent.id);
     toast.success('Ajuste solicitado com sucesso!');
-    // Sync with internal system
     syncPortalAdjustment(selectedContent.id, client.id, selectedContent.title, adjustmentNote).catch(console.error);
   };
 
   const handleSendComment = async () => {
     if (!selectedContent || !newComment.trim() || !client) return;
     const author = getCommentAuthor();
-    await supabase.from('client_portal_comments').insert({ content_id: selectedContent.id, author_name: author.name, author_type: author.type, author_id: author.id, message: newComment });
+    await supabase.functions.invoke('portal-actions', {
+      body: {
+        action: 'add_comment',
+        content_id: selectedContent.id,
+        author_name: author.name,
+        author_type: author.type,
+        author_id: author.id,
+        message: newComment,
+      },
+    });
     const commentText = newComment;
     setNewComment('');
     loadComments(selectedContent.id);
     setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 200);
-    // Sync comment notification
     syncPortalComment(client.id, selectedContent.title, author.name, author.type, commentText).catch(console.error);
   };
 

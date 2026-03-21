@@ -468,7 +468,10 @@ export default function ClientPortal() {
   return (
     <div className="min-h-screen bg-[#080810] text-white selection:bg-white/20 overflow-x-hidden">
       {/* Welcome / News video overlay */}
-      <PortalWelcomeOverlay clientId={client.id} />
+      <PortalWelcomeOverlay
+        clientId={client.id}
+        onVideosLoaded={(data) => setPortalVideoState({ hasNews: data.hasNews, hasWelcome: data.hasWelcome })}
+      />
       {/* ── HEADER ── */}
       <header className="sticky top-0 z-50 bg-[#080810]/80 backdrop-blur-xl border-b border-white/[0.06]">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">

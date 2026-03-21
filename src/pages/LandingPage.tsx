@@ -409,7 +409,7 @@ function Hero() {
               </Button>
             </motion.div>
             <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-              <Button size="lg" variant="outline" onClick={() => document.getElementById('servicos')?.scrollIntoView({ behavior: 'smooth' })} className="gap-2 text-base px-8 py-6 border-border/80 hover:border-primary/40 transition-colors">
+              <Button size="lg" variant="outline" onClick={() => document.getElementById('servicos')?.scrollIntoView({ behavior: 'smooth' })} className="gap-2 text-sm sm:text-base px-6 sm:px-8 py-5 sm:py-6 w-full sm:w-auto border-border/80 hover:border-primary/40 transition-colors">
                 <Play size={16} /> Ver serviços
               </Button>
             </motion.div>

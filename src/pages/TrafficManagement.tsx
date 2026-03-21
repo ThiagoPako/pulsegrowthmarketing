@@ -91,11 +91,10 @@ export default function TrafficManagement() {
     setLoading(true);
     const [campaignsRes, creativesRes] = await Promise.all([
       supabase.from('traffic_campaigns').select('*').order('created_at', { ascending: false }),
-      supabase.from('design_tasks')
-        .select('id, client_id, title, format_type, attachment_url, mockup_url, client_approved_at, completed_at')
-        .or('kanban_column.eq.aprovado_cliente,kanban_column.eq.concluido')
-        .in('format_type', ['feed', 'story'])
-        .order('completed_at', { ascending: false }),
+      supabase.from('content_tasks')
+        .select('id, client_id, title, content_type, edited_video_link, drive_link, approved_at, kanban_column, created_at')
+        .eq('content_type', 'criativo')
+        .order('created_at', { ascending: false }),
     ]);
 
     if (campaignsRes.data) setCampaigns(campaignsRes.data as Campaign[]);

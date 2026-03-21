@@ -48,17 +48,17 @@ export default function ClientPortalRegister() {
       return;
     }
 
+    const resolvedClientId = data.client_id || clientId;
+
     toast.success('Conta criada com sucesso!');
-    sessionStorage.setItem('portal_client_id', clientId!);
+    sessionStorage.setItem('portal_client_id', resolvedClientId);
     sessionStorage.setItem('portal_client_name', data.company_name || clientName);
     sessionStorage.setItem('portal_auth_type', 'client');
 
-    const portalSlug = encodeURIComponent((data.company_name || clientName).replace(/\s+/g, '-').toLowerCase());
-    navigate(`/portal/${portalSlug}`);
+    navigate(`/portal/${resolvedClientId}`);
   };
 
   if (alreadyRegistered) {
-    const portalSlug = encodeURIComponent(clientName.replace(/\s+/g, '-').toLowerCase());
     return (
       <div className="min-h-screen bg-[#080810] flex items-center justify-center px-4">
         <div className="absolute inset-0 overflow-hidden">

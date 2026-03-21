@@ -87,13 +87,6 @@ export default function EndomarketingDashboard() {
                   <span className="text-[10px] sm:text-xs text-muted-foreground">{m.label}</span>
                 </div>
                 <p className="text-base sm:text-lg font-bold">{m.value}</p>
-                <motion.div
-                  animate={{ y: [15, -25], opacity: [0, 0.2, 0] }}
-                  transition={{ duration: 4, repeat: Infinity, delay: i * 0.5 }}
-                  className="absolute top-2 right-2"
-                >
-                  <Rocket size={10} className="text-muted-foreground/20 -rotate-45" />
-                </motion.div>
               </CardContent>
             </Card>
           </motion.div>

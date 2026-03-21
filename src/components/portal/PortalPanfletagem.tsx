@@ -873,7 +873,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     link.href = item.generated_image_url;
     link.download = `${item.vehicle_model}-${item.vehicle_year}.jpg`;
     link.click();
-    supabase.from('flyer_items').update({ status: 'baixado' }).eq('id', item.id).then(() => {
+    portalAction({ action: 'update_flyer_item', item_id: item.id, status: 'baixado' }).then(() => {
       setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'baixado' } : i));
     });
   };

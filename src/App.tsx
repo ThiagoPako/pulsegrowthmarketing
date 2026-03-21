@@ -61,6 +61,7 @@ const AutomationFlows = lazy(() => import("@/pages/AutomationFlows"));
 const FlyerTemplates = lazy(() => import("@/pages/FlyerTemplates"));
 const PortalVideosAdmin = lazy(() => import("@/pages/PortalVideosAdmin"));
 const ClientRelationship = lazy(() => import("@/pages/ClientRelationship"));
+const LandingPage = lazy(() => import("@/pages/LandingPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {

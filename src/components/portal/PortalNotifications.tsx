@@ -22,9 +22,10 @@ interface Props {
   clientColor: string;
   onSelectContent?: (contentId: string) => void;
   onOpenScript?: (scriptId: string) => void;
+  onNavigateTab?: (tab: string) => void;
 }
 
-export default function PortalNotifications({ clientId, clientColor, onSelectContent, onOpenScript }: Props) {
+export default function PortalNotifications({ clientId, clientColor, onSelectContent, onOpenScript, onNavigateTab }: Props) {
   const [notifications, setNotifications] = useState<PortalNotification[]>([]);
   const [open, setOpen] = useState(false);
 
@@ -35,9 +36,9 @@ export default function PortalNotifications({ clientId, clientColor, onSelectCon
 
   useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
 
-  // Poll for new notifications every 30s
+  // Poll for new notifications every 10s for near real-time feel
   useEffect(() => {
-    const interval = setInterval(fetchNotifications, 30000);
+    const interval = setInterval(fetchNotifications, 10000);
     return () => clearInterval(interval);
   }, [fetchNotifications]);
 
@@ -51,9 +52,10 @@ export default function PortalNotifications({ clientId, clientColor, onSelectCon
     setOpen(false);
     if (n.link_content_id && onSelectContent) {
       onSelectContent(n.link_content_id);
-    }
-    if (n.link_script_id && onOpenScript) {
+    } else if (n.link_script_id && onOpenScript) {
       onOpenScript(n.link_script_id);
+    } else if (n.type === 'recording_approved' || n.type === 'recording_rejected' || n.type === 'recording_update') {
+      onNavigateTab?.('agenda');
     }
   };
 

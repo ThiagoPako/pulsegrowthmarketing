@@ -568,6 +568,7 @@ export default function ClientPortal() {
               onOpenScript={() => {
                 setActiveTab('criativa');
               }}
+              onNavigateTab={(tab) => setActiveTab(tab as TabView)}
             />
             <PortalTutorial clientColor={clientColor} />
             {isTeamMember && (

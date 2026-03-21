@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { portalAction } from '@/lib/portalApi';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Volume2, VolumeX, Sparkles } from 'lucide-react';
+import { X, Volume2, VolumeX, Sparkles, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface PortalVideo {
@@ -11,6 +11,22 @@ interface PortalVideo {
   description: string | null;
   video_url: string;
   is_active: boolean;
+}
+
+const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
+const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
+
+async function resolveVideoUrl(url: string): Promise<string> {
+  if (!url.startsWith(VPS_UPLOADS_URL)) return url;
+  const response = await fetch(PORTAL_MEDIA_PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  });
+  if (!response.ok) throw new Error(`Proxy error ${response.status}`);
+  const blob = await response.blob();
+  if (!blob.size) throw new Error('Video empty');
+  return URL.createObjectURL(blob);
 }
 
 const PARTICLE_COUNT = 30;
@@ -75,11 +91,23 @@ export default function PortalWelcomeOverlay({ clientId }: { clientId: string })
   const [phase, setPhase] = useState<'idle' | 'animation' | 'video' | 'done'>('idle');
   const [muted, setMuted] = useState(false);
   const [videoType, setVideoType] = useState<'welcome' | 'news'>('welcome');
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     checkForVideos();
   }, [clientId]);
+
+  // Resolve video URL through proxy when video is set
+  useEffect(() => {
+    if (!video) return;
+    let cancelled = false;
+    setResolvedUrl(null);
+    resolveVideoUrl(video.video_url)
+      .then(url => { if (!cancelled) setResolvedUrl(url); })
+      .catch(err => console.error('[WelcomeOverlay] proxy error:', err));
+    return () => { cancelled = true; };
+  }, [video]);
 
   const checkForVideos = async () => {
     const result = await portalAction({ action: 'get_portal_videos', client_id: clientId });
@@ -228,16 +256,20 @@ export default function PortalWelcomeOverlay({ clientId }: { clientId: string })
               </div>
 
               {/* Video player */}
-              <div className="aspect-video bg-black">
-                <video
-                  ref={videoRef}
-                  src={video.video_url}
-                  className="w-full h-full object-contain"
-                  autoPlay
-                  playsInline
-                  muted={muted}
-                  onEnded={handleVideoEnd}
-                />
+              <div className="aspect-video bg-black flex items-center justify-center">
+                {!resolvedUrl ? (
+                  <Loader2 className="h-8 w-8 text-white/60 animate-spin" />
+                ) : (
+                  <video
+                    ref={videoRef}
+                    src={resolvedUrl}
+                    className="w-full h-full object-contain"
+                    autoPlay
+                    playsInline
+                    muted={muted}
+                    onEnded={handleVideoEnd}
+                  />
+                )}
               </div>
 
               {video.description && (

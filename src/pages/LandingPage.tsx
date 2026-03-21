@@ -626,12 +626,13 @@ function Servicos() {
                 <motion.div
                   whileHover={{ rotate: [0, -10, 10, 0] }}
                   transition={{ duration: 0.5 }}
-                  className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-5 group-hover:bg-primary/15 transition-colors"
+                  className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-primary/10 flex items-center justify-center mb-3 sm:mb-5 group-hover:bg-primary/15 transition-colors"
                 >
-                  <s.icon size={24} className="text-primary" />
+                  <s.icon size={20} className="text-primary sm:hidden" />
+                  <s.icon size={24} className="text-primary hidden sm:block" />
                 </motion.div>
-                <h3 className="font-display text-lg font-bold text-foreground">{s.title}</h3>
-                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{s.desc}</p>
+                <h3 className="font-display text-sm sm:text-lg font-bold text-foreground">{s.title}</h3>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1.5 sm:mt-2 leading-relaxed line-clamp-3 sm:line-clamp-none">{s.desc}</p>
               </div>
             </motion.div>
           ))}

@@ -161,15 +161,11 @@ export default function EndomarketingCalendar() {
                         <div className="text-[9px] text-muted-foreground text-center">+{dayTasks.length - 3}</div>
                       )}
                     </div>
-                    {/* Today rocket indicator */}
+                    {/* Today indicator */}
                     {isToday && hasTasks && (
-                      <motion.div
-                        animate={{ y: [0, -2, 0] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                        className="hidden sm:block mt-0.5"
-                      >
-                        <Rocket size={8} className="text-primary -rotate-45 mx-auto" />
-                      </motion.div>
+                      <div className="hidden sm:block mt-0.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary mx-auto" />
+                      </div>
                     )}
                   </motion.div>
                 );

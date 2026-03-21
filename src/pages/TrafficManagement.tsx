@@ -268,16 +268,17 @@ export default function TrafficManagement() {
             {filteredCreatives.map(creative => {
               const clientObj = getClientObj(creative.client_id);
               const isInCampaign = creativesInCampaign.has(creative.id);
-              const typeConfig = CONTENT_TYPE_CONFIG[creative.format_type] || CONTENT_TYPE_CONFIG.criativo;
+              const typeConfig = CONTENT_TYPE_CONFIG.criativo;
               const Icon = typeConfig.icon;
 
               return (
                 <div key={creative.id} className="glass-card p-4 flex flex-col gap-3" style={{ borderLeftWidth: 4, borderLeftColor: clientObj ? `hsl(${clientObj.color})` : undefined }}>
-                  {/* Preview */}
-                  {(creative.mockup_url || creative.attachment_url) && (
-                    <div className="relative h-32 rounded-lg overflow-hidden bg-muted/30">
-                      <img src={creative.mockup_url || creative.attachment_url || ''} alt={creative.title} className="w-full h-full object-cover" />
-                    </div>
+                  {/* Preview link */}
+                  {creative.edited_video_link && (
+                    <a href={creative.edited_video_link} target="_blank" rel="noopener noreferrer" className="relative h-32 rounded-lg overflow-hidden bg-muted/30 flex items-center justify-center border border-border hover:border-primary/40 transition-colors">
+                      <Play size={24} className="text-primary" />
+                      <span className="text-xs text-muted-foreground ml-1.5">Ver criativo</span>
+                    </a>
                   )}
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
@@ -288,15 +289,18 @@ export default function TrafficManagement() {
                       <p className="text-[11px] text-muted-foreground truncate ml-6">
                         {getClientName(creative.client_id)} · <Icon size={10} className={`inline ${typeConfig.color}`} /> {typeConfig.label}
                       </p>
+                      <p className="text-[10px] text-muted-foreground ml-6 mt-0.5">
+                        Etapa: <span className="font-medium text-foreground">{creative.kanban_column}</span>
+                      </p>
                     </div>
                     {isInCampaign && (
                       <Badge className="text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/20">Em Campanha</Badge>
                     )}
                   </div>
                   <div className="flex items-center gap-1 mt-auto pt-2 border-t border-border">
-                    {creative.client_approved_at && (
+                    {creative.approved_at && (
                       <span className="text-[10px] text-muted-foreground">
-                        Aprovado em {format(new Date(creative.client_approved_at), "dd/MM/yy", { locale: pt })}
+                        Aprovado em {format(new Date(creative.approved_at), "dd/MM/yy", { locale: pt })}
                       </span>
                     )}
                     <Button variant="outline" size="sm" className="ml-auto gap-1 text-xs" onClick={() => handleCreateFromCreative(creative)} disabled={isInCampaign}>

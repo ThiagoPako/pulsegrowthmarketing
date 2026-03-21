@@ -410,18 +410,24 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
 
   /* ── Actions ── */
   const handleConfirm = async (rec: Recording) => {
-    const { data } = await invokeVpsFunction('portal-recordings', { body: { action: 'confirm', client_id: clientId, recording_id: rec.id } });
-    if (data?.success) { toast.success('✅ Gravação confirmada!'); await loadRecordings(); }
-    else toast.error('Erro ao confirmar');
+    const { data, error } = await invokeVpsFunction('portal-recordings', { body: { action: 'confirm', client_id: clientId, recording_id: rec.id } });
+    if (data?.success) {
+      toast.success('✅ Gravação confirmada!');
+      await loadRecordings();
+      return;
+    }
+    toast.error(error?.message || data?.error || 'Erro ao confirmar');
   };
 
   const handleCancel = async (rec: Recording) => {
     setCancelling(true);
-    const { data } = await invokeVpsFunction('portal-recordings', { body: { action: 'cancel', client_id: clientId, recording_id: rec.id } });
+    const { data, error } = await invokeVpsFunction('portal-recordings', { body: { action: 'cancel', client_id: clientId, recording_id: rec.id } });
     if (data?.success) {
       setCancelFlow({ step: 'result', rec, backupAvailable: data.backup_available, backupSlot: data.backup_slot, nextFixedDate: data.next_fixed_date, alternativeVideomakers: data.alternative_videomakers || [] });
       await loadRecordings();
-    } else toast.error('Erro ao cancelar');
+    } else {
+      toast.error(error?.message || data?.error || 'Erro ao cancelar');
+    }
     setCancelling(false);
   };
 
@@ -432,42 +438,79 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     setAcceptingBackup(true);
     const body: any = { action: 'accept_backup', client_id: clientId, backup_date: date, backup_time: time };
     if (altVmId) body.videomaker_id = altVmId;
-    const { data } = await invokeVpsFunction('portal-recordings', { body });
-    if (data?.success) { toast.success('🚀 Gravação remarcada!'); setCancelFlow(null); setSelectedAltVm(null); setSelectedAltTime(''); await loadRecordings(); }
-    else toast.error(data?.error || 'Erro ao remarcar');
+    const { data, error } = await invokeVpsFunction('portal-recordings', { body });
+    if (data?.success) {
+      toast.success('🚀 Gravação remarcada!');
+      setCancelFlow(null);
+      setSelectedAltVm(null);
+      setSelectedAltTime('');
+      await loadRecordings();
+    } else {
+      toast.error(error?.message || data?.error || 'Erro ao remarcar');
+    }
     setAcceptingBackup(false);
   };
 
   const handleCheckAvailability = async (date: string) => {
-    setCheckingAvailability(true); setAvailableSlots([]); setSelectedNewTime(''); setSelectedNewDate(date);
-    const { data } = await invokeVpsFunction('portal-recordings', { body: { action: 'check_availability', client_id: clientId, new_date: date } });
-    if (data?.available_slots) { setAvailableSlots(data.available_slots); setVmName(data.videomaker_name || ''); }
-    else toast.error(data?.error || 'Erro ao verificar');
+    setCheckingAvailability(true);
+    setAvailableSlots([]);
+    setSelectedNewTime('');
+    setSelectedNewDate(date);
+    const { data, error } = await invokeVpsFunction('portal-recordings', { body: { action: 'check_availability', client_id: clientId, new_date: date } });
+    if (data?.available_slots) {
+      setAvailableSlots(data.available_slots);
+      setVmName(data.videomaker_name || '');
+    } else {
+      toast.error(error?.message || data?.error || 'Erro ao verificar');
+    }
     setCheckingAvailability(false);
   };
 
   const handleExploreSlots = async (date: string) => {
-    setExploringSlots(true); setExploreSlotsDate(date); setExploreSlotsData([]);
-    const { data } = await invokeVpsFunction('portal-recordings', { body: { action: 'check_availability', client_id: clientId, new_date: date } });
-    if (data?.available_slots) { setExploreSlotsData(data.available_slots); setExploreVmName(data.videomaker_name || ''); }
+    setExploringSlots(true);
+    setExploreSlotsDate(date);
+    setExploreSlotsData([]);
+    const { data, error } = await invokeVpsFunction('portal-recordings', { body: { action: 'check_availability', client_id: clientId, new_date: date } });
+    if (data?.available_slots) {
+      setExploreSlotsData(data.available_slots);
+      setExploreVmName(data.videomaker_name || '');
+    } else {
+      toast.error(error?.message || data?.error || 'Erro ao verificar horários');
+    }
     setExploringSlots(false);
   };
 
   const handleReschedule = async () => {
     if (!rescheduleRec || !selectedNewDate || !selectedNewTime) return;
     setRescheduling(true);
-    const { data } = await invokeVpsFunction('portal-recordings', { body: { action: 'reschedule', client_id: clientId, recording_id: rescheduleRec.id, new_date: selectedNewDate, new_time: selectedNewTime } });
-    if (data?.success) { toast.success('🚀 Gravação reagendada!'); setRescheduleRec(null); await loadRecordings(); }
-    else toast.error(data?.error || 'Erro ao reagendar');
+    const { data, error } = await invokeVpsFunction('portal-recordings', { body: { action: 'reschedule', client_id: clientId, recording_id: rescheduleRec.id, new_date: selectedNewDate, new_time: selectedNewTime } });
+    if (data?.success) {
+      toast.success('🚀 Gravação reagendada!');
+      setRescheduleRec(null);
+      await loadRecordings();
+    } else {
+      toast.error(error?.message || data?.error || 'Erro ao reagendar');
+    }
     setRescheduling(false);
   };
 
   const handleSendSpecialRequest = async () => {
-    if (!specialDate || !specialComment.trim()) { toast.error('Preencha data e comentário'); return; }
+    if (!specialDate || !specialComment.trim()) {
+      toast.error('Preencha data e comentário');
+      return;
+    }
     setSendingSpecial(true);
-    const { data } = await invokeVpsFunction('portal-recordings', { body: { action: 'request_special', client_id: clientId, requested_date: specialDate, requested_time: specialTime || null, comment: specialComment } });
-    if (data?.success) { toast.success('📹 Solicitação enviada!'); setShowSpecialRequest(false); setSpecialDate(''); setSpecialTime(''); setSpecialComment(''); await loadRecordings(); }
-    else toast.error(data?.error || 'Erro ao enviar');
+    const { data, error } = await invokeVpsFunction('portal-recordings', { body: { action: 'request_special', client_id: clientId, requested_date: specialDate, requested_time: specialTime || null, comment: specialComment } });
+    if (data?.success) {
+      toast.success('📹 Solicitação enviada!');
+      setShowSpecialRequest(false);
+      setSpecialDate('');
+      setSpecialTime('');
+      setSpecialComment('');
+      await loadRecordings();
+    } else {
+      toast.error(error?.message || data?.error || 'Erro ao enviar');
+    }
     setSendingSpecial(false);
   };
 
@@ -610,7 +653,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
       <div className="grid grid-cols-1 lg:grid-cols-[1fr,380px] gap-4 sm:gap-6">
         {/* Calendar Grid */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-          className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-3 sm:p-6 relative overflow-hidden">
+          className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-3 sm:p-6 relative overflow-visible">
           <div className="flex items-center justify-between mb-4 sm:mb-6">
             <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1.5 sm:p-2.5 rounded-xl hover:bg-white/10 transition-colors">
               <ChevronLeft size={16} className="sm:w-[18px] sm:h-[18px]" />
@@ -636,7 +679,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
             })}
           </div>
 
-          <div className="grid grid-cols-7 gap-1 sm:gap-2">
+          <div className="grid grid-cols-7 gap-1 sm:gap-2 relative z-10 overflow-visible">
             {Array.from({ length: startPad }).map((_, i) => <div key={`pad-${i}`} className="aspect-square" />)}
             {daysInMonth.map((day, idx) => {
               const dateStr = format(day, 'yyyy-MM-dd');
@@ -650,14 +693,23 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
               const isPast = isBefore(day, new Date()) && !isToday;
               const isHovered = hoveredDay === dateStr;
               const dayStyle = getDayStyle(dateStr);
+              const rowIndex = Math.floor((startPad + idx) / 7);
+              const columnIndex = (startPad + idx) % 7;
+              const tooltipOnTop = rowIndex >= 3;
+              const tooltipVerticalClass = tooltipOnTop ? 'bottom-full mb-2' : 'top-full mt-2';
+              const tooltipHorizontalClass = columnIndex <= 1
+                ? 'left-0'
+                : columnIndex >= 5
+                  ? 'right-0'
+                  : 'left-1/2 -translate-x-1/2';
 
               const uniqueEvents = dayEvents.reduce((acc: DayEvent[], e) => {
                 if (!acc.find(a => a.icon === e.icon)) acc.push(e);
                 return acc;
               }, []).slice(0, 3);
 
-              const glowColor = hasCancelled ? 'rgba(239,68,68,0.4)' 
-                : hasUpcoming ? `hsl(25 100% 50% / 0.4)` 
+              const glowColor = hasCancelled ? 'rgba(239,68,68,0.4)'
+                : hasUpcoming ? `hsl(25 100% 50% / 0.4)`
                 : dayEvents.some(e => e.icon === '✅') ? 'rgba(52,211,153,0.4)'
                 : dayEvents.some(e => e.icon === '📱') ? 'rgba(236,72,153,0.4)'
                 : dayEvents.some(e => e.icon === '⏰') ? 'rgba(249,115,22,0.4)'
@@ -670,23 +722,23 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                   transition={{ delay: idx * 0.006, type: 'spring', stiffness: 300, damping: 25 }}
                   onClick={() => setSelectedDay(day)}
                   onMouseEnter={() => setHoveredDay(dateStr)} onMouseLeave={() => setHoveredDay(null)}
-                  whileHover={!isPast ? { scale: 1.12, zIndex: 20 } : {}} whileTap={!isPast ? { scale: 0.95 } : {}}
-                  className={`aspect-square rounded-lg sm:rounded-2xl flex flex-col items-center justify-center relative transition-all duration-300 overflow-hidden
+                  whileHover={!isPast ? { scale: 1.06, zIndex: 20 } : {}} whileTap={!isPast ? { scale: 0.95 } : {}}
+                  className={`aspect-square rounded-lg sm:rounded-2xl flex flex-col items-center justify-center relative transition-all duration-300 overflow-visible
                     ${isToday && !isSelected ? 'ring-1 sm:ring-2 ring-white/30' : ''}
                     ${isPast ? 'text-white/25' : 'text-white/80'}
                     ${hasAnyEvent && !isPast ? 'text-white shadow-lg' : ''}`}
                   style={{
-                    background: isSelected ? `hsl(${clientColor} / 0.3)` 
-                      : !isPast && hasAnyEvent ? (dayStyle.bg || 'transparent') 
+                    background: isSelected ? `hsl(${clientColor} / 0.3)`
+                      : !isPast && hasAnyEvent ? (dayStyle.bg || 'transparent')
                       : isHovered && !isPast ? 'rgba(255,255,255,0.06)' : 'transparent',
-                    boxShadow: isSelected 
-                      ? `0 0 0 2px hsl(${clientColor}), 0 4px 25px hsl(${clientColor} / 0.3), 0 0 40px hsl(${clientColor} / 0.15)` 
-                      : !isPast && hasAnyEvent 
-                        ? `inset 0 0 0 1.5px ${dayStyle.border || 'transparent'}, 0 0 20px ${glowColor}` 
+                    boxShadow: isSelected
+                      ? `0 0 0 2px hsl(${clientColor}), 0 4px 25px hsl(${clientColor} / 0.3), 0 0 40px hsl(${clientColor} / 0.15)`
+                      : !isPast && hasAnyEvent
+                        ? `inset 0 0 0 1.5px ${dayStyle.border || 'transparent'}, 0 0 20px ${glowColor}`
                         : 'none',
                   }}>
                   {hasAnyEvent && !isPast && (
-                    <motion.div 
+                    <motion.div
                       className="absolute inset-0 rounded-2xl pointer-events-none"
                       animate={{ opacity: [0.3, 0.6, 0.3] }}
                       transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
@@ -707,7 +759,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                         <EventIndicator key={i} event={evt} small />
                       ))}
                       {dayEvents.length > 3 && (
-                        <motion.span 
+                        <motion.span
                           className="text-[9px] text-white/60 font-extrabold ml-0.5 bg-white/10 rounded-full w-4 h-4 flex items-center justify-center"
                           animate={{ scale: [1, 1.1, 1] }}
                           transition={{ repeat: Infinity, duration: 2 }}
@@ -716,19 +768,20 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                     </motion.div>
                   )}
                   {isToday && !hasAnyEvent && (
-                    <motion.div className="w-1.5 h-1.5 rounded-full mt-1 relative z-10" 
+                    <motion.div className="w-1.5 h-1.5 rounded-full mt-1 relative z-10"
                       style={{ background: `hsl(${clientColor})` }}
-                      animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }} 
+                      animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }}
                       transition={{ repeat: Infinity, duration: 2 }} />
                   )}
                   <AnimatePresence>
                     {isHovered && hasAnyEvent && !isSelected && (
                       <motion.div initial={{ opacity: 0, y: 5, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 5, scale: 0.9 }}
-                        className="hidden sm:block absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full z-30 pointer-events-none">
-                        <div className="bg-[#12122a]/95 backdrop-blur-xl border border-white/15 rounded-xl px-4 py-2.5 shadow-2xl whitespace-nowrap space-y-1">
+                        className={`hidden sm:block absolute ${tooltipVerticalClass} ${tooltipHorizontalClass} z-40 pointer-events-none`}>
+                        <div className="bg-[#12122a]/95 backdrop-blur-xl border border-white/15 rounded-xl px-4 py-2.5 shadow-2xl max-w-[220px] sm:max-w-[280px] whitespace-normal text-left space-y-1">
                           {dayEvents.slice(0, 5).map((ev, i) => (
-                            <p key={i} className={`text-xs font-bold flex items-center gap-1.5 ${ev.color}`}>
-                              <span className="text-sm">{ev.icon}</span> {ev.label}{ev.time ? ` • ${ev.time}` : ''}
+                            <p key={i} className={`text-xs font-bold flex items-start gap-1.5 ${ev.color}`}>
+                              <span className="text-sm leading-none mt-0.5">{ev.icon}</span>
+                              <span>{ev.label}{ev.time ? ` • ${ev.time}` : ''}</span>
                             </p>
                           ))}
                           {dayEvents.length > 5 && <p className="text-[10px] text-white/40 font-medium">+{dayEvents.length - 5} mais</p>}

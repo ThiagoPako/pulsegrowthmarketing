@@ -656,15 +656,21 @@ app.post('/api/client-portal-auth', async (req, res) => {
       if (!client_id && !slug) return res.status(400).json({ error: 'client_id or slug required' });
       let query, params;
       if (client_id) {
-        query = `SELECT id, company_name, color, logo_url, client_login, client_password_hash, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics FROM clients WHERE id = $1`;
+        query = `SELECT id, company_name, color, logo_url, client_login, client_password_hash, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city FROM clients WHERE id = $1`;
         params = [client_id];
       } else {
-        query = `SELECT id, company_name, color, logo_url, client_login, client_password_hash, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics FROM clients WHERE LOWER(REPLACE(company_name, ' ', '-')) = LOWER($1)`;
-        params = [slug.replace(/-/g, ' ')];
+        query = `
+          SELECT id, company_name, color, logo_url, client_login, client_password_hash, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city
+          FROM clients
+          WHERE trim(both '-' from regexp_replace(lower(trim(company_name)), '\\s+', '-', 'g')) = trim(both '-' from regexp_replace(lower(trim($1)), '\\s+', '-', 'g'))
+             OR lower(trim(company_name)) = lower(trim(replace($1, '-', ' ')))
+          LIMIT 1
+        `;
+        params = [slug];
       }
       const { rows: [data] } = await pool.query(query, params);
       if (!data) return res.status(404).json({ error: 'Cliente não encontrado' });
-      return res.json({ id: data.id, company_name: data.company_name, color: data.color, logo_url: data.logo_url, has_credentials: !!(data.client_login && data.client_password_hash), weekly_reels: data.weekly_reels, weekly_creatives: data.weekly_creatives, weekly_stories: data.weekly_stories, monthly_recordings: data.monthly_recordings, plan_id: data.plan_id, show_metrics: data.show_metrics });
+      return res.json({ id: data.id, company_name: data.company_name, color: data.color, logo_url: data.logo_url, has_credentials: !!(data.client_login && data.client_password_hash), weekly_reels: data.weekly_reels, weekly_creatives: data.weekly_creatives, weekly_stories: data.weekly_stories, monthly_recordings: data.monthly_recordings, plan_id: data.plan_id, show_metrics: data.show_metrics, has_vehicle_flyer: data.has_vehicle_flyer, niche: data.niche, whatsapp: data.whatsapp, city: data.city });
     }
 
     if (action === 'get_contents') {

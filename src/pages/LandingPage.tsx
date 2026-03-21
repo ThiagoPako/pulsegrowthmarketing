@@ -246,26 +246,33 @@ function Planos() {
     {
       name: 'Starter',
       subtitle: 'Para quem está começando no digital',
-      features: ['2 criativos por semana', '4 artes para feed', 'Social media dedicado', 'Calendário editorial'],
+      features: ['2 criativos/mês', '4 artes para feed/mês', 'Tráfego pago', 'Social media dedicado', 'Calendário editorial'],
       popular: false,
     },
     {
       name: 'Boost',
       subtitle: 'Presença semanal estratégica',
-      features: ['4 reels por semana', '2 criativos por semana', '3 gravações/mês', 'Social media + designer', 'Conteúdo extra incluso'],
+      features: ['4 reels/mês', '2 criativos/mês', 'Até 3 gravações/mês', 'Tráfego pago', 'Social media + designer', 'Conteúdo extra incluso'],
       popular: false,
     },
     {
       name: 'Premium',
       subtitle: 'O mais escolhido',
-      features: ['8 reels por semana', '3 criativos por semana', '20 stories/mês', '4 artes para feed', '4 gravações/mês', 'Social media + designer dedicado', 'Assessoria comercial', 'Conteúdo extra incluso'],
+      features: ['8 reels/mês', '3 criativos/mês', '20 stories/mês', '4 artes para feed/mês', '4 gravações/mês', 'Tráfego pago', 'Social media + designer dedicado', 'Assessoria comercial', 'Conteúdo extra incluso'],
       popular: true,
     },
     {
       name: 'Elite',
       subtitle: 'Para dominar e vender',
-      features: ['12 reels por semana', '4 criativos por semana', '40 stories/mês', '4 artes para feed', '5 gravações/mês', 'Social media + designer exclusivo', 'Assessoria comercial completa', 'Treinamento da equipe de vendas', 'Conteúdo extra incluso', 'Portal do cliente'],
+      features: ['12 reels/mês', '4 criativos/mês', '40 stories/mês', '4 artes para feed/mês', '5 gravações/mês', 'Tráfego pago', 'Social media + designer exclusivo', 'Assessoria comercial completa', 'Treinamento da equipe de vendas', 'Conteúdo extra incluso', 'Portal do cliente'],
       popular: false,
+    },
+    {
+      name: 'Endomarketing',
+      subtitle: '🆕 Novidade — Presença diária com apresentadora',
+      features: ['Stories diários com apresentadora', 'Gravação presencial na empresa', 'Edição profissional diária', 'Postagem direta no perfil', 'Conteúdo humanizado e autêntico', 'Aumento de engajamento orgânico'],
+      popular: false,
+      isNew: true,
     },
   ];
 

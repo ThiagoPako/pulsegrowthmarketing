@@ -445,10 +445,10 @@ export default function EditorDashboard() {
 
           {sortedFiltered.length === 0 ? (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              className="bg-card border border-border rounded-xl p-8 text-center">
-              <RocketMascot size={56} className="mx-auto mb-3" />
-              <p className="text-foreground font-semibold">Fila limpa!</p>
-              <p className="text-sm text-muted-foreground">Todos os conteúdos foram editados</p>
+              className="bg-card border border-border rounded-xl p-6 text-center">
+              <Check size={28} className="mx-auto mb-2 text-success/40" />
+              <p className="text-foreground font-semibold text-sm">Fila limpa!</p>
+              <p className="text-xs text-muted-foreground">Todos os conteúdos foram editados</p>
             </motion.div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">

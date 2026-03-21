@@ -49,11 +49,13 @@ const ROLE_BORDER: Record<string, string> = {
 };
 
 export default function TeamPerformanceWidget() {
-  const { users, recordings, clients } = useApp();
+  const { users, recordings, clients, scripts } = useApp();
   const isMobile = useIsMobile();
   const [deliveryRecords, setDeliveryRecords] = useState<any[]>([]);
   const [contentTasks, setContentTasks] = useState<any[]>([]);
   const [designTasks, setDesignTasks] = useState<any[]>([]);
+  const [smDeliveries, setSmDeliveries] = useState<any[]>([]);
+  const [partnerTasks, setPartnerTasks] = useState<any[]>([]);
   const [expandedRole, setExpandedRole] = useState<string | null>(null);
 
   useEffect(() => {
@@ -63,10 +65,14 @@ export default function TeamPerformanceWidget() {
       supabase.from('delivery_records').select('*').gte('date', monthStart).lte('date', monthEnd),
       supabase.from('content_tasks').select('*'),
       supabase.from('design_tasks').select('*'),
-    ]).then(([dr, ct, dt]) => {
+      supabase.from('social_media_deliveries').select('*').gte('delivered_at', monthStart).lte('delivered_at', monthEnd),
+      supabase.from('endomarketing_partner_tasks').select('*').gte('date', monthStart).lte('date', monthEnd),
+    ]).then(([dr, ct, dt, smd, pt]) => {
       if (dr.data) setDeliveryRecords(dr.data);
       if (ct.data) setContentTasks(ct.data);
       if (dt.data) setDesignTasks(dt.data);
+      if (smd.data) setSmDeliveries(smd.data);
+      if (pt.data) setPartnerTasks(pt.data);
     });
   }, []);
 
@@ -83,62 +89,105 @@ export default function TeamPerformanceWidget() {
       const metrics: { label: string; value: number }[] = [];
 
       if (user.role === 'videomaker') {
+        // Videomaker: gravação exige deslocamento, setup, tempo no local
         const vmDeliveries = deliveryRecords.filter(r => r.videomaker_id === user.id);
         const reels = vmDeliveries.reduce((a, r) => a + (r.reels_produced || 0), 0);
         const creatives = vmDeliveries.reduce((a, r) => a + (r.creatives_produced || 0), 0);
         const stories = vmDeliveries.reduce((a, r) => a + (r.stories_produced || 0), 0);
         const extras = vmDeliveries.reduce((a, r) => a + (r.extras_produced || 0), 0);
-        score = reels * 10 + creatives * 5 + stories * 3 + extras * 8;
+        const arts = vmDeliveries.reduce((a, r) => a + (r.arts_produced || 0), 0);
         const weekRecs = recordings.filter(r =>
           r.videomakerId === user.id &&
           isWithinInterval(parseISO(r.date), { start: weekStart, end: weekEnd })
         );
         const weekDone = weekRecs.filter(r => r.status === 'concluida').length;
+        // Pontuação por esforço: Reel (roteiro+gravação+setup) = 12pts, Criativo (setup+gravação) = 6pts
+        // Story (rápido, menor esforço) = 3pts, Extra (fora do padrão, esforço adicional) = 10pts
+        // Gravação concluída na semana = 15pts (deslocamento+tempo no local)
+        score = reels * 12 + creatives * 6 + stories * 3 + extras * 10 + arts * 4 + weekDone * 15;
         metrics.push(
           { label: 'Reels', value: reels },
           { label: 'Criativos', value: creatives },
           { label: 'Stories', value: stories },
+          { label: 'Extras', value: extras },
           { label: 'Grav. Sem.', value: weekDone },
         );
         maxScore = Math.max(score, 200);
+
       } else if (user.role === 'editor') {
+        // Editor: edição de vídeo é trabalho intenso e técnico
         const editorTasks = contentTasks.filter(t => t.assigned_to === user.id);
-        const completed = editorTasks.filter(t => ['aprovado', 'publicado', 'finalizado'].includes(t.kanban_column)).length;
-        const inProgress = editorTasks.filter(t => ['em_edicao', 'revisao', 'alteracao'].includes(t.kanban_column)).length;
-        const total = editorTasks.length;
-        score = completed * 10 + inProgress * 3;
+        const approved = editorTasks.filter(t => ['aprovado', 'publicado', 'finalizado'].includes(t.kanban_column)).length;
+        const inRevision = editorTasks.filter(t => t.kanban_column === 'revisao').length;
+        const inEditing = editorTasks.filter(t => t.kanban_column === 'em_edicao').length;
+        const alterations = editorTasks.filter(t => t.kanban_column === 'alteracao').length;
+        const priorityTasks = editorTasks.filter(t => t.editing_priority === true).length;
+        // Aprovado/finalizado (ciclo completo) = 15pts, Em edição (esforço ativo) = 5pts
+        // Revisão (aguardando feedback) = 3pts, Alteração (retrabalho) = 8pts (exige atenção extra)
+        // Tarefa prioritária = bônus +5pts por tarefa
+        score = approved * 15 + inEditing * 5 + inRevision * 3 + alterations * 8 + priorityTasks * 5;
         metrics.push(
-          { label: 'Finalizados', value: completed },
-          { label: 'Em progresso', value: inProgress },
-          { label: 'Total', value: total },
+          { label: 'Aprovados', value: approved },
+          { label: 'Editando', value: inEditing },
+          { label: 'Alterações', value: alterations },
+          { label: 'Prioritários', value: priorityTasks },
         );
-        maxScore = Math.max(score, 100);
+        maxScore = Math.max(score, 150);
+
       } else if (user.role === 'designer' || user.role === 'fotografo') {
+        // Designer/Fotógrafo: criação visual exige conceito, execução e revisões
         const dTasks = designTasks.filter(t => t.assigned_to === user.id);
         const completed = dTasks.filter(t => ['concluida', 'aprovada_cliente'].includes(t.kanban_column)).length;
         const inProgress = dTasks.filter(t => ['em_andamento', 'revisao'].includes(t.kanban_column)).length;
         const totalTime = dTasks.reduce((a, t) => a + (t.time_spent_seconds || 0), 0);
-        score = completed * 10 + inProgress * 3;
+        const totalVersions = dTasks.reduce((a, t) => a + (t.version || 1), 0);
+        const highPriority = dTasks.filter(t => t.priority === 'alta' || t.priority === 'urgente').length;
+        // Concluída = 12pts, Em progresso = 4pts, Cada hora trabalhada = 2pts
+        // Versões extras (revisões do cliente) = 3pts por versão, Prioridade alta/urgente = bônus +6pts
+        score = completed * 12 + inProgress * 4 + Math.round(totalTime / 3600) * 2 + totalVersions * 3 + highPriority * 6;
         metrics.push(
-          { label: 'Finalizados', value: completed },
+          { label: 'Concluídos', value: completed },
           { label: 'Em progresso', value: inProgress },
           { label: 'Tempo (h)', value: Math.round(totalTime / 3600) },
+          { label: 'Versões', value: totalVersions },
         );
-        maxScore = Math.max(score, 80);
+        maxScore = Math.max(score, 120);
+
       } else if (user.role === 'social_media') {
-        const smTasks = contentTasks.filter(t => t.created_by === user.id);
-        const published = smTasks.filter(t => t.kanban_column === 'publicado').length;
-        const managed = smTasks.length;
-        score = published * 10 + managed * 2;
+        // Social Media: gestão de conteúdo, postagem, planejamento, roteiros
+        const smCreated = contentTasks.filter(t => t.created_by === user.id);
+        const published = smCreated.filter(t => t.kanban_column === 'publicado').length;
+        const managed = smCreated.length;
+        const userDeliveries = smDeliveries.filter(d => d.created_by === user.id);
+        const posted = userDeliveries.filter(d => d.status === 'posted' || d.posted_at).length;
+        const scheduled = userDeliveries.filter(d => d.status === 'scheduled').length;
+        const scriptsCreated = scripts.filter(s => s.createdBy === user.id).length;
+        // Publicado = 10pts (resultado final), Agendado = 5pts (planejamento), Gerenciado = 2pts
+        // Postado em rede social = 8pts (execução), Roteiro criado = 6pts (esforço criativo)
+        score = published * 10 + posted * 8 + scheduled * 5 + managed * 2 + scriptsCreated * 6;
         metrics.push(
           { label: 'Publicados', value: published },
+          { label: 'Postados', value: posted },
+          { label: 'Roteiros', value: scriptsCreated },
           { label: 'Gerenciados', value: managed },
         );
-        maxScore = Math.max(score, 100);
+        maxScore = Math.max(score, 120);
+
       } else if (user.role === 'parceiro') {
-        score = 0;
-        metrics.push({ label: 'Atividades', value: 0 });
-        maxScore = 50;
+        // Parceiro: atendimentos de endomarketing exigem deslocamento e presença
+        const pTasks = partnerTasks.filter(t => t.partner_id === user.id);
+        const completed = pTasks.filter(t => t.status === 'completed' || t.completed_at).length;
+        const pending = pTasks.filter(t => t.status === 'pending' || t.status === 'scheduled').length;
+        const totalMinutes = pTasks.reduce((a, t) => a + (t.duration_minutes || 0), 0);
+        // Atendimento concluído = 15pts (deslocamento+execução), Pendente = 3pts
+        // Cada hora de atendimento = 5pts (tempo investido no local)
+        score = completed * 15 + pending * 3 + Math.round(totalMinutes / 60) * 5;
+        metrics.push(
+          { label: 'Concluídos', value: completed },
+          { label: 'Pendentes', value: pending },
+          { label: 'Horas', value: Math.round(totalMinutes / 60) },
+        );
+        maxScore = Math.max(score, 100);
       } else {
         continue;
       }
@@ -150,7 +199,7 @@ export default function TeamPerformanceWidget() {
     }
 
     return members.sort((a, b) => b.score - a.score);
-  }, [users, deliveryRecords, contentTasks, designTasks, recordings, weekStart, weekEnd]);
+  }, [users, deliveryRecords, contentTasks, designTasks, smDeliveries, partnerTasks, scripts, recordings, weekStart, weekEnd]);
 
   const roleGroups = useMemo(() => {
     const groups: Record<string, MemberPerformance[]> = {};

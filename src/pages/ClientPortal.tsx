@@ -1010,6 +1010,21 @@ export default function ClientPortal() {
                   </div>
                 )}
 
+                {/* Download button */}
+                {selectedContent.file_url && (
+                  <div>
+                    <a
+                      href={selectedContent.file_url}
+                      download
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-sm bg-white/10 hover:bg-white/15 text-white transition-all hover:scale-105 active:scale-95 border border-white/[0.08]"
+                    >
+                      <Download size={16} /> Baixar conteúdo
+                    </a>
+                  </div>
+                )}
+
                 {/* Adjustment form */}
                 <AnimatePresence>
                   {showAdjustment && (

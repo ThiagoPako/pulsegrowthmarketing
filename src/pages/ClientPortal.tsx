@@ -205,6 +205,15 @@ export default function ClientPortal() {
     }
   };
 
+  // Real-time comment polling every 5s when a content is selected
+  useEffect(() => {
+    if (!selectedContent?.id) return;
+    const interval = setInterval(() => {
+      loadComments(selectedContent.id);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [selectedContent?.id]);
+
   const handleSelectContent = (content: PortalContent) => {
     setSelectedContent(content);
     setShowAdjustment(false);
@@ -559,6 +568,7 @@ export default function ClientPortal() {
               onOpenScript={() => {
                 setActiveTab('criativa');
               }}
+              onNavigateTab={(tab) => setActiveTab(tab as TabView)}
             />
             <PortalTutorial clientColor={clientColor} />
             {isTeamMember && (

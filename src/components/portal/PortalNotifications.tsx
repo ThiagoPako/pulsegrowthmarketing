@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { portalAction } from '@/lib/portalApi';
-import { Bell, X, Film, FileText, Sparkles } from 'lucide-react';
+import { Bell, X, Film, FileText, Sparkles, Calendar, CheckCircle2, XCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -22,9 +22,10 @@ interface Props {
   clientColor: string;
   onSelectContent?: (contentId: string) => void;
   onOpenScript?: (scriptId: string) => void;
+  onNavigateTab?: (tab: string) => void;
 }
 
-export default function PortalNotifications({ clientId, clientColor, onSelectContent, onOpenScript }: Props) {
+export default function PortalNotifications({ clientId, clientColor, onSelectContent, onOpenScript, onNavigateTab }: Props) {
   const [notifications, setNotifications] = useState<PortalNotification[]>([]);
   const [open, setOpen] = useState(false);
 
@@ -35,9 +36,9 @@ export default function PortalNotifications({ clientId, clientColor, onSelectCon
 
   useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
 
-  // Poll for new notifications every 30s
+  // Poll for new notifications every 10s for near real-time feel
   useEffect(() => {
-    const interval = setInterval(fetchNotifications, 30000);
+    const interval = setInterval(fetchNotifications, 10000);
     return () => clearInterval(interval);
   }, [fetchNotifications]);
 
@@ -51,9 +52,10 @@ export default function PortalNotifications({ clientId, clientColor, onSelectCon
     setOpen(false);
     if (n.link_content_id && onSelectContent) {
       onSelectContent(n.link_content_id);
-    }
-    if (n.link_script_id && onOpenScript) {
+    } else if (n.link_script_id && onOpenScript) {
       onOpenScript(n.link_script_id);
+    } else if (n.type === 'recording_approved' || n.type === 'recording_rejected' || n.type === 'recording_update') {
+      onNavigateTab?.('agenda');
     }
   };
 
@@ -68,6 +70,9 @@ export default function PortalNotifications({ clientId, clientColor, onSelectCon
     switch (type) {
       case 'video_approval': return <Film size={14} className="text-amber-400" />;
       case 'new_script': return <FileText size={14} className="text-violet-400" />;
+      case 'recording_approved': return <CheckCircle2 size={14} className="text-emerald-400" />;
+      case 'recording_rejected': return <XCircle size={14} className="text-red-400" />;
+      case 'recording_update': return <Calendar size={14} className="text-blue-400" />;
       default: return <Sparkles size={14} className="text-white/40" />;
     }
   };

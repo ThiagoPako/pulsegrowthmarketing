@@ -1246,24 +1246,7 @@ export default function VideomakerDashboard() {
                     disabled={Array.from(new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts])).some(id => !driveLinks[id]?.trim())}
                     className="w-full gap-2 bg-gradient-to-r from-orange-600 via-red-500 to-orange-500 hover:from-orange-500 hover:via-red-400 hover:to-orange-400 text-white shadow-lg shadow-red-500/30 font-bold py-5 text-base rounded-xl relative overflow-hidden group"
                   >
-                    <motion.div 
-                      animate={{ y: [0, -4, 0], rotate: [0, -15, 0] }} 
-                      transition={{ duration: 0.8, repeat: Infinity, ease: 'easeInOut' }}
-                      className="relative"
-                    >
-                      <Rocket size={20} className="-rotate-45 relative z-10" />
-                      {/* Fire particles */}
-                      <motion.div
-                        animate={{ opacity: [0.8, 1, 0.6], scale: [1, 1.3, 0.8], y: [0, 6, 2] }}
-                        transition={{ duration: 0.4, repeat: Infinity }}
-                        className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-3 h-4 rounded-full bg-gradient-to-t from-yellow-400 via-orange-400 to-transparent blur-[2px] rotate-45"
-                      />
-                      <motion.div
-                        animate={{ opacity: [0.6, 1, 0.4], scale: [0.8, 1.1, 0.6], y: [0, 8, 4] }}
-                        transition={{ duration: 0.5, repeat: Infinity, delay: 0.15 }}
-                        className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-2 h-3 rounded-full bg-gradient-to-t from-yellow-300 to-transparent blur-[1px] rotate-45"
-                      />
-                    </motion.div>
+                    <Send size={18} />
                     Enviar para Edicao
                     {/* Button glow effect */}
                     <motion.div 

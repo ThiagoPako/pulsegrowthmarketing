@@ -642,10 +642,8 @@ export default function Dashboard() {
             <span className="text-[10px] sm:text-xs text-muted-foreground">{todayRecordings.length} gravações</span>
           </div>
           {todayRecordings.length === 0 ? (
-            <div className="py-6 text-center text-muted-foreground text-xs sm:text-sm flex flex-col items-center gap-2">
-              <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 2, repeat: Infinity }}>
-                <Rocket size={28} className="text-muted-foreground/40" />
-              </motion.div>
+            <div className="py-4 text-center text-muted-foreground text-xs sm:text-sm flex flex-col items-center gap-2">
+              <Video size={24} className="text-muted-foreground/30" />
               Nenhuma gravação hoje
             </div>
           ) : (

@@ -879,8 +879,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   };
 
   const handleDeleteItem = async (itemId: string) => {
-    const { error } = await supabase.from('flyer_items').delete().eq('id', itemId);
-    if (error) { toast.error('Erro ao apagar'); return; }
+    const result = await portalAction({ action: 'delete_flyer_item', item_id: itemId });
+    if (result?.error) { toast.error('Erro ao apagar'); return; }
     setItems(prev => prev.filter(i => i.id !== itemId));
     if (previewItem?.id === itemId) setPreviewItem(null);
     toast.success('Panfleto apagado!');

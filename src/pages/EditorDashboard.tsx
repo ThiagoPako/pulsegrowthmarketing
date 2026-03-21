@@ -561,9 +561,9 @@ export default function EditorDashboard() {
                   })}
                 </div>
               ) : (
-                <div className="text-center py-6">
-                  <RocketMascot size={40} className="mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">Dados insuficientes</p>
+                <div className="text-center py-4">
+                  <Timer size={24} className="mx-auto mb-2 text-muted-foreground/30" />
+                  <p className="text-xs text-muted-foreground">Dados insuficientes</p>
                 </div>
               )}
             </motion.div>

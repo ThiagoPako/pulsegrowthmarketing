@@ -44,7 +44,7 @@ function Navbar() {
               <Rocket size={18} className="text-primary-foreground" />
             </div>
             <span className="font-display font-bold text-lg text-foreground tracking-tight">Pulse</span>
-            <span className="text-xs text-muted-foreground font-medium hidden sm:inline">Growth Marketing</span>
+            <span className="text-xs text-muted-foreground font-medium hidden sm:inline">Growth Marketing de Vendas</span>
           </a>
 
           <div className="hidden md:flex items-center gap-6">

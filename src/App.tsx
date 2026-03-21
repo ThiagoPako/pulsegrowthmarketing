@@ -163,6 +163,7 @@ function AppRoutes() {
         <Route path="/panfletagem" element={<ProtectedRoute><FlyerTemplates /></ProtectedRoute>} />
         <Route path="/portal-videos" element={<ProtectedRoute><PortalVideosAdmin /></ProtectedRoute>} />
         <Route path="/relacionamento" element={<ProtectedRoute><ClientRelationship /></ProtectedRoute>} />
+        <Route path="/feedback" element={<ClientFeedback />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>

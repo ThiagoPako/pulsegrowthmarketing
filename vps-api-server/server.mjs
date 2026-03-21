@@ -320,6 +320,7 @@ async function callAi(ai, model, messages, options = {}) {
 
 // WhatsApp helper
 const WHATSAPP_API_URL = 'https://api.atendeclique.com.br/api/messages/send';
+const PORTAL_BASE_URL = 'https://pulsegrowthmarketing.lovable.app/portal';
 
 async function sendWhatsAppDirect(config, number, message, supabase, clientId, triggerType) {
   try {
@@ -1874,7 +1875,8 @@ app.post('/api/whatsapp-webhook', async (req, res) => {
     const { data: configData } = await admin.from('whatsapp_config').select('*').limit(1).single();
     if (!configData?.api_token) return res.status(400).json({ error: 'No API token' });
 
-    const templateVars = { nome_cliente: client?.company_name || '', data_gravacao: recording?.date || '', hora_gravacao: recording?.start_time || '' };
+    const portalLink = `${PORTAL_BASE_URL}/${client?.id || ''}`;
+    const templateVars = { nome_cliente: client?.company_name || '', data_gravacao: recording?.date || '', hora_gravacao: recording?.start_time || '', link_portal: portalLink };
 
     if (confirmation.type === 'confirmation') {
       if (classification === 'confirm') {
@@ -1923,7 +1925,8 @@ app.post('/api/whatsapp-confirmation-cron', async (req, res) => {
       if (!client?.whatsapp) continue;
       const phoneNumber = client.whatsapp.replace(/\D/g, '');
       if (!phoneNumber) continue;
-      const message = applyTemplate(config.msg_confirmation, { nome_cliente: client.company_name, data_gravacao: recording.date, hora_gravacao: recording.start_time, videomaker: vmNames[recording.videomaker_id] || 'Equipe' });
+      const portalLink = `${PORTAL_BASE_URL}/${client.id}`;
+      const message = applyTemplate(config.msg_confirmation, { nome_cliente: client.company_name, data_gravacao: recording.date, hora_gravacao: recording.start_time, videomaker: vmNames[recording.videomaker_id] || 'Equipe', link_portal: portalLink });
       await admin.from('whatsapp_confirmations').insert({ recording_id: recording.id, client_id: client.id, phone_number: phoneNumber, type: 'confirmation', status: 'pending', sent_at: new Date().toISOString() });
       await admin.from('recordings').update({ confirmation_status: 'aguardando' }).eq('id', recording.id);
       const result = await sendWhatsAppDirect(config, client.whatsapp, message, admin, client.id, 'auto_confirmation');
@@ -1958,7 +1961,8 @@ app.post('/api/approval-deadline-cron', async (req, res) => {
       await admin.rpc('notify_role', { _role: 'social_media', _title: 'Aprovação expirada', _message: `"${task.title}" (${client?.company_name || ''}) não foi aprovado em 6h. Movido para agendamento.`, _type: 'deadline', _link: '/entregas-social' });
 
       if (config?.integration_active && config?.api_token && client?.whatsapp) {
-        const msg = applyTemplate(config.msg_approval_expired || 'Olá, {nome_cliente}! O vídeo "{titulo}" foi encaminhado para agendamento.', { nome_cliente: client.responsible_person || client.company_name, titulo: task.title });
+        const portalLink = `${PORTAL_BASE_URL}/${task.client_id}`;
+        const msg = applyTemplate(config.msg_approval_expired || 'Olá, {nome_cliente}! O vídeo "{titulo}" foi encaminhado para agendamento.', { nome_cliente: client.responsible_person || client.company_name, titulo: task.title, link_portal: portalLink });
         await sendWhatsAppDirect(config, client.whatsapp, msg, admin, task.client_id, 'auto_approval_expired');
       }
       movedCount++;

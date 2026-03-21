@@ -92,9 +92,11 @@ export async function syncContentTaskColumnChange(
     try {
       const whatsConfig = await getWhatsAppConfig();
       if (whatsConfig?.integrationActive && whatsConfig?.autoTaskEditing && ctx.clientWhatsapp) {
+        const portalUrl = `https://pulsegrowthmarketing.lovable.app/portal/${ctx.clientId}`;
         const editingMsg = whatsConfig.msgTaskEditing
           .replace('{nome_cliente}', ctx.clientName || '')
-          .replace('{titulo}', ctx.title);
+          .replace('{titulo}', ctx.title)
+          .replace('{link_portal}', portalUrl);
 
         await sendWhatsAppMessage({
           number: ctx.clientWhatsapp,
@@ -254,11 +256,12 @@ export async function syncContentTaskColumnChange(
         let msg = whatsConfig.msgVideoApproval
           .replace('{nome_cliente}', ctx.clientName || '')
           .replace('{link_video}', portalUrl)
-          .replace('{titulo}', ctx.title);
+          .replace('{titulo}', ctx.title)
+          .replace('{link_portal}', portalUrl);
 
         // If template still has the old drive link pattern, override with portal message
         if (!msg.includes('portal') && !msg.includes('Área do Cliente')) {
-          msg = `Olá, ${ctx.clientName || ''}! 😊\n\nSeu conteúdo "${ctx.title}" ficou pronto! 🎬\n\n📱 Acesse a Área do Cliente Pulse para assistir e aprovar:\n${portalUrl}\n\nEquipe Pulse Growth Marketing 🚀`;
+          msg = `Olá, ${ctx.clientName || ''}! 😊\n\nSeu conteúdo "${ctx.title}" ficou pronto! 🎬\n\n📱 Acesse sua Área do Cliente Pulse para assistir e aprovar:\n${portalUrl}\n\nEquipe Pulse Growth Marketing 🚀`;
         }
 
         await sendWhatsAppMessage({

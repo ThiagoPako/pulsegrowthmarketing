@@ -245,20 +245,26 @@ function Planos() {
   const plans = [
     {
       name: 'Starter',
-      subtitle: 'Para quem está começando',
-      features: ['4 gravações/mês', '8 reels editados', '4 artes para feed', 'Social media dedicado', 'Calendário editorial'],
+      subtitle: 'Para quem está começando no digital',
+      features: ['2 criativos por semana', '4 artes para feed', 'Social media dedicado', 'Calendário editorial'],
       popular: false,
     },
     {
-      name: 'Growth',
+      name: 'Boost',
+      subtitle: 'Presença semanal estratégica',
+      features: ['4 reels por semana', '2 criativos por semana', '3 gravações/mês', 'Social media + designer', 'Conteúdo extra incluso'],
+      popular: false,
+    },
+    {
+      name: 'Premium',
       subtitle: 'O mais escolhido',
-      features: ['8 gravações/mês', '16 reels editados', '8 artes para feed', 'Social media + designer', 'Tráfego pago incluso', 'Assessoria comercial básica', 'Relatórios mensais'],
+      features: ['8 reels por semana', '3 criativos por semana', '20 stories/mês', '4 artes para feed', '4 gravações/mês', 'Social media + designer dedicado', 'Assessoria comercial', 'Conteúdo extra incluso'],
       popular: true,
     },
     {
-      name: 'Scale',
+      name: 'Elite',
       subtitle: 'Para dominar e vender',
-      features: ['12 gravações/mês', '24 reels editados', '12 artes para feed', 'Social media + designer', 'Tráfego pago avançado', 'Assessoria comercial completa', 'Treinamento de equipe de vendas', 'Portal do cliente'],
+      features: ['12 reels por semana', '4 criativos por semana', '40 stories/mês', '4 artes para feed', '5 gravações/mês', 'Social media + designer exclusivo', 'Assessoria comercial completa', 'Treinamento da equipe de vendas', 'Conteúdo extra incluso', 'Portal do cliente'],
       popular: false,
     },
   ];
@@ -276,26 +282,26 @@ function Planos() {
           </motion.p>
         </motion.div>
 
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }} variants={staggerContainer} className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }} variants={staggerContainer} className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 max-w-6xl mx-auto">
           {plans.map((p, i) => (
-            <motion.div key={p.name} variants={fadeUp} custom={i} className={`relative p-6 rounded-2xl border transition-all duration-300 ${
+            <motion.div key={p.name} variants={fadeUp} custom={i} className={`relative p-6 rounded-2xl border transition-all duration-300 flex flex-col ${
               p.popular
                 ? 'border-primary bg-primary/[0.03] shadow-lg shadow-primary/10 scale-[1.02]'
                 : 'border-border/60 bg-background hover:border-primary/30'
             }`}>
               {p.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-primary text-primary-foreground text-xs font-bold">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-primary text-primary-foreground text-xs font-bold whitespace-nowrap">
                   Mais Popular
                 </div>
               )}
-              <div className="text-center mb-6 pt-2">
-                <h3 className="font-display text-2xl font-bold text-foreground">{p.name}</h3>
-                <p className="text-sm text-muted-foreground mt-1">{p.subtitle}</p>
+              <div className="text-center mb-5 pt-2">
+                <h3 className="font-display text-xl font-bold text-foreground">{p.name}</h3>
+                <p className="text-xs text-muted-foreground mt-1">{p.subtitle}</p>
               </div>
-              <ul className="space-y-3 mb-8">
+              <ul className="space-y-2.5 mb-6 flex-1">
                 {p.features.map(f => (
-                  <li key={f} className="flex items-center gap-2.5 text-sm text-foreground">
-                    <CheckCircle2 size={16} className="text-success shrink-0" />
+                  <li key={f} className="flex items-start gap-2 text-sm text-foreground">
+                    <CheckCircle2 size={15} className="text-success shrink-0 mt-0.5" />
                     {f}
                   </li>
                 ))}
@@ -305,11 +311,15 @@ function Planos() {
                 className={`w-full gap-2 ${p.popular ? 'bg-primary hover:bg-primary/90 text-primary-foreground' : ''}`}
                 variant={p.popular ? 'default' : 'outline'}
               >
-                Falar com consultor <ArrowRight size={14} />
+                <MessageCircle size={14} /> Solicitar proposta
               </Button>
             </motion.div>
           ))}
         </motion.div>
+
+        <motion.p initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} className="text-center text-sm text-muted-foreground mt-8">
+          Valores personalizados de acordo com a necessidade da sua empresa. <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer" className="text-primary font-semibold hover:underline">Fale conosco →</a>
+        </motion.p>
       </div>
     </section>
   );

@@ -611,7 +611,7 @@ function Servicos() {
           </motion.p>
         </motion.div>
 
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-40px' }} variants={staggerContainer} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-30px' }} variants={staggerContainer} className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
           {services.map((s, i) => (
             <motion.div
               key={s.title}
@@ -619,7 +619,7 @@ function Servicos() {
               custom={i}
               whileHover={{ y: -6, scale: 1.02 }}
               transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-              className="group p-7 rounded-2xl border border-border/60 bg-card hover:border-primary/40 hover:shadow-xl hover:shadow-primary/8 transition-all duration-300 relative overflow-hidden"
+              className="group p-4 sm:p-7 rounded-xl sm:rounded-2xl border border-border/60 bg-card hover:border-primary/40 hover:shadow-xl hover:shadow-primary/8 transition-all duration-300 relative overflow-hidden"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.02] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
               <div className="relative z-10">

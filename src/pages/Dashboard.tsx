@@ -35,14 +35,14 @@ interface LiveEditorTask {
 const SCORE_WEIGHTS = { reel: 10, criativo: 5, story: 3, arte: 2, extra: 8 };
 const BAR_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
 
-/* Floating rocket mascot */
-const FloatingRocket = ({ className = '', size = 20 }: { className?: string; size?: number }) => (
+/* Subtle pulsing icon — professional, not childish */
+const PulseIcon = ({ icon: Icon, size = 16, className = '' }: { icon: any; size?: number; className?: string }) => (
   <motion.div
     className={className}
-    animate={{ y: [0, -6, 0], rotate: [0, 5, -5, 0] }}
-    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+    animate={{ opacity: [0.7, 1, 0.7] }}
+    transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
   >
-    <Rocket size={size} className="text-primary" />
+    <Icon size={size} className="text-primary" />
   </motion.div>
 );
 

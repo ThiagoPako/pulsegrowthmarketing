@@ -288,18 +288,18 @@ export default function CompanySettings() {
           size="sm"
           onClick={async () => {
             try {
-              const { data: existing } = await supabase
+              const { data: existing } = await supabaseCloud
                 .from('landing_page_settings')
                 .select('id')
                 .eq('section', 'facebook_pixel')
                 .maybeSingle();
               if (existing) {
-                await supabase
+                await supabaseCloud
                   .from('landing_page_settings')
                   .update({ title: pixelId || null, updated_at: new Date().toISOString() })
                   .eq('id', existing.id);
               } else {
-                await supabase
+                await supabaseCloud
                   .from('landing_page_settings')
                   .insert({ section: 'facebook_pixel', title: pixelId || null });
               }

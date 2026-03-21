@@ -628,7 +628,30 @@ export default function ContentKanban() {
 
   // ─── RENDER ────────────────────────────────────────────────
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Carregando...</p></div>;
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <motion.svg width={64} height={64} viewBox="0 0 64 64" fill="none"
+          animate={{ y: [0, -8, 0], rotate: [0, 5, -5, 0] }}
+          transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}>
+          <motion.ellipse cx="32" cy="58" rx="6" ry="4"
+            animate={{ ry: [4, 7, 4], opacity: [0.7, 1, 0.7] }}
+            transition={{ duration: 0.4, repeat: Infinity }}
+            fill="url(#loadFlame)" />
+          <path d="M32 8C26 8 22 18 22 32V46C22 49 26 52 32 52C38 52 42 49 42 46V32C42 18 38 8 32 8Z" fill="hsl(var(--primary))" />
+          <circle cx="32" cy="28" r="7" fill="#1a1a2e" stroke="#e0e0e0" strokeWidth="1.5" />
+          <ellipse cx="30" cy="27" rx="3" ry="3.5" fill="white" />
+          <ellipse cx="35" cy="27" rx="2.5" ry="3" fill="white" />
+          <motion.circle cx="30.5" cy="27.5" r="1.5" fill="#1a1a2e"
+            animate={{ cx: [30.5, 31.5, 30, 30.5] }} transition={{ duration: 2, repeat: Infinity }} />
+          <motion.circle cx="35" cy="27.5" r="1.2" fill="#1a1a2e"
+            animate={{ cx: [35, 35.5, 34.5, 35] }} transition={{ duration: 2, repeat: Infinity }} />
+          <path d="M22 38L16 46C16 46 18 48 22 46V38Z" fill="hsl(var(--primary))" />
+          <path d="M42 38L48 46C48 46 46 48 42 46V38Z" fill="hsl(var(--primary))" />
+          <defs><radialGradient id="loadFlame"><stop stopColor="#fbbf24" /><stop offset="1" stopColor="#ef4444" /></radialGradient></defs>
+        </motion.svg>
+        <p className="text-muted-foreground animate-pulse font-medium">Carregando pipeline...</p>
+      </div>
+    );
   }
 
   return (

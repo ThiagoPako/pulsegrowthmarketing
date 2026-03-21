@@ -792,9 +792,7 @@ export default function VideomakerDashboard() {
         {/* Performance card */}
         <div className="glass-card p-3 sm:p-5">
           <div className="flex items-center gap-2 mb-3 sm:mb-4">
-            <motion.div animate={{ scale: [1, 1.15, 1] }} transition={{ duration: 2, repeat: Infinity }}>
-              <Rocket size={16} className="text-primary -rotate-45" />
-            </motion.div>
+            <TrendingUp size={16} className="text-primary" />
             <h3 className="font-display font-semibold text-sm">Meu Desempenho</h3>
           </div>
           <div className="space-y-3 sm:space-y-4">

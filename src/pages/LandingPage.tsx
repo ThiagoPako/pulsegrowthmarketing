@@ -28,6 +28,7 @@ function Navbar() {
   const navigate = useNavigate();
   const links = [
     { label: 'Serviços', href: '#servicos' },
+    { label: 'Como Funciona', href: '#portal' },
     { label: 'Planos', href: '#planos' },
     { label: 'Cases', href: '#cases' },
     { label: 'Depoimentos', href: '#depoimentos' },

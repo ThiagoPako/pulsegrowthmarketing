@@ -195,28 +195,16 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
 
   const loadScripts = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('scripts')
-      .select('id, title, content, caption, content_format, video_type, created_at, created_by, priority, client_priority')
-      .eq('client_id', clientId)
-      .eq('is_endomarketing', false)
-      .order('created_at', { ascending: false });
-
-    if (error) { console.error('Error loading scripts for portal:', error); setLoading(false); return; }
-
-    if (data) {
-      setScripts(data as Script[]);
-      const authorIds = [...new Set(data.filter(s => s.created_by).map(s => s.created_by!))];
-      if (authorIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, name, display_name, avatar_url, job_title')
-          .in('id', authorIds);
-        if (profiles) {
-          const map: Record<string, Author> = {};
-          profiles.forEach(p => { map[p.id] = p as Author; });
-          setAuthors(map);
-        }
+    const result = await portalAction({ action: 'get_scripts', client_id: clientId });
+    
+    if (result?.error) { console.error('Error loading scripts for portal:', result.error); setLoading(false); return; }
+    
+    if (result?.scripts) {
+      setScripts(result.scripts as Script[]);
+      if (result.authors) {
+        const map: Record<string, Author> = {};
+        Object.entries(result.authors).forEach(([id, p]: [string, any]) => { map[id] = p as Author; });
+        setAuthors(map);
       }
     }
     setLoading(false);

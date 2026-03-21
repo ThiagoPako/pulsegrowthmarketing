@@ -329,7 +329,7 @@ function Hero() {
         <motion.div
           animate={{ x: [0, 30, 0], y: [0, -20, 0], scale: [1, 1.1, 1] }}
           transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute top-20 right-[10%] w-[500px] h-[500px] bg-primary/8 rounded-full blur-[100px]"
+          className="absolute top-20 right-[10%] w-[300px] h-[300px] sm:w-[500px] sm:h-[500px] bg-primary/8 rounded-full blur-[80px] sm:blur-[100px]"
         />
         <motion.div
           animate={{ x: [0, -20, 0], y: [0, 30, 0], scale: [1, 1.2, 1] }}

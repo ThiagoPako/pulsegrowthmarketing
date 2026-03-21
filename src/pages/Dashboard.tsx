@@ -685,7 +685,7 @@ export default function Dashboard() {
         {/* Videomaker progress */}
         <div className="glass-card p-3 sm:p-5">
           <div className="flex items-center gap-2 mb-3 sm:mb-4">
-            <FloatingRocket size={16} />
+            <UsersIcon size={16} className="text-primary" />
             <h3 className="font-display font-semibold text-xs sm:text-sm">Progresso do Time</h3>
           </div>
           {videomakerStats.length === 0 ? (

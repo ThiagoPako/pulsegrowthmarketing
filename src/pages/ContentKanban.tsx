@@ -698,9 +698,12 @@ export default function ContentKanban() {
               ))}
             </SelectContent>
           </Select>
-          <Button size="sm" onClick={() => openNew()} className="gap-1.5 rounded-xl h-9 px-4 font-semibold shadow-sm">
-            <Plus size={14} /> Novo Conteúdo
-          </Button>
+          <motion.div whileTap={{ scale: 0.95 }} whileHover={{ scale: 1.03 }}>
+            <Button size="sm" onClick={() => openNew()}
+              className="gap-1.5 rounded-xl h-9 px-4 font-semibold shadow-md bg-gradient-to-r from-primary to-primary/80 hover:shadow-lg hover:shadow-primary/25 transition-shadow">
+              <Rocket size={14} /> Novo Conteúdo
+            </Button>
+          </motion.div>
         </div>
       </div>
 

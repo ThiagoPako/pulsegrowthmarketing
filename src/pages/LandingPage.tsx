@@ -1283,6 +1283,7 @@ function Footer() {
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-background">
+      <FacebookPixel />
       <Navbar />
       <Hero />
       <Sobre />

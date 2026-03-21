@@ -349,7 +349,7 @@ function Hero() {
         backgroundSize: '40px 40px',
       }} />
 
-      <motion.div style={{ opacity }} className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+      <motion.div style={{ opacity }} className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-20">
         <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="text-center max-w-4xl mx-auto">
           {/* Badge */}
           <motion.div variants={fadeScale} custom={0}>

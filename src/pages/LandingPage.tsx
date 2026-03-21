@@ -189,7 +189,7 @@ function Sobre() {
                   <Rocket size={40} className="text-primary" />
                 </div>
                 <h3 className="font-display text-2xl font-bold text-foreground">Pulse Growth</h3>
-                <p className="text-muted-foreground mt-2">Marketing que impulsiona</p>
+                <p className="text-muted-foreground mt-2">Marketing de vendas completo</p>
               </div>
             </div>
             <div className="absolute -bottom-4 -right-4 w-32 h-32 bg-warning/20 rounded-2xl blur-2xl" />

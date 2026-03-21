@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { portalAction } from '@/lib/portalApi';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Volume2, VolumeX, Sparkles, Loader2 } from 'lucide-react';
+import { X, Volume2, VolumeX, Sparkles, Loader2, Rocket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface PortalVideo {
@@ -86,19 +86,25 @@ function SparkleParticle({ delay }: { delay: number }) {
   );
 }
 
-export default function PortalWelcomeOverlay({ clientId }: { clientId: string }) {
+interface PortalWelcomeOverlayProps {
+  clientId: string;
+  onVideosLoaded?: (data: { hasNews: boolean; hasWelcome: boolean; isNewClient: boolean }) => void;
+}
+
+export default function PortalWelcomeOverlay({ clientId, onVideosLoaded }: PortalWelcomeOverlayProps) {
+  const [allVideos, setAllVideos] = useState<PortalVideo[]>([]);
   const [video, setVideo] = useState<PortalVideo | null>(null);
   const [phase, setPhase] = useState<'idle' | 'animation' | 'video' | 'done'>('idle');
   const [muted, setMuted] = useState(false);
   const [videoType, setVideoType] = useState<'welcome' | 'news'>('welcome');
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
+  const [isNewClient, setIsNewClient] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     checkForVideos();
   }, [clientId]);
 
-  // Resolve video URL through proxy when video is set
   useEffect(() => {
     if (!video) return;
     let cancelled = false;
@@ -111,12 +117,28 @@ export default function PortalWelcomeOverlay({ clientId }: { clientId: string })
 
   const checkForVideos = async () => {
     const result = await portalAction({ action: 'get_portal_videos', client_id: clientId });
-    if (!result?.videos?.length) return;
+    if (!result?.videos?.length) {
+      onVideosLoaded?.({ hasNews: false, hasWelcome: false, isNewClient: false });
+      return;
+    }
 
+    setAllVideos(result.videos);
     const viewedIds = new Set((result.viewed_ids || []) as string[]);
+
+    // Check if client is new (< 30 days)
+    const clientResult = await portalAction({ action: 'get_client', client_id: clientId });
+    const createdAt = clientResult?.client?.created_at;
+    const clientIsNew = createdAt ? (Date.now() - new Date(createdAt).getTime()) < 30 * 24 * 60 * 60 * 1000 : false;
+    setIsNewClient(clientIsNew);
+
+    const hasActiveNews = result.videos.some((v: any) => v.video_type === 'news' && v.is_active);
+    const hasActiveWelcome = result.videos.some((v: any) => v.video_type === 'welcome' && v.is_active);
+
+    onVideosLoaded?.({ hasNews: hasActiveNews, hasWelcome: hasActiveWelcome && clientIsNew, isNewClient: clientIsNew });
+
+    // Auto-play unseen videos
     const unseenWelcome = result.videos.find((v: any) => v.video_type === 'welcome' && !viewedIds.has(v.id));
     const unseenNews = result.videos.find((v: any) => v.video_type === 'news' && !viewedIds.has(v.id));
-
     const target = unseenWelcome || unseenNews;
     if (!target) return;
 
@@ -125,6 +147,21 @@ export default function PortalWelcomeOverlay({ clientId }: { clientId: string })
     setPhase('animation');
     setTimeout(() => setPhase('video'), 3500);
   };
+
+  const playVideo = useCallback((type: 'welcome' | 'news') => {
+    const target = allVideos.find(v => v.video_type === type && v.is_active);
+    if (!target) return;
+    setVideo(target);
+    setVideoType(type);
+    setPhase('animation');
+    setTimeout(() => setPhase('video'), 3500);
+  }, [allVideos]);
+
+  // Expose playVideo to parent
+  useEffect(() => {
+    (window as any).__portalPlayVideo = playVideo;
+    return () => { delete (window as any).__portalPlayVideo; };
+  }, [playVideo]);
 
   const markViewed = async (videoId: string) => {
     await portalAction({ action: 'mark_video_viewed', client_id: clientId, video_id: videoId });
@@ -137,7 +174,6 @@ export default function PortalWelcomeOverlay({ clientId }: { clientId: string })
 
   const handleVideoEnd = () => {
     if (video) markViewed(video.id);
-    // Keep showing for a moment then auto-close
     setTimeout(() => setPhase('done'), 1500);
   };
 
@@ -151,36 +187,19 @@ export default function PortalWelcomeOverlay({ clientId }: { clientId: string })
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
       >
-        {/* Dark overlay */}
-        <motion.div
-          className="absolute inset-0 bg-black/90 backdrop-blur-md"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-        />
+        <motion.div className="absolute inset-0 bg-black/90 backdrop-blur-md" initial={{ opacity: 0 }} animate={{ opacity: 1 }} />
 
-        {/* Animation phase: rockets + light beams */}
         {phase === 'animation' && (
           <>
-            {/* Light beams from center */}
             {Array.from({ length: PARTICLE_COUNT }).map((_, i) => (
               <LightBeam key={`beam-${i}`} index={i} />
             ))}
-
-            {/* Rockets flying up */}
             {Array.from({ length: ROCKET_COUNT }).map((_, i) => (
-              <RocketParticle
-                key={`rocket-${i}`}
-                delay={i * 0.2}
-                side={i % 2 === 0 ? 'left' : 'right'}
-              />
+              <RocketParticle key={`rocket-${i}`} delay={i * 0.2} side={i % 2 === 0 ? 'left' : 'right'} />
             ))}
-
-            {/* Sparkles */}
             {Array.from({ length: 20 }).map((_, i) => (
               <SparkleParticle key={`spark-${i}`} delay={0.5 + i * 0.1} />
             ))}
-
-            {/* Center text */}
             <motion.div
               className="relative z-10 text-center"
               initial={{ scale: 0, opacity: 0 }}
@@ -200,15 +219,12 @@ export default function PortalWelcomeOverlay({ clientId }: { clientId: string })
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 1.5 }}
               >
-                {videoType === 'welcome'
-                  ? 'Preparamos algo especial pra você'
-                  : 'Temos novidades incríveis pra você!'}
+                {videoType === 'welcome' ? 'Preparamos algo especial pra você' : 'Temos novidades incríveis pra você!'}
               </motion.p>
             </motion.div>
           </>
         )}
 
-        {/* Video phase */}
         {phase === 'video' && video && (
           <motion.div
             className="relative z-10 w-[90vw] max-w-2xl"
@@ -216,62 +232,32 @@ export default function PortalWelcomeOverlay({ clientId }: { clientId: string })
             animate={{ scale: 1, opacity: 1, y: 0 }}
             transition={{ type: 'spring', damping: 20, stiffness: 200 }}
           >
-            {/* Glowing border */}
             <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-orange-500 opacity-75 blur-sm animate-pulse" />
-
             <div className="relative bg-black rounded-2xl overflow-hidden shadow-2xl">
-              {/* Header */}
               <div className="flex items-center justify-between p-3 bg-gradient-to-r from-amber-900/50 to-orange-900/50">
                 <div className="flex items-center gap-2">
-                  <motion.span
-                    animate={{ rotate: [0, 15, -15, 0] }}
-                    transition={{ duration: 1, repeat: Infinity }}
-                    className="text-xl"
-                  >
+                  <motion.span animate={{ rotate: [0, 15, -15, 0] }} transition={{ duration: 1, repeat: Infinity }} className="text-xl">
                     {videoType === 'welcome' ? '🌟' : '📢'}
                   </motion.span>
                   <span className="text-white font-bold text-sm md:text-base">{video.title}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 text-white/70 hover:text-white"
-                    onClick={() => {
-                      setMuted(!muted);
-                      if (videoRef.current) videoRef.current.muted = !muted;
-                    }}
-                  >
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-white/70 hover:text-white"
+                    onClick={() => { setMuted(!muted); if (videoRef.current) videoRef.current.muted = !muted; }}>
                     {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
                   </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 text-white/70 hover:text-white"
-                    onClick={handleClose}
-                  >
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-white/70 hover:text-white" onClick={handleClose}>
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
-
-              {/* Video player */}
               <div className="aspect-video bg-black flex items-center justify-center">
                 {!resolvedUrl ? (
                   <Loader2 className="h-8 w-8 text-white/60 animate-spin" />
                 ) : (
-                  <video
-                    ref={videoRef}
-                    src={resolvedUrl}
-                    className="w-full h-full object-contain"
-                    autoPlay
-                    playsInline
-                    muted={muted}
-                    onEnded={handleVideoEnd}
-                  />
+                  <video ref={videoRef} src={resolvedUrl} className="w-full h-full object-contain" autoPlay playsInline muted={muted} onEnded={handleVideoEnd} />
                 )}
               </div>
-
               {video.description && (
                 <div className="p-3 bg-gradient-to-r from-amber-900/30 to-transparent">
                   <p className="text-white/70 text-sm">{video.description}</p>
@@ -282,5 +268,90 @@ export default function PortalWelcomeOverlay({ clientId }: { clientId: string })
         )}
       </motion.div>
     </AnimatePresence>
+  );
+}
+
+/* ── Standalone buttons for the portal header ── */
+
+interface PortalVideoButtonsProps {
+  hasNews: boolean;
+  hasWelcome: boolean;
+}
+
+export function PortalVideoButtons({ hasNews, hasWelcome }: PortalVideoButtonsProps) {
+  const triggerVideo = (type: 'welcome' | 'news') => {
+    (window as any).__portalPlayVideo?.(type);
+  };
+
+  if (!hasNews && !hasWelcome) return null;
+
+  return (
+    <div className="flex items-center gap-1.5">
+      {hasNews && (
+        <motion.button
+          onClick={() => triggerVideo('news')}
+          className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold overflow-hidden"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          {/* Animated glowing background */}
+          <motion.div
+            className="absolute inset-0 rounded-full bg-gradient-to-r from-orange-500 via-amber-400 to-yellow-500"
+            animate={{
+              backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
+            }}
+            transition={{ duration: 3, repeat: Infinity }}
+            style={{ backgroundSize: '200% 200%' }}
+          />
+          {/* Outer glow */}
+          <div className="absolute -inset-[2px] rounded-full bg-gradient-to-r from-orange-500 via-amber-400 to-yellow-500 opacity-60 blur-md animate-pulse" />
+          {/* Inner content */}
+          <span className="relative z-10 flex items-center gap-1.5 text-black">
+            <motion.span
+              animate={{ rotate: [0, -15, 15, 0], y: [0, -2, 0] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+            >
+              <Rocket size={13} />
+            </motion.span>
+            <span className="hidden sm:inline">Novidades</span>
+            <span className="sm:hidden">🔥</span>
+          </span>
+          {/* Sparkle dots */}
+          <motion.div
+            className="absolute top-0 right-1 w-1.5 h-1.5 rounded-full bg-white"
+            animate={{ scale: [0, 1, 0], opacity: [0, 1, 0] }}
+            transition={{ duration: 1.2, repeat: Infinity, delay: 0.3 }}
+          />
+          <motion.div
+            className="absolute bottom-0 left-2 w-1 h-1 rounded-full bg-white"
+            animate={{ scale: [0, 1, 0], opacity: [0, 1, 0] }}
+            transition={{ duration: 1.2, repeat: Infinity, delay: 0.7 }}
+          />
+        </motion.button>
+      )}
+
+      {hasWelcome && (
+        <motion.button
+          onClick={() => triggerVideo('welcome')}
+          className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold overflow-hidden"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          <motion.div
+            className="absolute inset-0 rounded-full bg-gradient-to-r from-violet-500 via-purple-400 to-fuchsia-500"
+            animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+            transition={{ duration: 3, repeat: Infinity }}
+            style={{ backgroundSize: '200% 200%' }}
+          />
+          <div className="absolute -inset-[2px] rounded-full bg-gradient-to-r from-violet-500 via-purple-400 to-fuchsia-500 opacity-50 blur-md animate-pulse" />
+          <span className="relative z-10 flex items-center gap-1.5 text-white">
+            <motion.span animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 2, repeat: Infinity }}>
+              🌟
+            </motion.span>
+            <span className="hidden sm:inline">Bem-vindo</span>
+          </span>
+        </motion.button>
+      )}
+    </div>
   );
 }

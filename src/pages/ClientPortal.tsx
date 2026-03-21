@@ -20,6 +20,7 @@ import PortalRecordingCalendar from '@/components/portal/PortalRecordingCalendar
 import PortalPanfletagem from '@/components/portal/PortalPanfletagem';
 import { syncPortalApproval, syncPortalAdjustment, syncPortalComment } from '@/lib/portalSync';
 import PortalWelcomeOverlay from '@/components/portal/PortalWelcomeOverlay';
+import { PortalVideoButtons } from '@/components/portal/PortalWelcomeOverlay';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
   reel: 'Reel', criativo: 'Criativo', institucional: 'Institucional', anuncio: 'Anúncio', arte: 'Arte',
@@ -113,6 +114,7 @@ export default function ClientPortal() {
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoLoadError, setVideoLoadError] = useState<string | null>(null);
   const commentsEndRef = useRef<HTMLDivElement>(null);
+  const [portalVideoState, setPortalVideoState] = useState({ hasNews: false, hasWelcome: false });
 
   // Auth state: team member or client login
   const isTeamMember = !!user && !!profile;
@@ -466,7 +468,10 @@ export default function ClientPortal() {
   return (
     <div className="min-h-screen bg-[#080810] text-white selection:bg-white/20 overflow-x-hidden">
       {/* Welcome / News video overlay */}
-      <PortalWelcomeOverlay clientId={client.id} />
+      <PortalWelcomeOverlay
+        clientId={client.id}
+        onVideosLoaded={(data) => setPortalVideoState({ hasNews: data.hasNews, hasWelcome: data.hasWelcome })}
+      />
       {/* ── HEADER ── */}
       <header className="sticky top-0 z-50 bg-[#080810]/80 backdrop-blur-xl border-b border-white/[0.06]">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">
@@ -533,6 +538,7 @@ export default function ClientPortal() {
                 </button>
               )}
             </div>
+            <PortalVideoButtons hasNews={portalVideoState.hasNews} hasWelcome={portalVideoState.hasWelcome} />
             <PortalNotifications
               clientId={client.id}
               clientColor={clientColor}

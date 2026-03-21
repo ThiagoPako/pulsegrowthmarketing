@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { DAY_LABELS } from '@/types';
 import type { DayOfWeek } from '@/types';

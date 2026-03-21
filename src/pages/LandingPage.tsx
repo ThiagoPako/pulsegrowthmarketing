@@ -355,7 +355,7 @@ function Hero() {
           <motion.div variants={fadeScale} custom={0}>
             <motion.div
               whileHover={{ scale: 1.05 }}
-              className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-semibold mb-8 backdrop-blur-sm"
+              className="inline-flex items-center gap-2 px-4 sm:px-5 py-1.5 sm:py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs sm:text-sm font-semibold mb-6 sm:mb-8 backdrop-blur-sm"
             >
               <motion.span
                 animate={{ rotate: [0, 15, -15, 0] }}

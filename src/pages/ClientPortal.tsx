@@ -197,11 +197,9 @@ export default function ClientPortal() {
   };
 
   const loadComments = async (contentId: string) => {
-    const { data } = await supabase.functions.invoke('portal-actions', {
-      body: { action: 'get_comments', content_id: contentId },
-    });
-    if (data?.comments) {
-      setComments(data.comments as PortalComment[]);
+    const result = await portalAction({ action: 'get_comments', content_id: contentId });
+    if (result?.comments) {
+      setComments(result.comments as PortalComment[]);
     }
   };
 

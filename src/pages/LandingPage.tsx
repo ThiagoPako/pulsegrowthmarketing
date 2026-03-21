@@ -246,19 +246,19 @@ function Planos() {
     {
       name: 'Starter',
       subtitle: 'Para quem está começando',
-      features: ['4 gravações/mês', '8 reels editados', '4 artes para feed', 'Gestão de 1 rede social', 'Calendário editorial'],
+      features: ['4 gravações/mês', '8 reels editados', '4 artes para feed', 'Social media dedicado', 'Calendário editorial'],
       popular: false,
     },
     {
       name: 'Growth',
       subtitle: 'O mais escolhido',
-      features: ['8 gravações/mês', '16 reels editados', '8 artes para feed', 'Gestão de 2 redes sociais', 'Calendário editorial', 'Tráfego pago incluso', 'Relatórios mensais'],
+      features: ['8 gravações/mês', '16 reels editados', '8 artes para feed', 'Social media + designer', 'Tráfego pago incluso', 'Assessoria comercial básica', 'Relatórios mensais'],
       popular: true,
     },
     {
       name: 'Scale',
-      subtitle: 'Para dominar o digital',
-      features: ['12 gravações/mês', '24 reels editados', '12 artes para feed', 'Gestão completa de redes', 'Tráfego pago avançado', 'Endomarketing', 'Suporte prioritário', 'Portal do cliente'],
+      subtitle: 'Para dominar e vender',
+      features: ['12 gravações/mês', '24 reels editados', '12 artes para feed', 'Social media + designer', 'Tráfego pago avançado', 'Assessoria comercial completa', 'Treinamento de equipe de vendas', 'Portal do cliente'],
       popular: false,
     },
   ];

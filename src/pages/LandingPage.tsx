@@ -322,7 +322,7 @@ function Hero() {
   const opacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
 
   return (
-    <section ref={ref} className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
+    <section ref={ref} className="relative min-h-[100svh] flex items-center justify-center overflow-hidden pt-14 sm:pt-16">
       {/* Animated gradient blobs */}
       <motion.div style={{ y: bgY }} className="absolute inset-0">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-accent/20" />

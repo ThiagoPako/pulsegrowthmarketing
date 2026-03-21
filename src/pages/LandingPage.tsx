@@ -983,16 +983,16 @@ function Cases() {
   ];
 
   return (
-    <section id="cases" className="py-24 relative overflow-hidden">
+    <section id="cases" className="py-16 sm:py-24 relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} variants={staggerContainer} className="text-center mb-16">
-          <motion.span variants={fadeUp} className="text-sm font-semibold text-primary uppercase tracking-wider">Cases de Sucesso</motion.span>
-          <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3">
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }} variants={staggerContainer} className="text-center mb-10 sm:mb-16">
+          <motion.span variants={fadeUp} className="text-xs sm:text-sm font-semibold text-primary uppercase tracking-wider">Cases de Sucesso</motion.span>
+          <motion.h2 variants={fadeUp} custom={1} className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mt-2 sm:mt-3">
             Resultados reais de clientes reais
           </motion.h2>
         </motion.div>
 
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-40px' }} variants={staggerContainer} className="grid sm:grid-cols-2 gap-6 max-w-4xl mx-auto">
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-30px' }} variants={staggerContainer} className="grid grid-cols-2 gap-3 sm:gap-6 max-w-4xl mx-auto">
           {cases.map((c, i) => (
             <motion.div
               key={c.name}
@@ -1000,22 +1000,23 @@ function Cases() {
               custom={i}
               whileHover={{ y: -6, scale: 1.02 }}
               transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-              className="p-7 rounded-2xl border border-border/60 bg-card hover:shadow-xl hover:border-primary/20 transition-all duration-300 group"
+              className="p-4 sm:p-7 rounded-xl sm:rounded-2xl border border-border/60 bg-card hover:shadow-xl hover:border-primary/20 transition-all duration-300 group"
             >
-              <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-4">
                 <motion.div
                   whileHover={{ rotate: 15 }}
-                  className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/15 transition-colors"
+                  className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/15 transition-colors shrink-0"
                 >
-                  <TrendingUp size={20} className="text-primary" />
+                  <TrendingUp size={16} className="text-primary sm:hidden" />
+                  <TrendingUp size={20} className="text-primary hidden sm:block" />
                 </motion.div>
-                <div>
-                  <h3 className="font-display font-bold text-foreground">{c.name}</h3>
-                  <span className="text-xs text-muted-foreground">{c.niche}</span>
+                <div className="min-w-0">
+                  <h3 className="font-display text-xs sm:text-base font-bold text-foreground truncate">{c.name}</h3>
+                  <span className="text-[10px] sm:text-xs text-muted-foreground">{c.niche}</span>
                 </div>
               </div>
-              <p className="text-sm font-semibold text-success">{c.result}</p>
-              <p className="text-sm text-muted-foreground mt-1">{c.highlight}</p>
+              <p className="text-xs sm:text-sm font-semibold text-success">{c.result}</p>
+              <p className="text-[10px] sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">{c.highlight}</p>
             </motion.div>
           ))}
         </motion.div>

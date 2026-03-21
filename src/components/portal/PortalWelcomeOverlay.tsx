@@ -82,42 +82,24 @@ export default function PortalWelcomeOverlay({ clientId }: { clientId: string })
   }, [clientId]);
 
   const checkForVideos = async () => {
-    // Get all active videos
-    const { data: allVideos } = await supabase
-      .from('portal_videos')
-      .select('*')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false });
+    const result = await portalAction({ action: 'get_portal_videos', client_id: clientId });
+    if (!result?.videos?.length) return;
 
-    if (!allVideos?.length) return;
-
-    // Get already viewed videos by this client
-    const { data: views } = await supabase
-      .from('portal_video_views')
-      .select('video_id')
-      .eq('client_id', clientId);
-
-    const viewedIds = new Set((views || []).map((v: any) => v.video_id));
-
-    // Priority: welcome first (if never seen), then latest news
-    const unseenWelcome = allVideos.find(v => v.video_type === 'welcome' && !viewedIds.has(v.id));
-    const unseenNews = allVideos.find(v => v.video_type === 'news' && !viewedIds.has(v.id));
+    const viewedIds = new Set((result.viewed_ids || []) as string[]);
+    const unseenWelcome = result.videos.find((v: any) => v.video_type === 'welcome' && !viewedIds.has(v.id));
+    const unseenNews = result.videos.find((v: any) => v.video_type === 'news' && !viewedIds.has(v.id));
 
     const target = unseenWelcome || unseenNews;
     if (!target) return;
 
     setVideo(target);
     setVideoType(target.video_type as any);
-    // Start animation
     setPhase('animation');
     setTimeout(() => setPhase('video'), 3500);
   };
 
   const markViewed = async (videoId: string) => {
-    await supabase.from('portal_video_views').insert({
-      video_id: videoId,
-      client_id: clientId,
-    });
+    await portalAction({ action: 'mark_video_viewed', client_id: clientId, video_id: videoId });
   };
 
   const handleClose = () => {

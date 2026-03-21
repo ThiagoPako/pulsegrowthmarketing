@@ -170,6 +170,8 @@ function Sobre() {
                 { icon: Film, label: 'Edição de vídeo' },
                 { icon: PenTool, label: 'Design gráfico' },
                 { icon: Megaphone, label: 'Gestão de redes' },
+                { icon: Users, label: 'Assessoria comercial' },
+                { icon: Target, label: 'Fechamento de vendas' },
               ].map(({ icon: Icon, label }) => (
                 <div key={label} className="flex items-center gap-3 p-3 rounded-xl bg-accent/50">
                   <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">

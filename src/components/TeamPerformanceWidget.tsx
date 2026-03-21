@@ -54,6 +54,8 @@ export default function TeamPerformanceWidget() {
   const [deliveryRecords, setDeliveryRecords] = useState<any[]>([]);
   const [contentTasks, setContentTasks] = useState<any[]>([]);
   const [designTasks, setDesignTasks] = useState<any[]>([]);
+  const [smDeliveries, setSmDeliveries] = useState<any[]>([]);
+  const [partnerTasks, setPartnerTasks] = useState<any[]>([]);
   const [expandedRole, setExpandedRole] = useState<string | null>(null);
 
   useEffect(() => {
@@ -63,10 +65,14 @@ export default function TeamPerformanceWidget() {
       supabase.from('delivery_records').select('*').gte('date', monthStart).lte('date', monthEnd),
       supabase.from('content_tasks').select('*'),
       supabase.from('design_tasks').select('*'),
-    ]).then(([dr, ct, dt]) => {
+      supabase.from('social_media_deliveries').select('*').gte('delivered_at', monthStart).lte('delivered_at', monthEnd),
+      supabase.from('endomarketing_partner_tasks').select('*').gte('date', monthStart).lte('date', monthEnd),
+    ]).then(([dr, ct, dt, smd, pt]) => {
       if (dr.data) setDeliveryRecords(dr.data);
       if (ct.data) setContentTasks(ct.data);
       if (dt.data) setDesignTasks(dt.data);
+      if (smd.data) setSmDeliveries(smd.data);
+      if (pt.data) setPartnerTasks(pt.data);
     });
   }, []);
 

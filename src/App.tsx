@@ -63,6 +63,7 @@ const PortalVideosAdmin = lazy(() => import("@/pages/PortalVideosAdmin"));
 const ClientRelationship = lazy(() => import("@/pages/ClientRelationship"));
 const LandingPage = lazy(() => import("@/pages/LandingPage"));
 const ClientFeedback = lazy(() => import("@/pages/ClientFeedback"));
+const TestimonialsAdmin = lazy(() => import("@/pages/TestimonialsAdmin"));
 
 const queryClient = new QueryClient({
   defaultOptions: {

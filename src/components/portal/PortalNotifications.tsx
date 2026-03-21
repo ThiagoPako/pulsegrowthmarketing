@@ -29,13 +29,8 @@ export default function PortalNotifications({ clientId, clientColor, onSelectCon
   const [open, setOpen] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
-    const { data } = await supabase
-      .from('client_portal_notifications')
-      .select('*')
-      .eq('client_id', clientId)
-      .order('created_at', { ascending: false })
-      .limit(30);
-    if (data) setNotifications(data as PortalNotification[]);
+    const result = await portalAction({ action: 'get_notifications', client_id: clientId });
+    if (result?.notifications) setNotifications(result.notifications as PortalNotification[]);
   }, [clientId]);
 
   useEffect(() => { fetchNotifications(); }, [fetchNotifications]);

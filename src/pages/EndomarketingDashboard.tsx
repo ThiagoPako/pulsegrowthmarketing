@@ -101,9 +101,7 @@ export default function EndomarketingDashboard() {
             <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <motion.div animate={{ rotate: [0, 360] }} transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}>
-                    <Rocket size={14} className="text-primary -rotate-45" />
-                  </motion.div>
+                  <Receipt size={14} className="text-primary" />
                   <CardTitle className="text-sm sm:text-base">Contratos Ativos</CardTitle>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => navigate('/endomarketing/contratos')} className="text-xs">

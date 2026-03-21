@@ -775,6 +775,22 @@ function ComoFunciona() {
 
 // ─── Planos ─────────────────────────────────────────────────
 function Planos() {
+  const [planVideos, setPlanVideos] = useState<Record<string, string>>({});
+  const [activeVideo, setActiveVideo] = useState<{ name: string; url: string } | null>(null);
+
+  useEffect(() => {
+    supabase
+      .from('plan_videos')
+      .select('plan_name, video_url')
+      .then(({ data }) => {
+        if (data) {
+          const map: Record<string, string> = {};
+          data.forEach((r: any) => { if (r.video_url) map[r.plan_name] = r.video_url; });
+          setPlanVideos(map);
+        }
+      });
+  }, []);
+
   const plans = [
     {
       name: 'Starter',

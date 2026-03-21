@@ -538,6 +538,7 @@ export default function ClientPortal() {
                 </button>
               )}
             </div>
+            <PortalVideoButtons hasNews={portalVideoState.hasNews} hasWelcome={portalVideoState.hasWelcome} />
             <PortalNotifications
               clientId={client.id}
               clientColor={clientColor}

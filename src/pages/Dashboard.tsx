@@ -636,7 +636,7 @@ export default function Dashboard() {
         <div className="lg:col-span-2 glass-card p-3 sm:p-5">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <div className="flex items-center gap-2">
-              <FloatingRocket size={16} />
+              <Clapperboard size={16} className="text-primary" />
               <h3 className="font-display font-semibold text-xs sm:text-sm">Gravações de Hoje</h3>
             </div>
             <span className="text-[10px] sm:text-xs text-muted-foreground">{todayRecordings.length} gravações</span>

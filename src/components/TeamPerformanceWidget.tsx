@@ -164,11 +164,11 @@ export default function TeamPerformanceWidget() {
         const scriptsCreated = scripts.filter(s => s.createdBy === user.id).length;
         // Publicado = 10pts (resultado final), Agendado = 5pts (planejamento), Gerenciado = 2pts
         // Postado em rede social = 8pts (execução), Roteiro criado = 6pts (esforço criativo)
-        score = published * 10 + posted * 8 + scheduled * 5 + managed * 2;
+        score = published * 10 + posted * 8 + scheduled * 5 + managed * 2 + scriptsCreated * 6;
         metrics.push(
           { label: 'Publicados', value: published },
           { label: 'Postados', value: posted },
-          { label: 'Agendados', value: scheduled },
+          { label: 'Roteiros', value: scriptsCreated },
           { label: 'Gerenciados', value: managed },
         );
         maxScore = Math.max(score, 120);

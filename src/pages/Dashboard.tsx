@@ -926,16 +926,14 @@ export default function Dashboard() {
       <div className="glass-card p-3 sm:p-5">
         <div className="flex items-center justify-between mb-3 sm:mb-4">
           <div className="flex items-center gap-2">
-            <FloatingRocket size={16} />
+            <Target size={16} className="text-primary" />
             <h3 className="font-display font-semibold text-xs sm:text-sm">Progresso por Cliente</h3>
           </div>
           <button onClick={() => navigate('/metas')} className="text-[10px] sm:text-[11px] text-primary font-semibold hover:underline">METAS</button>
         </div>
         {clientProgress.length === 0 ? (
-          <div className="py-6 text-center text-muted-foreground text-xs flex flex-col items-center gap-2">
-            <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 2, repeat: Infinity }}>
-              <Rocket size={28} className="text-muted-foreground/40" />
-            </motion.div>
+          <div className="py-4 text-center text-muted-foreground text-xs flex flex-col items-center gap-2">
+            <UsersIcon size={24} className="text-muted-foreground/30" />
             Nenhum cliente cadastrado
           </div>
         ) : (

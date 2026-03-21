@@ -310,12 +310,7 @@ export default function EndomarketingCalendar() {
                     ))}
                     {dayTasks.length === 0 && (
                       <div className="text-center py-3 sm:py-4">
-                        <motion.div
-                          animate={{ y: [0, -3, 0], opacity: [0.15, 0.3, 0.15] }}
-                          transition={{ duration: 3, repeat: Infinity }}
-                        >
-                          <Rocket size={12} className="text-muted-foreground/30 -rotate-45 mx-auto" />
-                        </motion.div>
+                        <CalendarDays size={12} className="text-muted-foreground/15 mx-auto" />
                         <p className="text-[10px] text-muted-foreground mt-1">Sem tarefas</p>
                       </div>
                     )}

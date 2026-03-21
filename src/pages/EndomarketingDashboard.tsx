@@ -200,9 +200,7 @@ export default function EndomarketingDashboard() {
           <Card className="glass-card">
             <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
               <div className="flex items-center gap-2">
-                <motion.div animate={{ y: [0, -3, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
-                  <Rocket size={16} className="text-warning -rotate-45" />
-                </motion.div>
+                <TrendingUp size={16} className="text-warning" />
                 <CardTitle className="text-sm sm:text-base">Ranking de Lucratividade</CardTitle>
               </div>
             </CardHeader>

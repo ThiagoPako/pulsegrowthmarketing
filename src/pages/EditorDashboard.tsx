@@ -683,7 +683,7 @@ function QueueCard({ task, clients, index, onClick, onStartEditing, currentUserI
           <motion.div whileTap={{ scale: 0.95 }}>
             <Button size="sm" className="w-full gap-1.5 h-8 text-xs bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-md"
               onClick={(e) => { e.stopPropagation(); onStartEditing(); }}>
-              <Rocket size={13} /> Iniciar Edição
+              <Play size={13} /> Iniciar Edição
             </Button>
           </motion.div>
         )}

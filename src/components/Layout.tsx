@@ -51,6 +51,7 @@ const navCategories: NavCategory[] = [
     items: [
       { path: '/clientes', label: 'Clientes', icon: Building2, roles: ['admin', 'social_media', 'designer', 'fotografo'] },
       { path: '/relacionamento', label: 'Relacionamento', icon: Handshake, roles: ['admin', 'social_media'] },
+      { path: '/depoimentos', label: 'Depoimentos', icon: Star, roles: ['admin', 'social_media'] },
       { path: '/onboarding-gestao', label: 'Onboarding', icon: UserPlus, roles: ['admin', 'social_media'] },
       { path: '/equipe', label: 'Equipe', icon: Users, roles: ['admin', 'social_media'] },
       { path: '/planos', label: 'Planos', icon: Package, roles: ['admin', 'social_media'] },

@@ -203,12 +203,12 @@ function Sobre() {
 // ─── Serviços ───────────────────────────────────────────────
 function Servicos() {
   const services = [
-    { icon: Video, title: 'Produção de Vídeos', desc: 'Gravamos e editamos reels, stories e vídeos institucionais profissionais para suas redes sociais.', color: 'text-primary' },
-    { icon: Palette, title: 'Design & Artes', desc: 'Criação de artes para feed, stories, banners e materiais gráficos alinhados à identidade visual.', color: 'text-info' },
-    { icon: Instagram, title: 'Gestão de Redes Sociais', desc: 'Planejamento estratégico, calendário editorial e publicação recorrente nas plataformas.', color: 'text-success' },
-    { icon: BarChart3, title: 'Tráfego Pago', desc: 'Gerenciamento de campanhas no Meta Ads e Google Ads com foco em resultados mensuráveis.', color: 'text-warning' },
-    { icon: Calendar, title: 'Calendário de Conteúdo', desc: 'Planejamento mensal completo com datas sazonais, tendências e conteúdo estratégico.', color: 'text-destructive' },
-    { icon: Target, title: 'Endomarketing', desc: 'Marketing interno e produção de conteúdo para colaboradores e cultura organizacional.', color: 'text-primary' },
+    { icon: Video, title: 'Produção de Vídeos', desc: 'Vamos até sua empresa, gravamos reels, stories e vídeos profissionais. Tudo pensado para engajar e vender.', color: 'text-primary' },
+    { icon: Palette, title: 'Design & Artes', desc: 'Designer dedicado para criar artes de feed, stories, banners e materiais gráficos com sua identidade visual.', color: 'text-info' },
+    { icon: Instagram, title: 'Social Media', desc: 'Social media exclusivo para gerenciar seus perfis, planejar conteúdo, responder interações e manter sua marca ativa.', color: 'text-success' },
+    { icon: BarChart3, title: 'Tráfego Pago', desc: 'Campanhas no Meta Ads e Google Ads com estratégia focada em gerar leads qualificados para sua equipe comercial.', color: 'text-warning' },
+    { icon: Users, title: 'Assessoria Comercial', desc: 'Acompanhamos sua equipe de atendimento, criamos métodos de abordagem e orientamos como fechar mais vendas.', color: 'text-destructive' },
+    { icon: Target, title: 'Estratégia Completa', desc: 'Não fazemos só o tráfego — acompanhamos do primeiro contato até o fechamento, garantindo que o lead vire cliente.', color: 'text-primary' },
   ];
 
   return (

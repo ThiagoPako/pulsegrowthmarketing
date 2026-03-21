@@ -103,16 +103,16 @@ function Hero() {
           </motion.div>
 
           <motion.h1 variants={fadeUp} custom={1} className="font-display text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[1.08] tracking-tight text-foreground">
-            Conteúdo que{' '}
+            Do conteúdo ao{' '}
             <span className="text-primary relative">
-              converte
+              fechamento
               <svg className="absolute -bottom-2 left-0 w-full" viewBox="0 0 200 12" fill="none">
                 <path d="M2 8C50 2 150 2 198 8" stroke="hsl(16 82% 51%)" strokeWidth="3" strokeLinecap="round" />
               </svg>
             </span>
             ,<br />
-            resultados que{' '}
-            <span className="text-primary">aparecem</span>
+            a gente cuida de{' '}
+            <span className="text-primary">tudo</span>
           </motion.h1>
 
           <motion.p variants={fadeUp} custom={2} className="mt-6 text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">

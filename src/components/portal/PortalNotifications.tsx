@@ -70,6 +70,9 @@ export default function PortalNotifications({ clientId, clientColor, onSelectCon
     switch (type) {
       case 'video_approval': return <Film size={14} className="text-amber-400" />;
       case 'new_script': return <FileText size={14} className="text-violet-400" />;
+      case 'recording_approved': return <CheckCircle2 size={14} className="text-emerald-400" />;
+      case 'recording_rejected': return <XCircle size={14} className="text-red-400" />;
+      case 'recording_update': return <Calendar size={14} className="text-blue-400" />;
       default: return <Sparkles size={14} className="text-white/40" />;
     }
   };

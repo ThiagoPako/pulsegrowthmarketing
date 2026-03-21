@@ -40,9 +40,7 @@ export default function EndomarketingDashboard() {
 
   if (loadingC || loadingT) return (
     <div className="flex items-center justify-center p-12">
-      <motion.div animate={{ y: [0, -10, 0], rotate: [0, -15, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
-        <Rocket size={32} className="text-primary -rotate-45" />
-      </motion.div>
+      <Megaphone size={28} className="text-primary animate-pulse" />
     </div>
   );
 

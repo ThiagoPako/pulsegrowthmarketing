@@ -247,6 +247,60 @@ export default function CompanySettings() {
         </div>
       </div>
 
+      {/* Facebook Pixel */}
+      <div className="glass-card p-6 space-y-4">
+        <div className="flex items-center gap-2 text-primary">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+          <h2 className="text-base font-semibold">Facebook Pixel</h2>
+        </div>
+        <p className="text-xs text-muted-foreground -mt-2">
+          Configure o Pixel do Facebook para rastrear eventos da landing page (PageView, Lead, etc).
+        </p>
+        <div className="space-y-1.5 p-3 rounded-lg border border-border bg-muted/30">
+          <Label className="text-sm font-medium">Pixel ID</Label>
+          <Input
+            value={pixelId}
+            onChange={e => setPixelId(e.target.value)}
+            placeholder="Ex: 123456789012345"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Encontre seu Pixel ID em{' '}
+            <a href="https://business.facebook.com/events_manager" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+              Meta Events Manager
+            </a>
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={async () => {
+            try {
+              const { data: existing } = await supabase
+                .from('landing_page_settings')
+                .select('id')
+                .eq('section', 'facebook_pixel')
+                .maybeSingle();
+              if (existing) {
+                await supabase
+                  .from('landing_page_settings')
+                  .update({ title: pixelId || null, updated_at: new Date().toISOString() })
+                  .eq('id', existing.id);
+              } else {
+                await supabase
+                  .from('landing_page_settings')
+                  .insert({ section: 'facebook_pixel', title: pixelId || null });
+              }
+              toast.success('Pixel salvo com sucesso!');
+            } catch {
+              toast.error('Erro ao salvar pixel');
+            }
+          }}
+          className="gap-2"
+        >
+          Salvar Pixel
+        </Button>
+      </div>
+
       <Button onClick={handleSave} className="w-full">Salvar Configurações</Button>
 
       {/* Zona de Perigo — Admin Only */}

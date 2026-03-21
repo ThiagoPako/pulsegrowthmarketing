@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/vpsDb';
+import { portalAction } from '@/lib/portalApi';
 import { useAuth } from '@/hooks/useAuth';
 import {
   Play, Pause, Maximize, Check, MessageSquare, X, ChevronLeft, ChevronRight,

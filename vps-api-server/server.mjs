@@ -1924,7 +1924,8 @@ app.post('/api/whatsapp-confirmation-cron', async (req, res) => {
       if (!client?.whatsapp) continue;
       const phoneNumber = client.whatsapp.replace(/\D/g, '');
       if (!phoneNumber) continue;
-      const message = applyTemplate(config.msg_confirmation, { nome_cliente: client.company_name, data_gravacao: recording.date, hora_gravacao: recording.start_time, videomaker: vmNames[recording.videomaker_id] || 'Equipe' });
+      const portalLink = `${PORTAL_BASE_URL}/${client.id}`;
+      const message = applyTemplate(config.msg_confirmation, { nome_cliente: client.company_name, data_gravacao: recording.date, hora_gravacao: recording.start_time, videomaker: vmNames[recording.videomaker_id] || 'Equipe', link_portal: portalLink });
       await admin.from('whatsapp_confirmations').insert({ recording_id: recording.id, client_id: client.id, phone_number: phoneNumber, type: 'confirmation', status: 'pending', sent_at: new Date().toISOString() });
       await admin.from('recordings').update({ confirmation_status: 'aguardando' }).eq('id', recording.id);
       const result = await sendWhatsAppDirect(config, client.whatsapp, message, admin, client.id, 'auto_confirmation');

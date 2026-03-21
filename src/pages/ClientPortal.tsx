@@ -222,9 +222,12 @@ export default function ClientPortal() {
   };
 
   const loadComments = async (contentId: string) => {
-    const { data } = await supabase.from('client_portal_comments').select('*').eq('content_id', contentId).order('created_at', { ascending: true });
-    if (data) {
-      // Fetch avatars for team comments
+    const { data } = await supabase.functions.invoke('portal-actions', {
+      body: { action: 'get_comments', content_id: contentId },
+    });
+    if (data?.comments) {
+      setComments(data.comments as PortalComment[]);
+    }
       const teamComments = data.filter((c: any) => c.author_id);
       const authorIds = [...new Set(teamComments.map((c: any) => c.author_id))];
       let avatarMap: Record<string, string | null> = {};

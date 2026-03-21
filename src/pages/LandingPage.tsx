@@ -8,6 +8,8 @@ import {
   Menu, X, Sparkles, Target, Megaphone, Camera, Film, PenTool,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
+import FacebookPixel from '@/components/FacebookPixel';
 
 const WHATSAPP_LINK = 'https://wa.me/5562985382981?text=Olá!%20Vim%20pelo%20site%20e%20gostaria%20de%20saber%20mais%20sobre%20os%20serviços%20da%20Pulse.';
 const INSTAGRAM_LINK = 'https://instagram.com/ag.pulse';

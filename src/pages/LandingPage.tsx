@@ -1236,7 +1236,7 @@ function Contato() {
             </motion.div>
           </motion.div>
 
-          <motion.div variants={fadeUp} custom={4} className="mt-14 flex flex-col sm:flex-row items-center justify-center gap-6 text-sm text-muted-foreground">
+          <motion.div variants={fadeUp} custom={4} className="mt-10 sm:mt-14 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 text-xs sm:text-sm text-muted-foreground">
             <motion.div whileHover={{ y: -2 }} className="flex items-center gap-2">
               <Phone size={14} className="text-primary" />
               (62) 9 8538-2981

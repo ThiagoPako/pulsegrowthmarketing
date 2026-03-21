@@ -392,7 +392,7 @@ function Hero() {
           </motion.h1>
 
           {/* Subheadline */}
-          <motion.p variants={fadeUp} custom={2} className="mt-6 text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+          <motion.p variants={fadeUp} custom={2} className="mt-4 sm:mt-6 text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed px-2">
             Gravamos, editamos, criamos a estratégia, gerenciamos suas redes sociais e acompanhamos sua equipe comercial até fechar a venda. Somos sua agência de growth marketing de vendas completa.
           </motion.p>
 

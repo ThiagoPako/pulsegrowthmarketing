@@ -61,6 +61,7 @@ const AutomationFlows = lazy(() => import("@/pages/AutomationFlows"));
 const FlyerTemplates = lazy(() => import("@/pages/FlyerTemplates"));
 const PortalVideosAdmin = lazy(() => import("@/pages/PortalVideosAdmin"));
 const ClientRelationship = lazy(() => import("@/pages/ClientRelationship"));
+const LandingPage = lazy(() => import("@/pages/LandingPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -87,7 +88,7 @@ function PageLoader() {
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return <PageLoader />;
-  if (!user) return <Navigate to="/" replace />;
+  if (!user) return <Navigate to="/login" replace />;
   return <Layout>{children}</Layout>;
 }
 
@@ -100,7 +101,8 @@ function AppRoutes() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
-        <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
         <Route path="/dashboard" element={
           <ProtectedRoute>
             {currentUser?.role === 'videomaker' ? <VideomakerDashboard /> :

@@ -35,19 +35,11 @@ export default function PortalNotifications({ clientId, clientColor, onSelectCon
 
   useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
 
-  // Realtime
+  // Poll for new notifications every 30s
   useEffect(() => {
-    const channel = supabase
-      .channel('portal_notifs_rt')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'client_portal_notifications',
-        filter: `client_id=eq.${clientId}`,
-      }, () => fetchNotifications())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [clientId, fetchNotifications]);
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 

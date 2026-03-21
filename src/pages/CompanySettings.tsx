@@ -40,8 +40,7 @@ export default function CompanySettings() {
 
   const isAdmin = currentUser?.role === 'admin';
 
-  // Load pixel ID on mount
-  useState(() => {
+  useEffect(() => {
     supabaseCloud
       .from('landing_page_settings')
       .select('title')
@@ -50,7 +49,7 @@ export default function CompanySettings() {
       .then(({ data }) => {
         if (data?.title) setPixelId(data.title);
       });
-  });
+  }, []);
 
   const handleSystemReset = async () => {
     if (confirmText !== 'RESETAR TUDO') return;

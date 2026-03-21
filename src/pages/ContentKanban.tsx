@@ -1391,43 +1391,45 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
             )}
             {/* Agendamentos: Schedule */}
             {onSchedule && (
-              <button onClick={e => { e.stopPropagation(); onSchedule(); }}
-                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary transition-colors text-[10px] font-semibold">
-                <Calendar size={11} /> Agendar Postagem
-              </button>
+              <motion.button whileTap={{ scale: 0.95 }} whileHover={{ scale: 1.02 }}
+                onClick={e => { e.stopPropagation(); onSchedule(); }}
+                className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-xl bg-gradient-to-r from-primary/10 to-primary/20 hover:from-primary/20 hover:to-primary/30 border border-primary/25 text-primary transition-all text-[10px] font-bold shadow-sm hover:shadow-primary/15">
+                <Calendar size={12} /> Agendar Postagem
+              </motion.button>
             )}
             {/* Alteração: Resubmit */}
             {onResubmit && (
-              <button onClick={e => { e.stopPropagation(); onResubmit(); }}
-                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 text-teal-600 transition-colors text-[10px] font-semibold">
-                <Send size={11} /> Reenviar para Revisão
-              </button>
+              <motion.button whileTap={{ scale: 0.93 }} whileHover={{ scale: 1.02 }}
+                onClick={e => { e.stopPropagation(); onResubmit(); }}
+                className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 text-teal-600 transition-all text-[10px] font-bold shadow-sm hover:shadow-teal-500/10">
+                <Send size={12} /> Reenviar para Revisão
+              </motion.button>
             )}
             {/* Adjustment notes viewer */}
             {task.adjustment_notes && task.kanban_column === 'alteracao' && (
-              <div className="px-2.5 py-1.5 rounded-lg bg-amber-500/5 border border-amber-500/15 text-[10px] text-amber-700 dark:text-amber-400">
-                <span className="font-semibold">Ajustes:</span> {task.adjustment_notes}
+              <div className="px-2.5 py-2 rounded-xl bg-amber-500/5 border border-amber-500/15 text-[10px] text-amber-700 dark:text-amber-400">
+                <span className="font-bold">Ajustes:</span> {task.adjustment_notes}
               </div>
             )}
-            {/* Acompanhamento: Confirm posted (always, not just overdue) */}
+            {/* Acompanhamento: Confirm posted */}
             {onConfirmPosted && !isOverdue && (
-              <button onClick={e => { e.stopPropagation(); onConfirmPosted(); }}
-                className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-success/10 hover:bg-success/20 border border-success/20 text-success transition-colors text-[10px] font-semibold">
-                <CheckCircle2 size={11} /> Confirmar Postagem
-              </button>
+              <motion.button whileTap={{ scale: 0.93 }} whileHover={{ scale: 1.02 }}
+                onClick={e => { e.stopPropagation(); onConfirmPosted(); }}
+                className="flex items-center justify-center gap-1.5 w-full px-2 py-2 rounded-xl bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-green-600 transition-all text-[10px] font-bold shadow-sm hover:shadow-green-500/10">
+                <CheckCircle2 size={12} /> Confirmar Postagem
+              </motion.button>
             )}
           </div>
 
           {/* Overdue confirm posted (prominent) */}
           {isOverdue && onConfirmPosted && (
-            <button
+            <motion.button whileTap={{ scale: 0.93 }} whileHover={{ scale: 1.03 }}
               onClick={e => { e.stopPropagation(); onConfirmPosted(); }}
-              className="flex items-center justify-center gap-1.5 w-full px-3 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-200 text-xs font-bold shadow-sm hover:shadow"
-              style={{ fontFamily: 'var(--font-display)' }}
+              className="flex items-center justify-center gap-1.5 w-full px-3 py-2.5 rounded-xl bg-gradient-to-r from-primary to-primary/80 text-primary-foreground transition-all text-xs font-bold shadow-md hover:shadow-lg hover:shadow-primary/25"
             >
-              <CheckCircle2 size={13} />
+              <Rocket size={14} />
               Confirmar Postagem
-            </button>
+            </motion.button>
           )}
         </div>
       </div>

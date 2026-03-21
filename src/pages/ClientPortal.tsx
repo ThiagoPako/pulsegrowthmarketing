@@ -276,10 +276,7 @@ export default function ClientPortal() {
 
   const handleApprove = async () => {
     if (!selectedContent || !client) return;
-    const author = getCommentAuthor();
-    await supabase.functions.invoke('portal-actions', {
-      body: { action: 'approve', content_id: selectedContent.id, client_id: client.id },
-    });
+    await portalAction({ action: 'approve', content_id: selectedContent.id, client_id: client.id });
     setContents(prev => prev.map(c => c.id === selectedContent.id ? { ...c, status: 'aprovado', approved_at: new Date().toISOString() } : c));
     setSelectedContent(prev => prev ? { ...prev, status: 'aprovado' } : null);
     toast.success('Conteúdo aprovado com sucesso!');

@@ -83,7 +83,7 @@ export default function NotificationBell() {
     }
     setOpen(false);
     if (n.link) {
-      setTimeout(() => navigate(n.link!), 100);
+      window.open(n.link, '_blank');
     }
   };
 

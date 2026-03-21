@@ -194,9 +194,11 @@ export default function ProductionAssistant() {
     }
   }, [user, profile, loading]);
 
-  // Check on mount + every 15 min
+  // Check on mount + every 15 min (only if enabled)
   useEffect(() => {
     if (!user) return;
+    const enabled = localStorage.getItem(ASSISTANT_KEY) !== 'false';
+    if (!enabled) return;
     const timer = setTimeout(() => checkProduction(), 3000);
     intervalRef.current = setInterval(() => checkProduction(), 15 * 60 * 1000);
     return () => {

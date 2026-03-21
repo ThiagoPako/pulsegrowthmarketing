@@ -112,10 +112,8 @@ export default function EndomarketingDashboard() {
             <CardContent className="space-y-2 px-3 sm:px-6 pb-3 sm:pb-6">
               {metrics.activeContracts.length === 0 && (
                 <div className="text-center py-6">
-                  <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 3, repeat: Infinity }}>
-                    <Rocket size={24} className="text-muted-foreground/30 -rotate-45 mx-auto" />
-                  </motion.div>
-                  <p className="text-sm text-muted-foreground mt-2">Nenhum contrato ativo</p>
+                  <Receipt size={20} className="text-muted-foreground/30 mx-auto" />
+                  <p className="text-xs text-muted-foreground mt-2">Nenhum contrato ativo</p>
                 </div>
               )}
               {metrics.activeContracts.slice(0, 6).map((c, i) => (

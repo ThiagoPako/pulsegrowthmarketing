@@ -446,30 +446,50 @@ function Sobre() {
             variants={slideInRight}
             className="relative"
           >
-            <motion.div style={{ y: imgY }} className="aspect-[4/3] rounded-3xl bg-gradient-to-br from-primary/20 via-primary/10 to-accent/30 flex items-center justify-center overflow-hidden relative">
-              {/* Decorative rings */}
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
-                className="absolute w-64 h-64 rounded-full border border-primary/10"
-              />
-              <motion.div
-                animate={{ rotate: -360 }}
-                transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
-                className="absolute w-48 h-48 rounded-full border border-primary/15 border-dashed"
-              />
-              <div className="text-center p-8 relative z-10">
+            {videoUrl ? (
+              <motion.div style={{ y: imgY }} className="aspect-[9/16] sm:aspect-video rounded-3xl overflow-hidden relative shadow-2xl shadow-primary/10">
+                {videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be') ? (
+                  <iframe
+                    src={videoUrl.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')}
+                    className="w-full h-full"
+                    allowFullScreen
+                    title="Quem Somos - Pulse Growth Marketing"
+                  />
+                ) : (
+                  <video
+                    src={videoUrl}
+                    controls
+                    className="w-full h-full object-cover"
+                    poster=""
+                    playsInline
+                  />
+                )}
+              </motion.div>
+            ) : (
+              <motion.div style={{ y: imgY }} className="aspect-[4/3] rounded-3xl bg-gradient-to-br from-primary/20 via-primary/10 to-accent/30 flex items-center justify-center overflow-hidden relative">
                 <motion.div
-                  animate={{ y: [0, -8, 0] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                  className="w-20 h-20 mx-auto rounded-2xl bg-primary/20 backdrop-blur-sm flex items-center justify-center mb-6"
-                >
-                  <Rocket size={40} className="text-primary" />
-                </motion.div>
-                <h3 className="font-display text-2xl font-bold text-foreground">Pulse Growth</h3>
-                <p className="text-muted-foreground mt-2">Marketing de vendas completo</p>
-              </div>
-            </motion.div>
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+                  className="absolute w-64 h-64 rounded-full border border-primary/10"
+                />
+                <motion.div
+                  animate={{ rotate: -360 }}
+                  transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
+                  className="absolute w-48 h-48 rounded-full border border-primary/15 border-dashed"
+                />
+                <div className="text-center p-8 relative z-10">
+                  <motion.div
+                    animate={{ y: [0, -8, 0] }}
+                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                    className="w-20 h-20 mx-auto rounded-2xl bg-primary/20 backdrop-blur-sm flex items-center justify-center mb-6"
+                  >
+                    <Rocket size={40} className="text-primary" />
+                  </motion.div>
+                  <h3 className="font-display text-2xl font-bold text-foreground">Pulse Growth</h3>
+                  <p className="text-muted-foreground mt-2">Marketing de vendas completo</p>
+                </div>
+              </motion.div>
+            )}
             <div className="absolute -bottom-6 -right-6 w-40 h-40 bg-warning/15 rounded-3xl blur-3xl" />
             <div className="absolute -top-4 -left-4 w-24 h-24 bg-primary/10 rounded-2xl blur-2xl" />
           </motion.div>

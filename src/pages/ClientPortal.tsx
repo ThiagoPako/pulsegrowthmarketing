@@ -20,6 +20,7 @@ import PortalRecordingCalendar from '@/components/portal/PortalRecordingCalendar
 import PortalPanfletagem from '@/components/portal/PortalPanfletagem';
 import { syncPortalApproval, syncPortalAdjustment, syncPortalComment } from '@/lib/portalSync';
 import PortalWelcomeOverlay from '@/components/portal/PortalWelcomeOverlay';
+import { PortalVideoButtons } from '@/components/portal/PortalWelcomeOverlay';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
   reel: 'Reel', criativo: 'Criativo', institucional: 'Institucional', anuncio: 'Anúncio', arte: 'Arte',

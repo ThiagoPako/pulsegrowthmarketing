@@ -170,53 +170,27 @@ export default function ClientPortal() {
 
     let clientData: ClientData | null = null;
 
-    if (!isUUID && storedClientId && portalAuthType === 'client') {
-      const { data: storedClient } = await supabase.functions.invoke('client-portal-auth', {
-        body: { action: 'get_info', client_id: storedClientId },
-      });
-
-      if (storedClient?.id) {
-        clientData = mapClientData(storedClient);
-      }
+    // Try stored client ID first for logged-in clients
+    const lookupId = (!isUUID && storedClientId && portalAuthType === 'client') ? storedClientId : slug;
+    
+    const clientResult = await portalAction({ action: 'get_client', client_id: lookupId });
+    if (clientResult?.client) {
+      clientData = mapClientData(clientResult.client);
     }
 
+    // Fallback: try edge function
     if (!clientData) {
-      let clientQuery;
-      if (isUUID) {
-        clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city').eq('id', slug).single();
-      } else {
-        const companySearch = slug.replace(/-/g, ' ');
-        clientQuery = supabase.from('clients').select('id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city').ilike('company_name', companySearch).single();
-      }
-
-      const clientRes = await clientQuery;
-
-      if (clientRes.data) {
-        clientData = clientRes.data as ClientData;
-      } else {
-        const { data: edgeData } = await supabase.functions.invoke('client-portal-auth', {
-          body: {
-            action: 'get_info',
-            ...(isUUID ? { client_id: slug } : { slug }),
-          },
-        });
-
-        if (edgeData?.id) {
-          clientData = mapClientData(edgeData);
-        }
-      }
+      const { data: edgeData } = await supabase.functions.invoke('client-portal-auth', {
+        body: { action: 'get_info', ...(isUUID ? { client_id: slug } : { slug }) },
+      });
+      if (edgeData?.id) clientData = mapClientData(edgeData);
     }
 
     if (clientData) {
       setClient(clientData);
-      const { data: contData } = await supabase.from('client_portal_contents').select('*').eq('client_id', clientData.id).order('created_at', { ascending: false });
-      if (contData && contData.length > 0) {
-        setContents(contData as PortalContent[]);
-      } else {
-        const { data: edgeContents } = await supabase.functions.invoke('client-portal-auth', {
-          body: { action: 'get_contents', client_id: clientData.id },
-        });
-        if (edgeContents?.contents) setContents(edgeContents.contents as PortalContent[]);
+      const contResult = await portalAction({ action: 'get_contents', client_id: clientData.id });
+      if (contResult?.contents && contResult.contents.length > 0) {
+        setContents(contResult.contents as PortalContent[]);
       }
     }
     setLoading(false);

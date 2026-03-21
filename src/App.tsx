@@ -60,6 +60,7 @@ const TrafficManagement = lazy(() => import("@/pages/TrafficManagement"));
 const AutomationFlows = lazy(() => import("@/pages/AutomationFlows"));
 const FlyerTemplates = lazy(() => import("@/pages/FlyerTemplates"));
 const PortalVideosAdmin = lazy(() => import("@/pages/PortalVideosAdmin"));
+const ClientRelationship = lazy(() => import("@/pages/ClientRelationship"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -158,6 +159,7 @@ function AppRoutes() {
         <Route path="/automacoes" element={<ProtectedRoute><AutomationFlows /></ProtectedRoute>} />
         <Route path="/panfletagem" element={<ProtectedRoute><FlyerTemplates /></ProtectedRoute>} />
         <Route path="/portal-videos" element={<ProtectedRoute><PortalVideosAdmin /></ProtectedRoute>} />
+        <Route path="/relacionamento" element={<ProtectedRoute><ClientRelationship /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>

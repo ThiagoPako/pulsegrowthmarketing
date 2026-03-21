@@ -53,6 +53,12 @@ export default function NotificationBell() {
 
   useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
 
+  // Poll every 15s for real-time feel
+  useEffect(() => {
+    const interval = setInterval(fetchNotifications, 15000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
+
   useEffect(() => {
     if (!user?.id) return;
     const channel = supabase

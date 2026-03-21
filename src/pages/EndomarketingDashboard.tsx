@@ -49,18 +49,7 @@ export default function EndomarketingDashboard() {
       {/* Header */}
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <motion.div
-            animate={{ y: [0, -5, 0], rotate: [0, -10, 0] }}
-            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-            className="relative shrink-0"
-          >
-            <Rocket size={22} className="text-primary -rotate-45" />
-            <motion.div
-              animate={{ opacity: [0.5, 1, 0.3], scale: [0.8, 1.2, 0.6] }}
-              transition={{ duration: 0.5, repeat: Infinity }}
-              className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-3 rounded-full bg-gradient-to-t from-warning via-primary to-transparent blur-[2px] rotate-45"
-            />
-          </motion.div>
+          <Megaphone size={20} className="text-primary shrink-0" />
           <div className="min-w-0">
             <h1 className="text-lg sm:text-2xl font-display font-bold truncate">Endomarketing</h1>
             <p className="text-[10px] sm:text-sm text-muted-foreground">Gestão de pacotes e parceiros</p>

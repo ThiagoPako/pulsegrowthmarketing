@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
-import { supabase } from '@/lib/vpsDb';
+import { portalAction } from '@/lib/portalApi';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isSameDay, parseISO, isAfter, isBefore, isToday as isDateToday, addDays } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';

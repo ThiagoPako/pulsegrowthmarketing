@@ -42,12 +42,13 @@ export default function NotificationBell() {
 
   const fetchNotifications = useCallback(async () => {
     if (!user?.id) return;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('notifications')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(30);
+    console.log('[NotificationBell] fetched:', data?.length, 'error:', error);
     if (data) setNotifications(data as Notification[]);
   }, [user?.id]);
 

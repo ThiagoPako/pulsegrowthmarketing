@@ -522,7 +522,7 @@ function Sobre() {
                   <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                     <Icon size={16} className="text-primary" />
                   </div>
-                  <span className="text-sm font-medium text-foreground">{label}</span>
+                  <span className="text-xs sm:text-sm font-medium text-foreground">{label}</span>
                 </motion.div>
               ))}
             </motion.div>

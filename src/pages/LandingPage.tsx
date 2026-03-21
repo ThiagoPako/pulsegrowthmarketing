@@ -899,6 +899,16 @@ function Planos() {
                 >
                   <MessageCircle size={12} /> Solicitar proposta
                 </Button>
+                {planVideos[p.name] && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setActiveVideo({ name: p.name, url: planVideos[p.name] })}
+                    className="w-full gap-1.5 mt-1.5 text-primary hover:text-primary"
+                  >
+                    <Play size={12} /> Entender melhor
+                  </Button>
+                )}
               </motion.div>
             ))}
           </motion.div>

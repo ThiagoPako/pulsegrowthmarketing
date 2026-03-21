@@ -700,8 +700,8 @@ function ComoFunciona() {
                     <s.icon size={20} className="text-primary hidden sm:block" />
                   </motion.div>
                 </div>
-                <h3 className="font-display text-base font-bold text-foreground">{s.title}</h3>
-                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{s.desc}</p>
+                <h3 className="font-display text-xs sm:text-base font-bold text-foreground">{s.title}</h3>
+                <p className="text-[10px] sm:text-sm text-muted-foreground mt-1 sm:mt-2 leading-relaxed line-clamp-3 sm:line-clamp-none">{s.desc}</p>
               </motion.div>
             ))}
           </motion.div>

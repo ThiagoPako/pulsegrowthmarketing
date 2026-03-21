@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import {
@@ -313,12 +313,26 @@ function Planos() {
                 <p className="text-xs text-muted-foreground mt-1">{p.subtitle}</p>
               </div>
               <ul className="space-y-2.5 mb-6 flex-1">
-                {p.features.map(f => (
-                  <li key={f} className="flex items-start gap-2 text-sm text-foreground">
-                    <CheckCircle2 size={15} className={`${(p as any).isNew ? 'text-emerald-500' : 'text-success'} shrink-0 mt-0.5`} />
-                    {f}
-                  </li>
-                ))}
+                {p.features.map(f => {
+                  const isTrafego = f.toLowerCase().includes('tráfego pago');
+                  return (
+                    <li key={f} className={`flex items-start gap-2 text-sm ${isTrafego ? 'relative' : ''}`}>
+                      {isTrafego ? (
+                        <>
+                          <Rocket size={15} className="shrink-0 mt-0.5 text-orange-500 animate-pulse" />
+                          <span className="font-bold bg-gradient-to-r from-orange-400 via-red-500 to-yellow-400 bg-clip-text text-transparent animate-pulse drop-shadow-[0_0_6px_rgba(251,146,60,0.6)]">
+                            🔥 {f}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 size={15} className={`${(p as any).isNew ? 'text-emerald-500' : 'text-success'} shrink-0 mt-0.5`} />
+                          <span className="text-foreground">{f}</span>
+                        </>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
               <Button
                 onClick={() => window.open(WHATSAPP_LINK, '_blank')}
@@ -382,11 +396,30 @@ function Cases() {
 
 // ─── Depoimentos ────────────────────────────────────────────
 function Depoimentos() {
-  const testimonials = [
-    { name: 'Maria Clara', role: 'Dona de restaurante', text: 'A Pulse transformou minha presença no Instagram. Em 3 meses, triplicamos as reservas online. O conteúdo é impecável!' },
-    { name: 'Carlos Eduardo', role: 'Empresário automotivo', text: 'Profissionalismo e pontualidade. Os vídeos são de altíssima qualidade e o portal do cliente é incrível — acompanho tudo em tempo real.' },
-    { name: 'Juliana Mendes', role: 'Dona de clínica estética', text: 'Nunca imaginei que marketing digital pudesse trazer tanto resultado. A equipe é atenciosa e entende do nosso negócio.' },
-  ];
+  const [testimonials, setTestimonials] = useState<Array<{ client_name: string; client_role: string; message: string; rating: number }>>([]);
+
+  useEffect(() => {
+    import('@/integrations/supabase/client').then(({ supabase }) => {
+      supabase
+        .from('client_testimonials')
+        .select('client_name, client_role, message, rating')
+        .eq('status', 'approved')
+        .order('approved_at', { ascending: false })
+        .limit(6)
+        .then(({ data }) => {
+          if (data && data.length > 0) {
+            setTestimonials(data);
+          } else {
+            // Fallback estáticos
+            setTestimonials([
+              { client_name: 'Maria Clara', client_role: 'Dona de restaurante', message: 'A Pulse transformou minha presença no Instagram. Em 3 meses, triplicamos as reservas online. O conteúdo é impecável!', rating: 5 },
+              { client_name: 'Carlos Eduardo', client_role: 'Empresário automotivo', message: 'Profissionalismo e pontualidade. Os vídeos são de altíssima qualidade e o portal do cliente é incrível.', rating: 5 },
+              { client_name: 'Juliana Mendes', client_role: 'Dona de clínica estética', message: 'Nunca imaginei que marketing digital pudesse trazer tanto resultado. A equipe é atenciosa e entende do nosso negócio.', rating: 5 },
+            ]);
+          }
+        });
+    });
+  }, []);
 
   return (
     <section id="depoimentos" className="py-20 bg-card border-y border-border/50">
@@ -400,20 +433,20 @@ function Depoimentos() {
 
         <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }} variants={staggerContainer} className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
           {testimonials.map((t, i) => (
-            <motion.div key={t.name} variants={fadeUp} custom={i} className="p-6 rounded-2xl border border-border/60 bg-background">
+            <motion.div key={i} variants={fadeUp} custom={i} className="p-6 rounded-2xl border border-border/60 bg-background">
               <div className="flex gap-1 mb-4">
                 {[...Array(5)].map((_, j) => (
-                  <Star key={j} size={14} className="text-warning fill-warning" />
+                  <Star key={j} size={14} className={j < t.rating ? 'text-warning fill-warning' : 'text-muted-foreground/20'} />
                 ))}
               </div>
-              <p className="text-sm text-muted-foreground leading-relaxed italic">"{t.text}"</p>
+              <p className="text-sm text-muted-foreground leading-relaxed italic">"{t.message}"</p>
               <div className="mt-5 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <span className="text-sm font-bold text-primary">{t.name[0]}</span>
+                  <span className="text-sm font-bold text-primary">{t.client_name[0]}</span>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-foreground">{t.name}</p>
-                  <p className="text-xs text-muted-foreground">{t.role}</p>
+                  <p className="text-sm font-semibold text-foreground">{t.client_name}</p>
+                  <p className="text-xs text-muted-foreground">{t.client_role}</p>
                 </div>
               </div>
             </motion.div>

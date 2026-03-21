@@ -62,6 +62,8 @@ const FlyerTemplates = lazy(() => import("@/pages/FlyerTemplates"));
 const PortalVideosAdmin = lazy(() => import("@/pages/PortalVideosAdmin"));
 const ClientRelationship = lazy(() => import("@/pages/ClientRelationship"));
 const LandingPage = lazy(() => import("@/pages/LandingPage"));
+const ClientFeedback = lazy(() => import("@/pages/ClientFeedback"));
+const TestimonialsAdmin = lazy(() => import("@/pages/TestimonialsAdmin"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -162,6 +164,8 @@ function AppRoutes() {
         <Route path="/panfletagem" element={<ProtectedRoute><FlyerTemplates /></ProtectedRoute>} />
         <Route path="/portal-videos" element={<ProtectedRoute><PortalVideosAdmin /></ProtectedRoute>} />
         <Route path="/relacionamento" element={<ProtectedRoute><ClientRelationship /></ProtectedRoute>} />
+        <Route path="/depoimentos" element={<ProtectedRoute><TestimonialsAdmin /></ProtectedRoute>} />
+        <Route path="/feedback" element={<ClientFeedback />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>

@@ -470,7 +470,7 @@ export default function ClientPortal() {
       {/* Welcome / News video overlay */}
       <PortalWelcomeOverlay
         clientId={client.id}
-        onVideosLoaded={(data) => setPortalVideoState({ hasNews: data.hasNews, hasWelcome: data.hasWelcome })}
+        onVideosLoaded={(data) => setPortalVideoState({ hasNews: data.hasNews, hasWelcome: data.hasWelcome, isNewClient: data.isNewClient })}
       />
       {/* ── HEADER ── */}
       <header className="sticky top-0 z-50 bg-[#080810]/80 backdrop-blur-xl border-b border-white/[0.06]">

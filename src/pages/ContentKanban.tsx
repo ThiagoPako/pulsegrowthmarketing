@@ -441,8 +441,15 @@ export default function ContentKanban() {
     setDraggedTask(null);
   };
 
+  // ─── EXECUTION COLUMNS THAT REQUIRE assigned_to ────────────
+  const EXECUTION_COLUMNS = ['edicao', 'revisao', 'alteracao'];
+
   // ─── VALIDATION FOR TRANSITIONS ───────────────────────────
   const validateKanbanTransition = (task: ContentTask, targetColumn: string): string | null => {
+    // Rule: tasks in execution columns MUST have a responsible person
+    if (EXECUTION_COLUMNS.includes(targetColumn) && !task.assigned_to) {
+      return 'Esta tarefa precisa ter um responsável atribuído antes de entrar em execução. Edite o card e selecione o responsável.';
+    }
     // captacao → edicao: needs drive_link (materiais brutos)
     if (targetColumn === 'edicao' && task.kanban_column === 'captacao' && !task.drive_link) {
       return 'O card precisa ter o link dos materiais brutos (Drive) para ir para edição';

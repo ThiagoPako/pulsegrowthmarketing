@@ -862,14 +862,9 @@ export default function VideomakerDashboard() {
                   )}
                 </div>
                 <div className="space-y-1.5 sm:space-y-2">
-                  {dayRecs.length === 0 && (
+                    {dayRecs.length === 0 && (
                     <div className="text-center py-3 sm:py-4">
-                      <motion.div
-                        animate={{ y: [0, -3, 0], opacity: [0.15, 0.3, 0.15] }}
-                        transition={{ duration: 3, repeat: Infinity }}
-                      >
-                        <Rocket size={14} className="text-muted-foreground/30 -rotate-45 mx-auto" />
-                      </motion.div>
+                      <Calendar size={12} className="text-muted-foreground/15 mx-auto" />
                       <p className="text-[10px] text-muted-foreground mt-1">Livre</p>
                     </div>
                   )}

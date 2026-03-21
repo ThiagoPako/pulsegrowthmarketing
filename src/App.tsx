@@ -64,6 +64,7 @@ const ClientRelationship = lazy(() => import("@/pages/ClientRelationship"));
 const LandingPage = lazy(() => import("@/pages/LandingPage"));
 const ClientFeedback = lazy(() => import("@/pages/ClientFeedback"));
 const TestimonialsAdmin = lazy(() => import("@/pages/TestimonialsAdmin"));
+const LandingPageAdmin = lazy(() => import("@/pages/LandingPageAdmin"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -165,6 +166,7 @@ function AppRoutes() {
         <Route path="/portal-videos" element={<ProtectedRoute><PortalVideosAdmin /></ProtectedRoute>} />
         <Route path="/relacionamento" element={<ProtectedRoute><ClientRelationship /></ProtectedRoute>} />
         <Route path="/depoimentos" element={<ProtectedRoute><TestimonialsAdmin /></ProtectedRoute>} />
+        <Route path="/landing-admin" element={<ProtectedRoute><LandingPageAdmin /></ProtectedRoute>} />
         <Route path="/feedback" element={<ClientFeedback />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

@@ -1898,6 +1898,33 @@ export type Database = {
           },
         ]
       }
+      landing_page_settings: {
+        Row: {
+          description: string | null
+          id: string
+          section: string
+          title: string | null
+          updated_at: string
+          video_url: string | null
+        }
+        Insert: {
+          description?: string | null
+          id?: string
+          section: string
+          title?: string | null
+          updated_at?: string
+          video_url?: string | null
+        }
+        Update: {
+          description?: string | null
+          id?: string
+          section?: string
+          title?: string | null
+          updated_at?: string
+          video_url?: string | null
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string

@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-const WHATSAPP_LINK = 'https://wa.me/5538999266863?text=Olá!%20Vim%20pelo%20site%20e%20gostaria%20de%20saber%20mais%20sobre%20os%20serviços%20da%20Pulse.';
+const WHATSAPP_LINK = 'https://wa.me/5562985382981?text=Olá!%20Vim%20pelo%20site%20e%20gostaria%20de%20saber%20mais%20sobre%20os%20serviços%20da%20Pulse.';
+const INSTAGRAM_LINK = 'https://instagram.com/ag.pulse';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 40 },

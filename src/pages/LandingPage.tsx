@@ -598,15 +598,15 @@ function Servicos() {
   ];
 
   return (
-    <section id="servicos" className="py-24 relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-[100px]" />
+    <section id="servicos" className="py-16 sm:py-24 relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-64 sm:w-96 h-64 sm:h-96 bg-primary/5 rounded-full blur-[80px] sm:blur-[100px]" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-80px' }} variants={staggerContainer} className="text-center mb-16">
-          <motion.span variants={fadeUp} className="text-sm font-semibold text-primary uppercase tracking-wider">Nossos Serviços</motion.span>
-          <motion.h2 variants={fadeUp} custom={1} className="font-display text-3xl sm:text-4xl font-bold text-foreground mt-3">
+        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-50px' }} variants={staggerContainer} className="text-center mb-10 sm:mb-16">
+          <motion.span variants={fadeUp} className="text-xs sm:text-sm font-semibold text-primary uppercase tracking-wider">Nossos Serviços</motion.span>
+          <motion.h2 variants={fadeUp} custom={1} className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mt-2 sm:mt-3">
             Tudo que sua marca precisa para crescer
           </motion.h2>
-          <motion.p variants={fadeUp} custom={2} className="text-muted-foreground mt-4 max-w-xl mx-auto">
+          <motion.p variants={fadeUp} custom={2} className="text-sm sm:text-base text-muted-foreground mt-3 sm:mt-4 max-w-xl mx-auto">
             Do conteúdo à venda fechada — cuidamos de tudo para sua empresa crescer no digital com resultados reais.
           </motion.p>
         </motion.div>

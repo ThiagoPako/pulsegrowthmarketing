@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  BookOpen, Film, MessageSquare, CheckCircle, Sparkles, AlertTriangle, 
-  Flame, ChevronRight, ChevronLeft, X, Play, Eye, Star, HelpCircle
+  BookOpen, Film, MessageSquare, CheckCircle, Sparkles, 
+  ChevronRight, ChevronLeft, X, Play, Eye, HelpCircle
 } from 'lucide-react';
 
 interface Props {
@@ -14,79 +14,57 @@ interface TutorialStep {
   title: string;
   description: string;
   tips: string[];
-  color: string;
 }
 
 const TUTORIAL_STEPS: TutorialStep[] = [
   {
     icon: Film,
     title: 'Biblioteca de Conteúdos',
-    description: 'Aqui você encontra todos os vídeos e conteúdos produzidos pela nossa equipe, organizados por temporada (mês).',
+    description: 'Todos os vídeos e conteúdos produzidos, organizados por mês.',
     tips: [
       'Navegue entre os meses usando as setas no topo',
-      'Clique em qualquer vídeo para visualizar em tela cheia',
-      'Passe o mouse sobre o vídeo para ver um preview automático',
-      'Os conteúdos são organizados por tipo: Reels, Criativos, Institucionais',
+      'Clique em qualquer vídeo para visualizar',
+      'Conteúdos são organizados por tipo: Reels, Criativos, etc.',
     ],
-    color: 'from-blue-500/20 to-indigo-500/20',
   },
   {
     icon: CheckCircle,
     title: 'Aprovação de Conteúdo',
-    description: 'Ao receber um novo vídeo, você será notificado para aprovar ou solicitar ajustes antes da publicação.',
+    description: 'Aprove ou solicite ajustes antes da publicação.',
     tips: [
-      'Clique em "Aprovar" se o conteúdo está pronto para publicação',
-      'Use "Solicitar Ajuste" para pedir modificações — descreva o que precisa mudar',
-      'Você também pode enviar comentários para discutir detalhes com a equipe',
+      'Clique em "Aprovar" se está pronto para publicar',
+      'Use "Solicitar Ajuste" para pedir modificações',
       'Conteúdos pendentes aparecem com badge amarelo',
     ],
-    color: 'from-emerald-500/20 to-green-500/20',
   },
   {
     icon: MessageSquare,
     title: 'Chat de Comentários',
-    description: 'Cada conteúdo tem um chat onde você pode conversar diretamente com a equipe criativa.',
+    description: 'Converse diretamente com a equipe em cada conteúdo.',
     tips: [
       'Os comentários da equipe aparecem identificados com nome e cargo',
       'Use o chat para dar feedback específico sobre edição, roteiro ou estilo',
       'As respostas da equipe chegam em tempo real',
     ],
-    color: 'from-violet-500/20 to-purple-500/20',
   },
   {
     icon: Sparkles,
     title: 'Zona Criativa',
-    description: 'Explore os roteiros criados pela equipe para seus conteúdos. Cada roteiro tem tipo, categoria e informações do autor.',
+    description: 'Explore os roteiros criados pela equipe para seus conteúdos.',
     tips: [
-      'Filtre roteiros por categoria usando as tags coloridas',
+      'Filtre roteiros por categoria usando as tags',
       'Clique em um roteiro para ler o conteúdo completo',
-      'Veja quem da equipe criou cada roteiro',
-      'Os roteiros são organizados por tipo de conteúdo',
+      'Marque prioridades para organizar a agenda de gravação',
     ],
-    color: 'from-amber-500/20 to-orange-500/20',
-  },
-  {
-    icon: AlertTriangle,
-    title: 'Prioridade de Gravação',
-    description: 'Marque os roteiros que você mais quer gravar primeiro! A equipe organiza a agenda com base nas suas prioridades.',
-    tips: [
-      'Use "Prioridade" para roteiros que você prefere gravar antes',
-      'Use "Urgente" para roteiros que precisam ser gravados o mais rápido possível',
-      'Roteiros marcados aparecem no topo da lista com destaque especial',
-      'Clique novamente para remover a marcação',
-    ],
-    color: 'from-red-500/20 to-rose-500/20',
   },
   {
     icon: Eye,
     title: 'Métricas & Entregas',
-    description: 'Acompanhe o progresso das entregas mensais e veja exatamente o que está contratado vs. o que já foi entregue.',
+    description: 'Acompanhe o progresso das entregas mensais.',
     tips: [
-      'O indicador "Overdelivery" mostra quando entregamos mais do que o contratado',
-      'Veja a distribuição por tipo de conteúdo',
+      'Veja o que está contratado vs. o que já foi entregue',
       'Acompanhe status: pendentes, aprovados e em ajuste',
     ],
-    color: 'from-cyan-500/20 to-teal-500/20',
   },
 ];
 
@@ -113,68 +91,64 @@ export default function PortalTutorial({ clientColor }: Props) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-sm flex items-end sm:items-center justify-center"
             onClick={() => setOpen(false)}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 40 }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="w-full max-w-lg"
+              className="w-full max-w-md max-h-[85vh] sm:max-h-[70vh]"
               onClick={e => e.stopPropagation()}
             >
-              <div className="bg-[#14141f] border border-white/[0.08] rounded-2xl overflow-hidden shadow-2xl">
-                {/* Header with gradient */}
-                <div className={`relative h-32 bg-gradient-to-br ${step.color} overflow-hidden`}>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-20 h-20 rounded-full bg-white/[0.06] flex items-center justify-center">
-                      <Icon size={36} className="text-white/40" />
+              <div className="bg-[#14141f] border border-white/[0.08] rounded-t-2xl sm:rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh] sm:max-h-[70vh]">
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `hsl(${clientColor} / 0.15)` }}>
+                      <Icon size={18} style={{ color: `hsl(${clientColor})` }} />
+                    </div>
+                    <div>
+                      <p className="text-xs text-white/40 font-medium flex items-center gap-1">
+                        <BookOpen size={10} /> Tutorial — {currentStep + 1}/{TUTORIAL_STEPS.length}
+                      </p>
+                      <h3 className="text-sm font-bold text-white">{step.title}</h3>
                     </div>
                   </div>
-                  {/* Step indicator */}
-                  <div className="absolute top-3 left-3 flex items-center gap-1.5">
-                    {TUTORIAL_STEPS.map((_, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setCurrentStep(i)}
-                        className={`h-1.5 rounded-full transition-all ${
-                          i === currentStep ? 'w-6 bg-white/80' : 'w-1.5 bg-white/20 hover:bg-white/40'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <div className="absolute top-3 right-3 flex items-center gap-2">
-                    <span className="text-[10px] text-white/50 font-medium">{currentStep + 1}/{TUTORIAL_STEPS.length}</span>
-                    <button onClick={() => setOpen(false)} className="p-1.5 rounded-full bg-black/30 backdrop-blur-sm hover:bg-black/50 transition-colors">
-                      <X size={12} className="text-white/70" />
-                    </button>
-                  </div>
-                  <div className="absolute bottom-3 left-4">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/30 backdrop-blur-sm text-[10px] font-semibold text-white/90">
-                      <BookOpen size={10} /> Tutorial
-                    </span>
-                  </div>
+                  <button onClick={() => setOpen(false)} className="p-2 rounded-full hover:bg-white/10 transition-colors">
+                    <X size={14} className="text-white/50" />
+                  </button>
                 </div>
 
-                {/* Content */}
-                <div className="p-6 space-y-4">
-                  <div>
-                    <h3 className="text-lg font-bold text-white">{step.title}</h3>
-                    <p className="text-sm text-white/50 mt-1 leading-relaxed">{step.description}</p>
-                  </div>
+                {/* Step dots */}
+                <div className="flex items-center gap-1.5 px-5 pt-3 shrink-0">
+                  {TUTORIAL_STEPS.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setCurrentStep(i)}
+                      className={`h-1 rounded-full transition-all ${
+                        i === currentStep ? 'w-6' : 'w-2 hover:opacity-70'
+                      }`}
+                      style={{ background: i === currentStep ? `hsl(${clientColor})` : 'rgba(255,255,255,0.15)' }}
+                    />
+                  ))}
+                </div>
+
+                {/* Content — scrollable */}
+                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                  <p className="text-sm text-white/50 leading-relaxed">{step.description}</p>
 
                   <div className="space-y-2">
-                    <p className="text-[10px] font-semibold text-white/30 uppercase tracking-wider">Dicas</p>
                     {step.tips.map((tip, i) => (
                       <motion.div
-                        key={i}
-                        initial={{ opacity: 0, x: -10 }}
+                        key={`${currentStep}-${i}`}
+                        initial={{ opacity: 0, x: -8 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: i * 0.08 }}
-                        className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.04]"
+                        transition={{ delay: i * 0.06 }}
+                        className="flex items-start gap-2.5 p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]"
                       >
-                        <Star size={10} className="mt-0.5 shrink-0" style={{ color: `hsl(${clientColor})` }} />
+                        <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: `hsl(${clientColor})` }} />
                         <p className="text-xs text-white/60 leading-relaxed">{tip}</p>
                       </motion.div>
                     ))}
@@ -182,7 +156,7 @@ export default function PortalTutorial({ clientColor }: Props) {
                 </div>
 
                 {/* Navigation */}
-                <div className="flex items-center justify-between px-6 pb-6">
+                <div className="flex items-center justify-between px-5 py-4 border-t border-white/[0.06] shrink-0">
                   <button
                     onClick={() => setCurrentStep(prev => Math.max(0, prev - 1))}
                     disabled={currentStep === 0}

@@ -777,6 +777,8 @@ export default function Dashboard() {
         </div>
       )}
 
+      {currentUser?.role === 'admin' && <TeamPerformanceWidget />}
+
       <AgencyCapacityWidget clients={clients} users={users} recordings={recordings} settings={settings} />
 
       {/* ENDOMARKETING */}

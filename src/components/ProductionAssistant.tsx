@@ -87,14 +87,16 @@ interface AssistantMessage {
   type: 'deadline' | 'motivation' | 'friday' | 'general';
 }
 
+const ASSISTANT_KEY = 'pulse_assistant_enabled';
+
 /* ─── Main Component ─── */
 export default function ProductionAssistant() {
   const { user, profile } = useAuth();
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [currentMsg, setCurrentMsg] = useState<AssistantMessage | null>(null);
   const [showBubble, setShowBubble] = useState(false);
-  const [minimized, setMinimized] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [hasMessage, setHasMessage] = useState(false);
   const checkedRef = useRef(false);
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
 
@@ -183,7 +185,7 @@ export default function ProductionAssistant() {
         setMessages(prev => [msg, ...prev].slice(0, 20));
         setCurrentMsg(msg);
         setShowBubble(true);
-        setMinimized(false);
+        setHasMessage(true);
       }
     } catch (err) {
       console.error('Production assistant error:', err);
@@ -192,9 +194,11 @@ export default function ProductionAssistant() {
     }
   }, [user, profile, loading]);
 
-  // Check on mount + every 15 min
+  // Check on mount + every 15 min (only if enabled)
   useEffect(() => {
     if (!user) return;
+    const enabled = localStorage.getItem(ASSISTANT_KEY) !== 'false';
+    if (!enabled) return;
     const timer = setTimeout(() => checkProduction(), 3000);
     intervalRef.current = setInterval(() => checkProduction(), 15 * 60 * 1000);
     return () => {
@@ -211,13 +215,13 @@ export default function ProductionAssistant() {
     }
   }, [showBubble, currentMsg]);
 
-  if (!user) return null;
+  // Only render when there's something to show
+  if (!user || !hasMessage) return null;
 
   return (
     <>
-      {/* Chat bubble overlay */}
       <AnimatePresence>
-        {showBubble && currentMsg && !minimized && (
+        {showBubble && currentMsg && (
           <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.8 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -225,88 +229,52 @@ export default function ProductionAssistant() {
             className="fixed bottom-24 right-4 z-50 max-w-xs sm:max-w-sm"
           >
             <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-4 pr-8">
-              {/* Close */}
               <button
-                onClick={() => setShowBubble(false)}
+                onClick={() => { setShowBubble(false); setHasMessage(false); }}
                 className="absolute top-2 right-2 text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X size={14} />
               </button>
-
-              {/* Speech arrow */}
               <div className="absolute -bottom-2 right-8 w-4 h-4 bg-card border-b border-r border-border rotate-45" />
-
-              {/* Message */}
               <div className="prose prose-sm max-w-none text-foreground text-sm leading-relaxed">
                 <ReactMarkdown>{currentMsg.text}</ReactMarkdown>
               </div>
-
-              {/* Timestamp */}
-              <p className="text-[10px] text-muted-foreground mt-2">
-                Foguetinho • agora
-              </p>
+              <p className="text-[10px] text-muted-foreground mt-2">Foguetinho • agora</p>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Floating mascot button */}
       <motion.button
         onClick={() => {
-          if (minimized) {
-            setMinimized(false);
-            if (currentMsg) setShowBubble(true);
-          } else if (showBubble) {
+          if (showBubble) {
             setShowBubble(false);
+            setHasMessage(false);
           } else if (currentMsg) {
             setShowBubble(true);
-          } else {
-            checkProduction();
           }
         }}
         className="fixed bottom-4 right-4 z-50 w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-card border-2 border-primary shadow-lg shadow-primary/20 flex items-center justify-center overflow-visible cursor-pointer"
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
-        animate={loading ? { rotate: [0, 10, -10, 0] } : {}}
-        transition={loading ? { duration: 0.5, repeat: Infinity } : {}}
       >
         <div className="w-10 h-10 sm:w-12 sm:h-12">
           <RocketMascot talking={showBubble} />
         </div>
-
-        {/* Notification dot */}
-        {messages.length > 0 && !showBubble && (
+        {!showBubble && (
           <motion.div
             className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive flex items-center justify-center"
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
+            animate={{ scale: [1, 1.2, 1] }}
+            transition={{ duration: 1, repeat: Infinity }}
           >
-            <span className="text-[9px] text-destructive-foreground font-bold">
-              {messages.length > 9 ? '9+' : messages.length}
-            </span>
+            <span className="text-[9px] text-destructive-foreground font-bold">!</span>
           </motion.div>
         )}
-
-        {/* Loading ring */}
-        {loading && (
-          <motion.div
-            className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-          />
-        )}
       </motion.button>
-
-      {/* Message history panel (opens on long press or click when bubble hidden) */}
-      <AnimatePresence>
-        {minimized === false && !showBubble && messages.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 0 }}
-            exit={{ opacity: 0 }}
-          />
-        )}
-      </AnimatePresence>
     </>
   );
 }
+
+export { ASSISTANT_KEY };

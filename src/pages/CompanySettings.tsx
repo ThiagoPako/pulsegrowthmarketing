@@ -7,10 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Clock, CalendarClock, AlertTriangle, Trash2 } from 'lucide-react';
+import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
+import { ASSISTANT_KEY } from '@/components/ProductionAssistant';
 
 const ALL_DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 
@@ -32,6 +34,7 @@ export default function CompanySettings() {
   const [confirmText, setConfirmText] = useState('');
   const [resetting, setResetting] = useState(false);
   const [showDangerZone, setShowDangerZone] = useState(false);
+  const [assistantEnabled, setAssistantEnabled] = useState(() => localStorage.getItem(ASSISTANT_KEY) !== 'false');
 
   const isAdmin = currentUser?.role === 'admin';
 
@@ -219,6 +222,28 @@ export default function CompanySettings() {
               Tempo para o cliente aprovar o conteúdo enviado
             </p>
           </div>
+        </div>
+      </div>
+
+      {/* Assistente de Produção */}
+      <div className="glass-card p-6 space-y-4">
+        <div className="flex items-center gap-2 text-primary">
+          <Rocket size={18} />
+          <h2 className="text-base font-semibold">Assistente de Produção (Foguetinho)</h2>
+        </div>
+        <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
+          <div>
+            <p className="text-sm font-medium">Ativar assistente</p>
+            <p className="text-[11px] text-muted-foreground">O Foguetinho monitora prazos e cobra a equipe de forma divertida</p>
+          </div>
+          <Switch
+            checked={assistantEnabled}
+            onCheckedChange={(checked) => {
+              setAssistantEnabled(checked);
+              localStorage.setItem(ASSISTANT_KEY, String(checked));
+              toast.success(checked ? 'Assistente ativado' : 'Assistente desativado');
+            }}
+          />
         </div>
       </div>
 

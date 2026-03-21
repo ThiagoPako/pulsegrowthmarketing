@@ -729,16 +729,17 @@ function ComoFunciona() {
                 variants={fadeScale}
                 custom={i}
                 whileHover={{ y: -4, scale: 1.02 }}
-                className="p-5 rounded-2xl border border-primary/20 bg-primary/[0.02] hover:bg-primary/[0.06] hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300"
+                className="p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border border-primary/20 bg-primary/[0.02] hover:bg-primary/[0.06] hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300"
               >
                 <motion.div
                   whileHover={{ scale: 1.1, rotate: -5 }}
-                  className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center mb-4"
+                  className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-primary/10 flex items-center justify-center mb-2.5 sm:mb-4"
                 >
-                  <f.icon size={20} className="text-primary" />
+                  <f.icon size={16} className="text-primary sm:hidden" />
+                  <f.icon size={20} className="text-primary hidden sm:block" />
                 </motion.div>
-                <h3 className="font-display text-sm font-bold text-foreground">{f.label}</h3>
-                <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{f.desc}</p>
+                <h3 className="font-display text-xs sm:text-sm font-bold text-foreground">{f.label}</h3>
+                <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 sm:mt-1.5 leading-relaxed line-clamp-2 sm:line-clamp-none">{f.desc}</p>
               </motion.div>
             ))}
           </motion.div>

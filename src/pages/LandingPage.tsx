@@ -122,6 +122,7 @@ function FloatingCTA() {
 function Navbar() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [activeSection, setActiveSection] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -130,101 +131,186 @@ function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Track active section
+  useEffect(() => {
+    const sectionIds = ['quem-somos', 'servicos', 'portal', 'planos', 'cases', 'depoimentos', 'faq', 'contato'];
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) setActiveSection(entry.target.id);
+        });
+      },
+      { rootMargin: '-40% 0px -55% 0px' }
+    );
+    sectionIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  // Close mobile menu on body scroll
+  useEffect(() => {
+    if (open) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = '';
+    return () => { document.body.style.overflow = ''; };
+  }, [open]);
+
   const links = [
-    { label: 'Quem Somos', href: '#quem-somos' },
-    { label: 'Serviços', href: '#servicos' },
-    { label: 'Como Funciona', href: '#portal' },
-    { label: 'Planos', href: '#planos' },
-    { label: 'Cases', href: '#cases' },
-    { label: 'Depoimentos', href: '#depoimentos' },
-    { label: 'FAQ', href: '#faq' },
-    { label: 'Contato', href: '#contato' },
+    { label: 'Quem Somos', href: '#quem-somos', id: 'quem-somos' },
+    { label: 'Serviços', href: '#servicos', id: 'servicos' },
+    { label: 'Processo', href: '#portal', id: 'portal' },
+    { label: 'Planos', href: '#planos', id: 'planos' },
+    { label: 'Cases', href: '#cases', id: 'cases' },
+    { label: 'Depoimentos', href: '#depoimentos', id: 'depoimentos' },
+    { label: 'FAQ', href: '#faq', id: 'faq' },
+    { label: 'Contato', href: '#contato', id: 'contato' },
   ];
 
+  const handleNavClick = (href: string) => {
+    setOpen(false);
+    setTimeout(() => {
+      const el = document.querySelector(href);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  };
+
   return (
-    <motion.nav
-      initial={{ y: -100 }}
-      animate={{ y: 0 }}
-      transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
-        scrolled
-          ? 'bg-background/90 backdrop-blur-2xl border-b border-border/50 shadow-sm'
-          : 'bg-transparent'
-      }`}
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <a href="#" className="flex items-center gap-2 group">
-            <motion.div
-              whileHover={{ rotate: 15, scale: 1.1 }}
-              transition={{ type: 'spring', stiffness: 400 }}
-              className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center"
-            >
-              <Rocket size={18} className="text-primary-foreground" />
-            </motion.div>
-            <span className="font-display font-bold text-lg text-foreground tracking-tight">Pulse</span>
-            <span className="text-xs text-muted-foreground font-medium hidden sm:inline">Growth Marketing de Vendas</span>
-          </a>
-
-          <div className="hidden md:flex items-center gap-6">
-            {links.map(l => (
-              <a
-                key={l.href}
-                href={l.href}
-                className="relative text-sm text-muted-foreground hover:text-foreground transition-colors font-medium after:content-[''] after:absolute after:w-full after:scale-x-0 after:h-0.5 after:bottom-[-4px] after:left-0 after:bg-primary after:origin-bottom-right after:transition-transform after:duration-300 hover:after:scale-x-100 hover:after:origin-bottom-left"
+    <>
+      <motion.nav
+        initial={{ y: -100 }}
+        animate={{ y: 0 }}
+        transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
+          scrolled
+            ? 'bg-background/90 backdrop-blur-2xl border-b border-border/50 shadow-sm'
+            : 'bg-transparent'
+        }`}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-14 sm:h-16">
+            <a href="#" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="flex items-center gap-2 group">
+              <motion.div
+                whileHover={{ rotate: 15, scale: 1.1 }}
+                transition={{ type: 'spring', stiffness: 400 }}
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary flex items-center justify-center"
               >
-                {l.label}
-              </a>
-            ))}
-          </div>
+                <Rocket size={16} className="text-primary-foreground" />
+              </motion.div>
+              <span className="font-display font-bold text-base sm:text-lg text-foreground tracking-tight">Pulse</span>
+              <span className="text-xs text-muted-foreground font-medium hidden lg:inline">Growth Marketing de Vendas</span>
+            </a>
 
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/login')} className="hidden sm:inline-flex text-sm">
-              Área da Equipe
-            </Button>
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button size="sm" onClick={() => window.open(WHATSAPP_LINK, '_blank')} className="gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shadow-primary/20">
-                <MessageCircle size={14} /> Falar conosco
+            <div className="hidden lg:flex items-center gap-1">
+              {links.map(l => (
+                <a
+                  key={l.href}
+                  href={l.href}
+                  onClick={(e) => { e.preventDefault(); handleNavClick(l.href); }}
+                  className={`relative text-sm px-3 py-1.5 rounded-lg transition-all duration-200 font-medium ${
+                    activeSection === l.id
+                      ? 'text-primary bg-primary/10'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                  }`}
+                >
+                  {l.label}
+                </a>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Button variant="ghost" size="sm" onClick={() => navigate('/login')} className="hidden sm:inline-flex text-xs sm:text-sm h-8 sm:h-9">
+                Área da Equipe
               </Button>
-            </motion.div>
-            <button className="md:hidden p-2" onClick={() => setOpen(!open)}>
-              {open ? <X size={20} /> : <Menu size={20} />}
-            </button>
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button size="sm" onClick={() => window.open(WHATSAPP_LINK, '_blank')} className="gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shadow-primary/20 h-8 sm:h-9 text-xs sm:text-sm px-3 sm:px-4">
+                  <MessageCircle size={14} /> <span className="hidden xs:inline">Falar conosco</span><span className="xs:hidden">WhatsApp</span>
+                </Button>
+              </motion.div>
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                className="lg:hidden p-2 rounded-lg hover:bg-accent/50 transition-colors"
+                onClick={() => setOpen(!open)}
+              >
+                <AnimatePresence mode="wait">
+                  {open ? (
+                    <motion.div key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.2 }}>
+                      <X size={20} />
+                    </motion.div>
+                  ) : (
+                    <motion.div key="menu" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.2 }}>
+                      <Menu size={20} />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.button>
+            </div>
           </div>
         </div>
-      </div>
+      </motion.nav>
 
+      {/* Full-screen mobile menu */}
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="md:hidden border-t border-border/50 bg-background/95 backdrop-blur-xl overflow-hidden"
+            className="fixed inset-0 z-40 lg:hidden"
           >
-            <div className="px-4 py-4 space-y-3">
-              {links.map((l, i) => (
-                <motion.a
-                  key={l.href}
-                  href={l.href}
-                  onClick={() => setOpen(false)}
-                  initial={{ x: -20, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  transition={{ delay: i * 0.05 }}
-                  className="block text-sm text-muted-foreground hover:text-foreground py-1"
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-background/98 backdrop-blur-xl"
+              onClick={() => setOpen(false)}
+            />
+
+            {/* Menu content */}
+            <div className="relative z-10 flex flex-col h-full pt-20 pb-8 px-6">
+              <div className="flex-1 flex flex-col justify-center gap-1">
+                {links.map((l, i) => (
+                  <motion.a
+                    key={l.href}
+                    href={l.href}
+                    onClick={(e) => { e.preventDefault(); handleNavClick(l.href); }}
+                    initial={{ x: -40, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: -40, opacity: 0 }}
+                    transition={{ delay: i * 0.05, duration: 0.3 }}
+                    className={`text-2xl sm:text-3xl font-display font-bold py-3 transition-colors ${
+                      activeSection === l.id ? 'text-primary' : 'text-foreground/70 hover:text-foreground'
+                    }`}
+                  >
+                    {l.label}
+                  </motion.a>
+                ))}
+              </div>
+
+              <motion.div
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.4 }}
+                className="space-y-3"
+              >
+                <Button
+                  size="lg"
+                  onClick={() => { setOpen(false); window.open(WHATSAPP_LINK, '_blank'); }}
+                  className="w-full gap-2 bg-primary hover:bg-primary/90 text-primary-foreground py-6"
                 >
-                  {l.label}
-                </motion.a>
-              ))}
-              <Button variant="outline" size="sm" onClick={() => navigate('/login')} className="w-full mt-2">
-                Área da Equipe
-              </Button>
+                  <MessageCircle size={18} /> Falar pelo WhatsApp
+                </Button>
+                <Button variant="outline" size="lg" onClick={() => { setOpen(false); navigate('/login'); }} className="w-full py-6">
+                  Área da Equipe
+                </Button>
+              </motion.div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.nav>
+    </>
   );
 }
 

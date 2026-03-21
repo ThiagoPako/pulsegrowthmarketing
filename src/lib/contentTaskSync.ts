@@ -92,9 +92,11 @@ export async function syncContentTaskColumnChange(
     try {
       const whatsConfig = await getWhatsAppConfig();
       if (whatsConfig?.integrationActive && whatsConfig?.autoTaskEditing && ctx.clientWhatsapp) {
+        const portalUrl = `https://pulsegrowthmarketing.lovable.app/portal/${ctx.clientId}`;
         const editingMsg = whatsConfig.msgTaskEditing
           .replace('{nome_cliente}', ctx.clientName || '')
-          .replace('{titulo}', ctx.title);
+          .replace('{titulo}', ctx.title)
+          .replace('{link_portal}', portalUrl);
 
         await sendWhatsAppMessage({
           number: ctx.clientWhatsapp,

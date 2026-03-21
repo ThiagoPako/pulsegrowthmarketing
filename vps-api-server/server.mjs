@@ -1875,7 +1875,8 @@ app.post('/api/whatsapp-webhook', async (req, res) => {
     const { data: configData } = await admin.from('whatsapp_config').select('*').limit(1).single();
     if (!configData?.api_token) return res.status(400).json({ error: 'No API token' });
 
-    const templateVars = { nome_cliente: client?.company_name || '', data_gravacao: recording?.date || '', hora_gravacao: recording?.start_time || '' };
+    const portalLink = `${PORTAL_BASE_URL}/${client?.id || ''}`;
+    const templateVars = { nome_cliente: client?.company_name || '', data_gravacao: recording?.date || '', hora_gravacao: recording?.start_time || '', link_portal: portalLink };
 
     if (confirmation.type === 'confirmation') {
       if (classification === 'confirm') {

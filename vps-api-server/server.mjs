@@ -693,6 +693,159 @@ app.post('/api/portal-actions', async (req, res) => {
   try {
     const { action, client_id, content_id, author_name, author_type, author_id, message } = req.body;
 
+    // ── Get client info ──
+    if (action === 'get_client') {
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(client_id);
+      let query, params;
+      if (isUUID) {
+        query = 'SELECT id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city FROM clients WHERE id = $1 LIMIT 1';
+        params = [client_id];
+      } else {
+        query = `SELECT id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city FROM clients WHERE trim(both '-' from regexp_replace(lower(trim(company_name)), '\\s+', '-', 'g')) = trim(both '-' from regexp_replace(lower(trim($1)), '\\s+', '-', 'g')) LIMIT 1`;
+        params = [client_id];
+      }
+      const { rows } = await pool.query(query, params);
+      if (rows.length === 0) return res.status(404).json({ error: 'Cliente não encontrado' });
+      return res.json({ client: rows[0] });
+    }
+
+    // ── Get portal contents ──
+    if (action === 'get_contents') {
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      const { rows } = await pool.query(
+        'SELECT * FROM client_portal_contents WHERE client_id = $1 ORDER BY created_at DESC',
+        [client_id]
+      );
+      return res.json({ contents: rows });
+    }
+
+    // ── Get notifications ──
+    if (action === 'get_notifications') {
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      const { rows } = await pool.query(
+        'SELECT * FROM client_portal_notifications WHERE client_id = $1 ORDER BY created_at DESC LIMIT 30',
+        [client_id]
+      );
+      return res.json({ notifications: rows });
+    }
+
+    // ── Mark notification read ──
+    if (action === 'mark_notification_read') {
+      const { notification_id, notification_ids } = req.body;
+      if (notification_id) {
+        await pool.query('UPDATE client_portal_notifications SET read = true WHERE id = $1', [notification_id]);
+      } else if (notification_ids && notification_ids.length > 0) {
+        await pool.query('UPDATE client_portal_notifications SET read = true WHERE id = ANY($1)', [notification_ids]);
+      }
+      return res.json({ success: true });
+    }
+
+    // ── Get scripts (Zona Criativa) ──
+    if (action === 'get_scripts') {
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      const { rows: scripts } = await pool.query(
+        `SELECT id, title, content, caption, content_format, video_type, created_at, created_by, priority, client_priority 
+         FROM scripts WHERE client_id = $1 AND (is_endomarketing = false OR is_endomarketing IS NULL)
+         ORDER BY created_at DESC`,
+        [client_id]
+      );
+      // Get authors
+      const authorIds = [...new Set(scripts.filter(s => s.created_by).map(s => s.created_by))];
+      let authors = {};
+      if (authorIds.length > 0) {
+        const { rows: profiles } = await pool.query(
+          'SELECT id, name, display_name, avatar_url, job_title FROM profiles WHERE id = ANY($1)',
+          [authorIds]
+        );
+        profiles.forEach(p => { authors[p.id] = p; });
+      }
+      return res.json({ scripts, authors });
+    }
+
+    // ── Update script client priority ──
+    if (action === 'set_script_priority') {
+      const { script_id, priority } = req.body;
+      if (!script_id) return res.status(400).json({ error: 'script_id required' });
+      await pool.query('UPDATE scripts SET client_priority = $1 WHERE id = $2', [priority || 'normal', script_id]);
+      // Get client name for notifications
+      if (client_id) {
+        const { rows: [clientInfo] } = await pool.query('SELECT company_name FROM clients WHERE id = $1', [client_id]);
+        return res.json({ success: true, company_name: clientInfo?.company_name || '' });
+      }
+      return res.json({ success: true });
+    }
+
+    // ── Get content tasks (for calendar) ──
+    if (action === 'get_content_tasks') {
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      const { rows: tasks } = await pool.query(
+        `SELECT id, title, content_type, kanban_column, scheduled_recording_date, scheduled_recording_time,
+                editing_started_at, editing_deadline, approval_sent_at, approved_at, adjustment_notes,
+                recording_id, script_id, drive_link, updated_at, created_at
+         FROM content_tasks WHERE client_id = $1`,
+        [client_id]
+      );
+      // Get task history
+      const taskIds = tasks.map(t => t.id);
+      let history = [];
+      if (taskIds.length > 0) {
+        const { rows } = await pool.query(
+          'SELECT id, task_id, action, details, created_at FROM task_history WHERE task_id = ANY($1) ORDER BY created_at ASC',
+          [taskIds]
+        );
+        history = rows;
+      }
+      return res.json({ tasks, history });
+    }
+
+    // ── Get deliveries (for calendar) ──
+    if (action === 'get_deliveries') {
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      const { rows } = await pool.query(
+        `SELECT id, title, content_type, status, delivered_at, posted_at, scheduled_time, platform
+         FROM social_media_deliveries WHERE client_id = $1`,
+        [client_id]
+      );
+      return res.json({ deliveries: rows });
+    }
+
+    // ── Flyer templates & items ──
+    if (action === 'get_flyer_data') {
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      const [templatesRes, itemsRes] = await Promise.all([
+        pool.query("SELECT * FROM flyer_templates WHERE is_active = true ORDER BY created_at DESC"),
+        pool.query('SELECT * FROM flyer_items WHERE client_id = $1 ORDER BY created_at DESC', [client_id]),
+      ]);
+      return res.json({ templates: templatesRes.rows, items: itemsRes.rows });
+    }
+
+    if (action === 'create_flyer_item') {
+      const { template_id, vehicle_model, vehicle_year, price, fuel_type, transmission, tire_condition, extra_info, media_urls } = req.body;
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      const { rows: [item] } = await pool.query(
+        `INSERT INTO flyer_items (client_id, template_id, vehicle_model, vehicle_year, price, fuel_type, transmission, tire_condition, extra_info, media_urls, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pendente') RETURNING *`,
+        [client_id, template_id || null, vehicle_model || '', vehicle_year || '', price || '', fuel_type || '', transmission || '', tire_condition || '', extra_info || null, media_urls || '{}']
+      );
+      return res.json({ item });
+    }
+
+    if (action === 'update_flyer_item') {
+      const { item_id, status } = req.body;
+      if (!item_id) return res.status(400).json({ error: 'item_id required' });
+      await pool.query('UPDATE flyer_items SET status = $1, updated_at = NOW() WHERE id = $2', [status, item_id]);
+      return res.json({ success: true });
+    }
+
+    if (action === 'delete_flyer_item') {
+      const { item_id } = req.body;
+      if (!item_id) return res.status(400).json({ error: 'item_id required' });
+      await pool.query('DELETE FROM flyer_items WHERE id = $1', [item_id]);
+      return res.json({ success: true });
+    }
+
+    // ── Comments ──
     if (action === 'get_comments') {
       if (!content_id) return res.status(400).json({ error: 'content_id required' });
       const { rows } = await pool.query(

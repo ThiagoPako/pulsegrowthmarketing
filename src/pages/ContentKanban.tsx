@@ -1145,11 +1145,11 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
         draggable
         onDragStart={onDragStart}
         onClick={onCardClick}
-        className={`group relative bg-card rounded-xl cursor-grab active:cursor-grabbing transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 overflow-hidden ${
-          isDragging ? 'opacity-40 scale-95 shadow-none' : 'shadow-sm'
+        className={`group relative bg-card rounded-xl cursor-grab active:cursor-grabbing transition-all duration-300 overflow-hidden ${
+          isDragging ? 'opacity-40 scale-95 shadow-none' : 'shadow-sm hover:shadow-xl hover:shadow-primary/10'
         } ${isOverdue ? 'ring-1 ring-destructive/40' : ''} ${
           isCaptacao ? 'ring-1 ring-orange-400/30' : ''
-        }`}
+        } hover:-translate-y-1`}
         style={{ borderLeft: `3px solid ${isOverdue ? 'hsl(var(--destructive))' : `hsl(${clientColor})`}` }}
       >
         {/* Recording indicator */}

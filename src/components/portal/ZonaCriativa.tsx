@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/lib/vpsDb';
+import { portalAction } from '@/lib/portalApi';
 import { FileText, Film, Palette, Video, Image, Sparkles, User, Tag, AlertTriangle, Flame, Rocket, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';

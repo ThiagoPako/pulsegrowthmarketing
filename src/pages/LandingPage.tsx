@@ -517,10 +517,10 @@ function Sobre() {
                   variants={fadeScale}
                   custom={i}
                   whileHover={{ scale: 1.03, x: 4 }}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-accent/50 hover:bg-accent/80 transition-colors cursor-default"
+                  className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-xl bg-accent/50 hover:bg-accent/80 transition-colors cursor-default"
                 >
-                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                    <Icon size={18} className="text-primary" />
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <Icon size={16} className="text-primary" />
                   </div>
                   <span className="text-sm font-medium text-foreground">{label}</span>
                 </motion.div>

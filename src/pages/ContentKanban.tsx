@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, Send, Eye, Maximize2 } from 'lucide-react';
+import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, Send, Eye, Maximize2, Rocket } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
@@ -22,6 +22,30 @@ import { getWhatsAppConfig, sendWhatsAppMessage } from '@/services/whatsappServi
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 import ContentTaskDetailSheet from '@/components/content/ContentTaskDetailSheet';
 import { motion, AnimatePresence } from 'framer-motion';
+
+/* ─── Mini Rocket Icon for headers ─────────────────────────── */
+function MiniRocket({ size = 18 }: { size?: number }) {
+  return (
+    <motion.svg width={size} height={size} viewBox="0 0 64 64" fill="none"
+      animate={{ y: [0, -2, 0] }} transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}>
+      <motion.ellipse cx="32" cy="56" rx="5" ry="3"
+        animate={{ ry: [3, 5, 3], opacity: [0.7, 1, 0.7] }}
+        transition={{ duration: 0.4, repeat: Infinity }}
+        fill="url(#miniFlame)" />
+      <path d="M32 10C27 10 24 18 24 30V42C24 44.5 27 47 32 47C37 47 40 44.5 40 42V30C40 18 37 10 32 10Z" fill="white" fillOpacity="0.95" />
+      <circle cx="32" cy="28" r="5" fill="rgba(0,0,0,0.7)" />
+      <ellipse cx="31" cy="27.5" rx="2" ry="2.5" fill="white" />
+      <ellipse cx="34" cy="27.5" rx="1.5" ry="2" fill="white" />
+      <motion.circle cx="31.5" cy="28" r="1" fill="rgba(0,0,0,0.8)"
+        animate={{ cx: [31.5, 32, 31, 31.5] }} transition={{ duration: 2.5, repeat: Infinity }} />
+      <path d="M24 36L20 42C20 42 22 43.5 24 42.5V36Z" fill="white" fillOpacity="0.7" />
+      <path d="M40 36L44 42C44 42 42 43.5 40 42.5V36Z" fill="white" fillOpacity="0.7" />
+      <defs>
+        <radialGradient id="miniFlame"><stop stopColor="#fbbf24" /><stop offset="1" stopColor="#ef4444" /></radialGradient>
+      </defs>
+    </motion.svg>
+  );
+}
 
 // Drag-to-scroll container
 function DragScrollContainer({ children, className }: { children: React.ReactNode; className?: string }) {

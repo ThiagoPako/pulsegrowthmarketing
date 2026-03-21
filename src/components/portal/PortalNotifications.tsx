@@ -46,7 +46,7 @@ export default function PortalNotifications({ clientId, clientColor, onSelectCon
   const handleClick = async (n: PortalNotification) => {
     if (!n.read) {
       setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x));
-      await supabase.from('client_portal_notifications').update({ read: true } as any).eq('id', n.id);
+      await portalAction({ action: 'mark_notification_read', notification_id: n.id });
     }
     setOpen(false);
     if (n.link_content_id && onSelectContent) {

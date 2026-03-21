@@ -87,14 +87,16 @@ interface AssistantMessage {
   type: 'deadline' | 'motivation' | 'friday' | 'general';
 }
 
+const ASSISTANT_KEY = 'pulse_assistant_enabled';
+
 /* ─── Main Component ─── */
 export default function ProductionAssistant() {
   const { user, profile } = useAuth();
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [currentMsg, setCurrentMsg] = useState<AssistantMessage | null>(null);
   const [showBubble, setShowBubble] = useState(false);
-  const [minimized, setMinimized] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [hasMessage, setHasMessage] = useState(false);
   const checkedRef = useRef(false);
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
 

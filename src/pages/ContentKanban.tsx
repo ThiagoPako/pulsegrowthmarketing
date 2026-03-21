@@ -658,9 +658,12 @@ export default function ContentKanban() {
     <div className="flex flex-col h-[calc(100vh-7rem)]">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold text-foreground tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>Criação de Conteúdo</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{tasks.length} cartões no pipeline</p>
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <MiniRocket size={28} />
+          <div>
+            <h1 className="text-xl font-bold text-foreground tracking-tight">Criação de Conteúdo</h1>
+            <p className="text-xs text-muted-foreground">{tasks.length} cartões no pipeline</p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">

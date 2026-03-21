@@ -227,13 +227,13 @@ export default function PortalWelcomeOverlay({ clientId, onVideosLoaded }: Porta
 
         {phase === 'video' && video && (
           <motion.div
-            className="relative z-10 w-[90vw] max-w-2xl"
+            className="relative z-10 w-[90vw] max-w-2xl md:w-[90vw] max-md:w-full max-md:h-full max-md:max-w-none max-md:flex max-md:flex-col max-md:justify-center"
             initial={{ scale: 0.5, opacity: 0, y: 40 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             transition={{ type: 'spring', damping: 20, stiffness: 200 }}
           >
-            <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-orange-500 opacity-75 blur-sm animate-pulse" />
-            <div className="relative bg-black rounded-2xl overflow-hidden shadow-2xl">
+            <div className="absolute -inset-1 rounded-2xl max-md:rounded-none bg-gradient-to-r from-amber-400 via-yellow-300 to-orange-500 opacity-75 blur-sm animate-pulse" />
+            <div className="relative bg-black rounded-2xl max-md:rounded-none overflow-hidden shadow-2xl max-md:h-full max-md:flex max-md:flex-col">
               <div className="flex items-center justify-between p-3 bg-gradient-to-r from-amber-900/50 to-orange-900/50">
                 <div className="flex items-center gap-2">
                   <motion.span animate={{ rotate: [0, 15, -15, 0] }} transition={{ duration: 1, repeat: Infinity }} className="text-xl">
@@ -251,7 +251,7 @@ export default function PortalWelcomeOverlay({ clientId, onVideosLoaded }: Porta
                   </Button>
                 </div>
               </div>
-              <div className="aspect-video bg-black flex items-center justify-center">
+              <div className="aspect-video max-md:aspect-auto max-md:flex-1 bg-black flex items-center justify-center">
                 {!resolvedUrl ? (
                   <Loader2 className="h-8 w-8 text-white/60 animate-spin" />
                 ) : (

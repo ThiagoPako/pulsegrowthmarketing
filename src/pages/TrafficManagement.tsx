@@ -160,11 +160,10 @@ export default function TrafficManagement() {
   };
 
   const handleCreateFromCreative = (creative: ApprovedCreative) => {
-    const client = clients.find(c => c.id === creative.client_id);
     setForm({
       clientId: creative.client_id,
       title: `Campanha - ${creative.title}`,
-      contentType: creative.format_type || 'criativo',
+      contentType: 'criativo',
       startDate: new Date().toISOString().split('T')[0],
       endDate: '',
       budget: '',

@@ -6,7 +6,7 @@ import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/vpsDb';
+import { portalAction } from '@/lib/portalApi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { uploadFileToVps, VPS_BASE_URL } from '@/services/vpsApi';
 import {
@@ -538,7 +538,8 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
       const uploadedUrl = await uploadFileToVps(file, `panfletagem/${clientId}/generated`);
 
       const now = new Date();
-      await supabase.from('client_portal_contents').insert({
+      await portalAction({
+        action: 'create_portal_content',
         client_id: clientId,
         title: `Panfleto Digital${model ? ` - ${model}` : ''}${year ? ` ${year}` : ''}`,
         content_type: 'reel',

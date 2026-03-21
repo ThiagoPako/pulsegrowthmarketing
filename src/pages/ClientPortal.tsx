@@ -542,10 +542,10 @@ export default function ClientPortal() {
                   setActiveTab('library');
                   handleSelectContent(found);
                 } else {
-                  supabase.from('client_portal_contents').select('*').eq('id', contentId).single().then(({ data }) => {
-                    if (data) {
+                  portalAction({ action: 'get_content_by_id', content_id: contentId }).then((result) => {
+                    if (result?.content) {
                       setActiveTab('library');
-                      handleSelectContent(data as PortalContent);
+                      handleSelectContent(result.content as PortalContent);
                     }
                   });
                 }

@@ -40,11 +40,12 @@ interface ApprovedCreative {
   id: string;
   client_id: string;
   title: string;
-  format_type: string;
-  attachment_url: string | null;
-  mockup_url: string | null;
-  client_approved_at: string | null;
-  completed_at: string | null;
+  content_type: string;
+  edited_video_link: string | null;
+  drive_link: string | null;
+  approved_at: string | null;
+  kanban_column: string;
+  created_at: string;
 }
 
 const CONTENT_TYPE_CONFIG: Record<string, { label: string; icon: any; color: string }> = {

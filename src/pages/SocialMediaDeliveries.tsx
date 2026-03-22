@@ -733,6 +733,7 @@ export default function SocialMediaDeliveries() {
     // All data now rendered via Kanban component
 
     return (
+      <CatClickWrapper>
       <div className="space-y-5">
         {/* Header */}
         <div className="flex items-center gap-3">

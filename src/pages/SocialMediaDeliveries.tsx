@@ -979,7 +979,7 @@ export default function SocialMediaDeliveries() {
 
               {/* Reels Mensal */}
               {(() => {
-                const baseGoal = plan?.reels_qty || (selectedClient.weeklyReels ? selectedClient.weeklyReels * 4 : 0);
+                const baseGoal = plan ? plan.reels_qty : (selectedClient.weeklyReels ? selectedClient.weeklyReels * 4 : 0);
                 const deficit = prevMonthDeficit[selectedClientId]?.reels || 0;
                 const goal = baseGoal + deficit;
                 const delivered = stats.reels;

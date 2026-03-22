@@ -1215,8 +1215,18 @@ export default function SocialMediaDeliveries() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {clientsWithData.map(({ client, stats, plan, weeklyStories: ws, overdue, isOnboarding }) => {
-                const storyGoal = client.weeklyStories || 0;
-                const storyPct = storyGoal > 0 ? Math.min(Math.round((ws / storyGoal) * 100), 100) : 0;
+                // Monthly plan goals
+                const reelsGoal = plan?.reels_qty || (client.weeklyReels ? client.weeklyReels * 4 : 0);
+                const creativosGoal = plan?.creatives_qty || (client.weeklyCreatives ? client.weeklyCreatives * 4 : 0);
+                const storiesGoalMonthly = plan?.stories_qty || (client.weeklyStories ? client.weeklyStories * 4 : 0);
+                const artesGoal = plan?.arts_qty || 0;
+                const deficit = prevMonthDeficit[client.id] || { reels: 0, criativo: 0, story: 0, arte: 0 };
+                const goalItems = [
+                  { label: 'Reels', delivered: stats.reels, goal: reelsGoal + deficit.reels, icon: Film, color: 'text-blue-600' },
+                  { label: 'Criativos', delivered: stats.criativo, goal: creativosGoal + deficit.criativo, icon: Megaphone, color: 'text-purple-600' },
+                  { label: 'Stories', delivered: stats.story, goal: storiesGoalMonthly + deficit.story, icon: Image, color: 'text-pink-600' },
+                  { label: 'Artes', delivered: stats.arte, goal: artesGoal + deficit.arte, icon: Palette, color: 'text-amber-600' },
+                ].filter(i => i.goal > 0);
                 const onboarding = onboardingStatus[client.id];
                 const hasOverdue = overdue.overdue > 0;
                 const hasAlmostOverdue = overdue.almostOverdue > 0;
@@ -1339,14 +1349,22 @@ export default function SocialMediaDeliveries() {
                         {stats.total === 0 && !isOnboarding && <span className="text-xs text-muted-foreground">Sem entregas este mês</span>}
                       </div>
 
-                      {/* Weekly stories progress */}
-                      {storyGoal > 0 && (
-                        <div className="mt-3 pt-3 border-t border-border">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-[10px] text-muted-foreground flex items-center gap-1"><Image size={10} className="text-pink-600" /> Stories/semana</span>
-                            <span className={`text-[10px] font-semibold ${ws >= storyGoal ? 'text-green-600' : 'text-muted-foreground'}`}>{ws}/{storyGoal}</span>
-                          </div>
-                          <Progress value={storyPct} className="h-1.5" />
+                      {/* Monthly plan progress */}
+                      {goalItems.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-border space-y-2">
+                          <span className="text-[10px] font-semibold text-muted-foreground">Progresso do Pacote</span>
+                          {goalItems.map(item => {
+                            const pct = Math.min(Math.round((item.delivered / item.goal) * 100), 100);
+                            return (
+                              <div key={item.label}>
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <span className={`text-[10px] flex items-center gap-1 ${item.color}`}><item.icon size={10} /> {item.label}</span>
+                                  <span className={`text-[10px] font-semibold ${item.delivered >= item.goal ? 'text-green-600' : 'text-muted-foreground'}`}>{item.delivered}/{item.goal}</span>
+                                </div>
+                                <Progress value={pct} className="h-1.5" />
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </CardContent>

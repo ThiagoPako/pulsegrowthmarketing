@@ -461,6 +461,75 @@ export default function ClientOnboarding() {
                     </p>
                   </div>
 
+                  {/* Concentrated Recording Option - shown when 1x/month */}
+                  {monthlyRecordings === 1 && (
+                    <div className={`p-4 rounded-xl border-2 transition-all space-y-3 ${
+                      fullShiftRecording 
+                        ? 'border-primary bg-gradient-to-br from-primary/10 to-primary/5 ring-1 ring-primary/30' 
+                        : 'border-amber-400/60 bg-gradient-to-br from-amber-50/80 to-orange-50/50 dark:from-amber-900/10 dark:to-orange-900/5'
+                    }`}>
+                      <div className="flex items-start gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                          fullShiftRecording ? 'bg-primary/20' : 'bg-amber-400/20'
+                        }`}>
+                          <Zap size={20} className={fullShiftRecording ? 'text-primary' : 'text-amber-600'} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="text-sm font-bold">⚡ Gravação Concentrada</p>
+                            <Badge className="bg-amber-500 text-white border-0 text-[9px] px-1.5 py-0">RECOMENDADO</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            Para sua <strong className="text-foreground">comodidade</strong>, podemos gravar todo o conteúdo do mês em um <strong className="text-foreground">único período</strong> (manhã ou tarde). 
+                            Assim você evita desgastes no fluxo de trabalho diário da sua operação!
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 p-3 rounded-lg bg-background/60 border border-border/50">
+                        <Switch
+                          checked={fullShiftRecording}
+                          onCheckedChange={(checked) => {
+                            setFullShiftRecording(checked);
+                            if (checked) {
+                              setPreferredShift('turnoA');
+                            } else {
+                              setPreferredShift('ambos');
+                            }
+                          }}
+                        />
+                        <div>
+                          <p className="text-xs font-semibold">{fullShiftRecording ? '✅ Gravação concentrada ativada!' : 'Ativar gravação concentrada'}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {fullShiftRecording 
+                              ? 'Você escolherá o período (manhã ou tarde) no próximo passo.' 
+                              : 'Reservamos um período inteiro para gravar tudo de uma vez.'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {fullShiftRecording && (
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          <div className="p-2 rounded-lg bg-background/80 border border-border/50">
+                            <Star size={14} className="text-primary mx-auto mb-1" />
+                            <p className="text-[10px] font-semibold">Mais prático</p>
+                            <p className="text-[9px] text-muted-foreground">Tudo em 1 dia</p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-background/80 border border-border/50">
+                            <TrendingUp size={14} className="text-primary mx-auto mb-1" />
+                            <p className="text-[10px] font-semibold">Mais produtivo</p>
+                            <p className="text-[9px] text-muted-foreground">Sem interrupções</p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-background/80 border border-border/50">
+                            <Clock size={14} className="text-primary mx-auto mb-1" />
+                            <p className="text-[10px] font-semibold">Otimize tempo</p>
+                            <p className="text-[9px] text-muted-foreground">Fluxo contínuo</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {monthlyRecordings > 1 && (
                     <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
                       <p className="text-sm font-semibold flex items-center gap-2">

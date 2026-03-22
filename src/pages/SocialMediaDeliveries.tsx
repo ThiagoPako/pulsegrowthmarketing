@@ -851,35 +851,43 @@ export default function SocialMediaDeliveries() {
         </div>
 
         {/* Plan progress */}
-        {plan && (
-          <Card className="border-border">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-semibold text-foreground">Progresso Mensal</span>
-                <Badge variant="outline" className="text-xs">{plan.name}</Badge>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[
-                  { label: 'Reels', delivered: stats.reels, goal: (plan.reels_qty || 0) + (prevMonthDeficit[selectedClientId]?.reels || 0) },
-                  { label: 'Criativos', delivered: stats.criativo, goal: (plan.creatives_qty || 0) + (prevMonthDeficit[selectedClientId]?.criativo || 0) },
-                  { label: 'Stories', delivered: stats.story, goal: (plan.stories_qty || 0) + (prevMonthDeficit[selectedClientId]?.story || 0) },
-                  { label: 'Artes', delivered: stats.arte, goal: (plan.arts_qty || 0) + (prevMonthDeficit[selectedClientId]?.arte || 0) },
-                ].filter(i => i.goal > 0).map(item => {
-                  const pct = Math.min(Math.round((item.delivered / item.goal) * 100), 100);
-                  return (
-                    <div key={item.label} className="space-y-1">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">{item.label}</span>
-                        <span className="font-medium text-foreground">{item.delivered}/{item.goal}</span>
+        {(() => {
+          const reelsGoal = (plan?.reels_qty || (selectedClient.weeklyReels ? selectedClient.weeklyReels * 4 : 0)) + (prevMonthDeficit[selectedClientId]?.reels || 0);
+          const creativosGoal = (plan?.creatives_qty || (selectedClient.weeklyCreatives ? selectedClient.weeklyCreatives * 4 : 0)) + (prevMonthDeficit[selectedClientId]?.criativo || 0);
+          const storiesGoal = (plan?.stories_qty || (storyGoal > 0 ? storyGoal * 4 : 0)) + (prevMonthDeficit[selectedClientId]?.story || 0);
+          const artesGoal = (plan?.arts_qty || 0) + (prevMonthDeficit[selectedClientId]?.arte || 0);
+          const hasAnyGoal = reelsGoal > 0 || creativosGoal > 0 || storiesGoal > 0 || artesGoal > 0;
+          if (!hasAnyGoal) return null;
+          return (
+            <Card className="border-border">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-semibold text-foreground">Progresso Mensal</span>
+                  <Badge variant="outline" className="text-xs">{plan?.name || 'Meta semanal'}</Badge>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Reels', delivered: stats.reels, goal: reelsGoal },
+                    { label: 'Criativos', delivered: stats.criativo, goal: creativosGoal },
+                    { label: 'Stories', delivered: stats.story, goal: storiesGoal },
+                    { label: 'Artes', delivered: stats.arte, goal: artesGoal },
+                  ].filter(i => i.goal > 0).map(item => {
+                    const pct = Math.min(Math.round((item.delivered / item.goal) * 100), 100);
+                    return (
+                      <div key={item.label} className="space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">{item.label}</span>
+                          <span className="font-medium text-foreground">{item.delivered}/{item.goal}</span>
+                        </div>
+                        <Progress value={pct} className="h-2" />
                       </div>
-                      <Progress value={pct} className="h-2" />
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         {/* Previous month deficit alert */}
         {prevMonthDeficit[selectedClientId] && (

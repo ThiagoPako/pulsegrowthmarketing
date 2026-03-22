@@ -186,6 +186,21 @@ export function useFinancialData() {
 
   // Revenue CRUD
   const addRevenue = async (r: Partial<Revenue>) => {
+    // Prevent duplicate: check if revenue already exists for this client+month
+    if (r.client_id && r.reference_month) {
+      const normalized = normalizeDate(r.reference_month);
+      const { data: existing } = await supabase.from('revenues').select('id').eq('client_id', r.client_id);
+      const dup = (existing as any[] || []).find((e: any) => normalizeDate(e.reference_month || e.id) === normalized);
+      // Better check: query with both filters
+      const { data: dupCheck } = await supabase
+        .from('revenues')
+        .select('id')
+        .eq('client_id', r.client_id)
+        .eq('reference_month', normalized);
+      if ((dupCheck as any[] || []).length > 0) {
+        return false; // Already exists
+      }
+    }
     const { error } = await supabase.from('revenues').insert(r as any);
     if (!error) {
       await logActivity('criação', 'receita', `Registrou receita - R$ ${Number(r.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, undefined, r);
@@ -210,14 +225,19 @@ export function useFinancialData() {
     const monthNum = parseInt(monthNumStr);
     const refMonth = `${year}-${String(monthNum).padStart(2, '0')}-01`;
 
-    // Fetch fresh contracts and existing revenues from DB to avoid stale state
+    // Fetch fresh contracts and ALL existing revenues for this month to avoid duplicates
     const [freshContracts, freshExisting] = await Promise.all([
       supabase.from('financial_contracts').select('*').eq('status', 'ativo'),
-      supabase.from('revenues').select('client_id').eq('reference_month', refMonth),
+      supabase.from('revenues').select('client_id, reference_month'),
     ]);
 
     const activeContracts = (freshContracts.data as any[] || []).filter((c: any) => Number(c.contract_value) > 0);
-    const existingClientIds = new Set((freshExisting.data as any[] || []).map((r: any) => r.client_id));
+    // Normalize all existing revenue dates to match
+    const existingClientIds = new Set(
+      (freshExisting.data as any[] || [])
+        .filter((r: any) => normalizeDate(r.reference_month) === refMonth)
+        .map((r: any) => r.client_id)
+    );
 
     const newRevenues = activeContracts
       .filter((c: any) => !existingClientIds.has(c.client_id))
@@ -231,11 +251,19 @@ export function useFinancialData() {
       }));
 
     if (newRevenues.length > 0) {
-      await supabase.from('revenues').insert(newRevenues as any);
-      await logActivity('geração', 'receita', `Gerou ${newRevenues.length} receita(s) recorrente(s) para ${monthStr}`, undefined, { month: monthStr, count: newRevenues.length });
+      // Insert one by one to skip duplicates gracefully
+      let inserted = 0;
+      for (const rev of newRevenues) {
+        const { error } = await supabase.from('revenues').insert(rev as any);
+        if (!error) inserted++;
+      }
+      if (inserted > 0) {
+        await logActivity('geração', 'receita', `Gerou ${inserted} receita(s) recorrente(s) para ${monthStr}`, undefined, { month: monthStr, count: inserted });
+      }
       await fetchAll();
+      return inserted;
     }
-    return newRevenues.length;
+    return 0;
   };
 
   // Expense CRUD

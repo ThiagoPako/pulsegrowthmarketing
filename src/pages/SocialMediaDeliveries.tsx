@@ -1237,10 +1237,10 @@ export default function SocialMediaDeliveries() {
                 const artesGoal = plan ? plan.arts_qty : 0;
                 const deficit = prevMonthDeficit[client.id] || { reels: 0, criativo: 0, story: 0, arte: 0 };
                 const goalItems = [
-                  { label: 'Reels', delivered: stats.reels, goal: reelsGoal + deficit.reels, icon: Film, color: 'text-blue-600' },
-                  { label: 'Criativos', delivered: stats.criativo, goal: creativosGoal + deficit.criativo, icon: Megaphone, color: 'text-purple-600' },
-                  { label: 'Stories', delivered: stats.story, goal: storiesGoalMonthly + deficit.story, icon: Image, color: 'text-pink-600' },
-                  { label: 'Artes', delivered: stats.arte, goal: artesGoal + deficit.arte, icon: Palette, color: 'text-amber-600' },
+                  { label: 'Reels', delivered: stats.reels, goal: reelsGoal + (reelsGoal > 0 ? deficit.reels : 0), icon: Film, color: 'text-blue-600' },
+                  { label: 'Criativos', delivered: stats.criativo, goal: creativosGoal + (creativosGoal > 0 ? deficit.criativo : 0), icon: Megaphone, color: 'text-purple-600' },
+                  { label: 'Stories', delivered: stats.story, goal: storiesGoalMonthly + (storiesGoalMonthly > 0 ? deficit.story : 0), icon: Image, color: 'text-pink-600' },
+                  { label: 'Artes', delivered: stats.arte, goal: artesGoal + (artesGoal > 0 ? deficit.arte : 0), icon: Palette, color: 'text-amber-600' },
                 ].filter(i => i.goal > 0 || i.delivered > 0);
                 const onboarding = onboardingStatus[client.id];
                 const hasOverdue = overdue.overdue > 0;

@@ -1228,7 +1228,7 @@ export default function SocialMediaDeliveries() {
                   { label: 'Criativos', delivered: stats.criativo, goal: creativosGoal + deficit.criativo, icon: Megaphone, color: 'text-purple-600' },
                   { label: 'Stories', delivered: stats.story, goal: storiesGoalMonthly + deficit.story, icon: Image, color: 'text-pink-600' },
                   { label: 'Artes', delivered: stats.arte, goal: artesGoal + deficit.arte, icon: Palette, color: 'text-amber-600' },
-                ].filter(i => i.goal > 0);
+                ].filter(i => i.goal > 0 || i.delivered > 0);
                 const onboarding = onboardingStatus[client.id];
                 const hasOverdue = overdue.overdue > 0;
                 const hasAlmostOverdue = overdue.almostOverdue > 0;

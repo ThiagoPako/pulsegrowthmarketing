@@ -131,6 +131,27 @@ export default function CompanySettings() {
       });
   }, []);
 
+  const [moduleConfirmText, setModuleConfirmText] = useState<Record<string, string>>({});
+  const [moduleResetting, setModuleResetting] = useState<string | null>(null);
+
+  const handleModuleReset = async (mod: ModuleReset) => {
+    if (moduleConfirmText[mod.label] !== mod.confirmWord) return;
+    setModuleResetting(mod.label);
+    try {
+      for (const table of mod.tables) {
+        const { error } = await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (error) console.error(`Erro ao limpar ${table}:`, error.message);
+      }
+      toast.success(`Módulo "${mod.label}" resetado com sucesso!`);
+      setModuleConfirmText(prev => ({ ...prev, [mod.label]: '' }));
+      setTimeout(() => window.location.reload(), 1500);
+    } catch {
+      toast.error(`Erro ao resetar módulo "${mod.label}".`);
+    } finally {
+      setModuleResetting(null);
+    }
+  };
+
   const handleSystemReset = async () => {
     if (confirmText !== 'RESETAR TUDO') return;
     setResetting(true);

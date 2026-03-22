@@ -268,9 +268,13 @@ export default function SocialMediaDeliveries() {
   }, [deliveries]);
 
   // Previous month deficit per client (how much is still owed from last month)
+  // System started in March 2026 — ignore any deficit before April 2026
+  const SYSTEM_START_MONTH = new Date(2026, 2, 1); // March 2026
   const prevMonthDeficit = useMemo(() => {
     const now = new Date();
     const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    // Don't calculate deficit for months before the system started
+    if (prevMonth < SYSTEM_START_MONTH) return {};
     const prevStart = format(startOfMonth(prevMonth), 'yyyy-MM-dd');
     const prevEnd = format(endOfMonth(prevMonth), 'yyyy-MM-dd');
     const prevDeliveries = deliveries.filter(d => d.delivered_at >= prevStart && d.delivered_at <= prevEnd);

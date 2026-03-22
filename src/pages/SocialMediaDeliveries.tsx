@@ -1356,12 +1356,13 @@ export default function SocialMediaDeliveries() {
                         <div className="mt-3 pt-3 border-t border-border space-y-2">
                           <span className="text-[10px] font-semibold text-muted-foreground">Progresso do Pacote</span>
                           {goalItems.map(item => {
-                            const pct = Math.min(Math.round((item.delivered / item.goal) * 100), 100);
+                            const isInfinite = item.goal === 0;
+                            const pct = isInfinite ? 100 : Math.min(Math.round((item.delivered / item.goal) * 100), 100);
                             return (
                               <div key={item.label}>
                                 <div className="flex items-center justify-between mb-0.5">
                                   <span className={`text-[10px] flex items-center gap-1 ${item.color}`}><item.icon size={10} /> {item.label}</span>
-                                  <span className={`text-[10px] font-semibold ${item.delivered >= item.goal ? 'text-green-600' : 'text-muted-foreground'}`}>{item.delivered}/{item.goal}</span>
+                                  <span className={`text-[10px] font-semibold ${!isInfinite && item.delivered >= item.goal ? 'text-green-600' : 'text-muted-foreground'}`}>{item.delivered}/{isInfinite ? '∞' : item.goal}{isInfinite && item.delivered > 0 ? ' extra' : ''}</span>
                                 </div>
                                 <Progress value={pct} className="h-1.5" />
                               </div>

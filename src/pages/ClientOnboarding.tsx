@@ -87,6 +87,7 @@ export default function ClientOnboarding() {
   const [acceptsExtra, setAcceptsExtra] = useState(false);
   const [extraTypes, setExtraTypes] = useState<string[]>([]);
   const [extraAppears, setExtraAppears] = useState(false);
+  const [fullShiftRecording, setFullShiftRecording] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
 
   // Photo preferences

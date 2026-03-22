@@ -871,15 +871,17 @@ export default function SocialMediaDeliveries() {
                     { label: 'Criativos', delivered: stats.criativo, goal: creativosGoal },
                     { label: 'Stories', delivered: stats.story, goal: storiesGoal },
                     { label: 'Artes', delivered: stats.arte, goal: artesGoal },
-                  ].filter(i => i.goal > 0).map(item => {
-                    const pct = Math.min(Math.round((item.delivered / item.goal) * 100), 100);
+                  ].filter(i => i.goal > 0 || i.delivered > 0).map(item => {
+                    const isInfinite = item.goal === 0;
+                    const pct = isInfinite ? 100 : Math.min(Math.round((item.delivered / item.goal) * 100), 100);
                     return (
                       <div key={item.label} className="space-y-1">
                         <div className="flex justify-between text-xs">
                           <span className="text-muted-foreground">{item.label}</span>
-                          <span className="font-medium text-foreground">{item.delivered}/{item.goal}</span>
+                          <span className="font-medium text-foreground">{item.delivered}/{isInfinite ? '∞' : item.goal}</span>
                         </div>
                         <Progress value={pct} className="h-2" />
+                        {isInfinite && item.delivered > 0 && <span className="text-[9px] text-primary font-medium">Extra</span>}
                       </div>
                     );
                   })}

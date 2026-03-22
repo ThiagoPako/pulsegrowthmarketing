@@ -134,13 +134,13 @@ export default function FinancialRevenues() {
   const autoGenRef = useRef<string | null>(null);
   useEffect(() => {
     if (loading || autoGenRef.current === selectedMonth) return;
-    if (filtered.length === 0 && clients.length > 0) {
+    if (filtered.length === 0 && clients.length > 0 && contracts.length > 0) {
       autoGenRef.current = selectedMonth;
       generateMonthlyRevenues(selectedMonth).then(count => {
         if (count > 0) toast.success(`${count} receitas geradas automaticamente`);
       });
     }
-  }, [selectedMonth, loading, filtered.length, clients.length]);
+  }, [selectedMonth, loading, filtered.length, clients.length, contracts.length]);
 
   const handleGenerate = async () => {
     autoGenRef.current = selectedMonth;

@@ -128,7 +128,7 @@ export function useFinancialData() {
       const revenueData = rRes.data as any[];
       
       for (const r of revenueData) {
-        if (r.status === 'prevista' && r.due_date && r.due_date < today && Number(r.amount) > 0) {
+        if (r.status === 'prevista' && r.due_date && normalizeDate(r.due_date) < today && Number(r.amount) > 0) {
           overdueIds.push(r.id);
         }
       }

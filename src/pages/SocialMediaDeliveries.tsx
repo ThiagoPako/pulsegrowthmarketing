@@ -938,7 +938,7 @@ export default function SocialMediaDeliveries() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Stories Mensal */}
               {(() => {
-                const baseGoal = plan?.stories_qty || (storyGoal > 0 ? storyGoal * 4 : 0);
+                const baseGoal = plan ? plan.stories_qty : (storyGoal > 0 ? storyGoal * 4 : 0);
                 const deficit = prevMonthDeficit[selectedClientId]?.story || 0;
                 const goal = baseGoal + deficit;
                 const delivered = stats.story;

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { useFinancialData } from '@/hooks/useFinancialData';
+import { useFinancialData, normalizeDate } from '@/hooks/useFinancialData';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -127,7 +127,7 @@ export default function FinancialRevenues() {
   }, []);
 
   const refMonth = `${selectedMonth}-01`;
-  const filtered = revenues.filter(r => r.reference_month === refMonth);
+  const filtered = revenues.filter(r => normalizeDate(r.reference_month) === refMonth);
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   // Auto-generate revenues when month has none and data is loaded

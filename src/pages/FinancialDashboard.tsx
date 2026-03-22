@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useFinancialData } from '@/hooks/useFinancialData';
+import { useFinancialData, normalizeDate } from '@/hooks/useFinancialData';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -43,7 +43,7 @@ export default function FinancialDashboard() {
 
   // Filter data for selected month
   const monthRevenues = useMemo(() =>
-    revenues.filter(r => r.reference_month === format(monthStart, 'yyyy-MM-dd')),
+    revenues.filter(r => normalizeDate(r.reference_month) === format(monthStart, 'yyyy-MM-dd')),
     [revenues, monthStart]
   );
 
@@ -99,7 +99,7 @@ export default function FinancialDashboard() {
       const mEnd = endOfMonth(m);
       const ref = format(mStart, 'yyyy-MM-dd');
       const label = format(m, 'MMM', { locale: ptBR });
-      const rec = revenues.filter(r => r.reference_month === ref && r.status === 'recebida').reduce((s, r) => s + Number(r.amount), 0);
+      const rec = revenues.filter(r => normalizeDate(r.reference_month) === ref && r.status === 'recebida').reduce((s, r) => s + Number(r.amount), 0);
       const desp = expenses.filter(e => { const d = new Date(e.date); return d >= mStart && d <= mEnd; }).reduce((s, e) => s + Number(e.amount), 0);
       data.push({ name: label, receita: rec, despesa: desp, lucro: rec - desp });
     }
@@ -153,7 +153,7 @@ export default function FinancialDashboard() {
 
         // Check if already paid this month
         const monthRevenue = revenues.find(
-          r => r.client_id === contract.client_id && r.reference_month === refMonth
+          r => r.client_id === contract.client_id && normalizeDate(r.reference_month) === refMonth
         );
         const isPaid = monthRevenue?.status === 'recebida';
 

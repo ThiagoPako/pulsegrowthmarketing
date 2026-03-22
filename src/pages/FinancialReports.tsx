@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from 'react';
-import { useFinancialData } from '@/hooks/useFinancialData';
+import { useFinancialData, normalizeDate } from '@/hooks/useFinancialData';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,7 +25,7 @@ export default function FinancialReports() {
   const monthEnd = endOfMonth(monthStart);
   const refMonth = `${selectedMonth}-01`;
 
-  const monthRevenues = revenues.filter(r => r.reference_month === refMonth);
+  const monthRevenues = revenues.filter(r => normalizeDate(r.reference_month) === refMonth);
   const monthExpenses = expenses.filter(e => { const d = new Date(e.date); return d >= monthStart && d <= monthEnd; });
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });

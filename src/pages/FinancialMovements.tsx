@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useFinancialData, type Revenue, type Expense, type CashMovement } from '@/hooks/useFinancialData';
+import { useFinancialData, normalizeDate, type Revenue, type Expense, type CashMovement } from '@/hooks/useFinancialData';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -77,12 +77,13 @@ export default function FinancialMovements() {
 
     // Revenues
     revenues.forEach(r => {
-      const d = new Date(r.due_date + 'T12:00:00');
+      const dateStr = normalizeDate(r.due_date);
+      const d = new Date(dateStr + 'T12:00:00');
       if (d >= monthStart && d <= monthEnd) {
         const client = clients.find(c => c.id === r.client_id);
         movements.push({
           id: r.id,
-          date: r.due_date,
+          date: dateStr,
           type: 'receita',
           description: `Mensalidade - ${client?.companyName || 'Cliente'}`,
           amount: Number(r.amount),

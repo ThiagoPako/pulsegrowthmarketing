@@ -55,19 +55,27 @@ export default function FinancialDashboard() {
     [expenses, monthStart, monthEnd]
   );
 
-  // KPIs
-  const mrr = useMemo(() =>
-    contracts.filter(c => c.status === 'ativo').reduce((sum, c) => sum + Number(c.contract_value), 0),
+  // KPIs — exclude zero-value contracts from financial metrics
+  const activeContracts = useMemo(() =>
+    contracts.filter(c => c.status === 'ativo' && Number(c.contract_value) > 0),
     [contracts]
   );
 
-  const revenuePrevista = useMemo(() => monthRevenues.reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
+  const mrr = useMemo(() =>
+    activeContracts.reduce((sum, c) => sum + Number(c.contract_value), 0),
+    [activeContracts]
+  );
+
+  const revenuePrevista = useMemo(() => monthRevenues.filter(r => Number(r.amount) > 0).reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
   const revenueRecebida = useMemo(() => monthRevenues.filter(r => r.status === 'recebida').reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
   const revenueAtraso = useMemo(() => monthRevenues.filter(r => r.status === 'em_atraso').reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
   const totalExpenses = useMemo(() => monthExpenses.reduce((s, e) => s + Number(e.amount), 0), [monthExpenses]);
+  // Lucro uses received + expected (prevista) revenues minus expenses for a more realistic view
+  const revenuePendente = useMemo(() => monthRevenues.filter(r => r.status === 'prevista').reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
   const lucro = revenueRecebida - totalExpenses;
-  const activeClients = contracts.filter(c => c.status === 'ativo').length;
-  const ticketMedio = activeClients > 0 ? mrr / activeClients : 0;
+  const lucroProjetado = revenuePrevista - totalExpenses;
+  const activeClientsCount = activeContracts.length;
+  const ticketMedio = activeClientsCount > 0 ? mrr / activeClientsCount : 0;
   const cancelados = contracts.filter(c => c.status === 'cancelado').length;
   const taxaCancelamento = contracts.length > 0 ? (cancelados / contracts.length * 100) : 0;
 
@@ -103,7 +111,7 @@ export default function FinancialDashboard() {
     const totalMonthExpenses = totalExpenses;
     const totalDeliveries = monthRevenues.length || 1;
 
-    return contracts.filter(c => c.status === 'ativo').map(contract => {
+    return activeContracts.map(contract => {
       const client = clients.find(cl => cl.id === contract.client_id);
       const clientRevenues = monthRevenues.filter(r => r.client_id === contract.client_id);
       const faturamento = clientRevenues.reduce((s, r) => s + Number(r.amount), 0) || Number(contract.contract_value);
@@ -313,7 +321,7 @@ export default function FinancialDashboard() {
   const kpiRow2 = [
     { icon: <AlertTriangle size={18} />, label: 'Em Atraso', value: fmt(revenueAtraso), gradient: 'from-orange-500/10 to-amber-500/10', iconBg: 'bg-orange-500/20 text-orange-600', border: 'border-orange-200/50' },
     { icon: <CreditCard size={18} />, label: 'Ticket Médio', value: fmt(ticketMedio), gradient: 'from-violet-500/10 to-purple-500/10', iconBg: 'bg-violet-500/20 text-violet-600', border: 'border-violet-200/50' },
-    { icon: <Users size={18} />, label: 'Clientes Ativos', value: String(activeClients), gradient: 'from-sky-500/10 to-cyan-500/10', iconBg: 'bg-sky-500/20 text-sky-600', border: 'border-sky-200/50' },
+    { icon: <Users size={18} />, label: 'Clientes Ativos', value: String(activeClientsCount), gradient: 'from-sky-500/10 to-cyan-500/10', iconBg: 'bg-sky-500/20 text-sky-600', border: 'border-sky-200/50' },
     { icon: <TrendingDown size={18} />, label: 'Cancelamento', value: `${taxaCancelamento.toFixed(1)}%`, gradient: 'from-slate-500/10 to-gray-500/10', iconBg: 'bg-slate-500/20 text-slate-600', border: 'border-slate-200/50' },
   ];
 

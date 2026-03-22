@@ -108,13 +108,40 @@ export function useFinancialData() {
       supabase.from('financial_activity_log').select('*').order('created_at', { ascending: false }).limit(50),
     ]);
     if (cRes.data) setContracts(cRes.data as any);
-    if (rRes.data) setRevenues(rRes.data as any);
     if (eRes.data) setExpenses(eRes.data as any);
     if (catRes.data) setCategories(catRes.data as any);
     if (pRes.data?.[0]) setPaymentConfigState(pRes.data[0] as any);
     if (bRes.data) setBillingMessages(bRes.data as any);
     if (cashRes.data) setCashMovements(cashRes.data as any);
     if (logRes.data) setActivityLog(logRes.data as any);
+
+    // Auto-mark overdue revenues: if due_date < today and status is still 'prevista', update to 'em_atraso'
+    if (rRes.data) {
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const overdueIds: string[] = [];
+      const revenueData = rRes.data as any[];
+      
+      for (const r of revenueData) {
+        if (r.status === 'prevista' && r.due_date && r.due_date < today && Number(r.amount) > 0) {
+          overdueIds.push(r.id);
+        }
+      }
+
+      if (overdueIds.length > 0) {
+        // Batch update overdue revenues
+        await Promise.all(
+          overdueIds.map(id =>
+            supabase.from('revenues').update({ status: 'em_atraso' } as any).eq('id', id)
+          )
+        );
+        // Re-fetch revenues after update
+        const updated = await supabase.from('revenues').select('*').order('due_date', { ascending: false });
+        if (updated.data) setRevenues(updated.data as any);
+      } else {
+        setRevenues(revenueData);
+      }
+    }
+
     setLoading(false);
   }, []);
 
@@ -175,7 +202,7 @@ export function useFinancialData() {
     const [yearStr, monthNumStr] = monthStr.split('-');
     const year = parseInt(yearStr);
     const monthNum = parseInt(monthNumStr);
-    const activeContracts = contracts.filter(c => c.status === 'ativo');
+    const activeContracts = contracts.filter(c => c.status === 'ativo' && Number(c.contract_value) > 0);
     const refMonth = `${year}-${String(monthNum).padStart(2, '0')}-01`;
 
     const existing = revenues.filter(r => r.reference_month === refMonth);

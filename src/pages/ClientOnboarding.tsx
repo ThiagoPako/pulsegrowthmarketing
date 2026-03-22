@@ -239,7 +239,7 @@ export default function ClientOnboarding() {
           clientId,
           videomaker_id: selectedVm,
           fixed_day: fixedDay,
-          fixed_time: fixedTime,
+          fixed_time: fullShiftRecording ? (preferredShift === 'turnoB' ? settings?.shift_b_start : settings?.shift_a_start) || '08:30' : fixedTime,
           backup_day: backupDay,
           backup_time: backupTime || '14:00',
           monthly_recordings: monthlyRecordings,
@@ -250,6 +250,8 @@ export default function ClientOnboarding() {
           photo_preference: photoPreference,
           has_photo_shoot: hasPhotoShoot,
           accepts_photo_shoot_cost: acceptsPhotoShootCost,
+          full_shift_recording: fullShiftRecording,
+          preferred_shift: fullShiftRecording ? (preferredShift === 'turnoB' ? 'tarde' : 'manha') : (preferredShift === 'turnoA' ? 'manha' : preferredShift === 'turnoB' ? 'tarde' : 'manha'),
           briefing_data: isNewClient ? briefing : undefined,
         }),
       });

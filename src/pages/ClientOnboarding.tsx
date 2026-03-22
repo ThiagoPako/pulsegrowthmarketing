@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CheckCircle2, ChevronLeft, ChevronRight, Video, Calendar, Shield, Sparkles, Clock, User, Camera, AlertTriangle, ImageIcon, FileText } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Video, Calendar, Shield, Sparkles, Clock, User, Camera, AlertTriangle, ImageIcon, FileText, Zap, Star, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 
@@ -87,6 +87,7 @@ export default function ClientOnboarding() {
   const [acceptsExtra, setAcceptsExtra] = useState(false);
   const [extraTypes, setExtraTypes] = useState<string[]>([]);
   const [extraAppears, setExtraAppears] = useState(false);
+  const [fullShiftRecording, setFullShiftRecording] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
 
   // Photo preferences
@@ -223,7 +224,8 @@ export default function ClientOnboarding() {
 
   const handleSave = async () => {
     if (!acceptTerms) { toast.error('Aceite os termos para continuar'); return; }
-    if (!selectedVm || !fixedDay || !fixedTime) { toast.error('Preencha todos os campos obrigatórios'); return; }
+    const needsTime = !fullShiftRecording;
+    if (!selectedVm || !fixedDay || (needsTime && !fixedTime)) { toast.error('Preencha todos os campos obrigatórios'); return; }
     if (photoPreference === 'fotos_reais' && !hasPhotoShoot && !acceptsPhotoShootCost) {
       toast.error('Aceite o agendamento do ensaio fotográfico para continuar'); return;
     }
@@ -237,7 +239,7 @@ export default function ClientOnboarding() {
           clientId,
           videomaker_id: selectedVm,
           fixed_day: fixedDay,
-          fixed_time: fixedTime,
+          fixed_time: fullShiftRecording ? (preferredShift === 'turnoB' ? settings?.shift_b_start : settings?.shift_a_start) || '08:30' : fixedTime,
           backup_day: backupDay,
           backup_time: backupTime || '14:00',
           monthly_recordings: monthlyRecordings,
@@ -248,6 +250,8 @@ export default function ClientOnboarding() {
           photo_preference: photoPreference,
           has_photo_shoot: hasPhotoShoot,
           accepts_photo_shoot_cost: acceptsPhotoShootCost,
+          full_shift_recording: fullShiftRecording,
+          preferred_shift: fullShiftRecording ? (preferredShift === 'turnoB' ? 'tarde' : 'manha') : (preferredShift === 'turnoA' ? 'manha' : preferredShift === 'turnoB' ? 'tarde' : 'manha'),
           briefing_data: isNewClient ? briefing : undefined,
         }),
       });
@@ -307,7 +311,7 @@ export default function ClientOnboarding() {
 
   const canProceed = () => {
     if (step === 0) return !!selectedVm;
-    if (step === 1) return !!fixedTime;
+    if (step === 1) return fullShiftRecording ? (!!fixedDay && preferredShift !== 'ambos') : !!fixedTime;
     if (step === PHOTO_STEP) {
       if (photoPreference === 'fotos_reais' && !hasPhotoShoot && !acceptsPhotoShootCost) return false;
       return true;
@@ -457,6 +461,75 @@ export default function ClientOnboarding() {
                     </p>
                   </div>
 
+                  {/* Concentrated Recording Option - shown when 1x/month */}
+                  {monthlyRecordings === 1 && (
+                    <div className={`p-4 rounded-xl border-2 transition-all space-y-3 ${
+                      fullShiftRecording 
+                        ? 'border-primary bg-gradient-to-br from-primary/10 to-primary/5 ring-1 ring-primary/30' 
+                        : 'border-amber-400/60 bg-gradient-to-br from-amber-50/80 to-orange-50/50 dark:from-amber-900/10 dark:to-orange-900/5'
+                    }`}>
+                      <div className="flex items-start gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                          fullShiftRecording ? 'bg-primary/20' : 'bg-amber-400/20'
+                        }`}>
+                          <Zap size={20} className={fullShiftRecording ? 'text-primary' : 'text-amber-600'} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="text-sm font-bold">⚡ Gravação Concentrada</p>
+                            <Badge className="bg-amber-500 text-white border-0 text-[9px] px-1.5 py-0">RECOMENDADO</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            Para sua <strong className="text-foreground">comodidade</strong>, podemos gravar todo o conteúdo do mês em um <strong className="text-foreground">único período</strong> (manhã ou tarde). 
+                            Assim você evita desgastes no fluxo de trabalho diário da sua operação!
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 p-3 rounded-lg bg-background/60 border border-border/50">
+                        <Switch
+                          checked={fullShiftRecording}
+                          onCheckedChange={(checked) => {
+                            setFullShiftRecording(checked);
+                            if (checked) {
+                              setPreferredShift('turnoA');
+                            } else {
+                              setPreferredShift('ambos');
+                            }
+                          }}
+                        />
+                        <div>
+                          <p className="text-xs font-semibold">{fullShiftRecording ? '✅ Gravação concentrada ativada!' : 'Ativar gravação concentrada'}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {fullShiftRecording 
+                              ? 'Você escolherá o período (manhã ou tarde) no próximo passo.' 
+                              : 'Reservamos um período inteiro para gravar tudo de uma vez.'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {fullShiftRecording && (
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          <div className="p-2 rounded-lg bg-background/80 border border-border/50">
+                            <Star size={14} className="text-primary mx-auto mb-1" />
+                            <p className="text-[10px] font-semibold">Mais prático</p>
+                            <p className="text-[9px] text-muted-foreground">Tudo em 1 dia</p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-background/80 border border-border/50">
+                            <TrendingUp size={14} className="text-primary mx-auto mb-1" />
+                            <p className="text-[10px] font-semibold">Mais produtivo</p>
+                            <p className="text-[9px] text-muted-foreground">Sem interrupções</p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-background/80 border border-border/50">
+                            <Clock size={14} className="text-primary mx-auto mb-1" />
+                            <p className="text-[10px] font-semibold">Otimize tempo</p>
+                            <p className="text-[9px] text-muted-foreground">Fluxo contínuo</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {monthlyRecordings > 1 && (
                     <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
                       <p className="text-sm font-semibold flex items-center gap-2">
@@ -506,165 +579,271 @@ export default function ClientOnboarding() {
         {/* Step 1: Schedule */}
         {step === 1 && settings && (
           <div className="space-y-5">
-            <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-3">
-              <p className="text-sm font-semibold">Em qual período prefere gravar?</p>
-              <div className="grid grid-cols-3 gap-2">
-                {([
-                  { key: 'turnoA' as const, icon: '☀️', label: 'Manhã', desc: `${settings.shift_a_start} – ${settings.shift_a_end}` },
-                  { key: 'turnoB' as const, icon: '🌙', label: 'Tarde', desc: `${settings.shift_b_start} – ${settings.shift_b_end}` },
-                  { key: 'ambos' as const, icon: '🔄', label: 'Ambos', desc: 'Qualquer horário' },
-                ] as const).map(s => (
-                  <button
-                    key={s.key}
-                    onClick={() => setPreferredShift(s.key)}
-                    className={`p-3 rounded-xl border-2 text-center transition-all ${
-                      preferredShift === s.key ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
-                    }`}
-                  >
-                    <span className="text-xs font-bold block">{s.icon} {s.label}</span>
-                    <span className="text-[10px] text-muted-foreground block">{s.desc}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {bestDays.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-sm font-semibold text-primary flex items-center gap-2">
-                  <Sparkles size={14} /> Melhores dias disponíveis
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {bestDays.map((bd, i) => (
-                    <button
-                      key={bd.day}
-                      onClick={() => {
-                        setFixedDay(bd.day);
-                        const firstSlot = availableSlots.find(s => s.day === bd.day);
-                        if (firstSlot) setFixedTime(firstSlot.time);
-                      }}
-                      className={`p-3 rounded-xl border-2 text-center transition-all ${
-                        fixedDay === bd.day ? 'border-primary bg-primary/10' : 'border-dashed border-primary/30 bg-primary/5 hover:bg-primary/10'
-                      }`}
-                    >
-                      <span className="text-sm font-semibold block">{DAY_LABELS[bd.day]}</span>
-                      <span className="text-xs text-muted-foreground">{bd.count} vagas livres</span>
-                      {monthlyRecordings > 1 && bd.count >= monthlyRecordings && (
-                        <Badge variant="secondary" className="mt-1 text-[10px] bg-primary/15 text-primary border-0">
-                          Cabe {monthlyRecordings} gravações
-                        </Badge>
-                      )}
-                      {monthlyRecordings <= 1 && <Badge variant="secondary" className="mt-1 text-[10px]">{i === 0 ? 'Melhor opção' : '2ª opção'}</Badge>}
-                    </button>
-                  ))}
+            {/* Concentrated recording: simplified shift selection */}
+            {fullShiftRecording ? (
+              <>
+                <div className="p-4 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Zap size={18} className="text-primary" />
+                    <p className="text-sm font-bold">Gravação Concentrada</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Escolha o <strong className="text-foreground">dia da semana</strong> e o <strong className="text-foreground">período</strong> que deseja reservar. 
+                    Nosso videomaker ficará dedicado exclusivamente a você durante todo o período escolhido.
+                  </p>
                 </div>
-              </div>
-            )}
 
-            <div className="space-y-3">
-              <p className="text-xs text-muted-foreground font-medium">Selecione o dia e horário fixo de gravação:</p>
-              
-              {/* Stacking info */}
-              {monthlyRecordings > 1 && fixedDay && (
-                <div className={`p-3 rounded-lg text-xs flex items-start gap-2 ${
-                  (slotsPerDay.get(fixedDay) || 0) >= monthlyRecordings 
-                    ? 'bg-primary/5 border border-primary/20 text-primary' 
-                    : 'bg-muted border border-border text-muted-foreground'
-                }`}>
-                  <Calendar size={14} className="shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-medium">
-                      {(slotsPerDay.get(fixedDay) || 0) >= monthlyRecordings 
-                        ? `✅ Este dia comporta todas as ${monthlyRecordings} gravações consecutivas!`
-                        : `Este dia tem ${slotsPerDay.get(fixedDay) || 0} vaga(s) — para ${monthlyRecordings} gravações, distribua entre semanas diferentes.`
-                      }
-                    </p>
+                {/* Day selection */}
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold flex items-center gap-2">
+                    <Calendar size={16} className="text-primary" /> Dia da gravação
+                  </p>
+                  <div className="grid grid-cols-5 gap-2">
+                    {(settings.work_days as DayOfWeek[]).map(d => {
+                      const count = availableSlots.filter(s => s.day === d).length;
+                      return (
+                        <button
+                          key={d}
+                          onClick={() => setFixedDay(d)}
+                          className={`p-3 rounded-xl border-2 text-center transition-all ${
+                            fixedDay === d ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
+                          }`}
+                        >
+                          <span className="text-xs font-bold block">{DAY_LABELS[d]}</span>
+                          <span className="text-[9px] text-muted-foreground">{count} vagas</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-              )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>Dia da Semana</Label>
-                  <Select value={fixedDay} onValueChange={v => { setFixedDay(v as DayOfWeek); setFixedTime(''); }}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {(settings.work_days as string[]).map(d => {
-                        const count = availableSlots.filter(s => s.day === d).length;
-                        const canStack = count >= monthlyRecordings;
-                        return (
-                          <SelectItem key={d} value={d}>
-                            {DAY_LABELS[d]} ({count} vagas){canStack && monthlyRecordings > 1 ? ' ⭐' : ''}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
+                {/* Shift selection */}
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold">Qual período?</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => setPreferredShift('turnoA')}
+                      className={`p-4 rounded-xl border-2 text-center transition-all space-y-1 ${
+                        preferredShift === 'turnoA' ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
+                      }`}
+                    >
+                      <span className="text-2xl block">☀️</span>
+                      <span className="text-sm font-bold block">Manhã</span>
+                      <span className="text-xs text-muted-foreground block">{settings.shift_a_start} – {settings.shift_a_end}</span>
+                      <span className="text-[10px] text-primary font-medium block">~{Math.floor((timeToMinutes(settings.shift_a_end) - timeToMinutes(settings.shift_a_start)) / 60)}h de gravação</span>
+                    </button>
+                    <button
+                      onClick={() => setPreferredShift('turnoB')}
+                      className={`p-4 rounded-xl border-2 text-center transition-all space-y-1 ${
+                        preferredShift === 'turnoB' ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
+                      }`}
+                    >
+                      <span className="text-2xl block">🌙</span>
+                      <span className="text-sm font-bold block">Tarde</span>
+                      <span className="text-xs text-muted-foreground block">{settings.shift_b_start} – {settings.shift_b_end}</span>
+                      <span className="text-[10px] text-primary font-medium block">~{Math.floor((timeToMinutes(settings.shift_b_end) - timeToMinutes(settings.shift_b_start)) / 60)}h de gravação</span>
+                    </button>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <Label>Horário Inicial</Label>
-                  {slotsForDay.length > 0 ? (
-                    <Select value={fixedTime} onValueChange={setFixedTime}>
-                      <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+
+                {/* Benefit reminder */}
+                <div className="p-3 rounded-lg bg-accent/50 border border-accent text-xs text-muted-foreground space-y-1">
+                  <p className="font-semibold text-foreground flex items-center gap-1">
+                    <Star size={12} className="text-primary" /> Vantagens da gravação concentrada:
+                  </p>
+                  <ul className="space-y-0.5 ml-4 list-disc">
+                    <li>Todo conteúdo do mês gravado em <strong className="text-foreground">um único dia</strong></li>
+                    <li>Sem interrupções no fluxo de trabalho diário da sua empresa</li>
+                    <li>Videomaker dedicado exclusivamente para você no período</li>
+                    <li>Maior variedade de conteúdo com continuidade criativa</li>
+                  </ul>
+                </div>
+
+                {/* Backup day */}
+                <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
+                  <p className="text-sm font-semibold flex items-center gap-2">
+                    <Shield size={14} className="text-primary" /> Dia de Backup
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Caso precise cancelar, escolha <strong>1 dia de backup</strong> sujeito à disponibilidade.
+                  </p>
+                  <div className="space-y-1">
+                    <Label>Dia Backup</Label>
+                    <Select value={backupDay} onValueChange={v => { setBackupDay(v as DayOfWeek); setBackupTime(''); }}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {slotsForDay.map(s => (
-                          <SelectItem key={s.time} value={s.time}>
-                            <span className="flex items-center gap-1">
-                              <Clock size={12} /> {s.time} – {minutesToTime(timeToMinutes(s.time) + RECORDING_DURATION)}
-                            </span>
-                          </SelectItem>
+                        {(settings.work_days as string[]).filter(d => d !== fixedDay).map(d => (
+                          <SelectItem key={d} value={d}>{DAY_LABELS[d]}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                  ) : (
-                    <div className="flex h-10 items-center rounded-md border border-input bg-muted/50 px-3">
-                      <span className="text-sm text-muted-foreground">Sem vagas neste dia</span>
-                    </div>
-                  )}
+                  </div>
                 </div>
-              </div>
-            </div>
+              </>
+            ) : (
+              /* Normal flow: shift preference + day + time */
+              <>
+                <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-3">
+                  <p className="text-sm font-semibold">Em qual período prefere gravar?</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { key: 'turnoA' as const, icon: '☀️', label: 'Manhã', desc: `${settings.shift_a_start} – ${settings.shift_a_end}` },
+                      { key: 'turnoB' as const, icon: '🌙', label: 'Tarde', desc: `${settings.shift_b_start} – ${settings.shift_b_end}` },
+                      { key: 'ambos' as const, icon: '🔄', label: 'Ambos', desc: 'Qualquer horário' },
+                    ] as const).map(s => (
+                      <button
+                        key={s.key}
+                        onClick={() => setPreferredShift(s.key)}
+                        className={`p-3 rounded-xl border-2 text-center transition-all ${
+                          preferredShift === s.key ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
+                        }`}
+                      >
+                        <span className="text-xs font-bold block">{s.icon} {s.label}</span>
+                        <span className="text-[10px] text-muted-foreground block">{s.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
-              <p className="text-sm font-semibold flex items-center gap-2">
-                <Shield size={14} className="text-primary" /> Dia de Backup
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Caso precise cancelar, escolha <strong>1 dia de backup</strong> sujeito à disponibilidade.
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>Dia Backup</Label>
-                  <Select value={backupDay} onValueChange={v => { setBackupDay(v as DayOfWeek); setBackupTime(''); }}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {(settings.work_days as string[]).filter(d => d !== fixedDay).map(d => {
-                        const count = availableSlots.filter(s => s.day === d).length;
-                        return <SelectItem key={d} value={d}>{DAY_LABELS[d]} ({count} vagas)</SelectItem>;
-                      })}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label>Horário Backup</Label>
-                  {backupSlotsForDay.length > 0 ? (
-                    <Select value={backupTime} onValueChange={setBackupTime}>
-                      <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent>
-                        {backupSlotsForDay.map(s => (
-                          <SelectItem key={s.time} value={s.time}>
-                            <span className="flex items-center gap-1"><Clock size={12} /> {s.time}</span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <div className="flex h-10 items-center rounded-md border border-input bg-muted/50 px-3">
-                      <span className="text-sm text-muted-foreground">Sem vagas</span>
+                {bestDays.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-primary flex items-center gap-2">
+                      <Sparkles size={14} /> Melhores dias disponíveis
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {bestDays.map((bd, i) => (
+                        <button
+                          key={bd.day}
+                          onClick={() => {
+                            setFixedDay(bd.day);
+                            const firstSlot = availableSlots.find(s => s.day === bd.day);
+                            if (firstSlot) setFixedTime(firstSlot.time);
+                          }}
+                          className={`p-3 rounded-xl border-2 text-center transition-all ${
+                            fixedDay === bd.day ? 'border-primary bg-primary/10' : 'border-dashed border-primary/30 bg-primary/5 hover:bg-primary/10'
+                          }`}
+                        >
+                          <span className="text-sm font-semibold block">{DAY_LABELS[bd.day]}</span>
+                          <span className="text-xs text-muted-foreground">{bd.count} vagas livres</span>
+                          {monthlyRecordings > 1 && bd.count >= monthlyRecordings && (
+                            <Badge variant="secondary" className="mt-1 text-[10px] bg-primary/15 text-primary border-0">
+                              Cabe {monthlyRecordings} gravações
+                            </Badge>
+                          )}
+                          {monthlyRecordings <= 1 && <Badge variant="secondary" className="mt-1 text-[10px]">{i === 0 ? 'Melhor opção' : '2ª opção'}</Badge>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground font-medium">Selecione o dia e horário fixo de gravação:</p>
+                  
+                  {/* Stacking info */}
+                  {monthlyRecordings > 1 && fixedDay && (
+                    <div className={`p-3 rounded-lg text-xs flex items-start gap-2 ${
+                      (slotsPerDay.get(fixedDay) || 0) >= monthlyRecordings 
+                        ? 'bg-primary/5 border border-primary/20 text-primary' 
+                        : 'bg-muted border border-border text-muted-foreground'
+                    }`}>
+                      <Calendar size={14} className="shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-medium">
+                          {(slotsPerDay.get(fixedDay) || 0) >= monthlyRecordings 
+                            ? `✅ Este dia comporta todas as ${monthlyRecordings} gravações consecutivas!`
+                            : `Este dia tem ${slotsPerDay.get(fixedDay) || 0} vaga(s) — para ${monthlyRecordings} gravações, distribua entre semanas diferentes.`
+                          }
+                        </p>
+                      </div>
                     </div>
                   )}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label>Dia da Semana</Label>
+                      <Select value={fixedDay} onValueChange={v => { setFixedDay(v as DayOfWeek); setFixedTime(''); }}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {(settings.work_days as string[]).map(d => {
+                            const count = availableSlots.filter(s => s.day === d).length;
+                            const canStack = count >= monthlyRecordings;
+                            return (
+                              <SelectItem key={d} value={d}>
+                                {DAY_LABELS[d]} ({count} vagas){canStack && monthlyRecordings > 1 ? ' ⭐' : ''}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Horário Inicial</Label>
+                      {slotsForDay.length > 0 ? (
+                        <Select value={fixedTime} onValueChange={setFixedTime}>
+                          <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                          <SelectContent>
+                            {slotsForDay.map(s => (
+                              <SelectItem key={s.time} value={s.time}>
+                                <span className="flex items-center gap-1">
+                                  <Clock size={12} /> {s.time} – {minutesToTime(timeToMinutes(s.time) + RECORDING_DURATION)}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div className="flex h-10 items-center rounded-md border border-input bg-muted/50 px-3">
+                          <span className="text-sm text-muted-foreground">Sem vagas neste dia</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+
+                <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
+                  <p className="text-sm font-semibold flex items-center gap-2">
+                    <Shield size={14} className="text-primary" /> Dia de Backup
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Caso precise cancelar, escolha <strong>1 dia de backup</strong> sujeito à disponibilidade.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label>Dia Backup</Label>
+                      <Select value={backupDay} onValueChange={v => { setBackupDay(v as DayOfWeek); setBackupTime(''); }}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {(settings.work_days as string[]).filter(d => d !== fixedDay).map(d => {
+                            const count = availableSlots.filter(s => s.day === d).length;
+                            return <SelectItem key={d} value={d}>{DAY_LABELS[d]} ({count} vagas)</SelectItem>;
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Horário Backup</Label>
+                      {backupSlotsForDay.length > 0 ? (
+                        <Select value={backupTime} onValueChange={setBackupTime}>
+                          <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                          <SelectContent>
+                            {backupSlotsForDay.map(s => (
+                              <SelectItem key={s.time} value={s.time}>
+                                <span className="flex items-center gap-1"><Clock size={12} /> {s.time}</span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div className="flex h-10 items-center rounded-md border border-input bg-muted/50 px-3">
+                          <span className="text-sm text-muted-foreground">Sem vagas</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 

@@ -1748,11 +1748,12 @@ app.all('/api/client-onboarding', async (req, res) => {
 
     // POST — full onboarding save logic
     const body = req.body;
-    const { clientId, videomaker_id, fixed_day, fixed_time, backup_day, backup_time, monthly_recordings, accepts_extra, extra_content_types, extra_client_appears, selected_weeks, photo_preference, has_photo_shoot, accepts_photo_shoot_cost, briefing_data } = body;
-    if (!clientId || !videomaker_id || !fixed_day || !fixed_time) return res.status(400).json({ error: 'Missing required fields' });
+    const { clientId, videomaker_id, fixed_day, fixed_time, backup_day, backup_time, monthly_recordings, accepts_extra, extra_content_types, extra_client_appears, selected_weeks, photo_preference, has_photo_shoot, accepts_photo_shoot_cost, briefing_data, full_shift_recording, preferred_shift } = body;
+    if (!clientId || !videomaker_id || !fixed_day) return res.status(400).json({ error: 'Missing required fields' });
+    if (!full_shift_recording && !fixed_time) return res.status(400).json({ error: 'Missing fixed_time' });
 
     const updateFields = {
-      videomaker_id, fixed_day, fixed_time,
+      videomaker_id, fixed_day, fixed_time: fixed_time || '08:30',
       backup_day: backup_day || 'terca', backup_time: backup_time || '14:00',
       monthly_recordings: monthly_recordings || 4,
       accepts_extra: accepts_extra || false,
@@ -1763,6 +1764,8 @@ app.all('/api/client-onboarding', async (req, res) => {
       photo_preference: photo_preference || 'nao_precisa',
       has_photo_shoot: has_photo_shoot || false,
       accepts_photo_shoot_cost: accepts_photo_shoot_cost || false,
+      full_shift_recording: full_shift_recording || false,
+      preferred_shift: preferred_shift || 'manha',
     };
 
     let briefingUpdate = '';
@@ -1770,9 +1773,10 @@ app.all('/api/client-onboarding', async (req, res) => {
       updateFields.backup_day, updateFields.backup_time, updateFields.monthly_recordings,
       updateFields.accepts_extra, updateFields.extra_content_types, updateFields.extra_client_appears,
       updateFields.selected_weeks, updateFields.onboarding_completed,
-      updateFields.photo_preference, updateFields.has_photo_shoot, updateFields.accepts_photo_shoot_cost, clientId];
+      updateFields.photo_preference, updateFields.has_photo_shoot, updateFields.accepts_photo_shoot_cost,
+      clientId, updateFields.full_shift_recording, updateFields.preferred_shift];
 
-    let paramIdx = 16;
+    let paramIdx = 18;
     let extraSets = '';
     if (briefing_data && Object.keys(briefing_data).length > 0) {
       extraSets += `, briefing_data = $${paramIdx}`;
@@ -1796,6 +1800,7 @@ app.all('/api/client-onboarding', async (req, res) => {
        accepts_extra=$7, extra_content_types=$8, extra_client_appears=$9,
        selected_weeks=$10, onboarding_completed=$11,
        photo_preference=$12, has_photo_shoot=$13, accepts_photo_shoot_cost=$14,
+       full_shift_recording=$16, preferred_shift=$17,
        updated_at=now() ${extraSets}
        WHERE id=$15`, vals
     );

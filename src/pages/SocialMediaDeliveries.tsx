@@ -1267,6 +1267,24 @@ export default function SocialMediaDeliveries() {
                         </div>
                       )}
 
+                      {/* Previous month deficit alert */}
+                      {prevMonthDeficit[client.id] && (
+                        <div className="mb-3 p-2 rounded-lg bg-orange-50 dark:bg-orange-900/10 border border-orange-200/50 dark:border-orange-800/30 flex items-center gap-2">
+                          <AlertTriangle size={14} className="text-orange-600 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[10px] font-semibold text-orange-700 dark:text-orange-400">
+                              Pendente do mês anterior:
+                            </span>
+                            <div className="flex flex-wrap gap-1.5 mt-0.5">
+                              {prevMonthDeficit[client.id].story > 0 && <span className="text-[9px] text-orange-600">{prevMonthDeficit[client.id].story} stories</span>}
+                              {prevMonthDeficit[client.id].reels > 0 && <span className="text-[9px] text-orange-600">{prevMonthDeficit[client.id].reels} reels</span>}
+                              {prevMonthDeficit[client.id].criativo > 0 && <span className="text-[9px] text-orange-600">{prevMonthDeficit[client.id].criativo} criativos</span>}
+                              {prevMonthDeficit[client.id].arte > 0 && <span className="text-[9px] text-orange-600">{prevMonthDeficit[client.id].arte} artes</span>}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Onboarding mini-progress */}
                       {isOnboarding && onboarding && (
                         <div className="mb-3 p-2 rounded-lg bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200/50 dark:border-amber-800/30">

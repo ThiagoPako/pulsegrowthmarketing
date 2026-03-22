@@ -1363,6 +1363,78 @@ function Footer() {
   );
 }
 
+// ─── Client Logos Marquee ────────────────────────────────────
+function ClientLogos() {
+  const [clients, setClients] = useState<{ id: string; company_name: string; logo_url: string; color: string }[]>([]);
+
+  useEffect(() => {
+    supabase
+      .from('clients')
+      .select('id, company_name, logo_url, color')
+      .not('logo_url', 'is', null)
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setClients(data.filter(c => c.logo_url));
+        }
+      });
+  }, []);
+
+  if (clients.length === 0) return null;
+
+  // Duplicate for seamless loop
+  const doubled = [...clients, ...clients];
+
+  return (
+    <section className="py-10 sm:py-14 bg-card/50 border-y border-border/30 overflow-hidden relative">
+      <div className="absolute inset-0 bg-gradient-to-r from-card via-transparent to-card z-10 pointer-events-none" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6 sm:mb-8">
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: '-50px' }}
+          variants={staggerContainer}
+          className="text-center"
+        >
+          <motion.span variants={fadeUp} className="text-xs sm:text-sm font-semibold text-primary uppercase tracking-wider">
+            Empresas que confiam na Pulse
+          </motion.span>
+          <motion.h2 variants={fadeUp} custom={1} className="font-display text-xl sm:text-2xl md:text-3xl font-bold text-foreground mt-2">
+            Marcas que fazem parte da nossa história
+          </motion.h2>
+        </motion.div>
+      </div>
+
+      <div className="relative">
+        {/* Gradient fade edges */}
+        <div className="absolute left-0 top-0 bottom-0 w-20 sm:w-32 bg-gradient-to-r from-card/80 to-transparent z-20 pointer-events-none" />
+        <div className="absolute right-0 top-0 bottom-0 w-20 sm:w-32 bg-gradient-to-l from-card/80 to-transparent z-20 pointer-events-none" />
+
+        <motion.div
+          className="flex gap-8 sm:gap-12 items-center w-max"
+          animate={{ x: ['0%', '-50%'] }}
+          transition={{ x: { repeat: Infinity, repeatType: 'loop', duration: clients.length * 3, ease: 'linear' } }}
+        >
+          {doubled.map((client, i) => (
+            <div
+              key={`${client.id}-${i}`}
+              className="flex-shrink-0 flex items-center justify-center group"
+            >
+              <div className="w-24 h-16 sm:w-32 sm:h-20 md:w-36 md:h-24 flex items-center justify-center rounded-xl border border-border/40 bg-card/60 backdrop-blur-sm p-3 sm:p-4 transition-all duration-300 group-hover:border-primary/30 group-hover:shadow-lg group-hover:shadow-primary/5 group-hover:scale-105">
+                <img
+                  src={client.logo_url}
+                  alt={client.company_name}
+                  className="max-w-full max-h-full object-contain grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500"
+                  loading="lazy"
+                />
+              </div>
+            </div>
+          ))}
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
 // ─── Main ───────────────────────────────────────────────────
 export default function LandingPage() {
   return (
@@ -1370,6 +1442,7 @@ export default function LandingPage() {
       <FacebookPixel />
       <Navbar />
       <Hero />
+      <ClientLogos />
       <Sobre />
       <Servicos />
       <ComoFunciona />

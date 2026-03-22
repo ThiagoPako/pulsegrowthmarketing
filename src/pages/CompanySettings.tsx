@@ -520,6 +520,8 @@ export default function CompanySettings() {
 
               <Separator className="border-destructive/20" />
               <h3 className="text-sm font-semibold text-destructive">⚠️ Reset Total (todos os módulos)</h3>
+
+              <div className="flex gap-2">
                 <Button variant="outline" className="flex-1" onClick={() => setShowDangerZone(false)}>
                   Ocultar
                 </Button>

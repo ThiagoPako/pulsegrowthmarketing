@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket } from 'lucide-react';
+import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket, RotateCcw } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
 import { supabase as supabaseCloud } from '@/integrations/supabase/client';
 import { ASSISTANT_KEY } from '@/components/ProductionAssistant';
@@ -26,8 +26,88 @@ const RESET_TABLES = [
   'financial_activity_log', 'financial_contracts', 'goals', 'integration_logs',
   'kanban_tasks', 'notifications', 'onboarding_tasks', 'revenues', 'expenses',
   'recordings', 'scripts', 'social_media_deliveries', 'social_accounts', 'clients',
-  // 'plans' e equipe (profiles, user_roles, partners) são preservados
 ] as const;
+
+interface ModuleReset {
+  label: string;
+  icon: string;
+  tables: string[];
+  description: string;
+  confirmWord: string;
+}
+
+const MODULE_RESETS: ModuleReset[] = [
+  {
+    label: 'Clientes',
+    icon: '👥',
+    tables: ['client_portal_comments', 'client_portal_contents', 'client_portal_notifications', 'onboarding_tasks', 'clients'],
+    description: 'Apaga todos os clientes, portal e onboarding. Contratos financeiros vinculados também serão removidos.',
+    confirmWord: 'RESETAR CLIENTES',
+  },
+  {
+    label: 'Conteúdo (Kanban)',
+    icon: '🎬',
+    tables: ['task_history', 'content_tasks'],
+    description: 'Apaga todas as tarefas de conteúdo e histórico de movimentação do kanban.',
+    confirmWord: 'RESETAR CONTEUDO',
+  },
+  {
+    label: 'Gravações',
+    icon: '📹',
+    tables: ['active_recordings', 'delivery_records', 'recordings'],
+    description: 'Apaga todas as gravações, registros de entrega e gravações ativas.',
+    confirmWord: 'RESETAR GRAVACOES',
+  },
+  {
+    label: 'Roteiros',
+    icon: '📝',
+    tables: ['scripts'],
+    description: 'Apaga todos os roteiros do sistema.',
+    confirmWord: 'RESETAR ROTEIROS',
+  },
+  {
+    label: 'Design',
+    icon: '🎨',
+    tables: ['design_task_history', 'design_tasks'],
+    description: 'Apaga todas as tarefas de design e seu histórico.',
+    confirmWord: 'RESETAR DESIGN',
+  },
+  {
+    label: 'Social Media (Entregas)',
+    icon: '📱',
+    tables: ['social_media_deliveries'],
+    description: 'Apaga todos os registros de entrega de social media.',
+    confirmWord: 'RESETAR SOCIAL',
+  },
+  {
+    label: 'Financeiro',
+    icon: '💰',
+    tables: ['billing_messages', 'cash_reserve_movements', 'financial_activity_log', 'financial_contracts', 'revenues', 'expenses'],
+    description: 'Apaga contratos financeiros, receitas, despesas, reserva de caixa e logs.',
+    confirmWord: 'RESETAR FINANCEIRO',
+  },
+  {
+    label: 'Endomarketing',
+    icon: '🏢',
+    tables: ['endomarketing_agendamentos', 'endomarketing_logs', 'endomarketing_partner_tasks', 'client_endomarketing_contracts', 'endomarketing_clientes', 'endomarketing_profissionais', 'endomarketing_packages'],
+    description: 'Apaga todos os dados de endomarketing: clientes, agendamentos, pacotes e parceiros.',
+    confirmWord: 'RESETAR ENDO',
+  },
+  {
+    label: 'Metas',
+    icon: '🎯',
+    tables: ['goals'],
+    description: 'Apaga todas as metas do sistema.',
+    confirmWord: 'RESETAR METAS',
+  },
+  {
+    label: 'Notificações e Logs',
+    icon: '🔔',
+    tables: ['notifications', 'integration_logs'],
+    description: 'Apaga todas as notificações e logs de integração.',
+    confirmWord: 'RESETAR LOGS',
+  },
+];
 
 export default function CompanySettings() {
   const { settings, updateSettings, currentUser } = useApp();
@@ -50,6 +130,27 @@ export default function CompanySettings() {
         if (data?.title) setPixelId(data.title);
       });
   }, []);
+
+  const [moduleConfirmText, setModuleConfirmText] = useState<Record<string, string>>({});
+  const [moduleResetting, setModuleResetting] = useState<string | null>(null);
+
+  const handleModuleReset = async (mod: ModuleReset) => {
+    if (moduleConfirmText[mod.label] !== mod.confirmWord) return;
+    setModuleResetting(mod.label);
+    try {
+      for (const table of mod.tables) {
+        const { error } = await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (error) console.error(`Erro ao limpar ${table}:`, error.message);
+      }
+      toast.success(`Módulo "${mod.label}" resetado com sucesso!`);
+      setModuleConfirmText(prev => ({ ...prev, [mod.label]: '' }));
+      setTimeout(() => window.location.reload(), 1500);
+    } catch {
+      toast.error(`Erro ao resetar módulo "${mod.label}".`);
+    } finally {
+      setModuleResetting(null);
+    }
+  };
 
   const handleSystemReset = async () => {
     if (confirmText !== 'RESETAR TUDO') return;
@@ -355,6 +456,70 @@ export default function CompanySettings() {
                   ⚡ Use APENAS se deseja limpar completamente o sistema e começar do zero.
                 </p>
               </div>
+
+              {/* Reset por Módulo */}
+              <Separator className="border-destructive/20" />
+              <h3 className="text-sm font-semibold text-destructive flex items-center gap-2">
+                <RotateCcw size={14} />
+                Reset por Módulo
+              </h3>
+              <p className="text-xs text-muted-foreground -mt-2">
+                Resete apenas os dados de um módulo específico. Planos e equipe são sempre preservados.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {MODULE_RESETS.map(mod => (
+                  <AlertDialog key={mod.label}>
+                    <AlertDialogTrigger asChild>
+                      <button className="flex items-center gap-3 p-3 rounded-lg border border-destructive/20 bg-background hover:bg-destructive/5 transition-colors text-left group">
+                        <span className="text-xl">{mod.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium group-hover:text-destructive transition-colors">{mod.label}</p>
+                          <p className="text-[11px] text-muted-foreground truncate">{mod.tables.length} tabela{mod.tables.length > 1 ? 's' : ''}</p>
+                        </div>
+                        <RotateCcw size={14} className="text-muted-foreground group-hover:text-destructive transition-colors" />
+                      </button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                          <span className="text-xl">{mod.icon}</span>
+                          Resetar {mod.label}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="space-y-3">
+                          <span className="block text-sm">{mod.description}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            Tabelas afetadas: {mod.tables.join(', ')}
+                          </span>
+                          <span className="block text-sm">
+                            Para confirmar, digite <strong className="text-destructive">{mod.confirmWord}</strong>:
+                          </span>
+                          <Input
+                            value={moduleConfirmText[mod.label] || ''}
+                            onChange={e => setModuleConfirmText(prev => ({ ...prev, [mod.label]: e.target.value }))}
+                            placeholder={`Digite ${mod.confirmWord}`}
+                            className="border-destructive/50 focus:border-destructive"
+                          />
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setModuleConfirmText(prev => ({ ...prev, [mod.label]: '' }))}>
+                          Cancelar
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleModuleReset(mod)}
+                          disabled={moduleConfirmText[mod.label] !== mod.confirmWord || moduleResetting === mod.label}
+                          className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                        >
+                          {moduleResetting === mod.label ? 'Resetando...' : 'CONFIRMAR RESET'}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                ))}
+              </div>
+
+              <Separator className="border-destructive/20" />
+              <h3 className="text-sm font-semibold text-destructive">⚠️ Reset Total (todos os módulos)</h3>
 
               <div className="flex gap-2">
                 <Button variant="outline" className="flex-1" onClick={() => setShowDangerZone(false)}>

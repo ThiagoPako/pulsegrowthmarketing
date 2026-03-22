@@ -877,6 +877,43 @@ export default function SocialMediaDeliveries() {
           </Card>
         )}
 
+        {/* Previous month deficit alert */}
+        {prevMonthDeficit[selectedClientId] && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-3 rounded-lg bg-orange-50 dark:bg-orange-900/10 border border-orange-200/60 dark:border-orange-800/30 flex items-start gap-2"
+          >
+            <AlertTriangle size={16} className="text-orange-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-orange-700 dark:text-orange-400">Conteúdo pendente do mês anterior</p>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {prevMonthDeficit[selectedClientId].story > 0 && (
+                  <Badge className="bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400 border-0 text-[10px] gap-1">
+                    <Image size={10} /> {prevMonthDeficit[selectedClientId].story} stories
+                  </Badge>
+                )}
+                {prevMonthDeficit[selectedClientId].reels > 0 && (
+                  <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-0 text-[10px] gap-1">
+                    <Film size={10} /> {prevMonthDeficit[selectedClientId].reels} reels
+                  </Badge>
+                )}
+                {prevMonthDeficit[selectedClientId].criativo > 0 && (
+                  <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-0 text-[10px] gap-1">
+                    <Megaphone size={10} /> {prevMonthDeficit[selectedClientId].criativo} criativos
+                  </Badge>
+                )}
+                {prevMonthDeficit[selectedClientId].arte > 0 && (
+                  <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0 text-[10px] gap-1">
+                    <Palette size={10} /> {prevMonthDeficit[selectedClientId].arte} artes
+                  </Badge>
+                )}
+              </div>
+              <p className="text-[10px] text-orange-600 dark:text-orange-500 mt-1">A meta deste mês foi ajustada para compensar o déficit.</p>
+            </div>
+          </motion.div>
+        )}
+
         {/* Manual Content Controls — always visible for all clients */}
         <Card className="border-border">
           <CardContent className="p-4 space-y-3">
@@ -884,28 +921,32 @@ export default function SocialMediaDeliveries() {
               <Plus size={14} className="text-primary" /> Registro Manual de Conteúdo
             </h3>
             <p className="text-[10px] text-muted-foreground -mt-1">
-              Registre entregas extras ou conteúdos adicionais fora do plano contratado
+              Registre entregas e acompanhe a meta do contrato (inclui compensação de meses anteriores)
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Stories Mensal */}
               {(() => {
-                const goal = storyGoal > 0 ? storyGoal * 4 : 0; // weekly * ~4 weeks
+                const baseGoal = storyGoal > 0 ? storyGoal * 4 : 0;
+                const deficit = prevMonthDeficit[selectedClientId]?.story || 0;
+                const goal = baseGoal + deficit;
                 const delivered = stats.story;
+                const pct = goal > 0 ? Math.min(Math.round((delivered / goal) * 100), 100) : 0;
                 return (
-                  <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <Image size={14} className="text-pink-600 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-semibold text-foreground">Stories Mensal</span>
-                          <span className={`text-[10px] font-bold ${goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
-                            {delivered}{goal > 0 ? `/${goal}` : ''}
-                          </span>
-                        </div>
-                        {goal > 0 && <Progress value={Math.min(Math.round((delivered / goal) * 100), 100)} className="h-1.5" />}
+                  <div className="rounded-lg border border-border p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Image size={14} className="text-pink-600 shrink-0" />
+                        <span className="text-xs font-semibold text-foreground">Stories Mensal</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className={`text-[10px] font-bold ${goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          {delivered}/{goal > 0 ? goal : '∞'}
+                        </span>
+                        {deficit > 0 && <Badge variant="outline" className="text-[8px] px-1 py-0 text-orange-600 border-orange-300">+{deficit} anterior</Badge>}
                       </div>
                     </div>
-                    <div className="flex gap-1 shrink-0">
+                    <Progress value={pct} className="h-2" />
+                    <div className="flex gap-1 justify-end">
                       <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRemoveLastStory(selectedClientId)}>
                         <Trash2 size={12} /> -1
                       </Button>
@@ -926,23 +967,27 @@ export default function SocialMediaDeliveries() {
 
               {/* Reels Mensal */}
               {(() => {
-                const goal = plan?.reels_qty || 0;
+                const baseGoal = plan?.reels_qty || 0;
+                const deficit = prevMonthDeficit[selectedClientId]?.reels || 0;
+                const goal = baseGoal + deficit;
                 const delivered = stats.reels;
+                const pct = goal > 0 ? Math.min(Math.round((delivered / goal) * 100), 100) : 0;
                 return (
-                  <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <Film size={14} className="text-blue-600 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-semibold text-foreground">Reels Mensal</span>
-                          <span className={`text-[10px] font-bold ${goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
-                            {delivered}{goal > 0 ? `/${goal}` : ''}
-                          </span>
-                        </div>
-                        {goal > 0 && <Progress value={Math.min(Math.round((delivered / goal) * 100), 100)} className="h-1.5" />}
+                  <div className="rounded-lg border border-border p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Film size={14} className="text-blue-600 shrink-0" />
+                        <span className="text-xs font-semibold text-foreground">Reels Mensal</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className={`text-[10px] font-bold ${goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          {delivered}/{goal > 0 ? goal : '∞'}
+                        </span>
+                        {deficit > 0 && <Badge variant="outline" className="text-[8px] px-1 py-0 text-orange-600 border-orange-300">+{deficit} anterior</Badge>}
                       </div>
                     </div>
-                    <div className="flex gap-1 shrink-0">
+                    <Progress value={pct} className="h-2" />
+                    <div className="flex gap-1 justify-end">
                       <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRemoveLastContent(selectedClientId, 'reels')}>
                         <Trash2 size={12} /> -1
                       </Button>
@@ -962,23 +1007,27 @@ export default function SocialMediaDeliveries() {
 
               {/* Criativos Mensal */}
               {(() => {
-                const goal = plan?.creatives_qty || 0;
+                const baseGoal = plan?.creatives_qty || 0;
+                const deficit = prevMonthDeficit[selectedClientId]?.criativo || 0;
+                const goal = baseGoal + deficit;
                 const delivered = stats.criativo;
+                const pct = goal > 0 ? Math.min(Math.round((delivered / goal) * 100), 100) : 0;
                 return (
-                  <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <Megaphone size={14} className="text-purple-600 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-semibold text-foreground">Criativos Mensal</span>
-                          <span className={`text-[10px] font-bold ${goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
-                            {delivered}{goal > 0 ? `/${goal}` : ''}
-                          </span>
-                        </div>
-                        {goal > 0 && <Progress value={Math.min(Math.round((delivered / goal) * 100), 100)} className="h-1.5" />}
+                  <div className="rounded-lg border border-border p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Megaphone size={14} className="text-purple-600 shrink-0" />
+                        <span className="text-xs font-semibold text-foreground">Criativos Mensal</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className={`text-[10px] font-bold ${goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          {delivered}/{goal > 0 ? goal : '∞'}
+                        </span>
+                        {deficit > 0 && <Badge variant="outline" className="text-[8px] px-1 py-0 text-orange-600 border-orange-300">+{deficit} anterior</Badge>}
                       </div>
                     </div>
-                    <div className="flex gap-1 shrink-0">
+                    <Progress value={pct} className="h-2" />
+                    <div className="flex gap-1 justify-end">
                       <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRemoveLastContent(selectedClientId, 'criativo')}>
                         <Trash2 size={12} /> -1
                       </Button>
@@ -998,23 +1047,27 @@ export default function SocialMediaDeliveries() {
 
               {/* Artes Mensal */}
               {(() => {
-                const goal = plan?.arts_qty || 0;
+                const baseGoal = plan?.arts_qty || 0;
+                const deficit = prevMonthDeficit[selectedClientId]?.arte || 0;
+                const goal = baseGoal + deficit;
                 const delivered = stats.arte;
+                const pct = goal > 0 ? Math.min(Math.round((delivered / goal) * 100), 100) : 0;
                 return (
-                  <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <Palette size={14} className="text-amber-600 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-semibold text-foreground">Artes Mensal</span>
-                          <span className={`text-[10px] font-bold ${goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
-                            {delivered}{goal > 0 ? `/${goal}` : ''}
-                          </span>
-                        </div>
-                        {goal > 0 && <Progress value={Math.min(Math.round((delivered / goal) * 100), 100)} className="h-1.5" />}
+                  <div className="rounded-lg border border-border p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Palette size={14} className="text-amber-600 shrink-0" />
+                        <span className="text-xs font-semibold text-foreground">Artes Mensal</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className={`text-[10px] font-bold ${goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          {delivered}/{goal > 0 ? goal : '∞'}
+                        </span>
+                        {deficit > 0 && <Badge variant="outline" className="text-[8px] px-1 py-0 text-orange-600 border-orange-300">+{deficit} anterior</Badge>}
                       </div>
                     </div>
-                    <div className="flex gap-1 shrink-0">
+                    <Progress value={pct} className="h-2" />
+                    <div className="flex gap-1 justify-end">
                       <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRemoveLastContent(selectedClientId, 'arte')}>
                         <Trash2 size={12} /> -1
                       </Button>

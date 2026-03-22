@@ -374,19 +374,20 @@ app.post('/api/financial-chat', async (req, res) => {
 
     const selectedModel = aiModel || 'gemini-2.5-flash-lite';
     const now = new Date();
-    const startOfYear = `${now.getFullYear()}-01-01`;
+    const SYSTEM_START = '2026-03-01'; // Sistema iniciou em março 2026
     const startOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
     const fmt = v => Number(v || 0).toLocaleString('pt-BR');
     const fmtDate = d => { if (!d) return 'N/A'; const dt = typeof d === 'string' ? d : d.toISOString(); return dt.slice(0, 10).split('-').reverse().join('/'); };
 
     // Fetch ALL system data in parallel from local PostgreSQL
+    // NOTE: All operational data filtered from SYSTEM_START (March 2026). Only contracts can have earlier dates.
     const [
       revenuesRes, expensesRes, contractsRes, clientsRes, cashRes, apiKeyRes,
       recordingsRes, contentTasksRes, designTasksRes, scriptsRes,
       deliveriesRes, socialDeliveriesRes, profilesRes, plansRes,
       goalsRes, portalContentsRes
     ] = await Promise.all([
-      pool.query(`SELECT r.*, c.company_name AS client_name FROM revenues r LEFT JOIN clients c ON c.id = r.client_id WHERE r.due_date >= $1 ORDER BY r.due_date DESC LIMIT 500`, [startOfYear]),
+      pool.query(`SELECT r.*, c.company_name AS client_name FROM revenues r LEFT JOIN clients c ON c.id = r.client_id WHERE r.due_date >= $1 ORDER BY r.due_date DESC LIMIT 500`, [SYSTEM_START]),
       pool.query(`SELECT e.*, ec.name AS category_name FROM expenses e LEFT JOIN expense_categories ec ON ec.id = e.category_id WHERE e.date >= $1 ORDER BY e.date DESC LIMIT 500`, [startOfYear]),
       pool.query(`SELECT fc.*, c.company_name AS client_name, p.name AS plan_name, p.price AS plan_price FROM financial_contracts fc LEFT JOIN clients c ON c.id = fc.client_id LEFT JOIN plans p ON p.id = fc.plan_id WHERE fc.status = 'ativo'`),
       pool.query(`SELECT c.*, p.name AS plan_name FROM clients c LEFT JOIN plans p ON p.id = c.plan_id`),

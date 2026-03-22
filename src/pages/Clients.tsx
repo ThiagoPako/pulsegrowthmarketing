@@ -69,9 +69,15 @@ const emptySocialAccounts = (): SocialAccountState => ({
   facebook: { connected: false, accountName: '', pageId: '' },
 });
 
-const STEP_LABELS = [
+const STEP_LABELS_WITH_META = [
   { icon: User, label: 'Dados da Empresa' },
   { icon: Globe, label: 'Redes Sociais' },
+  { icon: Target, label: 'Metas Semanais' },
+  { icon: DollarSign, label: 'Financeiro' },
+];
+
+const STEP_LABELS_NO_META = [
+  { icon: User, label: 'Dados da Empresa' },
   { icon: Target, label: 'Metas Semanais' },
   { icon: DollarSign, label: 'Financeiro' },
 ];

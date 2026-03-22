@@ -115,10 +115,15 @@ export default function Clients() {
   // Social accounts state
   const [socialAccounts, setSocialAccounts] = useState<SocialAccountState>(emptySocialAccounts());
   const [existingSocialAccounts, setExistingSocialAccounts] = useState<any[]>([]);
+  const [hasMetaApi, setHasMetaApi] = useState(false);
 
   useEffect(() => {
     supabase.from('plans').select('id, name, status, reels_qty, creatives_qty, stories_qty, recording_sessions, accepts_extra_content').eq('status', 'ativo').then(({ data }) => {
       if (data) setPlans(data as any[]);
+    });
+    // Check if Meta API integration is active
+    supabase.from('api_integrations').select('id').eq('provider', 'meta').eq('status', 'ativo').limit(1).then(({ data }) => {
+      setHasMetaApi(!!(data && data.length > 0));
     });
   }, []);
 

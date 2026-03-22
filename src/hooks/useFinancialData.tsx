@@ -123,28 +123,44 @@ export function useFinancialData() {
 
     // Auto-mark overdue revenues: if due_date < today and status is still 'prevista', update to 'em_atraso'
     if (rRes.data) {
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-      const overdueIds: string[] = [];
+      const today = new Date().toISOString().split('T')[0];
       const revenueData = rRes.data as any[];
-      
+
+      // Deduplicate by client_id + reference_month (keep earliest), in case DB constraint wasn't applied on VPS yet
+      const seen = new Map<string, any>();
       for (const r of revenueData) {
+        const key = `${r.client_id}_${normalizeDate(r.reference_month)}`;
+        if (!seen.has(key)) {
+          seen.set(key, r);
+        }
+      }
+      const uniqueRevenues = Array.from(seen.values());
+
+      const overdueIds: string[] = [];
+      for (const r of uniqueRevenues) {
         if (r.status === 'prevista' && r.due_date && normalizeDate(r.due_date) < today && Number(r.amount) > 0) {
           overdueIds.push(r.id);
         }
       }
 
       if (overdueIds.length > 0) {
-        // Batch update overdue revenues
         await Promise.all(
           overdueIds.map(id =>
             supabase.from('revenues').update({ status: 'em_atraso' } as any).eq('id', id)
           )
         );
-        // Re-fetch revenues after update
         const updated = await supabase.from('revenues').select('*').order('due_date', { ascending: false });
-        if (updated.data) setRevenues(updated.data as any);
+        if (updated.data) {
+          // Deduplicate again after re-fetch
+          const seen2 = new Map<string, any>();
+          for (const r of (updated.data as any[])) {
+            const key = `${r.client_id}_${normalizeDate(r.reference_month)}`;
+            if (!seen2.has(key)) seen2.set(key, r);
+          }
+          setRevenues(Array.from(seen2.values()));
+        }
       } else {
-        setRevenues(revenueData);
+        setRevenues(uniqueRevenues);
       }
     }
 

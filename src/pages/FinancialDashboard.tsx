@@ -111,7 +111,7 @@ export default function FinancialDashboard() {
     const totalMonthExpenses = totalExpenses;
     const totalDeliveries = monthRevenues.length || 1;
 
-    return contracts.filter(c => c.status === 'ativo').map(contract => {
+    return activeContracts.map(contract => {
       const client = clients.find(cl => cl.id === contract.client_id);
       const clientRevenues = monthRevenues.filter(r => r.client_id === contract.client_id);
       const faturamento = clientRevenues.reduce((s, r) => s + Number(r.amount), 0) || Number(contract.contract_value);

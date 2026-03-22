@@ -1349,14 +1349,22 @@ export default function SocialMediaDeliveries() {
                         {stats.total === 0 && !isOnboarding && <span className="text-xs text-muted-foreground">Sem entregas este mês</span>}
                       </div>
 
-                      {/* Weekly stories progress */}
-                      {storyGoal > 0 && (
-                        <div className="mt-3 pt-3 border-t border-border">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-[10px] text-muted-foreground flex items-center gap-1"><Image size={10} className="text-pink-600" /> Stories/semana</span>
-                            <span className={`text-[10px] font-semibold ${ws >= storyGoal ? 'text-green-600' : 'text-muted-foreground'}`}>{ws}/{storyGoal}</span>
-                          </div>
-                          <Progress value={storyPct} className="h-1.5" />
+                      {/* Monthly plan progress */}
+                      {goalItems.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-border space-y-2">
+                          <span className="text-[10px] font-semibold text-muted-foreground">Progresso do Pacote</span>
+                          {goalItems.map(item => {
+                            const pct = Math.min(Math.round((item.delivered / item.goal) * 100), 100);
+                            return (
+                              <div key={item.label}>
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <span className={`text-[10px] flex items-center gap-1 ${item.color}`}><item.icon size={10} /> {item.label}</span>
+                                  <span className={`text-[10px] font-semibold ${item.delivered >= item.goal ? 'text-green-600' : 'text-muted-foreground'}`}>{item.delivered}/{item.goal}</span>
+                                </div>
+                                <Progress value={pct} className="h-1.5" />
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </CardContent>

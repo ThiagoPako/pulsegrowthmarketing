@@ -99,7 +99,7 @@ export default function FinancialDashboard() {
       const mEnd = endOfMonth(m);
       const ref = format(mStart, 'yyyy-MM-dd');
       const label = format(m, 'MMM', { locale: ptBR });
-      const rec = revenues.filter(r => r.reference_month === ref && r.status === 'recebida').reduce((s, r) => s + Number(r.amount), 0);
+      const rec = revenues.filter(r => normalizeDate(r.reference_month) === ref && r.status === 'recebida').reduce((s, r) => s + Number(r.amount), 0);
       const desp = expenses.filter(e => { const d = new Date(e.date); return d >= mStart && d <= mEnd; }).reduce((s, e) => s + Number(e.amount), 0);
       data.push({ name: label, receita: rec, despesa: desp, lucro: rec - desp });
     }

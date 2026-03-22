@@ -856,8 +856,8 @@ export default function SocialMediaDeliveries() {
           const creativosGoal = (plan ? plan.creatives_qty : (selectedClient.weeklyCreatives ? selectedClient.weeklyCreatives * 4 : 0)) + (prevMonthDeficit[selectedClientId]?.criativo || 0);
           const storiesGoal = (plan ? plan.stories_qty : (storyGoal > 0 ? storyGoal * 4 : 0)) + (prevMonthDeficit[selectedClientId]?.story || 0);
           const artesGoal = (plan ? plan.arts_qty : 0) + (prevMonthDeficit[selectedClientId]?.arte || 0);
-          const hasAnyGoal = reelsGoal > 0 || creativosGoal > 0 || storiesGoal > 0 || artesGoal > 0;
-          if (!hasAnyGoal) return null;
+          const hasAnyContent = reelsGoal > 0 || creativosGoal > 0 || storiesGoal > 0 || artesGoal > 0 || stats.total > 0;
+          if (!hasAnyContent) return null;
           return (
             <Card className="border-border">
               <CardContent className="p-4">
@@ -871,15 +871,17 @@ export default function SocialMediaDeliveries() {
                     { label: 'Criativos', delivered: stats.criativo, goal: creativosGoal },
                     { label: 'Stories', delivered: stats.story, goal: storiesGoal },
                     { label: 'Artes', delivered: stats.arte, goal: artesGoal },
-                  ].filter(i => i.goal > 0).map(item => {
-                    const pct = Math.min(Math.round((item.delivered / item.goal) * 100), 100);
+                  ].filter(i => i.goal > 0 || i.delivered > 0).map(item => {
+                    const isInfinite = item.goal === 0;
+                    const pct = isInfinite ? 100 : Math.min(Math.round((item.delivered / item.goal) * 100), 100);
                     return (
                       <div key={item.label} className="space-y-1">
                         <div className="flex justify-between text-xs">
                           <span className="text-muted-foreground">{item.label}</span>
-                          <span className="font-medium text-foreground">{item.delivered}/{item.goal}</span>
+                          <span className="font-medium text-foreground">{item.delivered}/{isInfinite ? '∞' : item.goal}</span>
                         </div>
                         <Progress value={pct} className="h-2" />
+                        {isInfinite && item.delivered > 0 && <span className="text-[9px] text-primary font-medium">Extra</span>}
                       </div>
                     );
                   })}
@@ -1226,7 +1228,7 @@ export default function SocialMediaDeliveries() {
                   { label: 'Criativos', delivered: stats.criativo, goal: creativosGoal + deficit.criativo, icon: Megaphone, color: 'text-purple-600' },
                   { label: 'Stories', delivered: stats.story, goal: storiesGoalMonthly + deficit.story, icon: Image, color: 'text-pink-600' },
                   { label: 'Artes', delivered: stats.arte, goal: artesGoal + deficit.arte, icon: Palette, color: 'text-amber-600' },
-                ].filter(i => i.goal > 0);
+                ].filter(i => i.goal > 0 || i.delivered > 0);
                 const onboarding = onboardingStatus[client.id];
                 const hasOverdue = overdue.overdue > 0;
                 const hasAlmostOverdue = overdue.almostOverdue > 0;
@@ -1354,12 +1356,13 @@ export default function SocialMediaDeliveries() {
                         <div className="mt-3 pt-3 border-t border-border space-y-2">
                           <span className="text-[10px] font-semibold text-muted-foreground">Progresso do Pacote</span>
                           {goalItems.map(item => {
-                            const pct = Math.min(Math.round((item.delivered / item.goal) * 100), 100);
+                            const isInfinite = item.goal === 0;
+                            const pct = isInfinite ? 100 : Math.min(Math.round((item.delivered / item.goal) * 100), 100);
                             return (
                               <div key={item.label}>
                                 <div className="flex items-center justify-between mb-0.5">
                                   <span className={`text-[10px] flex items-center gap-1 ${item.color}`}><item.icon size={10} /> {item.label}</span>
-                                  <span className={`text-[10px] font-semibold ${item.delivered >= item.goal ? 'text-green-600' : 'text-muted-foreground'}`}>{item.delivered}/{item.goal}</span>
+                                  <span className={`text-[10px] font-semibold ${!isInfinite && item.delivered >= item.goal ? 'text-green-600' : 'text-muted-foreground'}`}>{item.delivered}/{isInfinite ? '∞' : item.goal}{isInfinite && item.delivered > 0 ? ' extra' : ''}</span>
                                 </div>
                                 <Progress value={pct} className="h-1.5" />
                               </div>

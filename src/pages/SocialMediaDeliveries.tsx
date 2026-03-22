@@ -286,21 +286,25 @@ export default function SocialMediaDeliveries() {
       if (d.content_type === 'arte') delivered[d.client_id].arte++;
     });
 
-    // Calculate deficit for each client with a plan
+    // Calculate deficit for each client (plan or weekly goals)
     clients.forEach(c => {
       const planId = clientPlans[c.id];
-      if (!planId) return;
-      const plan = plans.find(p => p.id === planId);
-      if (!plan) return;
+      const plan = planId ? plans.find(p => p.id === planId) : null;
       const del = delivered[c.id] || { reels: 0, criativo: 0, story: 0, arte: 0 };
-      const storyGoalMonthly = (c.weeklyStories || 0) * 4;
+
+      const reelsGoal = plan?.reels_qty || (c.weeklyReels ? c.weeklyReels * 4 : 0);
+      const creativosGoal = plan?.creatives_qty || (c.weeklyCreatives ? c.weeklyCreatives * 4 : 0);
+      const storyGoalMonthly = plan?.stories_qty || (c.weeklyStories ? c.weeklyStories * 4 : 0);
+      const artesGoal = plan?.arts_qty || 0;
+
+      if (!reelsGoal && !creativosGoal && !storyGoalMonthly && !artesGoal) return;
+
       const deficit = {
-        reels: Math.max(0, (plan.reels_qty || 0) - del.reels),
-        criativo: Math.max(0, (plan.creatives_qty || 0) - del.criativo),
+        reels: Math.max(0, reelsGoal - del.reels),
+        criativo: Math.max(0, creativosGoal - del.criativo),
         story: Math.max(0, storyGoalMonthly - del.story),
-        arte: Math.max(0, (plan.arts_qty || 0) - del.arte),
+        arte: Math.max(0, artesGoal - del.arte),
       };
-      // Only store if there's actually a deficit
       if (deficit.reels > 0 || deficit.criativo > 0 || deficit.story > 0 || deficit.arte > 0) {
         byClient[c.id] = deficit;
       }

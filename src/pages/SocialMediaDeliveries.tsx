@@ -26,6 +26,7 @@ import PostingCalendar from '@/components/social/PostingCalendar';
 import OnboardingTracker from '@/components/social/OnboardingTracker';
 import SocialMediaKanban from '@/components/social/SocialMediaKanban';
 import CatStatusIndicator, { getCatStatus } from '@/components/social/CatStatusIndicator';
+import CatClickWrapper from '@/components/social/CatClickEffect';
 
 interface SocialDelivery {
   id: string;

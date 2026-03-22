@@ -1017,6 +1017,7 @@ export default function SocialMediaDeliveries() {
         {renderBatchContentDialog(selectedClientId)}
         {renderAlterationDialog()}
       </div>
+      </CatClickWrapper>
     );
   }
 

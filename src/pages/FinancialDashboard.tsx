@@ -321,7 +321,7 @@ export default function FinancialDashboard() {
   const kpiRow2 = [
     { icon: <AlertTriangle size={18} />, label: 'Em Atraso', value: fmt(revenueAtraso), gradient: 'from-orange-500/10 to-amber-500/10', iconBg: 'bg-orange-500/20 text-orange-600', border: 'border-orange-200/50' },
     { icon: <CreditCard size={18} />, label: 'Ticket Médio', value: fmt(ticketMedio), gradient: 'from-violet-500/10 to-purple-500/10', iconBg: 'bg-violet-500/20 text-violet-600', border: 'border-violet-200/50' },
-    { icon: <Users size={18} />, label: 'Clientes Ativos', value: String(activeClients), gradient: 'from-sky-500/10 to-cyan-500/10', iconBg: 'bg-sky-500/20 text-sky-600', border: 'border-sky-200/50' },
+    { icon: <Users size={18} />, label: 'Clientes Ativos', value: String(activeClientsCount), gradient: 'from-sky-500/10 to-cyan-500/10', iconBg: 'bg-sky-500/20 text-sky-600', border: 'border-sky-200/50' },
     { icon: <TrendingDown size={18} />, label: 'Cancelamento', value: `${taxaCancelamento.toFixed(1)}%`, gradient: 'from-slate-500/10 to-gray-500/10', iconBg: 'bg-slate-500/20 text-slate-600', border: 'border-slate-200/50' },
   ];
 

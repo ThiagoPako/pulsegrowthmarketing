@@ -3,7 +3,6 @@ import { useFinancialData, type Expense } from '@/hooks/useFinancialData';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -14,15 +13,13 @@ import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
-
-const emptyForm = { date: new Date().toISOString().split('T')[0], amount: 0, category_id: '', expense_type: 'fixa', description: '', responsible: '' };
+import ExpenseFormDialog from '@/components/financial/ExpenseFormDialog';
 
 export default function FinancialExpenses() {
   const navigate = useNavigate();
   const { expenses, categories, addExpense, updateExpense, deleteExpense, addCategory } = useFinancialData();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
   const [newCat, setNewCat] = useState('');
   const [catOpen, setCatOpen] = useState(false);
@@ -47,20 +44,17 @@ export default function FinancialExpenses() {
     return options;
   }, []);
 
-  const handleSave = async () => {
-    if (!form.category_id || !form.amount) { toast.error('Preencha os campos obrigatórios'); return; }
+  const handleSave = async (form: any, editingId: string | null) => {
     if (editingId) {
       await updateExpense(editingId, form);
     } else {
       await addExpense(form);
     }
     toast.success('Despesa salva!');
-    setOpen(false); setForm(emptyForm); setEditingId(null);
   };
 
   const handleEdit = (e: Expense) => {
-    setForm({ date: e.date, amount: e.amount, category_id: e.category_id, expense_type: e.expense_type, description: e.description, responsible: e.responsible });
-    setEditingId(e.id);
+    setEditingExpense(e);
     setOpen(true);
   };
 
@@ -76,6 +70,7 @@ export default function FinancialExpenses() {
       toast.success('Categoria criada');
     }
   };
+
   const fixas = filtered.filter(e => e.expense_type === 'fixa').reduce((s, e) => s + Number(e.amount), 0);
   const variaveis = filtered.filter(e => e.expense_type === 'variavel').reduce((s, e) => s + Number(e.amount), 0);
 
@@ -106,46 +101,21 @@ export default function FinancialExpenses() {
             </div>
           </DialogContent>
         </Dialog>
-        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setForm(emptyForm); setEditingId(null); } }}>
-          <DialogTrigger asChild>
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <Button size="sm" className="shadow-sm bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white"><Plus size={16} className="mr-1" /> Nova Despesa</Button>
-            </motion.div>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>{editingId ? 'Editar Despesa' : 'Nova Despesa'}</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Data</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
-                <div><Label>Valor (R$)</Label><Input type="number" min={0} step={0.01} value={form.amount} onChange={e => setForm({ ...form, amount: Number(e.target.value) })} /></div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Categoria</Label>
-                  <Select value={form.category_id} onValueChange={v => setForm({ ...form, category_id: v })}>
-                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>{categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Tipo</Label>
-                  <Select value={form.expense_type} onValueChange={v => setForm({ ...form, expense_type: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="fixa">Fixa</SelectItem>
-                      <SelectItem value="variavel">Variável</SelectItem>
-                      <SelectItem value="pontual">Pontual</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div><Label>Descrição</Label><Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></div>
-              <div><Label>Responsável</Label><Input value={form.responsible} onChange={e => setForm({ ...form, responsible: e.target.value })} /></div>
-              <Button className="w-full" onClick={handleSave}>Salvar</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+          <Button size="sm" className="shadow-sm bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white" onClick={() => { setEditingExpense(null); setOpen(true); }}>
+            <Plus size={16} className="mr-1" /> Nova Despesa
+          </Button>
+        </motion.div>
       </motion.div>
+
+      {/* Expense Form Dialog */}
+      <ExpenseFormDialog
+        open={open}
+        onOpenChange={(o) => { setOpen(o); if (!o) setEditingExpense(null); }}
+        categories={categories}
+        editingExpense={editingExpense}
+        onSave={handleSave}
+      />
 
       {/* KPI Summary */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.3 }} className="grid grid-cols-3 gap-3">
@@ -210,7 +180,7 @@ export default function FinancialExpenses() {
                     transition={{ delay: i * 0.03, duration: 0.2 }}
                     className="border-b transition-colors hover:bg-muted/50"
                   >
-                    <TableCell>{e.date}</TableCell>
+                    <TableCell>{format(new Date(e.date + 'T12:00:00'), 'dd/MM/yyyy')}</TableCell>
                     <TableCell><Badge variant="outline" className="font-normal">{cat?.name || '—'}</Badge></TableCell>
                     <TableCell>{e.description || '—'}</TableCell>
                     <TableCell>

@@ -856,8 +856,8 @@ export default function SocialMediaDeliveries() {
           const creativosGoal = (plan ? plan.creatives_qty : (selectedClient.weeklyCreatives ? selectedClient.weeklyCreatives * 4 : 0)) + (prevMonthDeficit[selectedClientId]?.criativo || 0);
           const storiesGoal = (plan ? plan.stories_qty : (storyGoal > 0 ? storyGoal * 4 : 0)) + (prevMonthDeficit[selectedClientId]?.story || 0);
           const artesGoal = (plan ? plan.arts_qty : 0) + (prevMonthDeficit[selectedClientId]?.arte || 0);
-          const hasAnyGoal = reelsGoal > 0 || creativosGoal > 0 || storiesGoal > 0 || artesGoal > 0;
-          if (!hasAnyGoal) return null;
+          const hasAnyContent = reelsGoal > 0 || creativosGoal > 0 || storiesGoal > 0 || artesGoal > 0 || stats.total > 0;
+          if (!hasAnyContent) return null;
           return (
             <Card className="border-border">
               <CardContent className="p-4">

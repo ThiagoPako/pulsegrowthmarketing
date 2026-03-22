@@ -852,10 +852,14 @@ export default function SocialMediaDeliveries() {
 
         {/* Plan progress */}
         {(() => {
-          const reelsGoal = (plan ? plan.reels_qty : (selectedClient.weeklyReels ? selectedClient.weeklyReels * 4 : 0)) + (prevMonthDeficit[selectedClientId]?.reels || 0);
-          const creativosGoal = (plan ? plan.creatives_qty : (selectedClient.weeklyCreatives ? selectedClient.weeklyCreatives * 4 : 0)) + (prevMonthDeficit[selectedClientId]?.criativo || 0);
-          const storiesGoal = (plan ? plan.stories_qty : (storyGoal > 0 ? storyGoal * 4 : 0)) + (prevMonthDeficit[selectedClientId]?.story || 0);
-          const artesGoal = (plan ? plan.arts_qty : 0) + (prevMonthDeficit[selectedClientId]?.arte || 0);
+          const reelsBase = plan ? plan.reels_qty : (selectedClient.weeklyReels ? selectedClient.weeklyReels * 4 : 0);
+          const creativosBase = plan ? plan.creatives_qty : (selectedClient.weeklyCreatives ? selectedClient.weeklyCreatives * 4 : 0);
+          const storiesBase = plan ? plan.stories_qty : (storyGoal > 0 ? storyGoal * 4 : 0);
+          const artesBase = plan ? plan.arts_qty : 0;
+          const reelsGoal = reelsBase + (reelsBase > 0 ? (prevMonthDeficit[selectedClientId]?.reels || 0) : 0);
+          const creativosGoal = creativosBase + (creativosBase > 0 ? (prevMonthDeficit[selectedClientId]?.criativo || 0) : 0);
+          const storiesGoal = storiesBase + (storiesBase > 0 ? (prevMonthDeficit[selectedClientId]?.story || 0) : 0);
+          const artesGoal = artesBase + (artesBase > 0 ? (prevMonthDeficit[selectedClientId]?.arte || 0) : 0);
           const hasAnyContent = reelsGoal > 0 || creativosGoal > 0 || storiesGoal > 0 || artesGoal > 0 || stats.total > 0;
           if (!hasAnyContent) return null;
           return (
@@ -941,10 +945,12 @@ export default function SocialMediaDeliveries() {
               {/* Stories Mensal */}
               {(() => {
                 const baseGoal = plan ? plan.stories_qty : (storyGoal > 0 ? storyGoal * 4 : 0);
-                const deficit = prevMonthDeficit[selectedClientId]?.story || 0;
+                // Only count deficit if the item is contracted (baseGoal > 0)
+                const deficit = baseGoal > 0 ? (prevMonthDeficit[selectedClientId]?.story || 0) : 0;
                 const goal = baseGoal + deficit;
                 const delivered = stats.story;
-                const pct = goal > 0 ? Math.min(Math.round((delivered / goal) * 100), 100) : 0;
+                const isInfinite = baseGoal === 0;
+                const pct = isInfinite ? (delivered > 0 ? 100 : 0) : (goal > 0 ? Math.min(Math.round((delivered / goal) * 100), 100) : 0);
                 return (
                   <div className="rounded-lg border border-border p-3 space-y-2">
                     <div className="flex items-center justify-between">
@@ -953,9 +959,10 @@ export default function SocialMediaDeliveries() {
                         <span className="text-xs font-semibold text-foreground">Stories Mensal</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className={`text-[10px] font-bold ${goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
-                          {delivered}/{goal > 0 ? goal : '∞'}
+                        <span className={`text-[10px] font-bold ${!isInfinite && goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          {delivered}/{isInfinite ? '∞' : goal}
                         </span>
+                        {isInfinite && delivered > 0 && <Badge variant="outline" className="text-[8px] px-1 py-0 text-primary border-primary/30">Extra</Badge>}
                         {deficit > 0 && <Badge variant="outline" className="text-[8px] px-1 py-0 text-orange-600 border-orange-300">+{deficit} anterior</Badge>}
                       </div>
                     </div>
@@ -982,10 +989,11 @@ export default function SocialMediaDeliveries() {
               {/* Reels Mensal */}
               {(() => {
                 const baseGoal = plan ? plan.reels_qty : (selectedClient.weeklyReels ? selectedClient.weeklyReels * 4 : 0);
-                const deficit = prevMonthDeficit[selectedClientId]?.reels || 0;
+                const deficit = baseGoal > 0 ? (prevMonthDeficit[selectedClientId]?.reels || 0) : 0;
                 const goal = baseGoal + deficit;
                 const delivered = stats.reels;
-                const pct = goal > 0 ? Math.min(Math.round((delivered / goal) * 100), 100) : 0;
+                const isInfinite = baseGoal === 0;
+                const pct = isInfinite ? (delivered > 0 ? 100 : 0) : (goal > 0 ? Math.min(Math.round((delivered / goal) * 100), 100) : 0);
                 return (
                   <div className="rounded-lg border border-border p-3 space-y-2">
                     <div className="flex items-center justify-between">
@@ -994,9 +1002,10 @@ export default function SocialMediaDeliveries() {
                         <span className="text-xs font-semibold text-foreground">Reels Mensal</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className={`text-[10px] font-bold ${goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
-                          {delivered}/{goal > 0 ? goal : '∞'}
+                        <span className={`text-[10px] font-bold ${!isInfinite && goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          {delivered}/{isInfinite ? '∞' : goal}
                         </span>
+                        {isInfinite && delivered > 0 && <Badge variant="outline" className="text-[8px] px-1 py-0 text-primary border-primary/30">Extra</Badge>}
                         {deficit > 0 && <Badge variant="outline" className="text-[8px] px-1 py-0 text-orange-600 border-orange-300">+{deficit} anterior</Badge>}
                       </div>
                     </div>
@@ -1022,10 +1031,11 @@ export default function SocialMediaDeliveries() {
               {/* Criativos Mensal */}
               {(() => {
                 const baseGoal = plan ? plan.creatives_qty : (selectedClient.weeklyCreatives ? selectedClient.weeklyCreatives * 4 : 0);
-                const deficit = prevMonthDeficit[selectedClientId]?.criativo || 0;
+                const deficit = baseGoal > 0 ? (prevMonthDeficit[selectedClientId]?.criativo || 0) : 0;
                 const goal = baseGoal + deficit;
                 const delivered = stats.criativo;
-                const pct = goal > 0 ? Math.min(Math.round((delivered / goal) * 100), 100) : 0;
+                const isInfinite = baseGoal === 0;
+                const pct = isInfinite ? (delivered > 0 ? 100 : 0) : (goal > 0 ? Math.min(Math.round((delivered / goal) * 100), 100) : 0);
                 return (
                   <div className="rounded-lg border border-border p-3 space-y-2">
                     <div className="flex items-center justify-between">
@@ -1034,9 +1044,10 @@ export default function SocialMediaDeliveries() {
                         <span className="text-xs font-semibold text-foreground">Criativos Mensal</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className={`text-[10px] font-bold ${goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
-                          {delivered}/{goal > 0 ? goal : '∞'}
+                        <span className={`text-[10px] font-bold ${!isInfinite && goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          {delivered}/{isInfinite ? '∞' : goal}
                         </span>
+                        {isInfinite && delivered > 0 && <Badge variant="outline" className="text-[8px] px-1 py-0 text-primary border-primary/30">Extra</Badge>}
                         {deficit > 0 && <Badge variant="outline" className="text-[8px] px-1 py-0 text-orange-600 border-orange-300">+{deficit} anterior</Badge>}
                       </div>
                     </div>
@@ -1062,10 +1073,11 @@ export default function SocialMediaDeliveries() {
               {/* Artes Mensal */}
               {(() => {
                 const baseGoal = plan ? plan.arts_qty : 0;
-                const deficit = prevMonthDeficit[selectedClientId]?.arte || 0;
+                const deficit = baseGoal > 0 ? (prevMonthDeficit[selectedClientId]?.arte || 0) : 0;
                 const goal = baseGoal + deficit;
                 const delivered = stats.arte;
-                const pct = goal > 0 ? Math.min(Math.round((delivered / goal) * 100), 100) : 0;
+                const isInfinite = baseGoal === 0;
+                const pct = isInfinite ? (delivered > 0 ? 100 : 0) : (goal > 0 ? Math.min(Math.round((delivered / goal) * 100), 100) : 0);
                 return (
                   <div className="rounded-lg border border-border p-3 space-y-2">
                     <div className="flex items-center justify-between">
@@ -1074,9 +1086,10 @@ export default function SocialMediaDeliveries() {
                         <span className="text-xs font-semibold text-foreground">Artes Mensal</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className={`text-[10px] font-bold ${goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
-                          {delivered}/{goal > 0 ? goal : '∞'}
+                        <span className={`text-[10px] font-bold ${!isInfinite && goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          {delivered}/{isInfinite ? '∞' : goal}
                         </span>
+                        {isInfinite && delivered > 0 && <Badge variant="outline" className="text-[8px] px-1 py-0 text-primary border-primary/30">Extra</Badge>}
                         {deficit > 0 && <Badge variant="outline" className="text-[8px] px-1 py-0 text-orange-600 border-orange-300">+{deficit} anterior</Badge>}
                       </div>
                     </div>
@@ -1224,10 +1237,10 @@ export default function SocialMediaDeliveries() {
                 const artesGoal = plan ? plan.arts_qty : 0;
                 const deficit = prevMonthDeficit[client.id] || { reels: 0, criativo: 0, story: 0, arte: 0 };
                 const goalItems = [
-                  { label: 'Reels', delivered: stats.reels, goal: reelsGoal + deficit.reels, icon: Film, color: 'text-blue-600' },
-                  { label: 'Criativos', delivered: stats.criativo, goal: creativosGoal + deficit.criativo, icon: Megaphone, color: 'text-purple-600' },
-                  { label: 'Stories', delivered: stats.story, goal: storiesGoalMonthly + deficit.story, icon: Image, color: 'text-pink-600' },
-                  { label: 'Artes', delivered: stats.arte, goal: artesGoal + deficit.arte, icon: Palette, color: 'text-amber-600' },
+                  { label: 'Reels', delivered: stats.reels, goal: reelsGoal + (reelsGoal > 0 ? deficit.reels : 0), icon: Film, color: 'text-blue-600' },
+                  { label: 'Criativos', delivered: stats.criativo, goal: creativosGoal + (creativosGoal > 0 ? deficit.criativo : 0), icon: Megaphone, color: 'text-purple-600' },
+                  { label: 'Stories', delivered: stats.story, goal: storiesGoalMonthly + (storiesGoalMonthly > 0 ? deficit.story : 0), icon: Image, color: 'text-pink-600' },
+                  { label: 'Artes', delivered: stats.arte, goal: artesGoal + (artesGoal > 0 ? deficit.arte : 0), icon: Palette, color: 'text-amber-600' },
                 ].filter(i => i.goal > 0 || i.delivered > 0);
                 const onboarding = onboardingStatus[client.id];
                 const hasOverdue = overdue.overdue > 0;

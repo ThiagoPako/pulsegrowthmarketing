@@ -834,141 +834,160 @@ export default function SocialMediaDeliveries() {
           </Card>
         )}
 
-        {/* Manual Content Controls */}
+        {/* Manual Content Controls — always visible for all clients */}
         <Card className="border-border">
           <CardContent className="p-4 space-y-3">
             <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
               <Plus size={14} className="text-primary" /> Registro Manual de Conteúdo
             </h3>
+            <p className="text-[10px] text-muted-foreground -mt-1">
+              Registre entregas extras ou conteúdos adicionais fora do plano contratado
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Stories Semanal */}
-              {storyGoal > 0 && (
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <Image size={14} className="text-pink-600 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold text-foreground">Stories Semanal</span>
-                        <span className={`text-[10px] font-bold ${weekStories >= storyGoal ? 'text-green-600' : 'text-muted-foreground'}`}>
-                          {weekStories}/{storyGoal}
-                        </span>
+              {/* Stories Mensal */}
+              {(() => {
+                const goal = storyGoal > 0 ? storyGoal * 4 : 0; // weekly * ~4 weeks
+                const delivered = stats.story;
+                return (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <Image size={14} className="text-pink-600 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-foreground">Stories Mensal</span>
+                          <span className={`text-[10px] font-bold ${goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
+                            {delivered}{goal > 0 ? `/${goal}` : ''}
+                          </span>
+                        </div>
+                        {goal > 0 && <Progress value={Math.min(Math.round((delivered / goal) * 100), 100)} className="h-1.5" />}
                       </div>
-                      <Progress value={Math.min(Math.round((weekStories / storyGoal) * 100), 100)} className="h-1.5" />
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRemoveLastStory(selectedClientId)}>
+                        <Trash2 size={12} /> -1
+                      </Button>
+                      <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => handleSingleStory(selectedClientId)}>
+                        <Plus size={12} /> +1
+                      </Button>
+                      <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => {
+                        setStoriesCount(goal > 0 && goal - delivered > 0 ? goal - delivered : 5);
+                        setStoriesDate(format(new Date(), 'yyyy-MM-dd'));
+                        setStoriesDialogOpen(true);
+                      }}>
+                        <Zap size={12} /> Lote
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRemoveLastStory(selectedClientId)}>
-                      <Trash2 size={12} /> -1
-                    </Button>
-                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => handleSingleStory(selectedClientId)}>
-                      <Plus size={12} /> +1
-                    </Button>
-                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => {
-                      setStoriesCount(storyGoal - weekStories > 0 ? storyGoal - weekStories : 5);
-                      setStoriesDate(format(new Date(), 'yyyy-MM-dd'));
-                      setStoriesDialogOpen(true);
-                    }}>
-                      <Zap size={12} /> Lote
-                    </Button>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Reels Mensal */}
-              {plan && plan.reels_qty > 0 && (
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <Film size={14} className="text-blue-600 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold text-foreground">Reels Mensal</span>
-                        <span className={`text-[10px] font-bold ${stats.reels >= plan.reels_qty ? 'text-green-600' : 'text-muted-foreground'}`}>
-                          {stats.reels}/{plan.reels_qty}
-                        </span>
+              {(() => {
+                const goal = plan?.reels_qty || 0;
+                const delivered = stats.reels;
+                return (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <Film size={14} className="text-blue-600 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-foreground">Reels Mensal</span>
+                          <span className={`text-[10px] font-bold ${goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
+                            {delivered}{goal > 0 ? `/${goal}` : ''}
+                          </span>
+                        </div>
+                        {goal > 0 && <Progress value={Math.min(Math.round((delivered / goal) * 100), 100)} className="h-1.5" />}
                       </div>
-                      <Progress value={Math.min(Math.round((stats.reels / plan.reels_qty) * 100), 100)} className="h-1.5" />
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRemoveLastContent(selectedClientId, 'reels')}>
+                        <Trash2 size={12} /> -1
+                      </Button>
+                      <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => handleSingleContent(selectedClientId, 'reels')}>
+                        <Plus size={12} /> +1
+                      </Button>
+                      <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => {
+                        setBatchType('reels'); setBatchCount(goal > 0 && goal - delivered > 0 ? goal - delivered : 1);
+                        setBatchDate(format(new Date(), 'yyyy-MM-dd')); setBatchDialogOpen(true);
+                      }}>
+                        <Zap size={12} /> Lote
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRemoveLastContent(selectedClientId, 'reels')}>
-                      <Trash2 size={12} /> -1
-                    </Button>
-                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => handleSingleContent(selectedClientId, 'reels')}>
-                      <Plus size={12} /> +1
-                    </Button>
-                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => {
-                      setBatchType('reels'); setBatchCount(plan.reels_qty - stats.reels > 0 ? plan.reels_qty - stats.reels : 1);
-                      setBatchDate(format(new Date(), 'yyyy-MM-dd')); setBatchDialogOpen(true);
-                    }}>
-                      <Zap size={12} /> Lote
-                    </Button>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Criativos Mensal */}
-              {plan && plan.creatives_qty > 0 && (
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <Megaphone size={14} className="text-purple-600 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold text-foreground">Criativos Mensal</span>
-                        <span className={`text-[10px] font-bold ${stats.criativo >= plan.creatives_qty ? 'text-green-600' : 'text-muted-foreground'}`}>
-                          {stats.criativo}/{plan.creatives_qty}
-                        </span>
+              {(() => {
+                const goal = plan?.creatives_qty || 0;
+                const delivered = stats.criativo;
+                return (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <Megaphone size={14} className="text-purple-600 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-foreground">Criativos Mensal</span>
+                          <span className={`text-[10px] font-bold ${goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
+                            {delivered}{goal > 0 ? `/${goal}` : ''}
+                          </span>
+                        </div>
+                        {goal > 0 && <Progress value={Math.min(Math.round((delivered / goal) * 100), 100)} className="h-1.5" />}
                       </div>
-                      <Progress value={Math.min(Math.round((stats.criativo / plan.creatives_qty) * 100), 100)} className="h-1.5" />
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRemoveLastContent(selectedClientId, 'criativo')}>
+                        <Trash2 size={12} /> -1
+                      </Button>
+                      <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => handleSingleContent(selectedClientId, 'criativo')}>
+                        <Plus size={12} /> +1
+                      </Button>
+                      <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => {
+                        setBatchType('criativo'); setBatchCount(goal > 0 && goal - delivered > 0 ? goal - delivered : 1);
+                        setBatchDate(format(new Date(), 'yyyy-MM-dd')); setBatchDialogOpen(true);
+                      }}>
+                        <Zap size={12} /> Lote
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRemoveLastContent(selectedClientId, 'criativo')}>
-                      <Trash2 size={12} /> -1
-                    </Button>
-                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => handleSingleContent(selectedClientId, 'criativo')}>
-                      <Plus size={12} /> +1
-                    </Button>
-                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => {
-                      setBatchType('criativo'); setBatchCount(plan.creatives_qty - stats.criativo > 0 ? plan.creatives_qty - stats.criativo : 1);
-                      setBatchDate(format(new Date(), 'yyyy-MM-dd')); setBatchDialogOpen(true);
-                    }}>
-                      <Zap size={12} /> Lote
-                    </Button>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Artes Mensal */}
-              {plan && plan.arts_qty > 0 && (
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <Palette size={14} className="text-amber-600 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold text-foreground">Artes Mensal</span>
-                        <span className={`text-[10px] font-bold ${stats.arte >= plan.arts_qty ? 'text-green-600' : 'text-muted-foreground'}`}>
-                          {stats.arte}/{plan.arts_qty}
-                        </span>
+              {(() => {
+                const goal = plan?.arts_qty || 0;
+                const delivered = stats.arte;
+                return (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <Palette size={14} className="text-amber-600 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-foreground">Artes Mensal</span>
+                          <span className={`text-[10px] font-bold ${goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
+                            {delivered}{goal > 0 ? `/${goal}` : ''}
+                          </span>
+                        </div>
+                        {goal > 0 && <Progress value={Math.min(Math.round((delivered / goal) * 100), 100)} className="h-1.5" />}
                       </div>
-                      <Progress value={Math.min(Math.round((stats.arte / plan.arts_qty) * 100), 100)} className="h-1.5" />
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRemoveLastContent(selectedClientId, 'arte')}>
+                        <Trash2 size={12} /> -1
+                      </Button>
+                      <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => handleSingleContent(selectedClientId, 'arte')}>
+                        <Plus size={12} /> +1
+                      </Button>
+                      <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => {
+                        setBatchType('arte'); setBatchCount(goal > 0 && goal - delivered > 0 ? goal - delivered : 1);
+                        setBatchDate(format(new Date(), 'yyyy-MM-dd')); setBatchDialogOpen(true);
+                      }}>
+                        <Zap size={12} /> Lote
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleRemoveLastContent(selectedClientId, 'arte')}>
-                      <Trash2 size={12} /> -1
-                    </Button>
-                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => handleSingleContent(selectedClientId, 'arte')}>
-                      <Plus size={12} /> +1
-                    </Button>
-                    <Button size="sm" variant="outline" className="gap-0.5 h-7 px-2 text-[10px]" onClick={() => {
-                      setBatchType('arte'); setBatchCount(plan.arts_qty - stats.arte > 0 ? plan.arts_qty - stats.arte : 1);
-                      setBatchDate(format(new Date(), 'yyyy-MM-dd')); setBatchDialogOpen(true);
-                    }}>
-                      <Zap size={12} /> Lote
-                    </Button>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           </CardContent>
         </Card>

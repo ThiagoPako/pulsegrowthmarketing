@@ -1712,33 +1712,96 @@ app.post('/api/delete-user', async (req, res) => {
 // ─── 14. Client Onboarding ──────────────────────────────────
 app.all('/api/client-onboarding', async (req, res) => {
   try {
-    const admin = getAdminClient();
     if (req.method === 'GET') {
       const clientId = req.query.clientId;
       if (!clientId) return res.status(400).json({ error: 'Missing clientId' });
-      const { data: client } = await admin.from('clients').select('id, company_name, responsible_person, logo_url, onboarding_completed, videomaker_id, fixed_day, fixed_time, backup_day, backup_time, monthly_recordings, accepts_extra, extra_content_types, extra_client_appears, plan_id, selected_weeks, client_type, photo_preference, has_photo_shoot, accepts_photo_shoot_cost, briefing_data').eq('id', clientId).single();
+
+      const { rows: clients } = await pool.query(
+        `SELECT id, company_name, responsible_person, logo_url, onboarding_completed, videomaker_id,
+                fixed_day, fixed_time, backup_day, backup_time, monthly_recordings, accepts_extra,
+                extra_content_types, extra_client_appears, plan_id, selected_weeks, client_type,
+                photo_preference, has_photo_shoot, accepts_photo_shoot_cost, briefing_data
+         FROM clients WHERE id = $1`, [clientId]
+      );
+      const client = clients[0];
       if (!client) return res.status(404).json({ error: 'Client not found' });
-      const { data: videomakers } = await admin.from('profiles').select('id, name, display_name, avatar_url, bio, job_title').eq('role', 'videomaker');
-      const { data: settings } = await admin.from('company_settings').select('*').limit(1).single();
-      const { data: existingClients } = await admin.from('clients').select('id, videomaker_id, fixed_day, fixed_time').not('videomaker_id', 'is', null);
+
+      const { rows: videomakers } = await pool.query(
+        `SELECT id, name, display_name, avatar_url, bio, job_title FROM profiles WHERE role = 'videomaker'`
+      );
+      const { rows: settingsRows } = await pool.query(`SELECT * FROM company_settings LIMIT 1`);
+      const settings = settingsRows[0] || null;
+      const { rows: existingClients } = await pool.query(
+        `SELECT id, videomaker_id, fixed_day, fixed_time FROM clients WHERE videomaker_id IS NOT NULL`
+      );
+
       let plan = null;
-      if (client.plan_id) { const { data: planData } = await admin.from('plans').select('id, name, recording_sessions, accepts_extra_content').eq('id', client.plan_id).single(); plan = planData; }
+      if (client.plan_id) {
+        const { rows: planRows } = await pool.query(
+          `SELECT id, name, recording_sessions, accepts_extra_content FROM plans WHERE id = $1`, [client.plan_id]
+        );
+        plan = planRows[0] || null;
+      }
+
       return res.json({ client, videomakers: videomakers || [], settings, existingClients: existingClients || [], plan });
     }
-    // POST — full onboarding save logic (same as original edge function)
+
+    // POST — full onboarding save logic
     const body = req.body;
     const { clientId, videomaker_id, fixed_day, fixed_time, backup_day, backup_time, monthly_recordings, accepts_extra, extra_content_types, extra_client_appears, selected_weeks, photo_preference, has_photo_shoot, accepts_photo_shoot_cost, briefing_data } = body;
     if (!clientId || !videomaker_id || !fixed_day || !fixed_time) return res.status(400).json({ error: 'Missing required fields' });
 
-    const updatePayload = { videomaker_id, fixed_day, fixed_time, backup_day: backup_day || 'terca', backup_time: backup_time || '14:00', monthly_recordings: monthly_recordings || 4, accepts_extra: accepts_extra || false, extra_content_types: extra_content_types || [], extra_client_appears: extra_client_appears || false, selected_weeks: selected_weeks || [1, 2, 3, 4], onboarding_completed: true, photo_preference: photo_preference || 'nao_precisa', has_photo_shoot: has_photo_shoot || false, accepts_photo_shoot_cost: accepts_photo_shoot_cost || false };
-    if (briefing_data && Object.keys(briefing_data).length > 0) { updatePayload.briefing_data = briefing_data; if (briefing_data.instagram_login) updatePayload.client_login = briefing_data.instagram_login; if (briefing_data.niche) updatePayload.niche = briefing_data.niche; }
+    const updateFields = {
+      videomaker_id, fixed_day, fixed_time,
+      backup_day: backup_day || 'terca', backup_time: backup_time || '14:00',
+      monthly_recordings: monthly_recordings || 4,
+      accepts_extra: accepts_extra || false,
+      extra_content_types: extra_content_types || '{}',
+      extra_client_appears: extra_client_appears || false,
+      selected_weeks: selected_weeks || [1, 2, 3, 4],
+      onboarding_completed: true,
+      photo_preference: photo_preference || 'nao_precisa',
+      has_photo_shoot: has_photo_shoot || false,
+      accepts_photo_shoot_cost: accepts_photo_shoot_cost || false,
+    };
 
-    const { error } = await admin.from('clients').update(updatePayload).eq('id', clientId);
-    if (error) return res.status(500).json({ error: error.message });
+    let briefingUpdate = '';
+    const vals = [updateFields.videomaker_id, updateFields.fixed_day, updateFields.fixed_time,
+      updateFields.backup_day, updateFields.backup_time, updateFields.monthly_recordings,
+      updateFields.accepts_extra, updateFields.extra_content_types, updateFields.extra_client_appears,
+      updateFields.selected_weeks, updateFields.onboarding_completed,
+      updateFields.photo_preference, updateFields.has_photo_shoot, updateFields.accepts_photo_shoot_cost, clientId];
 
-    // Auto-complete onboarding tasks + create recordings (simplified)
-    const weeks = selected_weeks || [1, 2, 3, 4];
+    let paramIdx = 16;
+    let extraSets = '';
+    if (briefing_data && Object.keys(briefing_data).length > 0) {
+      extraSets += `, briefing_data = $${paramIdx}`;
+      vals.push(JSON.stringify(briefing_data));
+      paramIdx++;
+      if (briefing_data.instagram_login) {
+        extraSets += `, client_login = $${paramIdx}`;
+        vals.push(briefing_data.instagram_login);
+        paramIdx++;
+      }
+      if (briefing_data.niche) {
+        extraSets += `, niche = $${paramIdx}`;
+        vals.push(briefing_data.niche);
+        paramIdx++;
+      }
+    }
+
+    await pool.query(
+      `UPDATE clients SET videomaker_id=$1, fixed_day=$2, fixed_time=$3,
+       backup_day=$4, backup_time=$5, monthly_recordings=$6,
+       accepts_extra=$7, extra_content_types=$8, extra_client_appears=$9,
+       selected_weeks=$10, onboarding_completed=$11,
+       photo_preference=$12, has_photo_shoot=$13, accepts_photo_shoot_cost=$14,
+       updated_at=now() ${extraSets}
+       WHERE id=$15`, vals
+    );
+
     // Create upcoming recordings
+    const weeks = selected_weeks || [1, 2, 3, 4];
     const dayMap = { domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6 };
     const targetDay = dayMap[fixed_day];
     if (targetDay !== undefined) {
@@ -1757,7 +1820,17 @@ app.all('/api/client-onboarding', async (req, res) => {
         while (next.getMonth() === nextMonth.getMonth()) { if (next.getDay() === targetDay) nextAllDates.push(next.toISOString().split('T')[0]); next.setDate(next.getDate() + 1); }
         dates = weeks.filter(w => w >= 1 && w <= nextAllDates.length).map(w => nextAllDates[w - 1]);
       }
-      if (dates.length > 0) await admin.from('recordings').insert(dates.map(date => ({ client_id: clientId, videomaker_id, date, start_time: fixed_time, type: 'fixa', status: 'agendada', confirmation_status: 'pendente' })));
+      if (dates.length > 0) {
+        const insertVals = dates.map((date, i) => {
+          const base = i * 4;
+          return `($${base+1}, $${base+2}, $${base+3}, $${base+4}, 'fixa', 'agendada', 'pendente')`;
+        }).join(', ');
+        const insertParams = dates.flatMap(date => [clientId, videomaker_id, date, fixed_time]);
+        await pool.query(
+          `INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ${insertVals}`,
+          insertParams
+        );
+      }
     }
 
     res.json({ success: true });

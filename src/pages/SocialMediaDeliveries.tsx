@@ -955,9 +955,10 @@ export default function SocialMediaDeliveries() {
                         <span className="text-xs font-semibold text-foreground">Stories Mensal</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className={`text-[10px] font-bold ${goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
-                          {delivered}/{goal > 0 ? goal : '∞'}
+                        <span className={`text-[10px] font-bold ${!isInfinite && goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          {delivered}/{isInfinite ? '∞' : goal}
                         </span>
+                        {isInfinite && delivered > 0 && <Badge variant="outline" className="text-[8px] px-1 py-0 text-primary border-primary/30">Extra</Badge>}
                         {deficit > 0 && <Badge variant="outline" className="text-[8px] px-1 py-0 text-orange-600 border-orange-300">+{deficit} anterior</Badge>}
                       </div>
                     </div>

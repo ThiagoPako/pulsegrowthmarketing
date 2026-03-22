@@ -311,7 +311,7 @@ export default function ClientOnboarding() {
 
   const canProceed = () => {
     if (step === 0) return !!selectedVm;
-    if (step === 1) return !!fixedTime;
+    if (step === 1) return fullShiftRecording ? (!!fixedDay && preferredShift !== 'ambos') : !!fixedTime;
     if (step === PHOTO_STEP) {
       if (photoPreference === 'fotos_reais' && !hasPhotoShoot && !acceptsPhotoShootCost) return false;
       return true;

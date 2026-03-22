@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket } from 'lucide-react';
+import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket, RotateCcw } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
 import { supabase as supabaseCloud } from '@/integrations/supabase/client';
 import { ASSISTANT_KEY } from '@/components/ProductionAssistant';
@@ -26,8 +26,88 @@ const RESET_TABLES = [
   'financial_activity_log', 'financial_contracts', 'goals', 'integration_logs',
   'kanban_tasks', 'notifications', 'onboarding_tasks', 'revenues', 'expenses',
   'recordings', 'scripts', 'social_media_deliveries', 'social_accounts', 'clients',
-  // 'plans' e equipe (profiles, user_roles, partners) são preservados
 ] as const;
+
+interface ModuleReset {
+  label: string;
+  icon: string;
+  tables: string[];
+  description: string;
+  confirmWord: string;
+}
+
+const MODULE_RESETS: ModuleReset[] = [
+  {
+    label: 'Clientes',
+    icon: '👥',
+    tables: ['client_portal_comments', 'client_portal_contents', 'client_portal_notifications', 'onboarding_tasks', 'clients'],
+    description: 'Apaga todos os clientes, portal e onboarding. Contratos financeiros vinculados também serão removidos.',
+    confirmWord: 'RESETAR CLIENTES',
+  },
+  {
+    label: 'Conteúdo (Kanban)',
+    icon: '🎬',
+    tables: ['task_history', 'content_tasks'],
+    description: 'Apaga todas as tarefas de conteúdo e histórico de movimentação do kanban.',
+    confirmWord: 'RESETAR CONTEUDO',
+  },
+  {
+    label: 'Gravações',
+    icon: '📹',
+    tables: ['active_recordings', 'delivery_records', 'recordings'],
+    description: 'Apaga todas as gravações, registros de entrega e gravações ativas.',
+    confirmWord: 'RESETAR GRAVACOES',
+  },
+  {
+    label: 'Roteiros',
+    icon: '📝',
+    tables: ['scripts'],
+    description: 'Apaga todos os roteiros do sistema.',
+    confirmWord: 'RESETAR ROTEIROS',
+  },
+  {
+    label: 'Design',
+    icon: '🎨',
+    tables: ['design_task_history', 'design_tasks'],
+    description: 'Apaga todas as tarefas de design e seu histórico.',
+    confirmWord: 'RESETAR DESIGN',
+  },
+  {
+    label: 'Social Media (Entregas)',
+    icon: '📱',
+    tables: ['social_media_deliveries'],
+    description: 'Apaga todos os registros de entrega de social media.',
+    confirmWord: 'RESETAR SOCIAL',
+  },
+  {
+    label: 'Financeiro',
+    icon: '💰',
+    tables: ['billing_messages', 'cash_reserve_movements', 'financial_activity_log', 'financial_contracts', 'revenues', 'expenses'],
+    description: 'Apaga contratos financeiros, receitas, despesas, reserva de caixa e logs.',
+    confirmWord: 'RESETAR FINANCEIRO',
+  },
+  {
+    label: 'Endomarketing',
+    icon: '🏢',
+    tables: ['endomarketing_agendamentos', 'endomarketing_logs', 'endomarketing_partner_tasks', 'client_endomarketing_contracts', 'endomarketing_clientes', 'endomarketing_profissionais', 'endomarketing_packages'],
+    description: 'Apaga todos os dados de endomarketing: clientes, agendamentos, pacotes e parceiros.',
+    confirmWord: 'RESETAR ENDO',
+  },
+  {
+    label: 'Metas',
+    icon: '🎯',
+    tables: ['goals'],
+    description: 'Apaga todas as metas do sistema.',
+    confirmWord: 'RESETAR METAS',
+  },
+  {
+    label: 'Notificações e Logs',
+    icon: '🔔',
+    tables: ['notifications', 'integration_logs'],
+    description: 'Apaga todas as notificações e logs de integração.',
+    confirmWord: 'RESETAR LOGS',
+  },
+];
 
 export default function CompanySettings() {
   const { settings, updateSettings, currentUser } = useApp();

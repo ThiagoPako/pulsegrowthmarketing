@@ -856,10 +856,10 @@ export default function SocialMediaDeliveries() {
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
-                  { label: 'Reels', delivered: stats.reels, goal: plan.reels_qty },
-                  { label: 'Criativos', delivered: stats.criativo, goal: plan.creatives_qty },
-                  { label: 'Stories', delivered: stats.story, goal: plan.stories_qty },
-                  { label: 'Artes', delivered: stats.arte, goal: plan.arts_qty },
+                  { label: 'Reels', delivered: stats.reels, goal: (plan.reels_qty || 0) + (prevMonthDeficit[selectedClientId]?.reels || 0) },
+                  { label: 'Criativos', delivered: stats.criativo, goal: (plan.creatives_qty || 0) + (prevMonthDeficit[selectedClientId]?.criativo || 0) },
+                  { label: 'Stories', delivered: stats.story, goal: (plan.stories_qty || 0) + (prevMonthDeficit[selectedClientId]?.story || 0) },
+                  { label: 'Artes', delivered: stats.arte, goal: (plan.arts_qty || 0) + (prevMonthDeficit[selectedClientId]?.arte || 0) },
                 ].filter(i => i.goal > 0).map(item => {
                   const pct = Math.min(Math.round((item.delivered / item.goal) * 100), 100);
                   return (
@@ -926,7 +926,7 @@ export default function SocialMediaDeliveries() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Stories Mensal */}
               {(() => {
-                const baseGoal = storyGoal > 0 ? storyGoal * 4 : 0;
+                const baseGoal = plan?.stories_qty || (storyGoal > 0 ? storyGoal * 4 : 0);
                 const deficit = prevMonthDeficit[selectedClientId]?.story || 0;
                 const goal = baseGoal + deficit;
                 const delivered = stats.story;

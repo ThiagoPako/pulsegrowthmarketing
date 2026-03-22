@@ -292,10 +292,10 @@ export default function SocialMediaDeliveries() {
       const plan = planId ? plans.find(p => p.id === planId) : null;
       const del = delivered[c.id] || { reels: 0, criativo: 0, story: 0, arte: 0 };
 
-      const reelsGoal = plan?.reels_qty || (c.weeklyReels ? c.weeklyReels * 4 : 0);
-      const creativosGoal = plan?.creatives_qty || (c.weeklyCreatives ? c.weeklyCreatives * 4 : 0);
-      const storyGoalMonthly = plan?.stories_qty || (c.weeklyStories ? c.weeklyStories * 4 : 0);
-      const artesGoal = plan?.arts_qty || 0;
+      const reelsGoal = plan ? plan.reels_qty : (c.weeklyReels ? c.weeklyReels * 4 : 0);
+      const creativosGoal = plan ? plan.creatives_qty : (c.weeklyCreatives ? c.weeklyCreatives * 4 : 0);
+      const storyGoalMonthly = plan ? plan.stories_qty : (c.weeklyStories ? c.weeklyStories * 4 : 0);
+      const artesGoal = plan ? plan.arts_qty : 0;
 
       if (!reelsGoal && !creativosGoal && !storyGoalMonthly && !artesGoal) return;
 

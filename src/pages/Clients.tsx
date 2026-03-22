@@ -69,9 +69,15 @@ const emptySocialAccounts = (): SocialAccountState => ({
   facebook: { connected: false, accountName: '', pageId: '' },
 });
 
-const STEP_LABELS = [
+const STEP_LABELS_WITH_META = [
   { icon: User, label: 'Dados da Empresa' },
   { icon: Globe, label: 'Redes Sociais' },
+  { icon: Target, label: 'Metas Semanais' },
+  { icon: DollarSign, label: 'Financeiro' },
+];
+
+const STEP_LABELS_NO_META = [
+  { icon: User, label: 'Dados da Empresa' },
   { icon: Target, label: 'Metas Semanais' },
   { icon: DollarSign, label: 'Financeiro' },
 ];
@@ -115,10 +121,15 @@ export default function Clients() {
   // Social accounts state
   const [socialAccounts, setSocialAccounts] = useState<SocialAccountState>(emptySocialAccounts());
   const [existingSocialAccounts, setExistingSocialAccounts] = useState<any[]>([]);
+  const [hasMetaApi, setHasMetaApi] = useState(false);
 
   useEffect(() => {
     supabase.from('plans').select('id, name, status, reels_qty, creatives_qty, stories_qty, recording_sessions, accepts_extra_content').eq('status', 'ativo').then(({ data }) => {
       if (data) setPlans(data as any[]);
+    });
+    // Check if Meta API integration is active
+    supabase.from('api_integrations').select('id').eq('provider', 'meta').eq('status', 'ativo').limit(1).then(({ data }) => {
+      setHasMetaApi(!!(data && data.length > 0));
     });
   }, []);
 
@@ -1593,9 +1604,12 @@ export default function Clients() {
               </DialogHeader>
 
               {/* Stepper indicator */}
-              {!editing && (
+              {!editing && (() => {
+                const stepLabels = hasMetaApi ? STEP_LABELS_WITH_META : STEP_LABELS_NO_META;
+                const maxStep = stepLabels.length - 1;
+                return (
                 <div className="flex items-center gap-1 mb-2">
-                  {STEP_LABELS.map((s, i) => {
+                  {stepLabels.map((s, i) => {
                     const Icon = s.icon;
                     const isActive = i === step;
                     const isDone = i < step;
@@ -1608,12 +1622,13 @@ export default function Clients() {
                           <span className="hidden sm:inline">{s.label}</span>
                           <span className="sm:hidden">{i + 1}</span>
                         </div>
-                        {i < STEP_LABELS.length - 1 && <ChevronRight size={14} className="text-muted-foreground shrink-0" />}
+                        {i < stepLabels.length - 1 && <ChevronRight size={14} className="text-muted-foreground shrink-0" />}
                       </div>
                     );
                   })}
                 </div>
-              )}
+                );
+              })()}
 
               {/* Step content */}
               <div className="min-h-[200px]">
@@ -1621,17 +1636,23 @@ export default function Clients() {
                   // Editing: show all fields together
                   <div className="space-y-5">
                     {renderStep0()}
-                    {renderStep1()}
+                    {hasMetaApi && renderStep1()}
                     {renderStep2()}
                     {renderStep3()}
                     {renderStep4()}
                   </div>
-                ) : (
+                ) : hasMetaApi ? (
                   <>
                     {step === 0 && renderStep0()}
                     {step === 1 && renderStep1()}
                     {step === 2 && renderStep3()}
                     {step === 3 && renderStep4()}
+                  </>
+                ) : (
+                  <>
+                    {step === 0 && renderStep0()}
+                    {step === 1 && renderStep3()}
+                    {step === 2 && renderStep4()}
                   </>
                 )}
               </div>
@@ -1640,14 +1661,16 @@ export default function Clients() {
               <div className="flex gap-2 pt-2">
                 {editing ? (
                   <Button onClick={handleSave} className="w-full">Salvar Alterações</Button>
-                ) : (
+                ) : (() => {
+                  const maxStep = (hasMetaApi ? STEP_LABELS_WITH_META : STEP_LABELS_NO_META).length - 1;
+                  return (
                   <>
                     {step > 0 && (
                       <Button variant="outline" onClick={() => setStep(s => s - 1)} className="gap-1">
                         <ChevronLeft size={14} /> Voltar
                       </Button>
                     )}
-                    {step < 3 ? (
+                    {step < maxStep ? (
                       <Button onClick={() => setStep(s => s + 1)} className="ml-auto gap-1"
                         disabled={step === 0 ? !canProceedStep0 : false}>
                         Próximo <ChevronRight size={14} />
@@ -1658,7 +1681,8 @@ export default function Clients() {
                       </Button>
                     )}
                   </>
-                )}
+                  );
+                })()}
               </div>
             </DialogContent>
           </Dialog>

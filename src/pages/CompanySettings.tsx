@@ -457,7 +457,69 @@ export default function CompanySettings() {
                 </p>
               </div>
 
-              <div className="flex gap-2">
+              {/* Reset por Módulo */}
+              <Separator className="border-destructive/20" />
+              <h3 className="text-sm font-semibold text-destructive flex items-center gap-2">
+                <RotateCcw size={14} />
+                Reset por Módulo
+              </h3>
+              <p className="text-xs text-muted-foreground -mt-2">
+                Resete apenas os dados de um módulo específico. Planos e equipe são sempre preservados.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {MODULE_RESETS.map(mod => (
+                  <AlertDialog key={mod.label}>
+                    <AlertDialogTrigger asChild>
+                      <button className="flex items-center gap-3 p-3 rounded-lg border border-destructive/20 bg-background hover:bg-destructive/5 transition-colors text-left group">
+                        <span className="text-xl">{mod.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium group-hover:text-destructive transition-colors">{mod.label}</p>
+                          <p className="text-[11px] text-muted-foreground truncate">{mod.tables.length} tabela{mod.tables.length > 1 ? 's' : ''}</p>
+                        </div>
+                        <RotateCcw size={14} className="text-muted-foreground group-hover:text-destructive transition-colors" />
+                      </button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                          <span className="text-xl">{mod.icon}</span>
+                          Resetar {mod.label}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="space-y-3">
+                          <span className="block text-sm">{mod.description}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            Tabelas afetadas: {mod.tables.join(', ')}
+                          </span>
+                          <span className="block text-sm">
+                            Para confirmar, digite <strong className="text-destructive">{mod.confirmWord}</strong>:
+                          </span>
+                          <Input
+                            value={moduleConfirmText[mod.label] || ''}
+                            onChange={e => setModuleConfirmText(prev => ({ ...prev, [mod.label]: e.target.value }))}
+                            placeholder={`Digite ${mod.confirmWord}`}
+                            className="border-destructive/50 focus:border-destructive"
+                          />
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setModuleConfirmText(prev => ({ ...prev, [mod.label]: '' }))}>
+                          Cancelar
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleModuleReset(mod)}
+                          disabled={moduleConfirmText[mod.label] !== mod.confirmWord || moduleResetting === mod.label}
+                          className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                        >
+                          {moduleResetting === mod.label ? 'Resetando...' : 'CONFIRMAR RESET'}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                ))}
+              </div>
+
+              <Separator className="border-destructive/20" />
+              <h3 className="text-sm font-semibold text-destructive">⚠️ Reset Total (todos os módulos)</h3>
                 <Button variant="outline" className="flex-1" onClick={() => setShowDangerZone(false)}>
                   Ocultar
                 </Button>

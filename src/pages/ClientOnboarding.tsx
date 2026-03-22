@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CheckCircle2, ChevronLeft, ChevronRight, Video, Calendar, Shield, Sparkles, Clock, User, Camera, AlertTriangle, ImageIcon, FileText } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Video, Calendar, Shield, Sparkles, Clock, User, Camera, AlertTriangle, ImageIcon, FileText, Zap, Star, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 

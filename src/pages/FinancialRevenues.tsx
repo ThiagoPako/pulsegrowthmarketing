@@ -409,9 +409,9 @@ export default function FinancialRevenues() {
                   >
                     <TableCell className="font-medium">{client?.companyName || '—'}</TableCell>
                     <TableCell className="font-semibold">{fmt(Number(r.amount))}</TableCell>
-                    <TableCell className="text-muted-foreground">{r.due_date}</TableCell>
+                    <TableCell className="text-muted-foreground">{r.due_date ? format(new Date(normalizeDate(r.due_date) + 'T12:00:00'), 'dd/MM/yyyy') : '—'}</TableCell>
                     <TableCell><Badge variant={st.variant}>{st.label}</Badge></TableCell>
-                    <TableCell className="text-muted-foreground">{r.paid_at || '—'}</TableCell>
+                    <TableCell className="text-muted-foreground">{r.paid_at ? format(new Date(normalizeDate(r.paid_at) + 'T12:00:00'), 'dd/MM/yyyy') : '—'}</TableCell>
                     <TableCell>
                       <div className="flex gap-1.5">
                         {r.status !== 'recebida' && (

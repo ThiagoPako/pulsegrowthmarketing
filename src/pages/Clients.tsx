@@ -1683,7 +1683,6 @@ export default function Clients() {
                   </>
                   );
                 })()}
-                )}
               </div>
             </DialogContent>
           </Dialog>

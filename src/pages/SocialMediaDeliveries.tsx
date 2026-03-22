@@ -941,10 +941,12 @@ export default function SocialMediaDeliveries() {
               {/* Stories Mensal */}
               {(() => {
                 const baseGoal = plan ? plan.stories_qty : (storyGoal > 0 ? storyGoal * 4 : 0);
-                const deficit = prevMonthDeficit[selectedClientId]?.story || 0;
+                // Only count deficit if the item is contracted (baseGoal > 0)
+                const deficit = baseGoal > 0 ? (prevMonthDeficit[selectedClientId]?.story || 0) : 0;
                 const goal = baseGoal + deficit;
                 const delivered = stats.story;
-                const pct = goal > 0 ? Math.min(Math.round((delivered / goal) * 100), 100) : 0;
+                const isInfinite = baseGoal === 0;
+                const pct = isInfinite ? (delivered > 0 ? 100 : 0) : (goal > 0 ? Math.min(Math.round((delivered / goal) * 100), 100) : 0);
                 return (
                   <div className="rounded-lg border border-border p-3 space-y-2">
                     <div className="flex items-center justify-between">

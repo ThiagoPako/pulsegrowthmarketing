@@ -292,10 +292,10 @@ export default function SocialMediaDeliveries() {
       const plan = planId ? plans.find(p => p.id === planId) : null;
       const del = delivered[c.id] || { reels: 0, criativo: 0, story: 0, arte: 0 };
 
-      const reelsGoal = plan?.reels_qty || (c.weeklyReels ? c.weeklyReels * 4 : 0);
-      const creativosGoal = plan?.creatives_qty || (c.weeklyCreatives ? c.weeklyCreatives * 4 : 0);
-      const storyGoalMonthly = plan?.stories_qty || (c.weeklyStories ? c.weeklyStories * 4 : 0);
-      const artesGoal = plan?.arts_qty || 0;
+      const reelsGoal = plan ? plan.reels_qty : (c.weeklyReels ? c.weeklyReels * 4 : 0);
+      const creativosGoal = plan ? plan.creatives_qty : (c.weeklyCreatives ? c.weeklyCreatives * 4 : 0);
+      const storyGoalMonthly = plan ? plan.stories_qty : (c.weeklyStories ? c.weeklyStories * 4 : 0);
+      const artesGoal = plan ? plan.arts_qty : 0;
 
       if (!reelsGoal && !creativosGoal && !storyGoalMonthly && !artesGoal) return;
 
@@ -852,10 +852,10 @@ export default function SocialMediaDeliveries() {
 
         {/* Plan progress */}
         {(() => {
-          const reelsGoal = (plan?.reels_qty || (selectedClient.weeklyReels ? selectedClient.weeklyReels * 4 : 0)) + (prevMonthDeficit[selectedClientId]?.reels || 0);
-          const creativosGoal = (plan?.creatives_qty || (selectedClient.weeklyCreatives ? selectedClient.weeklyCreatives * 4 : 0)) + (prevMonthDeficit[selectedClientId]?.criativo || 0);
-          const storiesGoal = (plan?.stories_qty || (storyGoal > 0 ? storyGoal * 4 : 0)) + (prevMonthDeficit[selectedClientId]?.story || 0);
-          const artesGoal = (plan?.arts_qty || 0) + (prevMonthDeficit[selectedClientId]?.arte || 0);
+          const reelsGoal = (plan ? plan.reels_qty : (selectedClient.weeklyReels ? selectedClient.weeklyReels * 4 : 0)) + (prevMonthDeficit[selectedClientId]?.reels || 0);
+          const creativosGoal = (plan ? plan.creatives_qty : (selectedClient.weeklyCreatives ? selectedClient.weeklyCreatives * 4 : 0)) + (prevMonthDeficit[selectedClientId]?.criativo || 0);
+          const storiesGoal = (plan ? plan.stories_qty : (storyGoal > 0 ? storyGoal * 4 : 0)) + (prevMonthDeficit[selectedClientId]?.story || 0);
+          const artesGoal = (plan ? plan.arts_qty : 0) + (prevMonthDeficit[selectedClientId]?.arte || 0);
           const hasAnyGoal = reelsGoal > 0 || creativosGoal > 0 || storiesGoal > 0 || artesGoal > 0;
           if (!hasAnyGoal) return null;
           return (
@@ -938,7 +938,7 @@ export default function SocialMediaDeliveries() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Stories Mensal */}
               {(() => {
-                const baseGoal = plan?.stories_qty || (storyGoal > 0 ? storyGoal * 4 : 0);
+                const baseGoal = plan ? plan.stories_qty : (storyGoal > 0 ? storyGoal * 4 : 0);
                 const deficit = prevMonthDeficit[selectedClientId]?.story || 0;
                 const goal = baseGoal + deficit;
                 const delivered = stats.story;
@@ -979,7 +979,7 @@ export default function SocialMediaDeliveries() {
 
               {/* Reels Mensal */}
               {(() => {
-                const baseGoal = plan?.reels_qty || (selectedClient.weeklyReels ? selectedClient.weeklyReels * 4 : 0);
+                const baseGoal = plan ? plan.reels_qty : (selectedClient.weeklyReels ? selectedClient.weeklyReels * 4 : 0);
                 const deficit = prevMonthDeficit[selectedClientId]?.reels || 0;
                 const goal = baseGoal + deficit;
                 const delivered = stats.reels;
@@ -1019,7 +1019,7 @@ export default function SocialMediaDeliveries() {
 
               {/* Criativos Mensal */}
               {(() => {
-                const baseGoal = plan?.creatives_qty || (selectedClient.weeklyCreatives ? selectedClient.weeklyCreatives * 4 : 0);
+                const baseGoal = plan ? plan.creatives_qty : (selectedClient.weeklyCreatives ? selectedClient.weeklyCreatives * 4 : 0);
                 const deficit = prevMonthDeficit[selectedClientId]?.criativo || 0;
                 const goal = baseGoal + deficit;
                 const delivered = stats.criativo;
@@ -1059,7 +1059,7 @@ export default function SocialMediaDeliveries() {
 
               {/* Artes Mensal */}
               {(() => {
-                const baseGoal = plan?.arts_qty || 0; // artes não tem campo semanal no cliente
+                const baseGoal = plan ? plan.arts_qty : 0;
                 const deficit = prevMonthDeficit[selectedClientId]?.arte || 0;
                 const goal = baseGoal + deficit;
                 const delivered = stats.arte;
@@ -1216,10 +1216,10 @@ export default function SocialMediaDeliveries() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {clientsWithData.map(({ client, stats, plan, weeklyStories: ws, overdue, isOnboarding }) => {
                 // Monthly plan goals
-                const reelsGoal = plan?.reels_qty || (client.weeklyReels ? client.weeklyReels * 4 : 0);
-                const creativosGoal = plan?.creatives_qty || (client.weeklyCreatives ? client.weeklyCreatives * 4 : 0);
-                const storiesGoalMonthly = plan?.stories_qty || (client.weeklyStories ? client.weeklyStories * 4 : 0);
-                const artesGoal = plan?.arts_qty || 0;
+                const reelsGoal = plan ? plan.reels_qty : (client.weeklyReels ? client.weeklyReels * 4 : 0);
+                const creativosGoal = plan ? plan.creatives_qty : (client.weeklyCreatives ? client.weeklyCreatives * 4 : 0);
+                const storiesGoalMonthly = plan ? plan.stories_qty : (client.weeklyStories ? client.weeklyStories * 4 : 0);
+                const artesGoal = plan ? plan.arts_qty : 0;
                 const deficit = prevMonthDeficit[client.id] || { reels: 0, criativo: 0, story: 0, arte: 0 };
                 const goalItems = [
                   { label: 'Reels', delivered: stats.reels, goal: reelsGoal + deficit.reels, icon: Film, color: 'text-blue-600' },

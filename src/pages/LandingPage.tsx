@@ -1368,13 +1368,13 @@ function ClientLogos() {
   const [clients, setClients] = useState<{ id: string; company_name: string; logo_url: string; color: string }[]>([]);
 
   useEffect(() => {
+    // Use the public view (no auth required) instead of the clients table
     supabase
-      .from('clients')
+      .from('clients_public_logos' as any)
       .select('id, company_name, logo_url, color')
-      .not('logo_url', 'is', null)
-      .then(({ data }) => {
+      .then(({ data }: any) => {
         if (data && data.length > 0) {
-          setClients(data.filter(c => c.logo_url));
+          setClients(data.filter((c: any) => c.logo_url));
         }
       });
   }, []);

@@ -153,7 +153,7 @@ export default function FinancialDashboard() {
 
         // Check if already paid this month
         const monthRevenue = revenues.find(
-          r => r.client_id === contract.client_id && r.reference_month === refMonth
+          r => r.client_id === contract.client_id && normalizeDate(r.reference_month) === refMonth
         );
         const isPaid = monthRevenue?.status === 'recebida';
 

@@ -96,7 +96,7 @@ export default function FinancialPartners() {
       // Month revenues from these contracts
       const contractIds = activeContracts.map(c => c.id);
       const monthRevs = revenues.filter(r =>
-        contractIds.includes(r.contract_id) && r.reference_month === referenceMonth
+        contractIds.includes(r.contract_id) && normalizeDate(r.reference_month) === referenceMonth
       );
 
       const totalRevenue = monthRevs.reduce((sum: number, r: any) => sum + Number(r.amount), 0);

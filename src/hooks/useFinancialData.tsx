@@ -202,7 +202,7 @@ export function useFinancialData() {
     const [yearStr, monthNumStr] = monthStr.split('-');
     const year = parseInt(yearStr);
     const monthNum = parseInt(monthNumStr);
-    const activeContracts = contracts.filter(c => c.status === 'ativo');
+    const activeContracts = contracts.filter(c => c.status === 'ativo' && Number(c.contract_value) > 0);
     const refMonth = `${year}-${String(monthNum).padStart(2, '0')}-01`;
 
     const existing = revenues.filter(r => r.reference_month === refMonth);

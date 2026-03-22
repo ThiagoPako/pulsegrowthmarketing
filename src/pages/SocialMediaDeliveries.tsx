@@ -267,6 +267,47 @@ export default function SocialMediaDeliveries() {
     return byClient;
   }, [deliveries]);
 
+  // Previous month deficit per client (how much is still owed from last month)
+  const prevMonthDeficit = useMemo(() => {
+    const now = new Date();
+    const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevStart = format(startOfMonth(prevMonth), 'yyyy-MM-dd');
+    const prevEnd = format(endOfMonth(prevMonth), 'yyyy-MM-dd');
+    const prevDeliveries = deliveries.filter(d => d.delivered_at >= prevStart && d.delivered_at <= prevEnd);
+    const byClient: Record<string, { reels: number; criativo: number; story: number; arte: number }> = {};
+
+    // Count what was delivered last month
+    const delivered: Record<string, { reels: number; criativo: number; story: number; arte: number }> = {};
+    prevDeliveries.forEach(d => {
+      if (!delivered[d.client_id]) delivered[d.client_id] = { reels: 0, criativo: 0, story: 0, arte: 0 };
+      if (d.content_type === 'reels') delivered[d.client_id].reels++;
+      if (d.content_type === 'criativo') delivered[d.client_id].criativo++;
+      if (d.content_type === 'story') delivered[d.client_id].story++;
+      if (d.content_type === 'arte') delivered[d.client_id].arte++;
+    });
+
+    // Calculate deficit for each client with a plan
+    clients.forEach(c => {
+      const planId = clientPlans[c.id];
+      if (!planId) return;
+      const plan = plans.find(p => p.id === planId);
+      if (!plan) return;
+      const del = delivered[c.id] || { reels: 0, criativo: 0, story: 0, arte: 0 };
+      const storyGoalMonthly = (c.weeklyStories || 0) * 4;
+      const deficit = {
+        reels: Math.max(0, (plan.reels_qty || 0) - del.reels),
+        criativo: Math.max(0, (plan.creatives_qty || 0) - del.criativo),
+        story: Math.max(0, storyGoalMonthly - del.story),
+        arte: Math.max(0, (plan.arts_qty || 0) - del.arte),
+      };
+      // Only store if there's actually a deficit
+      if (deficit.reels > 0 || deficit.criativo > 0 || deficit.story > 0 || deficit.arte > 0) {
+        byClient[c.id] = deficit;
+      }
+    });
+    return byClient;
+  }, [deliveries, clients, clientPlans, plans]);
+
   // Weekly stories per client
   const weeklyStoriesMap = useMemo(() => {
     const now = new Date();

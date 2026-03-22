@@ -689,6 +689,9 @@ export default function FinancialDashboard() {
         </CardContent>
       </Card>
 
+      {/* Salary Raise Alert */}
+      <SalaryRaiseAlert />
+
       {/* Recent Cash Movements */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">

@@ -178,11 +178,14 @@ export default function TestimonialsAdmin() {
                                 </Button>
                               </>
                             )}
-                            {(t.status === 'approved' || t.status === 'rejected') && (
-                              <Button size="sm" variant="ghost" onClick={() => remove(t.id)} className="text-destructive">
-                                <Trash2 size={12} />
-                              </Button>
-                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => { if (confirm('Tem certeza que deseja apagar este depoimento?')) remove(t.id); }}
+                              className="text-destructive hover:bg-destructive/10"
+                            >
+                              <Trash2 size={12} />
+                            </Button>
                           </div>
                         </div>
                       </CardContent>

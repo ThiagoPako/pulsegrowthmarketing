@@ -55,19 +55,27 @@ export default function FinancialDashboard() {
     [expenses, monthStart, monthEnd]
   );
 
-  // KPIs
-  const mrr = useMemo(() =>
-    contracts.filter(c => c.status === 'ativo').reduce((sum, c) => sum + Number(c.contract_value), 0),
+  // KPIs — exclude zero-value contracts from financial metrics
+  const activeContracts = useMemo(() =>
+    contracts.filter(c => c.status === 'ativo' && Number(c.contract_value) > 0),
     [contracts]
   );
 
-  const revenuePrevista = useMemo(() => monthRevenues.reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
+  const mrr = useMemo(() =>
+    activeContracts.reduce((sum, c) => sum + Number(c.contract_value), 0),
+    [activeContracts]
+  );
+
+  const revenuePrevista = useMemo(() => monthRevenues.filter(r => Number(r.amount) > 0).reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
   const revenueRecebida = useMemo(() => monthRevenues.filter(r => r.status === 'recebida').reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
   const revenueAtraso = useMemo(() => monthRevenues.filter(r => r.status === 'em_atraso').reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
   const totalExpenses = useMemo(() => monthExpenses.reduce((s, e) => s + Number(e.amount), 0), [monthExpenses]);
+  // Lucro uses received + expected (prevista) revenues minus expenses for a more realistic view
+  const revenuePendente = useMemo(() => monthRevenues.filter(r => r.status === 'prevista').reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
   const lucro = revenueRecebida - totalExpenses;
-  const activeClients = contracts.filter(c => c.status === 'ativo').length;
-  const ticketMedio = activeClients > 0 ? mrr / activeClients : 0;
+  const lucroProjetado = revenuePrevista - totalExpenses;
+  const activeClientsCount = activeContracts.length;
+  const ticketMedio = activeClientsCount > 0 ? mrr / activeClientsCount : 0;
   const cancelados = contracts.filter(c => c.status === 'cancelado').length;
   const taxaCancelamento = contracts.length > 0 ? (cancelados / contracts.length * 100) : 0;
 

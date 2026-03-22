@@ -202,15 +202,20 @@ export function useFinancialData() {
     const [yearStr, monthNumStr] = monthStr.split('-');
     const year = parseInt(yearStr);
     const monthNum = parseInt(monthNumStr);
-    const activeContracts = contracts.filter(c => c.status === 'ativo' && Number(c.contract_value) > 0);
     const refMonth = `${year}-${String(monthNum).padStart(2, '0')}-01`;
 
-    const existing = revenues.filter(r => r.reference_month === refMonth);
-    const existingClientIds = new Set(existing.map(r => r.client_id));
+    // Fetch fresh contracts and existing revenues from DB to avoid stale state
+    const [freshContracts, freshExisting] = await Promise.all([
+      supabase.from('financial_contracts').select('*').eq('status', 'ativo'),
+      supabase.from('revenues').select('client_id').eq('reference_month', refMonth),
+    ]);
+
+    const activeContracts = (freshContracts.data as any[] || []).filter((c: any) => Number(c.contract_value) > 0);
+    const existingClientIds = new Set((freshExisting.data as any[] || []).map((r: any) => r.client_id));
 
     const newRevenues = activeContracts
-      .filter(c => !existingClientIds.has(c.client_id))
-      .map(c => ({
+      .filter((c: any) => !existingClientIds.has(c.client_id))
+      .map((c: any) => ({
         client_id: c.client_id,
         contract_id: c.id,
         reference_month: refMonth,

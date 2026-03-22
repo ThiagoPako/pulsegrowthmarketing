@@ -17,6 +17,7 @@ import { sendWhatsAppMessage } from '@/services/whatsappService';
 import { generateDeliveryReport, resolvePaymentInfo } from '@/lib/billingReport';
 import ClientLogo from '@/components/ClientLogo';
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
+import SalaryRaiseAlert from '@/components/financial/SalaryRaiseAlert';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -687,6 +688,9 @@ export default function FinancialDashboard() {
           ) : <p className="text-muted-foreground text-sm text-center py-4">Nenhum contrato ativo</p>}
         </CardContent>
       </Card>
+
+      {/* Salary Raise Alert */}
+      <SalaryRaiseAlert />
 
       {/* Recent Cash Movements */}
       <Card>

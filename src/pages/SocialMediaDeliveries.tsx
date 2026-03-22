@@ -1245,6 +1245,7 @@ export default function SocialMediaDeliveries() {
       {renderBatchContentDialog('')}
       {renderAlterationDialog()}
     </div>
+    </CatClickWrapper>
   );
 
   // ─── SHARED DIALOG RENDERERS ───────────────────────────────

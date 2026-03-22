@@ -331,6 +331,25 @@ export default function SocialMediaDeliveries() {
         await syncContentTaskColumnChange('acompanhamento', ctx);
       }
     }
+    // Sync scheduled date with client portal contents
+    if (schedulingItem.content_task_id) {
+      const { data: portalContent } = await supabase.from('client_portal_contents')
+        .select('id').eq('client_id', schedulingItem.client_id)
+        .eq('title', schedulingItem.title).limit(1);
+      if (portalContent && portalContent.length > 0) {
+        await supabase.from('client_portal_contents').update({
+          status: 'agendado',
+          updated_at: new Date().toISOString(),
+        } as any).eq('id', portalContent[0].id);
+      }
+    }
+    // Notify client about scheduled posting via portal notification
+    await supabase.from('client_portal_notifications').insert({
+      client_id: schedulingItem.client_id,
+      title: '📅 Conteúdo agendado para postagem',
+      message: `Seu conteúdo "${schedulingItem.title}" foi agendado para ${schedDate.split('-').reverse().join('/')}${schedTime ? ` às ${schedTime}` : ''}.`,
+      type: 'info',
+    } as any);
     toast.success('Conteúdo agendado para postagem');
     setScheduleDialogOpen(false); setSchedulingItem(null); fetchData();
   };

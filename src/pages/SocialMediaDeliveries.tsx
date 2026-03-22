@@ -1215,8 +1215,18 @@ export default function SocialMediaDeliveries() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {clientsWithData.map(({ client, stats, plan, weeklyStories: ws, overdue, isOnboarding }) => {
-                const storyGoal = client.weeklyStories || 0;
-                const storyPct = storyGoal > 0 ? Math.min(Math.round((ws / storyGoal) * 100), 100) : 0;
+                // Monthly plan goals
+                const reelsGoal = plan?.reels_qty || (client.weeklyReels ? client.weeklyReels * 4 : 0);
+                const creativosGoal = plan?.creatives_qty || (client.weeklyCreatives ? client.weeklyCreatives * 4 : 0);
+                const storiesGoalMonthly = plan?.stories_qty || (client.weeklyStories ? client.weeklyStories * 4 : 0);
+                const artesGoal = plan?.arts_qty || 0;
+                const deficit = prevMonthDeficit[client.id] || { reels: 0, criativo: 0, story: 0, arte: 0 };
+                const goalItems = [
+                  { label: 'Reels', delivered: stats.reels, goal: reelsGoal + deficit.reels, icon: Film, color: 'text-blue-600' },
+                  { label: 'Criativos', delivered: stats.criativo, goal: creativosGoal + deficit.criativo, icon: Megaphone, color: 'text-purple-600' },
+                  { label: 'Stories', delivered: stats.story, goal: storiesGoalMonthly + deficit.story, icon: Image, color: 'text-pink-600' },
+                  { label: 'Artes', delivered: stats.arte, goal: artesGoal + deficit.arte, icon: Palette, color: 'text-amber-600' },
+                ].filter(i => i.goal > 0);
                 const onboarding = onboardingStatus[client.id];
                 const hasOverdue = overdue.overdue > 0;
                 const hasAlmostOverdue = overdue.almostOverdue > 0;

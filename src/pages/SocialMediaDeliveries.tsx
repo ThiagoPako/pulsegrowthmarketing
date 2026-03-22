@@ -1027,10 +1027,11 @@ export default function SocialMediaDeliveries() {
               {/* Criativos Mensal */}
               {(() => {
                 const baseGoal = plan ? plan.creatives_qty : (selectedClient.weeklyCreatives ? selectedClient.weeklyCreatives * 4 : 0);
-                const deficit = prevMonthDeficit[selectedClientId]?.criativo || 0;
+                const deficit = baseGoal > 0 ? (prevMonthDeficit[selectedClientId]?.criativo || 0) : 0;
                 const goal = baseGoal + deficit;
                 const delivered = stats.criativo;
-                const pct = goal > 0 ? Math.min(Math.round((delivered / goal) * 100), 100) : 0;
+                const isInfinite = baseGoal === 0;
+                const pct = isInfinite ? (delivered > 0 ? 100 : 0) : (goal > 0 ? Math.min(Math.round((delivered / goal) * 100), 100) : 0);
                 return (
                   <div className="rounded-lg border border-border p-3 space-y-2">
                     <div className="flex items-center justify-between">
@@ -1039,9 +1040,10 @@ export default function SocialMediaDeliveries() {
                         <span className="text-xs font-semibold text-foreground">Criativos Mensal</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className={`text-[10px] font-bold ${goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
-                          {delivered}/{goal > 0 ? goal : '∞'}
+                        <span className={`text-[10px] font-bold ${!isInfinite && goal > 0 && delivered >= goal ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          {delivered}/{isInfinite ? '∞' : goal}
                         </span>
+                        {isInfinite && delivered > 0 && <Badge variant="outline" className="text-[8px] px-1 py-0 text-primary border-primary/30">Extra</Badge>}
                         {deficit > 0 && <Badge variant="outline" className="text-[8px] px-1 py-0 text-orange-600 border-orange-300">+{deficit} anterior</Badge>}
                       </div>
                     </div>

@@ -375,16 +375,33 @@ app.post('/api/financial-chat', async (req, res) => {
     const selectedModel = aiModel || 'gemini-2.5-flash-lite';
     const now = new Date();
     const startOfYear = `${now.getFullYear()}-01-01`;
+    const startOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const fmt = v => Number(v || 0).toLocaleString('pt-BR');
+    const fmtDate = d => { if (!d) return 'N/A'; const dt = typeof d === 'string' ? d : d.toISOString(); return dt.slice(0, 10).split('-').reverse().join('/'); };
 
-    // Use local PostgreSQL pool instead of Supabase admin client
-    const [revenuesRes, expensesRes, contractsRes, clientsRes, cashRes, partnersRes, apiKeyRes] = await Promise.all([
+    // Fetch ALL system data in parallel from local PostgreSQL
+    const [
+      revenuesRes, expensesRes, contractsRes, clientsRes, cashRes, apiKeyRes,
+      recordingsRes, contentTasksRes, designTasksRes, scriptsRes,
+      deliveriesRes, socialDeliveriesRes, profilesRes, plansRes,
+      goalsRes, portalContentsRes
+    ] = await Promise.all([
       pool.query(`SELECT r.*, c.company_name AS client_name FROM revenues r LEFT JOIN clients c ON c.id = r.client_id WHERE r.due_date >= $1 ORDER BY r.due_date DESC LIMIT 500`, [startOfYear]),
       pool.query(`SELECT e.*, ec.name AS category_name FROM expenses e LEFT JOIN expense_categories ec ON ec.id = e.category_id WHERE e.date >= $1 ORDER BY e.date DESC LIMIT 500`, [startOfYear]),
       pool.query(`SELECT fc.*, c.company_name AS client_name, p.name AS plan_name, p.price AS plan_price FROM financial_contracts fc LEFT JOIN clients c ON c.id = fc.client_id LEFT JOIN plans p ON p.id = fc.plan_id WHERE fc.status = 'ativo'`),
-      pool.query(`SELECT id, company_name, color, plan_id, weekly_reels, weekly_creatives, weekly_stories, weekly_goal, monthly_recordings FROM clients`),
+      pool.query(`SELECT c.*, p.name AS plan_name FROM clients c LEFT JOIN plans p ON p.id = c.plan_id`),
       pool.query(`SELECT * FROM cash_reserve_movements WHERE date >= $1 ORDER BY date DESC LIMIT 100`, [startOfYear]),
-      pool.query(`SELECT pr.*, pf.name AS profile_name FROM partners pr LEFT JOIN profiles pf ON pf.id = pr.user_id WHERE pr.active = true`).catch(() => ({ rows: [] })),
       pool.query(`SELECT config FROM api_integrations WHERE provider = ANY($1) AND status = 'ativo' LIMIT 1`, [['ai_gemini', 'ai_openai', 'ai_claude']]),
+      pool.query(`SELECT r.*, c.company_name AS client_name, pf.name AS videomaker_name FROM recordings r LEFT JOIN clients c ON c.id = r.client_id LEFT JOIN profiles pf ON pf.id = r.videomaker_id ORDER BY r.date DESC LIMIT 200`),
+      pool.query(`SELECT ct.*, c.company_name AS client_name, pf.name AS assigned_name FROM content_tasks ct LEFT JOIN clients c ON c.id = ct.client_id LEFT JOIN profiles pf ON pf.id = ct.assigned_to ORDER BY ct.updated_at DESC LIMIT 200`),
+      pool.query(`SELECT dt.*, c.company_name AS client_name, pf.name AS assigned_name FROM design_tasks dt LEFT JOIN clients c ON c.id = dt.client_id LEFT JOIN profiles pf ON pf.id = dt.assigned_to ORDER BY dt.updated_at DESC LIMIT 200`),
+      pool.query(`SELECT s.*, c.company_name AS client_name FROM scripts s LEFT JOIN clients c ON c.id = s.client_id ORDER BY s.created_at DESC LIMIT 200`),
+      pool.query(`SELECT dr.*, c.company_name AS client_name, pf.name AS videomaker_name FROM delivery_records dr LEFT JOIN clients c ON c.id = dr.client_id LEFT JOIN profiles pf ON pf.id = dr.videomaker_id WHERE dr.date >= $1 ORDER BY dr.date DESC LIMIT 200`, [startOfMonth]),
+      pool.query(`SELECT sd.*, c.company_name AS client_name FROM social_media_deliveries sd LEFT JOIN clients c ON c.id = sd.client_id WHERE sd.delivery_date >= $1 ORDER BY sd.delivery_date DESC LIMIT 300`, [startOfMonth]).catch(() => ({ rows: [] })),
+      pool.query(`SELECT id, name, email, role, job_title FROM profiles`),
+      pool.query(`SELECT * FROM plans`),
+      pool.query(`SELECT * FROM goals WHERE status != 'cancelada' ORDER BY end_date DESC LIMIT 20`).catch(() => ({ rows: [] })),
+      pool.query(`SELECT cpc.*, c.company_name AS client_name FROM client_portal_contents cpc LEFT JOIN clients c ON c.id = cpc.client_id ORDER BY cpc.created_at DESC LIMIT 100`).catch(() => ({ rows: [] })),
     ]);
 
     const revenues = revenuesRes.rows || [];
@@ -392,8 +409,18 @@ app.post('/api/financial-chat', async (req, res) => {
     const contracts = contractsRes.rows || [];
     const clients = clientsRes.rows || [];
     const cashMovements = cashRes.rows || [];
-    const partners = partnersRes.rows || [];
+    const recordings = recordingsRes.rows || [];
+    const contentTasks = contentTasksRes.rows || [];
+    const designTasks = designTasksRes.rows || [];
+    const scripts = scriptsRes.rows || [];
+    const deliveries = deliveriesRes.rows || [];
+    const socialDeliveries = socialDeliveriesRes.rows || [];
+    const profiles = profilesRes.rows || [];
+    const plans = plansRes.rows || [];
+    const goals = goalsRes.rows || [];
+    const portalContents = portalContentsRes.rows || [];
 
+    // ── Financial summary ──
     const totalRevenuePaid = revenues.filter(r => r.status === 'pago').reduce((s, r) => s + Number(r.amount), 0);
     const totalRevenuePending = revenues.filter(r => ['pendente', 'prevista'].includes(r.status)).reduce((s, r) => s + Number(r.amount), 0);
     const totalRevenueOverdue = revenues.filter(r => ['vencido', 'em_atraso'].includes(r.status)).reduce((s, r) => s + Number(r.amount), 0);
@@ -403,18 +430,101 @@ app.post('/api/financial-chat', async (req, res) => {
     expenses.forEach(e => { const cat = e.category_name || 'Sem categoria'; expByCategory[cat] = (expByCategory[cat] || 0) + Number(e.amount); });
 
     const revByMonth = {};
-    revenues.forEach(r => { const m = r.due_date ? r.due_date.toISOString().slice(0, 7) : 'N/A'; if (!revByMonth[m]) revByMonth[m] = { paid: 0, pending: 0, overdue: 0 }; if (r.status === 'pago') revByMonth[m].paid += Number(r.amount); else if (['vencido','em_atraso'].includes(r.status)) revByMonth[m].overdue += Number(r.amount); else revByMonth[m].pending += Number(r.amount); });
-
-    const expByMonth = {};
-    expenses.forEach(e => { const m = e.date ? (typeof e.date === 'string' ? e.date.slice(0, 7) : e.date.toISOString().slice(0, 7)) : 'N/A'; expByMonth[m] = (expByMonth[m] || 0) + Number(e.amount); });
+    revenues.forEach(r => { const m = r.due_date ? (typeof r.due_date === 'string' ? r.due_date.slice(0, 7) : r.due_date.toISOString().slice(0, 7)) : 'N/A'; if (!revByMonth[m]) revByMonth[m] = { paid: 0, pending: 0, overdue: 0 }; if (r.status === 'pago') revByMonth[m].paid += Number(r.amount); else if (['vencido','em_atraso'].includes(r.status)) revByMonth[m].overdue += Number(r.amount); else revByMonth[m].pending += Number(r.amount); });
 
     const revByClient = {};
     revenues.forEach(r => { const name = r.client_name || 'N/A'; revByClient[name] = (revByClient[name] || 0) + Number(r.amount); });
 
-    const fmt = v => v.toLocaleString('pt-BR');
-    const contextData = `## Dados Financeiros da Agência Pulse (${now.getFullYear()})\n### Resumo Geral\n- Receitas pagas: R$ ${fmt(totalRevenuePaid)}\n- Receitas pendentes/previstas: R$ ${fmt(totalRevenuePending)}\n- Receitas vencidas/em atraso: R$ ${fmt(totalRevenueOverdue)}\n- Despesas totais: R$ ${fmt(totalExpenses)}\n- Lucro bruto: R$ ${fmt(totalRevenuePaid - totalExpenses)}\n- Contratos ativos: ${contracts.length}\n- Clientes: ${clients.length}\n- Parceiros ativos: ${partners.length}\n\n### Receitas por Mês\n${Object.entries(revByMonth).sort(([a], [b]) => b.localeCompare(a)).slice(0, 12).map(([m, v]) => `- ${m}: Pago R$ ${fmt(v.paid)} | Pendente R$ ${fmt(v.pending)} | Vencido R$ ${fmt(v.overdue)}`).join('\n')}\n\n### Despesas por Mês\n${Object.entries(expByMonth).sort(([a], [b]) => b.localeCompare(a)).slice(0, 12).map(([m, v]) => `- ${m}: R$ ${fmt(v)}`).join('\n')}\n\n### Despesas por Categoria\n${Object.entries(expByCategory).sort(([, a], [, b]) => b - a).map(([cat, val]) => `- ${cat}: R$ ${fmt(val)}`).join('\n')}\n\n### Receita por Cliente (Top 15)\n${Object.entries(revByClient).sort(([, a], [, b]) => b - a).slice(0, 15).map(([name, val]) => `- ${name}: R$ ${fmt(val)}`).join('\n')}\n\n### Contratos Ativos\n${contracts.map(c => `- ${c.client_name}: R$ ${fmt(Number(c.contract_value))}/mês (${c.payment_method}) Dia ${c.due_day}`).join('\n')}\n\n### Parceiros\n${partners.map(p => `- ${p.profile_name || 'N/A'}: ${p.service_function || 'N/A'} (R$ ${fmt(Number(p.fixed_rate || 0))})`).join('\n')}\n\n### Movimentações do Caixa\n${cashMovements.slice(0, 10).map(m => `- ${typeof m.date === 'string' ? m.date : m.date?.toISOString().slice(0,10)}: ${m.type} R$ ${fmt(Number(m.amount))} - ${m.description}`).join('\n')}\n\n### Clientes e Produção\n${clients.slice(0, 20).map(c => `- ${c.company_name}: ${c.weekly_reels} reels/sem, ${c.weekly_creatives} criativos/sem, ${c.weekly_stories} stories/sem, ${c.monthly_recordings} gravações/mês`).join('\n')}`;
+    // ── Recordings summary ──
+    const recByStatus = {};
+    recordings.forEach(r => { recByStatus[r.status] = (recByStatus[r.status] || 0) + 1; });
 
-    const messages = [{ role: 'system', content: `Você é o assistente financeiro inteligente da Agência Pulse. Responda perguntas sobre dados financeiros e operacionais usando os dados abaixo. Seja preciso com números, use formato brasileiro (R$, vírgulas). Responda em português do Brasil. Use markdown para formatar.\n\nQuando não tiver dados suficientes, diga claramente. Sempre contextualize com períodos (mês, ano). Sugira insights quando pertinente.\n\n${contextData}` }];
+    // ── Content tasks summary ──
+    const tasksByColumn = {};
+    contentTasks.forEach(t => { tasksByColumn[t.kanban_column] = (tasksByColumn[t.kanban_column] || 0) + 1; });
+
+    // ── Design tasks summary ──
+    const designByColumn = {};
+    designTasks.forEach(t => { designByColumn[t.kanban_column] = (designByColumn[t.kanban_column] || 0) + 1; });
+
+    // Build comprehensive context
+    const contextData = `## Dados Completos da Agência Pulse — ${fmtDate(now)}
+
+### 📊 FINANCEIRO (${now.getFullYear()})
+- Receitas pagas: R$ ${fmt(totalRevenuePaid)}
+- Receitas pendentes/previstas: R$ ${fmt(totalRevenuePending)}
+- Receitas vencidas/em atraso: R$ ${fmt(totalRevenueOverdue)}
+- Despesas totais: R$ ${fmt(totalExpenses)}
+- Lucro bruto: R$ ${fmt(totalRevenuePaid - totalExpenses)}
+- Contratos ativos: ${contracts.length}
+
+Receitas por Mês:
+${Object.entries(revByMonth).sort(([a], [b]) => b.localeCompare(a)).slice(0, 12).map(([m, v]) => `- ${m}: Pago R$ ${fmt(v.paid)} | Pendente R$ ${fmt(v.pending)} | Vencido R$ ${fmt(v.overdue)}`).join('\n')}
+
+Despesas por Categoria:
+${Object.entries(expByCategory).sort(([, a], [, b]) => b - a).map(([cat, val]) => `- ${cat}: R$ ${fmt(val)}`).join('\n')}
+
+Top 15 Receita por Cliente:
+${Object.entries(revByClient).sort(([, a], [, b]) => b - a).slice(0, 15).map(([name, val]) => `- ${name}: R$ ${fmt(val)}`).join('\n')}
+
+Contratos Ativos:
+${contracts.map(c => `- ${c.client_name}: R$ ${fmt(c.contract_value)}/mês (${c.payment_method}) Dia ${c.due_day} | Plano: ${c.plan_name || 'N/A'}`).join('\n')}
+
+Caixa:
+${cashMovements.slice(0, 10).map(m => `- ${fmtDate(m.date)}: ${m.type} R$ ${fmt(m.amount)} - ${m.description}`).join('\n')}
+
+### 👥 CLIENTES (${clients.length} total)
+${clients.map(c => `- ${c.company_name} | Plano: ${c.plan_name || 'Sem plano'} | Reels: ${c.weekly_reels}/sem | Criativos: ${c.weekly_creatives}/sem | Stories: ${c.weekly_stories}/sem | Gravações: ${c.monthly_recordings}/mês | Cidade: ${c.city || 'N/A'} | Nicho: ${c.niche || 'N/A'} | Contrato desde: ${fmtDate(c.contract_start_date)}`).join('\n')}
+
+### 📋 PLANOS
+${plans.map(p => `- ${p.name}: R$ ${fmt(p.price)} | ${p.description || ''}`).join('\n')}
+
+### 👤 EQUIPE (${profiles.length} membros)
+${profiles.map(p => `- ${p.name} (${p.role}) ${p.job_title ? '— ' + p.job_title : ''}`).join('\n')}
+
+### 🎬 GRAVAÇÕES (últimas 200)
+Resumo por status: ${Object.entries(recByStatus).map(([s, n]) => `${s}: ${n}`).join(', ') || 'Nenhuma'}
+${recordings.slice(0, 30).map(r => `- ${fmtDate(r.date)} ${r.start_time || ''} | ${r.client_name} | Status: ${r.status} | Videomaker: ${r.videomaker_name || 'N/A'} | Tipo: ${r.type || 'fixa'}`).join('\n')}
+
+### 📝 ROTEIROS (${scripts.length})
+${scripts.slice(0, 30).map(s => `- ${s.client_name}: "${s.title || 'Sem título'}" | Status: ${s.status || 'rascunho'} | Tipo: ${s.content_type || 'N/A'} | Criado: ${fmtDate(s.created_at)}`).join('\n')}
+
+### 🎯 TAREFAS DE CONTEÚDO (${contentTasks.length})
+Por coluna: ${Object.entries(tasksByColumn).map(([col, n]) => `${col}: ${n}`).join(', ') || 'Nenhuma'}
+${contentTasks.slice(0, 30).map(t => `- ${t.client_name}: "${t.title}" | Coluna: ${t.kanban_column} | Tipo: ${t.content_type || 'N/A'} | Responsável: ${t.assigned_name || 'N/A'}`).join('\n')}
+
+### 🎨 TAREFAS DE DESIGN (${designTasks.length})
+Por coluna: ${Object.entries(designByColumn).map(([col, n]) => `${col}: ${n}`).join(', ') || 'Nenhuma'}
+${designTasks.slice(0, 30).map(t => `- ${t.client_name}: "${t.title}" | Coluna: ${t.kanban_column} | Prioridade: ${t.priority || 'normal'} | Designer: ${t.assigned_name || 'N/A'}`).join('\n')}
+
+### 📦 ENTREGAS DO MÊS (${deliveries.length} registros)
+${deliveries.slice(0, 30).map(d => `- ${fmtDate(d.date)} | ${d.client_name} | Vídeos: ${d.videos_recorded} | Reels: ${d.reels_produced} | Criativos: ${d.creatives_produced} | Stories: ${d.stories_produced} | Artes: ${d.arts_produced} | Extras: ${d.extras_produced} | Status: ${d.delivery_status}`).join('\n')}
+
+### 📱 POSTAGENS SOCIAL MEDIA (${socialDeliveries.length} neste mês)
+${socialDeliveries.slice(0, 40).map(sd => `- ${fmtDate(sd.delivery_date)} | ${sd.client_name} | Tipo: ${sd.delivery_type || 'N/A'} | Plataforma: ${sd.platform || 'N/A'}`).join('\n')}
+
+### 🌐 CONTEÚDOS DO PORTAL (${portalContents.length})
+${portalContents.slice(0, 20).map(pc => `- ${pc.client_name}: "${pc.title}" | Tipo: ${pc.content_type} | Status: ${pc.status} | Temporada: ${pc.season_month}/${pc.season_year}`).join('\n')}
+
+### 🏆 METAS
+${goals.map(g => `- ${g.title}: ${g.current_value}/${g.target_value} (${g.status}) | Período: ${fmtDate(g.start_date)} a ${fmtDate(g.end_date)}`).join('\n') || 'Nenhuma meta cadastrada'}`;
+
+    const systemPrompt = `Você é o Foguetinho 🚀, o assistente inteligente da Agência Pulse de Marketing Digital. Você tem acesso a TODOS os dados do sistema: financeiro, clientes, contratos, gravações, roteiros, tarefas de conteúdo, design, entregas, postagens, metas e equipe.
+
+REGRAS:
+- Responda em português do Brasil, sempre amigável e profissional
+- Use formato brasileiro para números (R$, vírgulas) e datas (dd/mm/aaaa)
+- Seja preciso com dados — cite números exatos
+- Use markdown para formatar (negrito, listas, tabelas quando útil)
+- Quando não tiver dados suficientes, diga claramente
+- Sugira insights e recomendações quando pertinente
+- Seja conciso mas completo
+- Adicione emojis relevantes para deixar as respostas mais visuais
+- Você pode cruzar dados entre módulos (ex: receita de um cliente vs entregas feitas)
+
+${contextData}`;
+
+    const messages = [{ role: 'system', content: systemPrompt }];
     if (conversationHistory && Array.isArray(conversationHistory)) {
       for (const msg of conversationHistory.slice(-10)) messages.push({ role: msg.role, content: msg.content });
     }
@@ -424,7 +534,7 @@ app.post('/api/financial-chat', async (req, res) => {
     const dbApiKeyConfig = apiKeyRes.rows?.[0]?.config;
     const dbApiKey = dbApiKeyConfig?.api_key_encrypted;
     const ai = getAiConfig(aiProvider, dbApiKey);
-    const answer = await callAi(ai, selectedModel, messages, { temperature: 0.3, max_tokens: 2000 });
+    const answer = await callAi(ai, selectedModel, messages, { temperature: 0.3, max_tokens: 3000 });
 
     // Save chat messages to local DB
     await pool.query(

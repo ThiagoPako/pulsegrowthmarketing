@@ -25,7 +25,7 @@ export default function FinancialReports() {
   const monthEnd = endOfMonth(monthStart);
   const refMonth = `${selectedMonth}-01`;
 
-  const monthRevenues = revenues.filter(r => r.reference_month === refMonth);
+  const monthRevenues = revenues.filter(r => normalizeDate(r.reference_month) === refMonth);
   const monthExpenses = expenses.filter(e => { const d = new Date(e.date); return d >= monthStart && d <= monthEnd; });
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });

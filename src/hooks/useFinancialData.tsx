@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/vpsDb';
 
+/** Normalize date strings like "2026-03-01T00:00:00.000Z" to "2026-03-01" */
+export const normalizeDate = (d: string | null | undefined): string => {
+  if (!d) return '';
+  return d.includes('T') ? d.split('T')[0] : d;
+};
+
 export interface FinancialContract {
   id: string;
   client_id: string;

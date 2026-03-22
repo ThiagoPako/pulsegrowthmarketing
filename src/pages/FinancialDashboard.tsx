@@ -43,7 +43,7 @@ export default function FinancialDashboard() {
 
   // Filter data for selected month
   const monthRevenues = useMemo(() =>
-    revenues.filter(r => r.reference_month === format(monthStart, 'yyyy-MM-dd')),
+    revenues.filter(r => normalizeDate(r.reference_month) === format(monthStart, 'yyyy-MM-dd')),
     [revenues, monthStart]
   );
 

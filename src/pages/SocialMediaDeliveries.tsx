@@ -1047,7 +1047,7 @@ export default function SocialMediaDeliveries() {
 
               {/* Artes Mensal */}
               {(() => {
-                const baseGoal = plan?.arts_qty || 0;
+                const baseGoal = plan?.arts_qty || 0; // artes não tem campo semanal no cliente
                 const deficit = prevMonthDeficit[selectedClientId]?.arte || 0;
                 const goal = baseGoal + deficit;
                 const delivered = stats.arte;

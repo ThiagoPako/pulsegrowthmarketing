@@ -813,8 +813,35 @@ export default function Scripts() {
                   {viewing.recorded ? 'Gravado' : 'Pendente'}
                 </Badge>
               </div>
-              <div className="prose prose-sm max-w-none mt-4 p-4 rounded-xl bg-muted/30 border border-border"
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-xs text-muted-foreground">Fonte:</span>
+                {[
+                  { label: 'P', val: 0 },
+                  { label: 'M', val: 1 },
+                  { label: 'G', val: 2 },
+                  { label: 'GG', val: 3 },
+                ].map(opt => (
+                  <Button
+                    key={opt.val}
+                    variant={viewFontSize === opt.val ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-7 w-8 text-xs px-0"
+                    onClick={() => setViewFontSize(opt.val)}
+                  >
+                    {opt.label}
+                  </Button>
+                ))}
+              </div>
+              <div className={`${['prose-sm', 'prose-base', 'prose-lg', 'prose-xl'][viewFontSize]} prose max-w-none mt-2 p-4 rounded-xl bg-muted/30 border border-border`}
                 dangerouslySetInnerHTML={{ __html: highlightQuotes(viewing.content) || '<em>Sem conteúdo</em>' }} />
+              {viewing.caption && (
+                <div className="mt-3 space-y-1">
+                  <Label className="text-xs text-muted-foreground">📝 Legenda</Label>
+                  <div className={`${['text-sm', 'text-base', 'text-lg', 'text-xl'][viewFontSize]} p-3 rounded-lg bg-muted/20 border border-border whitespace-pre-wrap`}>
+                    {viewing.caption}
+                  </div>
+                </div>
+              )}
               <div className="flex gap-2 mt-4">
                 <Button variant="outline" className="flex-1" onClick={() => handleDownloadPdf(viewing)}>
                   <Download size={16} className="mr-2" /> Baixar PDF

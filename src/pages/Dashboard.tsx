@@ -202,6 +202,40 @@ export default function Dashboard() {
     });
   }, [clients, tasks, recordings, currentWeekStr, weekStart, weekEnd]);
 
+  const waitTimeStats = useMemo(() => {
+    const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+    const monthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
+    const monthLogs = waitLogs.filter(w => {
+      const d = w.started_at?.split('T')[0] || '';
+      return d >= monthStart && d <= monthEnd && w.wait_duration_seconds;
+    });
+    const vmMap = new Map<string, { totalSeconds: number; count: number; clients: Map<string, number> }>();
+    monthLogs.forEach(w => {
+      const vmId = w.videomaker_id;
+      if (!vmMap.has(vmId)) vmMap.set(vmId, { totalSeconds: 0, count: 0, clients: new Map() });
+      const entry = vmMap.get(vmId)!;
+      entry.totalSeconds += w.wait_duration_seconds || 0;
+      entry.count += 1;
+      entry.clients.set(w.client_id, (entry.clients.get(w.client_id) || 0) + (w.wait_duration_seconds || 0));
+    });
+    const clientMap = new Map<string, { totalSeconds: number; count: number }>();
+    monthLogs.forEach(w => {
+      if (!clientMap.has(w.client_id)) clientMap.set(w.client_id, { totalSeconds: 0, count: 0 });
+      const entry = clientMap.get(w.client_id)!;
+      entry.totalSeconds += w.wait_duration_seconds || 0;
+      entry.count += 1;
+    });
+    const topClients = Array.from(clientMap.entries())
+      .map(([id, data]) => ({ id, ...data }))
+      .sort((a, b) => b.totalSeconds - a.totalSeconds)
+      .slice(0, 5);
+    const vmStats = Array.from(vmMap.entries())
+      .map(([id, data]) => ({ id, ...data }))
+      .sort((a, b) => b.totalSeconds - a.totalSeconds);
+    const totalSeconds = monthLogs.reduce((a, w) => a + (w.wait_duration_seconds || 0), 0);
+    return { totalSeconds, totalCount: monthLogs.length, vmStats, topClients };
+  }, [waitLogs]);
+
   const getRecsForDay = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     return recordings.filter(r => normalizeDateKey(r.date) === dateStr && r.status !== 'cancelada').sort((a, b) => a.startTime.localeCompare(b.startTime));

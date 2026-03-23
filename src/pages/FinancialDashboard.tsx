@@ -726,7 +726,7 @@ export default function FinancialDashboard() {
                     )}
                     <span className="text-sm">{m.description}</span>
                     <span className="text-xs text-muted-foreground">
-                      {format(new Date(m.date + 'T12:00:00'), 'dd/MM/yyyy')}
+                      {safeFormatDate(m.date ? normalizeDate(m.date) + 'T12:00:00' : null, 'dd/MM/yyyy')}
                     </span>
                   </div>
                   <span className={`text-sm font-bold ${m.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>

@@ -13,6 +13,19 @@ import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfWeek, en
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
+
+/** Safely format a date string — returns fallback on invalid input */
+const safeFormatDate = (dateStr: string | null | undefined, pattern: string, options?: any): string => {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '—';
+    return format(d, pattern, options);
+  } catch {
+    return '—';
+  }
+};
+
 import { sendWhatsAppMessage } from '@/services/whatsappService';
 import { generateDeliveryReport, resolvePaymentInfo } from '@/lib/billingReport';
 import ClientLogo from '@/components/ClientLogo';

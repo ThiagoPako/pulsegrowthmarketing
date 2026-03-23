@@ -1056,18 +1056,18 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (logoSrc) {
           const lImg = new window.Image();
           if (!logoSrc.startsWith('data:')) lImg.crossOrigin = 'anonymous';
-          lImg.onload = () => { drawCanvas(canvas, vImg, lImg); resolve(canvas.toDataURL('image/jpeg', 0.92)); };
-          lImg.onerror = () => { drawCanvas(canvas, vImg, null); resolve(canvas.toDataURL('image/jpeg', 0.92)); };
+          lImg.onload = () => { drawCanvas(canvas, vImg, lImg, frameImgObj); resolve(canvas.toDataURL('image/jpeg', 0.92)); };
+          lImg.onerror = () => { drawCanvas(canvas, vImg, null, frameImgObj); resolve(canvas.toDataURL('image/jpeg', 0.92)); };
           lImg.src = logoSrc;
         } else {
-          drawCanvas(canvas, vImg, null);
+          drawCanvas(canvas, vImg, null, frameImgObj);
           resolve(canvas.toDataURL('image/jpeg', 0.92));
         }
       };
       vImg.onerror = () => reject('Failed to load vehicle image');
       vImg.src = vehicleImageSrc;
     });
-  }, [drawCanvas, customLogoDataUrl, clientLogoUrl]);
+  }, [drawCanvas, customLogoDataUrl, clientLogoUrl, frameImgObj]);
 
   const handleCreate = async () => {
     if (!model.trim() || !year.trim()) { toast.error('Preencha modelo e ano do veículo'); return; }

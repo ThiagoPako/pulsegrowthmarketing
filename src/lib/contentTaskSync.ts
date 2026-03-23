@@ -252,7 +252,7 @@ export async function syncContentTaskColumnChange(
     try {
       const whatsConfig = await getWhatsAppConfig();
       if (whatsConfig?.integrationActive && whatsConfig?.autoVideoApproval && ctx.clientWhatsapp) {
-        const portalUrl = `https://pulsegrowthmarketing.lovable.app/portal/${ctx.clientId}`;
+        const portalUrl = `https://agenciapulse.tech/portal/${ctx.clientId}`;
         let msg = whatsConfig.msgVideoApproval
           .replace('{nome_cliente}', ctx.clientName || '')
           .replace('{link_video}', portalUrl)

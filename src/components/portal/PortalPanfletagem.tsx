@@ -439,8 +439,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     canvas.width = CANVAS_W;
-    canvas.height = CANVAS_H;
-    const W = CANVAS_W, H = CANVAS_H;
+    canvas.height = CANVAS_H_VAL;
+    const W = CANVAS_W, H = CANVAS_H_VAL;
     const fs = fontScale;
     const bs = infoBoxScale;
 
@@ -683,7 +683,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (!canvas) return { cx: 0, cy: 0 };
     const rect = canvas.getBoundingClientRect();
     const scaleX = CANVAS_W / rect.width;
-    const scaleY = CANVAS_H / rect.height;
+    const scaleY = CANVAS_H_VAL / rect.height;
     return { cx: (e.clientX - rect.left) * scaleX, cy: (e.clientY - rect.top) * scaleY };
   };
 
@@ -708,7 +708,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     // Check footer hit (only when unlocked)
     const footY = infoPosY + infoH;
     if (!layoutLocked && cy >= footY) {
-      setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + (CANVAS_H - footY) / 2 + footerPosY) }); return;
+      setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + (CANVAS_H_VAL - footY) / 2 + footerPosY) }); return;
     }
   };
 
@@ -726,16 +726,16 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const { cx, cy } = getCanvasCoords(e);
     if (dragging === 'logo') {
       setLogoX(Math.max(-logoW / 2, Math.min(CANVAS_W - logoW / 2, cx - dragOffset.x)));
-      setLogoY(Math.max(-logoH / 2, Math.min(CANVAS_H - logoH / 2, cy - dragOffset.y)));
+      setLogoY(Math.max(-logoH / 2, Math.min(CANVAS_H_VAL - logoH / 2, cy - dragOffset.y)));
     } else if (dragging === 'photo') {
       setPhotoOffsetX(cx - dragOffset.x);
       setPhotoOffsetY(cy - dragOffset.y);
     } else if (dragging === 'info') {
-      setInfoPosY(Math.max(400, Math.min(CANVAS_H - 330, cy - dragOffset.y)));
+      setInfoPosY(Math.max(400, Math.min(CANVAS_H_VAL - 330, cy - dragOffset.y)));
     } else if (dragging === 'footer') {
       const infoH = Math.round(260 * infoBoxScale);
       const footY = infoPosY + infoH;
-      const footCenterDefault = footY + (CANVAS_H - footY) / 2;
+      const footCenterDefault = footY + (CANVAS_H_VAL - footY) / 2;
       setFooterPosX(cx - dragOffset.x);
       setFooterPosY(cy - dragOffset.y - footCenterDefault);
     }
@@ -750,7 +750,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const rect = canvas.getBoundingClientRect();
     const touch = e.touches[0];
     const scaleX = CANVAS_W / rect.width;
-    const scaleY = CANVAS_H / rect.height;
+    const scaleY = CANVAS_H_VAL / rect.height;
     return { cx: (touch.clientX - rect.left) * scaleX, cy: (touch.clientY - rect.top) * scaleY };
   };
 
@@ -770,7 +770,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     }
     const footY = infoPosY + infoH;
     if (!layoutLocked && cy >= footY) {
-      setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + (CANVAS_H - footY) / 2 + footerPosY) }); e.preventDefault(); return;
+      setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + (CANVAS_H_VAL - footY) / 2 + footerPosY) }); e.preventDefault(); return;
     }
   };
 
@@ -781,16 +781,16 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const { cx, cy } = getTouchCoords(e);
     if (dragging === 'logo') {
       setLogoX(Math.max(-logoW / 2, Math.min(CANVAS_W - logoW / 2, cx - dragOffset.x)));
-      setLogoY(Math.max(-logoH / 2, Math.min(CANVAS_H - logoH / 2, cy - dragOffset.y)));
+      setLogoY(Math.max(-logoH / 2, Math.min(CANVAS_H_VAL - logoH / 2, cy - dragOffset.y)));
     } else if (dragging === 'photo') {
       setPhotoOffsetX(cx - dragOffset.x);
       setPhotoOffsetY(cy - dragOffset.y);
     } else if (dragging === 'info') {
-      setInfoPosY(Math.max(400, Math.min(CANVAS_H - 330, cy - dragOffset.y)));
+      setInfoPosY(Math.max(400, Math.min(CANVAS_H_VAL - 330, cy - dragOffset.y)));
     } else if (dragging === 'footer') {
       const infoH = Math.round(260 * infoBoxScale);
       const footY = infoPosY + infoH;
-      const footCenterDefault = footY + (CANVAS_H - footY) / 2;
+      const footCenterDefault = footY + (CANVAS_H_VAL - footY) / 2;
       setFooterPosX(cx - dragOffset.x);
       setFooterPosY(cy - dragOffset.y - footCenterDefault);
     }

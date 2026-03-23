@@ -59,7 +59,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
         .then(res => res.ok ? res.json() : Promise.reject())
         .then(data => {
-          // Server returns { id, email, ... } directly (no .user wrapper)
           const userData = data.user || data;
           const u = { id: userData.id, email: userData.email };
           setUser(u);
@@ -71,7 +70,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
         .finally(() => setLoading(false));
     } else {
-      setLoading(false);
+      // Check Supabase session as fallback (preview environment)
+      supabaseReal.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          const u = { id: session.user.id, email: session.user.email || '' };
+          setUser(u);
+          setSession({ access_token: session.access_token });
+          fetchProfile(u.id);
+        }
+        setLoading(false);
+      });
     }
   }, [fetchProfile]);
 

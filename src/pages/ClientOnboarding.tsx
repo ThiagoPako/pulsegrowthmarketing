@@ -1247,7 +1247,9 @@ export default function ClientOnboarding() {
 
         {/* Last Step: Extra content + Terms */}
         {step === EXTRA_STEP && (
-          <div className="space-y-5">
+           <div className="space-y-5">
+            {planHasRecording && (
+            <>
             <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-3">
               <p className="text-sm font-semibold flex items-center gap-2">
                 <Sparkles size={16} className="text-primary" /> Conteúdo Extra
@@ -1296,6 +1298,8 @@ export default function ClientOnboarding() {
                   </p>
                 </div>
               </div>
+            )}
+            </>
             )}
 
             {/* Terms */}

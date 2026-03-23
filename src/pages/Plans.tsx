@@ -20,6 +20,23 @@ interface Partner {
   fixed_rate: number;
 }
 
+interface PlanService {
+  key: string;
+  label: string;
+  icon: string;
+}
+
+const AVAILABLE_SERVICES: PlanService[] = [
+  { key: 'roteiros', label: 'Criação de Roteiros', icon: '📝' },
+  { key: 'estrategia', label: 'Estratégias de Campanha', icon: '🎯' },
+  { key: 'reformulacao_perfil', label: 'Reformulação de Perfil', icon: '👤' },
+  { key: 'edicao_video', label: 'Edição de Vídeos', icon: '✂️' },
+  { key: 'trafego_pago', label: 'Tráfego Pago', icon: '📈' },
+  { key: 'gestao_redes', label: 'Gestão de Redes Sociais', icon: '📱' },
+  { key: 'design', label: 'Design / Artes', icon: '🎨' },
+  { key: 'consultoria', label: 'Consultoria', icon: '💡' },
+];
+
 interface Plan {
   id: string;
   name: string;
@@ -38,6 +55,10 @@ interface Plan {
   is_partner_plan: boolean;
   partner_id: string | null;
   partner_cost: number;
+  has_recording: boolean;
+  has_photography: boolean;
+  services: string[];
+  plan_type: string;
 }
 
 const PERIODICITY_LABELS: Record<string, string> = {

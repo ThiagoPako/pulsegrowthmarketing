@@ -230,6 +230,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   // Loaded images for preview
   const [vehicleImgObj, setVehicleImgObj] = useState<HTMLImageElement | null>(null);
   const [logoImgObj, setLogoImgObj] = useState<HTMLImageElement | null>(null);
+  const [frameImgObj, setFrameImgObj] = useState<HTMLImageElement | null>(null);
 
   // Canvas click → zone color picker
   const [activeColorZone, setActiveColorZone] = useState<CanvasZone>(null);

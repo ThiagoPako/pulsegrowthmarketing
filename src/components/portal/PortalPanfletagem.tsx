@@ -135,6 +135,7 @@ function darkenHex(hex: string, amount = 30): string {
 export default function PortalPanfletagem({ clientId, clientColor, clientName, clientLogoUrl, clientWhatsapp, clientCity }: Props) {
   const [templates, setTemplates] = useState<FlyerTemplate[]>([]);
   const [canvasFormat, setCanvasFormat] = useState<CanvasFormat>('feed');
+  const CANVAS_H_VAL = canvasFormat === 'story' ? CANVAS_H_STORY : CANVAS_H_FEED;
   const [activeTab, setActiveTab] = useState<'image' | 'video'>('image');
   const [flyerImageDataUrl, setFlyerImageDataUrl] = useState<string | null>(null);
   const [items, setItems] = useState<FlyerItem[]>([]);

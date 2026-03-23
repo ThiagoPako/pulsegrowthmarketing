@@ -377,6 +377,7 @@ app.post('/api/financial-chat', async (req, res) => {
     const SYSTEM_START = '2026-03-01'; // Sistema iniciou em março 2026
     const startOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
     const fmt = v => Number(v || 0).toLocaleString('pt-BR');
+    const fmtMoney = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const fmtDate = d => { if (!d) return 'N/A'; const dt = typeof d === 'string' ? d : d.toISOString(); return dt.slice(0, 10).split('-').reverse().join('/'); };
 
     // Fetch ALL system data in parallel from local PostgreSQL

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, RefreshCw, CheckCircle, MessageCircle, Loader2, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, RefreshCw, CheckCircle, MessageCircle, Loader2, TrendingUp, AlertTriangle, Undo2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { format, subMonths, addMonths } from 'date-fns';
@@ -16,6 +16,7 @@ import { generateDeliveryReport, resolvePaymentInfo } from '@/lib/billingReport'
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import ClientLogo from '@/components/ClientLogo';
 
 /* ── Rocket Animation Overlay ── */
 function RocketOverlay({ onComplete }: { onComplete: () => void }) {
@@ -148,8 +149,12 @@ export default function FinancialRevenues() {
     toast.success(`${count} receitas geradas`);
   };
 
+  const [animatingPaid, setAnimatingPaid] = useState<string | null>(null);
+
   const handleMarkPaid = async (id: string) => {
+    setAnimatingPaid(id);
     const ok = await updateRevenue(id, { status: 'recebida', paid_at: new Date().toISOString().split('T')[0] });
+    setTimeout(() => setAnimatingPaid(null), 1200);
     if (ok) toast.success('Marcada como recebida');
     else toast.error('Não foi possível marcar como recebida');
   };
@@ -158,6 +163,12 @@ export default function FinancialRevenues() {
     const ok = await updateRevenue(id, { status: 'em_atraso' });
     if (ok) toast.success('Marcada como em atraso');
     else toast.error('Não foi possível marcar como em atraso');
+  };
+
+  const handleRevertToPending = async (id: string) => {
+    const ok = await updateRevenue(id, { status: 'prevista', paid_at: null });
+    if (ok) toast.success('Receita revertida para pendente');
+    else toast.error('Não foi possível reverter');
   };
 
   const handleSendBilling = async (revenueId: string) => {
@@ -387,83 +398,166 @@ export default function FinancialRevenues() {
       <Card className="shadow-sm">
         <CardContent className="p-0">
           <Table>
-            <TableHeader>
-              <TableRow>
+             <TableHeader>
+              <TableRow className="bg-muted/30">
+                <TableHead className="w-12"></TableHead>
                 <TableHead>Cliente</TableHead>
                 <TableHead>Valor</TableHead>
                 <TableHead>Vencimento</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Pago em</TableHead>
-                <TableHead className="w-48"></TableHead>
+                <TableHead className="w-56 text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.map((r, i) => {
                 const client = clients.find(c => c.id === r.client_id);
                 const st = STATUS_MAP[r.status] || { label: r.status, variant: 'secondary' as const };
+                const isPaid = r.status === 'recebida';
+                const isAnimating = animatingPaid === r.id;
                 return (
                   <motion.tr
                     key={r.id}
                     initial={{ opacity: 0, x: -15 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.25 + i * 0.04, duration: 0.3 }}
-                    className="border-b transition-colors hover:bg-muted/50"
+                    className={`border-b transition-all duration-500 hover:bg-muted/50 ${isPaid ? 'bg-emerald-500/5' : ''}`}
                   >
+                    {/* Logo */}
+                    <TableCell className="pr-0">
+                      {client ? (
+                        <ClientLogo
+                          client={{ companyName: client.companyName, color: client.color, logoUrl: client.logoUrl || undefined }}
+                          size="sm"
+                        />
+                      ) : (
+                        <div className="w-7 h-7 rounded-md bg-muted" />
+                      )}
+                    </TableCell>
                     <TableCell className="font-medium">{client?.companyName || '—'}</TableCell>
                     <TableCell className="font-semibold">{fmt(Number(r.amount))}</TableCell>
                     <TableCell className="text-muted-foreground">{r.due_date ? format(new Date(normalizeDate(r.due_date) + 'T12:00:00'), 'dd/MM/yyyy') : '—'}</TableCell>
-                    <TableCell><Badge variant={st.variant}>{st.label}</Badge></TableCell>
+                    <TableCell>
+                      <AnimatePresence mode="wait">
+                        <motion.div
+                          key={r.status}
+                          initial={{ scale: 0.7, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0.7, opacity: 0 }}
+                          transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                        >
+                          <Badge variant={st.variant}>{st.label}</Badge>
+                        </motion.div>
+                      </AnimatePresence>
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{r.paid_at ? format(new Date(normalizeDate(r.paid_at) + 'T12:00:00'), 'dd/MM/yyyy') : '—'}</TableCell>
                     <TableCell>
-                      <div className="flex gap-1.5">
-                        {r.status !== 'recebida' && (
-                          <>
-                            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.92 }}>
-                              <Button
-                                size="sm"
+                      <div className="flex gap-1.5 justify-end">
+                        <AnimatePresence mode="wait">
+                          {!isPaid && !isAnimating && (
+                            <motion.div
+                              key="actions"
+                              initial={{ opacity: 0, x: 10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              exit={{ opacity: 0, x: -10, scale: 0.8 }}
+                              className="flex gap-1.5"
+                            >
+                              {/* Recebida button with glow */}
+                              <motion.button
                                 onClick={() => handleMarkPaid(r.id)}
-                                title="Marcar como recebida"
-                                className="gap-1.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white shadow-sm shadow-emerald-500/20 font-medium"
+                                className="relative group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-emerald-500 to-green-600 shadow-md overflow-hidden"
+                                whileHover={{ scale: 1.08, boxShadow: '0 0 20px rgba(16,185,129,0.5)' }}
+                                whileTap={{ scale: 0.92 }}
                               >
-                                <CheckCircle size={13} /> Recebida
-                              </Button>
-                            </motion.div>
-                            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.92 }}>
-                              <Button
-                                size="sm"
-                                variant="outline"
+                                {/* Glow border animation */}
+                                <motion.div
+                                  className="absolute inset-0 rounded-lg"
+                                  style={{ border: '2px solid rgba(52,211,153,0.6)' }}
+                                  animate={{ opacity: [0.4, 1, 0.4], scale: [1, 1.03, 1] }}
+                                  transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+                                />
+                                <motion.div
+                                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent -skew-x-12"
+                                  animate={{ x: ['-150%', '150%'] }}
+                                  transition={{ repeat: Infinity, duration: 3, ease: 'linear' }}
+                                />
+                                <CheckCircle size={13} className="relative z-10" />
+                                <span className="relative z-10">Recebida</span>
+                              </motion.button>
+
+                              {/* Cobrar button */}
+                              <motion.button
                                 onClick={() => handleSendBilling(r.id)}
                                 disabled={sendingBilling === r.id}
-                                title="Enviar cobrança via WhatsApp"
-                                className="gap-1.5 border-primary/30 text-primary hover:bg-primary/10 font-medium shadow-sm"
+                                className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-primary/30 text-primary hover:bg-primary/10 shadow-sm overflow-hidden disabled:opacity-50"
+                                whileHover={{ scale: 1.08, boxShadow: '0 0 15px hsl(var(--primary) / 0.3)' }}
+                                whileTap={{ scale: 0.92 }}
                               >
+                                <motion.div
+                                  className="absolute inset-0 rounded-lg"
+                                  style={{ border: '1px solid hsl(var(--primary) / 0.4)' }}
+                                  animate={{ opacity: [0.3, 0.8, 0.3] }}
+                                  transition={{ repeat: Infinity, duration: 2.5 }}
+                                />
                                 {sendingBilling === r.id ? (
                                   <Loader2 size={13} className="animate-spin" />
                                 ) : (
                                   <MessageCircle size={13} />
                                 )}
-                                Cobrar
-                              </Button>
+                                <span>Cobrar</span>
+                              </motion.button>
+
+                              {/* Em Atraso button (only for prevista) */}
+                              {r.status === 'prevista' && (
+                                <motion.button
+                                  onClick={() => handleMarkOverdue(r.id)}
+                                  className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-destructive hover:bg-destructive/10 overflow-hidden"
+                                  whileHover={{ scale: 1.08 }}
+                                  whileTap={{ scale: 0.92 }}
+                                >
+                                  <AlertTriangle size={13} />
+                                  <span>Atraso</span>
+                                </motion.button>
+                              )}
                             </motion.div>
-                          </>
-                        )}
-                        {r.status === 'recebida' && (
-                          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 300 }}>
-                            <span className="text-emerald-500 text-lg">✅</span>
-                          </motion.div>
-                        )}
-                        {r.status === 'prevista' && (
-                          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.92 }}>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="gap-1.5 text-destructive hover:bg-destructive/10 font-medium"
-                              onClick={() => handleMarkOverdue(r.id)}
+                          )}
+
+                          {/* Paid state with rocket celebration + revert */}
+                          {(isPaid || isAnimating) && (
+                            <motion.div
+                              key="paid"
+                              initial={{ opacity: 0, scale: 0.3 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              className="flex items-center gap-2"
                             >
-                              <AlertTriangle size={13} /> Em Atraso
-                            </Button>
-                          </motion.div>
-                        )}
+                              <motion.div
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-600 font-semibold text-xs"
+                                initial={{ scale: 0 }}
+                                animate={{ scale: [0, 1.2, 1] }}
+                                transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                              >
+                                <motion.span
+                                  animate={{ rotate: [0, -10, 10, 0], y: [0, -4, 0] }}
+                                  transition={{ duration: 0.6, delay: 0.2 }}
+                                >
+                                  🚀
+                                </motion.span>
+                                <span>Pago!</span>
+                              </motion.div>
+                              {/* Revert button */}
+                              <motion.button
+                                onClick={() => handleRevertToPending(r.id)}
+                                className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                title="Reverter para pendente"
+                              >
+                                <Undo2 size={12} />
+                                <span>Reverter</span>
+                              </motion.button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     </TableCell>
                   </motion.tr>
@@ -471,9 +565,9 @@ export default function FinancialRevenues() {
               })}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12">
+                  <TableCell colSpan={7} className="text-center py-12">
                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">
-                      <motion.span className="text-4xl block" animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 2 }}>📊</motion.span>
+                      <motion.span className="text-4xl block" animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 2 }}>🚀</motion.span>
                       <p className="text-muted-foreground text-sm">Nenhuma receita neste mês. Clique em "Gerar Receitas".</p>
                     </motion.div>
                   </TableCell>

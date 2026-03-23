@@ -121,7 +121,13 @@ export default function Plans() {
   useEffect(() => { fetchPlans(); fetchPartners(); }, [fetchPlans, fetchPartners]);
 
   const handleOpen = (plan?: Plan) => {
-    if (plan) { setEditing(plan); setForm(plan); }
+    if (plan) {
+      setEditing(plan);
+      setForm({
+        ...plan,
+        services: Array.isArray(plan.services) ? plan.services : [],
+      });
+    }
     else { setEditing(null); setForm(emptyPlan()); }
     setOpen(true);
   };

@@ -17,7 +17,7 @@ export default function FinancialDelinquency() {
   const today = new Date();
   const inadimplentes = useMemo(() => {
     return revenues
-      .filter(r => r.status === 'em_atraso')
+      .filter(r => ['em_atraso', 'vencido'].includes(r.status))
       .map(r => {
         const client = clients.find(c => c.id === r.client_id);
         const diasAtraso = differenceInDays(today, new Date(r.due_date));

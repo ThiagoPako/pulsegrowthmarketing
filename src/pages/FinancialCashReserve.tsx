@@ -201,7 +201,7 @@ export default function FinancialCashReserve() {
               <TableBody>
                 {cashMovements.map(m => (
                   <TableRow key={m.id}>
-                    <TableCell>{format(new Date(m.date + 'T12:00:00'), 'dd/MM/yyyy')}</TableCell>
+                    <TableCell>{(() => { const d = normalizeDate(m.date); const [y,mo,day] = d.split('-'); return `${day}/${mo}/${y}`; })()}</TableCell>
                     <TableCell>
                       <Badge variant={m.type === 'entrada' ? 'default' : 'destructive'} className="gap-1">
                         {m.type === 'entrada' ? <ArrowUpCircle className="w-3 h-3" /> : <ArrowDownCircle className="w-3 h-3" />}

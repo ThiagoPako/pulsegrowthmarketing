@@ -26,6 +26,7 @@ interface Props {
   clientWhatsapp?: string;
   clientCity?: string;
   flyerImageDataUrl?: string | null;
+  flyerOverlayDataUrl?: string | null;
 }
 
 type VideoSegment = 'intro' | 'car' | 'closing';
@@ -140,7 +141,7 @@ interface CompSegment { type: 'intro' | 'vehicle' | 'closing'; blobUrl: string; 
 /*  COMPONENT                                                        */
 /* ================================================================ */
 
-export default function PortalPanfletagemVideo({ clientId, clientColor, clientName, clientWhatsapp, clientCity, flyerImageDataUrl }: Props) {
+export default function PortalPanfletagemVideo({ clientId, clientColor, clientName, clientWhatsapp, clientCity, flyerImageDataUrl, flyerOverlayDataUrl }: Props) {
   const saved = loadSavedMedia(clientId);
 
   // --- Media state ---
@@ -199,11 +200,13 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
   // Layout overlay image
   const [layoutOverlayImg, setLayoutOverlayImg] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
-    if (!flyerImageDataUrl) { setLayoutOverlayImg(null); return; }
+    // Use transparent overlay (no vehicle photo) for video composition
+    const overlayUrl = flyerOverlayDataUrl || flyerImageDataUrl;
+    if (!overlayUrl) { setLayoutOverlayImg(null); return; }
     const img = new Image();
     img.onload = () => setLayoutOverlayImg(img);
-    img.src = flyerImageDataUrl;
-  }, [flyerImageDataUrl]);
+    img.src = overlayUrl;
+  }, [flyerOverlayDataUrl, flyerImageDataUrl]);
 
   // --- Options ---
   const [musicFadeIn, setMusicFadeIn] = useState(2);
@@ -355,19 +358,15 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     // Overlay layout during vehicle segments
     const seg = compositionSegmentsRef.current[currentSegIndexRef.current];
     if (seg?.type === 'vehicle' && layoutOverlayImg) {
-      ctx.globalAlpha = 0.75;
-      // Detect overlay aspect — if it matches story (9:16) draw full, otherwise center feed (4:5)
+      ctx.globalAlpha = 1.0;
       const overlayRatio = layoutOverlayImg.naturalWidth / layoutOverlayImg.naturalHeight;
       if (overlayRatio < 0.6) {
-        // Story format (9:16 ≈ 0.5625) — draw full canvas
         ctx.drawImage(layoutOverlayImg, 0, 0, CANVAS_W, CANVAS_H);
       } else {
-        // Feed format (4:5 = 0.8) — center vertically
         const lh = Math.round(CANVAS_H * (1350 / 1920));
         const ly = Math.round((CANVAS_H - lh) / 2);
         ctx.drawImage(layoutOverlayImg, 0, ly, CANVAS_W, lh);
       }
-      ctx.globalAlpha = 1.0;
     }
 
     animFrameRef.current = requestAnimationFrame(drawFrame);
@@ -901,11 +900,12 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
           {/* Action Buttons */}
           <div className="space-y-3">
             <Button onClick={() => startComposition(false)} disabled={compositionState !== 'idle' && compositionState !== 'done' || totalSegments === 0}
-              variant="outline" className="w-full h-12 text-sm font-semibold rounded-xl border-white/[0.15] text-white/80 hover:bg-white/[0.08]">
-              <Eye size={16} className="mr-2" /> Pré-visualizar Montagem
+              variant="outline" className="w-full h-14 text-sm font-bold rounded-xl border-2 text-white hover:bg-white/[0.12]"
+              style={{ borderColor: `hsl(${clientColor})`, color: `hsl(${clientColor})` }}>
+              <Eye size={18} className="mr-2" /> 👁 Pré-visualizar Montagem
             </Button>
             <Button onClick={() => startComposition(true)} disabled={compositionState === 'preparing' || compositionState === 'generating' || compositionState === 'previewing' || totalSegments === 0}
-              className="w-full h-12 text-sm font-semibold rounded-xl" style={{ backgroundColor: `hsl(${clientColor})` }}>
+              className="w-full h-14 text-sm font-bold rounded-xl shadow-lg" style={{ backgroundColor: `hsl(${clientColor})` }}>
               {compositionState === 'generating' ? <><Loader2 size={16} className="animate-spin mr-2" /> Gerando...</> : <><Film size={16} className="mr-2" /> Gerar Vídeo ({totalSegments})</>}
             </Button>
           </div>

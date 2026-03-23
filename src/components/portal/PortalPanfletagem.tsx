@@ -138,6 +138,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const CANVAS_H_VAL = canvasFormat === 'story' ? CANVAS_H_STORY : CANVAS_H_FEED;
   const [activeTab, setActiveTab] = useState<'image' | 'video'>('image');
   const [flyerImageDataUrl, setFlyerImageDataUrl] = useState<string | null>(null);
+  const [flyerOverlayDataUrl, setFlyerOverlayDataUrl] = useState<string | null>(null);
   const [items, setItems] = useState<FlyerItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -971,9 +972,18 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const canvas = previewCanvasRef.current;
     if (!canvas) return;
     drawCanvas(canvas, vehicleImgObj, logoImgObj, frameImgObj);
-    // Capture flyer image for video tab usage
+    // Capture full flyer image for preview display
     try { setFlyerImageDataUrl(canvas.toDataURL('image/jpeg', 0.8)); } catch {}
-  }, [drawCanvas, vehicleImgObj, logoImgObj, frameImgObj]);
+    // Generate transparent overlay (frame only, no vehicle photo) for video composition
+    try {
+      const overlayCanvas = document.createElement('canvas');
+      overlayCanvas.width = CANVAS_W;
+      overlayCanvas.height = CANVAS_H_VAL;
+      // Draw frame WITHOUT vehicle image — pass null for vImg
+      drawCanvas(overlayCanvas, null, logoImgObj, frameImgObj);
+      setFlyerOverlayDataUrl(overlayCanvas.toDataURL('image/png'));
+    } catch {}
+  }, [drawCanvas, vehicleImgObj, logoImgObj, frameImgObj, CANVAS_H_VAL]);
 
   // Drag handlers on preview canvas
   const getCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -1230,6 +1240,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           clientWhatsapp={clientWhatsapp}
           clientCity={clientCity}
           flyerImageDataUrl={flyerImageDataUrl}
+          flyerOverlayDataUrl={flyerOverlayDataUrl}
         />
       ) : (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

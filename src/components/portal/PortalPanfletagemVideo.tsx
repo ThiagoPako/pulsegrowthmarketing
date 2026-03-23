@@ -26,6 +26,7 @@ interface Props {
   clientWhatsapp?: string;
   clientCity?: string;
   flyerImageDataUrl?: string | null;
+  flyerOverlayDataUrl?: string | null;
 }
 
 type VideoSegment = 'intro' | 'car' | 'closing';

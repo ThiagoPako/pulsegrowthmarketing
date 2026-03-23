@@ -978,18 +978,33 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
                 </div>
               </div>
             ) : (
-              <div className="relative aspect-[9/16] rounded-xl bg-white/[0.02] border border-dashed border-white/[0.1] flex flex-col items-center justify-center gap-3">
+              <div className="relative aspect-[9/16] rounded-xl bg-black border border-white/[0.08] overflow-hidden flex flex-col items-center justify-center">
+                {/* Show layout overlay from image tab in real-time */}
+                {flyerImageDataUrl ? (
+                  <img src={flyerImageDataUrl} alt="Layout overlay" className="absolute inset-0 w-full h-full object-contain" />
+                ) : (
+                  <>
+                    <Video size={32} className="text-white/15" />
+                    <p className="text-xs text-white/30 text-center px-8 mt-3">
+                      Formato Reels 1080×1920<br />
+                      Preencha os dados na aba <strong>Imagem</strong> para ver o layout aqui
+                    </p>
+                  </>
+                )}
+                {/* Safe zones */}
                 <div className="absolute top-0 inset-x-0 h-[13%] bg-red-500/5 border-b border-dashed border-red-400/20 flex items-center justify-center pointer-events-none">
                   <span className="text-[8px] text-red-300/40 font-medium">ZONA COBERTA</span>
                 </div>
                 <div className="absolute bottom-0 inset-x-0 h-[14.6%] bg-red-500/5 border-t border-dashed border-red-400/20 flex items-end justify-center pb-1 pointer-events-none">
                   <span className="text-[8px] text-red-300/40 font-medium">ZONA COBERTA</span>
                 </div>
-                <Video size={32} className="text-white/15" />
-                <p className="text-xs text-white/30 text-center px-8">
-                  Formato Reels 1080×1920<br />
-                  Clique em <strong>Pré-visualizar</strong> ou <strong>Gerar Vídeo</strong>
-                </p>
+                {flyerImageDataUrl && (
+                  <div className="absolute bottom-[16%] inset-x-0 flex justify-center pointer-events-none">
+                    <span className="text-[10px] text-white/40 bg-black/50 px-3 py-1 rounded-full">
+                      Layout sobreposto • Adicione vídeos e clique Pré-visualizar
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>

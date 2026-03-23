@@ -286,6 +286,7 @@ export async function sendRecordingCancelledNotification(
 
   const message = applyTemplate(config.msgConfirmationCancelled, {
     nome_cliente: clientName,
+    link_portal: getPortalLink(clientId),
   });
 
   return sendWhatsAppMessage({ number: clientPhone, message, clientId, triggerType: 'auto_confirmation' });

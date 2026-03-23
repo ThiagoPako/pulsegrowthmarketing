@@ -190,7 +190,7 @@ export default function FinancialExpenses() {
                     transition={{ delay: i * 0.03, duration: 0.2 }}
                     className="border-b transition-colors hover:bg-muted/50"
                   >
-                    <TableCell>{format(new Date(e.date + 'T12:00:00'), 'dd/MM/yyyy')}</TableCell>
+                    <TableCell>{(() => { const d = normalizeDate(e.date); const [y,m,day] = d.split('-'); return `${day}/${m}/${y}`; })()}</TableCell>
                     <TableCell><Badge variant="outline" className="font-normal">{cat?.name || '—'}</Badge></TableCell>
                     <TableCell>{e.description || '—'}</TableCell>
                     <TableCell>

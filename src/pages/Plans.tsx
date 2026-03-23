@@ -72,6 +72,7 @@ const emptyPlan = (): Partial<Plan> => ({
   name: '', description: '', reels_qty: 0, creatives_qty: 0, stories_qty: 0, arts_qty: 0,
   recording_sessions: 0, recording_hours: 0, extra_content_allowed: 0, accepts_extra_content: false,
   price: 0, periodicity: 'mensal', status: 'ativo', is_partner_plan: false, partner_id: null, partner_cost: 0,
+  has_recording: true, has_photography: true, services: [], plan_type: 'completo',
 });
 
 export default function Plans() {

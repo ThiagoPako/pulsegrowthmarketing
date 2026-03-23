@@ -231,9 +231,9 @@ export default function FinancialDashboard() {
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  // Inadimplentes (em_atraso only)
+  // Inadimplentes (em_atraso + vencido)
   const inadimplentes = useMemo(() =>
-    monthRevenues.filter(r => r.status === 'em_atraso'),
+    monthRevenues.filter(r => ['em_atraso', 'vencido'].includes(r.status)),
     [monthRevenues]
   );
 

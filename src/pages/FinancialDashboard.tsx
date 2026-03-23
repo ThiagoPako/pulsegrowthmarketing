@@ -69,7 +69,7 @@ export default function FinancialDashboard() {
 
   const revenuePrevista = useMemo(() => monthRevenues.filter(r => Number(r.amount) > 0).reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
   const revenueRecebida = useMemo(() => monthRevenues.filter(r => r.status === 'recebida').reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
-  const revenueAtraso = useMemo(() => monthRevenues.filter(r => r.status === 'em_atraso').reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
+  const revenueAtraso = useMemo(() => monthRevenues.filter(r => ['em_atraso', 'vencido'].includes(r.status)).reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
   const totalExpenses = useMemo(() => monthExpenses.reduce((s, e) => s + Number(e.amount), 0), [monthExpenses]);
   // Lucro uses received + expected (prevista) revenues minus expenses for a more realistic view
   const revenuePendente = useMemo(() => monthRevenues.filter(r => r.status === 'prevista').reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);

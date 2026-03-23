@@ -972,9 +972,18 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const canvas = previewCanvasRef.current;
     if (!canvas) return;
     drawCanvas(canvas, vehicleImgObj, logoImgObj, frameImgObj);
-    // Capture flyer image for video tab usage
+    // Capture full flyer image for preview display
     try { setFlyerImageDataUrl(canvas.toDataURL('image/jpeg', 0.8)); } catch {}
-  }, [drawCanvas, vehicleImgObj, logoImgObj, frameImgObj]);
+    // Generate transparent overlay (frame only, no vehicle photo) for video composition
+    try {
+      const overlayCanvas = document.createElement('canvas');
+      overlayCanvas.width = CANVAS_W;
+      overlayCanvas.height = CANVAS_H_VAL;
+      // Draw frame WITHOUT vehicle image — pass null for vImg
+      drawCanvas(overlayCanvas, null, logoImgObj, frameImgObj);
+      setFlyerOverlayDataUrl(overlayCanvas.toDataURL('image/png'));
+    } catch {}
+  }, [drawCanvas, vehicleImgObj, logoImgObj, frameImgObj, CANVAS_H_VAL]);
 
   // Drag handlers on preview canvas
   const getCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {

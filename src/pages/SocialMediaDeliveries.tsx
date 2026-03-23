@@ -1082,7 +1082,7 @@ export default function SocialMediaDeliveries() {
 
               {/* Artes Mensal */}
               {(() => {
-                const baseGoal = plan ? plan.arts_qty : 0;
+                const baseGoal = isExternalPlan ? 0 : (plan ? plan.arts_qty : 0);
                 const deficit = baseGoal > 0 ? (prevMonthDeficit[selectedClientId]?.arte || 0) : 0;
                 const goal = baseGoal + deficit;
                 const delivered = stats.arte;

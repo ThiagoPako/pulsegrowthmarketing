@@ -113,7 +113,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (res.status === 502 || !contentType.includes('application/json')) {
-        return { error: 'Servidor de autenticação indisponível no momento. Tente novamente em instantes.' };
+        // VPS unavailable, try Supabase Auth fallback
+        try {
+          const { data: sbData, error: sbError } = await supabaseReal.auth.signInWithPassword({ email, password });
+          if (sbError || !sbData?.user) {
+            return { error: 'Servidor de autenticação indisponível no momento. Tente novamente em instantes.' };
+          }
+          const u = { id: sbData.user.id, email: sbData.user.email || email };
+          setUser(u);
+          setSession({ access_token: sbData.session?.access_token || '' });
+          await fetchProfile(u.id);
+          return { error: null };
+        } catch {
+          return { error: 'Servidor de autenticação indisponível no momento. Tente novamente em instantes.' };
+        }
       }
 
       const message = payload && typeof payload === 'object' && 'error' in payload

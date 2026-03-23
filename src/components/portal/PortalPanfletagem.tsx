@@ -896,7 +896,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
 
   // Unified draw function
-  const drawCanvas = useCallback((canvas: HTMLCanvasElement, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {
+  const drawCanvas = useCallback((canvas: HTMLCanvasElement, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null, fImg: HTMLImageElement | null = null) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const W = CANVAS_W;
@@ -908,16 +908,20 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     } else {
       drawCanvasFeed(ctx, W, H, vImg, lImg);
     }
+    // Draw frame overlay on top of everything
+    if (fImg) {
+      ctx.drawImage(fImg, 0, 0, W, H);
+    }
   }, [canvasFormat, CANVAS_H_VAL, drawCanvasFeed, drawCanvasStory]);
 
   // Live preview rendering + capture for video tab
   useEffect(() => {
     const canvas = previewCanvasRef.current;
     if (!canvas) return;
-    drawCanvas(canvas, vehicleImgObj, logoImgObj);
+    drawCanvas(canvas, vehicleImgObj, logoImgObj, frameImgObj);
     // Capture flyer image for video tab usage
     try { setFlyerImageDataUrl(canvas.toDataURL('image/jpeg', 0.8)); } catch {}
-  }, [drawCanvas, vehicleImgObj, logoImgObj]);
+  }, [drawCanvas, vehicleImgObj, logoImgObj, frameImgObj]);
 
   // Drag handlers on preview canvas
   const getCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {

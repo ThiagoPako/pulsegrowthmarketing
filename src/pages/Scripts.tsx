@@ -131,6 +131,7 @@ export default function Scripts() {
   const { clientes: endoClientes } = useEndoClientes();
   const [open, setOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
+  const [viewFontSize, setViewFontSize] = useState(0);
   const [editing, setEditing] = useState<Script | null>(null);
   const [viewing, setViewing] = useState<Script | null>(null);
   const [searchTerm, setSearchTerm] = useState('');

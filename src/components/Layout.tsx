@@ -96,6 +96,27 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { hasModuleAccess } = useMyPermissions();
   const isMobile = useIsMobile();
 
+  const FONT_SCALE_KEY = `pulse_font_scale_${currentUser?.id || 'default'}`;
+  const FONT_SCALES = [
+    { label: 'Pequena', value: 'font-scale-sm', size: '13px' },
+    { label: 'Normal', value: 'font-scale-base', size: '14px' },
+    { label: 'Grande', value: 'font-scale-lg', size: '16px' },
+    { label: 'Extra Grande', value: 'font-scale-xl', size: '18px' },
+  ];
+  const [fontScale, setFontScale] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(FONT_SCALE_KEY) || 'font-scale-base';
+    }
+    return 'font-scale-base';
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    FONT_SCALES.forEach(s => root.classList.remove(s.value));
+    root.classList.add(fontScale);
+    localStorage.setItem(FONT_SCALE_KEY, fontScale);
+  }, [fontScale, FONT_SCALE_KEY]);
+
   const filteredCategories = navCategories
     .map(cat => ({
       ...cat,

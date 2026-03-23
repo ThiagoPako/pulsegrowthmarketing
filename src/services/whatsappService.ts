@@ -307,6 +307,7 @@ export async function sendRecordingConfirmedNotification(
     nome_cliente: clientName,
     data_gravacao: date,
     hora_gravacao: time,
+    link_portal: getPortalLink(clientId),
   });
 
   return sendWhatsAppMessage({ number: clientPhone, message, clientId, triggerType: 'auto_confirmation' });

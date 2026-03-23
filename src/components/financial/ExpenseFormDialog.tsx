@@ -113,11 +113,15 @@ export default function ExpenseFormDialog({ open, onOpenChange, categories, edit
       toast.error('Preencha os campos obrigatórios');
       return;
     }
-    await onSave(form, editingExpense?.id || null);
-    onOpenChange(false);
-    setForm(emptyForm);
-    setIsSalaryMode(false);
-    setSelectedMember('');
+    try {
+      await onSave(form, editingExpense?.id || null);
+      onOpenChange(false);
+      setForm(emptyForm);
+      setIsSalaryMode(false);
+      setSelectedMember('');
+    } catch (err) {
+      console.error('[ExpenseFormDialog] save error:', err);
+    }
   };
 
   const handleClose = (o: boolean) => {

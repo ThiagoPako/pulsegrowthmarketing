@@ -13,6 +13,7 @@ export interface Profile {
   display_name?: string;
   job_title?: string;
   bio?: string;
+  font_scale?: string;
 }
 
 interface AuthContextType {

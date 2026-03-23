@@ -9,6 +9,7 @@ export interface User {
   avatarUrl?: string; // base64 data URL
   displayName?: string;
   jobTitle?: string;
+  fontScale?: string;
 }
 
 export type DayOfWeek = 'segunda' | 'terca' | 'quarta' | 'quinta' | 'sexta' | 'sabado' | 'domingo';

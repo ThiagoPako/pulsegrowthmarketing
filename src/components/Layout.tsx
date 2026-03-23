@@ -96,7 +96,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { hasModuleAccess } = useMyPermissions();
   const isMobile = useIsMobile();
 
-  const FONT_SCALE_KEY = `pulse_font_scale_${currentUser?.id || 'default'}`;
+  const { updateProfile } = useAuth();
   const FONT_SCALES = [
     { label: 'Pequena', value: 'font-scale-sm', size: '13px' },
     { label: 'Normal', value: 'font-scale-base', size: '14px' },
@@ -105,18 +105,27 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { label: 'Padrão Victor', value: 'font-scale-victor', size: '22px' },
   ];
   const [fontScale, setFontScale] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem(FONT_SCALE_KEY) || 'font-scale-base';
-    }
-    return 'font-scale-base';
+    return currentUser?.fontScale || 'font-scale-base';
   });
+
+  // Sync from profile when user loads
+  useEffect(() => {
+    if (currentUser?.fontScale && currentUser.fontScale !== fontScale) {
+      setFontScale(currentUser.fontScale);
+    }
+  }, [currentUser?.fontScale]);
 
   useEffect(() => {
     const root = document.documentElement;
     FONT_SCALES.forEach(s => root.classList.remove(s.value));
     root.classList.add(fontScale);
-    localStorage.setItem(FONT_SCALE_KEY, fontScale);
-  }, [fontScale, FONT_SCALE_KEY]);
+  }, [fontScale]);
+
+  const handleFontScaleChange = (newScale: string) => {
+    setFontScale(newScale);
+    // Persist to database
+    updateProfile({ font_scale: newScale } as any);
+  };
 
   const filteredCategories = navCategories
     .map(cat => ({

@@ -66,6 +66,9 @@ export default function Dashboard() {
   useEffect(() => {
     supabase.from('delivery_records').select('*').then(({ data }) => { if (data) setDeliveryRecords(data); });
   }, []);
+  useEffect(() => {
+    supabase.from('recording_wait_logs').select('*').then(({ data }) => { if (data) setWaitLogs(data); });
+  }, []);
 
   useEffect(() => {
     const fetchContractAlerts = async () => {

@@ -553,6 +553,37 @@ REGRAS:
 
 ${contextData}`;
 
+    const normalizedQuestion = String(question)
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+    const isDelinquencyQuestion = /(inadimpl|vencid|em atraso|atrasad)/.test(normalizedQuestion)
+      && /(quant|quanto|valor|total|soma|cliente|clientes|quem|quais|lista)/.test(normalizedQuestion);
+
+    if (isDelinquencyQuestion) {
+      const overdueList = Object.entries(overdueByClient)
+        .sort(([, a], [, b]) => b.amount - a.amount)
+        .slice(0, 20)
+        .map(([name, v]) => `- ${name}: ${fmtMoney(v.amount)} (${v.count} receita(s))`)
+        .join('\n');
+
+      const answer = [
+        `Olá! 👋`,
+        `Atualmente, temos **${inadimplentesCount} clientes inadimplentes**.`,
+        `O valor total em títulos **vencidos e em atraso** é **${fmtMoney(totalRevenueOverdue)}**.`,
+        overdueList ? `\n**Clientes inadimplentes:**\n${overdueList}` : '',
+        `\n_Esses números foram calculados diretamente dos dados do financeiro._`,
+      ].filter(Boolean).join('\n\n');
+
+      await pool.query(
+        `INSERT INTO financial_chat_messages (id, user_id, role, content, created_at) VALUES ($1, $2, 'user', $3, NOW()), ($4, $2, 'assistant', $5, NOW())`,
+        [crypto.randomUUID(), user.id, question, crypto.randomUUID(), answer]
+      );
+
+      return res.json({ answer });
+    }
+
     const messages = [{ role: 'system', content: systemPrompt }];
     if (conversationHistory && Array.isArray(conversationHistory)) {
       for (const msg of conversationHistory.slice(-10)) messages.push({ role: msg.role, content: msg.content });

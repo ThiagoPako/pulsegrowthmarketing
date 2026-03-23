@@ -13,6 +13,19 @@ import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfWeek, en
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
+
+/** Safely format a date string — returns fallback on invalid input */
+const safeFormatDate = (dateStr: string | null | undefined, pattern: string, options?: any): string => {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '—';
+    return format(d, pattern, options);
+  } catch {
+    return '—';
+  }
+};
+
 import { sendWhatsAppMessage } from '@/services/whatsappService';
 import { generateDeliveryReport, resolvePaymentInfo } from '@/lib/billingReport';
 import ClientLogo from '@/components/ClientLogo';
@@ -50,8 +63,10 @@ export default function FinancialDashboard() {
 
   const monthExpenses = useMemo(() =>
     expenses.filter(e => {
-      const d = new Date(e.date);
-      return d >= monthStart && d <= monthEnd;
+      if (!e.date) return false;
+      const normalized = normalizeDate(e.date);
+      const ym = format(monthStart, 'yyyy-MM');
+      return normalized.startsWith(ym);
     }),
     [expenses, monthStart, monthEnd]
   );
@@ -101,7 +116,8 @@ export default function FinancialDashboard() {
       const ref = format(mStart, 'yyyy-MM-dd');
       const label = format(m, 'MMM', { locale: ptBR });
       const rec = revenues.filter(r => normalizeDate(r.reference_month) === ref && r.status === 'recebida').reduce((s, r) => s + Number(r.amount), 0);
-      const desp = expenses.filter(e => { const d = new Date(e.date); return d >= mStart && d <= mEnd; }).reduce((s, e) => s + Number(e.amount), 0);
+      const ym = format(mStart, 'yyyy-MM');
+      const desp = expenses.filter(e => e.date && normalizeDate(e.date).startsWith(ym)).reduce((s, e) => s + Number(e.amount), 0);
       data.push({ name: label, receita: rec, despesa: desp, lucro: rec - desp });
     }
     return data;
@@ -713,7 +729,7 @@ export default function FinancialDashboard() {
                     )}
                     <span className="text-sm">{m.description}</span>
                     <span className="text-xs text-muted-foreground">
-                      {format(new Date(m.date + 'T12:00:00'), 'dd/MM/yyyy')}
+                      {safeFormatDate(m.date ? normalizeDate(m.date) + 'T12:00:00' : null, 'dd/MM/yyyy')}
                     </span>
                   </div>
                   <span className={`text-sm font-bold ${m.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>
@@ -758,7 +774,7 @@ export default function FinancialDashboard() {
                       </div>
                     </div>
                     <span className="text-xs text-muted-foreground whitespace-nowrap">
-                      {format(new Date(log.created_at), 'dd/MM HH:mm')}
+                      {safeFormatDate(log.created_at, 'dd/MM HH:mm')}
                     </span>
                   </div>
                 );

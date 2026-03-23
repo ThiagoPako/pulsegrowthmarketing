@@ -1481,13 +1481,9 @@ export default function Clients() {
                 setPlanId(newPlanId);
                 if (newPlanId) {
                   const selectedPlan = plans.find(p => p.id === newPlanId);
-                  if (selectedPlan) {
-                    const weeklyReels = Math.ceil(selectedPlan.reels_qty / 4);
-                    const weeklyCreatives = Math.ceil(selectedPlan.creatives_qty / 4);
-                    const weeklyStories = Math.ceil(selectedPlan.stories_qty / 4);
-                    const weeklyGoal = weeklyReels + weeklyCreatives + weeklyStories + 1;
+                if (selectedPlan) {
                     const monthlyRecordings = selectedPlan.recording_sessions || 4;
-                    setForm(prev => ({ ...prev, weeklyReels: weeklyReels + 1, weeklyCreatives: weeklyCreatives + 1, weeklyStories: weeklyStories + 1, weeklyGoal, monthlyRecordings, acceptsExtra: selectedPlan.accepts_extra_content }));
+                    setForm(prev => ({ ...prev, monthlyRecordings, acceptsExtra: selectedPlan.accepts_extra_content }));
                   }
                 }
               }}>

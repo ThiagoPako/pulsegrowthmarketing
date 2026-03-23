@@ -900,11 +900,12 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
           {/* Action Buttons */}
           <div className="space-y-3">
             <Button onClick={() => startComposition(false)} disabled={compositionState !== 'idle' && compositionState !== 'done' || totalSegments === 0}
-              variant="outline" className="w-full h-12 text-sm font-semibold rounded-xl border-white/[0.15] text-white/80 hover:bg-white/[0.08]">
-              <Eye size={16} className="mr-2" /> Pré-visualizar Montagem
+              variant="outline" className="w-full h-14 text-sm font-bold rounded-xl border-2 text-white hover:bg-white/[0.12]"
+              style={{ borderColor: `hsl(${clientColor})`, color: `hsl(${clientColor})` }}>
+              <Eye size={18} className="mr-2" /> 👁 Pré-visualizar Montagem
             </Button>
             <Button onClick={() => startComposition(true)} disabled={compositionState === 'preparing' || compositionState === 'generating' || compositionState === 'previewing' || totalSegments === 0}
-              className="w-full h-12 text-sm font-semibold rounded-xl" style={{ backgroundColor: `hsl(${clientColor})` }}>
+              className="w-full h-14 text-sm font-bold rounded-xl shadow-lg" style={{ backgroundColor: `hsl(${clientColor})` }}>
               {compositionState === 'generating' ? <><Loader2 size={16} className="animate-spin mr-2" /> Gerando...</> : <><Film size={16} className="mr-2" /> Gerar Vídeo ({totalSegments})</>}
             </Button>
           </div>

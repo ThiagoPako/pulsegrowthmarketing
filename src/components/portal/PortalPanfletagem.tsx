@@ -1483,7 +1483,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         <div className="space-y-6">
           {/* Live Preview Canvas */}
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
                 <Eye size={16} style={{ color: `hsl(${clientColor})` }} /> Prévia em Tempo Real
               </h3>
@@ -1507,7 +1507,26 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
                 )}
               </div>
             </div>
-            <div className="aspect-[4/5] rounded-xl overflow-hidden bg-black relative">
+
+            {/* Format selector */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCanvasFormat('feed')}
+                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all ${canvasFormat === 'feed' ? 'text-white border-2' : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'}`}
+                style={canvasFormat === 'feed' ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}
+              >
+                <Image size={14} /> Feed (4:5)
+              </button>
+              <button
+                onClick={() => setCanvasFormat('story')}
+                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all ${canvasFormat === 'story' ? 'text-white border-2' : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'}`}
+                style={canvasFormat === 'story' ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}
+              >
+                <Film size={14} /> Story / Reels (9:16)
+              </button>
+            </div>
+
+            <div style={{ aspectRatio: canvasFormat === 'story' ? '9/16' : '4/5' }} className="rounded-xl overflow-hidden bg-black relative transition-all duration-300">
               <canvas
                 ref={previewCanvasRef}
                 className="w-full h-full"

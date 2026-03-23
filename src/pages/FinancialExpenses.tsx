@@ -45,12 +45,22 @@ export default function FinancialExpenses() {
   }, []);
 
   const handleSave = async (form: any, editingId: string | null) => {
-    if (editingId) {
-      await updateExpense(editingId, form);
-    } else {
-      await addExpense(form);
+    try {
+      let success: boolean;
+      if (editingId) {
+        success = await updateExpense(editingId, form);
+      } else {
+        success = await addExpense(form);
+      }
+      if (success) {
+        toast.success('Despesa salva!');
+      } else {
+        toast.error('Erro ao salvar despesa. Verifique os dados e tente novamente.');
+      }
+    } catch (err: any) {
+      console.error('[FinancialExpenses] handleSave error:', err);
+      toast.error('Erro inesperado ao salvar despesa.');
     }
-    toast.success('Despesa salva!');
   };
 
   const handleEdit = (e: Expense) => {

@@ -210,7 +210,7 @@ export default function FinancialCashReserve() {
                     </TableCell>
                     <TableCell>{m.description}</TableCell>
                     <TableCell className={`text-right font-medium ${m.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>
-                      {m.type === 'entrada' ? '+' : '-'}{fmt(m.amount)}
+                      {m.type === 'entrada' ? '+' : '-'}{fmt(Number(m.amount))}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">

@@ -102,6 +102,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { label: 'Normal', value: 'font-scale-base', size: '14px' },
     { label: 'Grande', value: 'font-scale-lg', size: '16px' },
     { label: 'Extra Grande', value: 'font-scale-xl', size: '18px' },
+    { label: 'Padrão Victor', value: 'font-scale-victor', size: '22px' },
   ];
   const [fontScale, setFontScale] = useState(() => {
     if (typeof window !== 'undefined') {

@@ -431,7 +431,7 @@ app.post('/api/financial-chat', async (req, res) => {
     expenses.forEach(e => { const cat = e.category_name || 'Sem categoria'; expByCategory[cat] = (expByCategory[cat] || 0) + Number(e.amount); });
 
     const revByMonth = {};
-    revenues.forEach(r => { const m = r.due_date ? (typeof r.due_date === 'string' ? r.due_date.slice(0, 7) : r.due_date.toISOString().slice(0, 7)) : 'N/A'; if (!revByMonth[m]) revByMonth[m] = { paid: 0, pending: 0, overdue: 0 }; if (r.status === 'pago') revByMonth[m].paid += Number(r.amount); else if (r.status === 'em_atraso') revByMonth[m].overdue += Number(r.amount); else revByMonth[m].pending += Number(r.amount); });
+    revenues.forEach(r => { const m = r.due_date ? (typeof r.due_date === 'string' ? r.due_date.slice(0, 7) : r.due_date.toISOString().slice(0, 7)) : 'N/A'; if (!revByMonth[m]) revByMonth[m] = { paid: 0, pending: 0, overdue: 0 }; if (r.status === 'pago') revByMonth[m].paid += Number(r.amount); else if (['vencido','em_atraso'].includes(r.status)) revByMonth[m].overdue += Number(r.amount); else revByMonth[m].pending += Number(r.amount); });
 
     const revByClient = {};
     revenues.forEach(r => { const name = r.client_name || 'N/A'; if (!revByClient[name]) revByClient[name] = { total: 0, paid: 0, pending: 0, overdue: 0 }; revByClient[name].total += Number(r.amount); if (r.status === 'pago') revByClient[name].paid += Number(r.amount); else if (r.status === 'em_atraso') revByClient[name].overdue += Number(r.amount); else revByClient[name].pending += Number(r.amount); });

@@ -121,7 +121,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         : 'Falha ao conectar com o servidor de autenticação';
       return { error: message };
     } catch {
-      return { error: 'Não foi possível conectar ao servidor de autenticação' };
+      // Fallback: try Supabase Auth (for preview environment)
+      try {
+        const { data: sbData, error: sbError } = await supabaseReal.auth.signInWithPassword({ email, password });
+        if (sbError || !sbData?.user) {
+          return { error: sbError?.message || 'Não foi possível conectar ao servidor de autenticação' };
+        }
+        const u = { id: sbData.user.id, email: sbData.user.email || email };
+        setUser(u);
+        setSession({ access_token: sbData.session?.access_token || '' });
+        await fetchProfile(u.id);
+        return { error: null };
+      } catch {
+        return { error: 'Não foi possível conectar ao servidor de autenticação' };
+      }
     }
   };
 

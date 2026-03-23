@@ -1308,11 +1308,18 @@ export default function ClientOnboarding() {
               <div className="space-y-2 text-xs text-muted-foreground">
                 <p>Ao aceitar, você concorda com os seguintes termos:</p>
                 <ul className="list-disc pl-4 space-y-1">
-                  <li>O dia e horário fixo de gravação serão reservados exclusivamente para sua empresa.</li>
-                  <li>Cancelamentos podem ser reagendados para o dia de backup, sujeito à disponibilidade.</li>
-                  <li>O conteúdo extra (se aceito) será produzido sem aviso prévio.</li>
-                  <li>A quantidade de gravações mensais pode ser ajustada com aviso prévio de 7 dias.</li>
-                  {photoPreference === 'fotos_reais' && !hasPhotoShoot && (
+                  {planHasRecording && <>
+                    <li>O dia e horário fixo de gravação serão reservados exclusivamente para sua empresa.</li>
+                    <li>Cancelamentos podem ser reagendados para o dia de backup, sujeito à disponibilidade.</li>
+                    <li>O conteúdo extra (se aceito) será produzido sem aviso prévio.</li>
+                    <li>A quantidade de gravações mensais pode ser ajustada com aviso prévio de 7 dias.</li>
+                  </>}
+                  {!planHasRecording && <>
+                    <li>Os materiais brutos (vídeos, fotos) devem ser enviados pela sua empresa para edição.</li>
+                    <li>Entregas de conteúdo editado seguem o prazo acordado no contrato.</li>
+                    <li>Estratégias e roteiros serão entregues conforme a frequência contratada.</li>
+                  </>}
+                  {photoPreference === 'fotos_reais' && !hasPhotoShoot && planHasPhotography && (
                     <li className="text-warning font-medium">O ensaio fotográfico tem custo adicional e será agendado pela equipe.</li>
                   )}
                 </ul>

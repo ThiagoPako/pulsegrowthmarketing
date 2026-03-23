@@ -424,31 +424,41 @@ export function useFinancialData() {
 
   // Cash reserve
   const addCashMovement = async (m: Partial<CashMovement>) => {
-    const { error } = await supabase.from('cash_reserve_movements').insert(m as any);
-    if (!error) {
-      await logActivity('criação', 'caixa', `${m.type === 'entrada' ? 'Depósito' : 'Retirada'} no caixa - R$ ${Number(m.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${m.description}`, undefined, m);
-      await fetchAll();
-    }
-    return !error;
+    try {
+      console.log('[useFinancialData] addCashMovement payload:', JSON.stringify(m));
+      const { error } = await supabase.from('cash_reserve_movements').insert(m as any);
+      if (error) { console.error('[useFinancialData] addCashMovement error:', error); return false; }
+      await Promise.allSettled([
+        logActivity('criação', 'caixa', `${m.type === 'entrada' ? 'Depósito' : 'Retirada'} no caixa - R$ ${Number(m.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${m.description}`, undefined, m),
+        fetchAll(),
+      ]);
+      return true;
+    } catch (err) { console.error('[useFinancialData] addCashMovement unexpected:', err); return false; }
   };
 
   const updateCashMovement = async (id: string, updates: Partial<CashMovement>) => {
-    const { error } = await supabase.from('cash_reserve_movements').update(updates as any).eq('id', id);
-    if (!error) {
-      await logActivity('edição', 'caixa', `Editou movimentação do caixa - R$ ${Number(updates.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, updates);
-      await fetchAll();
-    }
-    return !error;
+    try {
+      const { error } = await supabase.from('cash_reserve_movements').update(updates as any).eq('id', id);
+      if (error) { console.error('[useFinancialData] updateCashMovement error:', error); return false; }
+      await Promise.allSettled([
+        logActivity('edição', 'caixa', `Editou movimentação do caixa - R$ ${Number(updates.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, updates),
+        fetchAll(),
+      ]);
+      return true;
+    } catch (err) { console.error('[useFinancialData] updateCashMovement unexpected:', err); return false; }
   };
 
   const deleteCashMovement = async (id: string) => {
-    const mov = cashMovements.find(m => m.id === id);
-    const { error } = await supabase.from('cash_reserve_movements').delete().eq('id', id);
-    if (!error) {
-      await logActivity('exclusão', 'caixa', `Excluiu movimentação do caixa - R$ ${Number(mov?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${mov?.description}`, id);
-      await fetchAll();
-    }
-    return !error;
+    try {
+      const mov = cashMovements.find(m => m.id === id);
+      const { error } = await supabase.from('cash_reserve_movements').delete().eq('id', id);
+      if (error) { console.error('[useFinancialData] deleteCashMovement error:', error); return false; }
+      await Promise.allSettled([
+        logActivity('exclusão', 'caixa', `Excluiu movimentação do caixa - R$ ${Number(mov?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${mov?.description}`, id),
+        fetchAll(),
+      ]);
+      return true;
+    } catch (err) { console.error('[useFinancialData] deleteCashMovement unexpected:', err); return false; }
   };
 
   return {

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useFinancialData } from '@/hooks/useFinancialData';
+import { useFinancialData, normalizeDate } from '@/hooks/useFinancialData';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,17 +27,17 @@ export default function FinancialCashReserve() {
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   const balance = useMemo(() =>
-    cashMovements.reduce((acc, m) => acc + (m.type === 'entrada' ? m.amount : -m.amount), 0),
+    cashMovements.reduce((acc, m) => acc + (m.type === 'entrada' ? Number(m.amount) : -Number(m.amount)), 0),
     [cashMovements]
   );
 
   const totalIn = useMemo(() =>
-    cashMovements.filter(m => m.type === 'entrada').reduce((acc, m) => acc + m.amount, 0),
+    cashMovements.filter(m => m.type === 'entrada').reduce((acc, m) => acc + Number(m.amount), 0),
     [cashMovements]
   );
 
   const totalOut = useMemo(() =>
-    cashMovements.filter(m => m.type === 'saida').reduce((acc, m) => acc + m.amount, 0),
+    cashMovements.filter(m => m.type === 'saida').reduce((acc, m) => acc + Number(m.amount), 0),
     [cashMovements]
   );
 
@@ -56,10 +56,10 @@ export default function FinancialCashReserve() {
 
   const openEdit = (m: typeof cashMovements[0]) => {
     setEditingId(m.id);
-    setAmount(String(m.amount));
+    setAmount(String(Number(m.amount)));
     setType(m.type as 'entrada' | 'saida');
     setDescription(m.description);
-    setDate(m.date);
+    setDate(normalizeDate(m.date));
     setOpen(true);
   };
 
@@ -201,7 +201,7 @@ export default function FinancialCashReserve() {
               <TableBody>
                 {cashMovements.map(m => (
                   <TableRow key={m.id}>
-                    <TableCell>{format(new Date(m.date + 'T12:00:00'), 'dd/MM/yyyy')}</TableCell>
+                    <TableCell>{(() => { const d = normalizeDate(m.date); const [y,mo,day] = d.split('-'); return `${day}/${mo}/${y}`; })()}</TableCell>
                     <TableCell>
                       <Badge variant={m.type === 'entrada' ? 'default' : 'destructive'} className="gap-1">
                         {m.type === 'entrada' ? <ArrowUpCircle className="w-3 h-3" /> : <ArrowDownCircle className="w-3 h-3" />}
@@ -210,7 +210,7 @@ export default function FinancialCashReserve() {
                     </TableCell>
                     <TableCell>{m.description}</TableCell>
                     <TableCell className={`text-right font-medium ${m.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>
-                      {m.type === 'entrada' ? '+' : '-'}{fmt(m.amount)}
+                      {m.type === 'entrada' ? '+' : '-'}{fmt(Number(m.amount))}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">

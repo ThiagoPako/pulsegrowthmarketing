@@ -224,8 +224,8 @@ export default function ClientOnboarding() {
 
   const handleSave = async () => {
     if (!acceptTerms) { toast.error('Aceite os termos para continuar'); return; }
-    const needsTime = !fullShiftRecording;
-    if (!selectedVm || !fixedDay || (needsTime && !fixedTime)) { toast.error('Preencha todos os campos obrigatórios'); return; }
+    const needsTime = planHasRecording && !fullShiftRecording;
+    if (planHasRecording && (!selectedVm || !fixedDay || (needsTime && !fixedTime))) { toast.error('Preencha todos os campos obrigatórios'); return; }
     if (photoPreference === 'fotos_reais' && !hasPhotoShoot && !acceptsPhotoShootCost) {
       toast.error('Aceite o agendamento do ensaio fotográfico para continuar'); return;
     }

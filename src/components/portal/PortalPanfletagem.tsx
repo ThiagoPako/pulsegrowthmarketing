@@ -1240,6 +1240,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           clientWhatsapp={clientWhatsapp}
           clientCity={clientCity}
           flyerImageDataUrl={flyerImageDataUrl}
+          flyerOverlayDataUrl={flyerOverlayDataUrl}
         />
       ) : (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

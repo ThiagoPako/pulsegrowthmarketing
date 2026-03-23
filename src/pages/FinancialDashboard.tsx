@@ -771,7 +771,7 @@ export default function FinancialDashboard() {
                       </div>
                     </div>
                     <span className="text-xs text-muted-foreground whitespace-nowrap">
-                      {format(new Date(log.created_at), 'dd/MM HH:mm')}
+                      {safeFormatDate(log.created_at, 'dd/MM HH:mm')}
                     </span>
                   </div>
                 );

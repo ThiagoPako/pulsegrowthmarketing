@@ -87,7 +87,12 @@ export default function Plans() {
 
   const fetchPlans = useCallback(async () => {
     const { data } = await supabase.from('plans').select('*').order('created_at', { ascending: false });
-    if (data) setPlans(data as Plan[]);
+    if (data) {
+      setPlans((data as Plan[]).map(p => ({
+        ...p,
+        services: Array.isArray(p.services) ? p.services : (typeof p.services === 'string' ? JSON.parse(p.services || '[]') : []),
+      })));
+    }
     setLoading(false);
   }, []);
 

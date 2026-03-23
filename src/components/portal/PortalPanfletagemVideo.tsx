@@ -358,19 +358,15 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     // Overlay layout during vehicle segments
     const seg = compositionSegmentsRef.current[currentSegIndexRef.current];
     if (seg?.type === 'vehicle' && layoutOverlayImg) {
-      ctx.globalAlpha = 0.75;
-      // Detect overlay aspect — if it matches story (9:16) draw full, otherwise center feed (4:5)
+      ctx.globalAlpha = 1.0;
       const overlayRatio = layoutOverlayImg.naturalWidth / layoutOverlayImg.naturalHeight;
       if (overlayRatio < 0.6) {
-        // Story format (9:16 ≈ 0.5625) — draw full canvas
         ctx.drawImage(layoutOverlayImg, 0, 0, CANVAS_W, CANVAS_H);
       } else {
-        // Feed format (4:5 = 0.8) — center vertically
         const lh = Math.round(CANVAS_H * (1350 / 1920));
         const ly = Math.round((CANVAS_H - lh) / 2);
         ctx.drawImage(layoutOverlayImg, 0, ly, CANVAS_W, lh);
       }
-      ctx.globalAlpha = 1.0;
     }
 
     animFrameRef.current = requestAnimationFrame(drawFrame);

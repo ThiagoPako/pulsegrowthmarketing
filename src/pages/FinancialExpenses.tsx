@@ -24,13 +24,13 @@ export default function FinancialExpenses() {
   const [newCat, setNewCat] = useState('');
   const [catOpen, setCatOpen] = useState(false);
 
-  const monthStart = startOfMonth(new Date(selectedMonth + '-01'));
-  const monthEnd = endOfMonth(monthStart);
-
-  const filtered = useMemo(() =>
-    expenses.filter(e => { const d = new Date(e.date); return d >= monthStart && d <= monthEnd; }),
-    [expenses, monthStart, monthEnd]
-  );
+  const filtered = useMemo(() => {
+    const ym = selectedMonth; // "2026-03"
+    return expenses.filter(e => {
+      const dateStr = normalizeDate(e.date); // "2026-03-23"
+      return dateStr.startsWith(ym);
+    });
+  }, [expenses, selectedMonth]);
 
   const total = filtered.reduce((s, e) => s + Number(e.amount), 0);
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });

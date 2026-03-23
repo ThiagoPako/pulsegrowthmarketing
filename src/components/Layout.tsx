@@ -283,6 +283,26 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 ml-auto shrink-0">
+            {/* Font size control */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="p-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors" title="Tamanho da fonte">
+                  <Type size={18} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-44 p-2" align="end">
+                <p className="text-xs font-semibold text-muted-foreground mb-2 px-1">Tamanho da Fonte</p>
+                {FONT_SCALES.map(s => (
+                  <button
+                    key={s.value}
+                    onClick={() => setFontScale(s.value)}
+                    className={`w-full text-left px-2 py-1.5 rounded-md text-sm transition-colors ${fontScale === s.value ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
+                  >
+                    <span style={{ fontSize: s.size }}>{s.label}</span>
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
             <NotificationBell />
             {/* Mobile avatar */}
             <div className="md:hidden">

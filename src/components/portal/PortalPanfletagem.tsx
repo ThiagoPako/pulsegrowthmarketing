@@ -358,6 +358,18 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     img.src = src;
   }, [customLogoDataUrl, clientLogoUrl]);
 
+  // Load selected frame template image
+  useEffect(() => {
+    if (!selectedTemplate) { setFrameImgObj(null); return; }
+    const tpl = templates.find(t => t.id === selectedTemplate && t.template_type === 'frame');
+    if (!tpl?.file_url) { setFrameImgObj(null); return; }
+    const img = new window.Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => setFrameImgObj(img);
+    img.onerror = () => setFrameImgObj(null);
+    img.src = tpl.file_url;
+  }, [selectedTemplate, templates]);
+
   // Load first vehicle image
   useEffect(() => {
     if (mediaPreviews.length === 0) { setVehicleImgObj(null); return; }

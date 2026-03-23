@@ -107,6 +107,20 @@ const MODULE_RESETS: ModuleReset[] = [
     description: 'Apaga todas as notificações e logs de integração.',
     confirmWord: 'RESETAR LOGS',
   },
+  {
+    label: 'Agenda (Todas Gravações)',
+    icon: '📅',
+    tables: ['active_recordings', 'delivery_records', 'recordings'],
+    description: 'Zera toda a agenda: remove todas as gravações agendadas, ativas e registros de entrega vinculados.',
+    confirmWord: 'ZERAR AGENDA',
+  },
+  {
+    label: 'Execuções de Colaboradores',
+    icon: '👷',
+    tables: ['task_history', 'delivery_records', 'active_recordings'],
+    description: 'Limpa todos os dados de tarefas executadas: histórico de ações, registros de entrega e gravações ativas.',
+    confirmWord: 'LIMPAR EXECUCOES',
+  },
 ];
 
 export default function CompanySettings() {

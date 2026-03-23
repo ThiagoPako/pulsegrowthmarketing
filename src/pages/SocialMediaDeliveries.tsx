@@ -295,6 +295,10 @@ export default function SocialMediaDeliveries() {
     clients.forEach(c => {
       const planId = clientPlans[c.id];
       const plan = planId ? plans.find(p => p.id === planId) : null;
+      
+      // Skip automatic goals for plans without recording (external plans)
+      if (plan && plan.has_recording === false) return;
+      
       const del = delivered[c.id] || { reels: 0, criativo: 0, story: 0, arte: 0 };
 
       const reelsGoal = plan ? plan.reels_qty : (c.weeklyReels ? c.weeklyReels * 4 : 0);

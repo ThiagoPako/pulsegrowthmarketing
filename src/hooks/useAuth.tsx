@@ -1,5 +1,6 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { supabase } from '@/lib/vpsDb';
+import { supabase as supabaseReal } from '@/integrations/supabase/client';
 
 export type AppRole = 'admin' | 'videomaker' | 'social_media' | 'editor' | 'endomarketing' | 'parceiro' | 'fotografo' | 'designer';
 
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = useCallback(async (userId: string) => {
+    // Try VPS first
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
@@ -45,6 +47,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .single();
     if (data && !error) {
       setProfile(data as Profile);
+      return;
+    }
+    // Fallback: try Supabase directly (preview environment)
+    const { data: sbData, error: sbErr } = await supabaseReal
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+    if (sbData && !sbErr) {
+      setProfile(sbData as unknown as Profile);
     }
   }, []);
 
@@ -58,7 +70,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
         .then(res => res.ok ? res.json() : Promise.reject())
         .then(data => {
-          // Server returns { id, email, ... } directly (no .user wrapper)
           const userData = data.user || data;
           const u = { id: userData.id, email: userData.email };
           setUser(u);
@@ -70,7 +81,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
         .finally(() => setLoading(false));
     } else {
-      setLoading(false);
+      // Check Supabase session as fallback (preview environment)
+      supabaseReal.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          const u = { id: session.user.id, email: session.user.email || '' };
+          setUser(u);
+          setSession({ access_token: session.access_token });
+          fetchProfile(u.id);
+        }
+        setLoading(false);
+      });
     }
   }, [fetchProfile]);
 
@@ -104,7 +124,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (res.status === 502 || !contentType.includes('application/json')) {
-        return { error: 'Servidor de autenticação indisponível no momento. Tente novamente em instantes.' };
+        // VPS unavailable, try Supabase Auth fallback
+        try {
+          const { data: sbData, error: sbError } = await supabaseReal.auth.signInWithPassword({ email, password });
+          if (sbError || !sbData?.user) {
+            return { error: 'Servidor de autenticação indisponível no momento. Tente novamente em instantes.' };
+          }
+          const u = { id: sbData.user.id, email: sbData.user.email || email };
+          setUser(u);
+          setSession({ access_token: sbData.session?.access_token || '' });
+          await fetchProfile(u.id);
+          return { error: null };
+        } catch {
+          return { error: 'Servidor de autenticação indisponível no momento. Tente novamente em instantes.' };
+        }
       }
 
       const message = payload && typeof payload === 'object' && 'error' in payload
@@ -112,7 +145,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         : 'Falha ao conectar com o servidor de autenticação';
       return { error: message };
     } catch {
-      return { error: 'Não foi possível conectar ao servidor de autenticação' };
+      // Fallback: try Supabase Auth (for preview environment)
+      try {
+        const { data: sbData, error: sbError } = await supabaseReal.auth.signInWithPassword({ email, password });
+        if (sbError || !sbData?.user) {
+          return { error: sbError?.message || 'Não foi possível conectar ao servidor de autenticação' };
+        }
+        const u = { id: sbData.user.id, email: sbData.user.email || email };
+        setUser(u);
+        setSession({ access_token: sbData.session?.access_token || '' });
+        await fetchProfile(u.id);
+        return { error: null };
+      } catch {
+        return { error: 'Não foi possível conectar ao servidor de autenticação' };
+      }
     }
   };
 

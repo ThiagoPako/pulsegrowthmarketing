@@ -434,7 +434,17 @@ app.post('/api/financial-chat', async (req, res) => {
     revenues.forEach(r => { const m = r.due_date ? (typeof r.due_date === 'string' ? r.due_date.slice(0, 7) : r.due_date.toISOString().slice(0, 7)) : 'N/A'; if (!revByMonth[m]) revByMonth[m] = { paid: 0, pending: 0, overdue: 0 }; if (r.status === 'pago') revByMonth[m].paid += Number(r.amount); else if (['vencido','em_atraso'].includes(r.status)) revByMonth[m].overdue += Number(r.amount); else revByMonth[m].pending += Number(r.amount); });
 
     const revByClient = {};
-    revenues.forEach(r => { const name = r.client_name || 'N/A'; revByClient[name] = (revByClient[name] || 0) + Number(r.amount); });
+    revenues.forEach(r => { const name = r.client_name || 'N/A'; if (!revByClient[name]) revByClient[name] = { total: 0, paid: 0, pending: 0, overdue: 0 }; revByClient[name].total += Number(r.amount); if (r.status === 'pago') revByClient[name].paid += Number(r.amount); else if (['vencido','em_atraso'].includes(r.status)) revByClient[name].overdue += Number(r.amount); else revByClient[name].pending += Number(r.amount); });
+
+    // ── Overdue per client (inadimplentes) ──
+    const overdueClients = revenues.filter(r => ['vencido', 'em_atraso'].includes(r.status));
+    const overdueByClient = {};
+    overdueClients.forEach(r => { const name = r.client_name || 'N/A'; if (!overdueByClient[name]) overdueByClient[name] = { amount: 0, count: 0 }; overdueByClient[name].amount += Number(r.amount); overdueByClient[name].count += 1; });
+    const inadimplentesCount = Object.keys(overdueByClient).length;
+
+    // ── MRR (from active contracts with value > 0) ──
+    const mrr = contracts.filter(c => Number(c.contract_value) > 0).reduce((s, c) => s + Number(c.contract_value), 0);
+    const ticketMedio = contracts.filter(c => Number(c.contract_value) > 0).length > 0 ? mrr / contracts.filter(c => Number(c.contract_value) > 0).length : 0;
 
     // ── Recordings summary ──
     const recByStatus = {};
@@ -451,13 +461,16 @@ app.post('/api/financial-chat', async (req, res) => {
     // Build comprehensive context
     const contextData = `## Dados Completos da Agência Pulse — ${fmtDate(now)}
 
-### 📊 FINANCEIRO (${now.getFullYear()})
+### 📊 FINANCEIRO (a partir de março/2026)
+- MRR (Receita Recorrente Mensal): R$ ${fmt(mrr)}
+- Ticket Médio: R$ ${fmt(ticketMedio)}
 - Receitas pagas: R$ ${fmt(totalRevenuePaid)}
 - Receitas pendentes/previstas: R$ ${fmt(totalRevenuePending)}
 - Receitas vencidas/em atraso: R$ ${fmt(totalRevenueOverdue)}
 - Despesas totais: R$ ${fmt(totalExpenses)}
 - Lucro bruto: R$ ${fmt(totalRevenuePaid - totalExpenses)}
 - Contratos ativos: ${contracts.length}
+- Clientes inadimplentes: ${inadimplentesCount}
 
 Receitas por Mês:
 ${Object.entries(revByMonth).sort(([a], [b]) => b.localeCompare(a)).slice(0, 12).map(([m, v]) => `- ${m}: Pago R$ ${fmt(v.paid)} | Pendente R$ ${fmt(v.pending)} | Vencido R$ ${fmt(v.overdue)}`).join('\n')}
@@ -465,8 +478,17 @@ ${Object.entries(revByMonth).sort(([a], [b]) => b.localeCompare(a)).slice(0, 12)
 Despesas por Categoria:
 ${Object.entries(expByCategory).sort(([, a], [, b]) => b - a).map(([cat, val]) => `- ${cat}: R$ ${fmt(val)}`).join('\n')}
 
-Top 15 Receita por Cliente:
-${Object.entries(revByClient).sort(([, a], [, b]) => b - a).slice(0, 15).map(([name, val]) => `- ${name}: R$ ${fmt(val)}`).join('\n')}
+### ⚠️ CLIENTES INADIMPLENTES (${inadimplentesCount} clientes — Total: R$ ${fmt(totalRevenueOverdue)})
+${Object.entries(overdueByClient).sort(([, a], [, b]) => b.amount - a.amount).map(([name, v]) => `- ${name}: R$ ${fmt(v.amount)} (${v.count} receita(s) em atraso)`).join('\n') || 'Nenhum cliente inadimplente'}
+
+### 💰 RECEITAS DETALHADAS POR CLIENTE
+${Object.entries(revByClient).sort(([, a], [, b]) => b.total - a.total).slice(0, 25).map(([name, v]) => `- ${name}: Total R$ ${fmt(v.total)} | Pago R$ ${fmt(v.paid)} | Pendente R$ ${fmt(v.pending)} | Em atraso R$ ${fmt(v.overdue)}`).join('\n')}
+
+### 📄 TODAS RECEITAS INDIVIDUAIS (${revenues.length})
+${revenues.map(r => `- ${r.client_name}: R$ ${fmt(r.amount)} | Venc: ${fmtDate(r.due_date)} | Status: ${r.status}${r.paid_at ? ' | Pago em: ' + fmtDate(r.paid_at) : ''}`).join('\n')}
+
+Contratos Ativos:
+${contracts.map(c => `- ${c.client_name}: R$ ${fmt(c.contract_value)}/mês (${c.payment_method}) Dia ${c.due_day} | Plano: ${c.plan_name || 'N/A'} | Início: ${fmtDate(c.contract_start_date)}`).join('\n')}
 
 Contratos Ativos:
 ${contracts.map(c => `- ${c.client_name}: R$ ${fmt(c.contract_value)}/mês (${c.payment_method}) Dia ${c.due_day} | Plano: ${c.plan_name || 'N/A'}`).join('\n')}

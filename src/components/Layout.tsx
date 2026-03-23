@@ -305,7 +305,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 {FONT_SCALES.map(s => (
                   <button
                     key={s.value}
-                    onClick={() => setFontScale(s.value)}
+                    onClick={() => handleFontScaleChange(s.value)}
                     className={`w-full text-left px-2 py-1.5 rounded-md text-sm transition-colors ${fontScale === s.value ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
                   >
                     <span style={{ fontSize: s.size }}>{s.label}</span>

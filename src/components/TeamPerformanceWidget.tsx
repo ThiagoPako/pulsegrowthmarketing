@@ -68,12 +68,14 @@ export default function TeamPerformanceWidget() {
       supabase.from('design_tasks').select('*'),
       supabase.from('social_media_deliveries').select('*').gte('delivered_at', monthStart).lte('delivered_at', monthEnd),
       supabase.from('endomarketing_partner_tasks').select('*').gte('date', monthStart).lte('date', monthEnd),
-    ]).then(([dr, ct, dt, smd, pt]) => {
+      supabase.from('recording_wait_logs').select('*').gte('created_at', monthStart),
+    ]).then(([dr, ct, dt, smd, pt, wl]) => {
       if (dr.data) setDeliveryRecords(dr.data);
       if (ct.data) setContentTasks(ct.data);
       if (dt.data) setDesignTasks(dt.data);
       if (smd.data) setSmDeliveries(smd.data);
       if (pt.data) setPartnerTasks(pt.data);
+      if (wl.data) setWaitLogs(wl.data);
     });
   }, []);
 

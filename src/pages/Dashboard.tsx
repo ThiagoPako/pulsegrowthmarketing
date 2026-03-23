@@ -60,6 +60,7 @@ export default function Dashboard() {
   const [endoMetrics, setEndoMetrics] = useState({ totalClients: 0, revenue: 0, costs: 0, profit: 0, margin: 0, topClients: [] as { name: string; profit: number }[] });
   const [contractAlerts, setContractAlerts] = useState<{ clientName: string; daysLeft: number; endDate: string }[]>([]);
   const [expandedWeekDay, setExpandedWeekDay] = useState<string | null>(null);
+  const [waitLogs, setWaitLogs] = useState<any[]>([]);
 
   useEffect(() => { getMessageStats().then(setWaStats); }, []);
   useEffect(() => {

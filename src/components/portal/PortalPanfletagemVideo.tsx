@@ -200,11 +200,13 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
   // Layout overlay image
   const [layoutOverlayImg, setLayoutOverlayImg] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
-    if (!flyerImageDataUrl) { setLayoutOverlayImg(null); return; }
+    // Use transparent overlay (no vehicle photo) for video composition
+    const overlayUrl = flyerOverlayDataUrl || flyerImageDataUrl;
+    if (!overlayUrl) { setLayoutOverlayImg(null); return; }
     const img = new Image();
     img.onload = () => setLayoutOverlayImg(img);
-    img.src = flyerImageDataUrl;
-  }, [flyerImageDataUrl]);
+    img.src = overlayUrl;
+  }, [flyerOverlayDataUrl, flyerImageDataUrl]);
 
   // --- Options ---
   const [musicFadeIn, setMusicFadeIn] = useState(2);

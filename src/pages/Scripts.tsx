@@ -242,9 +242,9 @@ export default function Scripts() {
       toast.error('Selecione o cliente de endomarketing'); return;
     }
 
-    // Auto-generate caption if content exists but caption is empty
-    let captionToSave = form.caption;
-    if (form.content && form.content.trim() && !form.caption.trim()) {
+    // Auto-generate caption if content exists but caption is empty (skip for stories)
+    let captionToSave = form.contentFormat === 'story' ? '' : form.caption;
+    if (form.contentFormat !== 'story' && form.content && form.content.trim() && !form.caption.trim()) {
       toast.info('Gerando legenda automaticamente...');
       const autoCaption = await generateCaptionFromContent(form.content, form.clientId);
       if (autoCaption) {

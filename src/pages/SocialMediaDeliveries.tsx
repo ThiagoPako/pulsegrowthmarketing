@@ -780,9 +780,10 @@ export default function SocialMediaDeliveries() {
   // ─── CLIENT DETAIL VIEW ────────────────────────────────────
   if (selectedClientId && selectedClient) {
     const plan = getClientPlanGoals(selectedClientId);
+    const isExternalPlan = plan && plan.has_recording === false;
     const stats = monthlyStats[selectedClientId] || { reels: 0, criativo: 0, story: 0, arte: 0, total: 0, pendentes: 0, agendados: 0, postados: 0, revisao: 0 };
     const weekStories = weeklyStoriesMap[selectedClientId] || 0;
-    const storyGoal = selectedClient.weeklyStories || 0;
+    const storyGoal = isExternalPlan ? 0 : (selectedClient.weeklyStories || 0);
 
     // All data now rendered via Kanban component
 

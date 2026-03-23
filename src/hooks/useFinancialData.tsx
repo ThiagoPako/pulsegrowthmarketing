@@ -171,15 +171,24 @@ export function useFinancialData() {
 
   // Activity logger
   const logActivity = async (actionType: string, entityType: string, description: string, entityId?: string, details?: any) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from('financial_activity_log').insert({
-      user_id: user?.id || null,
-      action_type: actionType,
-      entity_type: entityType,
-      entity_id: entityId || null,
-      description,
-      details: details || null,
-    } as any);
+    try {
+      const authResult = await supabase.auth.getUser();
+      const user = authResult.data?.user ?? null;
+      const { error } = await supabase.from('financial_activity_log').insert({
+        user_id: user?.id || null,
+        action_type: actionType,
+        entity_type: entityType,
+        entity_id: entityId || null,
+        description,
+        details: details || null,
+      } as any);
+
+      if (error) {
+        console.error('[useFinancialData] Failed to log activity:', error);
+      }
+    } catch (error) {
+      console.error('[useFinancialData] Unexpected activity log error:', error);
+    }
   };
 
   // Contract CRUD
@@ -226,13 +235,26 @@ export function useFinancialData() {
   };
 
   const updateRevenue = async (id: string, updates: Partial<Revenue>) => {
-    const { error } = await supabase.from('revenues').update(updates as any).eq('id', id);
-    if (!error) {
+    try {
+      const { error } = await supabase.from('revenues').update(updates as any).eq('id', id);
+
+      if (error) {
+        console.error('[useFinancialData] Failed to update revenue:', error);
+        return false;
+      }
+
       const action = updates.status === 'recebida' ? 'Marcou receita como paga' : updates.status === 'prevista' ? 'Reverteu receita para pendente' : 'Atualizou receita';
-      await logActivity('edição', 'receita', `${action} - R$ ${Number(updates.amount || revenues.find(r => r.id === id)?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, updates);
-      await fetchAll();
+
+      await Promise.allSettled([
+        logActivity('edição', 'receita', `${action} - R$ ${Number(updates.amount || revenues.find(r => r.id === id)?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, updates),
+        fetchAll(),
+      ]);
+
+      return true;
+    } catch (error) {
+      console.error('[useFinancialData] Unexpected revenue update error:', error);
+      return false;
     }
-    return !error;
   };
 
   const generateMonthlyRevenues = async (monthStr: string) => {

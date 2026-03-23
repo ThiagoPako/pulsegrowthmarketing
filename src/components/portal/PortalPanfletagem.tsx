@@ -277,6 +277,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         }
         if (s.footerAddress != null) setFooterAddress(s.footerAddress);
         if (s.footerWhatsapp != null) setFooterWhatsapp(s.footerWhatsapp);
+        if (s.canvasFormat) setCanvasFormat(s.canvasFormat);
       } catch { /* ignore */ }
     }
   }, [clientId]);

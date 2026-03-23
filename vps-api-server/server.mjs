@@ -377,6 +377,7 @@ app.post('/api/financial-chat', async (req, res) => {
     const SYSTEM_START = '2026-03-01'; // Sistema iniciou em março 2026
     const startOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
     const fmt = v => Number(v || 0).toLocaleString('pt-BR');
+    const fmtMoney = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const fmtDate = d => { if (!d) return 'N/A'; const dt = typeof d === 'string' ? d : d.toISOString(); return dt.slice(0, 10).split('-').reverse().join('/'); };
 
     // Fetch ALL system data in parallel from local PostgreSQL
@@ -551,6 +552,37 @@ REGRAS:
 - Você pode cruzar dados entre módulos (ex: receita de um cliente vs entregas feitas)
 
 ${contextData}`;
+
+    const normalizedQuestion = String(question)
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+    const isDelinquencyQuestion = /(inadimpl|vencid|em atraso|atrasad)/.test(normalizedQuestion)
+      && /(quant|quanto|valor|total|soma|cliente|clientes|quem|quais|lista)/.test(normalizedQuestion);
+
+    if (isDelinquencyQuestion) {
+      const overdueList = Object.entries(overdueByClient)
+        .sort(([, a], [, b]) => b.amount - a.amount)
+        .slice(0, 20)
+        .map(([name, v]) => `- ${name}: ${fmtMoney(v.amount)} (${v.count} receita(s))`)
+        .join('\n');
+
+      const answer = [
+        `Olá! 👋`,
+        `Atualmente, temos **${inadimplentesCount} clientes inadimplentes**.`,
+        `O valor total em títulos **vencidos e em atraso** é **${fmtMoney(totalRevenueOverdue)}**.`,
+        overdueList ? `\n**Clientes inadimplentes:**\n${overdueList}` : '',
+        `\n_Esses números foram calculados diretamente dos dados do financeiro._`,
+      ].filter(Boolean).join('\n\n');
+
+      await pool.query(
+        `INSERT INTO financial_chat_messages (id, user_id, role, content, created_at) VALUES ($1, $2, 'user', $3, NOW()), ($4, $2, 'assistant', $5, NOW())`,
+        [crypto.randomUUID(), user.id, question, crypto.randomUUID(), answer]
+      );
+
+      return res.json({ answer });
+    }
 
     const messages = [{ role: 'system', content: systemPrompt }];
     if (conversationHistory && Array.isArray(conversationHistory)) {

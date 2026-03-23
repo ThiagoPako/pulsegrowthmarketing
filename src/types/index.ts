@@ -217,6 +217,7 @@ export interface Script {
   scheduledDate?: string; // YYYY-MM-DD
   createdBy?: string; // user id
   directToEditing?: boolean; // goes straight to editing queue
+  caption?: string; // Instagram caption
 }
 
 export interface ActiveRecording {

@@ -131,6 +131,7 @@ export default function Scripts() {
   const { clientes: endoClientes } = useEndoClientes();
   const [open, setOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
+  const [viewFontSize, setViewFontSize] = useState(0);
   const [editing, setEditing] = useState<Script | null>(null);
   const [viewing, setViewing] = useState<Script | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -774,14 +775,13 @@ export default function Scripts() {
             <div className="space-y-1">
               <Label className="flex items-center gap-1.5">
                 📝 Legenda para Instagram
-                {form.caption && <Badge variant="outline" className="text-[9px]">{form.caption.length}/200</Badge>}
+                {form.caption && <Badge variant="outline" className="text-[9px]">{form.caption.length} caracteres</Badge>}
               </Label>
               <Textarea 
                 value={form.caption} 
-                onChange={e => setForm(prev => ({ ...prev, caption: e.target.value.slice(0, 200) }))} 
-                placeholder="Legenda curta com CTA para a postagem..." 
-                rows={2}
-                maxLength={200}
+                onChange={e => setForm(prev => ({ ...prev, caption: e.target.value }))} 
+                placeholder="Legenda com CTA para a postagem..." 
+                rows={4}
               />
               <p className="text-[10px] text-muted-foreground">Gerada automaticamente pela IA junto com o roteiro. Você pode editar manualmente.</p>
             </div>
@@ -813,8 +813,35 @@ export default function Scripts() {
                   {viewing.recorded ? 'Gravado' : 'Pendente'}
                 </Badge>
               </div>
-              <div className="prose prose-sm max-w-none mt-4 p-4 rounded-xl bg-muted/30 border border-border"
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-xs text-muted-foreground">Fonte:</span>
+                {[
+                  { label: 'P', val: 0 },
+                  { label: 'M', val: 1 },
+                  { label: 'G', val: 2 },
+                  { label: 'GG', val: 3 },
+                ].map(opt => (
+                  <Button
+                    key={opt.val}
+                    variant={viewFontSize === opt.val ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-7 w-8 text-xs px-0"
+                    onClick={() => setViewFontSize(opt.val)}
+                  >
+                    {opt.label}
+                  </Button>
+                ))}
+              </div>
+              <div className={`${['prose-sm', 'prose-base', 'prose-lg', 'prose-xl'][viewFontSize]} prose max-w-none mt-2 p-4 rounded-xl bg-muted/30 border border-border`}
                 dangerouslySetInnerHTML={{ __html: highlightQuotes(viewing.content) || '<em>Sem conteúdo</em>' }} />
+              {viewing.caption && (
+                <div className="mt-3 space-y-1">
+                  <Label className="text-xs text-muted-foreground">📝 Legenda</Label>
+                  <div className={`${['text-sm', 'text-base', 'text-lg', 'text-xl'][viewFontSize]} p-3 rounded-lg bg-muted/20 border border-border whitespace-pre-wrap`}>
+                    {viewing.caption}
+                  </div>
+                </div>
+              )}
               <div className="flex gap-2 mt-4">
                 <Button variant="outline" className="flex-1" onClick={() => handleDownloadPdf(viewing)}>
                   <Download size={16} className="mr-2" /> Baixar PDF

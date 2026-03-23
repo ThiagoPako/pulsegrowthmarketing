@@ -1040,7 +1040,7 @@ export default function SocialMediaDeliveries() {
 
               {/* Criativos Mensal */}
               {(() => {
-                const baseGoal = plan ? plan.creatives_qty : (selectedClient.weeklyCreatives ? selectedClient.weeklyCreatives * 4 : 0);
+                const baseGoal = isExternalPlan ? 0 : (plan ? plan.creatives_qty : (selectedClient.weeklyCreatives ? selectedClient.weeklyCreatives * 4 : 0));
                 const deficit = baseGoal > 0 ? (prevMonthDeficit[selectedClientId]?.criativo || 0) : 0;
                 const goal = baseGoal + deficit;
                 const delivered = stats.criativo;

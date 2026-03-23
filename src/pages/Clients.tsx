@@ -32,7 +32,7 @@ const emptyClient = (): Partial<Client> & { clientType?: string } => ({
   fixedDay: 'segunda', fixedTime: '09:00',
   videomaker: '', backupTime: '14:00', backupDay: 'terca', extraDay: 'quarta',
   extraContentTypes: [], acceptsExtra: false, extraClientAppears: false,
-  weeklyReels: 0, weeklyCreatives: 0, weeklyGoal: 10,
+  weeklyReels: 0, weeklyCreatives: 0, weeklyGoal: 0,
   hasEndomarketing: false, hasVehicleFlyer: false, weeklyStories: 0, presenceDays: 1,
   monthlyRecordings: 4, niche: '',
   clientLogin: '', clientPassword: '', driveLink: '', driveFotos: '', driveIdentidadeVisual: '',
@@ -1442,36 +1442,28 @@ export default function Clients() {
         <p className="text-sm font-semibold flex items-center gap-2">
           <Target size={16} className="text-primary" /> Metas de Entrega Semanal
         </p>
-        {planId && (() => {
-          const sp = plans.find(p => p.id === planId);
-          if (!sp) return null;
-          return (
-            <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 text-xs text-primary space-y-1">
-              <p className="font-semibold">Metas calculadas automaticamente pelo plano</p>
-              <p className="text-muted-foreground">
-                Entrega mínima do plano: {Math.ceil(sp.reels_qty / 4)} reels, {Math.ceil(sp.creatives_qty / 4)} criativos, {Math.ceil(sp.stories_qty / 4)} stories/semana.
-                Gravações mensais: <strong>{sp.recording_sessions || 4}x</strong>.
-                A meta semanal é sempre <strong>+1 a mais</strong> que o mínimo para adiantar conteúdos.
-              </p>
-            </div>
-          );
-        })()}
+        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-600 space-y-1">
+          <p className="font-semibold">⚠️ Preencha as metas manualmente</p>
+          <p className="text-muted-foreground">
+            As metas de entrega semanal devem ser definidas de acordo com o combinado com o cliente. Deixe em 0 para configurar depois.
+          </p>
+        </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="space-y-1">
             <Label>Meta Reels/Sem.</Label>
-            <Input type="number" min={0} value={form.weeklyReels ?? 0} onChange={e => setForm({ ...form, weeklyReels: Number(e.target.value) })} disabled={!!planId} className={planId ? 'opacity-70' : ''} />
+            <Input type="number" min={0} value={form.weeklyReels ?? 0} onChange={e => setForm({ ...form, weeklyReels: Number(e.target.value) })} />
           </div>
           <div className="space-y-1">
             <Label>Meta Criativos/Sem.</Label>
-            <Input type="number" min={0} value={form.weeklyCreatives ?? 0} onChange={e => setForm({ ...form, weeklyCreatives: Number(e.target.value) })} disabled={!!planId} className={planId ? 'opacity-70' : ''} />
+            <Input type="number" min={0} value={form.weeklyCreatives ?? 0} onChange={e => setForm({ ...form, weeklyCreatives: Number(e.target.value) })} />
           </div>
           <div className="space-y-1">
             <Label>Meta Stories/Sem.</Label>
-            <Input type="number" min={0} value={form.weeklyStories ?? 0} onChange={e => setForm({ ...form, weeklyStories: Number(e.target.value) })} disabled={!!planId} className={planId ? 'opacity-70' : ''} />
+            <Input type="number" min={0} value={form.weeklyStories ?? 0} onChange={e => setForm({ ...form, weeklyStories: Number(e.target.value) })} />
           </div>
           <div className="space-y-1">
             <Label>Meta Total/Sem.</Label>
-            <Input type="number" min={1} value={form.weeklyGoal} onChange={e => setForm({ ...form, weeklyGoal: Number(e.target.value) })} disabled={!!planId} className={planId ? 'opacity-70' : ''} />
+            <Input type="number" min={0} value={form.weeklyGoal ?? 0} onChange={e => setForm({ ...form, weeklyGoal: Number(e.target.value) })} />
           </div>
         </div>
       </div>
@@ -1489,13 +1481,9 @@ export default function Clients() {
                 setPlanId(newPlanId);
                 if (newPlanId) {
                   const selectedPlan = plans.find(p => p.id === newPlanId);
-                  if (selectedPlan) {
-                    const weeklyReels = Math.ceil(selectedPlan.reels_qty / 4);
-                    const weeklyCreatives = Math.ceil(selectedPlan.creatives_qty / 4);
-                    const weeklyStories = Math.ceil(selectedPlan.stories_qty / 4);
-                    const weeklyGoal = weeklyReels + weeklyCreatives + weeklyStories + 1;
+                if (selectedPlan) {
                     const monthlyRecordings = selectedPlan.recording_sessions || 4;
-                    setForm(prev => ({ ...prev, weeklyReels: weeklyReels + 1, weeklyCreatives: weeklyCreatives + 1, weeklyStories: weeklyStories + 1, weeklyGoal, monthlyRecordings, acceptsExtra: selectedPlan.accepts_extra_content }));
+                    setForm(prev => ({ ...prev, monthlyRecordings, acceptsExtra: selectedPlan.accepts_extra_content }));
                   }
                 }
               }}>

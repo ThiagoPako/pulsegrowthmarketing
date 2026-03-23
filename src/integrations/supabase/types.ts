@@ -2240,16 +2240,20 @@ export type Database = {
           creatives_qty: number
           description: string
           extra_content_allowed: number
+          has_photography: boolean
+          has_recording: boolean
           id: string
           is_partner_plan: boolean
           name: string
           partner_cost: number
           partner_id: string | null
           periodicity: string
+          plan_type: string
           price: number
           recording_hours: number
           recording_sessions: number
           reels_qty: number
+          services: Json
           status: string
           stories_qty: number
           updated_at: string
@@ -2261,16 +2265,20 @@ export type Database = {
           creatives_qty?: number
           description?: string
           extra_content_allowed?: number
+          has_photography?: boolean
+          has_recording?: boolean
           id?: string
           is_partner_plan?: boolean
           name: string
           partner_cost?: number
           partner_id?: string | null
           periodicity?: string
+          plan_type?: string
           price?: number
           recording_hours?: number
           recording_sessions?: number
           reels_qty?: number
+          services?: Json
           status?: string
           stories_qty?: number
           updated_at?: string
@@ -2282,16 +2290,20 @@ export type Database = {
           creatives_qty?: number
           description?: string
           extra_content_allowed?: number
+          has_photography?: boolean
+          has_recording?: boolean
           id?: string
           is_partner_plan?: boolean
           name?: string
           partner_cost?: number
           partner_id?: string | null
           periodicity?: string
+          plan_type?: string
           price?: number
           recording_hours?: number
           recording_sessions?: number
           reels_qty?: number
+          services?: Json
           status?: string
           stories_qty?: number
           updated_at?: string

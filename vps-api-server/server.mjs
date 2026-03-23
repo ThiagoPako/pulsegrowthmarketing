@@ -422,10 +422,20 @@ app.post('/api/financial-chat', async (req, res) => {
     const goals = goalsRes.rows || [];
     const portalContents = portalContentsRes.rows || [];
 
+    const normalizeDate = value => {
+      if (!value) return '';
+      return String(value).includes('T') ? String(value).slice(0, 10) : String(value).slice(0, 10);
+    };
+
+    const currentMonthRevenues = revenues.filter(r => {
+      const dueDate = normalizeDate(r.due_date);
+      return dueDate && dueDate >= startOfMonth;
+    });
+
     // ── Financial summary ──
     const totalRevenuePaid = revenues.filter(r => r.status === 'pago').reduce((s, r) => s + Number(r.amount), 0);
     const totalRevenuePending = revenues.filter(r => ['pendente', 'prevista'].includes(r.status)).reduce((s, r) => s + Number(r.amount), 0);
-    const totalRevenueOverdue = revenues.filter(r => ['vencido', 'em_atraso'].includes(r.status)).reduce((s, r) => s + Number(r.amount), 0);
+    const totalRevenueOverdue = currentMonthRevenues.filter(r => ['vencido', 'em_atraso'].includes(r.status)).reduce((s, r) => s + Number(r.amount), 0);
     const totalExpenses = expenses.reduce((s, e) => s + Number(e.amount), 0);
 
     const expByCategory = {};
@@ -437,8 +447,8 @@ app.post('/api/financial-chat', async (req, res) => {
     const revByClient = {};
     revenues.forEach(r => { const name = r.client_name || 'N/A'; if (!revByClient[name]) revByClient[name] = { total: 0, paid: 0, pending: 0, overdue: 0 }; revByClient[name].total += Number(r.amount); if (r.status === 'pago') revByClient[name].paid += Number(r.amount); else if (['vencido','em_atraso'].includes(r.status)) revByClient[name].overdue += Number(r.amount); else revByClient[name].pending += Number(r.amount); });
 
-    // ── Overdue per client (inadimplentes) ──
-    const overdueClients = revenues.filter(r => ['vencido', 'em_atraso'].includes(r.status));
+    // ── Overdue per client (inadimplentes do mês atual) ──
+    const overdueClients = currentMonthRevenues.filter(r => ['vencido', 'em_atraso'].includes(r.status));
     const overdueByClient = {};
     overdueClients.forEach(r => { const name = r.client_name || 'N/A'; if (!overdueByClient[name]) overdueByClient[name] = { amount: 0, count: 0 }; overdueByClient[name].amount += Number(r.amount); overdueByClient[name].count += 1; });
     const inadimplentesCount = Object.keys(overdueByClient).length;

@@ -56,6 +56,7 @@ export default function TeamPerformanceWidget() {
   const [designTasks, setDesignTasks] = useState<any[]>([]);
   const [smDeliveries, setSmDeliveries] = useState<any[]>([]);
   const [partnerTasks, setPartnerTasks] = useState<any[]>([]);
+  const [waitLogs, setWaitLogs] = useState<any[]>([]);
   const [expandedRole, setExpandedRole] = useState<string | null>(null);
 
   useEffect(() => {

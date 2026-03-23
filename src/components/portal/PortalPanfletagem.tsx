@@ -230,6 +230,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   // Loaded images for preview
   const [vehicleImgObj, setVehicleImgObj] = useState<HTMLImageElement | null>(null);
   const [logoImgObj, setLogoImgObj] = useState<HTMLImageElement | null>(null);
+  const [frameImgObj, setFrameImgObj] = useState<HTMLImageElement | null>(null);
 
   // Canvas click → zone color picker
   const [activeColorZone, setActiveColorZone] = useState<CanvasZone>(null);
@@ -356,6 +357,18 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     };
     img.src = src;
   }, [customLogoDataUrl, clientLogoUrl]);
+
+  // Load selected frame template image
+  useEffect(() => {
+    if (!selectedTemplate) { setFrameImgObj(null); return; }
+    const tpl = templates.find(t => t.id === selectedTemplate && t.template_type === 'frame');
+    if (!tpl?.file_url) { setFrameImgObj(null); return; }
+    const img = new window.Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => setFrameImgObj(img);
+    img.onerror = () => setFrameImgObj(null);
+    img.src = tpl.file_url;
+  }, [selectedTemplate, templates]);
 
   // Load first vehicle image
   useEffect(() => {
@@ -883,7 +896,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
 
   // Unified draw function
-  const drawCanvas = useCallback((canvas: HTMLCanvasElement, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {
+  const drawCanvas = useCallback((canvas: HTMLCanvasElement, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null, fImg: HTMLImageElement | null = null) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const W = CANVAS_W;
@@ -895,16 +908,20 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     } else {
       drawCanvasFeed(ctx, W, H, vImg, lImg);
     }
+    // Draw frame overlay on top of everything
+    if (fImg) {
+      ctx.drawImage(fImg, 0, 0, W, H);
+    }
   }, [canvasFormat, CANVAS_H_VAL, drawCanvasFeed, drawCanvasStory]);
 
   // Live preview rendering + capture for video tab
   useEffect(() => {
     const canvas = previewCanvasRef.current;
     if (!canvas) return;
-    drawCanvas(canvas, vehicleImgObj, logoImgObj);
+    drawCanvas(canvas, vehicleImgObj, logoImgObj, frameImgObj);
     // Capture flyer image for video tab usage
     try { setFlyerImageDataUrl(canvas.toDataURL('image/jpeg', 0.8)); } catch {}
-  }, [drawCanvas, vehicleImgObj, logoImgObj]);
+  }, [drawCanvas, vehicleImgObj, logoImgObj, frameImgObj]);
 
   // Drag handlers on preview canvas
   const getCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -1039,18 +1056,18 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (logoSrc) {
           const lImg = new window.Image();
           if (!logoSrc.startsWith('data:')) lImg.crossOrigin = 'anonymous';
-          lImg.onload = () => { drawCanvas(canvas, vImg, lImg); resolve(canvas.toDataURL('image/jpeg', 0.92)); };
-          lImg.onerror = () => { drawCanvas(canvas, vImg, null); resolve(canvas.toDataURL('image/jpeg', 0.92)); };
+          lImg.onload = () => { drawCanvas(canvas, vImg, lImg, frameImgObj); resolve(canvas.toDataURL('image/jpeg', 0.92)); };
+          lImg.onerror = () => { drawCanvas(canvas, vImg, null, frameImgObj); resolve(canvas.toDataURL('image/jpeg', 0.92)); };
           lImg.src = logoSrc;
         } else {
-          drawCanvas(canvas, vImg, null);
+          drawCanvas(canvas, vImg, null, frameImgObj);
           resolve(canvas.toDataURL('image/jpeg', 0.92));
         }
       };
       vImg.onerror = () => reject('Failed to load vehicle image');
       vImg.src = vehicleImageSrc;
     });
-  }, [drawCanvas, customLogoDataUrl, clientLogoUrl]);
+  }, [drawCanvas, customLogoDataUrl, clientLogoUrl, frameImgObj]);
 
   const handleCreate = async () => {
     if (!model.trim() || !year.trim()) { toast.error('Preencha modelo e ano do veículo'); return; }

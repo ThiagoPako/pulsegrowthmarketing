@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
@@ -12,8 +12,9 @@ import UserAvatar from '@/components/UserAvatar';
 import ProfileDialog from '@/components/ProfileDialog';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
-  LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Bot, Plug, Car, Menu, X, Video, Handshake, Star, Rocket
+  LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Bot, Plug, Car, Menu, X, Video, Handshake, Star, Rocket, Type
 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import NotificationBell from '@/components/NotificationBell';
 import BirthdayOverlay from '@/components/BirthdayOverlay';
 import ProductionAssistant from '@/components/ProductionAssistant';
@@ -94,6 +95,27 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { hasModuleAccess } = useMyPermissions();
   const isMobile = useIsMobile();
+
+  const FONT_SCALE_KEY = `pulse_font_scale_${currentUser?.id || 'default'}`;
+  const FONT_SCALES = [
+    { label: 'Pequena', value: 'font-scale-sm', size: '13px' },
+    { label: 'Normal', value: 'font-scale-base', size: '14px' },
+    { label: 'Grande', value: 'font-scale-lg', size: '16px' },
+    { label: 'Extra Grande', value: 'font-scale-xl', size: '18px' },
+  ];
+  const [fontScale, setFontScale] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(FONT_SCALE_KEY) || 'font-scale-base';
+    }
+    return 'font-scale-base';
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    FONT_SCALES.forEach(s => root.classList.remove(s.value));
+    root.classList.add(fontScale);
+    localStorage.setItem(FONT_SCALE_KEY, fontScale);
+  }, [fontScale, FONT_SCALE_KEY]);
 
   const filteredCategories = navCategories
     .map(cat => ({
@@ -261,6 +283,26 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 ml-auto shrink-0">
+            {/* Font size control */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="p-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors" title="Tamanho da fonte">
+                  <Type size={18} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-44 p-2" align="end">
+                <p className="text-xs font-semibold text-muted-foreground mb-2 px-1">Tamanho da Fonte</p>
+                {FONT_SCALES.map(s => (
+                  <button
+                    key={s.value}
+                    onClick={() => setFontScale(s.value)}
+                    className={`w-full text-left px-2 py-1.5 rounded-md text-sm transition-colors ${fontScale === s.value ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
+                  >
+                    <span style={{ fontSize: s.size }}>{s.label}</span>
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
             <NotificationBell />
             {/* Mobile avatar */}
             <div className="md:hidden">

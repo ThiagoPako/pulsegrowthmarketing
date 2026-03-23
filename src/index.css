@@ -118,3 +118,9 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* Global font scale classes */
+html.font-scale-sm { font-size: 13px; }
+html.font-scale-base { font-size: 14px; }
+html.font-scale-lg { font-size: 16px; }
+html.font-scale-xl { font-size: 18px; }

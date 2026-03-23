@@ -141,7 +141,7 @@ interface CompSegment { type: 'intro' | 'vehicle' | 'closing'; blobUrl: string; 
 /*  COMPONENT                                                        */
 /* ================================================================ */
 
-export default function PortalPanfletagemVideo({ clientId, clientColor, clientName, clientWhatsapp, clientCity, flyerImageDataUrl }: Props) {
+export default function PortalPanfletagemVideo({ clientId, clientColor, clientName, clientWhatsapp, clientCity, flyerImageDataUrl, flyerOverlayDataUrl }: Props) {
   const saved = loadSavedMedia(clientId);
 
   // --- Media state ---

@@ -6,11 +6,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Package, Film, Image, BookImage, Palette, Handshake, Sparkles } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Film, Image, BookImage, Palette, Handshake, Sparkles, Monitor, Megaphone } from 'lucide-react';
 
 interface Partner {
   id: string;
@@ -19,6 +20,23 @@ interface Partner {
   service_function: string;
   fixed_rate: number;
 }
+
+interface PlanService {
+  key: string;
+  label: string;
+  icon: string;
+}
+
+const AVAILABLE_SERVICES: PlanService[] = [
+  { key: 'roteiros', label: 'Criação de Roteiros', icon: '📝' },
+  { key: 'estrategia', label: 'Estratégias de Campanha', icon: '🎯' },
+  { key: 'reformulacao_perfil', label: 'Reformulação de Perfil', icon: '👤' },
+  { key: 'edicao_video', label: 'Edição de Vídeos', icon: '✂️' },
+  { key: 'trafego_pago', label: 'Tráfego Pago', icon: '📈' },
+  { key: 'gestao_redes', label: 'Gestão de Redes Sociais', icon: '📱' },
+  { key: 'design', label: 'Design / Artes', icon: '🎨' },
+  { key: 'consultoria', label: 'Consultoria', icon: '💡' },
+];
 
 interface Plan {
   id: string;
@@ -38,6 +56,10 @@ interface Plan {
   is_partner_plan: boolean;
   partner_id: string | null;
   partner_cost: number;
+  has_recording: boolean;
+  has_photography: boolean;
+  services: string[];
+  plan_type: string;
 }
 
 const PERIODICITY_LABELS: Record<string, string> = {
@@ -51,6 +73,7 @@ const emptyPlan = (): Partial<Plan> => ({
   name: '', description: '', reels_qty: 0, creatives_qty: 0, stories_qty: 0, arts_qty: 0,
   recording_sessions: 0, recording_hours: 0, extra_content_allowed: 0, accepts_extra_content: false,
   price: 0, periodicity: 'mensal', status: 'ativo', is_partner_plan: false, partner_id: null, partner_cost: 0,
+  has_recording: true, has_photography: true, services: [], plan_type: 'completo',
 });
 
 export default function Plans() {
@@ -103,7 +126,8 @@ export default function Plans() {
     const payload = {
       name: form.name, description: form.description, reels_qty: form.reels_qty,
       creatives_qty: form.creatives_qty, stories_qty: form.stories_qty, arts_qty: form.arts_qty,
-      recording_sessions: form.recording_sessions, recording_hours: form.recording_hours,
+      recording_sessions: form.has_recording ? form.recording_sessions : 0,
+      recording_hours: form.has_recording ? form.recording_hours : 0,
       extra_content_allowed: form.extra_content_allowed,
       accepts_extra_content: form.accepts_extra_content || false,
       price: form.price,
@@ -111,6 +135,10 @@ export default function Plans() {
       is_partner_plan: form.is_partner_plan || false,
       partner_id: form.is_partner_plan ? form.partner_id : null,
       partner_cost: form.is_partner_plan ? (form.partner_cost || 0) : 0,
+      has_recording: form.has_recording ?? true,
+      has_photography: form.has_photography ?? true,
+      services: form.services || [],
+      plan_type: form.plan_type || 'completo',
     };
     if (editing) {
       const { error } = await supabase.from('plans').update({ ...payload, updated_at: new Date().toISOString() } as any).eq('id', editing.id);
@@ -169,14 +197,24 @@ export default function Plans() {
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <CardTitle className="text-lg truncate">{plan.name}</CardTitle>
-                      {plan.is_partner_plan && (
-                        <Badge variant="outline" className="gap-1 shrink-0 text-purple-700 border-purple-300 bg-purple-50">
-                          <Handshake size={10} /> Parceiro
-                        </Badge>
-                      )}
-                    </div>
+                     <div className="flex items-center gap-2 flex-wrap">
+                       <CardTitle className="text-lg truncate">{plan.name}</CardTitle>
+                       {plan.plan_type === 'externo' && (
+                         <Badge variant="outline" className="gap-1 shrink-0 border-amber-300 bg-amber-50 text-amber-700">
+                           <Monitor size={10} /> Externo
+                         </Badge>
+                       )}
+                       {!plan.has_recording && (
+                         <Badge variant="outline" className="gap-1 shrink-0 border-blue-300 bg-blue-50 text-blue-700">
+                           Sem Gravação
+                         </Badge>
+                       )}
+                       {plan.is_partner_plan && (
+                         <Badge variant="outline" className="gap-1 shrink-0 text-purple-700 border-purple-300 bg-purple-50">
+                           <Handshake size={10} /> Parceiro
+                         </Badge>
+                       )}
+                     </div>
                     <CardDescription className="line-clamp-2 mt-1">{plan.description || 'Sem descrição'}</CardDescription>
                   </div>
                   <div className="flex gap-1 ml-2 shrink-0">
@@ -213,12 +251,14 @@ export default function Plans() {
                 <Badge variant="outline">{PERIODICITY_LABELS[plan.periodicity] || plan.periodicity}</Badge>
 
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="flex items-center gap-1.5"><Film size={12} className="text-primary" /><span>{plan.reels_qty} Reels</span></div>
-                  <div className="flex items-center gap-1.5"><Image size={12} className="text-primary" /><span>{plan.creatives_qty} Criativos</span></div>
-                  {plan.stories_qty > 0 && <div className="flex items-center gap-1.5"><BookImage size={12} className="text-primary" /><span>{plan.stories_qty} Stories</span></div>}
-                  {plan.arts_qty > 0 && <div className="flex items-center gap-1.5"><Palette size={12} className="text-primary" /><span>{plan.arts_qty} Artes</span></div>}
-                  <div className="flex items-center gap-1.5"><Film size={12} className="text-primary" /><span>{plan.recording_sessions} gravações/mês</span></div>
-                  <div className="flex items-center gap-1.5"><span className="text-muted-foreground">{plan.recording_hours}h gravação</span></div>
+                   {plan.reels_qty > 0 && <div className="flex items-center gap-1.5"><Film size={12} className="text-primary" /><span>{plan.reels_qty} Reels</span></div>}
+                   {plan.creatives_qty > 0 && <div className="flex items-center gap-1.5"><Image size={12} className="text-primary" /><span>{plan.creatives_qty} Criativos</span></div>}
+                   {plan.stories_qty > 0 && <div className="flex items-center gap-1.5"><BookImage size={12} className="text-primary" /><span>{plan.stories_qty} Stories</span></div>}
+                   {plan.arts_qty > 0 && <div className="flex items-center gap-1.5"><Palette size={12} className="text-primary" /><span>{plan.arts_qty} Artes</span></div>}
+                   {plan.has_recording && <>
+                     <div className="flex items-center gap-1.5"><Film size={12} className="text-primary" /><span>{plan.recording_sessions} gravações/mês</span></div>
+                     <div className="flex items-center gap-1.5"><span className="text-muted-foreground">{plan.recording_hours}h gravação</span></div>
+                   </>}
                    {plan.extra_content_allowed > 0 && <div className="col-span-2 text-muted-foreground">+{plan.extra_content_allowed} extras permitidos</div>}
                    {plan.accepts_extra_content && (
                      <div className="col-span-2 flex items-center gap-1.5 text-emerald-600 font-medium">
@@ -226,6 +266,20 @@ export default function Plans() {
                      </div>
                    )}
                 </div>
+
+                {/* Services */}
+                {(plan.services as string[] || []).length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {(plan.services as string[]).map(svc => {
+                      const svcDef = AVAILABLE_SERVICES.find(s => s.key === svc);
+                      return svcDef ? (
+                        <Badge key={svc} variant="secondary" className="text-[10px] gap-1">
+                          {svcDef.icon} {svcDef.label}
+                        </Badge>
+                      ) : null;
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -242,11 +296,69 @@ export default function Plans() {
               <Label>Nome do Plano *</Label>
               <Input value={form.name} onChange={e => setField('name', e.target.value)} placeholder="Ex: Plano Growth" />
             </div>
+            {/* Plan Type */}
             <div className="space-y-1">
-              <Label>Descrição</Label>
-              <Textarea value={form.description} onChange={e => setField('description', e.target.value)} placeholder="Descrição do plano..." rows={2} />
+              <Label>Tipo do Plano</Label>
+              <Select value={form.plan_type || 'completo'} onValueChange={v => {
+                setField('plan_type', v);
+                if (v === 'externo') {
+                  setField('has_recording', false);
+                  setField('recording_sessions', 0);
+                  setField('recording_hours', 0);
+                }
+              }}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="completo">Completo (com gravação)</SelectItem>
+                  <SelectItem value="externo">Externo (sem gravação)</SelectItem>
+                </SelectContent>
+              </Select>
+              {form.plan_type === 'externo' && (
+                <p className="text-xs text-amber-600 mt-1">⚠️ Plano externo: cliente entrega os materiais. Onboarding não exigirá videomaker ou agenda.</p>
+              )}
             </div>
 
+            {/* Recording & Photography toggles */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-border">
+                <Switch checked={form.has_recording ?? true} onCheckedChange={v => {
+                  setField('has_recording', v);
+                  if (!v) { setField('recording_sessions', 0); setField('recording_hours', 0); }
+                }} />
+                <div>
+                  <Label className="font-medium text-sm">Inclui Gravação</Label>
+                  <p className="text-[10px] text-muted-foreground">Videomaker + agenda</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-border">
+                <Switch checked={form.has_photography ?? true} onCheckedChange={v => setField('has_photography', v)} />
+                <div>
+                  <Label className="font-medium text-sm">Inclui Fotografia</Label>
+                  <p className="text-[10px] text-muted-foreground">Ensaio fotográfico</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Services */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2"><Megaphone size={14} /> Serviços Inclusos</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {AVAILABLE_SERVICES.map(svc => {
+                  const checked = (form.services || []).includes(svc.key);
+                  return (
+                    <label key={svc.key} className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors text-xs ${checked ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'}`}>
+                      <Checkbox checked={checked} onCheckedChange={() => {
+                        const current = form.services || [];
+                        setField('services', checked ? current.filter((s: string) => s !== svc.key) : [...current, svc.key]);
+                      }} />
+                      <span>{svc.icon} {svc.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Content quantities */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Reels</Label>
@@ -264,14 +376,22 @@ export default function Plans() {
                 <Label>Artes (opcional)</Label>
                 <Input type="number" min={0} value={form.arts_qty} onChange={e => setField('arts_qty', parseInt(e.target.value) || 0)} />
               </div>
-              <div className="space-y-1">
-                <Label>Gravações mensais</Label>
-                <Input type="number" min={0} value={form.recording_sessions} onChange={e => setField('recording_sessions', parseInt(e.target.value) || 0)} />
+            </div>
+
+            {/* Recording fields - only if has_recording */}
+            {(form.has_recording ?? true) && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Gravações mensais</Label>
+                  <Input type="number" min={0} value={form.recording_sessions} onChange={e => setField('recording_sessions', parseInt(e.target.value) || 0)} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Horas de gravação</Label>
+                  <Input type="number" min={0} step={0.5} value={form.recording_hours} onChange={e => setField('recording_hours', parseFloat(e.target.value) || 0)} />
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label>Horas de gravação</Label>
-                <Input type="number" min={0} step={0.5} value={form.recording_hours} onChange={e => setField('recording_hours', parseFloat(e.target.value) || 0)} />
-              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Extras permitidos</Label>
@@ -283,14 +403,15 @@ export default function Plans() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 p-3 rounded-xl border border-border">
-              <Switch checked={form.accepts_extra_content || false} onCheckedChange={v => setField('accepts_extra_content', v)} />
-              <div>
-                <Label className="font-medium flex items-center gap-2"><Sparkles size={14} className="text-primary" /> Cliente aceita conteúdo extra</Label>
-                <p className="text-xs text-muted-foreground mt-0.5">Permite envio de videomaker extra em horários vagos</p>
+            {(form.has_recording ?? true) && (
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-border">
+                <Switch checked={form.accepts_extra_content || false} onCheckedChange={v => setField('accepts_extra_content', v)} />
+                <div>
+                  <Label className="font-medium flex items-center gap-2"><Sparkles size={14} className="text-primary" /> Cliente aceita conteúdo extra</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">Permite envio de videomaker extra em horários vagos</p>
+                </div>
               </div>
-            </div>
-            </div>
+            )}
 
             {/* Partner section */}
             <div className="p-3 rounded-lg border border-border space-y-3">

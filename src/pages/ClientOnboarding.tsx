@@ -73,7 +73,7 @@ export default function ClientOnboarding() {
   const [videomakers, setVideomakers] = useState<Videomaker[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [existingClients, setExistingClients] = useState<ExistingClient[]>([]);
-  const [plan, setPlan] = useState<{ id: string; name: string; recording_sessions: number; accepts_extra_content?: boolean } | null>(null);
+  const [plan, setPlan] = useState<{ id: string; name: string; recording_sessions: number; accepts_extra_content?: boolean; has_recording?: boolean; has_photography?: boolean; services?: string[]; plan_type?: string } | null>(null);
 
   // Form state
   const [selectedVm, setSelectedVm] = useState('');
@@ -224,8 +224,8 @@ export default function ClientOnboarding() {
 
   const handleSave = async () => {
     if (!acceptTerms) { toast.error('Aceite os termos para continuar'); return; }
-    const needsTime = !fullShiftRecording;
-    if (!selectedVm || !fixedDay || (needsTime && !fixedTime)) { toast.error('Preencha todos os campos obrigatórios'); return; }
+    const needsTime = planHasRecording && !fullShiftRecording;
+    if (planHasRecording && (!selectedVm || !fixedDay || (needsTime && !fixedTime))) { toast.error('Preencha todos os campos obrigatórios'); return; }
     if (photoPreference === 'fotos_reais' && !hasPhotoShoot && !acceptsPhotoShootCost) {
       toast.error('Aceite o agendamento do ensaio fotográfico para continuar'); return;
     }
@@ -295,23 +295,34 @@ export default function ClientOnboarding() {
     </div>
   );
 
-  // Dynamic steps based on client type
+  // Determine which features are available based on plan
+  const planHasRecording = plan?.has_recording !== false;
+  const planHasPhotography = plan?.has_photography !== false;
+  const planArtsQty = plan ? (plan as any).arts_qty : 1;
+  const showPhotoStep = planHasPhotography && planArtsQty > 0;
+
+  // Dynamic steps based on client type and plan features
   const STEPS = [
-    { icon: Camera, label: 'Videomaker' },
-    { icon: Calendar, label: 'Agenda' },
-    { icon: ImageIcon, label: 'Fotos' },
+    ...(planHasRecording ? [
+      { icon: Camera, label: 'Videomaker' },
+      { icon: Calendar, label: 'Agenda' },
+    ] : []),
+    ...(showPhotoStep ? [{ icon: ImageIcon, label: 'Fotos' }] : []),
     ...(isNewClient ? [{ icon: FileText, label: 'Briefing' }] : []),
-    { icon: Sparkles, label: 'Extra & Termos' },
+    { icon: Sparkles, label: planHasRecording ? 'Extra & Termos' : 'Termos' },
   ];
 
-  const PHOTO_STEP = 2;
-  const BRIEFING_STEP = isNewClient ? 3 : -1;
-  const EXTRA_STEP = isNewClient ? 4 : 3;
+  // Calculate step indices dynamically
+  const VM_STEP = planHasRecording ? 0 : -1;
+  const AGENDA_STEP = planHasRecording ? 1 : -1;
+  const PHOTO_STEP = showPhotoStep ? (planHasRecording ? 2 : 0) : -1;
+  const BRIEFING_STEP = isNewClient ? (PHOTO_STEP >= 0 ? PHOTO_STEP + 1 : (planHasRecording ? 2 : 0)) : -1;
+  const EXTRA_STEP = STEPS.length - 1;
   const LAST_STEP = STEPS.length - 1;
 
   const canProceed = () => {
-    if (step === 0) return !!selectedVm;
-    if (step === 1) return fullShiftRecording ? (!!fixedDay && preferredShift !== 'ambos') : !!fixedTime;
+    if (step === VM_STEP) return !!selectedVm;
+    if (step === AGENDA_STEP) return fullShiftRecording ? (!!fixedDay && preferredShift !== 'ambos') : !!fixedTime;
     if (step === PHOTO_STEP) {
       if (photoPreference === 'fotos_reais' && !hasPhotoShoot && !acceptsPhotoShootCost) return false;
       return true;
@@ -358,7 +369,7 @@ export default function ClientOnboarding() {
         </div>
 
         {/* Step 0: Videomaker Selection */}
-        {step === 0 && (
+        {step === VM_STEP && planHasRecording && (
           <div className="space-y-5">
             <div className="p-4 rounded-xl bg-primary/5 border border-primary/20">
               <p className="text-sm font-semibold flex items-center gap-2 mb-1">
@@ -577,7 +588,7 @@ export default function ClientOnboarding() {
         )}
 
         {/* Step 1: Schedule */}
-        {step === 1 && settings && (
+        {step === AGENDA_STEP && planHasRecording && settings && (
           <div className="space-y-5">
             {/* Concentrated recording: simplified shift selection */}
             {fullShiftRecording ? (
@@ -1236,7 +1247,9 @@ export default function ClientOnboarding() {
 
         {/* Last Step: Extra content + Terms */}
         {step === EXTRA_STEP && (
-          <div className="space-y-5">
+           <div className="space-y-5">
+            {planHasRecording && (
+            <>
             <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-3">
               <p className="text-sm font-semibold flex items-center gap-2">
                 <Sparkles size={16} className="text-primary" /> Conteúdo Extra
@@ -1286,6 +1299,8 @@ export default function ClientOnboarding() {
                 </div>
               </div>
             )}
+            </>
+            )}
 
             {/* Terms */}
             <div className="p-4 rounded-xl border-2 border-border space-y-3">
@@ -1293,11 +1308,18 @@ export default function ClientOnboarding() {
               <div className="space-y-2 text-xs text-muted-foreground">
                 <p>Ao aceitar, você concorda com os seguintes termos:</p>
                 <ul className="list-disc pl-4 space-y-1">
-                  <li>O dia e horário fixo de gravação serão reservados exclusivamente para sua empresa.</li>
-                  <li>Cancelamentos podem ser reagendados para o dia de backup, sujeito à disponibilidade.</li>
-                  <li>O conteúdo extra (se aceito) será produzido sem aviso prévio.</li>
-                  <li>A quantidade de gravações mensais pode ser ajustada com aviso prévio de 7 dias.</li>
-                  {photoPreference === 'fotos_reais' && !hasPhotoShoot && (
+                  {planHasRecording && <>
+                    <li>O dia e horário fixo de gravação serão reservados exclusivamente para sua empresa.</li>
+                    <li>Cancelamentos podem ser reagendados para o dia de backup, sujeito à disponibilidade.</li>
+                    <li>O conteúdo extra (se aceito) será produzido sem aviso prévio.</li>
+                    <li>A quantidade de gravações mensais pode ser ajustada com aviso prévio de 7 dias.</li>
+                  </>}
+                  {!planHasRecording && <>
+                    <li>Os materiais brutos (vídeos, fotos) devem ser enviados pela sua empresa para edição.</li>
+                    <li>Entregas de conteúdo editado seguem o prazo acordado no contrato.</li>
+                    <li>Estratégias e roteiros serão entregues conforme a frequência contratada.</li>
+                  </>}
+                  {photoPreference === 'fotos_reais' && !hasPhotoShoot && planHasPhotography && (
                     <li className="text-warning font-medium">O ensaio fotográfico tem custo adicional e será agendado pela equipe.</li>
                   )}
                 </ul>

@@ -56,10 +56,10 @@ export default function FinancialCashReserve() {
 
   const openEdit = (m: typeof cashMovements[0]) => {
     setEditingId(m.id);
-    setAmount(String(m.amount));
+    setAmount(String(Number(m.amount)));
     setType(m.type as 'entrada' | 'saida');
     setDescription(m.description);
-    setDate(m.date);
+    setDate(normalizeDate(m.date));
     setOpen(true);
   };
 

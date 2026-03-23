@@ -261,6 +261,12 @@ export async function testWhatsAppConnection(): Promise<{ success: boolean; erro
 
 // ── Build messages from templates ──
 
+const PORTAL_BASE = 'https://agenciapulse.tech/portal';
+
+function getPortalLink(clientId?: string): string {
+  return clientId ? `${PORTAL_BASE}/${clientId}` : PORTAL_BASE;
+}
+
 function applyTemplate(template: string, vars: Record<string, string>): string {
   let result = template;
   for (const [key, value] of Object.entries(vars)) {

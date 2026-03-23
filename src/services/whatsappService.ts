@@ -446,6 +446,7 @@ export async function sendManualConfirmation(
     data_gravacao: date,
     hora_gravacao: time,
     videomaker: videomakerName,
+    link_portal: getPortalLink(clientId),
   });
 
   // Create confirmation record (prevents cron from sending duplicate)

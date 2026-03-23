@@ -359,12 +359,23 @@ export function useFinancialData() {
 
   // Expense CRUD
   const addExpense = async (e: Partial<Expense>) => {
-    const { error } = await supabase.from('expenses').insert(e as any);
-    if (!error) {
-      await logActivity('criação', 'despesa', `Registrou despesa - R$ ${Number(e.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${e.description}`, undefined, e);
-      await fetchAll();
+    try {
+      console.log('[useFinancialData] addExpense payload:', JSON.stringify(e));
+      const { data, error } = await supabase.from('expenses').insert(e as any);
+      console.log('[useFinancialData] addExpense result:', { data, error });
+      if (error) {
+        console.error('[useFinancialData] addExpense error:', error);
+        return false;
+      }
+      await Promise.allSettled([
+        logActivity('criação', 'despesa', `Registrou despesa - R$ ${Number(e.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${e.description}`, undefined, e),
+        fetchAll(),
+      ]);
+      return true;
+    } catch (err) {
+      console.error('[useFinancialData] addExpense unexpected error:', err);
+      return false;
     }
-    return !error;
   };
 
   const updateExpense = async (id: string, updates: Partial<Expense>) => {

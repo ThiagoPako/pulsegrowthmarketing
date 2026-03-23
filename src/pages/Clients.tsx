@@ -1442,20 +1442,12 @@ export default function Clients() {
         <p className="text-sm font-semibold flex items-center gap-2">
           <Target size={16} className="text-primary" /> Metas de Entrega Semanal
         </p>
-        {planId && (() => {
-          const sp = plans.find(p => p.id === planId);
-          if (!sp) return null;
-          return (
-            <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 text-xs text-primary space-y-1">
-              <p className="font-semibold">Metas calculadas automaticamente pelo plano</p>
-              <p className="text-muted-foreground">
-                Entrega mínima do plano: {Math.ceil(sp.reels_qty / 4)} reels, {Math.ceil(sp.creatives_qty / 4)} criativos, {Math.ceil(sp.stories_qty / 4)} stories/semana.
-                Gravações mensais: <strong>{sp.recording_sessions || 4}x</strong>.
-                A meta semanal é sempre <strong>+1 a mais</strong> que o mínimo para adiantar conteúdos.
-              </p>
-            </div>
-          );
-        })()}
+        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-600 space-y-1">
+          <p className="font-semibold">⚠️ Preencha as metas manualmente</p>
+          <p className="text-muted-foreground">
+            As metas de entrega semanal devem ser definidas de acordo com o combinado com o cliente. Deixe em 0 para configurar depois.
+          </p>
+        </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="space-y-1">
             <Label>Meta Reels/Sem.</Label>

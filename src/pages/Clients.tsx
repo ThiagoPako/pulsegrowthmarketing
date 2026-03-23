@@ -1451,19 +1451,19 @@ export default function Clients() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="space-y-1">
             <Label>Meta Reels/Sem.</Label>
-            <Input type="number" min={0} value={form.weeklyReels ?? 0} onChange={e => setForm({ ...form, weeklyReels: Number(e.target.value) })} disabled={!!planId} className={planId ? 'opacity-70' : ''} />
+            <Input type="number" min={0} value={form.weeklyReels ?? 0} onChange={e => setForm({ ...form, weeklyReels: Number(e.target.value) })} />
           </div>
           <div className="space-y-1">
             <Label>Meta Criativos/Sem.</Label>
-            <Input type="number" min={0} value={form.weeklyCreatives ?? 0} onChange={e => setForm({ ...form, weeklyCreatives: Number(e.target.value) })} disabled={!!planId} className={planId ? 'opacity-70' : ''} />
+            <Input type="number" min={0} value={form.weeklyCreatives ?? 0} onChange={e => setForm({ ...form, weeklyCreatives: Number(e.target.value) })} />
           </div>
           <div className="space-y-1">
             <Label>Meta Stories/Sem.</Label>
-            <Input type="number" min={0} value={form.weeklyStories ?? 0} onChange={e => setForm({ ...form, weeklyStories: Number(e.target.value) })} disabled={!!planId} className={planId ? 'opacity-70' : ''} />
+            <Input type="number" min={0} value={form.weeklyStories ?? 0} onChange={e => setForm({ ...form, weeklyStories: Number(e.target.value) })} />
           </div>
           <div className="space-y-1">
             <Label>Meta Total/Sem.</Label>
-            <Input type="number" min={1} value={form.weeklyGoal} onChange={e => setForm({ ...form, weeklyGoal: Number(e.target.value) })} disabled={!!planId} className={planId ? 'opacity-70' : ''} />
+            <Input type="number" min={0} value={form.weeklyGoal ?? 0} onChange={e => setForm({ ...form, weeklyGoal: Number(e.target.value) })} />
           </div>
         </div>
       </div>

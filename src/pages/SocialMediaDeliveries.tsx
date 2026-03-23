@@ -53,7 +53,6 @@ interface Plan {
   creatives_qty: number;
   stories_qty: number;
   arts_qty: number;
-  has_recording?: boolean;
 }
 
 const CONTENT_TYPES = [
@@ -169,7 +168,7 @@ export default function SocialMediaDeliveries() {
   const fetchData = useCallback(async () => {
     const [dRes, pRes, cRes, tRes, oRes, ctRes] = await Promise.all([
       supabase.from('social_media_deliveries').select('*').order('delivered_at', { ascending: false }),
-      supabase.from('plans').select('id, name, reels_qty, creatives_qty, stories_qty, arts_qty, has_recording'),
+      supabase.from('plans').select('id, name, reels_qty, creatives_qty, stories_qty, arts_qty'),
       supabase.from('clients').select('id, plan_id'),
       supabase.from('content_tasks').select('id, review_deadline, alteration_deadline, approval_deadline, immediate_alteration'),
       supabase.from('onboarding_tasks').select('client_id, status'),
@@ -295,10 +294,6 @@ export default function SocialMediaDeliveries() {
     clients.forEach(c => {
       const planId = clientPlans[c.id];
       const plan = planId ? plans.find(p => p.id === planId) : null;
-      
-      // Skip automatic goals for plans without recording (external plans)
-      if (plan && plan.has_recording === false) return;
-      
       const del = delivered[c.id] || { reels: 0, criativo: 0, story: 0, arte: 0 };
 
       const reelsGoal = plan ? plan.reels_qty : (c.weeklyReels ? c.weeklyReels * 4 : 0);
@@ -780,10 +775,9 @@ export default function SocialMediaDeliveries() {
   // ─── CLIENT DETAIL VIEW ────────────────────────────────────
   if (selectedClientId && selectedClient) {
     const plan = getClientPlanGoals(selectedClientId);
-    const isExternalPlan = plan && plan.has_recording === false;
     const stats = monthlyStats[selectedClientId] || { reels: 0, criativo: 0, story: 0, arte: 0, total: 0, pendentes: 0, agendados: 0, postados: 0, revisao: 0 };
     const weekStories = weeklyStoriesMap[selectedClientId] || 0;
-    const storyGoal = isExternalPlan ? 0 : (selectedClient.weeklyStories || 0);
+    const storyGoal = selectedClient.weeklyStories || 0;
 
     // All data now rendered via Kanban component
 
@@ -954,7 +948,7 @@ export default function SocialMediaDeliveries() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Stories Mensal */}
               {(() => {
-                const baseGoal = isExternalPlan ? 0 : (plan ? plan.stories_qty : (storyGoal > 0 ? storyGoal * 4 : 0));
+                const baseGoal = plan ? plan.stories_qty : (storyGoal > 0 ? storyGoal * 4 : 0);
                 // Only count deficit if the item is contracted (baseGoal > 0)
                 const deficit = baseGoal > 0 ? (prevMonthDeficit[selectedClientId]?.story || 0) : 0;
                 const goal = baseGoal + deficit;
@@ -998,7 +992,7 @@ export default function SocialMediaDeliveries() {
 
               {/* Reels Mensal */}
               {(() => {
-                const baseGoal = isExternalPlan ? 0 : (plan ? plan.reels_qty : (selectedClient.weeklyReels ? selectedClient.weeklyReels * 4 : 0));
+                const baseGoal = plan ? plan.reels_qty : (selectedClient.weeklyReels ? selectedClient.weeklyReels * 4 : 0);
                 const deficit = baseGoal > 0 ? (prevMonthDeficit[selectedClientId]?.reels || 0) : 0;
                 const goal = baseGoal + deficit;
                 const delivered = stats.reels;
@@ -1040,7 +1034,7 @@ export default function SocialMediaDeliveries() {
 
               {/* Criativos Mensal */}
               {(() => {
-                const baseGoal = isExternalPlan ? 0 : (plan ? plan.creatives_qty : (selectedClient.weeklyCreatives ? selectedClient.weeklyCreatives * 4 : 0));
+                const baseGoal = plan ? plan.creatives_qty : (selectedClient.weeklyCreatives ? selectedClient.weeklyCreatives * 4 : 0);
                 const deficit = baseGoal > 0 ? (prevMonthDeficit[selectedClientId]?.criativo || 0) : 0;
                 const goal = baseGoal + deficit;
                 const delivered = stats.criativo;
@@ -1082,7 +1076,7 @@ export default function SocialMediaDeliveries() {
 
               {/* Artes Mensal */}
               {(() => {
-                const baseGoal = isExternalPlan ? 0 : (plan ? plan.arts_qty : 0);
+                const baseGoal = plan ? plan.arts_qty : 0;
                 const deficit = baseGoal > 0 ? (prevMonthDeficit[selectedClientId]?.arte || 0) : 0;
                 const goal = baseGoal + deficit;
                 const delivered = stats.arte;
@@ -1240,13 +1234,11 @@ export default function SocialMediaDeliveries() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {clientsWithData.map(({ client, stats, plan, weeklyStories: ws, overdue, isOnboarding }) => {
-                // Skip automatic goals for external plans (no recording)
-                const isExternalPlan = plan && plan.has_recording === false;
                 // Monthly plan goals
-                const reelsGoal = isExternalPlan ? 0 : (plan ? plan.reels_qty : (client.weeklyReels ? client.weeklyReels * 4 : 0));
-                const creativosGoal = isExternalPlan ? 0 : (plan ? plan.creatives_qty : (client.weeklyCreatives ? client.weeklyCreatives * 4 : 0));
-                const storiesGoalMonthly = isExternalPlan ? 0 : (plan ? plan.stories_qty : (client.weeklyStories ? client.weeklyStories * 4 : 0));
-                const artesGoal = isExternalPlan ? 0 : (plan ? plan.arts_qty : 0);
+                const reelsGoal = plan ? plan.reels_qty : (client.weeklyReels ? client.weeklyReels * 4 : 0);
+                const creativosGoal = plan ? plan.creatives_qty : (client.weeklyCreatives ? client.weeklyCreatives * 4 : 0);
+                const storiesGoalMonthly = plan ? plan.stories_qty : (client.weeklyStories ? client.weeklyStories * 4 : 0);
+                const artesGoal = plan ? plan.arts_qty : 0;
                 const deficit = prevMonthDeficit[client.id] || { reels: 0, criativo: 0, story: 0, arte: 0 };
                 const goalItems = [
                   { label: 'Reels', delivered: stats.reels, goal: reelsGoal + (reelsGoal > 0 ? deficit.reels : 0), icon: Film, color: 'text-blue-600' },

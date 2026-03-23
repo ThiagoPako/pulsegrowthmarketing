@@ -295,16 +295,67 @@ export default function Plans() {
               <Label>Nome do Plano *</Label>
               <Input value={form.name} onChange={e => setField('name', e.target.value)} placeholder="Ex: Plano Growth" />
             </div>
+            {/* Plan Type */}
             <div className="space-y-1">
-              <Label>Descrição</Label>
-              <Textarea value={form.description} onChange={e => setField('description', e.target.value)} placeholder="Descrição do plano..." rows={2} />
+              <Label>Tipo do Plano</Label>
+              <Select value={form.plan_type || 'completo'} onValueChange={v => {
+                setField('plan_type', v);
+                if (v === 'externo') {
+                  setField('has_recording', false);
+                  setField('recording_sessions', 0);
+                  setField('recording_hours', 0);
+                }
+              }}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="completo">Completo (com gravação)</SelectItem>
+                  <SelectItem value="externo">Externo (sem gravação)</SelectItem>
+                </SelectContent>
+              </Select>
+              {form.plan_type === 'externo' && (
+                <p className="text-xs text-amber-600 mt-1">⚠️ Plano externo: cliente entrega os materiais. Onboarding não exigirá videomaker ou agenda.</p>
+              )}
             </div>
 
+            {/* Recording & Photography toggles */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Reels</Label>
-                <Input type="number" min={0} value={form.reels_qty} onChange={e => setField('reels_qty', parseInt(e.target.value) || 0)} />
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-border">
+                <Switch checked={form.has_recording ?? true} onCheckedChange={v => {
+                  setField('has_recording', v);
+                  if (!v) { setField('recording_sessions', 0); setField('recording_hours', 0); }
+                }} />
+                <div>
+                  <Label className="font-medium text-sm">Inclui Gravação</Label>
+                  <p className="text-[10px] text-muted-foreground">Videomaker + agenda</p>
+                </div>
               </div>
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-border">
+                <Switch checked={form.has_photography ?? true} onCheckedChange={v => setField('has_photography', v)} />
+                <div>
+                  <Label className="font-medium text-sm">Inclui Fotografia</Label>
+                  <p className="text-[10px] text-muted-foreground">Ensaio fotográfico</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Services */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2"><Megaphone size={14} /> Serviços Inclusos</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {AVAILABLE_SERVICES.map(svc => {
+                  const checked = (form.services || []).includes(svc.key);
+                  return (
+                    <label key={svc.key} className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors text-xs ${checked ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'}`}>
+                      <Checkbox checked={checked} onCheckedChange={() => {
+                        const current = form.services || [];
+                        setField('services', checked ? current.filter((s: string) => s !== svc.key) : [...current, svc.key]);
+                      }} />
+                      <span>{svc.icon} {svc.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
               <div className="space-y-1">
                 <Label>Criativos</Label>
                 <Input type="number" min={0} value={form.creatives_qty} onChange={e => setField('creatives_qty', parseInt(e.target.value) || 0)} />

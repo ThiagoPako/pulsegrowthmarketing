@@ -250,12 +250,14 @@ export default function Plans() {
                 <Badge variant="outline">{PERIODICITY_LABELS[plan.periodicity] || plan.periodicity}</Badge>
 
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="flex items-center gap-1.5"><Film size={12} className="text-primary" /><span>{plan.reels_qty} Reels</span></div>
-                  <div className="flex items-center gap-1.5"><Image size={12} className="text-primary" /><span>{plan.creatives_qty} Criativos</span></div>
-                  {plan.stories_qty > 0 && <div className="flex items-center gap-1.5"><BookImage size={12} className="text-primary" /><span>{plan.stories_qty} Stories</span></div>}
-                  {plan.arts_qty > 0 && <div className="flex items-center gap-1.5"><Palette size={12} className="text-primary" /><span>{plan.arts_qty} Artes</span></div>}
-                  <div className="flex items-center gap-1.5"><Film size={12} className="text-primary" /><span>{plan.recording_sessions} gravações/mês</span></div>
-                  <div className="flex items-center gap-1.5"><span className="text-muted-foreground">{plan.recording_hours}h gravação</span></div>
+                   {plan.reels_qty > 0 && <div className="flex items-center gap-1.5"><Film size={12} className="text-primary" /><span>{plan.reels_qty} Reels</span></div>}
+                   {plan.creatives_qty > 0 && <div className="flex items-center gap-1.5"><Image size={12} className="text-primary" /><span>{plan.creatives_qty} Criativos</span></div>}
+                   {plan.stories_qty > 0 && <div className="flex items-center gap-1.5"><BookImage size={12} className="text-primary" /><span>{plan.stories_qty} Stories</span></div>}
+                   {plan.arts_qty > 0 && <div className="flex items-center gap-1.5"><Palette size={12} className="text-primary" /><span>{plan.arts_qty} Artes</span></div>}
+                   {plan.has_recording && <>
+                     <div className="flex items-center gap-1.5"><Film size={12} className="text-primary" /><span>{plan.recording_sessions} gravações/mês</span></div>
+                     <div className="flex items-center gap-1.5"><span className="text-muted-foreground">{plan.recording_hours}h gravação</span></div>
+                   </>}
                    {plan.extra_content_allowed > 0 && <div className="col-span-2 text-muted-foreground">+{plan.extra_content_allowed} extras permitidos</div>}
                    {plan.accepts_extra_content && (
                      <div className="col-span-2 flex items-center gap-1.5 text-emerald-600 font-medium">
@@ -263,6 +265,20 @@ export default function Plans() {
                      </div>
                    )}
                 </div>
+
+                {/* Services */}
+                {(plan.services as string[] || []).length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {(plan.services as string[]).map(svc => {
+                      const svcDef = AVAILABLE_SERVICES.find(s => s.key === svc);
+                      return svcDef ? (
+                        <Badge key={svc} variant="secondary" className="text-[10px] gap-1">
+                          {svcDef.icon} {svcDef.label}
+                        </Badge>
+                      ) : null;
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}

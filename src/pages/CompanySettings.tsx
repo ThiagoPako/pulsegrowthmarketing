@@ -434,14 +434,16 @@ export default function CompanySettings() {
       {/* Zona de Perigo — Admin Only */}
       {isAdmin && (
         <>
+          <Separator className="my-4" />
           {!showDangerZone ? (
             <Button
               variant="outline"
-              className="w-full gap-2 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+              size="lg"
+              className="w-full gap-2 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive font-bold"
               onClick={() => setShowDangerZone(true)}
             >
-              <AlertTriangle size={16} />
-              Exibir Zona de Perigo
+              <AlertTriangle size={18} />
+              ⚠️ Exibir Zona de Perigo
             </Button>
           ) : (
             <div className="glass-card p-6 space-y-4 border-2 border-destructive/40 bg-destructive/5">

@@ -151,11 +151,13 @@ export default function FinancialRevenues() {
   const handleMarkPaid = async (id: string) => {
     const ok = await updateRevenue(id, { status: 'recebida', paid_at: new Date().toISOString().split('T')[0] });
     if (ok) toast.success('Marcada como recebida');
+    else toast.error('Não foi possível marcar como recebida');
   };
 
   const handleMarkOverdue = async (id: string) => {
     const ok = await updateRevenue(id, { status: 'em_atraso' });
     if (ok) toast.success('Marcada como em atraso');
+    else toast.error('Não foi possível marcar como em atraso');
   };
 
   const handleSendBilling = async (revenueId: string) => {

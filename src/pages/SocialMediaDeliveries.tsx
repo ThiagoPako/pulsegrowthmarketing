@@ -169,7 +169,7 @@ export default function SocialMediaDeliveries() {
   const fetchData = useCallback(async () => {
     const [dRes, pRes, cRes, tRes, oRes, ctRes] = await Promise.all([
       supabase.from('social_media_deliveries').select('*').order('delivered_at', { ascending: false }),
-      supabase.from('plans').select('id, name, reels_qty, creatives_qty, stories_qty, arts_qty'),
+      supabase.from('plans').select('id, name, reels_qty, creatives_qty, stories_qty, arts_qty, has_recording'),
       supabase.from('clients').select('id, plan_id'),
       supabase.from('content_tasks').select('id, review_deadline, alteration_deadline, approval_deadline, immediate_alteration'),
       supabase.from('onboarding_tasks').select('client_id, status'),

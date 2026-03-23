@@ -437,7 +437,7 @@ app.post('/api/financial-chat', async (req, res) => {
     revenues.forEach(r => { const name = r.client_name || 'N/A'; if (!revByClient[name]) revByClient[name] = { total: 0, paid: 0, pending: 0, overdue: 0 }; revByClient[name].total += Number(r.amount); if (r.status === 'pago') revByClient[name].paid += Number(r.amount); else if (['vencido','em_atraso'].includes(r.status)) revByClient[name].overdue += Number(r.amount); else revByClient[name].pending += Number(r.amount); });
 
     // ── Overdue per client (inadimplentes) ──
-    const overdueClients = revenues.filter(r => r.status === 'em_atraso');
+    const overdueClients = revenues.filter(r => ['vencido', 'em_atraso'].includes(r.status));
     const overdueByClient = {};
     overdueClients.forEach(r => { const name = r.client_name || 'N/A'; if (!overdueByClient[name]) overdueByClient[name] = { amount: 0, count: 0 }; overdueByClient[name].amount += Number(r.amount); overdueByClient[name].count += 1; });
     const inadimplentesCount = Object.keys(overdueByClient).length;

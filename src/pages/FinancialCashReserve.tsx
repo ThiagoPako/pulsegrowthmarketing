@@ -27,17 +27,17 @@ export default function FinancialCashReserve() {
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   const balance = useMemo(() =>
-    cashMovements.reduce((acc, m) => acc + (m.type === 'entrada' ? m.amount : -m.amount), 0),
+    cashMovements.reduce((acc, m) => acc + (m.type === 'entrada' ? Number(m.amount) : -Number(m.amount)), 0),
     [cashMovements]
   );
 
   const totalIn = useMemo(() =>
-    cashMovements.filter(m => m.type === 'entrada').reduce((acc, m) => acc + m.amount, 0),
+    cashMovements.filter(m => m.type === 'entrada').reduce((acc, m) => acc + Number(m.amount), 0),
     [cashMovements]
   );
 
   const totalOut = useMemo(() =>
-    cashMovements.filter(m => m.type === 'saida').reduce((acc, m) => acc + m.amount, 0),
+    cashMovements.filter(m => m.type === 'saida').reduce((acc, m) => acc + Number(m.amount), 0),
     [cashMovements]
   );
 

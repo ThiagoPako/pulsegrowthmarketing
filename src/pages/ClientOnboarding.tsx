@@ -295,23 +295,34 @@ export default function ClientOnboarding() {
     </div>
   );
 
-  // Dynamic steps based on client type
+  // Determine which features are available based on plan
+  const planHasRecording = plan?.has_recording !== false;
+  const planHasPhotography = plan?.has_photography !== false;
+  const planArtsQty = plan ? (plan as any).arts_qty : 1;
+  const showPhotoStep = planHasPhotography && planArtsQty > 0;
+
+  // Dynamic steps based on client type and plan features
   const STEPS = [
-    { icon: Camera, label: 'Videomaker' },
-    { icon: Calendar, label: 'Agenda' },
-    { icon: ImageIcon, label: 'Fotos' },
+    ...(planHasRecording ? [
+      { icon: Camera, label: 'Videomaker' },
+      { icon: Calendar, label: 'Agenda' },
+    ] : []),
+    ...(showPhotoStep ? [{ icon: ImageIcon, label: 'Fotos' }] : []),
     ...(isNewClient ? [{ icon: FileText, label: 'Briefing' }] : []),
-    { icon: Sparkles, label: 'Extra & Termos' },
+    { icon: Sparkles, label: planHasRecording ? 'Extra & Termos' : 'Termos' },
   ];
 
-  const PHOTO_STEP = 2;
-  const BRIEFING_STEP = isNewClient ? 3 : -1;
-  const EXTRA_STEP = isNewClient ? 4 : 3;
+  // Calculate step indices dynamically
+  const VM_STEP = planHasRecording ? 0 : -1;
+  const AGENDA_STEP = planHasRecording ? 1 : -1;
+  const PHOTO_STEP = showPhotoStep ? (planHasRecording ? 2 : 0) : -1;
+  const BRIEFING_STEP = isNewClient ? (PHOTO_STEP >= 0 ? PHOTO_STEP + 1 : (planHasRecording ? 2 : 0)) : -1;
+  const EXTRA_STEP = STEPS.length - 1;
   const LAST_STEP = STEPS.length - 1;
 
   const canProceed = () => {
-    if (step === 0) return !!selectedVm;
-    if (step === 1) return fullShiftRecording ? (!!fixedDay && preferredShift !== 'ambos') : !!fixedTime;
+    if (step === VM_STEP) return !!selectedVm;
+    if (step === AGENDA_STEP) return fullShiftRecording ? (!!fixedDay && preferredShift !== 'ambos') : !!fixedTime;
     if (step === PHOTO_STEP) {
       if (photoPreference === 'fotos_reais' && !hasPhotoShoot && !acceptsPhotoShootCost) return false;
       return true;

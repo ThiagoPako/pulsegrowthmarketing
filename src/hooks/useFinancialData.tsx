@@ -277,19 +277,8 @@ export function useFinancialData() {
 
   const updateRevenue = async (id: string, updates: Partial<Revenue>) => {
     try {
-      const targetRevenue = revenues.find(r => r.id === id);
-
-      let query = supabase.from('revenues').update(updates as any);
-
-      if (targetRevenue?.client_id && targetRevenue?.reference_month) {
-        query = query
-          .eq('client_id', targetRevenue.client_id)
-          .eq('reference_month', normalizeDate(targetRevenue.reference_month));
-      } else {
-        query = query.eq('id', id);
-      }
-
-      const { error } = await query;
+      // Always update by ID only — never by client_id+month to avoid cross-contamination
+      const { error } = await supabase.from('revenues').update(updates as any).eq('id', id);
 
       if (error) {
         console.error('[useFinancialData] Failed to update revenue:', error);
@@ -298,10 +287,9 @@ export function useFinancialData() {
 
       const action = updates.status === 'recebida' ? 'Marcou receita como paga' : updates.status === 'prevista' ? 'Reverteu receita para pendente' : 'Atualizou receita';
 
-      await Promise.allSettled([
-        logActivity('edição', 'receita', `${action} - R$ ${Number(updates.amount || revenues.find(r => r.id === id)?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, updates),
-        fetchAll(),
-      ]);
+      // Log first, then refresh data to ensure UI always shows latest state
+      await logActivity('edição', 'receita', `${action} - R$ ${Number(updates.amount || revenues.find(r => r.id === id)?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, updates);
+      await fetchAll();
 
       return true;
     } catch (error) {

@@ -39,6 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = useCallback(async (userId: string) => {
+    // Try VPS first
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
@@ -46,6 +47,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .single();
     if (data && !error) {
       setProfile(data as Profile);
+      return;
+    }
+    // Fallback: try Supabase directly (preview environment)
+    const { data: sbData, error: sbErr } = await supabaseReal
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+    if (sbData && !sbErr) {
+      setProfile(sbData as unknown as Profile);
     }
   }, []);
 

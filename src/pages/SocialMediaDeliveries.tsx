@@ -53,6 +53,7 @@ interface Plan {
   creatives_qty: number;
   stories_qty: number;
   arts_qty: number;
+  has_recording?: boolean;
 }
 
 const CONTENT_TYPES = [

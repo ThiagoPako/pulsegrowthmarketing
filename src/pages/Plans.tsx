@@ -125,7 +125,8 @@ export default function Plans() {
     const payload = {
       name: form.name, description: form.description, reels_qty: form.reels_qty,
       creatives_qty: form.creatives_qty, stories_qty: form.stories_qty, arts_qty: form.arts_qty,
-      recording_sessions: form.recording_sessions, recording_hours: form.recording_hours,
+      recording_sessions: form.has_recording ? form.recording_sessions : 0,
+      recording_hours: form.has_recording ? form.recording_hours : 0,
       extra_content_allowed: form.extra_content_allowed,
       accepts_extra_content: form.accepts_extra_content || false,
       price: form.price,
@@ -133,6 +134,10 @@ export default function Plans() {
       is_partner_plan: form.is_partner_plan || false,
       partner_id: form.is_partner_plan ? form.partner_id : null,
       partner_cost: form.is_partner_plan ? (form.partner_cost || 0) : 0,
+      has_recording: form.has_recording ?? true,
+      has_photography: form.has_photography ?? true,
+      services: form.services || [],
+      plan_type: form.plan_type || 'completo',
     };
     if (editing) {
       const { error } = await supabase.from('plans').update({ ...payload, updated_at: new Date().toISOString() } as any).eq('id', editing.id);

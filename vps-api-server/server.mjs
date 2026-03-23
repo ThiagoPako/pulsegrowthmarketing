@@ -424,7 +424,7 @@ app.post('/api/financial-chat', async (req, res) => {
     // ── Financial summary ──
     const totalRevenuePaid = revenues.filter(r => r.status === 'pago').reduce((s, r) => s + Number(r.amount), 0);
     const totalRevenuePending = revenues.filter(r => ['pendente', 'prevista'].includes(r.status)).reduce((s, r) => s + Number(r.amount), 0);
-    const totalRevenueOverdue = revenues.filter(r => r.status === 'em_atraso').reduce((s, r) => s + Number(r.amount), 0);
+    const totalRevenueOverdue = revenues.filter(r => ['vencido', 'em_atraso'].includes(r.status)).reduce((s, r) => s + Number(r.amount), 0);
     const totalExpenses = expenses.reduce((s, e) => s + Number(e.amount), 0);
 
     const expByCategory = {};

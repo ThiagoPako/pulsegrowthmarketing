@@ -56,6 +56,7 @@ export default function TeamPerformanceWidget() {
   const [designTasks, setDesignTasks] = useState<any[]>([]);
   const [smDeliveries, setSmDeliveries] = useState<any[]>([]);
   const [partnerTasks, setPartnerTasks] = useState<any[]>([]);
+  const [waitLogs, setWaitLogs] = useState<any[]>([]);
   const [expandedRole, setExpandedRole] = useState<string | null>(null);
 
   useEffect(() => {
@@ -67,12 +68,14 @@ export default function TeamPerformanceWidget() {
       supabase.from('design_tasks').select('*'),
       supabase.from('social_media_deliveries').select('*').gte('delivered_at', monthStart).lte('delivered_at', monthEnd),
       supabase.from('endomarketing_partner_tasks').select('*').gte('date', monthStart).lte('date', monthEnd),
-    ]).then(([dr, ct, dt, smd, pt]) => {
+      supabase.from('recording_wait_logs').select('*').gte('created_at', monthStart),
+    ]).then(([dr, ct, dt, smd, pt, wl]) => {
       if (dr.data) setDeliveryRecords(dr.data);
       if (ct.data) setContentTasks(ct.data);
       if (dt.data) setDesignTasks(dt.data);
       if (smd.data) setSmDeliveries(smd.data);
       if (pt.data) setPartnerTasks(pt.data);
+      if (wl.data) setWaitLogs(wl.data);
     });
   }, []);
 
@@ -89,7 +92,6 @@ export default function TeamPerformanceWidget() {
       const metrics: { label: string; value: number }[] = [];
 
       if (user.role === 'videomaker') {
-        // Videomaker: gravação exige deslocamento, setup, tempo no local
         const vmDeliveries = deliveryRecords.filter(r => r.videomaker_id === user.id);
         const reels = vmDeliveries.reduce((a, r) => a + (r.reels_produced || 0), 0);
         const creatives = vmDeliveries.reduce((a, r) => a + (r.creatives_produced || 0), 0);
@@ -101,16 +103,20 @@ export default function TeamPerformanceWidget() {
           isWithinInterval(parseISO(r.date), { start: weekStart, end: weekEnd })
         );
         const weekDone = weekRecs.filter(r => r.status === 'concluida').length;
-        // Pontuação por esforço: Reel (roteiro+gravação+setup) = 12pts, Criativo (setup+gravação) = 6pts
-        // Story (rápido, menor esforço) = 3pts, Extra (fora do padrão, esforço adicional) = 10pts
-        // Gravação concluída na semana = 15pts (deslocamento+tempo no local)
-        score = reels * 12 + creatives * 6 + stories * 3 + extras * 10 + arts * 4 + weekDone * 15;
+
+        // Wait time scoring: 2 points per 10 min of waiting
+        const vmWaitLogs = waitLogs.filter(l => l.videomaker_id === user.id);
+        const totalWaitSeconds = vmWaitLogs.reduce((a, l) => a + (l.wait_duration_seconds || 0), 0);
+        const waitPoints = Math.floor(totalWaitSeconds / 600) * 2; // every 10 min = 2 pts
+
+        score = reels * 12 + creatives * 6 + stories * 3 + extras * 10 + arts * 4 + weekDone * 15 + waitPoints;
         metrics.push(
           { label: 'Reels', value: reels },
           { label: 'Criativos', value: creatives },
           { label: 'Stories', value: stories },
           { label: 'Extras', value: extras },
           { label: 'Grav. Sem.', value: weekDone },
+          { label: 'Espera (pts)', value: waitPoints },
         );
         maxScore = Math.max(score, 200);
 
@@ -199,7 +205,7 @@ export default function TeamPerformanceWidget() {
     }
 
     return members.sort((a, b) => b.score - a.score);
-  }, [users, deliveryRecords, contentTasks, designTasks, smDeliveries, partnerTasks, scripts, recordings, weekStart, weekEnd]);
+  }, [users, deliveryRecords, contentTasks, designTasks, smDeliveries, partnerTasks, scripts, recordings, weekStart, weekEnd, waitLogs]);
 
   const roleGroups = useMemo(() => {
     const groups: Record<string, MemberPerformance[]> = {};

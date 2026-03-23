@@ -671,69 +671,38 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
 
   // Core draw function — STORY/REELS format (1080x1920)
-  // Safe zones filled with brand colors so nothing looks empty
+  // Matches reference: compact header → big photo → info bar → footer → thin brand bar
   const drawCanvasStory = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {
     const fs = fontScale;
     const c = colors;
     const BRAND_DARK = darkenHex(c.header);
     const bs = infoBoxScale;
 
-    // ---- 1. FULL BACKGROUND: brand dark ----
+    // ---- LAYOUT ZONES (matching reference image proportions) ----
+    const headerH = 120;        // Compact header
+    const infoBarH = 280;       // Info section
+    const footerH = 110;        // Footer with WhatsApp + address
+    const bottomBarH = 100;     // Thin brand bar at very bottom
+    const infoStartY = H - infoBarH - footerH - bottomBarH; // ~1430
+    const footY = infoStartY + infoBarH;       // ~1710
+    const bottomBarY = footY + footerH;         // ~1820
+
+    // ---- 1. BACKGROUND ----
     ctx.fillStyle = c.footerBg;
     ctx.fillRect(0, 0, W, H);
 
-    // ---- 2. TOP BRAND BAR (0 → 220px) — fills top safe zone ----
-    const topBarH = 220;
-    const topGrad = ctx.createLinearGradient(0, 0, 0, topBarH);
-    topGrad.addColorStop(0, c.header);
-    topGrad.addColorStop(0.7, BRAND_DARK);
-    topGrad.addColorStop(1, c.infoBg);
-    ctx.fillStyle = topGrad;
-    ctx.fillRect(0, 0, W, topBarH);
-
-    // Diagonal accent stripe
-    ctx.fillStyle = '#FFFFFF';
-    ctx.globalAlpha = 0.08;
-    ctx.beginPath();
-    ctx.moveTo(0, 0); ctx.lineTo(W * 0.6, 0); ctx.lineTo(0, topBarH * 0.7); ctx.closePath();
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    // Accent line at bottom of top bar
-    ctx.fillStyle = c.infoPills;
-    ctx.fillRect(0, topBarH - 4, W, 4);
-
-    // Header text (inside top bar)
-    ctx.fillStyle = c.priceText;
-    ctx.textAlign = 'left';
-    ctx.font = `bold ${Math.round(32 * fs)}px 'Raleway', sans-serif`;
-    ctx.fillText('QUALIDADE, CONFIANÇA E AS', 40, 60);
-    ctx.font = `900 ${Math.round(42 * fs)}px 'Raleway', sans-serif`;
-    ctx.fillText('MELHORES CONDIÇÕES!', 40, 110);
-
-    // Logo inside top bar
-    if (lImg) {
-      ctx.drawImage(lImg, logoX, logoY, logoW, logoH);
-    } else if (clientName) {
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = `bold ${Math.round(36 * fs)}px Arial, sans-serif`;
-      ctx.textAlign = 'left';
-      ctx.fillText(clientName, logoX, logoY + 40);
-    }
-
-    // ---- 3. VEHICLE PHOTO (220 → ~1160px) ----
-    const photoY = topBarH;
-    const infoStartY = H - 760; // ~1160 — leaves 760px for info+footer+bottom bar
+    // ---- 2. VEHICLE PHOTO (full bleed from header to info) ----
+    const photoY = headerH;
     const photoH = infoStartY - photoY;
 
     if (vImg && photoH > 0) {
       drawImageCover(ctx, vImg, 0, photoY, W, photoH, photoOffsetX, photoOffsetY);
-      // Subtle gradient at bottom of photo to blend into info
-      const photoBottomGrad = ctx.createLinearGradient(0, infoStartY - 120, 0, infoStartY);
-      photoBottomGrad.addColorStop(0, 'rgba(0,0,0,0)');
-      photoBottomGrad.addColorStop(1, c.infoBg);
-      ctx.fillStyle = photoBottomGrad;
-      ctx.fillRect(0, infoStartY - 120, W, 120);
+      // Bottom gradient blend into info bar
+      const blendGrad = ctx.createLinearGradient(0, infoStartY - 100, 0, infoStartY);
+      blendGrad.addColorStop(0, 'rgba(0,0,0,0)');
+      blendGrad.addColorStop(1, c.infoBg);
+      ctx.fillStyle = blendGrad;
+      ctx.fillRect(0, infoStartY - 100, W, 100);
     } else {
       ctx.fillStyle = '#111';
       ctx.fillRect(0, photoY, W, Math.max(photoH, 200));
@@ -743,15 +712,51 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillText('Adicione uma foto do veículo', W / 2, photoY + Math.max(photoH, 200) / 2);
     }
 
-    // ---- 4. INFO SECTION (~1160 → ~1460) ----
-    const infoBarH = 300;
+    // ---- 3. HEADER BAR (top, over photo) ----
+    const headerGrad = ctx.createLinearGradient(0, 0, W, 0);
+    headerGrad.addColorStop(0, c.header);
+    headerGrad.addColorStop(1, BRAND_DARK);
+    ctx.fillStyle = headerGrad;
+    ctx.fillRect(0, 0, W, headerH);
+
+    // Diagonal white accent (like feed reference)
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.moveTo(0, 0); ctx.lineTo(W * 0.55, 0);
+    ctx.quadraticCurveTo(W * 0.4, headerH, 0, headerH);
+    ctx.closePath();
+    ctx.fill();
+
+    // Header text on white area
+    ctx.fillStyle = c.headerText;
+    ctx.textAlign = 'left';
+    ctx.font = `bold ${Math.round(30 * fs)}px 'Raleway', sans-serif`;
+    ctx.fillText('QUALIDADE, CONFIANÇA E AS', 30, 45);
+    ctx.font = `900 ${Math.round(38 * fs)}px 'Raleway', sans-serif`;
+    ctx.fillText('MELHORES CONDIÇÕES!', 30, 90);
+
+    // Accent line at bottom of header
+    ctx.fillStyle = c.infoPills;
+    ctx.fillRect(0, headerH - 3, W, 3);
+
+    // ---- 4. LOGO (overlapping photo area, upper right) ----
+    if (lImg) {
+      ctx.drawImage(lImg, logoX, logoY, logoW, logoH);
+    } else if (clientName) {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `bold ${Math.round(36 * fs)}px Arial, sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.fillText(clientName, logoX, logoY + 40);
+    }
+
+    // ---- 5. INFO BAR ----
     ctx.fillStyle = c.infoBg;
     ctx.fillRect(0, infoStartY, W, infoBarH);
     ctx.fillStyle = c.infoPills;
     ctx.fillRect(0, infoStartY, W, 4);
 
-    // Left side: Model + details
-    const leftX = 50;
+    // -- Left side: Model name, submodel, fuel, extras --
+    const leftX = 40;
     const modelText = model || 'MODELO';
     const modelParts = modelText.split(' ');
     const mainModel = modelParts.slice(0, 2).join(' ').toUpperCase();
@@ -759,105 +764,125 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
 
     ctx.fillStyle = c.infoValueText;
     ctx.textAlign = 'left';
-    ctx.font = `900 ${Math.round(48 * modelFontScale * fs)}px 'Raleway', sans-serif`;
-    ctx.fillText(mainModel, leftX, infoStartY + 60);
+    ctx.font = `900 ${Math.round(46 * modelFontScale * fs)}px 'Raleway', sans-serif`;
+    ctx.fillText(mainModel, leftX, infoStartY + 65);
 
+    let nextLineY = infoStartY + 65;
     if (subModel) {
       ctx.font = `bold ${Math.round(34 * modelFontScale * fs)}px 'Raleway', sans-serif`;
-      ctx.fillText(subModel, leftX, infoStartY + 105);
+      nextLineY += 45;
+      ctx.fillText(subModel, leftX, nextLineY);
     }
 
     // Fuel type
     const fuelLabel = FUEL_OPTIONS.find(f => f.value === fuelType)?.label?.toUpperCase() || fuelType.toUpperCase();
+    nextLineY += 38;
     ctx.font = `bold ${Math.round(24 * obsFontScale * fs)}px 'Raleway', sans-serif`;
-    ctx.fillStyle = c.infoPills;
-    const detailY = subModel ? infoStartY + 145 : infoStartY + 115;
-    ctx.fillText(fuelLabel, leftX, detailY);
+    ctx.fillStyle = c.infoLabelText;
+    ctx.fillText(fuelLabel, leftX, nextLineY);
 
-    // Observations line
+    // Extra observations (transmission, tires, etc.)
     const obsItems: string[] = [];
     const transLabel = transmission === 'automatico' ? 'Automático' : 'Manual';
     obsItems.push(transLabel);
     obsItems.push(`Pneus ${TIRE_OPTIONS.find(t => t.value === tireCondition)?.label || tireCondition}`);
     if (ipvaStatus === 'pago') obsItems.push('IPVA Pago');
-    if (extraInfo.trim()) obsItems.push(extraInfo.trim().split('\n')[0]);
+    if (extraInfo.trim()) {
+      extraInfo.trim().split('\n').filter(l => l.trim() && !l.toLowerCase().includes('km')).forEach(l => obsItems.push(l.trim()));
+    }
     if (obsItems.length) {
+      nextLineY += 32;
       ctx.font = `${Math.round(20 * obsFontScale * fs)}px 'Raleway', sans-serif`;
       ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.fillText(obsItems.join(' • '), leftX, detailY + 35);
+      // Wrap if too long
+      const maxLeftW = W / 2 - 60;
+      const obsText = obsItems.join(' • ');
+      if (ctx.measureText(obsText).width > maxLeftW) {
+        const mid = Math.ceil(obsItems.length / 2);
+        ctx.fillText(obsItems.slice(0, mid).join(' • '), leftX, nextLineY);
+        ctx.fillText(obsItems.slice(mid).join(' • '), leftX, nextLineY + 24);
+      } else {
+        ctx.fillText(obsText, leftX, nextLineY);
+      }
     }
 
-    // Right side: Year pills + Price
-    const rightX = W / 2 + 30;
-    const pillY = infoStartY + 25;
-    const yearText = year || '----';
-    const yearPillW = Math.round(180 * bs);
-    const yearPillH = Math.round(44 * bs);
+    // -- Right side: Year pill, KM pill, Price --
+    const rightX = W / 2 + 20;
+
+    // Year pill with calendar icon text
+    const pillY = infoStartY + 22;
+    const yearPillW = Math.round(190 * bs);
+    const yearPillH = Math.round(42 * bs);
 
     ctx.fillStyle = c.infoPills;
-    ctx.beginPath(); ctx.roundRect(rightX, pillY, yearPillW, yearPillH, 10); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(rightX, pillY, yearPillW, yearPillH, 8); ctx.fill();
     ctx.fillStyle = c.infoLabelText;
-    ctx.font = `bold ${Math.round(22 * yearFontScale * fs)}px 'Raleway', sans-serif`;
+    ctx.font = `bold ${Math.round(20 * yearFontScale * fs)}px 'Raleway', sans-serif`;
     ctx.textAlign = 'center';
-    ctx.fillText(yearText, rightX + yearPillW / 2, pillY + yearPillH / 2 + 8);
+    const yearDisplay = `Ano: ${year || '----'}`;
+    ctx.fillText(yearDisplay, rightX + yearPillW / 2, pillY + yearPillH / 2 + 7);
 
     // KM pill
     const extraLines = extraInfo.trim().split('\n').filter(l => l.trim());
     const kmLine = extraLines.find(l => l.toLowerCase().includes('km'));
     if (kmLine) {
       const kmText = kmLine.replace(/^•\s*/, '').trim();
-      const kmPillX = rightX + yearPillW + 16;
-      const kmPillW = Math.round(200 * bs);
+      const kmPillX = rightX + yearPillW + 14;
+      const kmPillW = Math.round(210 * bs);
       ctx.fillStyle = c.infoPills;
-      ctx.beginPath(); ctx.roundRect(kmPillX, pillY, kmPillW, yearPillH, 10); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(kmPillX, pillY, kmPillW, yearPillH, 8); ctx.fill();
       ctx.fillStyle = c.infoLabelText;
-      ctx.fillText(kmText, kmPillX + kmPillW / 2, pillY + yearPillH / 2 + 8);
+      ctx.fillText(kmText, kmPillX + kmPillW / 2, pillY + yearPillH / 2 + 7);
     }
 
-    // Price
+    // Price (large, below pills)
     const priceVal = price ? formatPrice(price) : 'R$ 00.000,00';
     const priceIsExample = !price;
     ctx.globalAlpha = priceIsExample ? 0.4 : 1;
+
+    const priceBaseY = pillY + yearPillH + 30;
     ctx.textAlign = 'left';
     ctx.fillStyle = c.priceText;
-    ctx.font = `bold ${Math.round(28 * fs)}px 'Raleway', sans-serif`;
-    ctx.fillText('R$', rightX, pillY + yearPillH + 60);
+    ctx.font = `bold ${Math.round(30 * fs)}px 'Raleway', sans-serif`;
+    ctx.fillText('R$', rightX, priceBaseY + 30);
 
     const priceNumMatch = priceVal.match(/[\d.,]+/);
     const priceNum = priceNumMatch ? priceNumMatch[0] : '0,00';
     const priceParts = priceNum.split(',');
-    ctx.font = `900 ${Math.round(76 * fs)}px 'Raleway', sans-serif`;
-    ctx.fillText(priceParts[0], rightX + Math.round(50 * fs), pillY + yearPillH + 70);
+
+    ctx.font = `900 ${Math.round(80 * fs)}px 'Raleway', sans-serif`;
+    const rsW = ctx.measureText('R$ ').width;
+    ctx.fillText(priceParts[0], rightX + Math.round(55 * fs), priceBaseY + 40);
+
     if (priceParts[1]) {
       const mainWidth = ctx.measureText(priceParts[0]).width;
       ctx.font = `bold ${Math.round(38 * fs)}px 'Raleway', sans-serif`;
-      ctx.fillText(`,${priceParts[1]}`, rightX + Math.round(50 * fs) + mainWidth + 4, pillY + yearPillH + 60);
+      ctx.fillText(`,${priceParts[1]}`, rightX + Math.round(55 * fs) + mainWidth + 4, priceBaseY + 30);
     }
     ctx.globalAlpha = 1;
 
-    // Vertical divider
+    // Vertical divider between left and right
     ctx.strokeStyle = 'rgba(255,255,255,0.15)';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(W / 2 + 10, infoStartY + 16);
-    ctx.lineTo(W / 2 + 10, infoStartY + infoBarH - 16);
+    ctx.moveTo(W / 2, infoStartY + 14);
+    ctx.lineTo(W / 2, infoStartY + infoBarH - 14);
     ctx.stroke();
 
-    // ---- 5. FOOTER (~1460 → ~1580) ----
-    const footY = infoStartY + infoBarH;
-    const footH = 120;
-    const footGrad = ctx.createLinearGradient(0, footY, 0, footY + footH);
+    // ---- 6. FOOTER ----
+    const footGrad = ctx.createLinearGradient(0, footY, 0, footY + footerH);
     footGrad.addColorStop(0, c.footerBg);
     footGrad.addColorStop(1, darkenHex(c.footerBg, 15));
     ctx.fillStyle = footGrad;
-    ctx.fillRect(0, footY, W, footH);
+    ctx.fillRect(0, footY, W, footerH);
     ctx.fillStyle = c.footerAccent;
     ctx.fillRect(0, footY, W, 3);
 
-    const footCenterY = footY + footH / 2 + footerPosY;
+    const footCenterY = footY + footerH / 2 + footerPosY;
     const wpText = footerWhatsapp || '';
     const addrText = footerAddress || '';
 
+    // WhatsApp (left)
     if (wpText) {
       const wpImg = wpIconRef.current;
       if (wpImg) {
@@ -865,15 +890,17 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       }
       ctx.fillStyle = c.footerAccent;
       ctx.textAlign = 'left';
-      ctx.font = `900 ${Math.round(16 * fs)}px 'Raleway', sans-serif`;
+      ctx.font = `900 ${Math.round(18 * fs)}px 'Raleway', sans-serif`;
       ctx.fillText('COMPRE AGORA!', 90 + footerPosX, footCenterY - 10);
       ctx.fillStyle = c.footerText;
-      ctx.font = `bold ${Math.round(24 * fs)}px 'Raleway', sans-serif`;
-      ctx.fillText(wpText, 90 + footerPosX, footCenterY + 18);
+      ctx.font = `bold ${Math.round(26 * fs)}px 'Raleway', sans-serif`;
+      ctx.fillText(wpText, 90 + footerPosX, footCenterY + 20);
     }
 
+    // Address (right)
     if (addrText) {
       const addrX = W / 2 + 40 + footerPosX;
+      // Pin icon
       ctx.save();
       ctx.fillStyle = c.footerAccent;
       ctx.beginPath(); ctx.arc(addrX + 16, footCenterY, 18, 0, Math.PI * 2); ctx.fill();
@@ -886,12 +913,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.quadraticCurveTo(addrX + 16 + ps, footCenterY, addrX + 16, footCenterY + ps * 1.3);
       ctx.fill();
       ctx.restore();
+
       ctx.fillStyle = c.footerText;
       ctx.textAlign = 'left';
-      ctx.font = `bold ${Math.round(15 * fs)}px 'Raleway', sans-serif`;
+      ctx.font = `bold ${Math.round(16 * fs)}px 'Raleway', sans-serif`;
       const maxW = W / 2 - 120;
       const words = addrText.toUpperCase().split(' ');
-      let line = ''; let ly = footCenterY - 8;
+      let line = ''; let ly = footCenterY - 10;
       words.forEach(word => {
         const test = line + (line ? ' ' : '') + word;
         if (ctx.measureText(test).width > maxW && line) {
@@ -901,47 +929,22 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       if (line) ctx.fillText(line, addrX + 44, ly);
     }
 
-    // ---- 6. BOTTOM BRAND BAR (~1580 → 1920) — fills bottom safe zone ----
-    const bottomBarY = footY + footH;
-    const bottomBarH = H - bottomBarY;
-    const bottomGrad = ctx.createLinearGradient(0, bottomBarY, 0, H);
-    bottomGrad.addColorStop(0, c.footerBg);
-    bottomGrad.addColorStop(0.4, BRAND_DARK);
-    bottomGrad.addColorStop(1, c.header);
-    ctx.fillStyle = bottomGrad;
+    // ---- 7. BOTTOM BRAND BAR (thin, fills remaining space) ----
+    const botGrad = ctx.createLinearGradient(0, bottomBarY, 0, H);
+    botGrad.addColorStop(0, BRAND_DARK);
+    botGrad.addColorStop(1, c.header);
+    ctx.fillStyle = botGrad;
     ctx.fillRect(0, bottomBarY, W, bottomBarH);
-
-    // Accent stripe at top
     ctx.fillStyle = c.infoPills;
     ctx.fillRect(0, bottomBarY, W, 3);
 
-    // Subtle diagonal accent in bottom bar
+    // Subtle diagonal accent
     ctx.fillStyle = '#FFFFFF';
     ctx.globalAlpha = 0.06;
     ctx.beginPath();
-    ctx.moveTo(W, H); ctx.lineTo(W * 0.4, H); ctx.lineTo(W, H - bottomBarH * 0.7); ctx.closePath();
+    ctx.moveTo(W, H); ctx.lineTo(W * 0.35, H); ctx.lineTo(W, bottomBarY + 10); ctx.closePath();
     ctx.fill();
     ctx.globalAlpha = 1;
-
-    // Decorative dots pattern in bottom bar
-    ctx.fillStyle = '#FFFFFF';
-    ctx.globalAlpha = 0.04;
-    for (let dx = 40; dx < W; dx += 60) {
-      for (let dy = bottomBarY + 30; dy < H - 20; dy += 60) {
-        ctx.beginPath(); ctx.arc(dx, dy, 3, 0, Math.PI * 2); ctx.fill();
-      }
-    }
-    ctx.globalAlpha = 1;
-
-    // Brand watermark text in bottom bar
-    if (clientName) {
-      ctx.fillStyle = '#FFFFFF';
-      ctx.globalAlpha = 0.12;
-      ctx.font = `900 ${Math.round(80 * fs)}px 'Raleway', sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText(clientName.toUpperCase(), W / 2, H - bottomBarH / 2 + 25);
-      ctx.globalAlpha = 1;
-    }
   }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
 
   // Unified draw function

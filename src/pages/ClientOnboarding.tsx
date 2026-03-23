@@ -369,7 +369,7 @@ export default function ClientOnboarding() {
         </div>
 
         {/* Step 0: Videomaker Selection */}
-        {step === 0 && (
+        {step === VM_STEP && planHasRecording && (
           <div className="space-y-5">
             <div className="p-4 rounded-xl bg-primary/5 border border-primary/20">
               <p className="text-sm font-semibold flex items-center gap-2 mb-1">

@@ -261,6 +261,12 @@ export async function testWhatsAppConnection(): Promise<{ success: boolean; erro
 
 // ── Build messages from templates ──
 
+const PORTAL_BASE = 'https://agenciapulse.tech/portal';
+
+function getPortalLink(clientId?: string): string {
+  return clientId ? `${PORTAL_BASE}/${clientId}` : PORTAL_BASE;
+}
+
 function applyTemplate(template: string, vars: Record<string, string>): string {
   let result = template;
   for (const [key, value] of Object.entries(vars)) {
@@ -280,6 +286,7 @@ export async function sendRecordingCancelledNotification(
 
   const message = applyTemplate(config.msgConfirmationCancelled, {
     nome_cliente: clientName,
+    link_portal: getPortalLink(clientId),
   });
 
   return sendWhatsAppMessage({ number: clientPhone, message, clientId, triggerType: 'auto_confirmation' });
@@ -300,6 +307,7 @@ export async function sendRecordingConfirmedNotification(
     nome_cliente: clientName,
     data_gravacao: date,
     hora_gravacao: time,
+    link_portal: getPortalLink(clientId),
   });
 
   return sendWhatsAppMessage({ number: clientPhone, message, clientId, triggerType: 'auto_confirmation' });
@@ -320,6 +328,7 @@ export async function sendBackupInviteNotification(
     nome_cliente: clientName,
     data_gravacao: date,
     hora_gravacao: time,
+    link_portal: getPortalLink(clientId),
   });
 
   return sendWhatsAppMessage({ number: clientPhone, message, clientId, triggerType: 'auto_backup' });
@@ -342,6 +351,7 @@ export async function sendRecordingScheduledNotification(
     data_gravacao: date,
     hora_gravacao: time,
     videomaker: videomakerName,
+    link_portal: getPortalLink(clientId),
   });
 
   await sendWhatsAppMessage({
@@ -436,6 +446,7 @@ export async function sendManualConfirmation(
     data_gravacao: date,
     hora_gravacao: time,
     videomaker: videomakerName,
+    link_portal: getPortalLink(clientId),
   });
 
   // Create confirmation record (prevents cron from sending duplicate)

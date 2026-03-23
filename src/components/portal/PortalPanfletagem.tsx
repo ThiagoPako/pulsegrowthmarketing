@@ -138,6 +138,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const CANVAS_H_VAL = canvasFormat === 'story' ? CANVAS_H_STORY : CANVAS_H_FEED;
   const [activeTab, setActiveTab] = useState<'image' | 'video'>('image');
   const [flyerImageDataUrl, setFlyerImageDataUrl] = useState<string | null>(null);
+  const [flyerOverlayDataUrl, setFlyerOverlayDataUrl] = useState<string | null>(null);
   const [items, setItems] = useState<FlyerItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);

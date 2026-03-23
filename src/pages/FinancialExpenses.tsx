@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, Pencil, Trash2, ArrowLeft, TrendingDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
+import { format, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import ExpenseFormDialog from '@/components/financial/ExpenseFormDialog';

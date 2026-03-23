@@ -615,6 +615,65 @@ export default function Dashboard() {
         </motion.div>
       )}
 
+      {/* WAITING TIME STATS */}
+      {waitTimeStats.totalCount > 0 && currentUser?.role === 'admin' && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-3 sm:p-5 border-warning/20">
+          <div className="flex items-center gap-2 mb-3">
+            <Hourglass size={16} className="text-warning" />
+            <h3 className="font-display font-semibold text-xs sm:text-sm">⏳ Tempo de Espera — {format(new Date(), "MMMM", { locale: ptBR })}</h3>
+            <Badge variant="outline" className="text-[9px] h-4 px-1 border-warning/40 text-warning ml-auto">
+              {waitTimeStats.totalCount} esperas · {Math.floor(waitTimeStats.totalSeconds / 60)}min total
+            </Badge>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+            {/* Per Videomaker */}
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Por Videomaker</p>
+              <div className="space-y-1.5">
+                {waitTimeStats.vmStats.map(vs => {
+                  const vm = users.find(u => u.id === vs.id);
+                  const mins = Math.floor(vs.totalSeconds / 60);
+                  const avgMins = vs.count > 0 ? Math.round(vs.totalSeconds / vs.count / 60) : 0;
+                  return (
+                    <div key={vs.id} className="flex items-center gap-2 p-2 rounded-lg bg-warning/5 border border-warning/15">
+                      {vm && <UserAvatar user={vm} size="sm" />}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold truncate">{vm?.name || 'Videomaker'}</p>
+                        <p className="text-[10px] text-muted-foreground">{vs.count} esperas · média {avgMins}min</p>
+                      </div>
+                      <Badge className="bg-warning/15 text-warning border-warning/30 text-[10px]">{mins}min</Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Per Client - top offenders */}
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Clientes que Mais Fizeram Esperar</p>
+              <div className="space-y-1.5">
+                {waitTimeStats.topClients.map(tc => {
+                  const client = clients.find(c => c.id === tc.id);
+                  const mins = Math.floor(tc.totalSeconds / 60);
+                  const avgMins = tc.count > 0 ? Math.round(tc.totalSeconds / tc.count / 60) : 0;
+                  return (
+                    <div key={tc.id} className="flex items-center gap-2 p-2 rounded-lg bg-secondary/50 border border-border">
+                      {client && <ClientLogo client={client} size="sm" className="w-6 h-6" />}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold truncate">{client?.companyName || 'Cliente'}</p>
+                        <p className="text-[10px] text-muted-foreground">{tc.count}x · média {avgMins}min</p>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] border-warning/30 text-warning">{mins}min</Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* SEASONAL DATES */}
       {(() => {
         const allAlerts: { clientName: string; clientColor: string; label: string; date: Date; daysUntil: number; urgency: 'high' | 'medium' | 'low' }[] = [];

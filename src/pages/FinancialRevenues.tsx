@@ -149,8 +149,12 @@ export default function FinancialRevenues() {
     toast.success(`${count} receitas geradas`);
   };
 
+  const [animatingPaid, setAnimatingPaid] = useState<string | null>(null);
+
   const handleMarkPaid = async (id: string) => {
+    setAnimatingPaid(id);
     const ok = await updateRevenue(id, { status: 'recebida', paid_at: new Date().toISOString().split('T')[0] });
+    setTimeout(() => setAnimatingPaid(null), 1200);
     if (ok) toast.success('Marcada como recebida');
     else toast.error('Não foi possível marcar como recebida');
   };
@@ -159,6 +163,12 @@ export default function FinancialRevenues() {
     const ok = await updateRevenue(id, { status: 'em_atraso' });
     if (ok) toast.success('Marcada como em atraso');
     else toast.error('Não foi possível marcar como em atraso');
+  };
+
+  const handleRevertToPending = async (id: string) => {
+    const ok = await updateRevenue(id, { status: 'prevista', paid_at: null });
+    if (ok) toast.success('Receita revertida para pendente');
+    else toast.error('Não foi possível reverter');
   };
 
   const handleSendBilling = async (revenueId: string) => {

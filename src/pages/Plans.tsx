@@ -196,14 +196,24 @@ export default function Plans() {
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <CardTitle className="text-lg truncate">{plan.name}</CardTitle>
-                      {plan.is_partner_plan && (
-                        <Badge variant="outline" className="gap-1 shrink-0 text-purple-700 border-purple-300 bg-purple-50">
-                          <Handshake size={10} /> Parceiro
-                        </Badge>
-                      )}
-                    </div>
+                     <div className="flex items-center gap-2 flex-wrap">
+                       <CardTitle className="text-lg truncate">{plan.name}</CardTitle>
+                       {plan.plan_type === 'externo' && (
+                         <Badge variant="outline" className="gap-1 shrink-0 border-amber-300 bg-amber-50 text-amber-700">
+                           <Monitor size={10} /> Externo
+                         </Badge>
+                       )}
+                       {!plan.has_recording && (
+                         <Badge variant="outline" className="gap-1 shrink-0 border-blue-300 bg-blue-50 text-blue-700">
+                           Sem Gravação
+                         </Badge>
+                       )}
+                       {plan.is_partner_plan && (
+                         <Badge variant="outline" className="gap-1 shrink-0 text-purple-700 border-purple-300 bg-purple-50">
+                           <Handshake size={10} /> Parceiro
+                         </Badge>
+                       )}
+                     </div>
                     <CardDescription className="line-clamp-2 mt-1">{plan.description || 'Sem descrição'}</CardDescription>
                   </div>
                   <div className="flex gap-1 ml-2 shrink-0">

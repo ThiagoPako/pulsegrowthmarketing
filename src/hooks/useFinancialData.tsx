@@ -7,6 +7,60 @@ export const normalizeDate = (d: string | null | undefined): string => {
   return d.includes('T') ? d.split('T')[0] : d;
 };
 
+const getRevenueStatusPriority = (status: string | null | undefined): number => {
+  if (status === 'recebida' || status === 'pago') return 3;
+  if (status === 'em_atraso' || status === 'vencido') return 2;
+  if (status === 'prevista') return 1;
+  return 0;
+};
+
+const getComparableTimestamp = (value: string | null | undefined): number => {
+  if (!value) return 0;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const chooseCanonicalRevenue = (current: any, candidate: any) => {
+  const currentPriority = getRevenueStatusPriority(current?.status);
+  const candidatePriority = getRevenueStatusPriority(candidate?.status);
+
+  if (candidatePriority !== currentPriority) {
+    return candidatePriority > currentPriority ? candidate : current;
+  }
+
+  const candidatePaidAt = getComparableTimestamp(candidate?.paid_at);
+  const currentPaidAt = getComparableTimestamp(current?.paid_at);
+  if (candidatePaidAt !== currentPaidAt) {
+    return candidatePaidAt > currentPaidAt ? candidate : current;
+  }
+
+  const candidateUpdatedAt = getComparableTimestamp(candidate?.updated_at);
+  const currentUpdatedAt = getComparableTimestamp(current?.updated_at);
+  if (candidateUpdatedAt !== currentUpdatedAt) {
+    return candidateUpdatedAt > currentUpdatedAt ? candidate : current;
+  }
+
+  const candidateCreatedAt = getComparableTimestamp(candidate?.created_at);
+  const currentCreatedAt = getComparableTimestamp(current?.created_at);
+  if (candidateCreatedAt !== currentCreatedAt) {
+    return candidateCreatedAt > currentCreatedAt ? candidate : current;
+  }
+
+  return String(candidate?.id || '') > String(current?.id || '') ? candidate : current;
+};
+
+const deduplicateRevenues = (items: any[]) => {
+  const byKey = new Map<string, any>();
+
+  for (const revenue of items) {
+    const key = `${revenue.client_id}_${normalizeDate(revenue.reference_month)}`;
+    const existing = byKey.get(key);
+    byKey.set(key, existing ? chooseCanonicalRevenue(existing, revenue) : revenue);
+  }
+
+  return Array.from(byKey.values());
+};
+
 export interface FinancialContract {
   id: string;
   client_id: string;
@@ -30,6 +84,7 @@ export interface Revenue {
   status: string;
   paid_at: string | null;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface Expense {
@@ -126,15 +181,7 @@ export function useFinancialData() {
       const today = new Date().toISOString().split('T')[0];
       const revenueData = rRes.data as any[];
 
-      // Deduplicate by client_id + reference_month (keep earliest), in case DB constraint wasn't applied on VPS yet
-      const seen = new Map<string, any>();
-      for (const r of revenueData) {
-        const key = `${r.client_id}_${normalizeDate(r.reference_month)}`;
-        if (!seen.has(key)) {
-          seen.set(key, r);
-        }
-      }
-      const uniqueRevenues = Array.from(seen.values());
+      const uniqueRevenues = deduplicateRevenues(revenueData);
 
       const overdueIds: string[] = [];
       for (const r of uniqueRevenues) {
@@ -151,13 +198,7 @@ export function useFinancialData() {
         );
         const updated = await supabase.from('revenues').select('*').order('due_date', { ascending: false });
         if (updated.data) {
-          // Deduplicate again after re-fetch
-          const seen2 = new Map<string, any>();
-          for (const r of (updated.data as any[])) {
-            const key = `${r.client_id}_${normalizeDate(r.reference_month)}`;
-            if (!seen2.has(key)) seen2.set(key, r);
-          }
-          setRevenues(Array.from(seen2.values()));
+          setRevenues(deduplicateRevenues(updated.data as any[]));
         }
       } else {
         setRevenues(uniqueRevenues);
@@ -236,7 +277,19 @@ export function useFinancialData() {
 
   const updateRevenue = async (id: string, updates: Partial<Revenue>) => {
     try {
-      const { error } = await supabase.from('revenues').update(updates as any).eq('id', id);
+      const targetRevenue = revenues.find(r => r.id === id);
+
+      let query = supabase.from('revenues').update(updates as any);
+
+      if (targetRevenue?.client_id && targetRevenue?.reference_month) {
+        query = query
+          .eq('client_id', targetRevenue.client_id)
+          .eq('reference_month', normalizeDate(targetRevenue.reference_month));
+      } else {
+        query = query.eq('id', id);
+      }
+
+      const { error } = await query;
 
       if (error) {
         console.error('[useFinancialData] Failed to update revenue:', error);

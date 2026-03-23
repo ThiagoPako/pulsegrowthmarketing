@@ -356,6 +356,13 @@ export default function Plans() {
                 })}
               </div>
             </div>
+
+            {/* Content quantities */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Reels</Label>
+                <Input type="number" min={0} value={form.reels_qty} onChange={e => setField('reels_qty', parseInt(e.target.value) || 0)} />
+              </div>
               <div className="space-y-1">
                 <Label>Criativos</Label>
                 <Input type="number" min={0} value={form.creatives_qty} onChange={e => setField('creatives_qty', parseInt(e.target.value) || 0)} />
@@ -368,14 +375,22 @@ export default function Plans() {
                 <Label>Artes (opcional)</Label>
                 <Input type="number" min={0} value={form.arts_qty} onChange={e => setField('arts_qty', parseInt(e.target.value) || 0)} />
               </div>
-              <div className="space-y-1">
-                <Label>Gravações mensais</Label>
-                <Input type="number" min={0} value={form.recording_sessions} onChange={e => setField('recording_sessions', parseInt(e.target.value) || 0)} />
+            </div>
+
+            {/* Recording fields - only if has_recording */}
+            {(form.has_recording ?? true) && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Gravações mensais</Label>
+                  <Input type="number" min={0} value={form.recording_sessions} onChange={e => setField('recording_sessions', parseInt(e.target.value) || 0)} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Horas de gravação</Label>
+                  <Input type="number" min={0} step={0.5} value={form.recording_hours} onChange={e => setField('recording_hours', parseFloat(e.target.value) || 0)} />
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label>Horas de gravação</Label>
-                <Input type="number" min={0} step={0.5} value={form.recording_hours} onChange={e => setField('recording_hours', parseFloat(e.target.value) || 0)} />
-              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Extras permitidos</Label>
@@ -387,14 +402,15 @@ export default function Plans() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 p-3 rounded-xl border border-border">
-              <Switch checked={form.accepts_extra_content || false} onCheckedChange={v => setField('accepts_extra_content', v)} />
-              <div>
-                <Label className="font-medium flex items-center gap-2"><Sparkles size={14} className="text-primary" /> Cliente aceita conteúdo extra</Label>
-                <p className="text-xs text-muted-foreground mt-0.5">Permite envio de videomaker extra em horários vagos</p>
+            {(form.has_recording ?? true) && (
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-border">
+                <Switch checked={form.accepts_extra_content || false} onCheckedChange={v => setField('accepts_extra_content', v)} />
+                <div>
+                  <Label className="font-medium flex items-center gap-2"><Sparkles size={14} className="text-primary" /> Cliente aceita conteúdo extra</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">Permite envio de videomaker extra em horários vagos</p>
+                </div>
               </div>
-            </div>
-            </div>
+            )}
 
             {/* Partner section */}
             <div className="p-3 rounded-lg border border-border space-y-3">

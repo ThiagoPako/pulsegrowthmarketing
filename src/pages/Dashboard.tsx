@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Video, Plus, XCircle, RefreshCw, TrendingUp, Calendar, Check,
   ChevronLeft, ChevronRight, Clock, Users as UsersIcon, MessageSquare, Trophy, BarChart3,
-  Clapperboard, Film, Megaphone, AlertTriangle, Rocket, Bell, Send
+  Clapperboard, Film, Megaphone, AlertTriangle, Rocket, Bell, Send, Hourglass
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, addDays, formatDistanceToNow, differenceInMinutes, differenceInHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -60,10 +60,14 @@ export default function Dashboard() {
   const [endoMetrics, setEndoMetrics] = useState({ totalClients: 0, revenue: 0, costs: 0, profit: 0, margin: 0, topClients: [] as { name: string; profit: number }[] });
   const [contractAlerts, setContractAlerts] = useState<{ clientName: string; daysLeft: number; endDate: string }[]>([]);
   const [expandedWeekDay, setExpandedWeekDay] = useState<string | null>(null);
+  const [waitLogs, setWaitLogs] = useState<any[]>([]);
 
   useEffect(() => { getMessageStats().then(setWaStats); }, []);
   useEffect(() => {
     supabase.from('delivery_records').select('*').then(({ data }) => { if (data) setDeliveryRecords(data); });
+  }, []);
+  useEffect(() => {
+    supabase.from('recording_wait_logs').select('*').then(({ data }) => { if (data) setWaitLogs(data); });
   }, []);
 
   useEffect(() => {
@@ -197,6 +201,40 @@ export default function Dashboard() {
       return { client, tasksDone: done, tasksTotal: weekTasks.length, goal, recsDone, recsTotal, progress: Math.min(100, Math.round((done / goal) * 100)) };
     });
   }, [clients, tasks, recordings, currentWeekStr, weekStart, weekEnd]);
+
+  const waitTimeStats = useMemo(() => {
+    const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+    const monthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
+    const monthLogs = waitLogs.filter(w => {
+      const d = w.started_at?.split('T')[0] || '';
+      return d >= monthStart && d <= monthEnd && w.wait_duration_seconds;
+    });
+    const vmMap = new Map<string, { totalSeconds: number; count: number; clients: Map<string, number> }>();
+    monthLogs.forEach(w => {
+      const vmId = w.videomaker_id;
+      if (!vmMap.has(vmId)) vmMap.set(vmId, { totalSeconds: 0, count: 0, clients: new Map() });
+      const entry = vmMap.get(vmId)!;
+      entry.totalSeconds += w.wait_duration_seconds || 0;
+      entry.count += 1;
+      entry.clients.set(w.client_id, (entry.clients.get(w.client_id) || 0) + (w.wait_duration_seconds || 0));
+    });
+    const clientMap = new Map<string, { totalSeconds: number; count: number }>();
+    monthLogs.forEach(w => {
+      if (!clientMap.has(w.client_id)) clientMap.set(w.client_id, { totalSeconds: 0, count: 0 });
+      const entry = clientMap.get(w.client_id)!;
+      entry.totalSeconds += w.wait_duration_seconds || 0;
+      entry.count += 1;
+    });
+    const topClients = Array.from(clientMap.entries())
+      .map(([id, data]) => ({ id, ...data }))
+      .sort((a, b) => b.totalSeconds - a.totalSeconds)
+      .slice(0, 5);
+    const vmStats = Array.from(vmMap.entries())
+      .map(([id, data]) => ({ id, ...data }))
+      .sort((a, b) => b.totalSeconds - a.totalSeconds);
+    const totalSeconds = monthLogs.reduce((a, w) => a + (w.wait_duration_seconds || 0), 0);
+    return { totalSeconds, totalCount: monthLogs.length, vmStats, topClients };
+  }, [waitLogs]);
 
   const getRecsForDay = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
@@ -572,6 +610,65 @@ export default function Dashboard() {
                   })}
                 </div>
               )}
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* WAITING TIME STATS */}
+      {waitTimeStats.totalCount > 0 && currentUser?.role === 'admin' && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-3 sm:p-5 border-warning/20">
+          <div className="flex items-center gap-2 mb-3">
+            <Hourglass size={16} className="text-warning" />
+            <h3 className="font-display font-semibold text-xs sm:text-sm">⏳ Tempo de Espera — {format(new Date(), "MMMM", { locale: ptBR })}</h3>
+            <Badge variant="outline" className="text-[9px] h-4 px-1 border-warning/40 text-warning ml-auto">
+              {waitTimeStats.totalCount} esperas · {Math.floor(waitTimeStats.totalSeconds / 60)}min total
+            </Badge>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+            {/* Per Videomaker */}
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Por Videomaker</p>
+              <div className="space-y-1.5">
+                {waitTimeStats.vmStats.map(vs => {
+                  const vm = users.find(u => u.id === vs.id);
+                  const mins = Math.floor(vs.totalSeconds / 60);
+                  const avgMins = vs.count > 0 ? Math.round(vs.totalSeconds / vs.count / 60) : 0;
+                  return (
+                    <div key={vs.id} className="flex items-center gap-2 p-2 rounded-lg bg-warning/5 border border-warning/15">
+                      {vm && <UserAvatar user={vm} size="sm" />}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold truncate">{vm?.name || 'Videomaker'}</p>
+                        <p className="text-[10px] text-muted-foreground">{vs.count} esperas · média {avgMins}min</p>
+                      </div>
+                      <Badge className="bg-warning/15 text-warning border-warning/30 text-[10px]">{mins}min</Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Per Client - top offenders */}
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Clientes que Mais Fizeram Esperar</p>
+              <div className="space-y-1.5">
+                {waitTimeStats.topClients.map(tc => {
+                  const client = clients.find(c => c.id === tc.id);
+                  const mins = Math.floor(tc.totalSeconds / 60);
+                  const avgMins = tc.count > 0 ? Math.round(tc.totalSeconds / tc.count / 60) : 0;
+                  return (
+                    <div key={tc.id} className="flex items-center gap-2 p-2 rounded-lg bg-secondary/50 border border-border">
+                      {client && <ClientLogo client={client} size="sm" className="w-6 h-6" />}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold truncate">{client?.companyName || 'Cliente'}</p>
+                        <p className="text-[10px] text-muted-foreground">{tc.count}x · média {avgMins}min</p>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] border-warning/30 text-warning">{mins}min</Badge>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </motion.div>

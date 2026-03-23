@@ -242,9 +242,9 @@ export default function Scripts() {
       toast.error('Selecione o cliente de endomarketing'); return;
     }
 
-    // Auto-generate caption if content exists but caption is empty
-    let captionToSave = form.caption;
-    if (form.content && form.content.trim() && !form.caption.trim()) {
+    // Auto-generate caption if content exists but caption is empty (skip for stories)
+    let captionToSave = form.contentFormat === 'story' ? '' : form.caption;
+    if (form.contentFormat !== 'story' && form.content && form.content.trim() && !form.caption.trim()) {
       toast.info('Gerando legenda automaticamente...');
       const autoCaption = await generateCaptionFromContent(form.content, form.clientId);
       if (autoCaption) {
@@ -772,19 +772,21 @@ export default function Scripts() {
               <RichEditor key={editing?.id || 'new'} content={form.content} onChange={html => setForm(prev => ({ ...prev, content: html }))} />
             </div>
 
-            <div className="space-y-1">
-              <Label className="flex items-center gap-1.5">
-                📝 Legenda para Instagram
-                {form.caption && <Badge variant="outline" className="text-[9px]">{form.caption.length} caracteres</Badge>}
-              </Label>
-              <Textarea 
-                value={form.caption} 
-                onChange={e => setForm(prev => ({ ...prev, caption: e.target.value }))} 
-                placeholder="Legenda com CTA para a postagem..." 
-                rows={4}
-              />
-              <p className="text-[10px] text-muted-foreground">Gerada automaticamente pela IA junto com o roteiro. Você pode editar manualmente.</p>
-            </div>
+            {form.contentFormat !== 'story' && (
+              <div className="space-y-1">
+                <Label className="flex items-center gap-1.5">
+                  📝 Legenda para Instagram
+                  {form.caption && <Badge variant="outline" className="text-[9px]">{form.caption.length} caracteres</Badge>}
+                </Label>
+                <Textarea 
+                  value={form.caption} 
+                  onChange={e => setForm(prev => ({ ...prev, caption: e.target.value }))} 
+                  placeholder="Legenda com CTA para a postagem..." 
+                  rows={4}
+                />
+                <p className="text-[10px] text-muted-foreground">Gerada automaticamente pela IA junto com o roteiro. Você pode editar manualmente.</p>
+              </div>
+            )}
 
             <Button onClick={handleSave} className="w-full">{editing ? 'Salvar Alterações' : 'Criar Roteiro'}</Button>
           </div>

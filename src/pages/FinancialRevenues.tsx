@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, RefreshCw, CheckCircle, MessageCircle, Loader2, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, RefreshCw, CheckCircle, MessageCircle, Loader2, TrendingUp, AlertTriangle, Undo2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { format, subMonths, addMonths } from 'date-fns';
@@ -16,6 +16,7 @@ import { generateDeliveryReport, resolvePaymentInfo } from '@/lib/billingReport'
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import ClientLogo from '@/components/ClientLogo';
 
 /* ── Rocket Animation Overlay ── */
 function RocketOverlay({ onComplete }: { onComplete: () => void }) {

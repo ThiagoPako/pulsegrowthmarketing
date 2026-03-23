@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useFinancialData, type Expense } from '@/hooks/useFinancialData';
+import { useFinancialData, type Expense, normalizeDate } from '@/hooks/useFinancialData';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, Pencil, Trash2, ArrowLeft, TrendingDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
+import { format, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import ExpenseFormDialog from '@/components/financial/ExpenseFormDialog';
@@ -24,13 +24,13 @@ export default function FinancialExpenses() {
   const [newCat, setNewCat] = useState('');
   const [catOpen, setCatOpen] = useState(false);
 
-  const monthStart = startOfMonth(new Date(selectedMonth + '-01'));
-  const monthEnd = endOfMonth(monthStart);
-
-  const filtered = useMemo(() =>
-    expenses.filter(e => { const d = new Date(e.date); return d >= monthStart && d <= monthEnd; }),
-    [expenses, monthStart, monthEnd]
-  );
+  const filtered = useMemo(() => {
+    const ym = selectedMonth; // "2026-03"
+    return expenses.filter(e => {
+      const dateStr = normalizeDate(e.date); // "2026-03-23"
+      return dateStr.startsWith(ym);
+    });
+  }, [expenses, selectedMonth]);
 
   const total = filtered.reduce((s, e) => s + Number(e.amount), 0);
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -190,7 +190,7 @@ export default function FinancialExpenses() {
                     transition={{ delay: i * 0.03, duration: 0.2 }}
                     className="border-b transition-colors hover:bg-muted/50"
                   >
-                    <TableCell>{format(new Date(e.date + 'T12:00:00'), 'dd/MM/yyyy')}</TableCell>
+                    <TableCell>{(() => { const d = normalizeDate(e.date); const [y,m,day] = d.split('-'); return `${day}/${m}/${y}`; })()}</TableCell>
                     <TableCell><Badge variant="outline" className="font-normal">{cat?.name || '—'}</Badge></TableCell>
                     <TableCell>{e.description || '—'}</TableCell>
                     <TableCell>

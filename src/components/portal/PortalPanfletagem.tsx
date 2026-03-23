@@ -104,8 +104,10 @@ const IPVA_OPTIONS = [
 ];
 
 const CANVAS_W = 1080;
-const CANVAS_H = 1350;
+const CANVAS_H_FEED = 1350;
+const CANVAS_H_STORY = 1920;
 
+type CanvasFormat = 'feed' | 'story';
 type CanvasZone = 'header' | 'price' | 'info' | 'footer' | null;
 
 const COLOR_LABELS: { key: keyof LayoutColors; label: string; zone: CanvasZone }[] = [

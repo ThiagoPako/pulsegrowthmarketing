@@ -588,7 +588,7 @@ export default function ClientOnboarding() {
         )}
 
         {/* Step 1: Schedule */}
-        {step === 1 && settings && (
+        {step === AGENDA_STEP && planHasRecording && settings && (
           <div className="space-y-5">
             {/* Concentrated recording: simplified shift selection */}
             {fullShiftRecording ? (

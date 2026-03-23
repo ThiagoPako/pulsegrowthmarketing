@@ -351,6 +351,7 @@ export async function sendRecordingScheduledNotification(
     data_gravacao: date,
     hora_gravacao: time,
     videomaker: videomakerName,
+    link_portal: getPortalLink(clientId),
   });
 
   await sendWhatsAppMessage({

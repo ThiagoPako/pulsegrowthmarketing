@@ -670,49 +670,69 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     }
   }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
 
-  // Core draw function — STORY format (1080x1920)
+  // Core draw function — STORY/REELS format (1080x1920)
+  // Safe zones: top ~250px, bottom ~340px (content should live between ~250-1580)
   const drawCanvasStory = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {
     const fs = fontScale;
     const c = colors;
     const BRAND_DARK = darkenHex(c.header);
+    const bs = infoBoxScale;
+
+    // Safe zone boundaries
+    const SAFE_TOP = 200;
+    const SAFE_BOTTOM = H - 340; // ~1580 for 1920
 
     // Background
     ctx.fillStyle = '#0d1117';
     ctx.fillRect(0, 0, W, H);
 
-    // ---- TOP HEADER ----
-    const headerH = 140;
+    // ---- FULL VEHICLE PHOTO (background, covers entire canvas) ----
+    if (vImg) {
+      drawImageCover(ctx, vImg, 0, 0, W, H, photoOffsetX, photoOffsetY);
+      // Gradient overlays for readability
+      // Top gradient
+      const topGrad = ctx.createLinearGradient(0, 0, 0, SAFE_TOP + 100);
+      topGrad.addColorStop(0, 'rgba(0,0,0,0.85)');
+      topGrad.addColorStop(0.6, 'rgba(0,0,0,0.4)');
+      topGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = topGrad;
+      ctx.fillRect(0, 0, W, SAFE_TOP + 100);
+      // Bottom gradient (stronger, info lives here)
+      const botGrad = ctx.createLinearGradient(0, SAFE_BOTTOM - 350, 0, H);
+      botGrad.addColorStop(0, 'rgba(0,0,0,0)');
+      botGrad.addColorStop(0.3, 'rgba(0,0,0,0.6)');
+      botGrad.addColorStop(0.6, 'rgba(0,0,0,0.85)');
+      botGrad.addColorStop(1, 'rgba(0,0,0,0.95)');
+      ctx.fillStyle = botGrad;
+      ctx.fillRect(0, SAFE_BOTTOM - 350, W, H - SAFE_BOTTOM + 350);
+    } else {
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#555';
+      ctx.font = `${Math.round(32 * fs)}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.fillText('Adicione uma foto do veículo', W / 2, H / 2);
+    }
+
+    // ---- HEADER (within top safe zone) ----
+    const headerBarH = 100;
     const headerGrad = ctx.createLinearGradient(0, 0, W, 0);
     headerGrad.addColorStop(0, c.header);
     headerGrad.addColorStop(1, BRAND_DARK);
     ctx.fillStyle = headerGrad;
-    ctx.fillRect(0, 0, W, headerH);
+    ctx.globalAlpha = 0.9;
+    ctx.fillRect(0, 0, W, headerBarH);
+    ctx.globalAlpha = 1;
 
     // Header text
     ctx.fillStyle = c.priceText;
-    ctx.font = `bold ${Math.round(42 * fs)}px 'Raleway', sans-serif`;
     ctx.textAlign = 'left';
-    ctx.fillText('QUALIDADE, CONFIANÇA E AS', 40, 55);
-    ctx.font = `900 ${Math.round(52 * fs)}px 'Raleway', sans-serif`;
-    ctx.fillText('MELHORES CONDIÇÕES!', 40, 115);
+    ctx.font = `bold ${Math.round(30 * fs)}px 'Raleway', sans-serif`;
+    ctx.fillText('QUALIDADE, CONFIANÇA E AS', 40, 40);
+    ctx.font = `900 ${Math.round(38 * fs)}px 'Raleway', sans-serif`;
+    ctx.fillText('MELHORES CONDIÇÕES!', 40, 82);
 
-    // ---- VEHICLE PHOTO (large area) ----
-    const photoY = headerH;
-    const infoSectionH = 300; // info + footer at bottom
-    const photoH = H - photoY - infoSectionH;
-
-    if (vImg && photoH > 0) {
-      drawImageCover(ctx, vImg, 0, photoY, W, photoH, photoOffsetX, photoOffsetY);
-    } else {
-      ctx.fillStyle = '#111';
-      ctx.fillRect(0, photoY, W, Math.max(photoH, 200));
-      ctx.fillStyle = '#555';
-      ctx.font = `${Math.round(32 * fs)}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.fillText('Adicione uma foto do veículo', W / 2, photoY + Math.max(photoH, 200) / 2);
-    }
-
-    // ---- LOGO (upper right of photo) ----
+    // ---- LOGO (within top safe zone, below header) ----
     if (lImg) {
       ctx.drawImage(lImg, logoX, logoY, logoW, logoH);
     } else if (clientName) {
@@ -722,127 +742,130 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillText(clientName, logoX, logoY + 40);
     }
 
-    // ---- INFO SECTION (bottom) ----
-    const infoY = H - infoSectionH;
-    const infoBarH = 180;
-    ctx.fillStyle = c.infoBg;
-    ctx.fillRect(0, infoY, W, infoBarH);
-    ctx.fillStyle = c.infoPills;
-    ctx.fillRect(0, infoY, W, 4);
+    // ---- INFO SECTION (positioned within bottom safe zone) ----
+    // All info content between ~1100 and ~1580
+    const infoStartY = SAFE_BOTTOM - 420; // ~1160
+    const infoBlockH = 420; // total info block height
 
-    // Left side: Model details
-    const leftX = 40;
+    // Semi-transparent info background
+    ctx.fillStyle = 'rgba(0,0,0,0.0)'; // already handled by gradient
+    ctx.fillRect(0, infoStartY, W, infoBlockH);
+
+    // Accent line
+    ctx.fillStyle = c.infoPills;
+    ctx.fillRect(30, infoStartY, W - 60, 3);
+
+    // ---- MODEL + DETAILS (left side) ----
+    const leftX = 50;
     const modelText = model || 'MODELO';
     const modelParts = modelText.split(' ');
     const mainModel = modelParts.slice(0, 2).join(' ').toUpperCase();
     const subModel = modelParts.slice(2).join(' ').toUpperCase();
 
-    ctx.fillStyle = c.infoValueText;
+    ctx.fillStyle = '#FFFFFF';
     ctx.textAlign = 'left';
-    ctx.font = `900 ${Math.round(40 * modelFontScale * fs)}px 'Raleway', sans-serif`;
-    ctx.fillText(mainModel, leftX, infoY + 50);
+    ctx.font = `900 ${Math.round(48 * modelFontScale * fs)}px 'Raleway', sans-serif`;
+    ctx.fillText(mainModel, leftX, infoStartY + 55);
 
     if (subModel) {
-      ctx.font = `bold ${Math.round(32 * modelFontScale * fs)}px 'Raleway', sans-serif`;
-      ctx.fillText(subModel, leftX, infoY + 90);
+      ctx.font = `bold ${Math.round(34 * modelFontScale * fs)}px 'Raleway', sans-serif`;
+      ctx.fillText(subModel, leftX, infoStartY + 100);
     }
 
-    // Fuel type & extra info below model
+    // Fuel type
     const fuelLabel = FUEL_OPTIONS.find(f => f.value === fuelType)?.label?.toUpperCase() || fuelType.toUpperCase();
-    ctx.font = `bold ${Math.round(24 * obsFontScale * fs)}px 'Raleway', sans-serif`;
-    ctx.fillStyle = c.infoLabelText;
-    const detailStartY = subModel ? infoY + 125 : infoY + 95;
-    ctx.fillText(fuelLabel, leftX, detailStartY);
+    ctx.font = `bold ${Math.round(22 * obsFontScale * fs)}px 'Raleway', sans-serif`;
+    ctx.fillStyle = c.infoPills;
+    const detailY = subModel ? infoStartY + 135 : infoStartY + 105;
+    ctx.fillText(fuelLabel, leftX, detailY);
 
-    // Extra observations (tires, IPVA, etc.) as comma-separated
+    // Extra info / observations
     const obsItems: string[] = [];
+    const transLabel = transmission === 'automatico' ? 'Automático' : 'Manual';
+    obsItems.push(transLabel);
     obsItems.push(`Pneus ${TIRE_OPTIONS.find(t => t.value === tireCondition)?.label || tireCondition}`);
     if (ipvaStatus === 'pago') obsItems.push('IPVA Pago');
     if (extraInfo.trim()) obsItems.push(extraInfo.trim().split('\n')[0]);
     if (obsItems.length) {
       ctx.font = `${Math.round(20 * obsFontScale * fs)}px 'Raleway', sans-serif`;
       ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.fillText(obsItems.join(' • '), leftX, detailStartY + 30);
+      ctx.fillText(obsItems.join(' • '), leftX, detailY + 32);
     }
 
-    // Right side: Year, KM and Price
-    const rightX = W / 2 + 40;
-
-    // Pill badges for Year and KM
-    const pillY = infoY + 20;
-    const yearText = `Ano: ${year || '----'}`;
-    
-    // Build observation items for km etc.
-    const extraLines = extraInfo.trim().split('\n').filter(l => l.trim());
-    const kmLine = extraLines.find(l => l.toLowerCase().includes('km'));
-    const kmText = kmLine ? kmLine.replace(/^•\s*/, '').trim() : '';
+    // ---- YEAR & PRICE (right side) ----
+    const rightX = W / 2 + 30;
 
     // Year pill
+    const pillY = infoStartY + 20;
+    const yearText = year || '----';
+    const yearPillW = Math.round(180 * bs);
+    const yearPillH = Math.round(42 * bs);
     ctx.fillStyle = c.infoPills;
-    const yearPillW = Math.round(200 * infoBoxScale);
-    const yearPillH = Math.round(40 * infoBoxScale);
-    ctx.beginPath(); ctx.roundRect(rightX, pillY, yearPillW, yearPillH, 8); ctx.fill();
-    ctx.fillStyle = c.infoLabelText;
-    ctx.font = `bold ${Math.round(20 * yearFontScale * fs)}px 'Raleway', sans-serif`;
+    ctx.beginPath(); ctx.roundRect(rightX, pillY, yearPillW, yearPillH, 10); ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `bold ${Math.round(22 * yearFontScale * fs)}px 'Raleway', sans-serif`;
     ctx.textAlign = 'center';
-    ctx.fillText(yearText, rightX + yearPillW / 2, pillY + yearPillH / 2 + 7);
+    ctx.fillText(yearText, rightX + yearPillW / 2, pillY + yearPillH / 2 + 8);
 
     // KM pill (if available)
-    if (kmText) {
+    const extraLines = extraInfo.trim().split('\n').filter(l => l.trim());
+    const kmLine = extraLines.find(l => l.toLowerCase().includes('km'));
+    if (kmLine) {
+      const kmText = kmLine.replace(/^•\s*/, '').trim();
       const kmPillX = rightX + yearPillW + 16;
-      const kmPillW = Math.round(200 * infoBoxScale);
+      const kmPillW = Math.round(200 * bs);
       ctx.fillStyle = c.infoPills;
-      ctx.beginPath(); ctx.roundRect(kmPillX, pillY, kmPillW, yearPillH, 8); ctx.fill();
-      ctx.fillStyle = c.infoLabelText;
-      ctx.fillText(kmText, kmPillX + kmPillW / 2, pillY + yearPillH / 2 + 7);
+      ctx.beginPath(); ctx.roundRect(kmPillX, pillY, kmPillW, yearPillH, 10); ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillText(kmText, kmPillX + kmPillW / 2, pillY + yearPillH / 2 + 8);
     }
 
-    // Price (large, below pills)
+    // Price
     const priceVal = price ? formatPrice(price) : 'R$ 00.000,00';
     const priceIsExample = !price;
     ctx.globalAlpha = priceIsExample ? 0.4 : 1;
 
     ctx.textAlign = 'left';
     ctx.fillStyle = c.priceText;
-    ctx.font = `bold ${Math.round(28 * fs)}px 'Raleway', sans-serif`;
-    ctx.fillText('R$', rightX, pillY + yearPillH + 55);
-    
-    // Extract number from formatted price
+    ctx.font = `bold ${Math.round(26 * fs)}px 'Raleway', sans-serif`;
+    ctx.fillText('R$', rightX, pillY + yearPillH + 58);
+
     const priceNumMatch = priceVal.match(/[\d.,]+/);
     const priceNum = priceNumMatch ? priceNumMatch[0] : '0,00';
     const priceParts = priceNum.split(',');
-    
+
     ctx.font = `900 ${Math.round(72 * fs)}px 'Raleway', sans-serif`;
-    const rsWidth = ctx.measureText('R$ ').width;
-    ctx.fillText(priceParts[0], rightX + Math.round(50 * fs), pillY + yearPillH + 60);
-    
+    ctx.fillText(priceParts[0], rightX + Math.round(48 * fs), pillY + yearPillH + 65);
+
     if (priceParts[1]) {
       const mainWidth = ctx.measureText(priceParts[0]).width;
       ctx.font = `bold ${Math.round(36 * fs)}px 'Raleway', sans-serif`;
-      ctx.fillText(`,${priceParts[1]}`, rightX + Math.round(50 * fs) + mainWidth + 4, pillY + yearPillH + 55);
+      ctx.fillText(`,${priceParts[1]}`, rightX + Math.round(48 * fs) + mainWidth + 4, pillY + yearPillH + 58);
     }
     ctx.globalAlpha = 1;
 
-    // Vertical divider
-    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    // Vertical divider between left and right info
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(W / 2 + 10, infoY + 16);
-    ctx.lineTo(W / 2 + 10, infoY + infoBarH - 16);
+    ctx.moveTo(W / 2 + 10, infoStartY + 16);
+    ctx.lineTo(W / 2 + 10, infoStartY + 180);
     ctx.stroke();
 
-    // ---- FOOTER ----
-    const footY = infoY + infoBarH;
-    const footH = H - footY;
-    const footGrad = ctx.createLinearGradient(0, footY, 0, footY + footH);
-    footGrad.addColorStop(0, c.footerBg);
-    footGrad.addColorStop(1, darkenHex(c.footerBg, 15));
-    ctx.fillStyle = footGrad;
-    ctx.fillRect(0, footY, W, footH);
-    ctx.fillStyle = c.footerAccent;
-    ctx.fillRect(0, footY, W, 3);
+    // ---- FOOTER (still within safe zone, below info) ----
+    const footY = infoStartY + 220;
+    const footH = SAFE_BOTTOM - footY;
 
-    const footCenterY = footY + footH / 2;
+    // Footer background
+    const footGrad = ctx.createLinearGradient(0, footY, 0, footY + footH);
+    footGrad.addColorStop(0, c.footerBg + 'CC');
+    footGrad.addColorStop(1, c.footerBg + 'EE');
+    ctx.fillStyle = footGrad;
+    ctx.beginPath(); ctx.roundRect(30, footY, W - 60, footH, 16); ctx.fill();
+    ctx.fillStyle = c.footerAccent;
+    ctx.fillRect(30, footY, W - 60, 3);
+
+    const footCenterY = footY + footH / 2 + footerPosY;
     const wpText = footerWhatsapp || '';
     const addrText = footerAddress || '';
 
@@ -850,27 +873,27 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (wpText) {
       const wpImg = wpIconRef.current;
       if (wpImg) {
-        const iconSize = 40;
-        ctx.drawImage(wpImg, 40, footCenterY - iconSize / 2, iconSize, iconSize);
+        const iconSize = 38;
+        ctx.drawImage(wpImg, 60 + footerPosX, footCenterY - iconSize / 2, iconSize, iconSize);
       }
       ctx.fillStyle = c.footerAccent;
       ctx.textAlign = 'left';
-      ctx.font = `900 ${Math.round(18 * fs)}px 'Raleway', sans-serif`;
-      ctx.fillText('COMPRE AGORA!', 95, footCenterY - 14);
+      ctx.font = `900 ${Math.round(16 * fs)}px 'Raleway', sans-serif`;
+      ctx.fillText('COMPRE AGORA!', 110 + footerPosX, footCenterY - 12);
       ctx.fillStyle = c.footerText;
-      ctx.font = `bold ${Math.round(26 * fs)}px 'Raleway', sans-serif`;
-      ctx.fillText(wpText, 95, footCenterY + 18);
+      ctx.font = `bold ${Math.round(24 * fs)}px 'Raleway', sans-serif`;
+      ctx.fillText(wpText, 110 + footerPosX, footCenterY + 16);
     }
 
     // Address section (right)
     if (addrText) {
-      const addrX = W / 2 + 40;
+      const addrX = W / 2 + 40 + footerPosX;
       // Pin icon
       ctx.save();
       ctx.fillStyle = c.footerAccent;
-      ctx.beginPath(); ctx.arc(addrX + 16, footCenterY, 20, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(addrX + 16, footCenterY, 18, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#FFFFFF';
-      const ps = 11;
+      const ps = 10;
       ctx.beginPath();
       ctx.moveTo(addrX + 16, footCenterY + ps * 1.3);
       ctx.quadraticCurveTo(addrX + 16 - ps, footCenterY, addrX + 16 - ps * 0.5, footCenterY - ps * 0.6);
@@ -881,18 +904,21 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
 
       ctx.fillStyle = c.footerText;
       ctx.textAlign = 'left';
-      ctx.font = `bold ${Math.round(16 * fs)}px 'Raleway', sans-serif`;
-      const maxW = W / 2 - 100;
+      ctx.font = `bold ${Math.round(15 * fs)}px 'Raleway', sans-serif`;
+      const maxW = W / 2 - 120;
       const words = addrText.toUpperCase().split(' ');
-      let line = ''; let ly = footCenterY - 10;
+      let line = ''; let ly = footCenterY - 8;
       words.forEach(word => {
         const test = line + (line ? ' ' : '') + word;
         if (ctx.measureText(test).width > maxW && line) {
-          ctx.fillText(line, addrX + 48, ly); line = word; ly += 24;
+          ctx.fillText(line, addrX + 44, ly); line = word; ly += 22;
         } else { line = test; }
       });
-      if (line) ctx.fillText(line, addrX + 48, ly);
+      if (line) ctx.fillText(line, addrX + 44, ly);
     }
+
+    // ---- SAFE ZONE INDICATORS (subtle guides, only in preview) ----
+    // These won't appear in final export since they're drawn by preview logic
   }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
 
   // Unified draw function

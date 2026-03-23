@@ -63,8 +63,10 @@ export default function FinancialDashboard() {
 
   const monthExpenses = useMemo(() =>
     expenses.filter(e => {
-      const d = new Date(e.date);
-      return d >= monthStart && d <= monthEnd;
+      if (!e.date) return false;
+      const normalized = normalizeDate(e.date);
+      const ym = format(monthStart, 'yyyy-MM');
+      return normalized.startsWith(ym);
     }),
     [expenses, monthStart, monthEnd]
   );

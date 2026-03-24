@@ -799,6 +799,13 @@ export default function VideomakerDashboard() {
                               </Badge>
                             </motion.div>
                           )}
+                          {isOrganizing && (
+                            <motion.div animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 2, repeat: Infinity }}>
+                              <Badge className="bg-info/20 text-info border-info/30 text-[9px] sm:text-[10px]">
+                                📦 Organizando Material
+                              </Badge>
+                            </motion.div>
+                          )}
                           {isDone && (
                             <Badge className="bg-success/20 text-success border-success/30 text-[9px] sm:text-[10px]">
                               <Check size={9} className="mr-0.5" /> Concluída

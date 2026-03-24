@@ -1095,17 +1095,14 @@ export default function Schedule() {
                   </TabsContent>
                   <TabsContent value="endo" className="mt-2">
                     <div className="grid gap-2 max-h-[300px] overflow-y-auto pr-1">
-                      {endoClientes.filter(ec => ec.active).length === 0 ? (
-                        <p className="text-xs text-muted-foreground text-center py-4">Nenhum cliente de endomarketing ativo</p>
+                      {endoClientsFromContracts.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">Nenhum cliente de endomarketing com contrato ativo</p>
                       ) : (
-                        endoClientes.filter(ec => ec.active).map(ec => {
-                          // Find linked regular client or use endo client name
-                          const linkedClient = ec.client_id ? clients.find(c => c.id === ec.client_id) : null;
-                          const clientId = linkedClient?.id || ec.id;
-                          const isSelected = form.clientId === clientId;
+                        endoClientsFromContracts.map(ec => {
+                          const isSelected = form.clientId === ec.id;
                           return (
                             <button key={ec.id} onClick={() => {
-                              setForm({ ...form, clientId: clientId, type: 'endomarketing' as RecordingType, prospectName: '' });
+                              setForm({ ...form, clientId: ec.id, type: 'endomarketing' as RecordingType, prospectName: '' });
                               setNewStep(1);
                             }}
                               className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 hover:scale-[1.01] ${
@@ -1116,7 +1113,7 @@ export default function Schedule() {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="font-medium text-sm truncate">{ec.company_name}</p>
-                                <p className="text-xs text-muted-foreground">{ec.responsible_person || 'Endomarketing'}</p>
+                                <p className="text-xs text-muted-foreground">{ec.packageName || ec.category || 'Endomarketing'}</p>
                               </div>
                               <Badge className="text-[10px] bg-fuchsia-500/20 text-fuchsia-600 border-fuchsia-500/30 shrink-0">
                                 <Sparkles size={10} className="mr-0.5" /> Endo

@@ -127,13 +127,14 @@ export default function CommercialProposal() {
       editor: 'Editor de Vídeo', designer: 'Designer Gráfico', fotografo: 'Fotógrafo',
       endomarketing: 'Endomarketing', parceiro: 'Parceiro',
     };
-    if (teamMembers.find(t => t.name === user.name)) {
+    if (teamMembers.find(t => t.name === (user.displayName || user.name))) {
       toast.error('Membro já adicionado'); return;
     }
     setTeamMembers(prev => [...prev, {
       id: crypto.randomUUID(),
       name: user.displayName || user.name,
       role: roleLabels[user.role] || user.role,
+      avatarUrl: user.avatarUrl,
     }]);
   };
 

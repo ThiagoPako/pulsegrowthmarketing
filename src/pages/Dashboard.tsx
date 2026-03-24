@@ -621,9 +621,30 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
+
+            {/* Organizando Material */}
+            {organizingRecordings.length > 0 && (
+              <div className="lg:col-span-2">
+                <div className="flex items-center gap-1.5 mb-2 sm:mb-3">
+                  <Package size={14} className="text-primary" />
+                  <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">Organizando Material</p>
+                  <Badge className="text-[9px] h-4 px-1 ml-1 bg-primary">{organizingRecordings.length}</Badge>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {organizingRecordings.map(rec => {
+                    const vm = users.find(u => u.id === rec.videomakerId);
+                    const client = clients.find(c => c.id === rec.clientId);
+                    return (
+                      <OrganizingMaterialCard key={rec.id} rec={rec} vm={vm} client={client} settings={settings} />
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </motion.div>
-      )}
+        );
+      })()}
 
       {/* WAITING TIME STATS */}
       {waitTimeStats.totalCount > 0 && currentUser?.role === 'admin' && (

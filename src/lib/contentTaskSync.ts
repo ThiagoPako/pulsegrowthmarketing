@@ -131,6 +131,7 @@ export async function syncContentTaskColumnChange(
     const deadline = addBusinessHours(new Date(), deadlineHours.approval, workDays);
     updates.approval_deadline = deadline.toISOString();
     updates.approval_sent_at = new Date().toISOString();
+    updates.assigned_to = null; // Remove editor responsibility on client approval
   }
   if (newColumn === 'agendamentos') {
     if (!ctx.approvedAt) {

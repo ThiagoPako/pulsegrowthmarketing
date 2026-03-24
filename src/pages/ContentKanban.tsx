@@ -1150,6 +1150,10 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
   const isOverdue = isAcompanhamento && task.scheduled_recording_date && 
     new Date(task.scheduled_recording_date + 'T23:59:59') < new Date();
 
+  // Check if someone is actively reviewing (within last 60s)
+  const isBeingReviewed = task.kanban_column === 'revisao' && task.reviewing_by_name && task.reviewing_at &&
+    (Date.now() - new Date(task.reviewing_at).getTime()) < 60000;
+
   return (
     <>
       <div

@@ -272,7 +272,7 @@ export default function EndomarketingDashboard() {
                         <p className="text-xs sm:text-sm font-medium truncate">{c.clients?.company_name}</p>
                         <p className="text-[10px] text-muted-foreground">{getCategoryLabel(c.endomarketing_packages?.category || '')}</p>
                       </div>
-                      <p className={`text-xs sm:text-sm font-bold shrink-0 ${profit >= 0 ? 'text-success' : 'text-destructive'}`}>{fmt(profit)}</p>
+                      <p className={`text-xs sm:text-sm font-bold shrink-0 ${isOverdelivery ? 'text-muted-foreground' : profit >= 0 ? 'text-success' : 'text-destructive'}`}>{isOverdelivery ? 'Overdelivery' : fmt(profit)}</p>
                     </motion.div>
                   );
                 })}

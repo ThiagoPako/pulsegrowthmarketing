@@ -90,11 +90,15 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
   const deadlineStatus = getDeadlineStatus(task.editing_deadline);
   const hasVideoLink = !!task.edited_video_link;
 
+  const isReview = task.kanban_column === 'revisao';
+
   return (
     <div draggable onDragStart={e => onDragStart(e, task)}
-      className={`group relative bg-card border border-border rounded-lg cursor-grab active:cursor-grabbing transition-all hover:shadow-md ${
+      className={`group relative bg-card border rounded-lg cursor-grab active:cursor-grabbing transition-all hover:shadow-md ${
         draggedId === task.id ? 'opacity-40 scale-95' : ''
-      } ${deadlineStatus.variant === 'destructive' && task.kanban_column === 'edicao' ? 'ring-1 ring-destructive/40' : ''}`}>
+      } ${isReview ? 'border-teal-500/40 bg-teal-500/5' : 'border-border'} ${
+        deadlineStatus.variant === 'destructive' && task.kanban_column === 'edicao' ? 'ring-1 ring-destructive/40' : ''
+      }`}>
       <div className="h-1 w-full rounded-t-lg" style={{ backgroundColor: `hsl(${clientColor})` }} />
       <div className="p-3 space-y-2">
         <div className="flex items-start justify-between gap-2">
@@ -116,6 +120,11 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
               {deadlineStatus.variant === 'destructive' && <AlertTriangle size={9} className="mr-0.5" />}
               {deadlineStatus.variant === 'warning' && <Clock size={9} className="mr-0.5" />}
               {deadlineStatus.label}
+            </Badge>
+          )}
+          {task.kanban_column === 'revisao' && (
+            <Badge className="text-[9px] bg-teal-500/20 text-teal-600 dark:text-teal-400 border-teal-500/30 gap-0.5">
+              <Eye size={9} /> Em Revisão
             </Badge>
           )}
           {task.kanban_column === 'envio' && (
@@ -190,11 +199,13 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
           <DeadlineBadge deadline={task.approval_deadline} label="Aprovação" />
         )}
 
-        {/* Assigned editor badge */}
+        {/* Assigned editor badge - show "editado por" in review */}
         {task.assigned_to && (
-          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground bg-muted/50 rounded-md px-2 py-1">
+          <div className={`flex items-center gap-1.5 text-[10px] rounded-md px-2 py-1 ${
+            isReview ? 'text-teal-700 dark:text-teal-300 bg-teal-500/10 border border-teal-500/20' : 'text-muted-foreground bg-muted/50'
+          }`}>
             <Scissors size={10} />
-            <span>Editor: <strong className="text-foreground">{users.find(u => u.id === task.assigned_to)?.name || 'Editor'}</strong></span>
+            <span>{isReview ? 'Editado por' : 'Editor'}: <strong className="text-foreground">{users.find(u => u.id === task.assigned_to)?.name || 'Editor'}</strong></span>
           </div>
         )}
 

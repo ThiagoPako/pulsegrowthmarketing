@@ -13,7 +13,7 @@ import {
   Film, Megaphone, Image, Palette, ExternalLink, Clock, AlertTriangle,
   Eye, Star, TrendingUp, BarChart3, Timer, Scissors, ArrowRight, Check,
   Search, Users, Upload, Send, History, Zap, Flame,
-  Play, Rocket, Trophy, FileText, FolderOpen, X, Link2, Video
+  Play, Rocket, Trophy, FileText, FolderOpen, X, Link2, Video, Pause
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
@@ -54,6 +54,8 @@ export interface EditorTask {
   review_deadline: string | null;
   alteration_deadline: string | null;
   approval_deadline: string | null;
+  editing_paused_at: string | null;
+  editing_paused_seconds: number;
   position: number;
   created_at: string;
   updated_at: string;
@@ -113,22 +115,29 @@ function RocketMascot({ size = 48, className = '' }: { size?: number; className?
   );
 }
 
-/* ─── Live Timer ──────────────────────────────────────────── */
-function LiveTimer({ startedAt, large }: { startedAt: string; large?: boolean }) {
+/* ─── Live Timer with pause support ───────────────────────── */
+function LiveTimer({ startedAt, large, pausedAt, pausedSeconds }: { startedAt: string; large?: boolean; pausedAt?: string | null; pausedSeconds?: number }) {
   const [elapsed, setElapsed] = useState(0);
+  const isPaused = !!pausedAt;
   useEffect(() => {
     const start = new Date(startedAt).getTime();
-    const tick = () => setElapsed(Math.floor((Date.now() - start) / 1000));
+    const paused = pausedSeconds || 0;
+    if (isPaused) {
+      const pauseTime = new Date(pausedAt!).getTime();
+      setElapsed(Math.floor((pauseTime - start) / 1000) - paused);
+      return;
+    }
+    const tick = () => setElapsed(Math.floor((Date.now() - start) / 1000) - paused);
     tick();
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
-  }, [startedAt]);
+  }, [startedAt, isPaused, pausedAt, pausedSeconds]);
   const h = Math.floor(elapsed / 3600);
   const m = Math.floor((elapsed % 3600) / 60);
   const s = elapsed % 60;
   return (
-    <motion.span className={`font-mono font-bold text-primary tabular-nums ${large ? 'text-3xl' : 'text-xs'}`}
-      animate={{ opacity: [1, 0.6, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
+    <motion.span className={`font-mono font-bold tabular-nums ${isPaused ? 'text-warning' : 'text-primary'} ${large ? 'text-3xl' : 'text-xs'}`}
+      animate={isPaused ? { opacity: [1, 0.4, 1] } : { opacity: [1, 0.6, 1] }} transition={{ duration: isPaused ? 1 : 1.5, repeat: Infinity }}>
       {h > 0 && `${h}:`}{String(m).padStart(2, '0')}:{String(s).padStart(2, '0')}
     </motion.span>
   );
@@ -356,9 +365,17 @@ export default function EditorDashboard() {
     const link = videoLink.trim() || activeEditTask.edited_video_link;
     if (!link) { toast.error('Adicione o vídeo primeiro'); return; }
     setSaving(true);
-    await supabase.from('content_tasks').update({
-      kanban_column: 'revisao', updated_at: new Date().toISOString(),
-    }).eq('id', activeEditTask.id);
+    // Auto-resume if paused before sending
+    const updateData: any = {
+      kanban_column: 'revisao', 
+      editing_paused_at: null,
+      updated_at: new Date().toISOString(),
+    };
+    if (activeEditTask.editing_paused_at) {
+      const pausedDuration = Math.floor((Date.now() - new Date(activeEditTask.editing_paused_at).getTime()) / 1000);
+      updateData.editing_paused_seconds = (activeEditTask.editing_paused_seconds || 0) + pausedDuration;
+    }
+    await supabase.from('content_tasks').update(updateData).eq('id', activeEditTask.id);
     const cl = clients.find(c => c.id === activeEditTask.client_id);
     const ctx = buildSyncContext({ ...activeEditTask, edited_video_link: link } as any, {
       userId: user?.id, clientName: cl?.companyName, clientWhatsapp: (cl as any)?.whatsapp,
@@ -375,6 +392,34 @@ export default function EditorDashboard() {
     toast.success('Enviado para revisão!');
     fetchTasks();
     setSaving(false);
+  };
+
+  /* ─── Pause / Resume ───────────────────────────────────── */
+  const handlePauseEditing = async () => {
+    if (!activeEditTask) return;
+    await supabase.from('content_tasks').update({
+      editing_paused_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', activeEditTask.id);
+    await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Edição pausada' });
+    toast.info('Edição pausada ⏸️');
+    setActiveEditTask({ ...activeEditTask, editing_paused_at: new Date().toISOString() });
+    fetchTasks();
+  };
+
+  const handleResumeEditing = async () => {
+    if (!activeEditTask || !activeEditTask.editing_paused_at) return;
+    const pausedDuration = Math.floor((Date.now() - new Date(activeEditTask.editing_paused_at).getTime()) / 1000);
+    const newPausedSeconds = (activeEditTask.editing_paused_seconds || 0) + pausedDuration;
+    await supabase.from('content_tasks').update({
+      editing_paused_at: null,
+      editing_paused_seconds: newPausedSeconds,
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', activeEditTask.id);
+    await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Edição retomada', details: `Pausa de ${Math.floor(pausedDuration / 60)}min` });
+    toast.success('Edição retomada! ▶️');
+    setActiveEditTask({ ...activeEditTask, editing_paused_at: null, editing_paused_seconds: newPausedSeconds });
+    fetchTasks();
   };
 
   if (loading) return (
@@ -468,7 +513,9 @@ export default function EditorDashboard() {
                     <RocketMascot size={36} />
                   </motion.div>
                   <div>
-                    <p className="text-[10px] uppercase tracking-widest text-primary font-bold">Edição em andamento</p>
+                    <p className="text-[10px] uppercase tracking-widest text-primary font-bold">
+                      {activeEditTask.editing_paused_at ? '⏸️ Edição pausada' : 'Edição em andamento'}
+                    </p>
                     <p className="text-base font-bold text-foreground leading-tight">{activeEditTask.title}</p>
                   </div>
                 </div>
@@ -488,12 +535,35 @@ export default function EditorDashboard() {
                     </Badge>
                   )}
                 </div>
-                {/* Live timer */}
-                <div className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-xl px-4 py-2">
-                  <motion.div className="w-2.5 h-2.5 rounded-full bg-primary"
-                    animate={{ scale: [1, 1.4, 1], opacity: [1, 0.4, 1] }}
-                    transition={{ duration: 1.2, repeat: Infinity }} />
-                  <LiveTimer startedAt={activeEditTask.editing_started_at!} large />
+                {/* Live timer + pause */}
+                <div className="flex items-center gap-2">
+                  <div className={`flex items-center gap-2 border rounded-xl px-4 py-2 ${
+                    activeEditTask.editing_paused_at 
+                      ? 'bg-warning/10 border-warning/30' 
+                      : 'bg-primary/10 border-primary/30'
+                  }`}>
+                    <motion.div className={`w-2.5 h-2.5 rounded-full ${activeEditTask.editing_paused_at ? 'bg-warning' : 'bg-primary'}`}
+                      animate={activeEditTask.editing_paused_at 
+                        ? { scale: 1, opacity: [1, 0.3, 1] } 
+                        : { scale: [1, 1.4, 1], opacity: [1, 0.4, 1] }}
+                      transition={{ duration: 1.2, repeat: Infinity }} />
+                    <LiveTimer startedAt={activeEditTask.editing_started_at!} large 
+                      pausedAt={activeEditTask.editing_paused_at} 
+                      pausedSeconds={activeEditTask.editing_paused_seconds || 0} />
+                  </div>
+                  <motion.div whileTap={{ scale: 0.9 }}>
+                    {activeEditTask.editing_paused_at ? (
+                      <Button size="sm" onClick={handleResumeEditing}
+                        className="gap-1.5 bg-success hover:bg-success/90 text-success-foreground shadow-md">
+                        <Play size={14} /> Retomar
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={handlePauseEditing}
+                        className="gap-1.5 border-warning/50 text-warning hover:bg-warning/10 hover:text-warning">
+                        <Pause size={14} /> Pausar
+                      </Button>
+                    )}
+                  </motion.div>
                 </div>
               </div>
 
@@ -663,9 +733,16 @@ export default function EditorDashboard() {
                     </div>
                   </div>
                   {task.editing_started_at && (
-                    <div className="flex items-center gap-1 bg-primary/10 rounded-full px-2 py-0.5 shrink-0">
-                      <motion.div className="w-1.5 h-1.5 rounded-full bg-primary" animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1, repeat: Infinity }} />
-                      <LiveTimer startedAt={task.editing_started_at} />
+                    <div className={`flex items-center gap-1 rounded-full px-2 py-0.5 shrink-0 ${
+                      task.editing_paused_at ? 'bg-warning/10' : 'bg-primary/10'
+                    }`}>
+                      <motion.div className={`w-1.5 h-1.5 rounded-full ${task.editing_paused_at ? 'bg-warning' : 'bg-primary'}`}
+                        animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1, repeat: Infinity }} />
+                      {task.editing_paused_at ? (
+                        <span className="text-[10px] font-bold text-warning">⏸️</span>
+                      ) : (
+                        <LiveTimer startedAt={task.editing_started_at} pausedAt={task.editing_paused_at} pausedSeconds={task.editing_paused_seconds || 0} />
+                      )}
                     </div>
                   )}
                 </motion.div>

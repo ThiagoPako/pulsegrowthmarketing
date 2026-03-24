@@ -16,7 +16,7 @@ import {
   Eye, ExternalLink, Upload, Send, History, MessageSquare, Clock,
   AlertTriangle, Check, Film, Megaphone, Image, Palette, Link2, Play,
   Video, Camera, CircleCheck, CircleDot, Circle, Rocket, Star, Trophy,
-  PartyPopper
+  PartyPopper, Pause
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import { highlightQuotes } from '@/lib/highlightQuotes';
@@ -69,23 +69,30 @@ function getStageIndex(column: string): number {
   }
 }
 
-/* ─── Live Timer ──────────────────────────────────────────── */
-function LiveTimer({ startedAt, large }: { startedAt: string; large?: boolean }) {
+/* ─── Live Timer with pause support ──────────────────────── */
+function LiveTimer({ startedAt, large, pausedAt, pausedSeconds }: { startedAt: string; large?: boolean; pausedAt?: string | null; pausedSeconds?: number }) {
   const [elapsed, setElapsed] = useState(0);
+  const isPaused = !!pausedAt;
   useEffect(() => {
     const start = new Date(startedAt).getTime();
-    const tick = () => setElapsed(Math.floor((Date.now() - start) / 1000));
+    const paused = pausedSeconds || 0;
+    if (isPaused) {
+      const pauseTime = new Date(pausedAt!).getTime();
+      setElapsed(Math.floor((pauseTime - start) / 1000) - paused);
+      return;
+    }
+    const tick = () => setElapsed(Math.floor((Date.now() - start) / 1000) - paused);
     tick();
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
-  }, [startedAt]);
+  }, [startedAt, isPaused, pausedAt, pausedSeconds]);
   const h = Math.floor(elapsed / 3600);
   const m = Math.floor((elapsed % 3600) / 60);
   const s = elapsed % 60;
   return (
     <motion.span
-      className={`font-mono font-bold text-primary tabular-nums ${large ? 'text-2xl' : 'text-sm'}`}
-      animate={{ opacity: [1, 0.6, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
+      className={`font-mono font-bold tabular-nums ${isPaused ? 'text-warning' : 'text-primary'} ${large ? 'text-2xl' : 'text-sm'}`}
+      animate={isPaused ? { opacity: [1, 0.4, 1] } : { opacity: [1, 0.6, 1] }} transition={{ duration: isPaused ? 1 : 1.5, repeat: Infinity }}>
       {h > 0 && `${h}:`}{String(m).padStart(2, '0')}:{String(s).padStart(2, '0')}
     </motion.span>
   );
@@ -419,19 +426,54 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
             {/* ─── EDITING TIMER HERO ─────────────────────────── */}
             {isEditing && task.editing_started_at && task.kanban_column === 'edicao' && (
               <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-                className="bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 border-2 border-primary/30 rounded-xl p-4 flex items-center justify-between">
+                className={`border-2 rounded-xl p-4 flex items-center justify-between ${
+                  (task as any).editing_paused_at 
+                    ? 'bg-gradient-to-r from-warning/10 via-warning/5 to-warning/10 border-warning/30' 
+                    : 'bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 border-primary/30'
+                }`}>
                 <div className="flex items-center gap-3">
-                  <motion.div animate={{ rotate: [0, 5, -5, 0] }} transition={{ duration: 2, repeat: Infinity }}>
-                    <Rocket size={28} className="text-primary" />
+                  <motion.div animate={(task as any).editing_paused_at ? {} : { rotate: [0, 5, -5, 0] }} transition={{ duration: 2, repeat: Infinity }}>
+                    {(task as any).editing_paused_at ? <Pause size={28} className="text-warning" /> : <Rocket size={28} className="text-primary" />}
                   </motion.div>
                   <div>
-                    <p className="text-xs text-muted-foreground font-medium">Tempo de edição</p>
-                    <LiveTimer startedAt={task.editing_started_at} large />
+                    <p className="text-xs text-muted-foreground font-medium">
+                      {(task as any).editing_paused_at ? '⏸️ Edição pausada' : 'Tempo de edição'}
+                    </p>
+                    <LiveTimer startedAt={task.editing_started_at} large 
+                      pausedAt={(task as any).editing_paused_at} 
+                      pausedSeconds={(task as any).editing_paused_seconds || 0} />
                   </div>
                 </div>
-                <motion.div className="w-3 h-3 rounded-full bg-primary"
-                  animate={{ scale: [1, 1.4, 1], opacity: [1, 0.5, 1] }}
-                  transition={{ duration: 1.5, repeat: Infinity }} />
+                <div className="flex items-center gap-2">
+                  {(task as any).editing_paused_at ? (
+                    <Button size="sm" onClick={async () => {
+                      const pausedDuration = Math.floor((Date.now() - new Date((task as any).editing_paused_at).getTime()) / 1000);
+                      const newPausedSeconds = ((task as any).editing_paused_seconds || 0) + pausedDuration;
+                      await supabase.from('content_tasks').update({
+                        editing_paused_at: null, editing_paused_seconds: newPausedSeconds, updated_at: new Date().toISOString(),
+                      } as any).eq('id', task.id);
+                      await logAction('Edição retomada', `Pausa de ${Math.floor(pausedDuration / 60)}min`);
+                      toast.success('Edição retomada! ▶️');
+                      onRefresh();
+                    }} className="gap-1.5 bg-success hover:bg-success/90 text-success-foreground shadow-md">
+                      <Play size={14} /> Retomar
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={async () => {
+                      await supabase.from('content_tasks').update({
+                        editing_paused_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+                      } as any).eq('id', task.id);
+                      await logAction('Edição pausada');
+                      toast.info('Edição pausada ⏸️');
+                      onRefresh();
+                    }} className="gap-1.5 border-warning/50 text-warning hover:bg-warning/10 hover:text-warning">
+                      <Pause size={14} /> Pausar
+                    </Button>
+                  )}
+                  <motion.div className={`w-3 h-3 rounded-full ${(task as any).editing_paused_at ? 'bg-warning' : 'bg-primary'}`}
+                    animate={{ scale: [1, 1.4, 1], opacity: [1, 0.5, 1] }}
+                    transition={{ duration: 1.5, repeat: Infinity }} />
+                </div>
               </motion.div>
             )}
 

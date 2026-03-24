@@ -861,6 +861,8 @@ export type Database = {
           edited_video_link: string | null
           edited_video_type: string | null
           editing_deadline: string | null
+          editing_paused_at: string | null
+          editing_paused_seconds: number
           editing_priority: boolean
           editing_started_at: string | null
           id: string
@@ -893,6 +895,8 @@ export type Database = {
           edited_video_link?: string | null
           edited_video_type?: string | null
           editing_deadline?: string | null
+          editing_paused_at?: string | null
+          editing_paused_seconds?: number
           editing_priority?: boolean
           editing_started_at?: string | null
           id?: string
@@ -925,6 +929,8 @@ export type Database = {
           edited_video_link?: string | null
           edited_video_type?: string | null
           editing_deadline?: string | null
+          editing_paused_at?: string | null
+          editing_paused_seconds?: number
           editing_priority?: boolean
           editing_started_at?: string | null
           id?: string

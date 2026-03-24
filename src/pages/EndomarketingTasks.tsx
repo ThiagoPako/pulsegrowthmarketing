@@ -182,6 +182,12 @@ export default function EndomarketingTasks() {
           <Button size="sm" onClick={() => setGenDialogOpen(true)} className="text-[10px] sm:text-sm h-8 px-2 sm:px-3 gap-1">
             <CalendarPlus size={13} /> <span className="truncate">Gerar Tarefas</span>
           </Button>
+          {isAdmin && (
+            <Button variant="destructive" size="sm" onClick={handleClearAll} disabled={clearing} className="text-[10px] sm:text-sm h-8 px-2 sm:px-3 gap-1">
+              <Trash2 size={13} />
+              <span className="truncate">{clearing ? 'Limpando...' : 'Limpar Todas'}</span>
+            </Button>
+          )}
         </div>
       </div>
 

@@ -698,20 +698,6 @@ export default function Schedule() {
         </div>
       </div>
 
-      {/* Low script warnings */}
-      {lowScriptClients.length > 0 && (
-        <div className="space-y-1.5">
-          {lowScriptClients.map(c => (
-            <div key={c.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-warning/10 border border-warning/30 text-sm">
-              <AlertTriangle size={16} className="text-warning shrink-0" />
-              <span>
-                <strong>{c.companyName}</strong> tem apenas <strong>{c.pendingCount}</strong> roteiro{c.pendingCount !== 1 ? 's' : ''} pendente{c.pendingCount !== 1 ? 's' : ''}.
-                <span className="text-muted-foreground ml-1">Crie novos roteiros!</span>
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Capacity widget */}
       <AgencyCapacityWidget clients={clients} users={users} recordings={recordings} settings={settings} compact />

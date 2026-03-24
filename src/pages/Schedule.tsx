@@ -712,7 +712,7 @@ export default function Schedule() {
           <Button variant="outline" onClick={() => { setRegenClientId(''); setRegenOpen(true); }}>
             <RefreshCw size={16} className="mr-2" /> Regenerar Agenda
           </Button>
-          <Button onClick={() => { setForm({ clientId: '', videomakerId: '', date: format(new Date(), 'yyyy-MM-dd'), startTime: '09:00', type: 'fixa' }); setNewOpen(true); }}>
+          <Button onClick={() => { setForm({ clientId: '', videomakerId: '', date: format(new Date(), 'yyyy-MM-dd'), startTime: '09:00', type: 'fixa', prospectName: '' }); setNewOpen(true); }}>
             <Plus size={16} className="mr-2" /> Nova Gravação
           </Button>
         </div>

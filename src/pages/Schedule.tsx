@@ -70,6 +70,24 @@ export default function Schedule() {
   // Endomarketing data
   const { clientes: endoClientes } = useEndoClientes();
   const { agendamentos: endoAgendamentos } = useEndoAgendamentos();
+  const { contracts: endoContracts } = useEndoContracts(false);
+
+  // Derive endo clients from active contracts (endomarketing_clientes table may be empty)
+  const endoClientsFromContracts = useMemo(() => {
+    const activeContracts = endoContracts.filter(c => c.status === 'ativo');
+    return activeContracts.map(contract => {
+      const client = clients.find(c => c.id === contract.client_id);
+      return {
+        id: contract.client_id,
+        company_name: contract.clients?.company_name || client?.company_name || 'Cliente',
+        color: contract.clients?.color || client?.color || '280 60% 60%',
+        active: true,
+        contractId: contract.id,
+        packageName: contract.endomarketing_packages?.package_name || '',
+        category: contract.endomarketing_packages?.category || '',
+      };
+    });
+  }, [endoContracts, clients]);
 
   const [monthOffset, setMonthOffset] = useState(0);
   const [newOpen, setNewOpen] = useState(false);

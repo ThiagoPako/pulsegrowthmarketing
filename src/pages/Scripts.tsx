@@ -153,7 +153,7 @@ export default function Scripts() {
 
   const clientsLowScripts = useMemo(() => {
     if (!scriptAlerts) return [];
-    const activeClients = clients.filter(c => c.clientType !== 'inativo');
+    const activeClients = clients;
     return activeClients
       .map(c => {
         const count = scripts.filter(s => s.clientId === c.id && !s.recorded).length;

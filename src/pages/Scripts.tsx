@@ -704,6 +704,7 @@ export default function Scripts() {
                   <p className="text-[11px] text-muted-foreground truncate ml-6">
                     {getClientName(script.clientId)} · {SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · <span className="font-medium">{SCRIPT_CONTENT_FORMAT_LABELS[script.contentFormat || 'reels']}</span>
                   </p>
+                  </div>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   <Badge variant={script.recorded ? 'default' : 'outline'} className={`text-[10px] ${script.recorded ? 'bg-success text-success-foreground' : ''}`}>

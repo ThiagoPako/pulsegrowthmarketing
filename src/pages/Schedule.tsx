@@ -210,15 +210,26 @@ export default function Schedule() {
   };
 
   const handleAdd = () => {
-    if (!form.clientId || !form.videomakerId || !form.date || !form.startTime) {
-      toast.error('Preencha todos os campos'); return;
-    }
+    const isAvulso = form.type === 'avulso';
+    if (!isAvulso && !form.clientId) { toast.error('Selecione um cliente'); return; }
+    if (isAvulso && !form.prospectName.trim()) { toast.error('Informe o nome do prospect'); return; }
+    if (!form.videomakerId || !form.date || !form.startTime) { toast.error('Preencha todos os campos'); return; }
     if (hasConflict(form.videomakerId, form.date, form.startTime)) {
       toast.error('Conflito de horário!'); return;
     }
-    const ok = addRecording({ ...form, id: crypto.randomUUID(), status: 'agendada' });
+    const rec: Recording = {
+      id: crypto.randomUUID(),
+      clientId: isAvulso ? '' : form.clientId,
+      videomakerId: form.videomakerId,
+      date: form.date,
+      startTime: form.startTime,
+      type: form.type,
+      status: 'agendada',
+      ...(isAvulso ? { prospectName: form.prospectName.trim() } : {}),
+    };
+    const ok = addRecording(rec);
     if (!ok) { toast.error('Conflito de horário!'); return; }
-    toast.success('Gravação agendada');
+    toast.success(isAvulso ? 'Gravação avulsa agendada' : 'Gravação agendada');
     setNewOpen(false);
   };
 

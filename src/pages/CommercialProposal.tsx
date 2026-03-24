@@ -143,21 +143,53 @@ export default function CommercialProposal() {
     toast.loading('Gerando PDF...');
     try {
       const el = proposalRef.current;
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
-      const imgData = canvas.toDataURL('image/png');
+      const sections = Array.from(el.querySelectorAll('[data-pdf-section]')) as HTMLElement[];
+      
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const pdfW = pdf.internal.pageSize.getWidth();
       const pdfH = pdf.internal.pageSize.getHeight();
-      const imgW = canvas.width;
-      const imgH = canvas.height;
-      const ratio = pdfW / imgW;
-      const scaledH = imgH * ratio;
-      let position = 0;
-      while (position < scaledH) {
-        if (position > 0) pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, -position, pdfW, scaledH);
-        position += pdfH;
+      const MARGIN = 0;
+      const CONTENT_W = pdfW - MARGIN * 2;
+      let currentY = MARGIN;
+      const GAP = 0;
+
+      if (sections.length === 0) {
+        // Fallback: capture entire element
+        const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+        const imgData = canvas.toDataURL('image/png');
+        const ratio = pdfW / (canvas.width / 2);
+        const scaledH = (canvas.height / 2) * ratio;
+        let pos = 0;
+        while (pos < scaledH) {
+          if (pos > 0) pdf.addPage();
+          pdf.addImage(imgData, 'PNG', 0, -pos, pdfW, scaledH);
+          pos += pdfH;
+        }
+      } else {
+        for (const section of sections) {
+          const canvas = await html2canvas(section, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+          });
+
+          const widthPx = canvas.width / 2;
+          const heightPx = canvas.height / 2;
+          const scaleFactor = CONTENT_W / widthPx;
+          const heightMM = heightPx * scaleFactor;
+
+          const remaining = pdfH - currentY;
+          if (heightMM > remaining && currentY > MARGIN) {
+            pdf.addPage();
+            currentY = MARGIN;
+          }
+
+          const imgData = canvas.toDataURL('image/png');
+          pdf.addImage(imgData, 'PNG', MARGIN, currentY, CONTENT_W, heightMM);
+          currentY += heightMM + GAP;
+        }
       }
+
       pdf.save(`proposta-${clientCompany || 'cliente'}.pdf`);
       toast.dismiss();
       toast.success('PDF gerado com sucesso!');
@@ -390,7 +422,7 @@ export default function CommercialProposal() {
           <div ref={proposalRef} className="bg-white w-full max-w-[800px] shadow-2xl rounded-xl overflow-hidden" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
 
             {/* Header */}
-            <div className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, hsl(16 82% 51%), hsl(16 82% 38%))' }}>
+            <div data-pdf-section className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, hsl(16 82% 51%), hsl(16 82% 38%))' }}>
               <div className="absolute inset-0 opacity-10">
                 <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full border-[40px] border-white/20" />
                 <div className="absolute -bottom-10 -left-10 w-40 h-40 rounded-full border-[30px] border-white/10" />
@@ -410,7 +442,7 @@ export default function CommercialProposal() {
 
             {/* Plan details */}
             {selectedPlan && (
-              <div className="p-8 md:p-12">
+              <div data-pdf-section className="p-8 md:p-12">
                 <h2 className="text-xl font-bold text-gray-800 mb-1 flex items-center gap-2">
                   <Rocket className="h-5 w-5" style={{ color: 'hsl(16 82% 51%)' }} /> Pacote {selectedPlan.name}
                 </h2>
@@ -464,7 +496,7 @@ export default function CommercialProposal() {
 
             {/* Bonus Section */}
             {bonusServices.length > 0 && (
-              <div className="px-8 md:px-12 pb-8">
+              <div data-pdf-section className="px-8 md:px-12 pb-8">
                 <div className="rounded-xl p-6" style={{ background: 'linear-gradient(135deg, hsl(16 82% 96%), hsl(16 82% 92%))' }}>
                   <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-1">
                     <Gift className="h-5 w-5" style={{ color: 'hsl(16 82% 51%)' }} /> Bônus Exclusivos desta Proposta
@@ -490,7 +522,7 @@ export default function CommercialProposal() {
             )}
 
             {/* Internal Process */}
-            <div className="px-8 md:px-12 pb-8">
+            <div data-pdf-section className="px-8 md:px-12 pb-8">
               <h2 className="text-xl font-bold text-gray-800 mb-1">Como Funciona</h2>
               <p className="text-sm text-gray-500 mb-6">Nosso processo interno para garantir resultados</p>
               <div className="space-y-3">
@@ -525,7 +557,7 @@ export default function CommercialProposal() {
 
             {/* Team */}
             {teamMembers.length > 0 && (
-              <div className="px-8 md:px-12 pb-8">
+              <div data-pdf-section className="px-8 md:px-12 pb-8">
                 <h2 className="text-xl font-bold text-gray-800 mb-1 flex items-center gap-2">
                   <Users className="h-5 w-5" style={{ color: 'hsl(16 82% 51%)' }} /> Sua Equipe Dedicada
                 </h2>
@@ -549,7 +581,7 @@ export default function CommercialProposal() {
             )}
 
             {/* Pricing */}
-            <div className="px-8 md:px-12 pb-8">
+            <div data-pdf-section className="px-8 md:px-12 pb-8">
               <h2 className="text-xl font-bold text-gray-800 mb-6">Investimento</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* 6 months */}
@@ -617,14 +649,14 @@ export default function CommercialProposal() {
 
             {/* Observations */}
             {observations && (
-              <div className="px-8 md:px-12 pb-8">
+              <div data-pdf-section className="px-8 md:px-12 pb-8">
                 <h2 className="text-lg font-bold text-gray-800 mb-2">Observações</h2>
                 <p className="text-sm text-gray-600 whitespace-pre-wrap">{observations}</p>
               </div>
             )}
 
             {/* Footer */}
-            <div className="p-8 md:p-12 text-center" style={{ background: 'linear-gradient(135deg, hsl(16 82% 51%), hsl(16 82% 38%))' }}>
+            <div data-pdf-section className="p-8 md:p-12 text-center" style={{ background: 'linear-gradient(135deg, hsl(16 82% 51%), hsl(16 82% 38%))' }}>
               <img src={pulseLogo} alt="Pulse" className="h-8 mx-auto mb-3 brightness-0 invert" />
               <p className="text-white/80 text-sm">Transformando marcas em movimentos.</p>
               <p className="text-white/60 text-xs mt-2">Proposta válida até {format(validityDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</p>

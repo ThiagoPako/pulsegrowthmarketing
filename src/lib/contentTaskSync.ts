@@ -119,6 +119,7 @@ export async function syncContentTaskColumnChange(
     const deadline = addBusinessHours(new Date(), deadlineHours.review, workDays);
     updates.review_deadline = deadline.toISOString();
     updates.approval_sent_at = new Date().toISOString();
+    updates.assigned_to = null; // Remove editor responsibility on review
   }
   if (newColumn === 'alteracao') {
     if (!ctx.immediateAlteration) {

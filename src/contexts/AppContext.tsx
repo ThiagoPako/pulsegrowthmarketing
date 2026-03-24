@@ -2,7 +2,7 @@ import React, { createContext, useContext, useCallback, useState, useEffect } fr
 import { useAuth, type Profile } from '@/hooks/useAuth';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { supabase } from '@/lib/vpsDb';
-import { generateFixedRecordings, generateExtraRecordings } from '@/lib/schedulingUtils';
+import { generateFixedRecordings } from '@/lib/schedulingUtils';
 import { sendRecordingScheduledNotification } from '@/services/whatsappService';
 import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek, Script, ActiveRecording, UserRole } from '@/types';
 
@@ -145,35 +145,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return true;
   }, [hasConflict, data, users]);
 
-  /** Generate fixed + extra recordings for a client until end of month */
+  /** Generate fixed recordings only for a client until end of month.
+   * REGRA: extras e backups NUNCA são gerados automaticamente — só aparecem
+   * manualmente quando um admin preenche a vaga após cancelamento. */
   const generateScheduleForClient = useCallback(async (client: Client): Promise<number> => {
-    const videomakerIds = users.filter(u => u.role === 'videomaker').map(u => u.id);
     const fixedRecs = generateFixedRecordings(client, data.recordings, data.settings);
-    const allRecsAfterFixed = [...data.recordings, ...fixedRecs];
-    const extraRecs = generateExtraRecordings(client, allRecsAfterFixed, data.settings, videomakerIds);
-    const allNew = [...fixedRecs, ...extraRecs];
-    if (allNew.length > 0) {
-      await data.addRecordingsBulk(allNew);
+    if (fixedRecs.length > 0) {
+      await data.addRecordingsBulk(fixedRecs);
     }
-    return allNew.length;
+    return fixedRecs.length;
   }, [data, users]);
 
-  /** Delete future agendada recordings for a client and regenerate */
+  /** Delete future agendada recordings for a client and regenerate (fixed only) */
   const regenerateScheduleForClient = useCallback(async (client: Client): Promise<{ deleted: number; created: number }> => {
     const deleted = await data.deleteFutureRecordingsForClient(client.id);
-    // After deletion, re-fetch current recordings state (minus deleted ones)
     const today = new Date().toISOString().split('T')[0];
     const remainingRecs = data.recordings.filter(r => !(r.clientId === client.id && r.status === 'agendada' && r.date >= today));
     
-    const videomakerIds = users.filter(u => u.role === 'videomaker').map(u => u.id);
     const fixedRecs = generateFixedRecordings(client, remainingRecs, data.settings);
-    const allRecsAfterFixed = [...remainingRecs, ...fixedRecs];
-    const extraRecs = generateExtraRecordings(client, allRecsAfterFixed, data.settings, videomakerIds);
-    const allNew = [...fixedRecs, ...extraRecs];
-    if (allNew.length > 0) {
-      await data.addRecordingsBulk(allNew);
+    if (fixedRecs.length > 0) {
+      await data.addRecordingsBulk(fixedRecs);
     }
-    return { deleted, created: allNew.length };
+    return { deleted, created: fixedRecs.length };
   }, [data, users]);
 
   /** Cancel a recording — backup slots are only created manually via the backup dialog */

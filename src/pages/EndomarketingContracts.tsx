@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useEndoContracts, useEndoPackages, getCategoryLabel, EndoContract } from '@/hooks/useEndomarketing';
+import { useEndoContracts, useEndoPackages, getCategoryLabel, EndoContract, syncEndoExpenses } from '@/hooks/useEndomarketing';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Pencil, Ban, AlertTriangle, TrendingUp, DollarSign } from 'lucide-react';
+import { Plus, Pencil, Ban, AlertTriangle, TrendingUp, DollarSign, RefreshCw } from 'lucide-react';
 
 interface SimpleClient { id: string; company_name: string; color: string; }
 interface SimpleProfile { id: string; name: string; display_name: string | null; role: string; }
@@ -130,7 +130,18 @@ export default function EndomarketingContracts() {
           <h1 className="text-2xl font-display font-bold">Contratos Endomarketing</h1>
           <p className="text-sm text-muted-foreground">{contracts.length} contratos</p>
         </div>
-        {isAdmin && <Button onClick={openAdd}><Plus size={16} className="mr-1" /> Novo Contrato</Button>}
+        {isAdmin && (
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={async () => {
+              const count = await syncEndoExpenses();
+              if (count > 0) toast.success(`${count} despesa(s) criada(s) com sucesso!`);
+              else toast.info('Todas as despesas já estão sincronizadas');
+            }}>
+              <RefreshCw size={16} className="mr-1" /> Sincronizar Despesas
+            </Button>
+            <Button onClick={openAdd}><Plus size={16} className="mr-1" /> Novo Contrato</Button>
+          </div>
+        )}
       </div>
 
       <Card className="glass-card">

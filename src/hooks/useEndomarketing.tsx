@@ -246,7 +246,40 @@ async function createEndoExpense(amount: number, clientId: string, partnerId: st
   } as any);
 }
 
-// ─── Tasks ──────────────────────────────────
+// Sync: create missing expenses for all active contracts
+export async function syncEndoExpenses(): Promise<number> {
+  // Get all active contracts
+  const { data: contracts } = await (supabase as any).from('client_endomarketing_contracts')
+    .select('id, client_id, partner_id, partner_cost, start_date, status')
+    .eq('status', 'ativo');
+  if (!contracts || contracts.length === 0) return 0;
+
+  // Get existing endo expenses
+  const { data: existingExpenses } = await supabase.from('expenses')
+    .select('description, responsible, amount')
+    .ilike('description', '%endomarketing parceiro%');
+
+  let created = 0;
+  for (const c of contracts) {
+    if (c.partner_cost <= 0) continue;
+
+    // Fetch client name
+    const { data: client } = await supabase.from('clients').select('company_name').eq('id', c.client_id).single();
+    const clientName = client?.company_name || 'Cliente';
+
+    // Check if expense already exists for this client
+    const alreadyExists = existingExpenses?.some(
+      (e: any) => e.description?.includes(clientName) && Number(e.amount) === Number(c.partner_cost)
+    );
+    if (alreadyExists) continue;
+
+    await createEndoExpense(c.partner_cost, c.client_id, c.partner_id, c.start_date);
+    created++;
+  }
+  return created;
+}
+
+
 export function useEndoTasks(partnerId?: string) {
   const [tasks, setTasks] = useState<EndoTask[]>([]);
   const [loading, setLoading] = useState(true);

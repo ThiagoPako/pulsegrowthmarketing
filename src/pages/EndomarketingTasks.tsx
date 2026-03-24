@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Rocket, CheckCircle, XCircle, Clock, CalendarPlus, MessageCircle } from 'lucide-react';
+import { Rocket, CheckCircle, XCircle, Clock, CalendarPlus, MessageCircle, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function EndomarketingTasks() {
@@ -65,6 +65,21 @@ export default function EndomarketingTasks() {
     if (ok) toast.success('Tarefas geradas com sucesso!');
     else toast.error('Erro ao gerar tarefas');
     setGenDialogOpen(false);
+  };
+
+  const handleRegenerateAll = async () => {
+    const activeContracts = contracts.filter(c => c.status === 'ativo');
+    if (activeContracts.length === 0) { toast.error('Nenhum contrato ativo'); return; }
+    setGenerating(true);
+    let success = 0;
+    let fail = 0;
+    for (const c of activeContracts) {
+      const ok = await generateTasks(c.id, genFrom, genTo);
+      if (ok) success++; else fail++;
+    }
+    setGenerating(false);
+    if (fail === 0) toast.success(`${success} contratos regenerados com sucesso!`);
+    else toast.error(`${success} ok, ${fail} falharam`);
   };
 
   const openComplete = (taskId: string) => {
@@ -140,10 +155,14 @@ export default function EndomarketingTasks() {
             <p className="text-[10px] sm:text-sm text-muted-foreground">{stats.pending} pendentes · {stats.completed} concluídas</p>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-1.5 sm:flex sm:gap-2">
+        <div className="grid grid-cols-3 gap-1.5 sm:flex sm:gap-2">
           <Button variant="outline" size="sm" onClick={handleSendDailyNotifications} disabled={sendingNotifications} className="text-[10px] sm:text-sm h-8 px-2 sm:px-3 gap-1">
             <MessageCircle size={13} />
             <span className="truncate">{sendingNotifications ? 'Enviando...' : 'WhatsApp'}</span>
+          </Button>
+          <Button variant="secondary" size="sm" onClick={handleRegenerateAll} disabled={generating} className="text-[10px] sm:text-sm h-8 px-2 sm:px-3 gap-1">
+            <RefreshCw size={13} className={generating ? 'animate-spin' : ''} />
+            <span className="truncate">{generating ? 'Regenerando...' : 'Regenerar Todas'}</span>
           </Button>
           <Button size="sm" onClick={() => setGenDialogOpen(true)} className="text-[10px] sm:text-sm h-8 px-2 sm:px-3 gap-1">
             <CalendarPlus size={13} /> <span className="truncate">Gerar Tarefas</span>

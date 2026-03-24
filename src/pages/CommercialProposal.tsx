@@ -78,8 +78,9 @@ export default function CommercialProposal() {
   const { data: plans = [] } = useQuery({
     queryKey: ['plans-proposal'],
     queryFn: async () => {
-      const { data } = await supabase.from('plans').select('*').eq('status', 'ativo').order('price');
-      return data || [];
+      const { data, error } = await supabase.from('plans').select('*').eq('status', 'ativo').order('price', { ascending: true });
+      if (error) console.error('Plans query error:', error);
+      return (data as any[]) || [];
     },
   });
 
@@ -169,11 +170,14 @@ export default function CommercialProposal() {
   return (
     <div className="space-y-6 p-4 md:p-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <FileText className="h-6 w-6 text-primary" /> Proposta Comercial
-          </h1>
-          <p className="text-sm text-muted-foreground">Crie propostas profissionais para novos clientes</p>
+        <div className="flex items-center gap-3">
+          <img src={pulseLogo} alt="Pulse" className="h-10 w-10 rounded-lg object-contain" />
+          <div>
+            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+              <FileText className="h-6 w-6 text-primary" /> Proposta Comercial
+            </h1>
+            <p className="text-sm text-muted-foreground">Crie propostas profissionais para novos clientes</p>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setShowPreview(!showPreview)}>
@@ -209,12 +213,12 @@ export default function CommercialProposal() {
             <CardHeader><CardTitle className="text-base">Pacote</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <Label>Plano contratado</Label>
+                <Label>Plano contratado ({plans.length} disponíveis)</Label>
                 <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
                   <SelectTrigger><SelectValue placeholder="Selecione o plano" /></SelectTrigger>
                   <SelectContent>
                     {plans.map((p: any) => (
-                      <SelectItem key={p.id} value={p.id}>{p.name} — {fmt(p.price)}/mês</SelectItem>
+                      <SelectItem key={p.id} value={String(p.id)}>{p.name} — {fmt(Number(p.price))}/mês</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

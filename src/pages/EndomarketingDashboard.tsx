@@ -159,6 +159,14 @@ export default function EndomarketingDashboard() {
                   {canSeeFinancials && (() => {
                     const sp = Number(c.sale_price || 0);
                     const pc = Number(c.partner_cost || 0);
+                    if (!isAdmin) {
+                      // Partner view: show what they earn
+                      return (
+                        <div className="text-right shrink-0 ml-2">
+                          <p className="text-xs sm:text-sm font-semibold text-success">{fmt(pc)}</p>
+                        </div>
+                      );
+                    }
                     const isOverdelivery = sp === 0 && pc > 0;
                     const profit = isOverdelivery ? 0 : sp - pc;
                     const margin = sp > 0 ? (profit / sp * 100).toFixed(0) : '0';

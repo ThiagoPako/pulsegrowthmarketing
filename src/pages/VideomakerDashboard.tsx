@@ -445,7 +445,10 @@ export default function VideomakerDashboard() {
       });
     }
 
-    let msg = `Gravação concluída! ${reelsCount} roteiro(s) enviado(s) para edição`;
+    const hasAnyLink = Array.from(allRecordedIds).some(id => driveLinks[id]?.trim());
+    let msg = hasAnyLink
+      ? `Gravação concluída! ${reelsCount} roteiro(s) enviado(s) para edição`
+      : `Captação finalizada! ${reelsCount} roteiro(s) aguardando link do Drive`;
     if (rejectedScripts.size > 0) msg += ` · ${rejectedScripts.size} rejeitado(s) e apagado(s)`;
     if (returnedCount > 0) msg += ` · ${returnedCount} retornado(s) ao banco`;
 

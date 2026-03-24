@@ -1296,7 +1296,7 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
                 </span>
               </div>
               <div className="min-w-0 flex-1">
-                <span className="text-[9px] font-semibold uppercase tracking-widest text-primary/60 block leading-none mb-0.5" style={{ fontFamily: 'var(--font-display)' }}>Executando</span>
+                <span className="text-[9px] font-semibold uppercase tracking-widest text-primary/60 block leading-none mb-0.5" style={{ fontFamily: 'var(--font-display)' }}>{task.kanban_column === 'revisao' ? 'Editado por' : 'Executando'}</span>
                 <span className="text-[11px] font-bold text-foreground truncate block">{assignedUser.name}</span>
               </div>
               <User size={11} className="text-primary/40 shrink-0" />

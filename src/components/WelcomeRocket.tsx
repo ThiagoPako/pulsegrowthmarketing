@@ -304,16 +304,31 @@ export default function WelcomeRocket() {
       if (isVictor || isRayssa || isThiago) {
         lines.push('');
         const { data: scripts } = await supabase.from('scripts')
-          .select('id, title, status, client_id, clients(company_name)')
-          .in('status', ['pendente', 'rascunho', 'em_producao']).limit(20);
+          .select('id, title, client_id, recorded, clients(company_name)')
+          .limit(500);
         
-        lines.push(`▸ ROTEIROS PENDENTES:`);
-        if (scripts && scripts.length > 0) {
-          lines.push(`  ◦ TOTAL NA FILA ........... ${scripts.length}`);
-          scripts.slice(0, 5).forEach((s: any) => lines.push(`    → ${s.clients?.company_name || ''} — ${s.title} [${s.status}]`));
-          if (scripts.length > 5) lines.push(`    ... +${scripts.length - 5} roteiros`);
-        } else {
-          lines.push(`  ✓ Todos os roteiros em dia!`);
+        const unrecorded = (scripts as any[] || []).filter((s: any) => !s.recorded);
+        lines.push(`▸ ROTEIROS PENDENTES (não gravados): ${unrecorded.length}`);
+        if (unrecorded.length > 0) {
+          unrecorded.slice(0, 5).forEach((s: any) => lines.push(`    → ${s.clients?.company_name || ''} — ${s.title}`));
+          if (unrecorded.length > 5) lines.push(`    ... +${unrecorded.length - 5} roteiros`);
+        }
+
+        // Clientes com menos de 3 roteiros disponíveis
+        const { data: allClients } = await supabase.from('clients').select('id, company_name').limit(200);
+        if (allClients) {
+          const lowScriptClients = (allClients as any[]).filter(c => {
+            const count = unrecorded.filter((s: any) => s.client_id === c.id).length;
+            return count < 3;
+          });
+          if (lowScriptClients.length > 0) {
+            lines.push('');
+            lines.push(`▸ ⚠ CLIENTES COM POUCOS ROTEIROS (< 3):`);
+            lowScriptClients.forEach((c: any) => {
+              const count = unrecorded.filter((s: any) => s.client_id === c.id).length;
+              lines.push(`  ◦ ${c.company_name} — ${count} roteiro${count !== 1 ? 's' : ''}`);
+            });
+          }
         }
       }
     } catch {

@@ -368,7 +368,13 @@ export default function Dashboard() {
                     const elapsedMin = startTime ? differenceInMinutes(new Date(), startTime) : 0;
                     const elapsedHrs = startTime ? differenceInHours(new Date(), startTime) : 0;
                     const elapsedLabel = startTime ? formatDistanceToNow(startTime, { locale: ptBR, addSuffix: false }) : '';
-                    const expectedDuration = settings?.recordingDuration || 120;
+                    const timeToMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); };
+                    const isStar = client?.fullShiftRecording || false;
+                    const expectedDuration = isStar
+                      ? (client?.preferredShift === 'tarde'
+                        ? (timeToMin(settings?.shiftBEnd || '18:00') - timeToMin(settings?.shiftBStart || '14:30'))
+                        : (timeToMin(settings?.shiftAEnd || '12:00') - timeToMin(settings?.shiftAStart || '08:30')))
+                      : (settings?.recordingDuration || 90);
                     const progressPct = Math.min((elapsedMin / expectedDuration) * 100, 100);
                     const isStale = elapsedMin > expectedDuration * 1.5;
                     const isWarning = elapsedMin > expectedDuration;

@@ -225,8 +225,8 @@ export default function WelcomeRocket() {
 
   useEffect(() => {
     if (!user || !profile) return;
-    const shown = sessionStorage.getItem(SESSION_KEY);
-    if (shown === format(new Date(), 'yyyy-MM-dd')) return;
+    // Clear previous session to allow re-showing
+    sessionStorage.removeItem(SESSION_KEY);
 
     const timer = setTimeout(async () => {
       const msg = await buildMessage();

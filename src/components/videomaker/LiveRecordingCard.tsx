@@ -324,56 +324,61 @@ export default function LiveRecordingCard({
         </AnimatePresence>
 
         {/* Actions */}
-        <div className="flex gap-2 flex-wrap">
-          {onCancel && (
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-              <Button
-                variant="outline"
-                onClick={onCancel}
-                className="gap-1.5 border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
-              >
-                <RotateCcw size={14} />
-                Reiniciar
-              </Button>
-            </motion.div>
-          )}
-          <Button variant="outline" onClick={onViewScripts} className="gap-1.5">
-            <FileText size={14} /> Ver Roteiros
-          </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <div className="flex gap-2">
+            {onCancel && (
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onCancel}
+                  className="gap-1 border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive text-xs"
+                >
+                  <RotateCcw size={13} />
+                  Reiniciar
+                </Button>
+              </motion.div>
+            )}
+            <Button variant="outline" size="sm" onClick={onViewScripts} className="gap-1 text-xs">
+              <FileText size={13} /> Ver Roteiros
+            </Button>
 
-          {/* Waiting toggle button */}
-          {isWaiting ? (
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-              <Button
-                onClick={handleStopWaiting}
-                className="gap-2 bg-success hover:bg-success/90 text-success-foreground shadow-md"
-              >
-                <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 0.8, repeat: Infinity }}>
-                  <Play size={16} />
-                </motion.div>
-                Iniciamos!
-              </Button>
-            </motion.div>
-          ) : (
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-              <Button
-                variant="outline"
-                onClick={handleStartWaiting}
-                className="gap-1.5 border-warning/50 text-warning hover:bg-warning/10 hover:text-warning"
-              >
-                <Hourglass size={14} />
-                Em Espera
-              </Button>
-            </motion.div>
-          )}
+            {/* Waiting toggle button */}
+            {isWaiting ? (
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                <Button
+                  size="sm"
+                  onClick={handleStopWaiting}
+                  className="gap-1 bg-success hover:bg-success/90 text-success-foreground shadow-md text-xs"
+                >
+                  <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 0.8, repeat: Infinity }}>
+                    <Play size={14} />
+                  </motion.div>
+                  Iniciamos!
+                </Button>
+              </motion.div>
+            ) : (
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleStartWaiting}
+                  className="gap-1 border-warning/50 text-warning hover:bg-warning/10 hover:text-warning text-xs"
+                >
+                  <Hourglass size={13} />
+                  Em Espera
+                </Button>
+              </motion.div>
+            )}
+          </div>
 
-          <motion.div className="flex-1" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
             <Button
               onClick={async () => {
                 if (isWaiting) await handleStopWaiting();
                 onFinish();
               }}
-              className={`w-full gap-2 font-bold text-base py-5 rounded-xl shadow-lg transition-all ${
+              className={`w-full gap-2 font-bold text-sm py-4 rounded-xl shadow-lg transition-all ${
                 isOvertime
                   ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-destructive/25'
                   : 'bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground shadow-primary/25'
@@ -383,14 +388,9 @@ export default function LiveRecordingCard({
                 animate={{ y: [0, -3, 0], rotate: [0, -10, 0] }}
                 transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
               >
-                <Rocket size={18} className="-rotate-45" />
+                <Rocket size={16} className="-rotate-45" />
               </motion.div>
               Finalizar Gravação
-              <motion.div
-                className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-warning"
-                animate={{ scale: [1, 1.5, 1], opacity: [1, 0, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              />
             </Button>
           </motion.div>
         </div>

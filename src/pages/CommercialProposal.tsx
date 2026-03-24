@@ -133,7 +133,7 @@ export default function CommercialProposal() {
     setTeamMembers(prev => [...prev, {
       id: crypto.randomUUID(),
       name: user.displayName || user.name,
-      role: roleLabels[user.role] || user.role,
+      role: user.jobTitle || roleLabels[user.role] || user.role,
       avatarUrl: user.avatarUrl,
     }]);
   };

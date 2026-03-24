@@ -534,7 +534,7 @@ export default function Scripts() {
         document.body.removeChild(container);
       }
 
-      pdf.save(`roteiros-selecionados-${selected.length}.pdf`);
+      
       toast.success(`PDF com ${selected.length} roteiro(s) baixado!`);
       setSelectMode(false);
       setSelectedIds(new Set());

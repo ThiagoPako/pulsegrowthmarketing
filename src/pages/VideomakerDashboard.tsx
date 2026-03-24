@@ -1228,7 +1228,7 @@ export default function VideomakerDashboard() {
               </Alert>
 
               <p className="text-sm text-muted-foreground mb-3">
-                Adicione o link do Google Drive com os materiais de cada roteiro. O editor terá <strong>{settings.editingDeadlineHours || 48}h</strong> para editar.
+                Adicione o link do Google Drive com os materiais de cada roteiro <strong>(opcional)</strong>. Você pode finalizar agora e adicionar o link depois. O editor terá <strong>{settings.editingDeadlineHours || 48}h</strong> para editar.
               </p>
 
               <div className="space-y-3">
@@ -1260,7 +1260,7 @@ export default function VideomakerDashboard() {
                         <Input
                           value={driveLinks[id] || ''}
                           onChange={e => setDriveLinks(prev => ({ ...prev, [id]: e.target.value }))}
-                          placeholder="https://drive.google.com/drive/folders/..."
+                          placeholder="https://drive.google.com/drive/folders/... (opcional)"
                           className="h-9"
                         />
                       </div>
@@ -1304,7 +1304,6 @@ export default function VideomakerDashboard() {
                 <motion.div className="flex-1" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
                   <Button 
                     onClick={confirmFinish} 
-                    disabled={Array.from(new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts])).some(id => !driveLinks[id]?.trim())}
                     className="w-full gap-2 bg-gradient-to-r from-orange-600 via-red-500 to-orange-500 hover:from-orange-500 hover:via-red-400 hover:to-orange-400 text-white shadow-lg shadow-red-500/30 font-bold py-5 text-base rounded-xl relative overflow-hidden group"
                   >
                     <motion.div 
@@ -1313,7 +1312,6 @@ export default function VideomakerDashboard() {
                       className="relative"
                     >
                       <Rocket size={20} className="-rotate-45 relative z-10" />
-                      {/* Fire particles */}
                       <motion.div
                         animate={{ opacity: [0.8, 1, 0.6], scale: [1, 1.3, 0.8], y: [0, 6, 2] }}
                         transition={{ duration: 0.4, repeat: Infinity }}
@@ -1325,8 +1323,9 @@ export default function VideomakerDashboard() {
                         className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-2 h-3 rounded-full bg-gradient-to-t from-yellow-300 to-transparent blur-[1px] rotate-45"
                       />
                     </motion.div>
-                    Enviar para Edicao
-                    {/* Button glow effect */}
+                    {Array.from(new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts])).some(id => driveLinks[id]?.trim()) 
+                      ? 'Enviar para Edição' 
+                      : 'Finalizar Captação'}
                     <motion.div 
                       animate={{ x: ['-100%', '200%'] }}
                       transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}

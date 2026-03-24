@@ -1133,6 +1133,7 @@ export default function SocialMediaDeliveries() {
           onMarkPosted={handleMarkPosted}
           onTogglePriority={handleTogglePriorityFromQueue}
           sendingWhatsApp={sendingWhatsApp}
+          onDragMove={handleKanbanDragMove}
         />
 
         {/* Dialogs */}

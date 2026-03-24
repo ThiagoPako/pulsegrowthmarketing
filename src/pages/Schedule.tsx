@@ -1007,28 +1007,70 @@ export default function Schedule() {
                 className="space-y-3"
               >
                 <Label className="text-sm font-semibold">Selecione o Cliente</Label>
-                <div className="grid gap-2 max-h-[300px] overflow-y-auto pr-1">
-                  {clients.map(c => {
-                    const isSelected = form.clientId === c.id;
-                    return (
-                      <button key={c.id} onClick={() => { setForm({ ...form, clientId: c.id }); setNewStep(1); }}
-                        className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 hover:scale-[1.01] ${
-                          isSelected ? 'border-primary bg-primary/5 shadow-md' : 'border-border hover:border-primary/40 hover:bg-accent/50'
-                        }`}>
-                        <ClientLogo client={c} size="sm" />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{c.companyName}</p>
-                          <p className="text-xs text-muted-foreground">{c.responsiblePerson}</p>
-                        </div>
-                        {c.fullShiftRecording && (
-                          <Badge className="text-[10px] bg-amber-500/20 text-amber-600 border-amber-500/30 shrink-0">
-                            <Star size={10} className="mr-0.5" /> Star
-                          </Badge>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
+                <Tabs defaultValue="regular" className="w-full">
+                  <TabsList className="w-full h-9">
+                    <TabsTrigger value="regular" className="flex-1 text-xs gap-1"><Play size={12} /> Gravação</TabsTrigger>
+                    <TabsTrigger value="endo" className="flex-1 text-xs gap-1"><Sparkles size={12} /> Endomarketing</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="regular" className="mt-2">
+                    <div className="grid gap-2 max-h-[300px] overflow-y-auto pr-1">
+                      {clients.map(c => {
+                        const isSelected = form.clientId === c.id;
+                        return (
+                          <button key={c.id} onClick={() => { setForm({ ...form, clientId: c.id, type: 'fixa' }); setNewStep(1); }}
+                            className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 hover:scale-[1.01] ${
+                              isSelected ? 'border-primary bg-primary/5 shadow-md' : 'border-border hover:border-primary/40 hover:bg-accent/50'
+                            }`}>
+                            <ClientLogo client={c} size="sm" />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm truncate">{c.companyName}</p>
+                              <p className="text-xs text-muted-foreground">{c.responsiblePerson}</p>
+                            </div>
+                            {c.fullShiftRecording && (
+                              <Badge className="text-[10px] bg-amber-500/20 text-amber-600 border-amber-500/30 shrink-0">
+                                <Star size={10} className="mr-0.5" /> Star
+                              </Badge>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="endo" className="mt-2">
+                    <div className="grid gap-2 max-h-[300px] overflow-y-auto pr-1">
+                      {endoClientes.filter(ec => ec.active).length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">Nenhum cliente de endomarketing ativo</p>
+                      ) : (
+                        endoClientes.filter(ec => ec.active).map(ec => {
+                          // Find linked regular client or use endo client name
+                          const linkedClient = ec.client_id ? clients.find(c => c.id === ec.client_id) : null;
+                          const clientId = linkedClient?.id || ec.id;
+                          const isSelected = form.clientId === clientId;
+                          return (
+                            <button key={ec.id} onClick={() => {
+                              setForm({ ...form, clientId: clientId, type: 'endomarketing' as RecordingType });
+                              setNewStep(1);
+                            }}
+                              className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 hover:scale-[1.01] ${
+                                isSelected ? 'border-fuchsia-500 bg-fuchsia-500/5 shadow-md' : 'border-border hover:border-fuchsia-500/40 hover:bg-fuchsia-500/5'
+                              }`}>
+                              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ backgroundColor: `hsl(${ec.color || ENDO_COLOR})` }}>
+                                {ec.company_name?.charAt(0) || '?'}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{ec.company_name}</p>
+                                <p className="text-xs text-muted-foreground">{ec.responsible_person || 'Endomarketing'}</p>
+                              </div>
+                              <Badge className="text-[10px] bg-fuchsia-500/20 text-fuchsia-600 border-fuchsia-500/30 shrink-0">
+                                <Sparkles size={10} className="mr-0.5" /> Endo
+                              </Badge>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </TabsContent>
+                </Tabs>
               </motion.div>
             )}
 

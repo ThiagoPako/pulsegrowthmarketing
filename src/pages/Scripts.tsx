@@ -145,6 +145,9 @@ export default function Scripts() {
     const stored = localStorage.getItem('pulse_script_alerts');
     return stored !== null ? stored === 'true' : true;
   });
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [downloadingBatch, setDownloadingBatch] = useState(false);
 
   const toggleScriptAlerts = (v: boolean) => {
     setScriptAlerts(v);

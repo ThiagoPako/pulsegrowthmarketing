@@ -17,7 +17,7 @@ import { motion } from 'framer-motion';
 
 export default function EndomarketingTasks() {
   const { tasks, loading, completeTask, cancelTask, generateTasks } = useEndoTasks();
-  const { contracts } = useEndoContracts();
+  const { contracts } = useEndoContracts(false);
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterDate, setFilterDate] = useState('');
   const [genDialogOpen, setGenDialogOpen] = useState(false);
@@ -29,6 +29,12 @@ export default function EndomarketingTasks() {
   const [completeNotes, setCompleteNotes] = useState('');
   const [generating, setGenerating] = useState(false);
   const [sendingNotifications, setSendingNotifications] = useState(false);
+
+  const formatTaskGroupDate = (dateValue: string) => {
+    const parsed = new Date(`${dateValue}T12:00:00`);
+    if (Number.isNaN(parsed.getTime())) return dateValue;
+    return format(parsed, "EEEE, dd 'de' MMMM", { locale: ptBR });
+  };
 
   const activeContracts = contracts.filter(c => c.status === 'ativo');
 
@@ -43,6 +49,7 @@ export default function EndomarketingTasks() {
   const grouped = useMemo(() => {
     const map = new Map<string, typeof filtered>();
     filtered.forEach(t => {
+      if (!t.date) return;
       const arr = map.get(t.date) || [];
       arr.push(t);
       map.set(t.date, arr);

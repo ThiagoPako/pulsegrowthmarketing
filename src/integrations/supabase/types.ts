@@ -799,6 +799,87 @@ export type Database = {
           },
         ]
       }
+      commercial_proposals: {
+        Row: {
+          bonus_services: Json | null
+          client_company: string
+          client_name: string
+          client_response_at: string | null
+          client_response_note: string | null
+          created_at: string
+          created_by: string | null
+          custom_discount: number
+          has_contract: boolean
+          id: string
+          observations: string | null
+          plan_id: string | null
+          plan_snapshot: Json | null
+          status: string
+          team_members: Json | null
+          token: string
+          updated_at: string
+          validity_date: string
+          whatsapp_number: string | null
+        }
+        Insert: {
+          bonus_services?: Json | null
+          client_company?: string
+          client_name?: string
+          client_response_at?: string | null
+          client_response_note?: string | null
+          created_at?: string
+          created_by?: string | null
+          custom_discount?: number
+          has_contract?: boolean
+          id?: string
+          observations?: string | null
+          plan_id?: string | null
+          plan_snapshot?: Json | null
+          status?: string
+          team_members?: Json | null
+          token?: string
+          updated_at?: string
+          validity_date?: string
+          whatsapp_number?: string | null
+        }
+        Update: {
+          bonus_services?: Json | null
+          client_company?: string
+          client_name?: string
+          client_response_at?: string | null
+          client_response_note?: string | null
+          created_at?: string
+          created_by?: string | null
+          custom_discount?: number
+          has_contract?: boolean
+          id?: string
+          observations?: string | null
+          plan_id?: string | null
+          plan_snapshot?: Json | null
+          status?: string
+          team_members?: Json | null
+          token?: string
+          updated_at?: string
+          validity_date?: string
+          whatsapp_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commercial_proposals_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commercial_proposals_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       company_settings: {
         Row: {
           alteration_deadline_hours: number
@@ -2467,6 +2548,38 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      proposal_comments: {
+        Row: {
+          author_name: string
+          created_at: string
+          id: string
+          message: string
+          proposal_id: string
+        }
+        Insert: {
+          author_name?: string
+          created_at?: string
+          id?: string
+          message?: string
+          proposal_id: string
+        }
+        Update: {
+          author_name?: string
+          created_at?: string
+          id?: string
+          message?: string
+          proposal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_comments_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "commercial_proposals"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       recording_wait_logs: {
         Row: {

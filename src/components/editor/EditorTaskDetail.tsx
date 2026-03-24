@@ -16,7 +16,7 @@ import {
   Eye, ExternalLink, Upload, Send, History, MessageSquare, Clock,
   AlertTriangle, Check, Film, Megaphone, Image, Palette, Link2, Play,
   Video, Camera, CircleCheck, CircleDot, Circle, Rocket, Star, Trophy,
-  PartyPopper
+  PartyPopper, Pause
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import { highlightQuotes } from '@/lib/highlightQuotes';
@@ -69,23 +69,30 @@ function getStageIndex(column: string): number {
   }
 }
 
-/* ─── Live Timer ──────────────────────────────────────────── */
-function LiveTimer({ startedAt, large }: { startedAt: string; large?: boolean }) {
+/* ─── Live Timer with pause support ──────────────────────── */
+function LiveTimer({ startedAt, large, pausedAt, pausedSeconds }: { startedAt: string; large?: boolean; pausedAt?: string | null; pausedSeconds?: number }) {
   const [elapsed, setElapsed] = useState(0);
+  const isPaused = !!pausedAt;
   useEffect(() => {
     const start = new Date(startedAt).getTime();
-    const tick = () => setElapsed(Math.floor((Date.now() - start) / 1000));
+    const paused = pausedSeconds || 0;
+    if (isPaused) {
+      const pauseTime = new Date(pausedAt!).getTime();
+      setElapsed(Math.floor((pauseTime - start) / 1000) - paused);
+      return;
+    }
+    const tick = () => setElapsed(Math.floor((Date.now() - start) / 1000) - paused);
     tick();
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
-  }, [startedAt]);
+  }, [startedAt, isPaused, pausedAt, pausedSeconds]);
   const h = Math.floor(elapsed / 3600);
   const m = Math.floor((elapsed % 3600) / 60);
   const s = elapsed % 60;
   return (
     <motion.span
-      className={`font-mono font-bold text-primary tabular-nums ${large ? 'text-2xl' : 'text-sm'}`}
-      animate={{ opacity: [1, 0.6, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
+      className={`font-mono font-bold tabular-nums ${isPaused ? 'text-warning' : 'text-primary'} ${large ? 'text-2xl' : 'text-sm'}`}
+      animate={isPaused ? { opacity: [1, 0.4, 1] } : { opacity: [1, 0.6, 1] }} transition={{ duration: isPaused ? 1 : 1.5, repeat: Infinity }}>
       {h > 0 && `${h}:`}{String(m).padStart(2, '0')}:{String(s).padStart(2, '0')}
     </motion.span>
   );

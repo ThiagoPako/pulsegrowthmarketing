@@ -175,11 +175,53 @@ export default function CommercialProposal() {
     }
   }, [clientCompany]);
 
+  const saveAndShareProposal = useCallback(async () => {
+    if (!selectedPlan) { toast.error('Selecione um plano'); return; }
+    if (!clientCompany) { toast.error('Preencha o nome da empresa'); return; }
+    setSavingProposal(true);
+    try {
+      const { data, error } = await supabase.from('commercial_proposals').insert({
+        client_name: clientName,
+        client_company: clientCompany,
+        plan_id: selectedPlanId,
+        plan_snapshot: selectedPlan,
+        bonus_services: bonusServices,
+        team_members: teamMembers,
+        has_contract: hasContract,
+        custom_discount: customDiscount,
+        observations,
+        validity_date: format(validityDate, 'yyyy-MM-dd'),
+        whatsapp_number: whatsappNumber,
+        created_by: user?.id || null,
+      } as any).select().single();
+      if (error) throw error;
+      const link = `${window.location.origin}/proposta/${(data as any).token}`;
+      setShareLink(link);
+      await navigator.clipboard.writeText(link);
+      toast.success('Proposta salva! Link copiado para a área de transferência.');
+      refetchProposals();
+    } catch (e: any) {
+      toast.error('Erro ao salvar proposta: ' + e.message);
+    }
+    setSavingProposal(false);
+  }, [clientName, clientCompany, selectedPlanId, selectedPlan, bonusServices, teamMembers, hasContract, customDiscount, observations, validityDate, whatsappNumber, user]);
+
+  const copyLink = (link: string) => {
+    navigator.clipboard.writeText(link);
+    toast.success('Link copiado!');
+  };
+
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  const statusColors: Record<string, string> = {
+    pendente: 'bg-yellow-100 text-yellow-800',
+    aceita: 'bg-green-100 text-green-800',
+    recusada: 'bg-red-100 text-red-800',
+  };
 
   return (
     <div className="space-y-6 p-4 md:p-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <img src={pulseLogo} alt="Pulse" className="h-10 w-10 rounded-lg object-contain" />
           <div>
@@ -189,15 +231,83 @@ export default function CommercialProposal() {
             <p className="text-sm text-muted-foreground">Crie propostas profissionais para novos clientes</p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowPreview(!showPreview)}>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => setShowSavedProposals(!showSavedProposals)}>
+            <List className="h-4 w-4 mr-1" /> Propostas ({savedProposals.length})
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowPreview(!showPreview)}>
             <Eye className="h-4 w-4 mr-1" /> {showPreview ? 'Editar' : 'Preview'}
           </Button>
           {showPreview && (
-            <Button onClick={downloadPDF}>
-              <Download className="h-4 w-4 mr-1" /> Baixar PDF
-            </Button>
+            <>
+              <Button size="sm" onClick={downloadPDF}>
+                <Download className="h-4 w-4 mr-1" /> PDF
+              </Button>
+              <Button size="sm" onClick={saveAndShareProposal} disabled={savingProposal} className="bg-green-600 hover:bg-green-700">
+                <Link2 className="h-4 w-4 mr-1" /> {savingProposal ? 'Salvando...' : 'Salvar & Enviar Link'}
+              </Button>
+            </>
           )}
+        </div>
+      </div>
+
+      {/* Share link banner */}
+      {shareLink && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-3">
+          <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-green-800">Link da proposta gerado!</p>
+            <p className="text-xs text-green-700 truncate">{shareLink}</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => copyLink(shareLink)}>
+            <Copy className="h-3 w-3 mr-1" /> Copiar
+          </Button>
+          <a href={shareLink} target="_blank" rel="noopener noreferrer">
+            <Button size="sm" variant="outline">
+              <ExternalLink className="h-3 w-3 mr-1" /> Abrir
+            </Button>
+          </a>
+        </div>
+      )}
+
+      {/* Saved proposals list */}
+      {showSavedProposals && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Propostas Enviadas</CardTitle></CardHeader>
+          <CardContent>
+            {savedProposals.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhuma proposta salva ainda.</p>
+            ) : (
+              <div className="space-y-2">
+                {savedProposals.map((p: any) => {
+                  const link = `${window.location.origin}/proposta/${p.token}`;
+                  return (
+                    <div key={p.id} className="flex items-center justify-between bg-accent/30 rounded-lg p-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm truncate">{p.client_company}</p>
+                        <p className="text-xs text-muted-foreground">{p.client_name} · {format(new Date(p.created_at), 'dd/MM/yyyy')}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge className={statusColors[p.status] || ''}>
+                          {p.status === 'aceita' ? '✅ Aceita' : p.status === 'recusada' ? '❌ Recusada' : '⏳ Pendente'}
+                        </Badge>
+                        <Button size="icon" variant="ghost" onClick={() => copyLink(link)} title="Copiar link">
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                        <a href={link} target="_blank" rel="noopener noreferrer">
+                          <Button size="icon" variant="ghost" title="Abrir proposta">
+                            <ExternalLink className="h-3 w-3" />
+                          </Button>
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
         </div>
       </div>
 

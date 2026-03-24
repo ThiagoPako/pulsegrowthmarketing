@@ -82,6 +82,7 @@ const navCategories: NavCategory[] = [
       { path: '/panfletagem', label: 'Panfletagem', icon: Car, roles: ['admin'] },
       { path: '/portal-videos', label: 'Vídeos Portal', icon: Video, roles: ['admin'] },
       { path: '/landing-admin', label: 'Landing Page', icon: Rocket, roles: ['admin'] },
+      { path: '/propostas', label: 'Propostas', icon: FileText, roles: ['admin'] },
       { path: '/configuracoes', label: 'Config', icon: Settings, roles: ['admin', 'social_media'] },
     ],
   },

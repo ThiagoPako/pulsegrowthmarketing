@@ -242,8 +242,8 @@ export default function EndomarketingDashboard() {
             </CardHeader>
             <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-                {[...metrics.activeContracts].sort((a, b) => (b.sale_price - b.partner_cost) - (a.sale_price - a.partner_cost)).slice(0, 3).map((c, i) => {
-                  const profit = c.sale_price - c.partner_cost;
+                {[...metrics.activeContracts].sort((a, b) => (Number(b.sale_price||0) - Number(b.partner_cost||0)) - (Number(a.sale_price||0) - Number(a.partner_cost||0))).slice(0, 3).map((c, i) => {
+                  const profit = Number(c.sale_price || 0) - Number(c.partner_cost || 0);
                   const medals = ['🥇', '🥈', '🥉'];
                   return (
                     <motion.div
@@ -259,7 +259,7 @@ export default function EndomarketingDashboard() {
                         <p className="text-xs sm:text-sm font-medium truncate">{c.clients?.company_name}</p>
                         <p className="text-[10px] text-muted-foreground">{getCategoryLabel(c.endomarketing_packages?.category || '')}</p>
                       </div>
-                      <p className="text-xs sm:text-sm font-bold text-success shrink-0">{fmt(profit)}</p>
+                      <p className={`text-xs sm:text-sm font-bold shrink-0 ${profit >= 0 ? 'text-success' : 'text-destructive'}`}>{fmt(profit)}</p>
                     </motion.div>
                   );
                 })}

@@ -59,6 +59,7 @@ const INTERNAL_PROCESS_STEPS = [
 ];
 
 export default function CommercialProposal() {
+  const { user } = useAuth();
   const { users } = useApp();
   const [clientName, setClientName] = useState('');
   const [clientCompany, setClientCompany] = useState('');
@@ -75,6 +76,10 @@ export default function CommercialProposal() {
   const [newBonusDesc, setNewBonusDesc] = useState('');
   const [newMemberName, setNewMemberName] = useState('');
   const [newMemberRole, setNewMemberRole] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [savingProposal, setSavingProposal] = useState(false);
+  const [shareLink, setShareLink] = useState('');
+  const [showSavedProposals, setShowSavedProposals] = useState(false);
   const proposalRef = useRef<HTMLDivElement>(null);
 
   const { data: plans = [] } = useQuery({

@@ -65,6 +65,7 @@ const LandingPage = lazy(() => import("@/pages/LandingPage"));
 const ClientFeedback = lazy(() => import("@/pages/ClientFeedback"));
 const TestimonialsAdmin = lazy(() => import("@/pages/TestimonialsAdmin"));
 const LandingPageAdmin = lazy(() => import("@/pages/LandingPageAdmin"));
+const CommercialProposal = lazy(() => import("@/pages/CommercialProposal"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -167,6 +168,7 @@ function AppRoutes() {
         <Route path="/relacionamento" element={<ProtectedRoute><ClientRelationship /></ProtectedRoute>} />
         <Route path="/depoimentos" element={<ProtectedRoute><TestimonialsAdmin /></ProtectedRoute>} />
         <Route path="/landing-admin" element={<ProtectedRoute><LandingPageAdmin /></ProtectedRoute>} />
+        <Route path="/propostas" element={<ProtectedRoute><CommercialProposal /></ProtectedRoute>} />
         <Route path="/feedback" element={<ClientFeedback />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

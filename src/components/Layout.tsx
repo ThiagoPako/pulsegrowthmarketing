@@ -106,13 +106,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { label: 'Padrão Victor', value: 'font-scale-victor', size: '22px' },
   ];
   const [fontScale, setFontScale] = useState(() => {
-    return currentUser?.fontScale || 'font-scale-base';
+    return currentUser?.fontScale || localStorage.getItem('pulse_font_scale') || 'font-scale-base';
   });
 
   // Sync from profile when user loads
   useEffect(() => {
     if (currentUser?.fontScale && currentUser.fontScale !== fontScale) {
       setFontScale(currentUser.fontScale);
+      localStorage.setItem('pulse_font_scale', currentUser.fontScale);
     }
   }, [currentUser?.fontScale]);
 
@@ -124,6 +125,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const handleFontScaleChange = (newScale: string) => {
     setFontScale(newScale);
+    localStorage.setItem('pulse_font_scale', newScale);
     // Persist to database
     updateProfile({ font_scale: newScale } as any);
   };

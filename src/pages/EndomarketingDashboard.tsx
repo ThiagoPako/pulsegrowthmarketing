@@ -99,7 +99,25 @@ export default function EndomarketingDashboard() {
                   </div>
                   <span className="text-[10px] sm:text-xs text-muted-foreground">{m.label}</span>
                 </div>
-                <p className="text-base sm:text-lg font-bold">{m.value}</p>
+                <div className="flex items-center gap-1.5">
+                  {m.value.includes('R$') && (
+                    <motion.span
+                      animate={{ opacity: [0.6, 1, 0.6], scale: [0.95, 1.05, 0.95] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                      className="text-xs font-bold text-success"
+                    >
+                      💰
+                    </motion.span>
+                  )}
+                  <p className="text-base sm:text-lg font-bold">{m.value}</p>
+                </div>
+                {m.value.includes('R$') && (
+                  <motion.div
+                    animate={{ opacity: [0, 0.15, 0] }}
+                    transition={{ duration: 3, repeat: Infinity, delay: i * 0.3 }}
+                    className="absolute inset-0 rounded-xl bg-gradient-to-tr from-success/10 via-transparent to-success/5 pointer-events-none"
+                  />
+                )}
                 <motion.div
                   animate={{ y: [15, -25], opacity: [0, 0.2, 0] }}
                   transition={{ duration: 4, repeat: Infinity, delay: i * 0.5 }}
@@ -163,7 +181,13 @@ export default function EndomarketingDashboard() {
                       // Partner view: show what they earn
                       return (
                         <div className="text-right shrink-0 ml-2">
-                          <p className="text-xs sm:text-sm font-semibold text-success">{fmt(pc)}</p>
+                          <motion.p
+                            animate={{ textShadow: ['0 0 0px transparent', '0 0 8px hsl(var(--success) / 0.4)', '0 0 0px transparent'] }}
+                            transition={{ duration: 2.5, repeat: Infinity }}
+                            className="text-xs sm:text-sm font-bold text-success"
+                          >
+                            💰 {fmt(pc)}
+                          </motion.p>
                         </div>
                       );
                     }
@@ -288,9 +312,15 @@ export default function EndomarketingDashboard() {
                         <p className="text-[10px] text-muted-foreground">{getCategoryLabel(c.endomarketing_packages?.category || '')}</p>
                       </div>
                       {isAdmin ? (
-                        <p className={`text-xs sm:text-sm font-bold shrink-0 ${isOverdelivery ? 'text-muted-foreground' : profit >= 0 ? 'text-success' : 'text-destructive'}`}>{isOverdelivery ? 'Overdelivery' : fmt(profit)}</p>
+                        <p className={`text-xs sm:text-sm font-bold shrink-0 ${isOverdelivery ? 'text-muted-foreground' : profit >= 0 ? 'text-success' : 'text-destructive'}`}>{isOverdelivery ? 'Overdelivery' : `💰 ${fmt(profit)}`}</p>
                       ) : (
-                        <p className="text-xs sm:text-sm font-bold shrink-0 text-success">{fmt(pc)}</p>
+                        <motion.p
+                          animate={{ textShadow: ['0 0 0px transparent', '0 0 8px hsl(var(--success) / 0.4)', '0 0 0px transparent'] }}
+                          transition={{ duration: 2.5, repeat: Infinity }}
+                          className="text-xs sm:text-sm font-bold shrink-0 text-success"
+                        >
+                          💰 {fmt(pc)}
+                        </motion.p>
                       )}
                     </motion.div>
                   );

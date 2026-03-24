@@ -140,6 +140,28 @@ export default function Scripts() {
   const [filterEndo, setFilterEndo] = useState<'all' | 'video' | 'endo'>('all');
   const [showRecorded, setShowRecorded] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [scriptAlerts, setScriptAlerts] = useState(() => {
+    const stored = localStorage.getItem('pulse_script_alerts');
+    return stored !== null ? stored === 'true' : true;
+  });
+
+  const toggleScriptAlerts = (v: boolean) => {
+    setScriptAlerts(v);
+    localStorage.setItem('pulse_script_alerts', String(v));
+    toast.success(v ? 'Alertas de roteiros ativados' : 'Alertas de roteiros desativados');
+  };
+
+  const clientsLowScripts = useMemo(() => {
+    if (!scriptAlerts) return [];
+    const activeClients = clients.filter(c => c.clientType !== 'inativo');
+    return activeClients
+      .map(c => {
+        const count = scripts.filter(s => s.clientId === c.id && !s.recorded).length;
+        return { client: c, count };
+      })
+      .filter(x => x.count < 3)
+      .sort((a, b) => a.count - b.count);
+  }, [clients, scripts, scriptAlerts]);
 
   const [form, setForm] = useState({
     clientId: '',

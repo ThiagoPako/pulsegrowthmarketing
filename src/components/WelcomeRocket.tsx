@@ -348,8 +348,11 @@ export default function WelcomeRocket() {
 
   useEffect(() => {
     if (!user || !profile) return;
-    // Clear previous session to allow re-showing
-    sessionStorage.removeItem(SESSION_KEY);
+
+    // Show only on first login of the day
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const lastShown = localStorage.getItem(STORAGE_KEY);
+    if (lastShown === today) return; // Already shown today
 
     const timer = setTimeout(async () => {
       const msg = await buildMessage();
@@ -357,7 +360,7 @@ export default function WelcomeRocket() {
         setMessage(msg);
         setVisible(true);
         setAudioPlaying(true);
-        sessionStorage.setItem(SESSION_KEY, format(new Date(), 'yyyy-MM-dd'));
+        localStorage.setItem(STORAGE_KEY, today);
       }
     }, 1000);
 

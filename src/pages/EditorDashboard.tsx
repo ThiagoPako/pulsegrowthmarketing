@@ -752,6 +752,59 @@ export default function EditorDashboard() {
         </div>
       )}
 
+      {/* ═══════ IN REVIEW (separate container) ═══════ */}
+      {(() => {
+        const reviewTasks = visibleTasks.filter(t => t.kanban_column === 'revisao');
+        if (reviewTasks.length === 0) return null;
+        return (
+          <div className="space-y-2">
+            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+              <Eye size={15} className="text-emerald-500" />
+              Em Revisão
+              <Badge className="text-[10px] px-1.5 py-0 bg-emerald-500/15 text-emerald-600 border-emerald-500/30">{reviewTasks.length}</Badge>
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {reviewTasks.map((task, i) => {
+                const cl = clients.find(c => c.id === task.client_id);
+                const cfg = getTypeConfig(task.content_type);
+                const clientColor = cl?.color || '217 91% 60%';
+                return (
+                  <motion.div key={task.id}
+                    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.02 }}
+                    className="relative bg-card border-2 border-emerald-500/30 rounded-xl overflow-hidden">
+                    <div className="h-1" style={{ backgroundColor: `hsl(${clientColor})` }} />
+                    <div className="p-3 space-y-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {cl && <ClientLogo client={cl as any} size="sm" />}
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-foreground truncate">{cl?.companyName || 'Cliente'}</p>
+                            <Badge className={`text-[9px] px-1 py-0 ${cfg.color} border-0`}>
+                              <cfg.icon size={9} className="mr-0.5" />{cfg.label}
+                            </Badge>
+                          </div>
+                        </div>
+                        <Badge className="text-[9px] shrink-0 bg-emerald-500/15 text-emerald-600 border-emerald-500/30">
+                          Em Revisão
+                        </Badge>
+                      </div>
+                      <p className="text-sm font-semibold text-foreground leading-tight">{task.title}</p>
+                      {task.editing_started_at && (
+                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 bg-emerald-500/10 rounded-md px-2 py-1">
+                          <Check size={10} />
+                          <span>Editado por você</span>
+                        </div>
+                      )}
+                      {task.review_deadline && <DeadlineBadge deadline={task.review_deadline} label="Revisão" />}
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ═══════ EDITING QUEUE ═══════ */}
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">

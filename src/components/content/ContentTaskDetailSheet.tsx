@@ -571,6 +571,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     await supabase.from('content_tasks').update({
       kanban_column: 'envio',
       approved_at: new Date().toISOString(),
+      assigned_to: user?.id || task.assigned_to,
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
 
@@ -589,6 +590,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
       kanban_column: 'alteracao',
       adjustment_notes: adjustmentNotes.trim(),
       immediate_alteration: adjustmentImmediate,
+      assigned_to: user?.id || task.assigned_to,
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
     await syncTask('alteracao');

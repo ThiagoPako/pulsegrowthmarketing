@@ -67,6 +67,21 @@ export default function EndomarketingTasks() {
     setGenDialogOpen(false);
   };
 
+  const handleRegenerateAll = async () => {
+    const activeContracts = contracts.filter(c => c.status === 'ativo');
+    if (activeContracts.length === 0) { toast.error('Nenhum contrato ativo'); return; }
+    setGenerating(true);
+    let success = 0;
+    let fail = 0;
+    for (const c of activeContracts) {
+      const ok = await generateTasks(c.id, genFrom, genTo);
+      if (ok) success++; else fail++;
+    }
+    setGenerating(false);
+    if (fail === 0) toast.success(`${success} contratos regenerados com sucesso!`);
+    else toast.error(`${success} ok, ${fail} falharam`);
+  };
+
   const openComplete = (taskId: string) => {
     setCompletingTaskId(taskId);
     setCompleteNotes('');

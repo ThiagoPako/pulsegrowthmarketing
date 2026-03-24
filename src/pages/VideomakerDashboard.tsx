@@ -389,7 +389,7 @@ export default function VideomakerDashboard() {
 
       if (existing && existing.length > 0) {
         await supabase.from('content_tasks').update({
-          kanban_column: 'edicao',
+          kanban_column: targetColumn,
           drive_link: scriptDriveLink,
           recording_id: rec.id,
           editing_deadline: editingDeadline.toISOString(),
@@ -403,7 +403,7 @@ export default function VideomakerDashboard() {
           client_id: rec.clientId,
           title: script.title,
           content_type: script.contentFormat || 'reels',
-          kanban_column: 'edicao',
+          kanban_column: targetColumn,
           description,
           script_id: scriptId,
           recording_id: rec.id,

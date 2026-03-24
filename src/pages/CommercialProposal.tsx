@@ -242,6 +242,7 @@ export default function CommercialProposal() {
                   <p><strong>Stories:</strong> {selectedPlan.stories_qty}/mês</p>
                   <p><strong>Artes:</strong> {selectedPlan.arts_qty}/mês</p>
                   <p><strong>Captações:</strong> {selectedPlan.recording_sessions}/mês</p>
+                  <p><strong>Tráfego Pago:</strong> ✅ Incluso</p>
                 </div>
               )}
             </CardContent>

@@ -1,17 +1,49 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X } from 'lucide-react';
+import { X, Zap, Shield, Activity } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-/* ─── Rocket Mascot SVG ─── */
+/* ─── JARVIS-style HUD Arc Ring ─── */
+function HudRing({ size = 120, delay = 0 }: { size?: number; delay?: number }) {
+  return (
+    <motion.svg
+      width={size} height={size}
+      viewBox="0 0 120 120"
+      className="absolute"
+      initial={{ rotate: 0, opacity: 0 }}
+      animate={{ rotate: 360, opacity: [0, 0.6, 0.3] }}
+      transition={{ rotate: { duration: 20, repeat: Infinity, ease: 'linear' }, opacity: { duration: 2, delay } }}
+    >
+      <circle cx="60" cy="60" r="55" fill="none" stroke="hsl(var(--primary))" strokeWidth="0.5" opacity={0.3} />
+      <motion.path
+        d="M60 5 A55 55 0 0 1 115 60"
+        fill="none"
+        stroke="hsl(var(--primary))"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        opacity={0.7}
+      />
+      <motion.path
+        d="M60 115 A55 55 0 0 1 5 60"
+        fill="none"
+        stroke="hsl(var(--primary))"
+        strokeWidth="1"
+        strokeLinecap="round"
+        opacity={0.4}
+      />
+    </motion.svg>
+  );
+}
+
+/* ─── Rocket Mascot SVG (JARVIS-enhanced) ─── */
 function RocketMascot({ talking }: { talking?: boolean }) {
   return (
     <motion.svg
       viewBox="0 0 80 80"
-      className="w-full h-full"
+      className="w-full h-full drop-shadow-[0_0_15px_hsl(var(--primary)/0.5)]"
       animate={talking ? { rotate: [0, -3, 3, -2, 0] } : { y: [0, -3, 0] }}
       transition={talking
         ? { duration: 0.5, repeat: Infinity, repeatType: 'mirror' }
@@ -25,16 +57,53 @@ function RocketMascot({ talking }: { talking?: boolean }) {
       <ellipse cx="40" cy="42" rx="18" ry="26" fill="hsl(var(--card))" stroke="hsl(var(--primary))" strokeWidth="2.5" />
       <circle cx="40" cy="34" r="12" fill="hsl(var(--primary)/0.15)" stroke="hsl(var(--primary))" strokeWidth="1.5" />
       <motion.g animate={talking ? { scaleY: [1, 0.2, 1] } : {}} transition={{ duration: 0.3, repeat: Infinity, repeatDelay: 2 }} style={{ transformOrigin: '40px 32px' }}>
-        <circle cx="35" cy="32" r="3" fill="hsl(var(--foreground))" />
-        <circle cx="45" cy="32" r="3" fill="hsl(var(--foreground))" />
+        <circle cx="35" cy="32" r="3" fill="hsl(var(--primary))" />
+        <circle cx="45" cy="32" r="3" fill="hsl(var(--primary))" />
         <motion.circle cx="36" cy="31.5" r="1.2" fill="hsl(var(--background))" animate={{ cx: talking ? [36, 37, 36] : [36, 35, 36] }} transition={{ duration: 1.5, repeat: Infinity }} />
         <motion.circle cx="46" cy="31.5" r="1.2" fill="hsl(var(--background))" animate={{ cx: talking ? [46, 47, 46] : [46, 45, 46] }} transition={{ duration: 1.5, repeat: Infinity }} />
       </motion.g>
-      <motion.path d={talking ? "M35 38 Q40 43 45 38" : "M36 38 Q40 41 44 38"} stroke="hsl(var(--foreground))" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+      <motion.path d={talking ? "M35 38 Q40 43 45 38" : "M36 38 Q40 41 44 38"} stroke="hsl(var(--primary))" strokeWidth="1.5" fill="none" strokeLinecap="round" />
       <path d="M22 52 L18 62 L28 56 Z" fill="hsl(var(--primary))" opacity={0.8} />
       <path d="M58 52 L62 62 L52 56 Z" fill="hsl(var(--primary))" opacity={0.8} />
       <path d="M30 18 Q40 6 50 18" fill="hsl(var(--primary))" />
     </motion.svg>
+  );
+}
+
+/* ─── Scanning line effect ─── */
+function ScanLine() {
+  return (
+    <motion.div
+      className="absolute left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-primary/50 to-transparent pointer-events-none"
+      initial={{ top: '0%' }}
+      animate={{ top: ['0%', '100%', '0%'] }}
+      transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}
+    />
+  );
+}
+
+/* ─── Particle dots floating ─── */
+function FloatingParticles() {
+  const particles = Array.from({ length: 12 }, (_, i) => ({
+    id: i,
+    x: Math.random() * 100,
+    y: Math.random() * 100,
+    size: Math.random() * 3 + 1,
+    delay: Math.random() * 3,
+  }));
+
+  return (
+    <>
+      {particles.map(p => (
+        <motion.div
+          key={p.id}
+          className="absolute rounded-full bg-primary/30 pointer-events-none"
+          style={{ left: `${p.x}%`, top: `${p.y}%`, width: p.size, height: p.size }}
+          animate={{ opacity: [0, 0.8, 0], y: [0, -20, 0], scale: [0.5, 1.2, 0.5] }}
+          transition={{ duration: 4, delay: p.delay, repeat: Infinity }}
+        />
+      ))}
+    </>
   );
 }
 
@@ -46,6 +115,8 @@ export default function WelcomeRocket() {
   const [message, setMessage] = useState('');
   const [typing, setTyping] = useState(true);
   const [displayedText, setDisplayedText] = useState('');
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const isIggor = profile?.name?.toLowerCase().includes('iggor') || profile?.display_name?.toLowerCase().includes('iggor');
 
@@ -54,26 +125,30 @@ export default function WelcomeRocket() {
 
     const today = format(new Date(), 'yyyy-MM-dd');
     const dayName = format(new Date(), "EEEE", { locale: ptBR });
-    const firstName = (profile.display_name || profile.name || 'Amigo').split(' ')[0];
+    const hour = new Date().getHours();
+    const firstName = (profile.display_name || profile.name || 'Operador').split(' ')[0];
     const role = profile.role;
 
+    const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
+
     let lines: string[] = [];
-    lines.push(`E aí, ${firstName}! 🔥`);
-    lines.push(`Hoje é ${dayName}, bora meter bronca!`);
+    lines.push(`[SISTEMA FOGUETINHO v3.0 — ONLINE]`);
+    lines.push('');
+    lines.push(`${greeting}, ${firstName}. Todos os sistemas operacionais.`);
+    lines.push(`Hoje é ${dayName}. Iniciando briefing do dia...`);
     lines.push('');
 
     try {
-      // Fetch tasks based on role
       if (role === 'videomaker') {
         const { data: recs } = await supabase.from('recordings')
           .select('id, client_id, date, status, clients(company_name)')
           .eq('date', today).eq('videomaker_id', user.id).limit(20);
         const pending = recs?.filter((r: any) => r.status !== 'concluida' && r.status !== 'cancelada') || [];
         if (pending.length > 0) {
-          lines.push(`📹 Você tem ${pending.length} gravação(ões) hoje:`);
-          pending.forEach((r: any) => lines.push(`  • ${r.clients?.company_name || 'Cliente'}`));
+          lines.push(`▸ GRAVAÇÕES DETECTADAS: ${pending.length}`);
+          pending.forEach((r: any) => lines.push(`  ◦ ${r.clients?.company_name || 'Cliente'}`));
         } else {
-          lines.push('📹 Nenhuma gravação agendada pra hoje. Dia tranquilo!');
+          lines.push('▸ GRAVAÇÕES: Nenhuma operação agendada.');
         }
       } else if (role === 'editor') {
         const { data: tasks } = await supabase.from('content_tasks')
@@ -81,11 +156,11 @@ export default function WelcomeRocket() {
           .eq('assigned_to', user.id)
           .in('kanban_column', ['edicao', 'revisao', 'alteracao']).limit(20);
         if (tasks && tasks.length > 0) {
-          lines.push(`🎬 Você tem ${tasks.length} tarefa(s) de edição:`);
-          tasks.slice(0, 5).forEach((t: any) => lines.push(`  • ${t.clients?.company_name || ''} - ${t.title}`));
-          if (tasks.length > 5) lines.push(`  ... e mais ${tasks.length - 5}`);
+          lines.push(`▸ EDIÇÕES NA FILA: ${tasks.length}`);
+          tasks.slice(0, 5).forEach((t: any) => lines.push(`  ◦ ${t.clients?.company_name || ''} — ${t.title}`));
+          if (tasks.length > 5) lines.push(`  ◦ ... +${tasks.length - 5} tarefas`);
         } else {
-          lines.push('🎬 Fila limpa! Nenhuma edição pendente.');
+          lines.push('▸ EDIÇÕES: Fila zerada. Sistemas limpos.');
         }
       } else if (role === 'designer' || role === 'fotografo') {
         const { data: tasks } = await supabase.from('design_tasks')
@@ -93,33 +168,32 @@ export default function WelcomeRocket() {
           .eq('assigned_to', user.id)
           .in('kanban_column', ['nova_tarefa', 'em_andamento', 'revisao']).limit(20);
         if (tasks && tasks.length > 0) {
-          lines.push(`🎨 Você tem ${tasks.length} tarefa(s) de design:`);
-          tasks.slice(0, 5).forEach((t: any) => lines.push(`  • ${t.clients?.company_name || ''} - ${t.title}`));
+          lines.push(`▸ DESIGN PENDENTE: ${tasks.length}`);
+          tasks.slice(0, 5).forEach((t: any) => lines.push(`  ◦ ${t.clients?.company_name || ''} — ${t.title}`));
         } else {
-          lines.push('🎨 Nenhuma tarefa de design pendente. Tá suave!');
+          lines.push('▸ DESIGN: Nenhuma tarefa pendente.');
         }
       } else if (role === 'social_media') {
         const { data: tasks } = await supabase.from('content_tasks')
           .select('id, title, kanban_column, client_id, clients(company_name)')
           .in('kanban_column', ['ideias', 'roteiro', 'pauta']).limit(20);
         if (tasks && tasks.length > 0) {
-          lines.push(`📱 ${tasks.length} tarefa(s) de conteúdo no radar:`);
-          tasks.slice(0, 5).forEach((t: any) => lines.push(`  • ${t.clients?.company_name || ''} - ${t.title}`));
+          lines.push(`▸ CONTEÚDOS NO RADAR: ${tasks.length}`);
+          tasks.slice(0, 5).forEach((t: any) => lines.push(`  ◦ ${t.clients?.company_name || ''} — ${t.title}`));
         } else {
-          lines.push('📱 Conteúdos em dia! Bora criar mais!');
+          lines.push('▸ CONTEÚDOS: Pipeline em dia.');
         }
       } else if (role === 'parceiro') {
         const { data: tasks } = await supabase.from('endomarketing_partner_tasks')
           .select('id, date, start_time, status, client_id, clients(company_name)')
           .eq('partner_id', user.id).eq('date', today).eq('status', 'pendente').limit(20);
         if (tasks && tasks.length > 0) {
-          lines.push(`📋 Você tem ${tasks.length} tarefa(s) de endomarketing hoje:`);
-          tasks.forEach((t: any) => lines.push(`  • ${t.start_time || ''} - ${t.clients?.company_name || 'Cliente'}`));
+          lines.push(`▸ OPERAÇÕES ENDOMARKETING: ${tasks.length}`);
+          tasks.forEach((t: any) => lines.push(`  ◦ ${t.start_time || '—'} → ${t.clients?.company_name || 'Cliente'}`));
         } else {
-          lines.push('📋 Nenhuma tarefa de endomarketing pra hoje!');
+          lines.push('▸ ENDOMARKETING: Sem operações agendadas.');
         }
       } else if (role === 'admin') {
-        // Admin sees overview
         const { data: recs } = await supabase.from('recordings')
           .select('id, status').eq('date', today).limit(50);
         const { data: contentTasks } = await supabase.from('content_tasks')
@@ -127,33 +201,28 @@ export default function WelcomeRocket() {
         const { data: designTasks } = await supabase.from('design_tasks')
           .select('id, kanban_column').in('kanban_column', ['nova_tarefa', 'em_andamento', 'revisao']).limit(50);
 
-        const recsToday = recs?.length || 0;
-        const editing = contentTasks?.length || 0;
-        const designing = designTasks?.length || 0;
-
-        lines.push('📊 Visão geral do dia:');
-        lines.push(`  📹 ${recsToday} gravação(ões) agendadas`);
-        lines.push(`  🎬 ${editing} edição(ões) pendente(s)`);
-        lines.push(`  🎨 ${designing} tarefa(s) de design`);
+        lines.push('▸ STATUS GERAL DA OPERAÇÃO:');
+        lines.push(`  ◦ GRAVAÇÕES HOJE ........... ${recs?.length || 0}`);
+        lines.push(`  ◦ EDIÇÕES PENDENTES ....... ${contentTasks?.length || 0}`);
+        lines.push(`  ◦ DESIGN ATIVO ............ ${designTasks?.length || 0}`);
       } else {
-        lines.push('💪 Bora trabalhar! O dia é nosso!');
+        lines.push('▸ Sistemas prontos. Aguardando comandos.');
       }
     } catch {
-      lines.push('💪 Bora trabalhar! O dia é nosso!');
+      lines.push('▸ Erro ao carregar dados. Sistemas em standby.');
     }
 
     lines.push('');
-    lines.push('Vamo que vamo! 🚀');
+    lines.push('Todos os módulos carregados. Pronto para operar. 🚀');
 
     if (isIggor) {
       lines.push('');
-      lines.push('Beijão pra você, Iggor! 😘💋');
+      lines.push('P.S.: Beijão pra você, Iggor! 😘💋');
     }
 
     return lines.join('\n');
   }, [user, profile, isIggor]);
 
-  // Check if already shown this session
   useEffect(() => {
     if (!user || !profile) return;
     const shown = sessionStorage.getItem(SESSION_KEY);
@@ -164,27 +233,30 @@ export default function WelcomeRocket() {
       if (msg) {
         setMessage(msg);
         setVisible(true);
+        setAudioPlaying(true);
         sessionStorage.setItem(SESSION_KEY, format(new Date(), 'yyyy-MM-dd'));
       }
-    }, 1500);
+    }, 1000);
 
     return () => clearTimeout(timer);
   }, [user, profile, buildMessage]);
 
-  // Typewriter effect
+  // Typewriter effect — faster JARVIS style
   useEffect(() => {
     if (!visible || !message) return;
     let i = 0;
     setDisplayedText('');
     setTyping(true);
     const interval = setInterval(() => {
-      i++;
+      i += 2;
+      if (i > message.length) i = message.length;
       setDisplayedText(message.slice(0, i));
       if (i >= message.length) {
         clearInterval(interval);
         setTyping(false);
+        setAudioPlaying(false);
       }
-    }, 25);
+    }, 18);
     return () => clearInterval(interval);
   }, [visible, message]);
 
@@ -197,59 +269,175 @@ export default function WelcomeRocket() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          transition={{ duration: 0.5 }}
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
           onClick={dismiss}
         >
+          {/* Dark backdrop with grid pattern */}
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" />
+          <div
+            className="absolute inset-0 opacity-[0.03] pointer-events-none"
+            style={{
+              backgroundImage: `linear-gradient(hsl(var(--primary)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--primary)) 1px, transparent 1px)`,
+              backgroundSize: '40px 40px',
+            }}
+          />
+
+          {/* Main HUD container */}
           <motion.div
-            initial={{ scale: 0.5, y: 50 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.5, y: 50, opacity: 0 }}
-            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-            className="relative bg-card border-2 border-primary/30 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+            ref={containerRef}
+            initial={{ scale: 0.3, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.3, opacity: 0 }}
+            transition={{ type: 'spring', damping: 18, stiffness: 200 }}
+            className="relative max-w-lg w-full overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
-            {/* Glow header */}
-            <div className="bg-gradient-to-r from-primary/20 via-primary/10 to-transparent p-4 flex items-center gap-3">
-              <div className="w-14 h-14 flex-shrink-0">
-                <RocketMascot talking={typing} />
-              </div>
-              <div className="flex-1">
-                <h2 className="font-display font-bold text-lg bg-gradient-to-r from-primary to-orange-400 bg-clip-text text-transparent">
-                  Foguetinho 🔥
-                </h2>
-                <p className="text-[11px] text-muted-foreground">Seu assistente de produção</p>
-              </div>
-              <button onClick={dismiss} className="p-1.5 rounded-full hover:bg-muted transition-colors">
-                <X size={16} className="text-muted-foreground" />
-              </button>
-            </div>
+            {/* Outer glow border */}
+            <div className="absolute -inset-[1px] rounded-2xl bg-gradient-to-br from-primary/40 via-primary/10 to-primary/30 blur-[1px]" />
 
-            {/* Message body */}
-            <div className="p-4 max-h-[50vh] overflow-y-auto">
-              <pre className="whitespace-pre-wrap text-sm text-foreground font-sans leading-relaxed">
-                {displayedText}
-                {typing && (
-                  <motion.span
-                    animate={{ opacity: [1, 0] }}
-                    transition={{ duration: 0.5, repeat: Infinity }}
-                    className="text-primary font-bold"
+            {/* Glass card */}
+            <div className="relative rounded-2xl border border-primary/20 bg-card/95 backdrop-blur-xl shadow-[0_0_60px_-10px_hsl(var(--primary)/0.3)] overflow-hidden">
+              {/* Scan line */}
+              <ScanLine />
+              <FloatingParticles />
+
+              {/* Header — JARVIS HUD */}
+              <div className="relative p-5 pb-4 border-b border-primary/10">
+                <div className="flex items-center gap-4">
+                  {/* Rocket with HUD rings */}
+                  <div className="relative w-20 h-20 flex items-center justify-center flex-shrink-0">
+                    <HudRing size={80} delay={0} />
+                    <motion.div
+                      className="absolute inset-0"
+                      animate={{ rotate: -360 }}
+                      transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
+                    >
+                      <HudRing size={80} delay={0.5} />
+                    </motion.div>
+                    <div className="relative w-12 h-12 z-10">
+                      <RocketMascot talking={typing} />
+                    </div>
+                    {/* Glow pulse behind rocket */}
+                    <motion.div
+                      className="absolute inset-0 rounded-full bg-primary/10 pointer-events-none"
+                      animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.1, 0.3] }}
+                      transition={{ duration: 3, repeat: Infinity }}
+                    />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <motion.h2
+                      className="font-display font-bold text-xl tracking-wide"
+                      initial={{ x: -20, opacity: 0 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      transition={{ delay: 0.3 }}
+                    >
+                      <span className="bg-gradient-to-r from-primary via-blue-400 to-primary bg-clip-text text-transparent">
+                        F.O.G.U.E.T.I.N.H.O
+                      </span>
+                    </motion.h2>
+                    <motion.div
+                      className="flex items-center gap-2 mt-1"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.5 }}
+                    >
+                      <motion.div
+                        className="w-2 h-2 rounded-full bg-emerald-400"
+                        animate={{ opacity: [1, 0.3, 1] }}
+                        transition={{ duration: 1.5, repeat: Infinity }}
+                      />
+                      <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-mono">
+                        Sistema Operacional • v3.0
+                      </span>
+                    </motion.div>
+                    {/* Mini status indicators */}
+                    <motion.div
+                      className="flex items-center gap-3 mt-2"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.7 }}
+                    >
+                      <div className="flex items-center gap-1 text-[9px] text-primary/70 font-mono">
+                        <Shield size={10} /> SEGURO
+                      </div>
+                      <div className="flex items-center gap-1 text-[9px] text-primary/70 font-mono">
+                        <Activity size={10} /> ATIVO
+                      </div>
+                      <div className="flex items-center gap-1 text-[9px] text-primary/70 font-mono">
+                        <Zap size={10} /> RÁPIDO
+                      </div>
+                    </motion.div>
+                  </div>
+
+                  <motion.button
+                    onClick={dismiss}
+                    whileHover={{ scale: 1.1, rotate: 90 }}
+                    whileTap={{ scale: 0.9 }}
+                    className="p-2 rounded-full border border-primary/20 hover:border-primary/50 hover:bg-primary/10 transition-all"
                   >
-                    |
-                  </motion.span>
-                )}
-              </pre>
-            </div>
+                    <X size={14} className="text-muted-foreground" />
+                  </motion.button>
+                </div>
+              </div>
 
-            {/* Footer */}
-            <div className="p-3 border-t border-border flex justify-end">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={dismiss}
-                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
-              >
-                Bora! 🚀
-              </motion.button>
+              {/* Message body — terminal style */}
+              <div className="p-5 max-h-[45vh] overflow-y-auto relative">
+                <motion.div
+                  className="font-mono text-[13px] leading-relaxed text-foreground/90"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  <pre className="whitespace-pre-wrap">
+                    {displayedText}
+                    {typing && (
+                      <motion.span
+                        animate={{ opacity: [1, 0] }}
+                        transition={{ duration: 0.4, repeat: Infinity }}
+                        className="text-primary font-bold text-base"
+                      >
+                        ▊
+                      </motion.span>
+                    )}
+                  </pre>
+                </motion.div>
+              </div>
+
+              {/* Footer — JARVIS action bar */}
+              <div className="p-4 border-t border-primary/10 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {audioPlaying && (
+                    <motion.div
+                      className="flex items-center gap-[2px]"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                    >
+                      {[...Array(5)].map((_, i) => (
+                        <motion.div
+                          key={i}
+                          className="w-[3px] bg-primary/60 rounded-full"
+                          animate={{ height: [4, 12 + Math.random() * 8, 4] }}
+                          transition={{ duration: 0.5, delay: i * 0.1, repeat: Infinity }}
+                        />
+                      ))}
+                    </motion.div>
+                  )}
+                  <span className="text-[10px] font-mono text-muted-foreground tracking-wider">
+                    {typing ? 'TRANSMITINDO...' : 'BRIEFING COMPLETO'}
+                  </span>
+                </div>
+
+                <motion.button
+                  whileHover={{ scale: 1.05, boxShadow: '0 0 20px hsl(var(--primary) / 0.4)' }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={dismiss}
+                  className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-primary to-primary/80 text-primary-foreground text-sm font-bold uppercase tracking-wider hover:from-primary/90 hover:to-primary/70 transition-all border border-primary/30 shadow-[0_0_15px_-3px_hsl(var(--primary)/0.4)]"
+                >
+                  INICIAR OPERAÇÃO 🚀
+                </motion.button>
+              </div>
             </div>
           </motion.div>
         </motion.div>

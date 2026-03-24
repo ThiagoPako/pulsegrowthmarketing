@@ -281,6 +281,51 @@ export function useEndoTasks(partnerId?: string) {
         .delete().eq('contract_id', contractId).eq('status', 'pendente')
         .gte('date', fromDate).lte('date', toDate);
 
+      // Fetch ALL existing tasks for this partner in the date range to avoid time conflicts
+      const existingQuery = (supabase as any).from('endomarketing_partner_tasks')
+        .select('date, start_time, duration_minutes')
+        .gte('date', fromDate).lte('date', toDate)
+        .neq('status', 'cancelada');
+      if (contract.partner_id) {
+        existingQuery.eq('partner_id', contract.partner_id);
+      }
+      const { data: existingTasks } = await existingQuery;
+
+      // Build a map of occupied time slots per date
+      const occupiedSlots = new Map<string, { start: number; end: number }[]>();
+      if (existingTasks) {
+        for (const t of existingTasks) {
+          if (!t.start_time) continue;
+          const [h, m] = t.start_time.split(':').map(Number);
+          const startMin = h * 60 + m;
+          const slots = occupiedSlots.get(t.date) || [];
+          slots.push({ start: startMin, end: startMin + (t.duration_minutes || 60) });
+          occupiedSlots.set(t.date, slots);
+        }
+      }
+
+      // Find next available start time on a given date (08:00-18:00 window)
+      const WORK_START = 8 * 60; // 08:00
+      const WORK_END = 18 * 60;  // 18:00
+      const BUFFER = 15; // 15 min buffer between tasks
+
+      const findAvailableTime = (dateStr: string, durationMin: number): string => {
+        const slots = occupiedSlots.get(dateStr) || [];
+        slots.sort((a, b) => a.start - b.start);
+
+        let candidate = WORK_START;
+        for (const slot of slots) {
+          if (candidate + durationMin <= slot.start) break;
+          candidate = Math.max(candidate, slot.end + BUFFER);
+        }
+        if (candidate + durationMin > WORK_END) {
+          candidate = WORK_START; // fallback if no slot fits
+        }
+        const hours = Math.floor(candidate / 60).toString().padStart(2, '0');
+        const mins = (candidate % 60).toString().padStart(2, '0');
+        return `${hours}:${mins}`;
+      };
+
       const tasksToInsert: any[] = [];
       let current = new Date(fromDate + 'T12:00:00');
       const end = new Date(toDate + 'T12:00:00');
@@ -308,22 +353,40 @@ export function useEndoTasks(partnerId?: string) {
           if (pkg.category === 'presenca_completa') {
             const allowedDays = getPresencaDays(pkg.sessions_per_week);
             if (allowedDays.includes(dayIdx)) {
-              tasksToInsert.push({
+              const durationMin = Math.round((pkg.duration_hours || 2) * 60);
+              const startTime = findAvailableTime(dateStr, durationMin);
+              const task = {
                 contract_id: contractId, client_id: contract.client_id,
                 partner_id: contract.partner_id, date: dateStr,
-                duration_minutes: Math.round((pkg.duration_hours || 2) * 60),
+                start_time: startTime,
+                duration_minutes: durationMin,
                 task_type: 'presenca', status: 'pendente',
-              });
+              };
+              tasksToInsert.push(task);
+              // Register this slot as occupied for subsequent tasks on same date
+              const [h, m] = startTime.split(':').map(Number);
+              const startMin = h * 60 + m;
+              const slots = occupiedSlots.get(dateStr) || [];
+              slots.push({ start: startMin, end: startMin + durationMin });
+              occupiedSlots.set(dateStr, slots);
             }
           } else if (pkg.category === 'gravacao_concentrada') {
-            // Schedule recording sessions on Mondays (up to sessions_per_week per month)
             if (pkg.sessions_per_week > 0 && dow === 1) {
-              tasksToInsert.push({
+              const durationMin = Math.round((pkg.duration_hours || 2) * 60);
+              const startTime = findAvailableTime(dateStr, durationMin);
+              const task = {
                 contract_id: contractId, client_id: contract.client_id,
                 partner_id: contract.partner_id, date: dateStr,
-                duration_minutes: Math.round((pkg.duration_hours || 2) * 60),
+                start_time: startTime,
+                duration_minutes: durationMin,
                 task_type: 'gravacao', status: 'pendente',
-              });
+              };
+              tasksToInsert.push(task);
+              const [h, m] = startTime.split(':').map(Number);
+              const startMin = h * 60 + m;
+              const slots = occupiedSlots.get(dateStr) || [];
+              slots.push({ start: startMin, end: startMin + durationMin });
+              occupiedSlots.set(dateStr, slots);
             }
           }
         }

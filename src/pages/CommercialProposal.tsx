@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -21,7 +22,7 @@ import { cn } from '@/lib/utils';
 import {
   FileText, Plus, Trash2, CalendarIcon, Download, Eye, Users, Rocket,
   CheckCircle2, Film, Palette, Scissors, Camera, Monitor, Share2, BarChart3,
-  Clock, Gift, AlertTriangle, X
+  Clock, Gift, AlertTriangle, X, Link2, Copy, ExternalLink, List
 } from 'lucide-react';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';

@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Video, Plus, XCircle, RefreshCw, TrendingUp, Calendar, Check,
   ChevronLeft, ChevronRight, Clock, Users as UsersIcon, MessageSquare, Trophy, BarChart3,
-  Clapperboard, Film, Megaphone, AlertTriangle, Rocket, Bell, Send, Hourglass, Trash2
+  Clapperboard, Film, Megaphone, AlertTriangle, Rocket, Bell, Send, Hourglass, Trash2, Package
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, addDays, formatDistanceToNow, differenceInMinutes, differenceInHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -339,7 +339,10 @@ export default function Dashboard() {
       )}
 
       {/* LIVE ACTIVITY */}
-      {(activeRecordings.length > 0 || liveEditorTasks.length > 0) && (
+      {(() => {
+        const organizingRecordings = recordings.filter(r => r.status === 'organizando_material' && normalizeDateKey(r.date) === today);
+        const totalActive = activeRecordings.length + liveEditorTasks.length + organizingRecordings.length;
+        return totalActive > 0 && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-3 sm:p-5 border-primary/20">
           <div className="flex items-center gap-2 mb-3 sm:mb-4">
             <span className="relative flex h-3 w-3">
@@ -347,7 +350,7 @@ export default function Dashboard() {
               <span className="relative inline-flex rounded-full h-3 w-3 bg-destructive" />
             </span>
             <h3 className="font-display font-semibold text-sm sm:text-base">Atividade em Tempo Real</h3>
-            <Badge variant="outline" className="text-[9px] ml-auto">{activeRecordings.length + liveEditorTasks.length} ativas</Badge>
+            <Badge variant="outline" className="text-[9px] ml-auto">{totalActive} ativas</Badge>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">

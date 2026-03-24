@@ -400,24 +400,37 @@ export default function Scripts() {
     document.body.appendChild(container);
 
     try {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      await pdf.html(container, {
-        x: 0,
-        y: 0,
-        width: pdfWidth,
-        windowWidth: 794,
-        autoPaging: 'text',
-        margin: [0, 0, 10, 0],
+
+      await new Promise<void>((resolve, reject) => {
+        pdf.html(container, {
+          x: 0,
+          y: 0,
+          width: pdfWidth,
+          windowWidth: 794,
+          autoPaging: 'text',
+          margin: [0, 0, 10, 0],
+          html2canvas: {
+            scale: 1.4,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+          },
+          callback: (doc) => {
+            try {
+              doc.save(`roteiro-${script.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          },
+        });
       });
-      // Remove blank first page if content starts on page 2
-      const totalPages = pdf.getNumberOfPages();
-      if (totalPages > 1) {
-        // Check if first page is essentially blank (jsPDF.html quirk)
-        const firstPageHeight = pdf.internal.pageSize.getHeight();
-        // Keep all pages — they contain content
-      }
-      pdf.save(`roteiro-${script.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+
       toast.success('PDF baixado');
     } finally {
       document.body.removeChild(container);
@@ -485,15 +498,33 @@ export default function Scripts() {
       document.body.appendChild(container);
 
       try {
-        await pdf.html(container, {
-          x: 0,
-          y: 0,
-          width: pdfWidth,
-          windowWidth: 794,
-          autoPaging: 'text',
-          margin: [0, 0, 10, 0],
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
         });
-        pdf.save(`roteiros-selecionados-${selected.length}.pdf`);
+
+        await new Promise<void>((resolve, reject) => {
+          pdf.html(container, {
+            x: 0,
+            y: 0,
+            width: pdfWidth,
+            windowWidth: 794,
+            autoPaging: 'text',
+            margin: [0, 0, 10, 0],
+            html2canvas: {
+              scale: 1.4,
+              useCORS: true,
+              backgroundColor: '#ffffff',
+            },
+            callback: (doc) => {
+              try {
+                doc.save(`roteiros-selecionados-${selected.length}.pdf`);
+                resolve();
+              } catch (error) {
+                reject(error);
+              }
+            },
+          });
+        });
       } finally {
         document.body.removeChild(container);
       }

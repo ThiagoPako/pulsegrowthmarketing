@@ -1216,6 +1216,7 @@ export default function Schedule() {
                   <SelectItem value="extra">Extra</SelectItem>
                   <SelectItem value="secundaria">Secundária</SelectItem>
                   <SelectItem value="backup">Backup</SelectItem>
+                  <SelectItem value="endomarketing">Endomarketing</SelectItem>
                 </SelectContent>
                 </Select>
               </div>

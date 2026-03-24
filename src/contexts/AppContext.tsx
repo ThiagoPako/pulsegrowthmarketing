@@ -241,6 +241,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       updateSettings, startActiveRecording, stopActiveRecording,
       hasConflict, isWithinWorkHours,
       getSuggestionsForCancellation,
+      refetchData: data.refetch,
     }}>
       {children}
     </AppContext.Provider>

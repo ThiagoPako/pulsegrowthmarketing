@@ -448,48 +448,58 @@ export default function Scripts() {
       const { default: jsPDF } = await import('jspdf');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      // Build a single continuous container with all scripts
+      const container = document.createElement('div');
+      container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:white;padding:0;';
+
+      let allHtml = `<div style="font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a;">`;
+      allHtml += `<div style="margin-bottom:0;"><img src="${pulseHeader}" style="width:100%; display:block;" /></div>`;
 
       for (let i = 0; i < selected.length; i++) {
         const script = selected[i];
         const client = clients.find(c => c.id === script.clientId);
-        if (i > 0) pdf.addPage();
-
-        const container = document.createElement('div');
-        container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:white;padding:0;';
-        container.innerHTML = `
-          <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a;">
-            ${i === 0 ? `<div style="margin-bottom:0;"><img src="${pulseHeader}" style="width:100%; display:block;" /></div>` : ''}
-            <div style="padding: 30px 40px;">
-              <h1 style="font-size:22px; margin:0 0 6px;">${script.title}</h1>
-              <p style="font-size:13px; color:#666; margin:0 0 20px;">
-                ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
-              </p>
-              <div style="font-size:14px; line-height:1.7;">
-                ${highlightQuotesForPdf(script.content)}
-              </div>
-              <div style="margin-top:40px; padding-top:16px; border-top:1px solid #e5e5e5; text-align:center;">
-                <p style="font-size:11px; color:#999;">Roteiro ${i + 1} de ${selected.length} · Pulse · ${new Date().toLocaleDateString('pt-BR')}</p>
-              </div>
+        const separator = i > 0 ? `<div style="border-top:2px solid #e5e5e5; margin:30px 40px 0;"></div>` : '';
+        allHtml += `
+          ${separator}
+          <div style="padding: 24px 40px 10px;">
+            <h1 style="font-size:22px; margin:0 0 6px;">${script.title}</h1>
+            <p style="font-size:13px; color:#666; margin:0 0 16px;">
+              ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
+            </p>
+            <div style="font-size:14px; line-height:1.7;">
+              ${highlightQuotesForPdf(script.content)}
             </div>
           </div>
         `;
-        document.body.appendChild(container);
-        try {
-          const canvas = await html2canvas(container, { scale: 2, useCORS: true });
-          const imgData = canvas.toDataURL('image/png');
-          const pageHeight = pdf.internal.pageSize.getHeight();
-          const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-          let position = 0;
-          let pg = 0;
-          while (position < imgHeight) {
-            if (pg > 0 || i > 0) { if (pg > 0) pdf.addPage(); }
-            pdf.addImage(imgData, 'PNG', 0, -position, pdfWidth, imgHeight);
-            position += pageHeight;
-            pg++;
-          }
-        } finally {
-          document.body.removeChild(container);
+      }
+
+      allHtml += `
+        <div style="padding:10px 40px 20px; text-align:center;">
+          <p style="font-size:11px; color:#999; border-top:1px solid #e5e5e5; padding-top:12px;">
+            ${selected.length} roteiro(s) · Pulse · ${new Date().toLocaleDateString('pt-BR')}
+          </p>
+        </div>
+      </div>`;
+
+      container.innerHTML = allHtml;
+      document.body.appendChild(container);
+
+      try {
+        const canvas = await html2canvas(container, { scale: 2, useCORS: true });
+        const imgData = canvas.toDataURL('image/png');
+        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+        let position = 0;
+        let pg = 0;
+        while (position < imgHeight) {
+          if (pg > 0) pdf.addPage();
+          pdf.addImage(imgData, 'PNG', 0, -position, pdfWidth, imgHeight);
+          position += pageHeight;
+          pg++;
         }
+      } finally {
+        document.body.removeChild(container);
       }
 
       pdf.save(`roteiros-selecionados-${selected.length}.pdf`);

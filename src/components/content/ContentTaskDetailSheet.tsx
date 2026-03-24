@@ -440,7 +440,7 @@ function getHistoryColor(action: string): string {
 
 export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRefresh }: Props) {
   const { clients, users, scripts, recordings } = useApp();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [history, setHistory] = useState<TaskHistory[]>([]);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
 
@@ -571,6 +571,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     await supabase.from('content_tasks').update({
       kanban_column: 'envio',
       approved_at: new Date().toISOString(),
+      assigned_to: user?.id || task.assigned_to,
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
 
@@ -589,6 +590,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
       kanban_column: 'alteracao',
       adjustment_notes: adjustmentNotes.trim(),
       immediate_alteration: adjustmentImmediate,
+      assigned_to: user?.id || task.assigned_to,
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
     await syncTask('alteracao');
@@ -931,14 +933,95 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                 {task.kanban_column === 'alteracao' && !task.immediate_alteration && renderDeadline(task.alteration_deadline, 'Prazo de Alteração')}
                 {task.kanban_column === 'envio' && renderDeadline(task.approval_deadline, 'Prazo de Aprovação')}
 
-                {/* Assigned user */}
+                {/* Assigned user / Editado por */}
                 {assignedUser && (
                   <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary/5 border border-primary/15">
                     <UserAvatar user={{ name: assignedUser.name, avatarUrl: assignedUser.avatarUrl }} size="sm" />
-                    <div className="min-w-0">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-primary/60 block">Responsável</span>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-primary/60 block">
+                        {task.kanban_column === 'revisao' ? 'Editado por' : 'Responsável'}
+                      </span>
                       <span className="text-sm font-bold text-foreground">{assignedUser.name}</span>
                     </div>
+                    {/* Admin/Social Media can change responsible */}
+                    {(user?.id && (profile?.role === 'admin' || profile?.role === 'social_media')) && task.kanban_column !== 'revisao' && (
+                      <Select
+                        value={task.assigned_to || ''}
+                        onValueChange={async (newUserId) => {
+                          await supabase.from('content_tasks').update({
+                            assigned_to: newUserId,
+                            updated_at: new Date().toISOString(),
+                          } as any).eq('id', task.id);
+                          // Sync social_media_deliveries
+                          await supabase.from('social_media_deliveries').update({
+                            created_by: newUserId,
+                          } as any).eq('content_task_id', task.id);
+                          // Add history
+                          const newUser = users.find(u => u.id === newUserId);
+                          await supabase.from('task_history').insert({
+                            task_id: task.id,
+                            user_id: user.id,
+                            action: `Responsável alterado para ${newUser?.name || 'Usuário'}`,
+                          } as any);
+                          toast.success(`Responsável alterado para ${newUser?.name}`);
+                          onRefresh();
+                        }}
+                      >
+                        <SelectTrigger className="w-8 h-8 p-0 border-0 bg-transparent hover:bg-muted/50 [&>svg]:w-3 [&>svg]:h-3">
+                          <Edit size={12} className="text-muted-foreground" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {users.filter(u => u.role !== 'admin' || u.id === user.id).map(u => (
+                            <SelectItem key={u.id} value={u.id}>
+                              <div className="flex items-center gap-2">
+                                <UserAvatar user={{ name: u.name, avatarUrl: u.avatarUrl }} size="sm" />
+                                <span className="text-xs">{u.name}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                )}
+                {/* Show change responsible button when no one is assigned */}
+                {!assignedUser && (user?.id && (profile?.role === 'admin' || profile?.role === 'social_media')) && task.kanban_column !== 'revisao' && (
+                  <div className="px-3 py-2.5 rounded-lg bg-muted/50 border border-border">
+                    <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">Atribuir Responsável</Label>
+                    <Select
+                      value=""
+                      onValueChange={async (newUserId) => {
+                        await supabase.from('content_tasks').update({
+                          assigned_to: newUserId,
+                          updated_at: new Date().toISOString(),
+                        } as any).eq('id', task.id);
+                        await supabase.from('social_media_deliveries').update({
+                          created_by: newUserId,
+                        } as any).eq('content_task_id', task.id);
+                        const newUser = users.find(u => u.id === newUserId);
+                        await supabase.from('task_history').insert({
+                          task_id: task.id,
+                          user_id: user.id,
+                          action: `Responsável atribuído: ${newUser?.name || 'Usuário'}`,
+                        } as any);
+                        toast.success(`Responsável: ${newUser?.name}`);
+                        onRefresh();
+                      }}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Selecionar responsável..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {users.map(u => (
+                          <SelectItem key={u.id} value={u.id}>
+                            <div className="flex items-center gap-2">
+                              <UserAvatar user={{ name: u.name, avatarUrl: u.avatarUrl }} size="sm" />
+                              <span className="text-xs">{u.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
 

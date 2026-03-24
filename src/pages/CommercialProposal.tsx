@@ -78,8 +78,9 @@ export default function CommercialProposal() {
   const { data: plans = [] } = useQuery({
     queryKey: ['plans-proposal'],
     queryFn: async () => {
-      const { data } = await supabase.from('plans').select('*').eq('status', 'ativo').order('price');
-      return data || [];
+      const { data, error } = await supabase.from('plans').select('*').eq('status', 'ativo').order('price', { ascending: true });
+      if (error) console.error('Plans query error:', error);
+      return (data as any[]) || [];
     },
   });
 

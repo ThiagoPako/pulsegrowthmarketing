@@ -1015,11 +1015,25 @@ export default function VideomakerDashboard() {
                     const color = getClientColor(rec.clientId);
                     const isActive = activeRecordingId === rec.id;
                     const isDone = rec.status === 'concluida';
+                    const isOrganizingWeek = rec.status === 'organizando_material';
                     return (
                       <motion.div key={rec.id}
                         whileTap={{ scale: 0.97 }}
                         onClick={() => {
                           if (isDone) return;
+                          if (isOrganizingWeek) {
+                            setFinishRecordingId(rec.id);
+                            setCompletedScriptIds(new Set());
+                            setRejectedScripts(new Set());
+                            setAlteredScripts(new Set());
+                            setVerbalScripts(new Set());
+                            setAlterationNotes({});
+                            setFinishStep('scripts');
+                            setDriveLinks({});
+                            setSelectedEditorId('__auto__');
+                            setFinishDialogOpen(true);
+                            return;
+                          }
                           if (isActive) {
                             handleFinishRecording(rec);
                           } else if (rec.status === 'agendada') {
@@ -1028,12 +1042,18 @@ export default function VideomakerDashboard() {
                         }}
                         className={`rounded-lg border-2 p-2 text-xs space-y-0.5 cursor-pointer transition-all active:shadow-md ${
                           isActive ? 'border-primary bg-primary/5 ring-1 ring-primary/30' :
+                          isOrganizingWeek ? 'border-info/50 bg-info/5' :
                           isDone ? 'border-success/30 bg-success/5 cursor-default' : 'border-border bg-card hover:border-primary/40'
                         }`}
                         style={{ borderLeftWidth: 3, borderLeftColor: `hsl(${color})` }}
                       >
                         <p className="font-medium truncate text-[11px]">{getClientName(rec.clientId)}</p>
                         <p className="text-muted-foreground text-[10px]">{rec.startTime}</p>
+                        {isOrganizingWeek && (
+                          <Badge className="bg-info/20 text-info border-info/30 text-[9px]">
+                            📦 Organizando
+                          </Badge>
+                        )}
                         {isDone && (
                           <Badge className="bg-success/20 text-success border-success/30 text-[9px]">
                             <Check size={8} className="mr-0.5" /> Gravado
@@ -1046,7 +1066,7 @@ export default function VideomakerDashboard() {
                             </Badge>
                           </motion.div>
                         )}
-                        {!isActive && !isDone && rec.status === 'agendada' && (
+                        {!isActive && !isDone && !isOrganizingWeek && rec.status === 'agendada' && (
                           <div className="flex items-center gap-1 text-primary text-[9px]">
                             <Play size={8} /> Toque para iniciar
                           </div>

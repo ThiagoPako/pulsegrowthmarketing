@@ -381,10 +381,17 @@ export default function VideomakerDashboard() {
 
     const reelsCount = allRecordedIds.size;
     const allRecordedArray = Array.from(allRecordedIds);
-    stopActiveRecording(finishRecordingId, {
-      reels_produced: reelsCount,
-      videos_recorded: Math.max(reelsCount, 1),
-    }, allRecordedArray);
+    // Active recording already stopped in handleFinishRecording, just update delivery data
+    try {
+      await supabase.from('delivery_records').insert({
+        client_id: rec.clientId,
+        videomaker_id: currentUser?.id || '',
+        date: rec.date,
+        recording_id: rec.id,
+        reels_produced: reelsCount,
+        videos_recorded: Math.max(reelsCount, 1),
+      });
+    } catch {}
     updateRecording({ ...rec, status: 'concluida' });
 
     // Create/update content_tasks for recorded scripts

@@ -278,8 +278,14 @@ class QueryBuilder {
         rightColumn: 'id',
       });
 
-      for (const col of joinColumns) {
-        extraSelects.push(`${joinTable}.${col} as ${joinTable}_${col}`);
+      if (joinColumns.length === 1 && joinColumns[0] === '*') {
+        // For wildcard joins, select all columns from joined table
+        // The server will return them with the table prefix
+        extraSelects.push(`${joinTable}.*`);
+      } else {
+        for (const col of joinColumns) {
+          extraSelects.push(`${joinTable}.${col} as ${joinTable}_${col}`);
+        }
       }
 
       selectStr = selectStr.replace(match[0], '').replace(/,\s*,/g, ',').replace(/,\s*$/, '').replace(/^\s*,/, '');

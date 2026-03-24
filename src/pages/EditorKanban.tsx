@@ -122,9 +122,9 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
               {deadlineStatus.label}
             </Badge>
           )}
-          {task.kanban_column === 'envio' && (
-            <Badge className="text-[9px] bg-success/20 text-success border-success/30">
-              <Check size={9} className="mr-0.5" /> Concluído
+          {task.kanban_column === 'revisao' && (
+            <Badge className="text-[9px] bg-teal-500/20 text-teal-600 dark:text-teal-400 border-teal-500/30 gap-0.5">
+              <Eye size={9} /> Em Revisão
             </Badge>
           )}
         </div>

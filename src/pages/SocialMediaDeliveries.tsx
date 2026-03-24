@@ -680,7 +680,53 @@ export default function SocialMediaDeliveries() {
     fetchData();
   };
 
-  // Global summary
+  // ─── DRAG MOVE HANDLER (Kanban drag & arrows) ─────────────
+  const handleKanbanDragMove = async (delivery: SocialDelivery, _targetColId: string, socialStatus: string, contentColumn: string) => {
+    // Update social_media_deliveries status
+    const updatePayload: Record<string, any> = { status: socialStatus };
+    if (socialStatus === 'postado') {
+      updatePayload.posted_at = format(new Date(), 'yyyy-MM-dd');
+    }
+    await supabase.from('social_media_deliveries').update(updatePayload as any).eq('id', delivery.id);
+
+    // Sync linked content_task
+    if (delivery.content_task_id) {
+      const contentUpdate: Record<string, any> = {
+        kanban_column: contentColumn,
+        updated_at: new Date().toISOString(),
+      };
+      // Clear assigned_to on review/envio
+      if (contentColumn === 'revisao' || contentColumn === 'envio') {
+        contentUpdate.assigned_to = null;
+      }
+      if (contentColumn === 'agendamentos') {
+        contentUpdate.approved_at = new Date().toISOString();
+      }
+      await supabase.from('content_tasks').update(contentUpdate as any).eq('id', delivery.content_task_id);
+
+      // Full cross-module sync
+      const { data: taskData } = await supabase.from('content_tasks').select('*').eq('id', delivery.content_task_id).single();
+      if (taskData) {
+        const client = clients.find(c => c.id === delivery.client_id);
+        const ctx = buildSyncContext(taskData as any, {
+          userId: user?.id,
+          clientName: client?.companyName,
+          clientWhatsapp: client?.whatsapp,
+        });
+        await syncContentTaskColumnChange(contentColumn, ctx);
+      }
+    }
+
+    const colName = [
+      { s: 'revisao', l: 'Revisão' }, { s: 'ajuste', l: 'Alteração' },
+      { s: 'aprovacao_cliente', l: 'Enviado' }, { s: 'entregue', l: 'Agendar' },
+      { s: 'agendado', l: 'Agendado' }, { s: 'postado', l: 'Postado' },
+    ].find(x => x.s === socialStatus)?.l || socialStatus;
+
+    toast.success(`Movido para ${colName}`);
+    fetchData();
+  };
+
   const totalThisMonth = useMemo(() => {
     const now = new Date();
     const start = format(startOfMonth(now), 'yyyy-MM-dd');

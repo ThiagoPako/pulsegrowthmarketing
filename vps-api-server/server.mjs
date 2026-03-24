@@ -387,7 +387,8 @@ app.post('/api/financial-chat', async (req, res) => {
       recordingsRes, contentTasksRes, designTasksRes, scriptsRes,
       deliveriesRes, socialDeliveriesRes, profilesRes, plansRes,
       goalsRes, portalContentsRes,
-      endoContractsRes, endoClientesRes, endoPartnerTasksRes, endoPackagesRes, onboardingTasksRes
+      endoContractsRes, endoClientesRes, endoPartnerTasksRes, endoPackagesRes, onboardingTasksRes,
+      waitLogsRes, taskHistoryRes
     ] = await Promise.all([
       pool.query(`SELECT r.*, c.company_name AS client_name FROM revenues r LEFT JOIN clients c ON c.id = r.client_id WHERE r.due_date >= $1 ORDER BY r.due_date DESC LIMIT 500`, [SYSTEM_START]),
       pool.query(`SELECT e.*, ec.name AS category_name FROM expenses e LEFT JOIN expense_categories ec ON ec.id = e.category_id WHERE e.date >= $1 ORDER BY e.date DESC LIMIT 500`, [SYSTEM_START]),
@@ -410,6 +411,8 @@ app.post('/api/financial-chat', async (req, res) => {
       pool.query(`SELECT ept.*, c.company_name AS client_name, pf.name AS partner_name FROM endomarketing_partner_tasks ept LEFT JOIN clients c ON c.id = ept.client_id LEFT JOIN profiles pf ON pf.id = ept.partner_id WHERE ept.date >= $1 ORDER BY ept.date DESC LIMIT 300`, [SYSTEM_START]).catch(() => ({ rows: [] })),
       pool.query(`SELECT * FROM endomarketing_packages ORDER BY category, package_name`).catch(() => ({ rows: [] })),
       pool.query(`SELECT ot.*, c.company_name AS client_name FROM onboarding_tasks ot LEFT JOIN clients c ON c.id = ot.client_id ORDER BY ot.created_at DESC LIMIT 100`).catch(() => ({ rows: [] })),
+      pool.query(`SELECT * FROM recording_wait_logs WHERE created_at >= $1`, [startOfMonth]).catch(() => ({ rows: [] })),
+      pool.query(`SELECT th.*, pf.name AS user_name FROM task_history th LEFT JOIN profiles pf ON pf.id = th.user_id WHERE th.created_at >= $1 ORDER BY th.created_at DESC LIMIT 500`, [startOfMonth]).catch(() => ({ rows: [] })),
     ]);
 
     const revenues = revenuesRes.rows || [];
@@ -432,6 +435,73 @@ app.post('/api/financial-chat', async (req, res) => {
     const endoPartnerTasks = endoPartnerTasksRes.rows || [];
     const endoPackages = endoPackagesRes.rows || [];
     const onboardingTasks = onboardingTasksRes.rows || [];
+    const waitLogs = waitLogsRes.rows || [];
+    const taskHistory = taskHistoryRes.rows || [];
+
+    // ── SCORING per team member (same formula as TeamPerformanceWidget) ──
+    const teamScores = [];
+    const teamProfs = profiles.filter(p => p.role !== 'admin');
+    const _wkStart = new Date(); _wkStart.setDate(_wkStart.getDate() - _wkStart.getDay() + 1); _wkStart.setHours(0,0,0,0);
+    const _wkEnd = new Date(_wkStart); _wkEnd.setDate(_wkEnd.getDate() + 6); _wkEnd.setHours(23,59,59,999);
+    const wkStartStr = _wkStart.toISOString().slice(0,10);
+    const wkEndStr = _wkEnd.toISOString().slice(0,10);
+
+    for (const p of teamProfs) {
+      let score = 0;
+      const bd = [];
+      if (p.role === 'videomaker') {
+        const vmDel = deliveries.filter(r => r.videomaker_id === p.id);
+        const reels = vmDel.reduce((a, r) => a + (r.reels_produced || 0), 0);
+        const crtv = vmDel.reduce((a, r) => a + (r.creatives_produced || 0), 0);
+        const st = vmDel.reduce((a, r) => a + (r.stories_produced || 0), 0);
+        const ext = vmDel.reduce((a, r) => a + (r.extras_produced || 0), 0);
+        const art = vmDel.reduce((a, r) => a + (r.arts_produced || 0), 0);
+        const wRecs = recordings.filter(r => r.videomaker_id === p.id && r.date >= wkStartStr && r.date <= wkEndStr);
+        const wDone = wRecs.filter(r => r.status === 'concluida' && r.type !== 'endomarketing').length;
+        const wEndo = wRecs.filter(r => r.status === 'concluida' && r.type === 'endomarketing').length;
+        const vmWaitSec = waitLogs.filter(l => l.videomaker_id === p.id).reduce((a, l) => a + (l.wait_duration_seconds || 0), 0);
+        const waitPts = Math.floor(vmWaitSec / 600) * 2;
+        score = reels * 12 + crtv * 6 + st * 3 + ext * 10 + art * 4 + wDone * 15 + wEndo * 8 + waitPts;
+        bd.push(`Reels:${reels}(x12) Criativos:${crtv}(x6) Stories:${st}(x3) Extras:${ext}(x10) Artes:${art}(x4) Grav.Sem:${wDone}(x15) Endo:${wEndo}(x8) Espera:${waitPts}pts`);
+      } else if (p.role === 'editor') {
+        const eT = contentTasks.filter(t => t.assigned_to === p.id);
+        const appr = eT.filter(t => ['aprovado','publicado','finalizado'].includes(t.kanban_column)).length;
+        const editing = eT.filter(t => t.kanban_column === 'em_edicao').length;
+        const rev = eT.filter(t => t.kanban_column === 'revisao').length;
+        const alt = eT.filter(t => t.kanban_column === 'alteracao').length;
+        const pri = eT.filter(t => t.editing_priority === true).length;
+        score = appr * 15 + editing * 5 + rev * 3 + alt * 8 + pri * 5;
+        bd.push(`Aprovados:${appr}(x15) Editando:${editing}(x5) Revisão:${rev}(x3) Alterações:${alt}(x8) Prioritários:${pri}(x5)`);
+      } else if (p.role === 'designer' || p.role === 'fotografo') {
+        const dT = designTasks.filter(t => t.assigned_to === p.id);
+        const comp = dT.filter(t => ['concluida','aprovada_cliente'].includes(t.kanban_column)).length;
+        const prog = dT.filter(t => ['em_andamento','revisao'].includes(t.kanban_column)).length;
+        const tSec = dT.reduce((a, t) => a + (t.time_spent_seconds || 0), 0);
+        const tVer = dT.reduce((a, t) => a + (t.version || 1), 0);
+        const hP = dT.filter(t => t.priority === 'alta' || t.priority === 'urgente').length;
+        score = comp * 12 + prog * 4 + Math.round(tSec / 3600) * 2 + tVer * 3 + hP * 6;
+        bd.push(`Concluídos:${comp}(x12) EmProgresso:${prog}(x4) Horas:${Math.round(tSec/3600)}(x2) Versões:${tVer}(x3) Urgentes:${hP}(x6)`);
+      } else if (p.role === 'social_media') {
+        const smC = contentTasks.filter(t => t.created_by === p.id);
+        const pub = smC.filter(t => t.kanban_column === 'publicado').length;
+        const mgd = smC.length;
+        const uDel = socialDeliveries.filter(d => d.created_by === p.id);
+        const post = uDel.filter(d => d.status === 'posted' || d.posted_at).length;
+        const sched = uDel.filter(d => d.status === 'scheduled').length;
+        const scrC = scripts.filter(s => s.created_by === p.id).length;
+        score = pub * 10 + post * 8 + sched * 5 + mgd * 2 + scrC * 6;
+        bd.push(`Publicados:${pub}(x10) Postados:${post}(x8) Agendados:${sched}(x5) Gerenciados:${mgd}(x2) Roteiros:${scrC}(x6)`);
+      } else if (p.role === 'parceiro') {
+        const pT = endoPartnerTasks.filter(t => t.partner_id === p.id);
+        const comp = pT.filter(t => t.status === 'completed' || t.completed_at).length;
+        const pend = pT.filter(t => t.status === 'pending' || t.status === 'scheduled').length;
+        const tMin = pT.reduce((a, t) => a + (t.duration_minutes || 0), 0);
+        score = comp * 15 + pend * 3 + Math.round(tMin / 60) * 5;
+        bd.push(`Concluídos:${comp}(x15) Pendentes:${pend}(x3) Horas:${Math.round(tMin/60)}(x5)`);
+      } else { continue; }
+      teamScores.push({ name: p.name, role: p.role, id: p.id, score, breakdown: bd.join(' | ') });
+    }
+    teamScores.sort((a, b) => b.score - a.score);
 
     const normalizeDate = value => {
       if (!value) return '';
@@ -571,9 +641,26 @@ ${endoPartnerTasks.slice(0, 50).map(t => `- ${fmtDate(t.date)} ${t.start_time ||
 ${onboardingTasks.slice(0, 30).map(ot => `- ${ot.client_name}: ${ot.description || 'Sem descrição'} | Status: ${ot.completed_at ? 'Concluído' : 'Pendente'} | Briefing: ${ot.briefing_completed ? 'Sim' : 'Não'} | Contrato enviado: ${ot.contract_sent ? 'Sim' : 'Não'} | Contrato assinado: ${ot.contract_signed ? 'Sim' : 'Não'} | Criado: ${fmtDate(ot.created_at)}`).join('\n') || 'Nenhuma tarefa de onboarding'}
 
 Clientes com onboarding pendente: ${clients.filter(c => !c.onboarding_completed).map(c => c.company_name).join(', ') || 'Nenhum'}
-Clientes com endomarketing: ${clients.filter(c => c.has_endomarketing).map(c => c.company_name).join(', ') || 'Nenhum'}`;
+Clientes com endomarketing: ${clients.filter(c => c.has_endomarketing).map(c => c.company_name).join(', ') || 'Nenhum'}
 
-    const systemPrompt = `Você é o Foguetinho 🚀, o assistente inteligente da Agência Pulse de Marketing Digital. Você tem acesso a TODOS os dados do sistema: financeiro, clientes, contratos, gravações, roteiros, tarefas de conteúdo, design, entregas, postagens, metas, equipe, endomarketing (contratos, clientes, pacotes, tarefas de parceiros) e onboarding.
+### 🏅 PONTUAÇÃO DA EQUIPE — MÊS ATUAL (Sistema de esforço por atividade)
+**Fórmula de pontuação por cargo:**
+- Videomaker: Gravação 15pts, Reels 12pts, Extras 10pts, Endo 8pts, Criativos 6pts, Artes 4pts, Stories 3pts, Espera 2pts/10min
+- Editor: Aprovado 15pts, Alteração 8pts, Editando 5pts, Prioritário +5pts, Revisão 3pts
+- Designer/Fotógrafo: Concluído 12pts, Urgente +6pts, EmProgresso 4pts, Versão 3pts, Hora 2pts
+- Social Media: Publicado 10pts, Postado 8pts, Roteiro 6pts, Agendado 5pts, Gerenciado 2pts
+- Parceiro: Concluído 15pts, Hora 5pts, Pendente 3pts
+
+**Ranking atual (${teamScores.length} membros):**
+${teamScores.map((s, i) => ` ${i+1}. ${s.name} (${s.role}) — **${s.score} pontos** | ${s.breakdown}`).join('\n') || 'Nenhum membro pontuado'}
+
+### 📜 HISTÓRICO DE AÇÕES RECENTES (${taskHistory.length} ações neste mês)
+${taskHistory.slice(0, 50).map(h => `- ${fmtDate(h.created_at)} | ${h.user_name || 'N/A'}: ${h.action}${h.details ? ' — ' + h.details.slice(0, 80) : ''}`).join('\n') || 'Nenhum histórico'}
+
+### ⏳ LOGS DE ESPERA DE VIDEOMAKERS (${waitLogs.length} registros)
+${waitLogs.slice(0, 30).map(w => `- Videomaker ID: ${w.videomaker_id} | Duração: ${Math.round((w.wait_duration_seconds || 0) / 60)}min | ${fmtDate(w.created_at)}`).join('\n') || 'Nenhum log de espera'}`;
+
+    const systemPrompt = `Você é o Foguetinho 🚀, o assistente inteligente da Agência Pulse de Marketing Digital. Você tem acesso a TODOS os dados do sistema: financeiro, clientes, contratos, gravações, roteiros, tarefas de conteúdo, design, entregas, postagens, metas, equipe, endomarketing (contratos, clientes, pacotes, tarefas de parceiros), onboarding, e PONTUAÇÃO DE DESEMPENHO da equipe (com detalhamento por atividade e histórico de ações para auditoria antifraude).
 
 CONTEXTO IMPORTANTE:
 - O sistema Pulse começou a ser utilizado em MARÇO DE 2026. Dados operacionais anteriores a esta data não existem.

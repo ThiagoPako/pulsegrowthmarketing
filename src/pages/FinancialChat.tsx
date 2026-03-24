@@ -24,7 +24,7 @@ const SUGGESTED_QUESTIONS = [
   { icon: Video, text: 'Quantos vídeos foram entregues este mês?', color: 'text-amber-500', category: '📦' },
   { icon: FileText, text: 'Quantos roteiros estão pendentes?', color: 'text-pink-500', category: '📝' },
   { icon: Palette, text: 'Quais tarefas de design estão em andamento?', color: 'text-purple-500', category: '🎨' },
-  { icon: BarChart3, text: 'Qual cliente tem mais entregas este mês?', color: 'text-orange-500', category: '🏆' },
+  { icon: BarChart3, text: 'Ranking de pontuação da equipe este mês', color: 'text-orange-500', category: '🏅' },
 ];
 
 const RocketMascot = ({ isThinking }: { isThinking: boolean }) => (

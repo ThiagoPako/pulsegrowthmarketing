@@ -8,6 +8,7 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isWithinInter
 import { Badge } from '@/components/ui/badge';
 import UserAvatar from '@/components/UserAvatar';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { VM_SCORE, EDITOR_SCORE, DESIGNER_SCORE, SM_SCORE, PARCEIRO_SCORE, calcVmDeliveryScore, calcWaitPoints } from '@/lib/scoringSystem';
 
 interface MemberPerformance {
   id: string;
@@ -98,27 +99,29 @@ export default function TeamPerformanceWidget() {
         const stories = vmDeliveries.reduce((a, r) => a + (r.stories_produced || 0), 0);
         const extras = vmDeliveries.reduce((a, r) => a + (r.extras_produced || 0), 0);
         const arts = vmDeliveries.reduce((a, r) => a + (r.arts_produced || 0), 0);
-        const weekRecs = recordings.filter(r =>
-          r.videomakerId === user.id &&
-          isWithinInterval(parseISO(r.date), { start: weekStart, end: weekEnd })
+        const monthStart2 = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+        const monthEnd2 = format(endOfMonth(new Date()), 'yyyy-MM-dd');
+        const monthRecs = recordings.filter(r =>
+          r.videomakerId === user.id && r.date >= monthStart2 && r.date <= monthEnd2 && r.status === 'concluida'
         );
-        const weekDone = weekRecs.filter(r => r.status === 'concluida' && r.type !== 'endomarketing').length;
-        const weekEndoDone = weekRecs.filter(r => r.status === 'concluida' && r.type === 'endomarketing').length;
+        const monthDone = monthRecs.filter(r => r.type !== 'endomarketing').length;
+        const monthEndoDone = monthRecs.filter(r => r.type === 'endomarketing').length;
 
-        // Wait time scoring: 2 points per 10 min of waiting
+        // Wait time scoring
         const vmWaitLogs = waitLogs.filter(l => l.videomaker_id === user.id);
         const totalWaitSeconds = vmWaitLogs.reduce((a, l) => a + (l.wait_duration_seconds || 0), 0);
-        const waitPoints = Math.floor(totalWaitSeconds / 600) * 2; // every 10 min = 2 pts
+        const waitPoints = calcWaitPoints(totalWaitSeconds);
 
-        // Endo recordings = 8 pts each
-        score = reels * 12 + creatives * 6 + stories * 3 + extras * 10 + arts * 4 + weekDone * 15 + weekEndoDone * 8 + waitPoints;
+        score = reels * VM_SCORE.REEL + creatives * VM_SCORE.CRIATIVO + stories * VM_SCORE.STORY +
+          extras * VM_SCORE.EXTRA + arts * VM_SCORE.ARTE + monthDone * VM_SCORE.GRAVACAO +
+          monthEndoDone * VM_SCORE.ENDO + waitPoints;
         metrics.push(
           { label: 'Reels', value: reels },
           { label: 'Criativos', value: creatives },
           { label: 'Stories', value: stories },
           { label: 'Extras', value: extras },
-          { label: 'Grav. Sem.', value: weekDone },
-          { label: 'Endo', value: weekEndoDone },
+          { label: 'Grav. Mês', value: monthDone },
+          { label: 'Endo', value: monthEndoDone },
           { label: 'Espera (pts)', value: waitPoints },
         );
         maxScore = Math.max(score, 200);

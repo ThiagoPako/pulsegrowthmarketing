@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Square, Clock, Video, FileText, Zap, Rocket, Hourglass, Play } from 'lucide-react';
+import { Square, Clock, Video, FileText, Zap, Rocket, Hourglass, Play, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/vpsDb';
@@ -18,6 +18,7 @@ interface LiveRecordingCardProps {
   clientId: string;
   onFinish: () => void;
   onViewScripts: () => void;
+  onCancel?: () => void;
 }
 
 export default function LiveRecordingCard({
@@ -32,6 +33,7 @@ export default function LiveRecordingCard({
   clientId,
   onFinish,
   onViewScripts,
+  onCancel,
 }: LiveRecordingCardProps) {
   const [elapsed, setElapsed] = useState(0);
   const [isWaiting, setIsWaiting] = useState(false);

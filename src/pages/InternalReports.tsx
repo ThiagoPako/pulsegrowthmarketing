@@ -36,6 +36,10 @@ function calcScore(r: DeliveryRecord) {
   return calcVmDeliveryScore(r);
 }
 
+// Aliases for display and editor scoring
+const SCORE_WEIGHTS = { reel: VM_SCORE.REEL, criativo: VM_SCORE.CRIATIVO, story: VM_SCORE.STORY, arte: VM_SCORE.ARTE, extra: VM_SCORE.EXTRA };
+const EDITOR_SCORE_WEIGHTS: Record<string, number> = { reels: 10, criativo: 5, story: 3 };
+
 interface EditorTask {
   id: string;
   content_type: string;

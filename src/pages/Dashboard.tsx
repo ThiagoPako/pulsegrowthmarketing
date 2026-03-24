@@ -34,7 +34,7 @@ interface LiveEditorTask {
   content_type: string;
 }
 
-const SCORE_WEIGHTS = { reel: 10, criativo: 5, story: 3, arte: 2, extra: 8 };
+const SCORE_WEIGHTS = { reel: VM_SCORE.REEL, criativo: VM_SCORE.CRIATIVO, story: VM_SCORE.STORY, arte: VM_SCORE.ARTE, extra: VM_SCORE.EXTRA };
 const BAR_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
 
 /* Floating rocket mascot */

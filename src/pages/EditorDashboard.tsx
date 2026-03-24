@@ -505,7 +505,9 @@ export default function EditorDashboard() {
                     <RocketMascot size={36} />
                   </motion.div>
                   <div>
-                    <p className="text-[10px] uppercase tracking-widest text-primary font-bold">Edição em andamento</p>
+                    <p className="text-[10px] uppercase tracking-widest text-primary font-bold">
+                      {activeEditTask.editing_paused_at ? '⏸️ Edição pausada' : 'Edição em andamento'}
+                    </p>
                     <p className="text-base font-bold text-foreground leading-tight">{activeEditTask.title}</p>
                   </div>
                 </div>

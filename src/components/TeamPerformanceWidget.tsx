@@ -8,6 +8,7 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isWithinInter
 import { Badge } from '@/components/ui/badge';
 import UserAvatar from '@/components/UserAvatar';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { VM_SCORE, EDITOR_SCORE, DESIGNER_SCORE, SM_SCORE, PARCEIRO_SCORE, calcVmDeliveryScore, calcWaitPoints } from '@/lib/scoringSystem';
 
 interface MemberPerformance {
   id: string;
@@ -98,27 +99,29 @@ export default function TeamPerformanceWidget() {
         const stories = vmDeliveries.reduce((a, r) => a + (r.stories_produced || 0), 0);
         const extras = vmDeliveries.reduce((a, r) => a + (r.extras_produced || 0), 0);
         const arts = vmDeliveries.reduce((a, r) => a + (r.arts_produced || 0), 0);
-        const weekRecs = recordings.filter(r =>
-          r.videomakerId === user.id &&
-          isWithinInterval(parseISO(r.date), { start: weekStart, end: weekEnd })
+        const monthStart2 = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+        const monthEnd2 = format(endOfMonth(new Date()), 'yyyy-MM-dd');
+        const monthRecs = recordings.filter(r =>
+          r.videomakerId === user.id && r.date >= monthStart2 && r.date <= monthEnd2 && r.status === 'concluida'
         );
-        const weekDone = weekRecs.filter(r => r.status === 'concluida' && r.type !== 'endomarketing').length;
-        const weekEndoDone = weekRecs.filter(r => r.status === 'concluida' && r.type === 'endomarketing').length;
+        const monthDone = monthRecs.filter(r => r.type !== 'endomarketing').length;
+        const monthEndoDone = monthRecs.filter(r => r.type === 'endomarketing').length;
 
-        // Wait time scoring: 2 points per 10 min of waiting
+        // Wait time scoring
         const vmWaitLogs = waitLogs.filter(l => l.videomaker_id === user.id);
         const totalWaitSeconds = vmWaitLogs.reduce((a, l) => a + (l.wait_duration_seconds || 0), 0);
-        const waitPoints = Math.floor(totalWaitSeconds / 600) * 2; // every 10 min = 2 pts
+        const waitPoints = calcWaitPoints(totalWaitSeconds);
 
-        // Endo recordings = 8 pts each
-        score = reels * 12 + creatives * 6 + stories * 3 + extras * 10 + arts * 4 + weekDone * 15 + weekEndoDone * 8 + waitPoints;
+        score = reels * VM_SCORE.REEL + creatives * VM_SCORE.CRIATIVO + stories * VM_SCORE.STORY +
+          extras * VM_SCORE.EXTRA + arts * VM_SCORE.ARTE + monthDone * VM_SCORE.GRAVACAO +
+          monthEndoDone * VM_SCORE.ENDO + waitPoints;
         metrics.push(
           { label: 'Reels', value: reels },
           { label: 'Criativos', value: creatives },
           { label: 'Stories', value: stories },
           { label: 'Extras', value: extras },
-          { label: 'Grav. Sem.', value: weekDone },
-          { label: 'Endo', value: weekEndoDone },
+          { label: 'Grav. Mês', value: monthDone },
+          { label: 'Endo', value: monthEndoDone },
           { label: 'Espera (pts)', value: waitPoints },
         );
         maxScore = Math.max(score, 200);
@@ -131,10 +134,9 @@ export default function TeamPerformanceWidget() {
         const inEditing = editorTasks.filter(t => t.kanban_column === 'em_edicao').length;
         const alterations = editorTasks.filter(t => t.kanban_column === 'alteracao').length;
         const priorityTasks = editorTasks.filter(t => t.editing_priority === true).length;
-        // Aprovado/finalizado (ciclo completo) = 15pts, Em edição (esforço ativo) = 5pts
-        // Revisão (aguardando feedback) = 3pts, Alteração (retrabalho) = 8pts (exige atenção extra)
-        // Tarefa prioritária = bônus +5pts por tarefa
-        score = approved * 15 + inEditing * 5 + inRevision * 3 + alterations * 8 + priorityTasks * 5;
+        score = approved * EDITOR_SCORE.APROVADO + inEditing * EDITOR_SCORE.EM_EDICAO +
+          inRevision * EDITOR_SCORE.REVISAO + alterations * EDITOR_SCORE.ALTERACAO +
+          priorityTasks * EDITOR_SCORE.PRIORIDADE;
         metrics.push(
           { label: 'Aprovados', value: approved },
           { label: 'Editando', value: inEditing },
@@ -151,9 +153,9 @@ export default function TeamPerformanceWidget() {
         const totalTime = dTasks.reduce((a, t) => a + (t.time_spent_seconds || 0), 0);
         const totalVersions = dTasks.reduce((a, t) => a + (t.version || 1), 0);
         const highPriority = dTasks.filter(t => t.priority === 'alta' || t.priority === 'urgente').length;
-        // Concluída = 12pts, Em progresso = 4pts, Cada hora trabalhada = 2pts
-        // Versões extras (revisões do cliente) = 3pts por versão, Prioridade alta/urgente = bônus +6pts
-        score = completed * 12 + inProgress * 4 + Math.round(totalTime / 3600) * 2 + totalVersions * 3 + highPriority * 6;
+        score = completed * DESIGNER_SCORE.CONCLUIDO + inProgress * DESIGNER_SCORE.EM_PROGRESSO +
+          Math.round(totalTime / 3600) * DESIGNER_SCORE.POR_HORA + totalVersions * DESIGNER_SCORE.POR_VERSAO +
+          highPriority * DESIGNER_SCORE.PRIORIDADE;
         metrics.push(
           { label: 'Concluídos', value: completed },
           { label: 'Em progresso', value: inProgress },
@@ -163,7 +165,6 @@ export default function TeamPerformanceWidget() {
         maxScore = Math.max(score, 120);
 
       } else if (user.role === 'social_media') {
-        // Social Media: gestão de conteúdo, postagem, planejamento, roteiros
         const smCreated = contentTasks.filter(t => t.created_by === user.id);
         const published = smCreated.filter(t => t.kanban_column === 'publicado').length;
         const managed = smCreated.length;
@@ -171,9 +172,8 @@ export default function TeamPerformanceWidget() {
         const posted = userDeliveries.filter(d => d.status === 'posted' || d.posted_at).length;
         const scheduled = userDeliveries.filter(d => d.status === 'scheduled').length;
         const scriptsCreated = scripts.filter(s => s.createdBy === user.id).length;
-        // Publicado = 10pts (resultado final), Agendado = 5pts (planejamento), Gerenciado = 2pts
-        // Postado em rede social = 8pts (execução), Roteiro criado = 6pts (esforço criativo)
-        score = published * 10 + posted * 8 + scheduled * 5 + managed * 2 + scriptsCreated * 6;
+        score = published * SM_SCORE.PUBLICADO + posted * SM_SCORE.POSTADO + scheduled * SM_SCORE.AGENDADO +
+          managed * SM_SCORE.GERENCIADO + scriptsCreated * SM_SCORE.ROTEIRO;
         metrics.push(
           { label: 'Publicados', value: published },
           { label: 'Postados', value: posted },
@@ -183,14 +183,12 @@ export default function TeamPerformanceWidget() {
         maxScore = Math.max(score, 120);
 
       } else if (user.role === 'parceiro') {
-        // Parceiro: atendimentos de endomarketing exigem deslocamento e presença
         const pTasks = partnerTasks.filter(t => t.partner_id === user.id);
         const completed = pTasks.filter(t => t.status === 'completed' || t.completed_at).length;
         const pending = pTasks.filter(t => t.status === 'pending' || t.status === 'scheduled').length;
         const totalMinutes = pTasks.reduce((a, t) => a + (t.duration_minutes || 0), 0);
-        // Atendimento concluído = 15pts (deslocamento+execução), Pendente = 3pts
-        // Cada hora de atendimento = 5pts (tempo investido no local)
-        score = completed * 15 + pending * 3 + Math.round(totalMinutes / 60) * 5;
+        score = completed * PARCEIRO_SCORE.CONCLUIDO + pending * PARCEIRO_SCORE.PENDENTE +
+          Math.round(totalMinutes / 60) * PARCEIRO_SCORE.POR_HORA;
         metrics.push(
           { label: 'Concluídos', value: completed },
           { label: 'Pendentes', value: pending },

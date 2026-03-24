@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/vpsDb';
+import { VM_SCORE, EDITOR_SCORE, DESIGNER_SCORE, SM_SCORE, PARCEIRO_SCORE } from '@/lib/scoringSystem';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -80,15 +81,18 @@ function calculateScoreForMonth(
     const stories = vmDeliveries.reduce((a, r) => a + (r.stories_produced || 0), 0);
     const extras = vmDeliveries.reduce((a, r) => a + (r.extras_produced || 0), 0);
     const arts = vmDeliveries.reduce((a, r) => a + (r.arts_produced || 0), 0);
-    const recDone = recordings.filter(r => r.videomaker_id === userId && r.status === 'concluida').length;
-    score = reels * 12 + creatives * 6 + stories * 3 + extras * 10 + arts * 4 + recDone * 15;
+    const recDone = recordings.filter(r => r.videomaker_id === userId && r.status === 'concluida' && (r as any).type !== 'endomarketing').length;
+    const endoDone = recordings.filter(r => r.videomaker_id === userId && r.status === 'concluida' && (r as any).type === 'endomarketing').length;
+    score = reels * VM_SCORE.REEL + creatives * VM_SCORE.CRIATIVO + stories * VM_SCORE.STORY +
+      extras * VM_SCORE.EXTRA + arts * VM_SCORE.ARTE + recDone * VM_SCORE.GRAVACAO + endoDone * VM_SCORE.ENDO;
   } else if (role === 'editor') {
     const editorTasks = contentTasks.filter(t => t.assigned_to === userId);
     const approved = editorTasks.filter(t => ['aprovado', 'publicado', 'finalizado'].includes(t.kanban_column)).length;
     const inEditing = editorTasks.filter(t => t.kanban_column === 'em_edicao').length;
     const alterations = editorTasks.filter(t => t.kanban_column === 'alteracao').length;
     const priority = editorTasks.filter(t => t.editing_priority === true).length;
-    score = approved * 15 + inEditing * 5 + alterations * 8 + priority * 5;
+    score = approved * EDITOR_SCORE.APROVADO + inEditing * EDITOR_SCORE.EM_EDICAO +
+      alterations * EDITOR_SCORE.ALTERACAO + priority * EDITOR_SCORE.PRIORIDADE;
   } else if (role === 'designer' || role === 'fotografo') {
     const dTasks = designTasks.filter(t => t.assigned_to === userId);
     const completed = dTasks.filter(t => ['concluida', 'aprovada_cliente'].includes(t.kanban_column)).length;
@@ -96,7 +100,9 @@ function calculateScoreForMonth(
     const totalTime = dTasks.reduce((a, t) => a + (t.time_spent_seconds || 0), 0);
     const totalVersions = dTasks.reduce((a, t) => a + (t.version || 1), 0);
     const highPriority = dTasks.filter(t => t.priority === 'alta' || t.priority === 'urgente').length;
-    score = completed * 12 + inProgress * 4 + Math.round(totalTime / 3600) * 2 + totalVersions * 3 + highPriority * 6;
+    score = completed * DESIGNER_SCORE.CONCLUIDO + inProgress * DESIGNER_SCORE.EM_PROGRESSO +
+      Math.round(totalTime / 3600) * DESIGNER_SCORE.POR_HORA + totalVersions * DESIGNER_SCORE.POR_VERSAO +
+      highPriority * DESIGNER_SCORE.PRIORIDADE;
   } else if (role === 'social_media') {
     const smCreated = contentTasks.filter(t => t.created_by === userId);
     const published = smCreated.filter(t => t.kanban_column === 'publicado').length;
@@ -105,13 +111,15 @@ function calculateScoreForMonth(
     const posted = userDel.filter(d => d.status === 'posted' || d.posted_at).length;
     const scheduled = userDel.filter(d => d.status === 'scheduled').length;
     const scriptsCreated = scripts.filter(s => s.created_by === userId).length;
-    score = published * 10 + posted * 8 + scheduled * 5 + managed * 2 + scriptsCreated * 6;
+    score = published * SM_SCORE.PUBLICADO + posted * SM_SCORE.POSTADO + scheduled * SM_SCORE.AGENDADO +
+      managed * SM_SCORE.GERENCIADO + scriptsCreated * SM_SCORE.ROTEIRO;
   } else if (role === 'parceiro') {
     const pTasks = partnerTasks.filter(t => t.partner_id === userId);
     const completed = pTasks.filter(t => t.status === 'completed' || t.completed_at).length;
     const pending = pTasks.filter(t => t.status === 'pending' || t.status === 'scheduled').length;
     const totalMin = pTasks.reduce((a, t) => a + (t.duration_minutes || 0), 0);
-    score = completed * 15 + pending * 3 + Math.round(totalMin / 60) * 5;
+    score = completed * PARCEIRO_SCORE.CONCLUIDO + pending * PARCEIRO_SCORE.PENDENTE +
+      Math.round(totalMin / 60) * PARCEIRO_SCORE.POR_HORA;
   }
   return score;
 }

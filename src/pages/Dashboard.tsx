@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/vpsDb';
+import { VM_SCORE, calcVmDeliveryScore, calcWaitPoints } from '@/lib/scoringSystem';
 import { DAY_LABELS } from '@/types';
 import { getSeasonalAlerts, NICHE_OPTIONS } from '@/lib/seasonalDates';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -33,7 +34,7 @@ interface LiveEditorTask {
   content_type: string;
 }
 
-const SCORE_WEIGHTS = { reel: 10, criativo: 5, story: 3, arte: 2, extra: 8 };
+const SCORE_WEIGHTS = { reel: VM_SCORE.REEL, criativo: VM_SCORE.CRIATIVO, story: VM_SCORE.STORY, arte: VM_SCORE.ARTE, extra: VM_SCORE.EXTRA };
 const BAR_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
 
 /* Floating rocket mascot */
@@ -239,14 +240,32 @@ export default function Dashboard() {
         r.videomaker_id === vm.id && r.date >= monthStart && r.date <= monthEnd &&
         (r.delivery_status === 'realizada' || r.delivery_status === 'encaixe' || r.delivery_status === 'extra')
       );
-      const score = vmRecs.reduce((a: number, r: any) =>
+      const deliveryScore = vmRecs.reduce((a: number, r: any) =>
         a + r.reels_produced * SCORE_WEIGHTS.reel + r.creatives_produced * SCORE_WEIGHTS.criativo +
         r.stories_produced * SCORE_WEIGHTS.story + r.arts_produced * SCORE_WEIGHTS.arte +
         r.extras_produced * SCORE_WEIGHTS.extra, 0);
+
+      // Gravações concluídas no mês
+      const monthRecs = recordings.filter(r =>
+        r.videomakerId === vm.id && r.date >= monthStart && r.date <= monthEnd && r.status === 'concluida'
+      );
+      const recsDone = monthRecs.filter(r => r.type !== 'endomarketing').length;
+      const endoDone = monthRecs.filter(r => r.type === 'endomarketing').length;
+
+      // Wait points
+      const vmWaitLogs = waitLogs.filter((l: any) => {
+        if (l.videomaker_id !== vm.id) return false;
+        const d = l.created_at?.slice(0, 10);
+        return d >= monthStart && d <= monthEnd;
+      });
+      const totalWaitSec = vmWaitLogs.reduce((a: number, l: any) => a + (l.wait_duration_seconds || 0), 0);
+      const waitPts = calcWaitPoints(totalWaitSec);
+
+      const score = deliveryScore + recsDone * VM_SCORE.GRAVACAO + endoDone * VM_SCORE.ENDO + waitPts;
       const reels = vmRecs.reduce((a: number, r: any) => a + r.reels_produced, 0);
       return { name: vm.name.split(' ')[0], score, reels, vm };
     }).sort((a, b) => b.score - a.score);
-  }, [videomakers, deliveryRecords]);
+  }, [videomakers, deliveryRecords, recordings, waitLogs]);
 
   const clientProgress = useMemo(() => {
     return clients.map(client => {

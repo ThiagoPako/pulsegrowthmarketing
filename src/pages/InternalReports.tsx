@@ -11,11 +11,12 @@ import { toast } from 'sonner';
 import { Download, Trophy, TrendingUp, Film, Users, BarChart3, Award, Target, Scissors } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import UserAvatar from '@/components/UserAvatar';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subMonths, subWeeks } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subMonths, subWeeks, isWithinInterval, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, Cell } from 'recharts';
 import jsPDF from 'jspdf';
 import pulseHeaderImg from '@/assets/pulse_header.png';
+import { VM_SCORE, calcVmDeliveryScore, calcWaitPoints } from '@/lib/scoringSystem';
 
 interface DeliveryRecord {
   id: string;
@@ -31,16 +32,13 @@ interface DeliveryRecord {
   delivery_status: string;
 }
 
-const SCORE_WEIGHTS = { reel: 10, criativo: 5, story: 3, arte: 2, extra: 8 };
-const EDITOR_SCORE_WEIGHTS: Record<string, number> = { reels: 10, criativo: 5, story: 3 };
-
 function calcScore(r: DeliveryRecord) {
-  return r.reels_produced * SCORE_WEIGHTS.reel +
-    r.creatives_produced * SCORE_WEIGHTS.criativo +
-    r.stories_produced * SCORE_WEIGHTS.story +
-    r.arts_produced * SCORE_WEIGHTS.arte +
-    r.extras_produced * SCORE_WEIGHTS.extra;
+  return calcVmDeliveryScore(r);
 }
+
+// Aliases for display and editor scoring
+const SCORE_WEIGHTS = { reel: VM_SCORE.REEL, criativo: VM_SCORE.CRIATIVO, story: VM_SCORE.STORY, arte: VM_SCORE.ARTE, extra: VM_SCORE.EXTRA };
+const EDITOR_SCORE_WEIGHTS: Record<string, number> = { reels: 10, criativo: 5, story: 3 };
 
 interface EditorTask {
   id: string;
@@ -59,10 +57,11 @@ const CHART_COLORS = [
 const BAR_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
 
 export default function InternalReports() {
-  const { users, clients } = useApp();
+  const { users, clients, recordings } = useApp();
   const [records, setRecords] = useState<DeliveryRecord[]>([]);
   const [periodType, setPeriodType] = useState<'week' | 'month' | 'previous_month'>('month');
   const [selectedVm, setSelectedVm] = useState('all');
+  const [waitLogs, setWaitLogs] = useState<any[]>([]);
 
   const videomakers = useMemo(() => users.filter(u => u.role === 'videomaker'), [users]);
   const editors = useMemo(() => users.filter(u => u.role === 'editor'), [users]);
@@ -70,13 +69,15 @@ export default function InternalReports() {
   const [editorTasks, setEditorTasks] = useState<EditorTask[]>([]);
 
   const fetchData = useCallback(async () => {
-    const [deliveries, tasks] = await Promise.all([
+    const [deliveries, tasks, wl] = await Promise.all([
       supabase.from('delivery_records').select('*').order('date', { ascending: false }),
       supabase.from('content_tasks').select('id, content_type, kanban_column, assigned_to, editing_started_at, updated_at, client_id')
         .eq('kanban_column', 'envio'),
+      supabase.from('recording_wait_logs').select('*'),
     ]);
     if (deliveries.data) setRecords(deliveries.data as DeliveryRecord[]);
     if (tasks.data) setEditorTasks(tasks.data as EditorTask[]);
+    if (wl.data) setWaitLogs(wl.data);
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -100,7 +101,7 @@ export default function InternalReports() {
   const ranking = useMemo(() => {
     return videomakers.map(vm => {
       const vmRecs = filtered.filter(r => r.videomaker_id === vm.id && (r.delivery_status === 'realizada' || r.delivery_status === 'encaixe' || r.delivery_status === 'extra'));
-      const score = vmRecs.reduce((a, r) => a + calcScore(r), 0);
+      const deliveryScore = vmRecs.reduce((a, r) => a + calcScore(r), 0);
       const reels = vmRecs.reduce((a, r) => a + r.reels_produced, 0);
       const creatives = vmRecs.reduce((a, r) => a + r.creatives_produced, 0);
       const stories = vmRecs.reduce((a, r) => a + r.stories_produced, 0);
@@ -108,9 +109,28 @@ export default function InternalReports() {
       const extras = vmRecs.reduce((a, r) => a + r.extras_produced, 0);
       const videos = vmRecs.reduce((a, r) => a + r.videos_recorded, 0);
       const sessions = vmRecs.length;
-      return { vm, score, reels, creatives, stories, arts, extras, videos, sessions };
+
+      // Gravações concluídas no período
+      const periodRecs = recordings.filter(r =>
+        r.videomakerId === vm.id && r.date >= dateRange.start && r.date <= dateRange.end && r.status === 'concluida'
+      );
+      const recsDone = periodRecs.filter(r => r.type !== 'endomarketing').length;
+      const endoDone = periodRecs.filter(r => r.type === 'endomarketing').length;
+
+      // Wait points no período
+      const vmWaitLogs = waitLogs.filter(l => {
+        if (l.videomaker_id !== vm.id) return false;
+        const d = l.created_at?.slice(0, 10);
+        return d >= dateRange.start && d <= dateRange.end;
+      });
+      const totalWaitSec = vmWaitLogs.reduce((a: number, l: any) => a + (l.wait_duration_seconds || 0), 0);
+      const waitPts = calcWaitPoints(totalWaitSec);
+
+      const score = deliveryScore + recsDone * VM_SCORE.GRAVACAO + endoDone * VM_SCORE.ENDO + waitPts;
+
+      return { vm, score, reels, creatives, stories, arts, extras, videos, sessions, recsDone, endoDone, waitPts };
     }).sort((a, b) => b.score - a.score);
-  }, [videomakers, filtered]);
+  }, [videomakers, filtered, recordings, dateRange, waitLogs]);
 
   // ── Score chart data ──
   const scoreChartData = useMemo(() => {

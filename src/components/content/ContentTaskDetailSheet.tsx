@@ -473,6 +473,35 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
       .then(({ data }) => { if (data) setHistory(data as TaskHistory[]); });
   }, [task?.id, open]);
 
+  // ─── LIVE REVIEWING PRESENCE ──────────────────────────────
+  useEffect(() => {
+    if (!open || !task?.id || task.kanban_column !== 'revisao' || !user?.id || !profile?.name) return;
+
+    // Mark as reviewing
+    supabase.from('content_tasks').update({
+      reviewing_by: user.id,
+      reviewing_by_name: profile.name,
+      reviewing_at: new Date().toISOString(),
+    } as any).eq('id', task.id);
+
+    // Heartbeat every 30s
+    const heartbeat = setInterval(() => {
+      supabase.from('content_tasks').update({
+        reviewing_at: new Date().toISOString(),
+      } as any).eq('id', task.id);
+    }, 30000);
+
+    return () => {
+      clearInterval(heartbeat);
+      // Clear reviewing status on close
+      supabase.from('content_tasks').update({
+        reviewing_by: null,
+        reviewing_by_name: null,
+        reviewing_at: null,
+      } as any).eq('id', task.id);
+    };
+  }, [open, task?.id, task?.kanban_column, user?.id, profile?.name]);
+
   // Reset forms when task changes
   useEffect(() => {
     setShowAdjustmentForm(false);
@@ -724,6 +753,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     }
     await supabase.from('content_tasks').update({
       kanban_column: 'revisao',
+      assigned_to: null,
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
     await syncTask('revisao');
@@ -743,6 +773,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     }
     await supabase.from('content_tasks').update({
       kanban_column: targetColumn,
+      ...(targetColumn === 'revisao' ? { assigned_to: null } : {}),
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
     await syncTask(targetColumn);

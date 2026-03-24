@@ -248,7 +248,10 @@ CREATE TABLE IF NOT EXISTS content_tasks (
   immediate_alteration BOOLEAN NOT NULL DEFAULT false,
   review_deadline TIMESTAMPTZ,
   alteration_deadline TIMESTAMPTZ,
-  approval_deadline TIMESTAMPTZ
+  approval_deadline TIMESTAMPTZ,
+  reviewing_by UUID,
+  reviewing_by_name TEXT,
+  reviewing_at TIMESTAMPTZ
 );
 
 -- Table: delivery_records

@@ -425,6 +425,7 @@ export default function ContentKanban() {
 
     const { error } = await supabase.from('content_tasks').update({
       kanban_column: targetColumn,
+      ...(targetColumn === 'revisao' ? { assigned_to: null } : {}),
       updated_at: new Date().toISOString(),
     } as any).eq('id', draggedTask.id);
 
@@ -442,7 +443,7 @@ export default function ContentKanban() {
   };
 
   // ─── EXECUTION COLUMNS THAT REQUIRE assigned_to ────────────
-  const EXECUTION_COLUMNS = ['edicao', 'revisao', 'alteracao'];
+  const EXECUTION_COLUMNS = ['edicao', 'alteracao'];
 
   // ─── VALIDATION FOR TRANSITIONS ───────────────────────────
   const validateKanbanTransition = (task: ContentTask, targetColumn: string): string | null => {

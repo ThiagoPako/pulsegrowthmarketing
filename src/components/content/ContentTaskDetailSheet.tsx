@@ -724,6 +724,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     }
     await supabase.from('content_tasks').update({
       kanban_column: 'revisao',
+      assigned_to: null,
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
     await syncTask('revisao');
@@ -743,6 +744,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     }
     await supabase.from('content_tasks').update({
       kanban_column: targetColumn,
+      ...(targetColumn === 'revisao' ? { assigned_to: null } : {}),
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
     await syncTask(targetColumn);

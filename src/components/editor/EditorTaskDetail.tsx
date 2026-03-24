@@ -304,6 +304,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
     setSaving(true);
     await supabase.from('content_tasks').update({
       kanban_column: 'revisao',
+      assigned_to: null,
       updated_at: new Date().toISOString(),
     }).eq('id', task.id);
     const cl = clients.find(c => c.id === task.client_id);

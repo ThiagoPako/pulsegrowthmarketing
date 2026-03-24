@@ -57,10 +57,11 @@ const CHART_COLORS = [
 const BAR_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
 
 export default function InternalReports() {
-  const { users, clients } = useApp();
+  const { users, clients, recordings } = useApp();
   const [records, setRecords] = useState<DeliveryRecord[]>([]);
   const [periodType, setPeriodType] = useState<'week' | 'month' | 'previous_month'>('month');
   const [selectedVm, setSelectedVm] = useState('all');
+  const [waitLogs, setWaitLogs] = useState<any[]>([]);
 
   const videomakers = useMemo(() => users.filter(u => u.role === 'videomaker'), [users]);
   const editors = useMemo(() => users.filter(u => u.role === 'editor'), [users]);
@@ -68,13 +69,15 @@ export default function InternalReports() {
   const [editorTasks, setEditorTasks] = useState<EditorTask[]>([]);
 
   const fetchData = useCallback(async () => {
-    const [deliveries, tasks] = await Promise.all([
+    const [deliveries, tasks, wl] = await Promise.all([
       supabase.from('delivery_records').select('*').order('date', { ascending: false }),
       supabase.from('content_tasks').select('id, content_type, kanban_column, assigned_to, editing_started_at, updated_at, client_id')
         .eq('kanban_column', 'envio'),
+      supabase.from('recording_wait_logs').select('*'),
     ]);
     if (deliveries.data) setRecords(deliveries.data as DeliveryRecord[]);
     if (tasks.data) setEditorTasks(tasks.data as EditorTask[]);
+    if (wl.data) setWaitLogs(wl.data);
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);

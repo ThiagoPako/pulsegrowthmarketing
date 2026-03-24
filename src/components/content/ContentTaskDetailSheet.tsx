@@ -972,7 +972,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                           {users.filter(u => u.role !== 'admin' || u.id === user.id).map(u => (
                             <SelectItem key={u.id} value={u.id}>
                               <div className="flex items-center gap-2">
-                                <UserAvatar user={{ name: u.name, avatarUrl: u.avatarUrl }} size="xs" />
+                                <UserAvatar user={{ name: u.name, avatarUrl: u.avatarUrl }} size="sm" />
                                 <span className="text-xs">{u.name}</span>
                               </div>
                             </SelectItem>
@@ -1013,7 +1013,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                         {users.map(u => (
                           <SelectItem key={u.id} value={u.id}>
                             <div className="flex items-center gap-2">
-                              <UserAvatar user={{ name: u.name, avatarUrl: u.avatarUrl }} size="xs" />
+                              <UserAvatar user={{ name: u.name, avatarUrl: u.avatarUrl }} size="sm" />
                               <span className="text-xs">{u.name}</span>
                             </div>
                           </SelectItem>

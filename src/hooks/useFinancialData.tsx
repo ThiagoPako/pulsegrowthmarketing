@@ -252,12 +252,9 @@ export function useFinancialData() {
 
   // Revenue CRUD
   const addRevenue = async (r: Partial<Revenue>) => {
-    // Prevent duplicate: check if revenue already exists for this client+month
+    // Prevent duplicate only when client_id AND reference_month are provided
     if (r.client_id && r.reference_month) {
       const normalized = normalizeDate(r.reference_month);
-      const { data: existing } = await supabase.from('revenues').select('id').eq('client_id', r.client_id);
-      const dup = (existing as any[] || []).find((e: any) => normalizeDate(e.reference_month || e.id) === normalized);
-      // Better check: query with both filters
       const { data: dupCheck } = await supabase
         .from('revenues')
         .select('id')

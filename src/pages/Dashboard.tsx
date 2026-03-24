@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Video, Plus, XCircle, RefreshCw, TrendingUp, Calendar, Check,
   ChevronLeft, ChevronRight, Clock, Users as UsersIcon, MessageSquare, Trophy, BarChart3,
-  Clapperboard, Film, Megaphone, AlertTriangle, Rocket, Bell, Send, Hourglass
+  Clapperboard, Film, Megaphone, AlertTriangle, Rocket, Bell, Send, Hourglass, Trash2
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, addDays, formatDistanceToNow, differenceInMinutes, differenceInHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -624,6 +624,21 @@ export default function Dashboard() {
             <Badge variant="outline" className="text-[9px] h-4 px-1 border-warning/40 text-warning ml-auto">
               {waitTimeStats.totalCount} esperas · {Math.floor(waitTimeStats.totalSeconds / 60)}min total
             </Badge>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="text-destructive text-[10px] h-6 px-2 ml-1 rounded hover:bg-destructive/10 flex items-center"
+              onClick={async () => {
+                if (!confirm('Limpar todos os dados de tempo de espera?')) return;
+                const ids = waitLogs.map((l: any) => l.id);
+                for (const id of ids) {
+                  await supabase.from('recording_wait_logs').delete().eq('id', id);
+                }
+                setWaitLogs([]);
+              }}
+            >
+              <Trash2 size={12} className="mr-1" /> Limpar
+            </motion.button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">

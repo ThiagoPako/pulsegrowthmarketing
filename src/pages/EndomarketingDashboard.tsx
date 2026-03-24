@@ -252,8 +252,11 @@ export default function EndomarketingDashboard() {
             </CardHeader>
             <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-                {[...metrics.activeContracts].sort((a, b) => (Number(b.sale_price||0) - Number(b.partner_cost||0)) - (Number(a.sale_price||0) - Number(a.partner_cost||0))).slice(0, 3).map((c, i) => {
-                  const profit = Number(c.sale_price || 0) - Number(c.partner_cost || 0);
+                {[...metrics.activeContracts]
+                  .map(c => ({ ...c, _profit: Number(c.sale_price||0) > 0 ? Number(c.sale_price||0) - Number(c.partner_cost||0) : 0 }))
+                  .sort((a, b) => b._profit - a._profit).slice(0, 3).map((c, i) => {
+                  const profit = c._profit;
+                  const isOverdelivery = Number(c.sale_price||0) === 0 && Number(c.partner_cost||0) > 0;
                   const medals = ['🥇', '🥈', '🥉'];
                   return (
                     <motion.div

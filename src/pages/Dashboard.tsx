@@ -624,6 +624,17 @@ export default function Dashboard() {
             <Badge variant="outline" className="text-[9px] h-4 px-1 border-warning/40 text-warning ml-auto">
               {waitTimeStats.totalCount} esperas · {Math.floor(waitTimeStats.totalSeconds / 60)}min total
             </Badge>
+            <Button variant="ghost" size="sm" className="text-destructive text-[10px] h-6 px-2 ml-1" onClick={async () => {
+              if (!confirm('Limpar todos os dados de tempo de espera?')) return;
+              const ids = waitLogs.map((l: any) => l.id);
+              for (const id of ids) {
+                await supabase.from('recording_wait_logs').delete().eq('id', id);
+              }
+              setWaitLogs([]);
+              toast.success('Dados de espera limpos!');
+            }}>
+              <Trash2 size={12} className="mr-1" /> Limpar
+            </Button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">

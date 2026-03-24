@@ -481,6 +481,11 @@ export default function CommercialProposal() {
                 <Label>Observações</Label>
                 <Textarea value={observations} onChange={e => setObservations(e.target.value)} placeholder="Notas adicionais para a proposta..." rows={3} />
               </div>
+              <div>
+                <Label>WhatsApp para contato (com DDD)</Label>
+                <Input value={whatsappNumber} onChange={e => setWhatsappNumber(e.target.value)} placeholder="5511999999999" />
+                <p className="text-xs text-muted-foreground mt-1">Aparecerá como botão flutuante na proposta online</p>
+              </div>
             </CardContent>
           </Card>
 

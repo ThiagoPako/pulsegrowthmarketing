@@ -47,6 +47,64 @@ const FloatingRocket = ({ className = '', size = 20 }: { className?: string; siz
   </motion.div>
 );
 
+/* Live timer for organizing material */
+function OrganizingMaterialCard({ rec, vm, client, settings }: { rec: any; vm: any; client: any; settings: any }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const timeToMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); };
+  const isStar = client?.fullShiftRecording || false;
+  const expectedDuration = isStar
+    ? (client?.preferredShift === 'tarde'
+      ? (timeToMin(settings?.shiftBEnd || '18:00') - timeToMin(settings?.shiftBStart || '14:30'))
+      : (timeToMin(settings?.shiftAEnd || '12:00') - timeToMin(settings?.shiftAStart || '08:30')))
+    : (settings?.recordingDuration || 90);
+
+  const recDate = new Date(rec.date + 'T' + rec.startTime + ':00');
+  const organizingStarted = new Date(recDate.getTime() + expectedDuration * 60 * 1000);
+  const elapsedMs = Math.max(now - organizingStarted.getTime(), 0);
+  const elapsedMin = Math.floor(elapsedMs / 60000);
+  const elapsedSec = Math.floor((elapsedMs % 60000) / 1000);
+  const isWarning = elapsedMin > 30;
+
+  return (
+    <motion.div
+      whileTap={{ scale: 0.97 }}
+      className={`relative p-2.5 sm:p-3 rounded-xl border transition-all ${
+        isWarning ? 'bg-warning/8 border-warning/30' : 'bg-primary/5 border-primary/15'
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <div className="relative shrink-0">
+          {vm && <UserAvatar user={vm} size="sm" />}
+          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-primary rounded-full border-2 border-background" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold truncate">{vm?.name || '—'}</p>
+          <div className="flex items-center gap-1">
+            {client && <ClientLogo client={client} size="sm" className="w-3.5 h-3.5" />}
+            <p className="text-[10px] text-muted-foreground truncate">{client?.companyName || '—'}</p>
+          </div>
+        </div>
+        <div className="text-right shrink-0 flex flex-col items-end gap-1">
+          <Badge className="text-[9px] bg-primary/80 px-1.5 gap-0.5">
+            📦 Organizando
+          </Badge>
+          <div className="flex items-center gap-1">
+            <Clock size={10} className="text-muted-foreground" />
+            <span className={`text-[10px] font-mono font-bold tabular-nums ${isWarning ? 'text-warning' : 'text-muted-foreground'}`}>
+              {elapsedMin}:{String(elapsedSec).padStart(2, '0')}
+            </span>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 export default function Dashboard() {
   const { currentUser, recordings, clients, users, tasks, cancelRecording, updateRecording, getSuggestionsForCancellation, activeRecordings, settings } = useApp();
   const navigate = useNavigate();

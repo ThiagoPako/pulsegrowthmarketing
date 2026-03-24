@@ -38,6 +38,7 @@ interface TeamMember {
   id: string;
   name: string;
   role: string;
+  avatarUrl?: string;
 }
 
 const IMPLEMENTATION_FEES = {

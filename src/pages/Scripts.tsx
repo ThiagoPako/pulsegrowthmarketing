@@ -374,6 +374,7 @@ export default function Scripts() {
 
   const handleDownloadPdf = useCallback(async (script: Script) => {
     const client = clients.find(c => c.id === script.clientId);
+    const { default: html2canvas } = await import('html2canvas');
     const { default: jsPDF } = await import('jspdf');
 
     const container = document.createElement('div');
@@ -400,37 +401,35 @@ export default function Scripts() {
     document.body.appendChild(container);
 
     try {
-      await new Promise<void>((resolve) => {
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-      });
-
+      const canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
-      await new Promise<void>((resolve, reject) => {
-        pdf.html(container, {
-          x: 0,
-          y: 0,
-          width: pdfWidth,
-          windowWidth: 794,
-          autoPaging: 'text',
-          margin: [0, 0, 10, 0],
-          html2canvas: {
-            scale: 1.4,
-            useCORS: true,
-            backgroundColor: '#ffffff',
-          },
-          callback: (doc) => {
-            try {
-              doc.save(`roteiro-${script.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
-              resolve();
-            } catch (error) {
-              reject(error);
+      if (imgHeight <= pageHeight) {
+        const shortPdf = new jsPDF({ orientation: 'p', unit: 'mm', format: [pdfWidth, imgHeight] });
+        shortPdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
+        shortPdf.save(`roteiro-${script.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+      } else {
+        let position = 0;
+        let page = 0;
+        while (position < imgHeight) {
+          if (page > 0) {
+            const remaining = imgHeight - position;
+            if (remaining < pageHeight) {
+              pdf.addPage([pdfWidth, remaining]);
+            } else {
+              pdf.addPage();
             }
-          },
-        });
-      });
-
+          }
+          pdf.addImage(imgData, 'JPEG', 0, -position, pdfWidth, imgHeight);
+          position += pageHeight;
+          page++;
+        }
+        pdf.save(`roteiro-${script.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+      }
       toast.success('PDF baixado');
     } finally {
       document.body.removeChild(container);
@@ -458,9 +457,11 @@ export default function Scripts() {
     if (selected.length === 0) { toast.error('Selecione ao menos um roteiro'); return; }
     setDownloadingBatch(true);
     try {
+      const { default: html2canvas } = await import('html2canvas');
       const { default: jsPDF } = await import('jspdf');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
 
       const container = document.createElement('div');
       container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:white;padding:0;';
@@ -471,10 +472,10 @@ export default function Scripts() {
       for (let i = 0; i < selected.length; i++) {
         const script = selected[i];
         const client = clients.find(c => c.id === script.clientId);
-        const separator = i > 0 ? `<div style="border-top:2px solid #e5e5e5; margin:30px 40px 0; page-break-before:auto;"></div>` : '';
+        const separator = i > 0 ? `<div style="border-top:2px solid #e5e5e5; margin:30px 40px 0;"></div>` : '';
         allHtml += `
           ${separator}
-          <div style="padding: 24px 40px 10px; page-break-inside:avoid;">
+          <div style="padding: 24px 40px 10px;">
             <h1 style="font-size:22px; margin:0 0 6px;">${script.title}</h1>
             <p style="font-size:13px; color:#666; margin:0 0 16px;">
               ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
@@ -498,33 +499,32 @@ export default function Scripts() {
       document.body.appendChild(container);
 
       try {
-        await new Promise<void>((resolve) => {
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-        });
+        const canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
-        await new Promise<void>((resolve, reject) => {
-          pdf.html(container, {
-            x: 0,
-            y: 0,
-            width: pdfWidth,
-            windowWidth: 794,
-            autoPaging: 'text',
-            margin: [0, 0, 10, 0],
-            html2canvas: {
-              scale: 1.4,
-              useCORS: true,
-              backgroundColor: '#ffffff',
-            },
-            callback: (doc) => {
-              try {
-                doc.save(`roteiros-selecionados-${selected.length}.pdf`);
-                resolve();
-              } catch (error) {
-                reject(error);
+        if (imgHeight <= pageHeight) {
+          const shortPdf = new jsPDF({ orientation: 'p', unit: 'mm', format: [pdfWidth, imgHeight] });
+          shortPdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
+          shortPdf.save(`roteiros-selecionados-${selected.length}.pdf`);
+        } else {
+          let position = 0;
+          let pg = 0;
+          while (position < imgHeight) {
+            if (pg > 0) {
+              const remaining = imgHeight - position;
+              if (remaining < pageHeight) {
+                pdf.addPage([pdfWidth, remaining]);
+              } else {
+                pdf.addPage();
               }
-            },
-          });
-        });
+            }
+            pdf.addImage(imgData, 'JPEG', 0, -position, pdfWidth, imgHeight);
+            position += pageHeight;
+            pg++;
+          }
+          pdf.save(`roteiros-selecionados-${selected.length}.pdf`);
+        }
       } finally {
         document.body.removeChild(container);
       }

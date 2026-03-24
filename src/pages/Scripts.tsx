@@ -446,6 +446,9 @@ export default function Scripts() {
     try {
       const { default: html2canvas } = await import('html2canvas');
       const { default: jsPDF } = await import('jspdf');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
 
       // Build a single continuous container with all scripts
       const container = document.createElement('div');
@@ -486,9 +489,6 @@ export default function Scripts() {
       try {
         const canvas = await html2canvas(container, { scale: 2, useCORS: true });
         const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
         const imgHeight = (canvas.height * pdfWidth) / canvas.width;
         let position = 0;
         let pg = 0;

@@ -309,14 +309,9 @@ export function useEndoTasks(partnerId?: string) {
         return false;
       }
 
-      // Delete existing pending tasks in range
-      await (supabase as any).from('endomarketing_partner_tasks')
-        .delete().eq('contract_id', contractId).eq('status', 'pendente')
-        .gte('date', fromDate).lte('date', toDate);
-
-      // Fetch ALL existing tasks for this partner in the date range to avoid time conflicts
+      // Fetch ALL existing tasks for this partner in the date range BEFORE deleting
       const existingQuery = (supabase as any).from('endomarketing_partner_tasks')
-        .select('date, start_time, duration_minutes')
+        .select('date, start_time, duration_minutes, contract_id')
         .gte('date', fromDate).lte('date', toDate)
         .neq('status', 'cancelada');
       if (contract.partner_id) {
@@ -324,21 +319,26 @@ export function useEndoTasks(partnerId?: string) {
       }
       const { data: existingTasks } = await existingQuery;
 
-      // Build a map of occupied time slots per date
+      // Build a map of occupied time slots per date (excluding THIS contract's tasks since we'll regenerate them)
       const occupiedSlots = new Map<string, { start: number; end: number }[]>();
       if (existingTasks) {
         for (const t of existingTasks) {
-          if (!t.start_time) continue;
+          if (!t.start_time || t.contract_id === contractId) continue;
           const [h, m] = t.start_time.split(':').map(Number);
           const startMin = h * 60 + m;
           const slots = occupiedSlots.get(t.date) || [];
-          slots.push({ start: startMin, end: startMin + (t.duration_minutes || 60) });
+          slots.push({ start: startMin, end: startMin + (Number(t.duration_minutes) || 60) });
           occupiedSlots.set(t.date, slots);
         }
       }
 
-      // Find next available start time on a given date (08:00-18:00 window)
-      const WORK_START = 8 * 60; // 08:00
+      // NOW delete existing pending tasks for this contract
+      await (supabase as any).from('endomarketing_partner_tasks')
+        .delete().eq('contract_id', contractId).eq('status', 'pendente')
+        .gte('date', fromDate).lte('date', toDate);
+
+      // Find next available start time on a given date (08:30-18:00 window)
+      const WORK_START = 8 * 60 + 30; // 08:30
       const WORK_END = 18 * 60;  // 18:00
       const BUFFER = 15; // 15 min buffer between tasks
 

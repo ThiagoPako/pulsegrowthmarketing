@@ -154,6 +154,29 @@ export default function FinancialRevenues() {
     toast.success(`${count} receitas geradas`);
   };
 
+  const handleCreateRevenue = async () => {
+    if (!newRev.client_id || !newRev.amount || !newRev.due_date) {
+      toast.error('Preencha cliente, valor e vencimento');
+      return;
+    }
+    const refMonth = newRev.due_date.slice(0, 7) + '-01';
+    const ok = await addRevenue({
+      client_id: newRev.client_id,
+      amount: Number(newRev.amount),
+      due_date: newRev.due_date,
+      reference_month: refMonth,
+      status: 'prevista',
+      description: newRev.description || undefined,
+    });
+    if (ok) {
+      toast.success('Receita cadastrada com sucesso!');
+      setShowNewDialog(false);
+      setNewRev({ client_id: '', amount: '', due_date: '', description: '' });
+    } else {
+      toast.error('Erro ao cadastrar receita (pode já existir)');
+    }
+  };
+
   const [animatingPaid, setAnimatingPaid] = useState<string | null>(null);
 
   const handleMarkPaid = async (id: string) => {

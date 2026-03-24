@@ -1513,6 +1513,32 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
               Confirmar Postagem
             </motion.button>
           )}
+
+          {/* Move forward/backward arrows */}
+          {(onMoveBackward || onMoveForward) && (
+            <div className="flex items-center gap-1.5 pt-1">
+              {onMoveBackward && (
+                <motion.button whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.05 }}
+                  onClick={e => { e.stopPropagation(); onMoveBackward(); }}
+                  className="flex items-center gap-1 flex-1 justify-center px-2 py-1.5 rounded-lg bg-secondary/60 hover:bg-secondary border border-border/50 text-muted-foreground hover:text-foreground transition-all text-[9px] font-semibold"
+                  title={`Mover para ${backwardLabel}`}
+                >
+                  <ChevronLeft size={12} />
+                  <span className="truncate">{backwardLabel}</span>
+                </motion.button>
+              )}
+              {onMoveForward && (
+                <motion.button whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.05 }}
+                  onClick={e => { e.stopPropagation(); onMoveForward(); }}
+                  className="flex items-center gap-1 flex-1 justify-center px-2 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary transition-all text-[9px] font-semibold"
+                  title={`Mover para ${forwardLabel}`}
+                >
+                  <span className="truncate">{forwardLabel}</span>
+                  <ChevronRight size={12} />
+                </motion.button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

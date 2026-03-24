@@ -415,6 +415,81 @@ export default function Scripts() {
     }
   }, [clients]);
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selectedIds.size === filteredScripts.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredScripts.map(s => s.id)));
+    }
+  };
+
+  const handleDownloadSelectedPdf = useCallback(async () => {
+    const selected = filteredScripts.filter(s => selectedIds.has(s.id));
+    if (selected.length === 0) { toast.error('Selecione ao menos um roteiro'); return; }
+    setDownloadingBatch(true);
+    try {
+      const { default: html2canvas } = await import('html2canvas');
+      const { default: jsPDF } = await import('jspdf');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+
+      for (let i = 0; i < selected.length; i++) {
+        const script = selected[i];
+        const client = clients.find(c => c.id === script.clientId);
+        if (i > 0) pdf.addPage();
+
+        const container = document.createElement('div');
+        container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:white;padding:0;';
+        container.innerHTML = `
+          <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a;">
+            <div style="margin-bottom:0;">
+              <img src="${pulseHeader}" style="width:100%; display:block;" />
+            </div>
+            <div style="padding: 30px 40px;">
+              <h1 style="font-size:22px; margin:0 0 6px;">${script.title}</h1>
+              <p style="font-size:13px; color:#666; margin:0 0 20px;">
+                ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
+              </p>
+              <div style="font-size:14px; line-height:1.7;">
+                ${highlightQuotesForPdf(script.content)}
+              </div>
+              <div style="margin-top:40px; padding-top:16px; border-top:1px solid #e5e5e5; text-align:center;">
+                <p style="font-size:11px; color:#999;">Roteiro ${i + 1} de ${selected.length} · Pulse · ${new Date().toLocaleDateString('pt-BR')}</p>
+              </div>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(container);
+        try {
+          const canvas = await html2canvas(container, { scale: 2, useCORS: true });
+          const imgData = canvas.toDataURL('image/png');
+          const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+          pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        } finally {
+          document.body.removeChild(container);
+        }
+      }
+
+      pdf.save(`roteiros-selecionados-${selected.length}.pdf`);
+      toast.success(`PDF com ${selected.length} roteiro(s) baixado!`);
+      setSelectMode(false);
+      setSelectedIds(new Set());
+    } catch (err) {
+      console.error('Batch PDF error:', err);
+      toast.error('Erro ao gerar PDF');
+    } finally {
+      setDownloadingBatch(false);
+    }
+  }, [filteredScripts, selectedIds, clients]);
+
   const handleCleanAll = () => {
     let count = 0;
     scripts.forEach(script => {

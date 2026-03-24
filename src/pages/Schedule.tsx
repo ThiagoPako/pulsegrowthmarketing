@@ -457,6 +457,13 @@ export default function Schedule() {
 
   const handleToggleRecording = (rec: Recording) => {
     if (isRecordingActive(rec.id)) {
+      // Endomarketing recordings: simplified finalization (no scripts, no Drive)
+      if (rec.type === 'endomarketing') {
+        stopActiveRecording(rec.id, { videos_recorded: 1 });
+        updateRecording({ ...rec, status: 'concluida' });
+        toast.success(`Gravação endomarketing finalizada — ${getClientName(rec.clientId)}`);
+        return;
+      }
       setFinishRecordingState(rec);
       setFinishCompletedScripts(new Set());
       setFinishRejectedScripts(new Set());
@@ -467,6 +474,18 @@ export default function Schedule() {
       setFinishDriveLinks({});
       setFinishRecOpen(true);
     } else {
+      // Endomarketing recordings: start without script selection
+      if (rec.type === 'endomarketing') {
+        startActiveRecording({
+          recordingId: rec.id,
+          videomarkerId: rec.videomakerId,
+          clientId: rec.clientId,
+          startedAt: new Date().toISOString(),
+          plannedScriptIds: [],
+        });
+        toast.success(`Gravação endomarketing iniciada — ${getClientName(rec.clientId)}`);
+        return;
+      }
       setStartRecordingState(rec);
       const urgentIds = scripts
         .filter(s => s.clientId === rec.clientId && !s.recorded && !s.isEndomarketing && s.priority === 'urgent')

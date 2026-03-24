@@ -326,7 +326,67 @@ export default function FinancialRevenues() {
         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
           <Button size="sm" variant="outline" onClick={handleGenerate} className="shadow-sm"><RefreshCw size={14} className="mr-1" /> Gerar Receitas</Button>
         </motion.div>
+        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+          <Button size="sm" onClick={() => setShowNewDialog(true)} className="shadow-sm bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white"><Plus size={14} className="mr-1" /> Nova Receita</Button>
+        </motion.div>
       </motion.div>
+
+      {/* Dialog Nova Receita */}
+      <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">💰 Nova Receita Manual</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label>Cliente *</Label>
+              <Select value={newRev.client_id} onValueChange={v => setNewRev(p => ({ ...p, client_id: v }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
+                <SelectContent>
+                  {clients.sort((a, b) => a.companyName.localeCompare(b.companyName)).map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Valor (R$) *</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0,00"
+                  value={newRev.amount}
+                  onChange={e => setNewRev(p => ({ ...p, amount: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Vencimento *</Label>
+                <Input
+                  type="date"
+                  value={newRev.due_date}
+                  onChange={e => setNewRev(p => ({ ...p, due_date: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Descrição (opcional)</Label>
+              <Input
+                placeholder="Ex: Serviço extra, bônus..."
+                value={newRev.description}
+                onChange={e => setNewRev(p => ({ ...p, description: e.target.value }))}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowNewDialog(false)}>Cancelar</Button>
+              <Button onClick={handleCreateRevenue} className="bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white">
+                <Plus size={14} className="mr-1" /> Cadastrar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── BIG Cobrar Todos Button ── */}
       <AnimatePresence>

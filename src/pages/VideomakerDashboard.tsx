@@ -849,6 +849,22 @@ export default function VideomakerDashboard() {
                             </Button>
                           </>
                         )}
+                        {isOrganizing && (
+                          <Button size="sm" onClick={() => {
+                            setFinishRecordingId(rec.id);
+                            setCompletedScriptIds(new Set());
+                            setRejectedScripts(new Set());
+                            setAlteredScripts(new Set());
+                            setVerbalScripts(new Set());
+                            setAlterationNotes({});
+                            setFinishStep('scripts');
+                            setDriveLinks({});
+                            setSelectedEditorId('__auto__');
+                            setFinishDialogOpen(true);
+                          }} className="gap-1 bg-info hover:bg-info/90 text-info-foreground">
+                            📦 Organizar Material
+                          </Button>
+                        )}
                       </div>
                     </div>
                     {/* Mobile action buttons - full width row */}
@@ -879,6 +895,22 @@ export default function VideomakerDashboard() {
                             <Square size={12} /> Finalizar
                           </Button>
                         </>
+                      )}
+                      {isOrganizing && (
+                        <Button size="sm" onClick={() => {
+                          setFinishRecordingId(rec.id);
+                          setCompletedScriptIds(new Set());
+                          setRejectedScripts(new Set());
+                          setAlteredScripts(new Set());
+                          setVerbalScripts(new Set());
+                          setAlterationNotes({});
+                          setFinishStep('scripts');
+                          setDriveLinks({});
+                          setSelectedEditorId('__auto__');
+                          setFinishDialogOpen(true);
+                        }} className="flex-1 gap-1 text-xs bg-info hover:bg-info/90 text-info-foreground h-8">
+                          📦 Organizar
+                        </Button>
                       )}
                     </div>
                   </motion.div>

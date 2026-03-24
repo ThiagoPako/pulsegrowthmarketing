@@ -567,7 +567,7 @@ export default function Scripts() {
           <div className="flex flex-wrap gap-2">
             {clientsLowScripts.map(({ client, count }) => (
               <Badge key={client.id} variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-300 bg-amber-500/5">
-                <ClientLogo clientId={client.id} size="xs" className="mr-1.5" />
+                <ClientLogo clientId={client.id} size="sm" className="mr-1.5 w-4 h-4" />
                 {client.companyName}: {count} roteiro{count !== 1 ? 's' : ''}
               </Badge>
             ))}

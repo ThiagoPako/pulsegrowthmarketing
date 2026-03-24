@@ -79,7 +79,7 @@ export default function Schedule() {
       const client = clients.find(c => c.id === contract.client_id);
       return {
         id: contract.client_id,
-        company_name: contract.clients?.company_name || client?.company_name || 'Cliente',
+        company_name: contract.clients?.company_name || client?.companyName || 'Cliente',
         color: contract.clients?.color || client?.color || '280 60% 60%',
         active: true,
         contractId: contract.id,

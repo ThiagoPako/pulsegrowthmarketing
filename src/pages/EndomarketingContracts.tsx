@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useEndoContracts, useEndoPackages, getCategoryLabel, EndoContract } from '@/hooks/useEndomarketing';
+import { useEndoContracts, useEndoPackages, getCategoryLabel, EndoContract, syncEndoExpenses } from '@/hooks/useEndomarketing';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';

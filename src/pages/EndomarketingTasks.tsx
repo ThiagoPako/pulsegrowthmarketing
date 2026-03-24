@@ -17,8 +17,8 @@ import { Rocket, CheckCircle, XCircle, Clock, CalendarPlus, MessageCircle, Refre
 import { motion } from 'framer-motion';
 
 export default function EndomarketingTasks() {
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
   const { tasks, loading, completeTask, cancelTask, generateTasks, refresh } = useEndoTasks();
   const { contracts } = useEndoContracts(false);
   const [filterStatus, setFilterStatus] = useState('all');

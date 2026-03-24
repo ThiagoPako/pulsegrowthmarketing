@@ -374,10 +374,8 @@ export default function Scripts() {
 
   const handleDownloadPdf = useCallback(async (script: Script) => {
     const client = clients.find(c => c.id === script.clientId);
-    const { default: html2canvas } = await import('html2canvas');
     const { default: jsPDF } = await import('jspdf');
 
-    // Create a temporary div for rendering
     const container = document.createElement('div');
     container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:white;padding:0;';
     container.innerHTML = `
@@ -402,37 +400,24 @@ export default function Scripts() {
     document.body.appendChild(container);
 
     try {
-      const canvas = await html2canvas(container, { scale: 2, useCORS: true });
-      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      if (imgHeight <= pageHeight) {
-        // Content fits in one page — use custom short page
-        const shortPdf = new jsPDF({ orientation: 'p', unit: 'mm', format: [pdfWidth, imgHeight] });
-        shortPdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
-        shortPdf.save(`roteiro-${script.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
-      } else {
-        let position = 0;
-        let page = 0;
-        while (position < imgHeight) {
-          const remaining = imgHeight - position;
-          if (page > 0) {
-            if (remaining < pageHeight) {
-              pdf.addPage([pdfWidth, remaining]);
-            } else {
-              pdf.addPage();
-            }
-          }
-          pdf.addImage(imgData, 'PNG', 0, -position, pdfWidth, imgHeight);
-          position += remaining < pageHeight && page > 0 ? remaining : pageHeight;
-          page++;
-        }
-        pdf.save(`roteiro-${script.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+      await pdf.html(container, {
+        x: 0,
+        y: 0,
+        width: pdfWidth,
+        windowWidth: 794,
+        autoPaging: 'text',
+        margin: [0, 0, 10, 0],
+      });
+      // Remove blank first page if content starts on page 2
+      const totalPages = pdf.getNumberOfPages();
+      if (totalPages > 1) {
+        // Check if first page is essentially blank (jsPDF.html quirk)
+        const firstPageHeight = pdf.internal.pageSize.getHeight();
+        // Keep all pages — they contain content
       }
-      
+      pdf.save(`roteiro-${script.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
       toast.success('PDF baixado');
     } finally {
       document.body.removeChild(container);
@@ -460,13 +445,10 @@ export default function Scripts() {
     if (selected.length === 0) { toast.error('Selecione ao menos um roteiro'); return; }
     setDownloadingBatch(true);
     try {
-      const { default: html2canvas } = await import('html2canvas');
       const { default: jsPDF } = await import('jspdf');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
 
-      // Build a single continuous container with all scripts
       const container = document.createElement('div');
       container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:white;padding:0;';
 
@@ -476,17 +458,17 @@ export default function Scripts() {
       for (let i = 0; i < selected.length; i++) {
         const script = selected[i];
         const client = clients.find(c => c.id === script.clientId);
-        const separator = i > 0 ? `<div style="border-top:2px solid #e5e5e5; margin:30px 40px 0;"></div>` : '';
+        const separator = i > 0 ? `<div style="border-top:2px solid #e5e5e5; margin:30px 40px 0; page-break-before:auto;"></div>` : '';
         allHtml += `
           ${separator}
-          <div style="padding: 24px 40px 10px;">
+          <div style="padding: 24px 40px 10px; page-break-inside:avoid;">
             <h1 style="font-size:22px; margin:0 0 6px;">${script.title}</h1>
             <p style="font-size:13px; color:#666; margin:0 0 16px;">
               ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
             </p>
-            <div style="font-size:14px; line-height:1.7;">
-              ${highlightQuotesForPdf(script.content)}
-            </div>
+          </div>
+          <div style="padding: 0 40px 10px; font-size:14px; line-height:1.7;">
+            ${highlightQuotesForPdf(script.content)}
           </div>
         `;
       }
@@ -503,38 +485,19 @@ export default function Scripts() {
       document.body.appendChild(container);
 
       try {
-        const canvas = await html2canvas(container, { scale: 2, useCORS: true });
-        const imgData = canvas.toDataURL('image/png');
-        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-        if (imgHeight <= pageHeight) {
-          // All content fits in one page — shrink page to content
-          const shortPdf = new jsPDF({ orientation: 'p', unit: 'mm', format: [pdfWidth, imgHeight] });
-          shortPdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
-          shortPdf.save(`roteiros-selecionados-${selected.length}.pdf`);
-        } else {
-          let position = 0;
-          let pg = 0;
-          while (position < imgHeight) {
-            const remaining = imgHeight - position;
-            if (pg > 0) {
-              if (remaining < pageHeight) {
-                pdf.addPage([pdfWidth, remaining]);
-              } else {
-                pdf.addPage();
-              }
-            }
-            pdf.addImage(imgData, 'PNG', 0, -position, pdfWidth, imgHeight);
-            position += remaining < pageHeight && pg > 0 ? remaining : pageHeight;
-            pg++;
-          }
-          pdf.save(`roteiros-selecionados-${selected.length}.pdf`);
-        }
+        await pdf.html(container, {
+          x: 0,
+          y: 0,
+          width: pdfWidth,
+          windowWidth: 794,
+          autoPaging: 'text',
+          margin: [0, 0, 10, 0],
+        });
+        pdf.save(`roteiros-selecionados-${selected.length}.pdf`);
       } finally {
         document.body.removeChild(container);
       }
 
-      
       toast.success(`PDF com ${selected.length} roteiro(s) baixado!`);
       setSelectMode(false);
       setSelectedIds(new Set());

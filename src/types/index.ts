@@ -113,7 +113,7 @@ export interface SocialAccount {
   createdAt: string;
 }
 
-export type RecordingType = 'fixa' | 'extra' | 'secundaria' | 'backup';
+export type RecordingType = 'fixa' | 'extra' | 'secundaria' | 'backup' | 'endomarketing';
 export type RecordingStatus = 'agendada' | 'concluida' | 'cancelada';
 export type ConfirmationStatus = 'pendente' | 'aguardando' | 'confirmada' | 'cancelada';
 

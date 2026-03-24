@@ -145,7 +145,7 @@ export default function VideomakerDashboard() {
   const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || '—';
   const getClientColor = (id: string) => clients.find(c => c.id === id)?.color || '220 10% 50%';
 
-  const typeLabels: Record<string, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.' };
+  const typeLabels: Record<string, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.', backup: 'Backup', endomarketing: 'Endo' };
   const timeToMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 
   // ── Active recording (use local backup to survive polling race conditions) ──
@@ -155,6 +155,19 @@ export default function VideomakerDashboard() {
   const activeRecordingId = myActiveRec?.recordingId || localActiveRecordingId;
 
   const handleStartRecording = (rec: Recording) => {
+    // Endomarketing recordings: start without script selection
+    if (rec.type === 'endomarketing') {
+      setLocalActiveRecordingId(rec.id);
+      startActiveRecording({
+        recordingId: rec.id,
+        videomarkerId: vmId,
+        clientId: rec.clientId,
+        startedAt: new Date().toISOString(),
+        plannedScriptIds: [],
+      });
+      toast.success(`Gravação endomarketing iniciada — ${getClientName(rec.clientId)}`);
+      return;
+    }
     setScriptsClientId(rec.clientId);
     setScriptsRecordingId(rec.id);
     // Auto-select all urgent scripts (mandatory)
@@ -204,6 +217,16 @@ export default function VideomakerDashboard() {
 
   // ── Finish recording flow ──
   const handleFinishRecording = (rec: Recording) => {
+    // Endomarketing recordings: simplified finalization (no scripts, no Drive)
+    if (rec.type === 'endomarketing') {
+      stopActiveRecording(rec.id, { videos_recorded: 1 });
+      updateRecording({ ...rec, status: 'concluida' });
+      setLocalActiveRecordingId(null);
+      toast.success(`Gravação endomarketing finalizada — ${getClientName(rec.clientId)}`);
+      setCelebrationScore(8);
+      setShowCelebration(true);
+      return;
+    }
     setFinishRecordingId(rec.id);
     setCompletedScriptIds(new Set());
     setRejectedScripts(new Set());

@@ -102,20 +102,23 @@ export default function TeamPerformanceWidget() {
           r.videomakerId === user.id &&
           isWithinInterval(parseISO(r.date), { start: weekStart, end: weekEnd })
         );
-        const weekDone = weekRecs.filter(r => r.status === 'concluida').length;
+        const weekDone = weekRecs.filter(r => r.status === 'concluida' && r.type !== 'endomarketing').length;
+        const weekEndoDone = weekRecs.filter(r => r.status === 'concluida' && r.type === 'endomarketing').length;
 
         // Wait time scoring: 2 points per 10 min of waiting
         const vmWaitLogs = waitLogs.filter(l => l.videomaker_id === user.id);
         const totalWaitSeconds = vmWaitLogs.reduce((a, l) => a + (l.wait_duration_seconds || 0), 0);
         const waitPoints = Math.floor(totalWaitSeconds / 600) * 2; // every 10 min = 2 pts
 
-        score = reels * 12 + creatives * 6 + stories * 3 + extras * 10 + arts * 4 + weekDone * 15 + waitPoints;
+        // Endo recordings = 8 pts each
+        score = reels * 12 + creatives * 6 + stories * 3 + extras * 10 + arts * 4 + weekDone * 15 + weekEndoDone * 8 + waitPoints;
         metrics.push(
           { label: 'Reels', value: reels },
           { label: 'Criativos', value: creatives },
           { label: 'Stories', value: stories },
           { label: 'Extras', value: extras },
           { label: 'Grav. Sem.', value: weekDone },
+          { label: 'Endo', value: weekEndoDone },
           { label: 'Espera (pts)', value: waitPoints },
         );
         maxScore = Math.max(score, 200);

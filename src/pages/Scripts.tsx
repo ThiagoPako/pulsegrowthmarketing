@@ -432,7 +432,7 @@ export default function Scripts() {
         }
         pdf.save(`roteiro-${script.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
       }
-      pdf.save(`roteiro-${script.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+      
       toast.success('PDF baixado');
     } finally {
       document.body.removeChild(container);

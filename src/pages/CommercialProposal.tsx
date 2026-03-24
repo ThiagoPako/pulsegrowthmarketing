@@ -308,8 +308,7 @@ export default function CommercialProposal() {
           </CardContent>
         </Card>
       )}
-        </div>
-      </div>
+
 
       {!showPreview ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

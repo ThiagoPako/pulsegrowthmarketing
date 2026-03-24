@@ -176,36 +176,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return { deleted, created: allNew.length };
   }, [data, users]);
 
-  /** Cancel a recording and try to reschedule automatically */
+  /** Cancel a recording — backup slots are only created manually via the backup dialog */
   const cancelAndReschedule = useCallback((recording: Recording) => {
     data.cancelRecording(recording.id);
-    
-    const client = data.clients.find(c => c.id === recording.clientId);
-    if (!client) return { success: false };
-
-    const videomakerIds = users.filter(u => u.role === 'videomaker').map(u => u.id);
-    
-    // Use recordings after cancel
-    const recsAfterCancel = data.recordings.map(r => r.id === recording.id ? { ...r, status: 'cancelada' as const } : r);
-    
-    const slot = findRescheduleSlot(recording, client, recsAfterCancel, data.settings, videomakerIds);
-    
-    if (slot) {
-      const newRec: Recording = {
-        id: crypto.randomUUID(),
-        clientId: recording.clientId,
-        videomakerId: slot.videomakerId,
-        date: slot.date,
-        startTime: slot.startTime,
-        type: slot.type,
-        status: 'agendada',
-      };
-      data.addRecording(newRec);
-      return { success: true, rescheduled: slot };
-    }
-    
+    // No automatic rescheduling to backup day — admin chooses via backup dialog
     return { success: false };
-  }, [data, users]);
+  }, [data]);
 
   const updateRecording = useCallback((recording: Recording) => { data.updateRecording(recording); }, [data]);
   const cancelRecording = useCallback((id: string) => { data.cancelRecording(id); }, [data]);

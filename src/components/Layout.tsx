@@ -124,6 +124,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const handleFontScaleChange = (newScale: string) => {
     setFontScale(newScale);
+    localStorage.setItem('pulse_font_scale', newScale);
     // Persist to database
     updateProfile({ font_scale: newScale } as any);
   };

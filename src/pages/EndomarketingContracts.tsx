@@ -19,7 +19,8 @@ interface SimpleProfile { id: string; name: string; display_name: string | null;
 export default function EndomarketingContracts() {
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
-  const isEndo = profile?.role === 'endomarketing' || profile?.role === 'parceiro';
+  const isPartner = profile?.role === 'parceiro';
+  const isEndo = profile?.role === 'endomarketing';
   const canSeeFinancials = isAdmin || isEndo;
   const { contracts, loading, addContract, updateContract, deactivateContract } = useEndoContracts();
   const { packages } = useEndoPackages();
@@ -140,7 +141,7 @@ export default function EndomarketingContracts() {
                 <TableHead>Cliente</TableHead>
                 <TableHead>Pacote</TableHead>
                 <TableHead>Parceiro</TableHead>
-                <TableHead className="text-right">Custo</TableHead>
+                <TableHead className="text-right">{isPartner ? 'Ganho' : 'Custo'}</TableHead>
                 {canSeeFinancials && <TableHead className="text-right">Venda</TableHead>}
                 {canSeeFinancials && <TableHead className="text-right">Lucro</TableHead>}
                 {canSeeFinancials && <TableHead className="text-right">Margem</TableHead>}
@@ -168,10 +169,10 @@ export default function EndomarketingContracts() {
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">{c.partner_profile?.display_name || c.partner_profile?.name || '—'}</TableCell>
-                    <TableCell className="text-right text-sm">{fmt(c.partner_cost)}</TableCell>
+                    <TableCell className={`text-right text-sm ${isPartner ? 'font-semibold text-success' : ''}`}>{fmt(c.partner_cost)}</TableCell>
                     {canSeeFinancials && <TableCell className="text-right text-sm font-medium">{fmt(c.sale_price)}</TableCell>}
                     {canSeeFinancials && (
-                      <TableCell className={`text-right text-sm font-bold ${isNegative ? 'text-red-500' : 'text-emerald-600'}`}>
+                      <TableCell className={`text-right text-sm font-bold ${isNegative ? 'text-destructive' : 'text-success'}`}>
                         {isNegative && <AlertTriangle size={12} className="inline mr-1" />}
                         {fmt(profit)}
                       </TableCell>
@@ -264,14 +265,14 @@ export default function EndomarketingContracts() {
             </div>
 
             {canSeeFinancials && formSalePrice > 0 && formPartnerCost > 0 && (
-              <div className={`p-3 rounded-lg border ${formSalePrice < formPartnerCost ? 'border-red-300 bg-red-50 dark:bg-red-950/20' : 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20'}`}>
+              <div className={`p-3 rounded-lg border ${formSalePrice < formPartnerCost ? 'border-destructive/30 bg-destructive/10' : 'border-success/30 bg-success/10'}`}>
                 <div className="flex items-center gap-2">
-                  {formSalePrice < formPartnerCost ? <AlertTriangle size={16} className="text-red-500" /> : <TrendingUp size={16} className="text-emerald-500" />}
+                  {formSalePrice < formPartnerCost ? <AlertTriangle size={16} className="text-destructive" /> : <TrendingUp size={16} className="text-success" />}
                   <div>
                     <p className="text-sm font-medium">
                       Lucro: {fmt(formSalePrice - formPartnerCost)} | Margem: {((formSalePrice - formPartnerCost) / formSalePrice * 100).toFixed(1)}%
                     </p>
-                    {formSalePrice < formPartnerCost && <p className="text-xs text-red-500">⚠️ Valor de venda inferior ao custo!</p>}
+                    {formSalePrice < formPartnerCost && <p className="text-xs text-destructive">⚠️ Valor de venda inferior ao custo!</p>}
                   </div>
                 </div>
               </div>

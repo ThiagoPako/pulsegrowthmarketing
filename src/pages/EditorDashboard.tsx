@@ -725,9 +725,16 @@ export default function EditorDashboard() {
                     </div>
                   </div>
                   {task.editing_started_at && (
-                    <div className="flex items-center gap-1 bg-primary/10 rounded-full px-2 py-0.5 shrink-0">
-                      <motion.div className="w-1.5 h-1.5 rounded-full bg-primary" animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1, repeat: Infinity }} />
-                      <LiveTimer startedAt={task.editing_started_at} />
+                    <div className={`flex items-center gap-1 rounded-full px-2 py-0.5 shrink-0 ${
+                      task.editing_paused_at ? 'bg-warning/10' : 'bg-primary/10'
+                    }`}>
+                      <motion.div className={`w-1.5 h-1.5 rounded-full ${task.editing_paused_at ? 'bg-warning' : 'bg-primary'}`}
+                        animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1, repeat: Infinity }} />
+                      {task.editing_paused_at ? (
+                        <span className="text-[10px] font-bold text-warning">⏸️</span>
+                      ) : (
+                        <LiveTimer startedAt={task.editing_started_at} pausedAt={task.editing_paused_at} pausedSeconds={task.editing_paused_seconds || 0} />
+                      )}
                     </div>
                   )}
                 </motion.div>

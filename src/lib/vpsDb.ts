@@ -224,6 +224,35 @@ class QueryBuilder {
     return result;
   }
 
+  // Known FK column overrides for tables where the simple pattern doesn't work
+  private static FK_MAP: Record<string, Record<string, string>> = {
+    client_endomarketing_contracts: {
+      endomarketing_packages: 'package_id',
+      clients: 'client_id',
+      profiles: 'partner_id',
+    },
+    endomarketing_partner_tasks: {
+      clients: 'client_id',
+      client_endomarketing_contracts: 'contract_id',
+      profiles: 'partner_id',
+    },
+    content_tasks: {
+      clients: 'client_id',
+      profiles: 'assigned_to',
+      scripts: 'script_id',
+      recordings: 'recording_id',
+    },
+    design_tasks: {
+      clients: 'client_id',
+      profiles: 'assigned_to',
+    },
+    delivery_records: {
+      clients: 'client_id',
+      profiles: 'videomaker_id',
+      recordings: 'recording_id',
+    },
+  };
+
   private _parseSelect(select: string): { selectStr: string; joins: any[] } {
     const joins: any[] = [];
     let selectStr = select;
@@ -236,8 +265,9 @@ class QueryBuilder {
       const joinTable = match[1];
       const joinColumns = match[2].split(',').map(c => c.trim());
 
-      // Build structured join — send individual identifiers so server can sanitize each one
-      const fkColumn = `${joinTable.replace(/s$/, '')}_id`;
+      // Use FK map if available, otherwise fall back to simple pattern
+      const fkColumn = QueryBuilder.FK_MAP[this._table]?.[joinTable]
+        || `${joinTable.replace(/s$/, '')}_id`;
 
       joins.push({
         table: joinTable,

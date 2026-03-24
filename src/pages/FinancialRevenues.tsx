@@ -166,7 +166,7 @@ export default function FinancialRevenues() {
       due_date: newRev.due_date,
       reference_month: refMonth,
       status: 'prevista',
-      description: newRev.description || undefined,
+      } as any);
     });
     if (ok) {
       toast.success('Receita cadastrada com sucesso!');

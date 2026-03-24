@@ -107,15 +107,17 @@ function rowToRecording(r: any): Recording {
 }
 
 function recordingToRow(r: Recording) {
-  return {
+  const row: any = {
     id: r.id,
-    client_id: r.clientId,
+    client_id: r.clientId || null,
     videomaker_id: r.videomakerId,
     date: r.date,
     start_time: r.startTime,
     type: r.type,
     status: r.status,
   };
+  if (r.prospectName) row.prospect_name = r.prospectName;
+  return row;
 }
 
 function rowToTask(r: any): KanbanTask {

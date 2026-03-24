@@ -164,24 +164,34 @@ export default function FinancialRevenues() {
   };
 
   const handleCreateRevenue = async () => {
-    if (!newRev.client_id || !newRev.amount || !newRev.due_date) {
-      toast.error('Preencha cliente, valor e vencimento');
+    if (!newRev.amount || !newRev.due_date) {
+      toast.error('Preencha valor e vencimento');
       return;
     }
     const refMonth = newRev.due_date.slice(0, 7) + '-01';
-    const ok = await addRevenue({
-      client_id: newRev.client_id,
+    const desc = [
+      newRev.category ? revenueCategories.find(c => c.value === newRev.category)?.label?.replace(/^.\s/, '') : '',
+      newRev.is_recurring ? '(Recorrente)' : '',
+      newRev.description,
+    ].filter(Boolean).join(' - ');
+
+    const payload: any = {
       amount: Number(newRev.amount),
       due_date: newRev.due_date,
       reference_month: refMonth,
       status: 'prevista',
-    } as any);
+    };
+    if (newRev.client_id) payload.client_id = newRev.client_id;
+    // Store category + description in a combined field if needed
+    if (desc) payload.description = desc;
+
+    const ok = await addRevenue(payload);
     if (ok) {
       toast.success('Receita cadastrada com sucesso!');
       setShowNewDialog(false);
-      setNewRev({ client_id: '', amount: '', due_date: '', description: '' });
+      setNewRev({ client_id: '', amount: '', due_date: '', description: '', category: '', is_recurring: false });
     } else {
-      toast.error('Erro ao cadastrar receita (pode já existir)');
+      toast.error('Erro ao cadastrar receita');
     }
   };
 

@@ -212,19 +212,29 @@ export default function CommercialProposal() {
           <Card>
             <CardHeader><CardTitle className="text-base">Pacote</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <div>
-                <Label>Plano contratado ({plans.length} disponíveis)</Label>
-                <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
-                  <SelectTrigger><SelectValue placeholder="Selecione o plano" /></SelectTrigger>
-                  <SelectContent>
-                    {plans.map((p: any) => (
-                      <SelectItem key={p.id} value={String(p.id)}>{p.name} — {fmt(Number(p.price))}/mês</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-2">
+                {plans.map((p: any) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setSelectedPlanId(selectedPlanId === String(p.id) ? '' : String(p.id))}
+                    className={cn(
+                      "relative rounded-xl border-2 p-3 text-left transition-all",
+                      selectedPlanId === String(p.id)
+                        ? "border-primary bg-primary/10 shadow-md"
+                        : "border-border hover:border-primary/40 hover:bg-accent/30"
+                    )}
+                  >
+                    {selectedPlanId === String(p.id) && (
+                      <CheckCircle2 className="absolute top-2 right-2 h-4 w-4 text-primary" />
+                    )}
+                    <p className="font-bold text-foreground">{p.name}</p>
+                    <p className="text-lg font-bold text-primary">{fmt(Number(p.price))}<span className="text-xs font-normal text-muted-foreground">/mês</span></p>
+                  </button>
+                ))}
               </div>
               {selectedPlan && (
-                <div className="bg-accent/50 rounded-lg p-3 text-sm space-y-1">
+                <div className="bg-accent/50 rounded-lg p-3 text-sm space-y-1 animate-in fade-in-0 slide-in-from-top-2">
                   <p><strong>Reels:</strong> {selectedPlan.reels_qty}/mês</p>
                   <p><strong>Criativos:</strong> {selectedPlan.creatives_qty}/mês</p>
                   <p><strong>Stories:</strong> {selectedPlan.stories_qty}/mês</p>

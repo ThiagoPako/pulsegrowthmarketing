@@ -256,6 +256,48 @@ export default function WelcomeRocket() {
         if (overdueDesign && overdueDesign.length > 0) {
           lines.push(`  ◦ DESIGN PENDENTE ......... ${overdueDesign.length} tarefas ativas`);
         }
+        // Clientes em onboarding
+        const { data: onboardingClients } = await supabase.from('clients')
+          .select('id, company_name, onboarding_completed')
+          .eq('onboarding_completed', false).limit(20);
+        if (onboardingClients && onboardingClients.length > 0) {
+          lines.push('');
+          lines.push(`▸ CLIENTES EM ONBOARDING: ${onboardingClients.length}`);
+          onboardingClients.slice(0, 5).forEach((c: any) => lines.push(`  ◦ ${c.company_name}`));
+          if (onboardingClients.length > 5) lines.push(`  ... +${onboardingClients.length - 5} clientes`);
+        }
+
+        // Clientes sem tráfego há muito tempo (criativos tipo 'criativo' sem atividade)
+        const { data: allClients } = await supabase.from('clients')
+          .select('id, company_name').limit(200);
+        const { data: activeCreatives } = await supabase.from('content_tasks')
+          .select('id, client_id, updated_at')
+          .eq('content_type', 'criativo').limit(500);
+        
+        if (allClients && allClients.length > 0) {
+          const clientsWithCreatives = new Set((activeCreatives || []).map((c: any) => c.client_id));
+          const noTraffic = allClients.filter((c: any) => !clientsWithCreatives.has(c.id));
+          if (noTraffic.length > 0) {
+            lines.push('');
+            lines.push(`▸ ⚠ CLIENTES SEM TRÁFEGO ATIVO: ${noTraffic.length}`);
+            noTraffic.slice(0, 5).forEach((c: any) => lines.push(`  ◦ ${c.company_name}`));
+            if (noTraffic.length > 5) lines.push(`  ... +${noTraffic.length - 5} clientes`);
+          }
+        }
+
+        // Criativos ativos há muito tempo (mais de 7 dias na mesma coluna ativa)
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const { data: staleCreatives } = await supabase.from('content_tasks')
+          .select('id, title, client_id, updated_at, clients(company_name)')
+          .eq('content_type', 'criativo')
+          .lt('updated_at', sevenDaysAgo.toISOString())
+          .not('kanban_column', 'in', '("concluido","aprovado","publicado")').limit(20);
+        if (staleCreatives && staleCreatives.length > 0) {
+          lines.push('');
+          lines.push(`▸ ⚠ CRIATIVOS ATIVOS HÁ MAIS DE 7 DIAS: ${staleCreatives.length}`);
+          staleCreatives.slice(0, 5).forEach((c: any) => lines.push(`  ◦ ${c.clients?.company_name || ''} — ${c.title}`));
+        }
       }
 
       // === ROTEIROS → Victor + Rayssa + Thiago ===

@@ -86,7 +86,17 @@ export default function EndomarketingTasks() {
     else toast.error(`${success} ok, ${fail} falharam`);
   };
 
-  const openComplete = (taskId: string) => {
+  const handleClearAll = async () => {
+    if (!confirm('Tem certeza que deseja LIMPAR TODAS as tarefas de endomarketing? Esta ação não pode ser desfeita.')) return;
+    setClearing(true);
+    try {
+      const { error } = await (supabase as any).from('endomarketing_partner_tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (error) { toast.error('Erro ao limpar tarefas'); console.error(error); }
+      else { toast.success('Todas as tarefas foram removidas!'); refresh(); }
+    } catch (e) { toast.error('Erro inesperado'); console.error(e); }
+    setClearing(false);
+  };
+
     setCompletingTaskId(taskId);
     setCompleteNotes('');
     setCompleteDialogOpen(true);

@@ -35,10 +35,10 @@ export default function EndoCapacityWidget({ contracts, tasks }: Props) {
     const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
 
     tasks
-      .filter(t => t.status === 'pendente' && t.date >= weekStartStr && t.date <= weekEndStr)
+      .filter(t => t.date >= weekStartStr && t.date <= weekEndStr && t.status !== 'cancelada')
       .forEach(t => {
         if (dailyHours[t.date] !== undefined) {
-          dailyHours[t.date] += t.duration_minutes / 60;
+          dailyHours[t.date] += Number(t.duration_minutes || 0) / 60;
         }
       });
 

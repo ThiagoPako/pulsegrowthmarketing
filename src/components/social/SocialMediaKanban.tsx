@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import {
   Film, Palette, Image, Megaphone, CheckCircle2, Clock, CalendarClock,
   Send, Zap, Eye, MessageSquare, AlertTriangle, ExternalLink, Link2,
-  Scissors, Flame, Rocket, Sparkles
+  Scissors, Flame, Rocket, Sparkles, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import DeadlineBadge from '@/components/DeadlineBadge';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -21,9 +21,8 @@ function DragScrollContainer({ children, className }: { children: React.ReactNod
   const onMouseDown = (e: React.MouseEvent) => {
     const el = ref.current;
     if (!el) return;
-    // Only drag from empty space (not buttons/cards)
     const target = e.target as HTMLElement;
-    if (target.closest('button, a, input, [role="button"]')) return;
+    if (target.closest('button, a, input, [role="button"], [draggable="true"]')) return;
     isDragging.current = true;
     startX.current = e.pageX - el.offsetLeft;
     scrollLeft.current = el.scrollLeft;
@@ -86,6 +85,8 @@ interface KanbanColumn {
   color: string;
   bgColor: string;
   borderColor: string;
+  socialStatus: string; // maps to social_media_deliveries.status
+  contentColumn: string; // maps to content_tasks.kanban_column
   items: SocialDelivery[];
 }
 
@@ -109,6 +110,7 @@ interface SocialMediaKanbanProps {
   onMarkPosted: (id: string) => void;
   onTogglePriority: (taskId: string, current: boolean) => void;
   sendingWhatsApp: boolean;
+  onDragMove?: (delivery: SocialDelivery, targetColumnId: string, socialStatus: string, contentColumn: string) => void;
 }
 
 const CONTENT_TYPES = [
@@ -188,6 +190,17 @@ function ReviewVideoLink({ contentTaskId, clientId }: { contentTaskId: string | 
   );
 }
 
+// Column definitions with status mappings
+const COLUMN_DEFS = [
+  { id: 'edicao', title: 'Fila de Edição', icon: Scissors, color: 'text-sky-600', bgColor: 'bg-sky-50/80', borderColor: 'border-sky-200', socialStatus: '', contentColumn: 'edicao' },
+  { id: 'revisao', title: 'Revisão', icon: Eye, color: 'text-orange-600', bgColor: 'bg-orange-50/80', borderColor: 'border-orange-200', socialStatus: 'revisao', contentColumn: 'revisao' },
+  { id: 'alteracao', title: 'Alteração', icon: AlertTriangle, color: 'text-amber-600', bgColor: 'bg-amber-50/80', borderColor: 'border-amber-200', socialStatus: 'ajuste', contentColumn: 'alteracao' },
+  { id: 'envio', title: 'Enviado', icon: Send, color: 'text-cyan-600', bgColor: 'bg-cyan-50/80', borderColor: 'border-cyan-200', socialStatus: 'aprovacao_cliente', contentColumn: 'envio' },
+  { id: 'agendar', title: 'Agendar', icon: CalendarClock, color: 'text-yellow-600', bgColor: 'bg-yellow-50/80', borderColor: 'border-yellow-200', socialStatus: 'entregue', contentColumn: 'agendamentos' },
+  { id: 'agendado', title: 'Agendado', icon: Clock, color: 'text-blue-600', bgColor: 'bg-blue-50/80', borderColor: 'border-blue-200', socialStatus: 'agendado', contentColumn: 'acompanhamento' },
+  { id: 'postado', title: 'Postado', icon: CheckCircle2, color: 'text-green-600', bgColor: 'bg-green-50/80', borderColor: 'border-green-200', socialStatus: 'postado', contentColumn: 'arquivado' },
+];
+
 export default function SocialMediaKanban({
   editingQueueTasks,
   deliveries,
@@ -201,82 +214,96 @@ export default function SocialMediaKanban({
   onMarkPosted,
   onTogglePriority,
   sendingWhatsApp,
+  onDragMove,
 }: SocialMediaKanbanProps) {
   const [showRocket, setShowRocket] = useState(false);
+  const [draggedDelivery, setDraggedDelivery] = useState<SocialDelivery | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
 
   const triggerRocket = useCallback(() => {
     setShowRocket(true);
   }, []);
 
-  const columns: KanbanColumn[] = [
-    {
-      id: 'edicao',
-      title: 'Fila de Edição',
-      icon: Scissors,
-      color: 'text-sky-600',
-      bgColor: 'bg-sky-50/80',
-      borderColor: 'border-sky-200',
-      items: [], // special handling
-    },
-    {
-      id: 'revisao',
-      title: 'Revisão',
-      icon: Eye,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50/80',
-      borderColor: 'border-orange-200',
-      items: deliveries.review,
-    },
-    {
-      id: 'alteracao',
-      title: 'Alteração',
-      icon: AlertTriangle,
-      color: 'text-amber-600',
-      bgColor: 'bg-amber-50/80',
-      borderColor: 'border-amber-200',
-      items: deliveries.alteration,
-    },
-    {
-      id: 'envio',
-      title: 'Enviado',
-      icon: Send,
-      color: 'text-cyan-600',
-      bgColor: 'bg-cyan-50/80',
-      borderColor: 'border-cyan-200',
-      items: deliveries.approval,
-    },
-    {
-      id: 'agendar',
-      title: 'Agendar',
-      icon: CalendarClock,
-      color: 'text-yellow-600',
-      bgColor: 'bg-yellow-50/80',
-      borderColor: 'border-yellow-200',
-      items: deliveries.pending,
-    },
-    {
-      id: 'agendado',
-      title: 'Agendado',
-      icon: Clock,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50/80',
-      borderColor: 'border-blue-200',
-      items: deliveries.scheduled,
-    },
-    {
-      id: 'postado',
-      title: 'Postado',
-      icon: CheckCircle2,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50/80',
-      borderColor: 'border-green-200',
-      items: deliveries.posted.slice(0, 20), // limit for performance
-    },
-  ];
+  const columns: KanbanColumn[] = COLUMN_DEFS.map(def => {
+    let items: SocialDelivery[] = [];
+    switch (def.id) {
+      case 'revisao': items = deliveries.review; break;
+      case 'alteracao': items = deliveries.alteration; break;
+      case 'envio': items = deliveries.approval; break;
+      case 'agendar': items = deliveries.pending; break;
+      case 'agendado': items = deliveries.scheduled; break;
+      case 'postado': items = deliveries.posted.slice(0, 20); break;
+      default: items = [];
+    }
+    return { ...def, items };
+  });
 
   const handleActionWithRocket = (action: () => void) => {
     triggerRocket();
     action();
+  };
+
+  // Drag handlers
+  const handleDragStart = (e: React.DragEvent, delivery: SocialDelivery) => {
+    setDraggedDelivery(delivery);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', delivery.id);
+  };
+
+  const handleDragOver = (e: React.DragEvent, colId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverColumn(colId);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverColumn(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetColId: string) => {
+    e.preventDefault();
+    setDragOverColumn(null);
+    if (!draggedDelivery) { setDraggedDelivery(null); return; }
+
+    // Don't allow drop on 'edicao' (editing queue is separate)
+    if (targetColId === 'edicao') {
+      setDraggedDelivery(null);
+      return;
+    }
+
+    // Find current column of the dragged delivery
+    const currentColDef = COLUMN_DEFS.find(c => c.socialStatus === draggedDelivery.status);
+    if (currentColDef?.id === targetColId) {
+      setDraggedDelivery(null);
+      return;
+    }
+
+    const targetDef = COLUMN_DEFS.find(c => c.id === targetColId);
+    if (!targetDef) { setDraggedDelivery(null); return; }
+
+    if (onDragMove) {
+      onDragMove(draggedDelivery, targetColId, targetDef.socialStatus, targetDef.contentColumn);
+    }
+    setDraggedDelivery(null);
+  };
+
+  // Move to adjacent column
+  const handleMoveToColumn = (delivery: SocialDelivery, targetColId: string) => {
+    if (targetColId === 'edicao') return;
+    const targetDef = COLUMN_DEFS.find(c => c.id === targetColId);
+    if (!targetDef || !onDragMove) return;
+    onDragMove(delivery, targetColId, targetDef.socialStatus, targetDef.contentColumn);
+  };
+
+  const getAdjacentColumns = (delivery: SocialDelivery) => {
+    const currentDef = COLUMN_DEFS.find(c => c.socialStatus === delivery.status);
+    if (!currentDef) return { prev: null, next: null };
+    const idx = COLUMN_DEFS.findIndex(c => c.id === currentDef.id);
+    return {
+      // Don't allow moving back to 'edicao'
+      prev: idx > 1 ? COLUMN_DEFS[idx - 1] : null,
+      next: idx < COLUMN_DEFS.length - 1 ? COLUMN_DEFS[idx + 1] : null,
+    };
   };
 
   return (
@@ -291,6 +318,7 @@ export default function SocialMediaKanban({
             const isEditing = col.id === 'edicao';
             const items = isEditing ? editingQueueTasks : col.items;
             const count = items.length;
+            const isDragOver = dragOverColumn === col.id && !isEditing;
 
             return (
               <motion.div
@@ -298,10 +326,17 @@ export default function SocialMediaKanban({
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: colIdx * 0.05, duration: 0.3 }}
-                className="w-[280px] shrink-0 flex flex-col"
+                className={`w-[280px] shrink-0 flex flex-col transition-all duration-200 ${
+                  isDragOver ? 'scale-[1.02]' : ''
+                }`}
+                onDragOver={!isEditing ? (e) => handleDragOver(e, col.id) : undefined}
+                onDragLeave={!isEditing ? handleDragLeave : undefined}
+                onDrop={!isEditing ? (e) => handleDrop(e, col.id) : undefined}
               >
                 {/* Column Header */}
-                <div className={`rounded-t-xl px-3 py-2.5 ${col.bgColor} border ${col.borderColor} border-b-0`}>
+                <div className={`rounded-t-xl px-3 py-2.5 ${col.bgColor} border ${col.borderColor} border-b-0 ${
+                  isDragOver ? 'ring-2 ring-primary/40' : ''
+                }`}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <col.icon size={15} className={col.color} />
@@ -314,7 +349,9 @@ export default function SocialMediaKanban({
                 </div>
 
                 {/* Column Body */}
-                <div className={`flex-1 rounded-b-xl border ${col.borderColor} border-t-0 bg-card/50 min-h-[200px] max-h-[calc(100vh-380px)] overflow-y-auto p-2 space-y-2`}>
+                <div className={`flex-1 rounded-b-xl border ${col.borderColor} border-t-0 bg-card/50 min-h-[200px] max-h-[calc(100vh-380px)] overflow-y-auto p-2 space-y-2 transition-colors ${
+                  isDragOver ? 'bg-primary/5' : ''
+                }`}>
                   <AnimatePresence mode="popLayout">
                     {count === 0 ? (
                       <motion.div
@@ -337,6 +374,9 @@ export default function SocialMediaKanban({
                             />
                           );
                         }
+
+                        const adj = getAdjacentColumns(item);
+
                         return (
                           <DeliveryCard
                             key={item.id}
@@ -352,6 +392,12 @@ export default function SocialMediaKanban({
                             onOpenSchedule={() => onOpenSchedule(item)}
                             onMarkPosted={() => handleActionWithRocket(() => onMarkPosted(item.id))}
                             sendingWhatsApp={sendingWhatsApp}
+                            isDragging={draggedDelivery?.id === item.id}
+                            onDragStart={(e) => handleDragStart(e, item)}
+                            onMoveForward={adj.next && onDragMove ? () => handleMoveToColumn(item, adj.next!.id) : undefined}
+                            onMoveBackward={adj.prev && onDragMove ? () => handleMoveToColumn(item, adj.prev!.id) : undefined}
+                            forwardLabel={adj.next?.title}
+                            backwardLabel={adj.prev?.title}
                           />
                         );
                       })
@@ -424,6 +470,12 @@ function DeliveryCard({
   onOpenSchedule,
   onMarkPosted,
   sendingWhatsApp,
+  isDragging,
+  onDragStart,
+  onMoveForward,
+  onMoveBackward,
+  forwardLabel,
+  backwardLabel,
 }: {
   delivery: SocialDelivery;
   index: number;
@@ -437,6 +489,12 @@ function DeliveryCard({
   onOpenSchedule: () => void;
   onMarkPosted: () => void;
   sendingWhatsApp: boolean;
+  isDragging?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onMoveForward?: () => void;
+  onMoveBackward?: () => void;
+  forwardLabel?: string;
+  backwardLabel?: string;
 }) {
   const typeConf = getTypeConfig(d.content_type);
   const td = d.content_task_id ? taskDeadlines[d.content_task_id] : null;
@@ -450,7 +508,13 @@ function DeliveryCard({
       transition={{ delay: index * 0.03, duration: 0.2 }}
       whileHover={{ y: -2 }}
     >
-      <Card className="border border-border shadow-sm hover:shadow-md transition-all group hover:border-primary/30">
+      <Card
+        draggable
+        onDragStart={onDragStart}
+        className={`border shadow-sm hover:shadow-md transition-all group hover:border-primary/30 cursor-grab active:cursor-grabbing ${
+          isDragging ? 'opacity-40 scale-95' : 'border-border'
+        }`}
+      >
         <CardContent className="p-3 space-y-2">
           {/* Title */}
           <p className="text-sm font-medium text-foreground leading-tight line-clamp-2">{d.title}</p>
@@ -545,6 +609,32 @@ function DeliveryCard({
               </div>
             )}
           </div>
+
+          {/* Move arrows */}
+          {(onMoveBackward || onMoveForward) && (
+            <div className="flex items-center gap-1.5 pt-1 border-t border-border/30">
+              {onMoveBackward && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onMoveBackward(); }}
+                  className="flex items-center gap-0.5 flex-1 justify-center px-1.5 py-1.5 rounded-lg bg-secondary/60 hover:bg-secondary border border-border/50 text-muted-foreground hover:text-foreground transition-all text-[9px] font-semibold"
+                  title={`Mover para ${backwardLabel}`}
+                >
+                  <ChevronLeft size={11} />
+                  <span className="truncate">{backwardLabel}</span>
+                </button>
+              )}
+              {onMoveForward && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onMoveForward(); }}
+                  className="flex items-center gap-0.5 flex-1 justify-center px-1.5 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary transition-all text-[9px] font-semibold"
+                  title={`Mover para ${forwardLabel}`}
+                >
+                  <span className="truncate">{forwardLabel}</span>
+                  <ChevronRight size={11} />
+                </button>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </motion.div>

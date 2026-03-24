@@ -169,12 +169,14 @@ export default function EndomarketingContracts() {
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">{c.partner_profile?.display_name || c.partner_profile?.name || '—'}</TableCell>
-                    <TableCell className={`text-right text-sm ${isPartner ? 'font-semibold text-success' : ''}`}>{fmt(c.partner_cost)}</TableCell>
+                    <TableCell className={`text-right text-sm ${isPartner ? 'font-bold text-success' : ''}`}>
+                      {isPartner ? `💰 ${fmt(c.partner_cost)}` : fmt(c.partner_cost)}
+                    </TableCell>
                     {canSeeFinancials && <TableCell className="text-right text-sm font-medium">{fmt(c.sale_price)}</TableCell>}
                     {canSeeFinancials && (
                       <TableCell className={`text-right text-sm font-bold ${isNegative ? 'text-destructive' : 'text-success'}`}>
                         {isNegative && <AlertTriangle size={12} className="inline mr-1" />}
-                        {fmt(profit)}
+                        {`💰 ${fmt(profit)}`}
                       </TableCell>
                     )}
                     {canSeeFinancials && <TableCell className="text-right text-sm">{margin.toFixed(0)}%</TableCell>}

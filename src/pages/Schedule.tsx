@@ -192,7 +192,7 @@ export default function Schedule() {
   const getVideomakerName = (id: string) => getVideomaker(id)?.name || '—';
   const getClientColor = (id: string) => clients.find(c => c.id === id)?.color || '220 10% 50%';
 
-  const typeLabels: Record<RecordingType, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.', backup: 'Backup', endomarketing: 'Endo' };
+  const typeLabels: Record<RecordingType, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.', backup: 'Backup', endomarketing: 'Endo', avulso: 'Avulso' };
 
   const handleRegenerate = async () => {
     if (!regenClientId) { toast.error('Selecione um cliente'); return; }

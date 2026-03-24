@@ -1186,7 +1186,20 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
           </div>
         )}
 
-        {/* Expand hint on hover */}
+        {/* Live reviewing indicator */}
+        {isBeingReviewed && (
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-900/20 dark:to-emerald-900/10 border-b border-teal-200/40">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-500 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
+            </span>
+            <Eye size={11} className="text-teal-600 dark:text-teal-400 shrink-0" />
+            <span className="text-[10px] font-semibold text-teal-700 dark:text-teal-300 truncate" style={{ fontFamily: 'var(--font-display)' }}>
+              {task.reviewing_by_name} revisando
+            </span>
+          </div>
+        )}
+
         <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10 pointer-events-none">
           <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-foreground/5 backdrop-blur-sm">
             <Maximize2 size={10} className="text-muted-foreground" />

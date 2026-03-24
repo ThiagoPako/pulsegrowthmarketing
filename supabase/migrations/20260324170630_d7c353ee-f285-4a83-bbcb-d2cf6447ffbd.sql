@@ -1,0 +1,1 @@
+UPDATE public.profiles SET job_title = 'Gestor de Tráfego e Analista Comercial' WHERE id = '865011fc-0834-47cf-bb23-25a74a761c55';

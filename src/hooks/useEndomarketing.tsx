@@ -253,74 +253,100 @@ export function useEndoTasks(partnerId?: string) {
   };
 
   const generateTasks = async (contractId: string, fromDate: string, toDate: string) => {
-    const { data: contract } = await (supabase as any)
-      .from('client_endomarketing_contracts')
-      .select('*, endomarketing_packages(*)')
-      .eq('id', contractId).single();
+    try {
+      // Fetch contract and package separately to avoid join issues
+      const { data: contract, error: contractErr } = await (supabase as any)
+        .from('client_endomarketing_contracts')
+        .select('*')
+        .eq('id', contractId).single();
 
-    if (!contract || contract.status !== 'ativo') return false;
-    const pkg = contract.endomarketing_packages;
-    if (!pkg) return false;
+      if (contractErr || !contract) {
+        console.error('generateTasks: contract fetch error', contractErr);
+        return false;
+      }
+      if (contract.status !== 'ativo') return false;
 
-    // Delete existing pending tasks in range
-    await (supabase as any).from('endomarketing_partner_tasks')
-      .delete().eq('contract_id', contractId).eq('status', 'pendente')
-      .gte('date', fromDate).lte('date', toDate);
+      const { data: pkg, error: pkgErr } = await (supabase as any)
+        .from('endomarketing_packages')
+        .select('*')
+        .eq('id', contract.package_id).single();
 
-    const tasksToInsert: any[] = [];
-    let current = new Date(fromDate + 'T12:00:00');
-    const end = new Date(toDate + 'T12:00:00');
+      if (pkgErr || !pkg) {
+        console.error('generateTasks: package fetch error', pkgErr);
+        return false;
+      }
 
-    while (current <= end) {
-      const dow = getDay(current); // 0=Sun
-      const dateStr = format(current, 'yyyy-MM-dd');
-      const isWeekday = dow >= 1 && dow <= 5;
+      // Delete existing pending tasks in range
+      await (supabase as any).from('endomarketing_partner_tasks')
+        .delete().eq('contract_id', contractId).eq('status', 'pendente')
+        .gte('date', fromDate).lte('date', toDate);
 
-      if (isWeekday) {
-        if (pkg.category === 'presenca_completa') {
+      const tasksToInsert: any[] = [];
+      let current = new Date(fromDate + 'T12:00:00');
+      const end = new Date(toDate + 'T12:00:00');
+
+      // Define which weekdays to include based on sessions_per_week
+      const getPresencaDays = (sessionsPerWeek: number): number[] => {
+        switch (sessionsPerWeek) {
+          case 1: return [0]; // Mon
+          case 2: return [0, 2]; // Mon, Wed
+          case 3: return [0, 2, 4]; // Mon, Wed, Fri
+          case 4: return [0, 1, 2, 3]; // Mon-Thu
+          case 5: return [0, 1, 2, 3, 4]; // Mon-Fri
+          default: return sessionsPerWeek >= 5 ? [0, 1, 2, 3, 4] : [0];
+        }
+      };
+
+      while (current <= end) {
+        const dow = getDay(current); // 0=Sun
+        const dateStr = format(current, 'yyyy-MM-dd');
+        const isWeekday = dow >= 1 && dow <= 5;
+
+        if (isWeekday) {
           const dayIdx = dow - 1; // 0=Mon..4=Fri
-          const include = pkg.sessions_per_week >= 5 || (pkg.sessions_per_week === 3 && [0, 2, 4].includes(dayIdx));
-          if (include) {
-            tasksToInsert.push({
-              contract_id: contractId, client_id: contract.client_id,
-              partner_id: contract.partner_id, date: dateStr,
-              duration_minutes: Math.round(pkg.duration_hours * 60),
-              task_type: 'presenca', status: 'pendente',
-            });
-          }
-        } else if (pkg.category === 'gravacao_concentrada') {
-          if (pkg.sessions_per_week > 0 && dow === 1) {
-            tasksToInsert.push({
-              contract_id: contractId, client_id: contract.client_id,
-              partner_id: contract.partner_id, date: dateStr,
-              duration_minutes: Math.round(pkg.duration_hours * 60),
-              task_type: 'gravacao', status: 'pendente',
-            });
-          }
-          if (pkg.stories_per_day > 0) {
-            for (let i = 0; i < pkg.stories_per_day; i++) {
+
+          if (pkg.category === 'presenca_completa') {
+            const allowedDays = getPresencaDays(pkg.sessions_per_week);
+            if (allowedDays.includes(dayIdx)) {
               tasksToInsert.push({
                 contract_id: contractId, client_id: contract.client_id,
                 partner_id: contract.partner_id, date: dateStr,
-                duration_minutes: Math.round(pkg.duration_hours * 60),
-                task_type: 'stories', status: 'pendente',
+                duration_minutes: Math.round((pkg.duration_hours || 2) * 60),
+                task_type: 'presenca', status: 'pendente',
+              });
+            }
+          } else if (pkg.category === 'gravacao_concentrada') {
+            // Schedule recording sessions on Mondays (up to sessions_per_week per month)
+            if (pkg.sessions_per_week > 0 && dow === 1) {
+              tasksToInsert.push({
+                contract_id: contractId, client_id: contract.client_id,
+                partner_id: contract.partner_id, date: dateStr,
+                duration_minutes: Math.round((pkg.duration_hours || 2) * 60),
+                task_type: 'gravacao', status: 'pendente',
               });
             }
           }
         }
+        current = addDays(current, 1);
       }
-      current = addDays(current, 1);
-    }
 
-    if (tasksToInsert.length > 0) {
-      // Insert in batches of 100
-      for (let i = 0; i < tasksToInsert.length; i += 100) {
-        const batch = tasksToInsert.slice(i, i + 100);
-        await (supabase as any).from('endomarketing_partner_tasks').insert(batch);
+      if (tasksToInsert.length > 0) {
+        // Insert in batches of 50
+        for (let i = 0; i < tasksToInsert.length; i += 50) {
+          const batch = tasksToInsert.slice(i, i + 50);
+          const { error: insertErr } = await (supabase as any).from('endomarketing_partner_tasks').insert(batch);
+          if (insertErr) {
+            console.error('generateTasks: insert error', insertErr);
+            return false;
+          }
+        }
+        fetchTasks();
       }
-      fetchTasks();
+      return true;
+    } catch (err) {
+      console.error('generateTasks: unexpected error', err);
+      return false;
     }
-    return true;
   };
 
   return { tasks, loading, completeTask, updateTask, cancelTask, generateTasks, refresh: fetchTasks };

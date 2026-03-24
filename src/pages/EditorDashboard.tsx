@@ -412,6 +412,9 @@ export default function EditorDashboard() {
     toast.success('Edição retomada! ▶️');
     setActiveEditTask({ ...activeEditTask, editing_paused_at: null, editing_paused_seconds: newPausedSeconds });
     fetchTasks();
+  };
+
+  if (loading) return (
     <div className="flex flex-col items-center justify-center h-64 gap-4">
       <RocketMascot size={64} />
       <p className="text-muted-foreground animate-pulse">Carregando sua bancada...</p>

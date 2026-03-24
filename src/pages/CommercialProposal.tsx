@@ -213,12 +213,12 @@ export default function CommercialProposal() {
             <CardHeader><CardTitle className="text-base">Pacote</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <Label>Plano contratado</Label>
+                <Label>Plano contratado ({plans.length} disponíveis)</Label>
                 <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
                   <SelectTrigger><SelectValue placeholder="Selecione o plano" /></SelectTrigger>
                   <SelectContent>
                     {plans.map((p: any) => (
-                      <SelectItem key={p.id} value={p.id}>{p.name} — {fmt(p.price)}/mês</SelectItem>
+                      <SelectItem key={p.id} value={String(p.id)}>{p.name} — {fmt(Number(p.price))}/mês</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

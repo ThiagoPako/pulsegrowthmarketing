@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/vpsDb';
+import { VM_SCORE, calcVmDeliveryScore, calcWaitPoints } from '@/lib/scoringSystem';
 import { DAY_LABELS } from '@/types';
 import { getSeasonalAlerts, NICHE_OPTIONS } from '@/lib/seasonalDates';
 import { motion, AnimatePresence } from 'framer-motion';

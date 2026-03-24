@@ -11,11 +11,12 @@ import { toast } from 'sonner';
 import { Download, Trophy, TrendingUp, Film, Users, BarChart3, Award, Target, Scissors } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import UserAvatar from '@/components/UserAvatar';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subMonths, subWeeks } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subMonths, subWeeks, isWithinInterval, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, Cell } from 'recharts';
 import jsPDF from 'jspdf';
 import pulseHeaderImg from '@/assets/pulse_header.png';
+import { VM_SCORE, calcVmDeliveryScore, calcWaitPoints } from '@/lib/scoringSystem';
 
 interface DeliveryRecord {
   id: string;
@@ -31,15 +32,8 @@ interface DeliveryRecord {
   delivery_status: string;
 }
 
-const SCORE_WEIGHTS = { reel: 10, criativo: 5, story: 3, arte: 2, extra: 8 };
-const EDITOR_SCORE_WEIGHTS: Record<string, number> = { reels: 10, criativo: 5, story: 3 };
-
 function calcScore(r: DeliveryRecord) {
-  return r.reels_produced * SCORE_WEIGHTS.reel +
-    r.creatives_produced * SCORE_WEIGHTS.criativo +
-    r.stories_produced * SCORE_WEIGHTS.story +
-    r.arts_produced * SCORE_WEIGHTS.arte +
-    r.extras_produced * SCORE_WEIGHTS.extra;
+  return calcVmDeliveryScore(r);
 }
 
 interface EditorTask {

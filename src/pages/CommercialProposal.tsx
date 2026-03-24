@@ -529,12 +529,16 @@ export default function CommercialProposal() {
                   <Users className="h-5 w-5" style={{ color: 'hsl(16 82% 51%)' }} /> Sua Equipe Dedicada
                 </h2>
                 <p className="text-sm text-gray-500 mb-4">Profissionais envolvidos no seu projeto</p>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {teamMembers.map(m => (
                     <div key={m.id} className="border rounded-lg p-3 text-center">
-                      <div className="w-10 h-10 rounded-full mx-auto mb-2 flex items-center justify-center text-white font-bold text-sm" style={{ background: 'hsl(16 82% 51%)' }}>
-                        {m.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                      </div>
+                      {m.avatarUrl ? (
+                        <img src={m.avatarUrl} alt={m.name} className="w-12 h-12 rounded-full mx-auto mb-2 object-cover border-2" style={{ borderColor: 'hsl(16 82% 80%)' }} />
+                      ) : (
+                        <div className="w-12 h-12 rounded-full mx-auto mb-2 flex items-center justify-center text-white font-bold text-sm" style={{ background: 'hsl(16 82% 51%)' }}>
+                          {m.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
                       <p className="font-semibold text-sm text-gray-800">{m.name}</p>
                       <p className="text-xs text-gray-500">{m.role}</p>
                     </div>

@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles, RefreshCw, MessageSquare, Play, Square, Star, Link, ThumbsDown, MessageCircle, Trash2 } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles, RefreshCw, MessageSquare, Play, Square, Star, Link, ThumbsDown, MessageCircle, Trash2, Video } from 'lucide-react';
 import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
@@ -79,7 +79,7 @@ export default function Schedule() {
   const [scriptsOpen, setScriptsOpen] = useState(false);
   const [scriptsClientId, setScriptsClientId] = useState('');
   const [selectedScriptIds, setSelectedScriptIds] = useState<Set<string>>(new Set());
-  const [form, setForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '09:00', type: 'fixa' as RecordingType });
+  const [form, setForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '09:00', type: 'fixa' as RecordingType, prospectName: '' });
   const [editForm, setEditForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '', type: 'fixa' as RecordingType, status: 'agendada' as Recording['status'] });
   const [filterVideomaker, setFilterVideomaker] = useState('all');
   const [showEndo, setShowEndo] = useState(true);
@@ -187,12 +187,18 @@ export default function Schedule() {
     return filteredRecordings.filter(r => r.date === dateStr).sort((a, b) => a.startTime.localeCompare(b.startTime));
   };
 
-  const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || '—';
+  const getClientName = (id: string, rec?: Recording) => {
+    if (rec?.prospectName) return `📹 ${rec.prospectName}`;
+    return clients.find(c => c.id === id)?.companyName || '—';
+  };
   const getVideomaker = (id: string) => users.find(u => u.id === id);
   const getVideomakerName = (id: string) => getVideomaker(id)?.name || '—';
-  const getClientColor = (id: string) => clients.find(c => c.id === id)?.color || '220 10% 50%';
+  const getClientColor = (id: string, rec?: Recording) => {
+    if (rec?.prospectName) return '200 80% 55%';
+    return clients.find(c => c.id === id)?.color || '220 10% 50%';
+  };
 
-  const typeLabels: Record<RecordingType, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.', backup: 'Backup', endomarketing: 'Endo' };
+  const typeLabels: Record<RecordingType, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.', backup: 'Backup', endomarketing: 'Endo', avulso: 'Avulso' };
 
   const handleRegenerate = async () => {
     if (!regenClientId) { toast.error('Selecione um cliente'); return; }
@@ -210,15 +216,26 @@ export default function Schedule() {
   };
 
   const handleAdd = () => {
-    if (!form.clientId || !form.videomakerId || !form.date || !form.startTime) {
-      toast.error('Preencha todos os campos'); return;
-    }
+    const isAvulso = form.type === 'avulso';
+    if (!isAvulso && !form.clientId) { toast.error('Selecione um cliente'); return; }
+    if (isAvulso && !form.prospectName.trim()) { toast.error('Informe o nome do prospect'); return; }
+    if (!form.videomakerId || !form.date || !form.startTime) { toast.error('Preencha todos os campos'); return; }
     if (hasConflict(form.videomakerId, form.date, form.startTime)) {
       toast.error('Conflito de horário!'); return;
     }
-    const ok = addRecording({ ...form, id: crypto.randomUUID(), status: 'agendada' });
+    const rec: Recording = {
+      id: crypto.randomUUID(),
+      clientId: isAvulso ? '' : form.clientId,
+      videomakerId: form.videomakerId,
+      date: form.date,
+      startTime: form.startTime,
+      type: form.type,
+      status: 'agendada',
+      ...(isAvulso ? { prospectName: form.prospectName.trim() } : {}),
+    };
+    const ok = addRecording(rec);
     if (!ok) { toast.error('Conflito de horário!'); return; }
-    toast.success('Gravação agendada');
+    toast.success(isAvulso ? 'Gravação avulsa agendada' : 'Gravação agendada');
     setNewOpen(false);
   };
 
@@ -712,7 +729,7 @@ export default function Schedule() {
           <Button variant="outline" onClick={() => { setRegenClientId(''); setRegenOpen(true); }}>
             <RefreshCw size={16} className="mr-2" /> Regenerar Agenda
           </Button>
-          <Button onClick={() => { setForm({ clientId: '', videomakerId: '', date: format(new Date(), 'yyyy-MM-dd'), startTime: '09:00', type: 'fixa' }); setNewOpen(true); }}>
+          <Button onClick={() => { setForm({ clientId: '', videomakerId: '', date: format(new Date(), 'yyyy-MM-dd'), startTime: '09:00', type: 'fixa', prospectName: '' }); setNewOpen(true); }}>
             <Plus size={16} className="mr-2" /> Nova Gravação
           </Button>
         </div>
@@ -1010,14 +1027,15 @@ export default function Schedule() {
                 <Tabs defaultValue="regular" className="w-full">
                   <TabsList className="w-full h-9">
                     <TabsTrigger value="regular" className="flex-1 text-xs gap-1"><Play size={12} /> Gravação</TabsTrigger>
-                    <TabsTrigger value="endo" className="flex-1 text-xs gap-1"><Sparkles size={12} /> Endomarketing</TabsTrigger>
+                    <TabsTrigger value="avulso" className="flex-1 text-xs gap-1"><Video size={12} /> Vídeo Avulso</TabsTrigger>
+                    <TabsTrigger value="endo" className="flex-1 text-xs gap-1"><Sparkles size={12} /> Endo</TabsTrigger>
                   </TabsList>
                   <TabsContent value="regular" className="mt-2">
                     <div className="grid gap-2 max-h-[300px] overflow-y-auto pr-1">
                       {clients.map(c => {
                         const isSelected = form.clientId === c.id;
                         return (
-                          <button key={c.id} onClick={() => { setForm({ ...form, clientId: c.id, type: 'fixa' }); setNewStep(1); }}
+                          <button key={c.id} onClick={() => { setForm({ ...form, clientId: c.id, type: 'fixa', prospectName: '' }); setNewStep(1); }}
                             className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 hover:scale-[1.01] ${
                               isSelected ? 'border-primary bg-primary/5 shadow-md' : 'border-border hover:border-primary/40 hover:bg-accent/50'
                             }`}>
@@ -1036,6 +1054,27 @@ export default function Schedule() {
                       })}
                     </div>
                   </TabsContent>
+                  <TabsContent value="avulso" className="mt-2">
+                    <div className="space-y-3">
+                      <p className="text-xs text-muted-foreground">Agende uma gravação para alguém que ainda não é cliente da agência.</p>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Nome do Prospect / Empresa</Label>
+                        <Input
+                          placeholder="Ex: João Silva - Padaria Bella"
+                          value={form.prospectName}
+                          onChange={e => setForm({ ...form, prospectName: e.target.value })}
+                          className="text-sm"
+                        />
+                      </div>
+                      <Button
+                        className="w-full"
+                        disabled={!form.prospectName.trim()}
+                        onClick={() => { setForm({ ...form, clientId: '', type: 'avulso' }); setNewStep(1); }}
+                      >
+                        Continuar <ChevronRight size={14} className="ml-1" />
+                      </Button>
+                    </div>
+                  </TabsContent>
                   <TabsContent value="endo" className="mt-2">
                     <div className="grid gap-2 max-h-[300px] overflow-y-auto pr-1">
                       {endoClientes.filter(ec => ec.active).length === 0 ? (
@@ -1048,7 +1087,7 @@ export default function Schedule() {
                           const isSelected = form.clientId === clientId;
                           return (
                             <button key={ec.id} onClick={() => {
-                              setForm({ ...form, clientId: clientId, type: 'endomarketing' as RecordingType });
+                              setForm({ ...form, clientId: clientId, type: 'endomarketing' as RecordingType, prospectName: '' });
                               setNewStep(1);
                             }}
                               className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 hover:scale-[1.01] ${
@@ -1130,7 +1169,17 @@ export default function Schedule() {
                 {/* Selected client + videomaker summary */}
                 <div className="flex items-center gap-3 p-2.5 rounded-lg bg-accent/50 border">
                   <div className="flex items-center gap-2 flex-1">
-                    {(() => { const c = clients.find(c => c.id === form.clientId); return c ? <><ClientLogo client={c} size="sm" /><span className="text-xs font-medium">{c.companyName}</span></> : null; })()}
+                    {form.type === 'avulso' ? (
+                      <>
+                        <div className="w-7 h-7 rounded-full bg-sky-500/20 flex items-center justify-center shrink-0">
+                          <Video size={12} className="text-sky-500" />
+                        </div>
+                        <span className="text-xs font-medium truncate">{form.prospectName}</span>
+                        <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-sky-500/30">Avulso</Badge>
+                      </>
+                    ) : (
+                      (() => { const c = clients.find(c => c.id === form.clientId); return c ? <><ClientLogo client={c} size="sm" /><span className="text-xs font-medium">{c.companyName}</span></> : null; })()
+                    )}
                   </div>
                   <div className="h-4 w-px bg-border" />
                   <div className="flex items-center gap-2 flex-1">
@@ -1221,6 +1270,7 @@ export default function Schedule() {
                   })()}
                 </div>
 
+                {form.type !== 'avulso' && (
                 <div className="space-y-1">
                   <Label>Tipo</Label>
                   <Select value={form.type} onValueChange={v => setForm({ ...form, type: v as RecordingType })}>
@@ -1234,6 +1284,7 @@ export default function Schedule() {
                     </SelectContent>
                   </Select>
                 </div>
+                )}
 
                 <Button onClick={handleAdd} className="w-full" disabled={!form.date || !form.startTime}>
                   <CalendarDays size={16} className="mr-2" /> Agendar Gravação

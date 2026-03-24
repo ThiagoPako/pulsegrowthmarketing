@@ -113,7 +113,7 @@ export interface SocialAccount {
   createdAt: string;
 }
 
-export type RecordingType = 'fixa' | 'extra' | 'secundaria' | 'backup' | 'endomarketing';
+export type RecordingType = 'fixa' | 'extra' | 'secundaria' | 'backup' | 'endomarketing' | 'avulso';
 export type RecordingStatus = 'agendada' | 'concluida' | 'cancelada';
 export type ConfirmationStatus = 'pendente' | 'aguardando' | 'confirmada' | 'cancelada';
 
@@ -126,6 +126,7 @@ export interface Recording {
   type: RecordingType;
   status: RecordingStatus;
   confirmationStatus?: ConfirmationStatus;
+  prospectName?: string;
 }
 
 export type KanbanColumn = 'backlog' | 'em_producao' | 'gravado' | 'finalizado';

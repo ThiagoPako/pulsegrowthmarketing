@@ -96,26 +96,29 @@ function normalizeDate(d: string): string {
 function rowToRecording(r: any): Recording {
   return {
     id: r.id,
-    clientId: r.client_id,
+    clientId: r.client_id || '',
     videomakerId: r.videomaker_id,
     date: normalizeDate(r.date),
     startTime: r.start_time,
     type: r.type as RecordingType,
     status: r.status as RecordingStatus,
     confirmationStatus: (r.confirmation_status || 'pendente') as ConfirmationStatus,
+    ...(r.prospect_name ? { prospectName: r.prospect_name } : {}),
   };
 }
 
 function recordingToRow(r: Recording) {
-  return {
+  const row: any = {
     id: r.id,
-    client_id: r.clientId,
+    client_id: r.clientId || null,
     videomaker_id: r.videomakerId,
     date: r.date,
     start_time: r.startTime,
     type: r.type,
     status: r.status,
   };
+  if (r.prospectName) row.prospect_name = r.prospectName;
+  return row;
 }
 
 function rowToTask(r: any): KanbanTask {

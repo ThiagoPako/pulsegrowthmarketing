@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
-  Plus, Pencil, Trash2, FileText, Download, Check, Eye, Search, Filter, AlertTriangle, Star, Eraser, Sparkles
+  Plus, Pencil, Trash2, FileText, Download, Check, Eye, Search, Filter, AlertTriangle, Star, Eraser, Sparkles, Bell, BellOff
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -140,6 +140,28 @@ export default function Scripts() {
   const [filterEndo, setFilterEndo] = useState<'all' | 'video' | 'endo'>('all');
   const [showRecorded, setShowRecorded] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [scriptAlerts, setScriptAlerts] = useState(() => {
+    const stored = localStorage.getItem('pulse_script_alerts');
+    return stored !== null ? stored === 'true' : true;
+  });
+
+  const toggleScriptAlerts = (v: boolean) => {
+    setScriptAlerts(v);
+    localStorage.setItem('pulse_script_alerts', String(v));
+    toast.success(v ? 'Alertas de roteiros ativados' : 'Alertas de roteiros desativados');
+  };
+
+  const clientsLowScripts = useMemo(() => {
+    if (!scriptAlerts) return [];
+    const activeClients = clients;
+    return activeClients
+      .map(c => {
+        const count = scripts.filter(s => s.clientId === c.id && !s.recorded).length;
+        return { client: c, count };
+      })
+      .filter(x => x.count < 3)
+      .sort((a, b) => a.count - b.count);
+  }, [clients, scripts, scriptAlerts]);
 
   const [form, setForm] = useState({
     clientId: '',
@@ -519,13 +541,39 @@ export default function Scripts() {
             {VIDEO_TYPES.map(t => <SelectItem key={t} value={t}>{SCRIPT_VIDEO_TYPE_LABELS[t]}</SelectItem>)}
           </SelectContent>
         </Select>
-        <div className="flex items-center gap-2 ml-auto">
-          <Switch checked={showRecorded} onCheckedChange={setShowRecorded} id="show-recorded" />
-          <Label htmlFor="show-recorded" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
-            Mostrar gravados
-          </Label>
+        <div className="flex items-center gap-3 ml-auto">
+          <div className="flex items-center gap-2">
+            <Switch checked={scriptAlerts} onCheckedChange={toggleScriptAlerts} id="script-alerts" />
+            <Label htmlFor="script-alerts" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap flex items-center gap-1">
+              {scriptAlerts ? <Bell size={12} /> : <BellOff size={12} />} Alertas
+            </Label>
+          </div>
+          <div className="w-px h-5 bg-border" />
+          <div className="flex items-center gap-2">
+            <Switch checked={showRecorded} onCheckedChange={setShowRecorded} id="show-recorded" />
+            <Label htmlFor="show-recorded" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+              Mostrar gravados
+            </Label>
+          </div>
         </div>
       </div>
+
+      {/* Low scripts alert */}
+      {scriptAlerts && clientsLowScripts.length > 0 && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-2">
+          <p className="text-sm font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-2">
+            <AlertTriangle size={16} /> Clientes com poucos roteiros disponíveis
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {clientsLowScripts.map(({ client, count }) => (
+              <Badge key={client.id} variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-300 bg-amber-500/5">
+                <ClientLogo client={client} size="sm" className="mr-1.5 w-4 h-4" />
+                {client.companyName}: {count} roteiro{count !== 1 ? 's' : ''}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Scripts list */}
       {filteredScripts.length === 0 ? (

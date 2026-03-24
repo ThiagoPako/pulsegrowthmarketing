@@ -156,12 +156,18 @@ export default function EndomarketingDashboard() {
                       <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{c.endomarketing_packages?.package_name}</p>
                     </div>
                   </div>
-                  {canSeeFinancials && (
-                    <div className="text-right shrink-0 ml-2">
-                      <p className="text-xs sm:text-sm font-semibold text-success">{fmt(c.sale_price - c.partner_cost)}</p>
-                      <p className="text-[10px] text-muted-foreground">{c.sale_price > 0 ? ((c.sale_price - c.partner_cost) / c.sale_price * 100).toFixed(0) : 0}%</p>
-                    </div>
-                  )}
+                  {canSeeFinancials && (() => {
+                    const sp = Number(c.sale_price || 0);
+                    const pc = Number(c.partner_cost || 0);
+                    const profit = sp - pc;
+                    const margin = sp > 0 ? (profit / sp * 100).toFixed(0) : '0';
+                    return (
+                      <div className="text-right shrink-0 ml-2">
+                        <p className={`text-xs sm:text-sm font-semibold ${profit >= 0 ? 'text-success' : 'text-destructive'}`}>{fmt(profit)}</p>
+                        <p className="text-[10px] text-muted-foreground">{margin}%</p>
+                      </div>
+                    );
+                  })()}
                 </motion.div>
               ))}
             </CardContent>

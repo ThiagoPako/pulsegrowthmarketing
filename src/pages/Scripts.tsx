@@ -506,13 +506,29 @@ export default function Scripts() {
         const canvas = await html2canvas(container, { scale: 2, useCORS: true });
         const imgData = canvas.toDataURL('image/png');
         const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-        let position = 0;
-        let pg = 0;
-        while (position < imgHeight) {
-          if (pg > 0) pdf.addPage();
-          pdf.addImage(imgData, 'PNG', 0, -position, pdfWidth, imgHeight);
-          position += pageHeight;
-          pg++;
+
+        if (imgHeight <= pageHeight) {
+          // All content fits in one page — shrink page to content
+          const shortPdf = new jsPDF({ orientation: 'p', unit: 'mm', format: [pdfWidth, imgHeight] });
+          shortPdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
+          shortPdf.save(`roteiros-selecionados-${selected.length}.pdf`);
+        } else {
+          let position = 0;
+          let pg = 0;
+          while (position < imgHeight) {
+            const remaining = imgHeight - position;
+            if (pg > 0) {
+              if (remaining < pageHeight) {
+                pdf.addPage([pdfWidth, remaining]);
+              } else {
+                pdf.addPage();
+              }
+            }
+            pdf.addImage(imgData, 'PNG', 0, -position, pdfWidth, imgHeight);
+            position += remaining < pageHeight && pg > 0 ? remaining : pageHeight;
+            pg++;
+          }
+          pdf.save(`roteiros-selecionados-${selected.length}.pdf`);
         }
       } finally {
         document.body.removeChild(container);

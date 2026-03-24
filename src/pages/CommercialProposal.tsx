@@ -552,28 +552,28 @@ export default function CommercialProposal() {
               <h2 className="text-xl font-bold text-gray-800 mb-6">Investimento</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* 6 months */}
-                <div className="border-2 rounded-xl p-6 relative" style={{ borderColor: 'hsl(16 82% 51%)' }}>
-                  <div className="absolute -top-3 left-4 px-3 py-0.5 rounded-full text-xs font-bold text-white" style={{ background: 'hsl(16 82% 51%)' }}>
-                    RECOMENDADO
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-800 mt-2">Plano Semestral</h3>
+                <div className="border rounded-xl p-6">
+                  <h3 className="text-lg font-bold text-gray-800">Plano Semestral</h3>
                   <p className="text-xs text-gray-500 mb-4">Contrato de 6 meses</p>
                   <p className="text-3xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(monthlyTotal)}<span className="text-sm font-normal text-gray-500">/mês</span></p>
                   <div className="mt-3 space-y-1 text-xs text-gray-500">
                     <p>✅ Sem taxa de implementação</p>
                     <p>✅ Todos os serviços do pacote</p>
+                    <p>✅ Tráfego pago incluso</p>
                     {bonusServices.length > 0 && <p>✅ {bonusServices.length} bônus exclusivos</p>}
                     <p>✅ Equipe dedicada</p>
                     <p>✅ Portal do cliente</p>
                   </div>
-                  <p className="mt-4 text-sm text-gray-600">Total semestral: <strong>{fmt(monthlyTotal * 6)}</strong></p>
                 </div>
 
-                {/* Annual */}
-                <div className="border rounded-xl p-6">
-                  <h3 className="text-lg font-bold text-gray-800">Plano Anual</h3>
+                {/* Annual - RECOMMENDED */}
+                <div className="border-2 rounded-xl p-6 relative" style={{ borderColor: 'hsl(16 82% 51%)' }}>
+                  <div className="absolute -top-3 left-4 px-3 py-0.5 rounded-full text-xs font-bold text-white" style={{ background: 'hsl(16 82% 51%)' }}>
+                    RECOMENDADO
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-800 mt-2">Plano Anual</h3>
                   <p className="text-xs text-gray-500 mb-4">Contrato de 12 meses{customDiscount > 0 ? ` com ${customDiscount}% de desconto` : ''}</p>
-                  <p className="text-3xl font-bold text-gray-800">
+                  <p className="text-3xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>
                     {fmt(customDiscount > 0 ? monthlyTotal * (1 - customDiscount / 100) : monthlyTotal)}
                     <span className="text-sm font-normal text-gray-500">/mês</span>
                   </p>
@@ -581,11 +581,17 @@ export default function CommercialProposal() {
                   <div className="mt-3 space-y-1 text-xs text-gray-500">
                     <p>✅ Sem taxa de implementação</p>
                     <p>✅ Todos os serviços do pacote</p>
-                    {customDiscount > 0 && <p>✅ Economia de {fmt(annualTotal - annualWithDiscount)}/ano</p>}
+                    <p>✅ Tráfego pago incluso</p>
+                    {bonusServices.length > 0 && <p>✅ {bonusServices.length} bônus exclusivos</p>}
                     <p>✅ Equipe dedicada</p>
                     <p>✅ Portal do cliente</p>
                   </div>
-                  <p className="mt-4 text-sm text-gray-600">Total anual: <strong>{fmt(annualWithDiscount)}</strong></p>
+                  {customDiscount > 0 && (
+                    <div className="mt-4 rounded-lg p-3 text-center" style={{ background: 'hsl(142 71% 95%)' }}>
+                      <p className="text-xs text-gray-500">Economia total no plano anual</p>
+                      <p className="text-xl font-bold" style={{ color: 'hsl(142 71% 35%)' }}>{fmt(annualTotal - annualWithDiscount)}</p>
+                    </div>
+                  )}
                 </div>
               </div>
 

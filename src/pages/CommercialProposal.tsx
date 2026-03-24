@@ -91,6 +91,14 @@ export default function CommercialProposal() {
     },
   });
 
+  const { data: savedProposals = [], refetch: refetchProposals } = useQuery({
+    queryKey: ['saved-proposals'],
+    queryFn: async () => {
+      const { data } = await supabase.from('commercial_proposals').select('*').order('created_at', { ascending: false });
+      return (data as any[]) || [];
+    },
+  });
+
   const selectedPlan = plans.find((p: any) => p.id === selectedPlanId);
 
   const totalImplementation = !hasContract

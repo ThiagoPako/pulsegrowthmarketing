@@ -145,6 +145,9 @@ interface ContentTask {
   editing_started_at: string | null;
   created_at: string;
   updated_at: string;
+  reviewing_by: string | null;
+  reviewing_by_name: string | null;
+  reviewing_at: string | null;
 }
 
 export default function ContentKanban() {

@@ -159,6 +159,14 @@ export default function EndomarketingDashboard() {
                   {canSeeFinancials && (() => {
                     const sp = Number(c.sale_price || 0);
                     const pc = Number(c.partner_cost || 0);
+                    if (!isAdmin) {
+                      // Partner view: show what they earn
+                      return (
+                        <div className="text-right shrink-0 ml-2">
+                          <p className="text-xs sm:text-sm font-semibold text-success">{fmt(pc)}</p>
+                        </div>
+                      );
+                    }
                     const isOverdelivery = sp === 0 && pc > 0;
                     const profit = isOverdelivery ? 0 : sp - pc;
                     const margin = sp > 0 ? (profit / sp * 100).toFixed(0) : '0';
@@ -247,16 +255,23 @@ export default function EndomarketingDashboard() {
                 <motion.div animate={{ y: [0, -3, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
                   <Rocket size={16} className="text-warning -rotate-45" />
                 </motion.div>
-                <CardTitle className="text-sm sm:text-base">Ranking de Lucratividade</CardTitle>
+                <CardTitle className="text-sm sm:text-base">{isAdmin ? 'Ranking de Lucratividade' : 'Ranking de Ganhos'}</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                 {[...metrics.activeContracts]
-                  .map(c => ({ ...c, _profit: Number(c.sale_price||0) > 0 ? Number(c.sale_price||0) - Number(c.partner_cost||0) : 0 }))
-                  .sort((a, b) => b._profit - a._profit).slice(0, 3).map((c, i) => {
-                  const profit = c._profit;
-                  const isOverdelivery = Number(c.sale_price||0) === 0 && Number(c.partner_cost||0) > 0;
+                  .map(c => ({
+                    ...c,
+                    _sortValue: isAdmin
+                      ? (Number(c.sale_price||0) > 0 ? Number(c.sale_price||0) - Number(c.partner_cost||0) : 0)
+                      : Number(c.partner_cost||0),
+                  }))
+                  .sort((a, b) => b._sortValue - a._sortValue).slice(0, 3).map((c, i) => {
+                  const pc = Number(c.partner_cost || 0);
+                  const sp = Number(c.sale_price || 0);
+                  const isOverdelivery = sp === 0 && pc > 0;
+                  const profit = isOverdelivery ? 0 : sp - pc;
                   const medals = ['🥇', '🥈', '🥉'];
                   return (
                     <motion.div
@@ -272,7 +287,11 @@ export default function EndomarketingDashboard() {
                         <p className="text-xs sm:text-sm font-medium truncate">{c.clients?.company_name}</p>
                         <p className="text-[10px] text-muted-foreground">{getCategoryLabel(c.endomarketing_packages?.category || '')}</p>
                       </div>
-                      <p className={`text-xs sm:text-sm font-bold shrink-0 ${isOverdelivery ? 'text-muted-foreground' : profit >= 0 ? 'text-success' : 'text-destructive'}`}>{isOverdelivery ? 'Overdelivery' : fmt(profit)}</p>
+                      {isAdmin ? (
+                        <p className={`text-xs sm:text-sm font-bold shrink-0 ${isOverdelivery ? 'text-muted-foreground' : profit >= 0 ? 'text-success' : 'text-destructive'}`}>{isOverdelivery ? 'Overdelivery' : fmt(profit)}</p>
+                      ) : (
+                        <p className="text-xs sm:text-sm font-bold shrink-0 text-success">{fmt(pc)}</p>
+                      )}
                     </motion.div>
                   );
                 })}

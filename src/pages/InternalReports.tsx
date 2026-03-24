@@ -101,7 +101,7 @@ export default function InternalReports() {
   const ranking = useMemo(() => {
     return videomakers.map(vm => {
       const vmRecs = filtered.filter(r => r.videomaker_id === vm.id && (r.delivery_status === 'realizada' || r.delivery_status === 'encaixe' || r.delivery_status === 'extra'));
-      const score = vmRecs.reduce((a, r) => a + calcScore(r), 0);
+      const deliveryScore = vmRecs.reduce((a, r) => a + calcScore(r), 0);
       const reels = vmRecs.reduce((a, r) => a + r.reels_produced, 0);
       const creatives = vmRecs.reduce((a, r) => a + r.creatives_produced, 0);
       const stories = vmRecs.reduce((a, r) => a + r.stories_produced, 0);
@@ -109,9 +109,28 @@ export default function InternalReports() {
       const extras = vmRecs.reduce((a, r) => a + r.extras_produced, 0);
       const videos = vmRecs.reduce((a, r) => a + r.videos_recorded, 0);
       const sessions = vmRecs.length;
-      return { vm, score, reels, creatives, stories, arts, extras, videos, sessions };
+
+      // Gravações concluídas no período
+      const periodRecs = recordings.filter(r =>
+        r.videomakerId === vm.id && r.date >= dateRange.start && r.date <= dateRange.end && r.status === 'concluida'
+      );
+      const recsDone = periodRecs.filter(r => r.type !== 'endomarketing').length;
+      const endoDone = periodRecs.filter(r => r.type === 'endomarketing').length;
+
+      // Wait points no período
+      const vmWaitLogs = waitLogs.filter(l => {
+        if (l.videomaker_id !== vm.id) return false;
+        const d = l.created_at?.slice(0, 10);
+        return d >= dateRange.start && d <= dateRange.end;
+      });
+      const totalWaitSec = vmWaitLogs.reduce((a: number, l: any) => a + (l.wait_duration_seconds || 0), 0);
+      const waitPts = calcWaitPoints(totalWaitSec);
+
+      const score = deliveryScore + recsDone * VM_SCORE.GRAVACAO + endoDone * VM_SCORE.ENDO + waitPts;
+
+      return { vm, score, reels, creatives, stories, arts, extras, videos, sessions, recsDone, endoDone, waitPts };
     }).sort((a, b) => b.score - a.score);
-  }, [videomakers, filtered]);
+  }, [videomakers, filtered, recordings, dateRange, waitLogs]);
 
   // ── Score chart data ──
   const scoreChartData = useMemo(() => {

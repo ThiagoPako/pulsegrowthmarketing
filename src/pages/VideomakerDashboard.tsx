@@ -660,6 +660,7 @@ export default function VideomakerDashboard() {
             clientId={activeRec.clientId}
             onFinish={() => handleFinishRecording(activeRec)}
             onViewScripts={() => openScripts(activeRec.clientId)}
+            onCancel={handleCancelActiveRecording}
           />
         );
       })()}

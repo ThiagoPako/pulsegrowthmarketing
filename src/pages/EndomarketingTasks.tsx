@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Rocket, CheckCircle, XCircle, Clock, CalendarPlus, MessageCircle, RefreshCw } from 'lucide-react';
+import { Rocket, CheckCircle, XCircle, Clock, CalendarPlus, MessageCircle, RefreshCw, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function EndomarketingTasks() {

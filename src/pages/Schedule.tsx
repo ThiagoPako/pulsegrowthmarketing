@@ -3,7 +3,7 @@ import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/vpsDb';
 import type { Recording, RecordingType, Script, DayOfWeek, Client } from '@/types';
 import { SCRIPT_VIDEO_TYPE_LABELS, DAY_LABELS } from '@/types';
-import { useEndoClientes, useEndoAgendamentos } from '@/hooks/useEndomarketing';
+import { useEndoClientes, useEndoAgendamentos, useEndoContracts } from '@/hooks/useEndomarketing';
 import AgencyCapacityWidget from '@/components/AgencyCapacityWidget';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -70,6 +70,24 @@ export default function Schedule() {
   // Endomarketing data
   const { clientes: endoClientes } = useEndoClientes();
   const { agendamentos: endoAgendamentos } = useEndoAgendamentos();
+  const { contracts: endoContracts } = useEndoContracts(false);
+
+  // Derive endo clients from active contracts (endomarketing_clientes table may be empty)
+  const endoClientsFromContracts = useMemo(() => {
+    const activeContracts = endoContracts.filter(c => c.status === 'ativo');
+    return activeContracts.map(contract => {
+      const client = clients.find(c => c.id === contract.client_id);
+      return {
+        id: contract.client_id,
+        company_name: contract.clients?.company_name || client?.companyName || 'Cliente',
+        color: contract.clients?.color || client?.color || '280 60% 60%',
+        active: true,
+        contractId: contract.id,
+        packageName: contract.endomarketing_packages?.package_name || '',
+        category: contract.endomarketing_packages?.category || '',
+      };
+    });
+  }, [endoContracts, clients]);
 
   const [monthOffset, setMonthOffset] = useState(0);
   const [newOpen, setNewOpen] = useState(false);
@@ -1077,17 +1095,14 @@ export default function Schedule() {
                   </TabsContent>
                   <TabsContent value="endo" className="mt-2">
                     <div className="grid gap-2 max-h-[300px] overflow-y-auto pr-1">
-                      {endoClientes.filter(ec => ec.active).length === 0 ? (
-                        <p className="text-xs text-muted-foreground text-center py-4">Nenhum cliente de endomarketing ativo</p>
+                      {endoClientsFromContracts.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">Nenhum cliente de endomarketing com contrato ativo</p>
                       ) : (
-                        endoClientes.filter(ec => ec.active).map(ec => {
-                          // Find linked regular client or use endo client name
-                          const linkedClient = ec.client_id ? clients.find(c => c.id === ec.client_id) : null;
-                          const clientId = linkedClient?.id || ec.id;
-                          const isSelected = form.clientId === clientId;
+                        endoClientsFromContracts.map(ec => {
+                          const isSelected = form.clientId === ec.id;
                           return (
                             <button key={ec.id} onClick={() => {
-                              setForm({ ...form, clientId: clientId, type: 'endomarketing' as RecordingType, prospectName: '' });
+                              setForm({ ...form, clientId: ec.id, type: 'endomarketing' as RecordingType, prospectName: '' });
                               setNewStep(1);
                             }}
                               className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 hover:scale-[1.01] ${
@@ -1098,7 +1113,7 @@ export default function Schedule() {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="font-medium text-sm truncate">{ec.company_name}</p>
-                                <p className="text-xs text-muted-foreground">{ec.responsible_person || 'Endomarketing'}</p>
+                                <p className="text-xs text-muted-foreground">{ec.packageName || ec.category || 'Endomarketing'}</p>
                               </div>
                               <Badge className="text-[10px] bg-fuchsia-500/20 text-fuchsia-600 border-fuchsia-500/30 shrink-0">
                                 <Sparkles size={10} className="mr-0.5" /> Endo

@@ -871,6 +871,9 @@ export type Database = {
           position: number
           recording_id: string | null
           review_deadline: string | null
+          reviewing_at: string | null
+          reviewing_by: string | null
+          reviewing_by_name: string | null
           scheduled_recording_date: string | null
           scheduled_recording_time: string | null
           script_alteration_notes: string | null
@@ -905,6 +908,9 @@ export type Database = {
           position?: number
           recording_id?: string | null
           review_deadline?: string | null
+          reviewing_at?: string | null
+          reviewing_by?: string | null
+          reviewing_by_name?: string | null
           scheduled_recording_date?: string | null
           scheduled_recording_time?: string | null
           script_alteration_notes?: string | null
@@ -939,6 +945,9 @@ export type Database = {
           position?: number
           recording_id?: string | null
           review_deadline?: string | null
+          reviewing_at?: string | null
+          reviewing_by?: string | null
+          reviewing_by_name?: string | null
           scheduled_recording_date?: string | null
           scheduled_recording_time?: string | null
           script_alteration_notes?: string | null

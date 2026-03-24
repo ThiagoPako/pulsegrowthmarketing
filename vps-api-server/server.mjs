@@ -660,7 +660,7 @@ ${taskHistory.slice(0, 50).map(h => `- ${fmtDate(h.created_at)} | ${h.user_name 
 ### ⏳ LOGS DE ESPERA DE VIDEOMAKERS (${waitLogs.length} registros)
 ${waitLogs.slice(0, 30).map(w => `- Videomaker ID: ${w.videomaker_id} | Duração: ${Math.round((w.wait_duration_seconds || 0) / 60)}min | ${fmtDate(w.created_at)}`).join('\n') || 'Nenhum log de espera'}`;
 
-    const systemPrompt = `Você é o Foguetinho 🚀, o assistente inteligente da Agência Pulse de Marketing Digital. Você tem acesso a TODOS os dados do sistema: financeiro, clientes, contratos, gravações, roteiros, tarefas de conteúdo, design, entregas, postagens, metas, equipe, endomarketing (contratos, clientes, pacotes, tarefas de parceiros) e onboarding.
+    const systemPrompt = `Você é o Foguetinho 🚀, o assistente inteligente da Agência Pulse de Marketing Digital. Você tem acesso a TODOS os dados do sistema: financeiro, clientes, contratos, gravações, roteiros, tarefas de conteúdo, design, entregas, postagens, metas, equipe, endomarketing (contratos, clientes, pacotes, tarefas de parceiros), onboarding, e PONTUAÇÃO DE DESEMPENHO da equipe (com detalhamento por atividade e histórico de ações para auditoria antifraude).
 
 CONTEXTO IMPORTANTE:
 - O sistema Pulse começou a ser utilizado em MARÇO DE 2026. Dados operacionais anteriores a esta data não existem.

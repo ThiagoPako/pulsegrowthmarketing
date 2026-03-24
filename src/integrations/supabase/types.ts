@@ -2503,11 +2503,12 @@ export type Database = {
       }
       recordings: {
         Row: {
-          client_id: string
+          client_id: string | null
           confirmation_status: string
           created_at: string
           date: string
           id: string
+          prospect_name: string | null
           start_time: string
           status: string
           type: string
@@ -2516,11 +2517,12 @@ export type Database = {
           wait_started_at: string | null
         }
         Insert: {
-          client_id: string
+          client_id?: string | null
           confirmation_status?: string
           created_at?: string
           date: string
           id?: string
+          prospect_name?: string | null
           start_time: string
           status?: string
           type?: string
@@ -2529,11 +2531,12 @@ export type Database = {
           wait_started_at?: string | null
         }
         Update: {
-          client_id?: string
+          client_id?: string | null
           confirmation_status?: string
           created_at?: string
           date?: string
           id?: string
+          prospect_name?: string | null
           start_time?: string
           status?: string
           type?: string

@@ -365,9 +365,17 @@ export default function EditorDashboard() {
     const link = videoLink.trim() || activeEditTask.edited_video_link;
     if (!link) { toast.error('Adicione o vídeo primeiro'); return; }
     setSaving(true);
-    await supabase.from('content_tasks').update({
-      kanban_column: 'revisao', updated_at: new Date().toISOString(),
-    }).eq('id', activeEditTask.id);
+    // Auto-resume if paused before sending
+    const updateData: any = {
+      kanban_column: 'revisao', 
+      editing_paused_at: null,
+      updated_at: new Date().toISOString(),
+    };
+    if (activeEditTask.editing_paused_at) {
+      const pausedDuration = Math.floor((Date.now() - new Date(activeEditTask.editing_paused_at).getTime()) / 1000);
+      updateData.editing_paused_seconds = (activeEditTask.editing_paused_seconds || 0) + pausedDuration;
+    }
+    await supabase.from('content_tasks').update(updateData).eq('id', activeEditTask.id);
     const cl = clients.find(c => c.id === activeEditTask.client_id);
     const ctx = buildSyncContext({ ...activeEditTask, edited_video_link: link } as any, {
       userId: user?.id, clientName: cl?.companyName, clientWhatsapp: (cl as any)?.whatsapp,

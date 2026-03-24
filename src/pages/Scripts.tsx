@@ -583,12 +583,34 @@ export default function Scripts() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-display font-bold">Roteiros</h1>
         <div className="flex items-center gap-2">
-          {scripts.length > 0 && (
-            <Button variant="outline" size="sm" onClick={handleCleanAll}>
-              <Eraser size={14} className="mr-1.5" /> Limpar Formatação
-            </Button>
+          {selectMode ? (
+            <>
+              <Button variant="outline" size="sm" onClick={selectAll} className="gap-1.5">
+                <CheckSquare size={14} />
+                {selectedIds.size === filteredScripts.length ? 'Desmarcar todos' : 'Selecionar todos'}
+              </Button>
+              <Button size="sm" onClick={handleDownloadSelectedPdf} disabled={selectedIds.size === 0 || downloadingBatch}
+                className="gap-1.5 bg-gradient-to-r from-primary to-primary/80">
+                <Download size={14} className={downloadingBatch ? 'animate-spin' : ''} />
+                {downloadingBatch ? 'Gerando...' : `Baixar ${selectedIds.size} selecionado(s)`}
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}>
+                <X size={16} />
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setSelectMode(true)} className="gap-1.5">
+                <CheckSquare size={14} /> Selecionar
+              </Button>
+              {scripts.length > 0 && (
+                <Button variant="outline" size="sm" onClick={handleCleanAll}>
+                  <Eraser size={14} className="mr-1.5" /> Limpar Formatação
+                </Button>
+              )}
+              <Button onClick={() => handleOpen()}><Plus size={16} className="mr-2" /> Novo Roteiro</Button>
+            </>
           )}
-          <Button onClick={() => handleOpen()}><Plus size={16} className="mr-2" /> Novo Roteiro</Button>
         </div>
       </div>
 

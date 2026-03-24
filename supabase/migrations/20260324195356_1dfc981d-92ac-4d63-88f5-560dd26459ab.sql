@@ -1,0 +1,1 @@
+UPDATE public.clients SET full_shift_recording = true WHERE company_name = 'Vanusa Moraes';

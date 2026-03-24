@@ -386,7 +386,32 @@ export default function EditorDashboard() {
     setSaving(false);
   };
 
-  if (loading) return (
+  /* ─── Pause / Resume ───────────────────────────────────── */
+  const handlePauseEditing = async () => {
+    if (!activeEditTask) return;
+    await supabase.from('content_tasks').update({
+      editing_paused_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', activeEditTask.id);
+    await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Edição pausada' });
+    toast.info('Edição pausada ⏸️');
+    setActiveEditTask({ ...activeEditTask, editing_paused_at: new Date().toISOString() });
+    fetchTasks();
+  };
+
+  const handleResumeEditing = async () => {
+    if (!activeEditTask || !activeEditTask.editing_paused_at) return;
+    const pausedDuration = Math.floor((Date.now() - new Date(activeEditTask.editing_paused_at).getTime()) / 1000);
+    const newPausedSeconds = (activeEditTask.editing_paused_seconds || 0) + pausedDuration;
+    await supabase.from('content_tasks').update({
+      editing_paused_at: null,
+      editing_paused_seconds: newPausedSeconds,
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', activeEditTask.id);
+    await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Edição retomada', details: `Pausa de ${Math.floor(pausedDuration / 60)}min` });
+    toast.success('Edição retomada! ▶️');
+    setActiveEditTask({ ...activeEditTask, editing_paused_at: null, editing_paused_seconds: newPausedSeconds });
+    fetchTasks();
     <div className="flex flex-col items-center justify-center h-64 gap-4">
       <RocketMascot size={64} />
       <p className="text-muted-foreground animate-pulse">Carregando sua bancada...</p>

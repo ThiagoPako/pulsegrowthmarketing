@@ -558,6 +558,23 @@ export default function Scripts() {
         </div>
       </div>
 
+      {/* Low scripts alert */}
+      {scriptAlerts && clientsLowScripts.length > 0 && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-2">
+          <p className="text-sm font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-2">
+            <AlertTriangle size={16} /> Clientes com poucos roteiros disponíveis
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {clientsLowScripts.map(({ client, count }) => (
+              <Badge key={client.id} variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-300 bg-amber-500/5">
+                <ClientLogo clientId={client.id} size="xs" className="mr-1.5" />
+                {client.companyName}: {count} roteiro{count !== 1 ? 's' : ''}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Scripts list */}
       {filteredScripts.length === 0 ? (
         <div className="glass-card p-12 text-center text-muted-foreground">

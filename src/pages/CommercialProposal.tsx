@@ -396,7 +396,7 @@ export default function CommercialProposal() {
                 <div className="absolute -bottom-10 -left-10 w-40 h-40 rounded-full border-[30px] border-white/10" />
               </div>
               <div className="relative p-8 md:p-12 text-white">
-                <img src={pulseLogo} alt="Pulse Growth Marketing" className="h-12 mb-6 drop-shadow-lg" />
+                <img src={pulseLogo} alt="Pulse Growth Marketing" className="h-20 mb-6 drop-shadow-lg" />
                 <h1 className="text-3xl md:text-4xl font-bold mb-2">Proposta Comercial</h1>
                 <p className="text-white/80 text-lg">Preparada exclusivamente para</p>
                 <p className="text-2xl font-bold mt-1">{clientCompany || 'Nome da Empresa'}</p>

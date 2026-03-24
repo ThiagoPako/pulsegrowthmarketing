@@ -96,13 +96,14 @@ function normalizeDate(d: string): string {
 function rowToRecording(r: any): Recording {
   return {
     id: r.id,
-    clientId: r.client_id,
+    clientId: r.client_id || '',
     videomakerId: r.videomaker_id,
     date: normalizeDate(r.date),
     startTime: r.start_time,
     type: r.type as RecordingType,
     status: r.status as RecordingStatus,
     confirmationStatus: (r.confirmation_status || 'pendente') as ConfirmationStatus,
+    ...(r.prospect_name ? { prospectName: r.prospect_name } : {}),
   };
 }
 

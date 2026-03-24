@@ -541,11 +541,20 @@ export default function Scripts() {
             {VIDEO_TYPES.map(t => <SelectItem key={t} value={t}>{SCRIPT_VIDEO_TYPE_LABELS[t]}</SelectItem>)}
           </SelectContent>
         </Select>
-        <div className="flex items-center gap-2 ml-auto">
-          <Switch checked={showRecorded} onCheckedChange={setShowRecorded} id="show-recorded" />
-          <Label htmlFor="show-recorded" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
-            Mostrar gravados
-          </Label>
+        <div className="flex items-center gap-3 ml-auto">
+          <div className="flex items-center gap-2">
+            <Switch checked={scriptAlerts} onCheckedChange={toggleScriptAlerts} id="script-alerts" />
+            <Label htmlFor="script-alerts" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap flex items-center gap-1">
+              {scriptAlerts ? <Bell size={12} /> : <BellOff size={12} />} Alertas
+            </Label>
+          </div>
+          <div className="w-px h-5 bg-border" />
+          <div className="flex items-center gap-2">
+            <Switch checked={showRecorded} onCheckedChange={setShowRecorded} id="show-recorded" />
+            <Label htmlFor="show-recorded" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+              Mostrar gravados
+            </Label>
+          </div>
         </div>
       </div>
 

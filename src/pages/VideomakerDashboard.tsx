@@ -374,12 +374,16 @@ export default function VideomakerDashboard() {
       const altType = isAltered ? 'altered' : isVerbal ? 'verbal' : null;
       const altNotes = alterationNotes[scriptId]?.trim() || null;
 
-      let description = `Roteiro gravado pelo videomaker. Link dos materiais: ${scriptDriveLink}`;
+      const linkPart = scriptDriveLink ? `Link dos materiais: ${scriptDriveLink}` : '⏳ Link do Drive ainda não informado';
+      let description = `Roteiro gravado pelo videomaker. ${linkPart}`;
       if (isAltered) {
-        description = `⚠️ ROTEIRO ALTERADO — O roteiro original foi modificado durante a gravação. ${altNotes ? `\n\n📝 Notas do videomaker: ${altNotes}` : 'Não seguir o roteiro original para editar.'}\n\nLink dos materiais: ${scriptDriveLink}`;
+        description = `⚠️ ROTEIRO ALTERADO — O roteiro original foi modificado durante a gravação. ${altNotes ? `\n\n📝 Notas do videomaker: ${altNotes}` : 'Não seguir o roteiro original para editar.'}\n\n${linkPart}`;
       } else if (isVerbal) {
-        description = `🗣️ ALTERAÇÃO VERBAL — A alteração do roteiro foi passada presencialmente/verbalmente ao editor. ${altNotes ? `\n\n📝 Notas adicionais: ${altNotes}` : ''}\n\nLink dos materiais: ${scriptDriveLink}`;
+        description = `🗣️ ALTERAÇÃO VERBAL — A alteração do roteiro foi passada presencialmente/verbalmente ao editor. ${altNotes ? `\n\n📝 Notas adicionais: ${altNotes}` : ''}\n\n${linkPart}`;
       }
+
+      // If no drive link, task goes to "captacao_concluida" (waiting for link); otherwise "edicao"
+      const targetColumn = scriptDriveLink ? 'edicao' : 'captacao_concluida';
 
       const assignedEditor = (selectedEditorId && selectedEditorId !== '__auto__') ? selectedEditorId : null;
 

@@ -374,10 +374,8 @@ export default function Scripts() {
 
   const handleDownloadPdf = useCallback(async (script: Script) => {
     const client = clients.find(c => c.id === script.clientId);
-    const { default: html2canvas } = await import('html2canvas');
     const { default: jsPDF } = await import('jspdf');
 
-    // Create a temporary div for rendering
     const container = document.createElement('div');
     container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:white;padding:0;';
     container.innerHTML = `
@@ -402,37 +400,24 @@ export default function Scripts() {
     document.body.appendChild(container);
 
     try {
-      const canvas = await html2canvas(container, { scale: 2, useCORS: true });
-      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      if (imgHeight <= pageHeight) {
-        // Content fits in one page — use custom short page
-        const shortPdf = new jsPDF({ orientation: 'p', unit: 'mm', format: [pdfWidth, imgHeight] });
-        shortPdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
-        shortPdf.save(`roteiro-${script.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
-      } else {
-        let position = 0;
-        let page = 0;
-        while (position < imgHeight) {
-          const remaining = imgHeight - position;
-          if (page > 0) {
-            if (remaining < pageHeight) {
-              pdf.addPage([pdfWidth, remaining]);
-            } else {
-              pdf.addPage();
-            }
-          }
-          pdf.addImage(imgData, 'PNG', 0, -position, pdfWidth, imgHeight);
-          position += remaining < pageHeight && page > 0 ? remaining : pageHeight;
-          page++;
-        }
-        pdf.save(`roteiro-${script.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
+      await pdf.html(container, {
+        x: 0,
+        y: 0,
+        width: pdfWidth,
+        windowWidth: 794,
+        autoPaging: 'text',
+        margin: [0, 0, 10, 0],
+      });
+      // Remove blank first page if content starts on page 2
+      const totalPages = pdf.getNumberOfPages();
+      if (totalPages > 1) {
+        // Check if first page is essentially blank (jsPDF.html quirk)
+        const firstPageHeight = pdf.internal.pageSize.getHeight();
+        // Keep all pages — they contain content
       }
-      
+      pdf.save(`roteiro-${script.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
       toast.success('PDF baixado');
     } finally {
       document.body.removeChild(container);

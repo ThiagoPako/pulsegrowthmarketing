@@ -386,7 +386,8 @@ app.post('/api/financial-chat', async (req, res) => {
       revenuesRes, expensesRes, contractsRes, clientsRes, cashRes, apiKeyRes,
       recordingsRes, contentTasksRes, designTasksRes, scriptsRes,
       deliveriesRes, socialDeliveriesRes, profilesRes, plansRes,
-      goalsRes, portalContentsRes
+      goalsRes, portalContentsRes,
+      endoContractsRes, endoClientesRes, endoPartnerTasksRes, endoPackagesRes, onboardingTasksRes
     ] = await Promise.all([
       pool.query(`SELECT r.*, c.company_name AS client_name FROM revenues r LEFT JOIN clients c ON c.id = r.client_id WHERE r.due_date >= $1 ORDER BY r.due_date DESC LIMIT 500`, [SYSTEM_START]),
       pool.query(`SELECT e.*, ec.name AS category_name FROM expenses e LEFT JOIN expense_categories ec ON ec.id = e.category_id WHERE e.date >= $1 ORDER BY e.date DESC LIMIT 500`, [SYSTEM_START]),
@@ -404,6 +405,11 @@ app.post('/api/financial-chat', async (req, res) => {
       pool.query(`SELECT * FROM plans`),
       pool.query(`SELECT * FROM goals WHERE status != 'cancelada' ORDER BY end_date DESC LIMIT 20`).catch(() => ({ rows: [] })),
       pool.query(`SELECT cpc.*, c.company_name AS client_name FROM client_portal_contents cpc LEFT JOIN clients c ON c.id = cpc.client_id ORDER BY cpc.created_at DESC LIMIT 100`).catch(() => ({ rows: [] })),
+      pool.query(`SELECT ec.*, c.company_name AS client_name, ep.package_name, ep.category AS package_category, ep.sessions_per_week, ep.duration_hours, ep.stories_per_day, pf.name AS partner_name FROM client_endomarketing_contracts ec LEFT JOIN clients c ON c.id = ec.client_id LEFT JOIN endomarketing_packages ep ON ep.id = ec.package_id LEFT JOIN profiles pf ON pf.id = ec.partner_id ORDER BY ec.created_at DESC`).catch(() => ({ rows: [] })),
+      pool.query(`SELECT * FROM endomarketing_clientes ORDER BY company_name`).catch(() => ({ rows: [] })),
+      pool.query(`SELECT ept.*, c.company_name AS client_name, pf.name AS partner_name FROM endomarketing_partner_tasks ept LEFT JOIN clients c ON c.id = ept.client_id LEFT JOIN profiles pf ON pf.id = ept.partner_id WHERE ept.date >= $1 ORDER BY ept.date DESC LIMIT 300`, [SYSTEM_START]).catch(() => ({ rows: [] })),
+      pool.query(`SELECT * FROM endomarketing_packages ORDER BY category, package_name`).catch(() => ({ rows: [] })),
+      pool.query(`SELECT ot.*, c.company_name AS client_name FROM onboarding_tasks ot LEFT JOIN clients c ON c.id = ot.client_id ORDER BY ot.created_at DESC LIMIT 100`).catch(() => ({ rows: [] })),
     ]);
 
     const revenues = revenuesRes.rows || [];
@@ -421,6 +427,11 @@ app.post('/api/financial-chat', async (req, res) => {
     const plans = plansRes.rows || [];
     const goals = goalsRes.rows || [];
     const portalContents = portalContentsRes.rows || [];
+    const endoContracts = endoContractsRes.rows || [];
+    const endoClientes = endoClientesRes.rows || [];
+    const endoPartnerTasks = endoPartnerTasksRes.rows || [];
+    const endoPackages = endoPackagesRes.rows || [];
+    const onboardingTasks = onboardingTasksRes.rows || [];
 
     const normalizeDate = value => {
       if (!value) return '';
@@ -542,9 +553,27 @@ ${socialDeliveries.slice(0, 40).map(sd => `- ${fmtDate(sd.delivery_date)} | ${sd
 ${portalContents.slice(0, 20).map(pc => `- ${pc.client_name}: "${pc.title}" | Tipo: ${pc.content_type} | Status: ${pc.status} | Temporada: ${pc.season_month}/${pc.season_year}`).join('\n')}
 
 ### 🏆 METAS
-${goals.map(g => `- ${g.title}: ${g.current_value}/${g.target_value} (${g.status}) | Período: ${fmtDate(g.start_date)} a ${fmtDate(g.end_date)}`).join('\n') || 'Nenhuma meta cadastrada'}`;
+${goals.map(g => `- ${g.title}: ${g.current_value}/${g.target_value} (${g.status}) | Período: ${fmtDate(g.start_date)} a ${fmtDate(g.end_date)}`).join('\n') || 'Nenhuma meta cadastrada'}
 
-    const systemPrompt = `Você é o Foguetinho 🚀, o assistente inteligente da Agência Pulse de Marketing Digital. Você tem acesso a TODOS os dados do sistema: financeiro, clientes, contratos, gravações, roteiros, tarefas de conteúdo, design, entregas, postagens, metas e equipe.
+### 🏢 ENDOMARKETING — CONTRATOS (${endoContracts.length})
+${endoContracts.map(ec => `- ${ec.client_name}: Pacote "${ec.package_name}" (${ec.package_category || 'N/A'}) | Status: ${ec.status} | Parceiro: ${ec.partner_name || 'N/A'} | Custo parceiro: R$ ${fmt(ec.partner_cost)} | Venda cliente: R$ ${fmt(ec.sale_price)} | Sessões/sem: ${ec.sessions_per_week || 'N/A'} | Duração: ${ec.duration_hours || 'N/A'}h | Início: ${fmtDate(ec.start_date)}`).join('\n') || 'Nenhum contrato de endomarketing'}
+
+### 🏢 ENDOMARKETING — CLIENTES (${endoClientes.length})
+${endoClientes.map(ec => `- ${ec.company_name} | Plano: ${ec.plan_type} | Execução: ${ec.execution_type} | Presença: ${ec.presence_days_per_week}x/sem | Stories: ${ec.stories_per_week}/sem | Sessão: ${ec.session_duration}min | Ativo: ${ec.active ? 'Sim' : 'Não'}`).join('\n') || 'Nenhum cliente de endomarketing'}
+
+### 🏢 ENDOMARKETING — PACOTES DISPONÍVEIS (${endoPackages.length})
+${endoPackages.map(ep => `- "${ep.package_name}" (${ep.category}) | Sessões: ${ep.sessions_per_week}/sem | Duração: ${ep.duration_hours}h | Stories: ${ep.stories_per_day}/dia | Custo parceiro: R$ ${fmt(ep.partner_cost)}`).join('\n') || 'Nenhum pacote cadastrado'}
+
+### 🏢 ENDOMARKETING — TAREFAS DO PARCEIRO (${endoPartnerTasks.length})
+${endoPartnerTasks.slice(0, 50).map(t => `- ${fmtDate(t.date)} ${t.start_time || ''} | ${t.client_name} | Parceiro: ${t.partner_name || 'N/A'} | Tipo: ${t.task_type} | Status: ${t.status} | Duração: ${t.duration_minutes}min`).join('\n') || 'Nenhuma tarefa'}
+
+### 📋 ONBOARDING DE CLIENTES (${onboardingTasks.length})
+${onboardingTasks.slice(0, 30).map(ot => `- ${ot.client_name}: ${ot.description || 'Sem descrição'} | Status: ${ot.completed_at ? 'Concluído' : 'Pendente'} | Briefing: ${ot.briefing_completed ? 'Sim' : 'Não'} | Contrato enviado: ${ot.contract_sent ? 'Sim' : 'Não'} | Contrato assinado: ${ot.contract_signed ? 'Sim' : 'Não'} | Criado: ${fmtDate(ot.created_at)}`).join('\n') || 'Nenhuma tarefa de onboarding'}
+
+Clientes com onboarding pendente: ${clients.filter(c => !c.onboarding_completed).map(c => c.company_name).join(', ') || 'Nenhum'}
+Clientes com endomarketing: ${clients.filter(c => c.has_endomarketing).map(c => c.company_name).join(', ') || 'Nenhum'}`;
+
+    const systemPrompt = `Você é o Foguetinho 🚀, o assistente inteligente da Agência Pulse de Marketing Digital. Você tem acesso a TODOS os dados do sistema: financeiro, clientes, contratos, gravações, roteiros, tarefas de conteúdo, design, entregas, postagens, metas, equipe, endomarketing (contratos, clientes, pacotes, tarefas de parceiros) e onboarding.
 
 CONTEXTO IMPORTANTE:
 - O sistema Pulse começou a ser utilizado em MARÇO DE 2026. Dados operacionais anteriores a esta data não existem.

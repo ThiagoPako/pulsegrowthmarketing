@@ -641,7 +641,24 @@ ${endoPartnerTasks.slice(0, 50).map(t => `- ${fmtDate(t.date)} ${t.start_time ||
 ${onboardingTasks.slice(0, 30).map(ot => `- ${ot.client_name}: ${ot.description || 'Sem descrição'} | Status: ${ot.completed_at ? 'Concluído' : 'Pendente'} | Briefing: ${ot.briefing_completed ? 'Sim' : 'Não'} | Contrato enviado: ${ot.contract_sent ? 'Sim' : 'Não'} | Contrato assinado: ${ot.contract_signed ? 'Sim' : 'Não'} | Criado: ${fmtDate(ot.created_at)}`).join('\n') || 'Nenhuma tarefa de onboarding'}
 
 Clientes com onboarding pendente: ${clients.filter(c => !c.onboarding_completed).map(c => c.company_name).join(', ') || 'Nenhum'}
-Clientes com endomarketing: ${clients.filter(c => c.has_endomarketing).map(c => c.company_name).join(', ') || 'Nenhum'}`;
+Clientes com endomarketing: ${clients.filter(c => c.has_endomarketing).map(c => c.company_name).join(', ') || 'Nenhum'}
+
+### 🏅 PONTUAÇÃO DA EQUIPE — MÊS ATUAL (Sistema de esforço por atividade)
+**Fórmula de pontuação por cargo:**
+- Videomaker: Gravação 15pts, Reels 12pts, Extras 10pts, Endo 8pts, Criativos 6pts, Artes 4pts, Stories 3pts, Espera 2pts/10min
+- Editor: Aprovado 15pts, Alteração 8pts, Editando 5pts, Prioritário +5pts, Revisão 3pts
+- Designer/Fotógrafo: Concluído 12pts, Urgente +6pts, EmProgresso 4pts, Versão 3pts, Hora 2pts
+- Social Media: Publicado 10pts, Postado 8pts, Roteiro 6pts, Agendado 5pts, Gerenciado 2pts
+- Parceiro: Concluído 15pts, Hora 5pts, Pendente 3pts
+
+**Ranking atual (${teamScores.length} membros):**
+${teamScores.map((s, i) => ` ${i+1}. ${s.name} (${s.role}) — **${s.score} pontos** | ${s.breakdown}`).join('\n') || 'Nenhum membro pontuado'}
+
+### 📜 HISTÓRICO DE AÇÕES RECENTES (${taskHistory.length} ações neste mês)
+${taskHistory.slice(0, 50).map(h => `- ${fmtDate(h.created_at)} | ${h.user_name || 'N/A'}: ${h.action}${h.details ? ' — ' + h.details.slice(0, 80) : ''}`).join('\n') || 'Nenhum histórico'}
+
+### ⏳ LOGS DE ESPERA DE VIDEOMAKERS (${waitLogs.length} registros)
+${waitLogs.slice(0, 30).map(w => `- Videomaker ID: ${w.videomaker_id} | Duração: ${Math.round((w.wait_duration_seconds || 0) / 60)}min | ${fmtDate(w.created_at)}`).join('\n') || 'Nenhum log de espera'}`;
 
     const systemPrompt = `Você é o Foguetinho 🚀, o assistente inteligente da Agência Pulse de Marketing Digital. Você tem acesso a TODOS os dados do sistema: financeiro, clientes, contratos, gravações, roteiros, tarefas de conteúdo, design, entregas, postagens, metas, equipe, endomarketing (contratos, clientes, pacotes, tarefas de parceiros) e onboarding.
 

@@ -191,7 +191,7 @@ export function useEndoContracts(includePartnerProfiles = true) {
     const { error } = await (supabase as any).from('client_endomarketing_contracts').insert(contract);
     if (!error) {
       fetchContracts();
-      await createEndoExpense(contract.partner_cost, contract.client_id, contract.start_date);
+      await createEndoExpense(contract.partner_cost, contract.client_id, contract.partner_id, contract.start_date);
     }
     return !error;
   };
@@ -210,7 +210,7 @@ export function useEndoContracts(includePartnerProfiles = true) {
 }
 
 // Helper: create expense for partner cost
-async function createEndoExpense(amount: number, clientId: string, date: string) {
+async function createEndoExpense(amount: number, clientId: string, partnerId: string | null, startDate: string) {
   if (amount <= 0) return;
   // Find or create the "Custo Endomarketing" category
   let { data: cats } = await supabase.from('expense_categories').select('id').eq('name', 'Custo Endomarketing').limit(1);
@@ -220,15 +220,29 @@ async function createEndoExpense(amount: number, clientId: string, date: string)
     catId = newCat?.id;
   }
   if (!catId) return;
-  // Fetch client name for description
+
+  // Fetch client name
   const { data: client } = await supabase.from('clients').select('company_name').eq('id', clientId).single();
+  const clientName = client?.company_name || 'Cliente';
+
+  // Fetch partner name
+  let partnerName = 'Parceiro';
+  if (partnerId) {
+    const { data: partner } = await supabase.from('profiles').select('name, display_name').eq('id', partnerId).single();
+    if (partner) partnerName = partner.display_name || partner.name || 'Parceiro';
+  }
+
+  // Set date to day 10 of the contract start month
+  const datePrefix = startDate.slice(0, 7); // YYYY-MM
+  const expenseDate = `${datePrefix}-10`;
+
   await supabase.from('expenses').insert({
     category_id: catId,
     amount,
-    date,
-    description: `Endomarketing - ${client?.company_name || 'Cliente'}`,
+    date: expenseDate,
+    description: `Pagamento endomarketing parceiro - ${clientName}`,
     expense_type: 'variavel',
-    responsible: 'Parceiro',
+    responsible: partnerName,
   } as any);
 }
 

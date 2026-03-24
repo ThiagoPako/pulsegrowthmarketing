@@ -76,7 +76,7 @@ export default function EndoCapacityWidget({ contracts, tasks }: Props) {
   };
 
   const getDayLabel = (dateStr: string) => {
-    return format(new Date(dateStr + 'T12:00:00'), 'EEE', { locale: ptBR });
+    return format(new Date(dateStr + 'T12:00:00'), 'EEEE', { locale: ptBR });
   };
 
   return (

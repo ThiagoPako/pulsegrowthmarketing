@@ -13,7 +13,7 @@ import {
   Film, Megaphone, Image, Palette, ExternalLink, Clock, AlertTriangle,
   Eye, Star, TrendingUp, BarChart3, Timer, Scissors, ArrowRight, Check,
   Search, Users, Upload, Send, History, Zap, Flame,
-  Play, Rocket, Trophy, FileText, FolderOpen, X, Link2, Video
+  Play, Rocket, Trophy, FileText, FolderOpen, X, Link2, Video, Pause
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';

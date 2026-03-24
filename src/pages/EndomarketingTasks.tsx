@@ -17,7 +17,9 @@ import { Rocket, CheckCircle, XCircle, Clock, CalendarPlus, MessageCircle, Refre
 import { motion } from 'framer-motion';
 
 export default function EndomarketingTasks() {
-  const { tasks, loading, completeTask, cancelTask, generateTasks } = useEndoTasks();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const { tasks, loading, completeTask, cancelTask, generateTasks, refresh } = useEndoTasks();
   const { contracts } = useEndoContracts(false);
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterDate, setFilterDate] = useState('');
@@ -30,6 +32,7 @@ export default function EndomarketingTasks() {
   const [completeNotes, setCompleteNotes] = useState('');
   const [generating, setGenerating] = useState(false);
   const [sendingNotifications, setSendingNotifications] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   const formatTaskGroupDate = (dateValue: string) => {
     const parsed = new Date(`${dateValue}T12:00:00`);

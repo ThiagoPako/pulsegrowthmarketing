@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, Send, Eye, Maximize2, Rocket, Download } from 'lucide-react';
+import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, ArrowLeft, Send, Eye, Maximize2, Rocket, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
@@ -576,20 +576,46 @@ export default function ContentKanban() {
     fetchTasks();
   };
 
-  // ─── QUICK MOVE TO NEXT COLUMN ────────────────────────────
-  const handleMoveToNext = async (task: ContentTask, targetColumn: string) => {
+  // ─── QUICK MOVE TO ANY COLUMN ────────────────────────────
+  const handleMoveToColumn = async (task: ContentTask, targetColumn: string) => {
     const validationError = validateKanbanTransition(task, targetColumn);
     if (validationError) { toast.error(validationError); return; }
 
-    const { error } = await supabase.from('content_tasks').update({
+    const updatePayload: Record<string, any> = {
       kanban_column: targetColumn,
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
-    if (error) { toast.error('Erro ao mover'); return; }
+    };
+    // Clear assigned_to when moving to revisao or envio
+    if (targetColumn === 'revisao' || targetColumn === 'envio') {
+      updatePayload.assigned_to = null;
+    }
+
+    const oldColumn = task.kanban_column;
+    // Optimistic
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, kanban_column: targetColumn } : t));
+
+    const { error } = await supabase.from('content_tasks').update(updatePayload as any).eq('id', task.id);
+    if (error) {
+      toast.error('Erro ao mover');
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, kanban_column: oldColumn } : t));
+      return;
+    }
 
     await syncOnColumnChange(task, targetColumn);
     toast.success(`Movido para ${KANBAN_COLUMNS.find(c => c.id === targetColumn)?.label}`);
     fetchTasks();
+  };
+
+  // Alias for backward compat
+  const handleMoveToNext = handleMoveToColumn;
+
+  // Get adjacent columns
+  const getAdjacentColumns = (currentCol: string) => {
+    const idx = KANBAN_COLUMNS.findIndex(c => c.id === currentCol);
+    return {
+      prev: idx > 0 ? KANBAN_COLUMNS[idx - 1] : null,
+      next: idx < KANBAN_COLUMNS.length - 1 ? KANBAN_COLUMNS[idx + 1] : null,
+    };
   };
 
   // ─── QUICK SCHEDULE (agendamentos) ────────────────────────
@@ -804,6 +830,16 @@ export default function ContentKanban() {
                             }
                             onSchedule={task.kanban_column === 'agendamentos' ? () => openScheduleDialog(task) : undefined}
                             onResubmit={task.kanban_column === 'alteracao' ? () => handleResubmitFromAlteracao(task) : undefined}
+                            onMoveForward={(() => {
+                              const { next } = getAdjacentColumns(task.kanban_column);
+                              return next ? () => handleMoveToColumn(task, next.id) : undefined;
+                            })()}
+                            onMoveBackward={(() => {
+                              const { prev } = getAdjacentColumns(task.kanban_column);
+                              return prev ? () => handleMoveToColumn(task, prev.id) : undefined;
+                            })()}
+                            forwardLabel={getAdjacentColumns(task.kanban_column).next?.label}
+                            backwardLabel={getAdjacentColumns(task.kanban_column).prev?.label}
                           />
                         </motion.div>
                       ))}
@@ -1136,9 +1172,13 @@ interface TaskCardProps {
   nextColumnLabel?: string;
   onSchedule?: () => void;
   onResubmit?: () => void;
+  onMoveForward?: () => void;
+  onMoveBackward?: () => void;
+  forwardLabel?: string;
+  backwardLabel?: string;
 }
 
-function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit }: TaskCardProps) {
+function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit, onMoveForward, onMoveBackward, forwardLabel, backwardLabel }: TaskCardProps) {
   const [scriptPreviewOpen, setScriptPreviewOpen] = useState(false);
   const typeConfig = CONTENT_TYPES.find(t => t.value === task.content_type) || CONTENT_TYPES[0];
   const TypeIcon = typeConfig.icon;
@@ -1472,6 +1512,32 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
               <Rocket size={14} />
               Confirmar Postagem
             </motion.button>
+          )}
+
+          {/* Move forward/backward arrows */}
+          {(onMoveBackward || onMoveForward) && (
+            <div className="flex items-center gap-1.5 pt-1">
+              {onMoveBackward && (
+                <motion.button whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.05 }}
+                  onClick={e => { e.stopPropagation(); onMoveBackward(); }}
+                  className="flex items-center gap-1 flex-1 justify-center px-2 py-1.5 rounded-lg bg-secondary/60 hover:bg-secondary border border-border/50 text-muted-foreground hover:text-foreground transition-all text-[9px] font-semibold"
+                  title={`Mover para ${backwardLabel}`}
+                >
+                  <ChevronLeft size={12} />
+                  <span className="truncate">{backwardLabel}</span>
+                </motion.button>
+              )}
+              {onMoveForward && (
+                <motion.button whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.05 }}
+                  onClick={e => { e.stopPropagation(); onMoveForward(); }}
+                  className="flex items-center gap-1 flex-1 justify-center px-2 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary transition-all text-[9px] font-semibold"
+                  title={`Mover para ${forwardLabel}`}
+                >
+                  <span className="truncate">{forwardLabel}</span>
+                  <ChevronRight size={12} />
+                </motion.button>
+              )}
+            </div>
           )}
         </div>
       </div>

@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, Send, Eye, Maximize2, Rocket } from 'lucide-react';
+import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, Send, Eye, Maximize2, Rocket, Download } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
@@ -1355,6 +1355,22 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
               <Eye size={11} className="text-teal-600 shrink-0" />
               <span className="text-[10px] font-medium text-teal-700 truncate flex-1">Assistir no Portal</span>
               <ExternalLink size={10} className="text-teal-500/60 group-hover/video:text-teal-600 transition-colors shrink-0" />
+            </a>
+          )}
+
+          {/* Download video button (revisão/envio) */}
+          {['revisao', 'envio', 'alteracao'].includes(task.kanban_column) && task.edited_video_link && (
+            <a
+              href={task.edited_video_link}
+              download
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 transition-colors w-full text-left group/dl"
+            >
+              <Download size={11} className="text-violet-600 shrink-0" />
+              <span className="text-[10px] font-medium text-violet-700 truncate flex-1">Baixar Vídeo</span>
+              <ExternalLink size={10} className="text-violet-500/60 group-hover/dl:text-violet-600 transition-colors shrink-0" />
             </a>
           )}
 

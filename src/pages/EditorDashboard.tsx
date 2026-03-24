@@ -525,12 +525,35 @@ export default function EditorDashboard() {
                     </Badge>
                   )}
                 </div>
-                {/* Live timer */}
-                <div className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-xl px-4 py-2">
-                  <motion.div className="w-2.5 h-2.5 rounded-full bg-primary"
-                    animate={{ scale: [1, 1.4, 1], opacity: [1, 0.4, 1] }}
-                    transition={{ duration: 1.2, repeat: Infinity }} />
-                  <LiveTimer startedAt={activeEditTask.editing_started_at!} large />
+                {/* Live timer + pause */}
+                <div className="flex items-center gap-2">
+                  <div className={`flex items-center gap-2 border rounded-xl px-4 py-2 ${
+                    activeEditTask.editing_paused_at 
+                      ? 'bg-warning/10 border-warning/30' 
+                      : 'bg-primary/10 border-primary/30'
+                  }`}>
+                    <motion.div className={`w-2.5 h-2.5 rounded-full ${activeEditTask.editing_paused_at ? 'bg-warning' : 'bg-primary'}`}
+                      animate={activeEditTask.editing_paused_at 
+                        ? { scale: 1, opacity: [1, 0.3, 1] } 
+                        : { scale: [1, 1.4, 1], opacity: [1, 0.4, 1] }}
+                      transition={{ duration: 1.2, repeat: Infinity }} />
+                    <LiveTimer startedAt={activeEditTask.editing_started_at!} large 
+                      pausedAt={activeEditTask.editing_paused_at} 
+                      pausedSeconds={activeEditTask.editing_paused_seconds || 0} />
+                  </div>
+                  <motion.div whileTap={{ scale: 0.9 }}>
+                    {activeEditTask.editing_paused_at ? (
+                      <Button size="sm" onClick={handleResumeEditing}
+                        className="gap-1.5 bg-success hover:bg-success/90 text-success-foreground shadow-md">
+                        <Play size={14} /> Retomar
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={handlePauseEditing}
+                        className="gap-1.5 border-warning/50 text-warning hover:bg-warning/10 hover:text-warning">
+                        <Pause size={14} /> Pausar
+                      </Button>
+                    )}
+                  </motion.div>
                 </div>
               </div>
 

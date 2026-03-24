@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Pencil, Ban, AlertTriangle, TrendingUp, DollarSign } from 'lucide-react';
+import { Plus, Pencil, Ban, AlertTriangle, TrendingUp, DollarSign, RefreshCw } from 'lucide-react';
 
 interface SimpleClient { id: string; company_name: string; color: string; }
 interface SimpleProfile { id: string; name: string; display_name: string | null; role: string; }

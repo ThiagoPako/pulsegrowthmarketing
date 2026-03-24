@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Square, FileText, Check, Clock, Video, Users as UsersIcon,
   TrendingUp, BarChart3, Undo2, AlertTriangle, Star, Eye, ChevronLeft, Download, Link, ArrowRight,
-  ThumbsDown, Pencil, MessageCircle, Send, UserCheck, Rocket, Hourglass
+  ThumbsDown, Pencil, MessageCircle, Send, UserCheck, Rocket, Hourglass, RefreshCw
 } from 'lucide-react';
 import LiveRecordingCard from '@/components/videomaker/LiveRecordingCard';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -28,7 +28,7 @@ import { ptBR } from 'date-fns/locale';
 export default function VideomakerDashboard() {
   const {
     currentUser, recordings, clients, scripts, users, activeRecordings, settings,
-    updateRecording, updateScript, startActiveRecording, stopActiveRecording,
+    updateRecording, updateScript, startActiveRecording, stopActiveRecording, refetchData,
   } = useApp();
 
   const [scriptsOpen, setScriptsOpen] = useState(false);
@@ -1456,10 +1456,15 @@ export default function VideomakerDashboard() {
                   {viewingScript.title}
                 </>
               ) : (
-                <>
-                  <FileText size={18} />
-                  Roteiros — {clients.find(c => c.id === scriptsClientId)?.companyName}
-                </>
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-2">
+                    <FileText size={18} />
+                    Roteiros — {clients.find(c => c.id === scriptsClientId)?.companyName}
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { refetchData(); toast.success('Roteiros atualizados!'); }}>
+                    <RefreshCw size={16} />
+                  </Button>
+                </div>
               )}
             </DialogTitle>
           </DialogHeader>

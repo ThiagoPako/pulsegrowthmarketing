@@ -41,6 +41,7 @@ interface AppContextType {
   hasConflict: (videomakerId: string, date: string, startTime: string, excludeId?: string) => boolean;
   isWithinWorkHours: (day: DayOfWeek, startTime: string) => boolean;
   getSuggestionsForCancellation: (recording: Recording) => Client[];
+  refetchData: () => void;
 }
 
 function profileToUser(profile: Profile): User {
@@ -241,6 +242,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       updateSettings, startActiveRecording, stopActiveRecording,
       hasConflict, isWithinWorkHours,
       getSuggestionsForCancellation,
+      refetchData: data.refetch,
     }}>
       {children}
     </AppContext.Provider>

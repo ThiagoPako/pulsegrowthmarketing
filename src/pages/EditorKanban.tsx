@@ -127,6 +127,11 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
               <Eye size={9} /> Em Revisão
             </Badge>
           )}
+          {task.kanban_column === 'envio' && (
+            <Badge className="text-[9px] bg-success/20 text-success border-success/30">
+              <Check size={9} className="mr-0.5" /> Concluído
+            </Badge>
+          )}
         </div>
         <p className="text-sm font-semibold text-foreground leading-tight">{task.title}</p>
         

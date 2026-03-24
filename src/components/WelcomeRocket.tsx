@@ -107,7 +107,7 @@ function FloatingParticles() {
   );
 }
 
-const SESSION_KEY = 'pulse_welcome_shown';
+const STORAGE_KEY = 'pulse_welcome_last_date';
 
 export default function WelcomeRocket() {
   const { user, profile } = useAuth();

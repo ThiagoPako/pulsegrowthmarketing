@@ -143,53 +143,15 @@ export default function CommercialProposal() {
     toast.loading('Gerando PDF...');
     try {
       const el = proposalRef.current;
-      const sections = Array.from(el.querySelectorAll('[data-pdf-section]')) as HTMLElement[];
+      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/png');
       
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const pdfW = pdf.internal.pageSize.getWidth();
-      const pdfH = pdf.internal.pageSize.getHeight();
-      const MARGIN = 0;
-      const CONTENT_W = pdfW - MARGIN * 2;
-      let currentY = MARGIN;
-      const GAP = 0;
+      const pdfWidthMM = 210; // A4 width
+      const ratio = pdfWidthMM / (canvas.width / 2);
+      const pdfHeightMM = (canvas.height / 2) * ratio;
 
-      if (sections.length === 0) {
-        // Fallback: capture entire element
-        const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
-        const imgData = canvas.toDataURL('image/png');
-        const ratio = pdfW / (canvas.width / 2);
-        const scaledH = (canvas.height / 2) * ratio;
-        let pos = 0;
-        while (pos < scaledH) {
-          if (pos > 0) pdf.addPage();
-          pdf.addImage(imgData, 'PNG', 0, -pos, pdfW, scaledH);
-          pos += pdfH;
-        }
-      } else {
-        for (const section of sections) {
-          const canvas = await html2canvas(section, {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: '#ffffff',
-          });
-
-          const widthPx = canvas.width / 2;
-          const heightPx = canvas.height / 2;
-          const scaleFactor = CONTENT_W / widthPx;
-          const heightMM = heightPx * scaleFactor;
-
-          const remaining = pdfH - currentY;
-          if (heightMM > remaining && currentY > MARGIN) {
-            pdf.addPage();
-            currentY = MARGIN;
-          }
-
-          const imgData = canvas.toDataURL('image/png');
-          pdf.addImage(imgData, 'PNG', MARGIN, currentY, CONTENT_W, heightMM);
-          currentY += heightMM + GAP;
-        }
-      }
-
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [pdfWidthMM, pdfHeightMM] });
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidthMM, pdfHeightMM);
       pdf.save(`proposta-${clientCompany || 'cliente'}.pdf`);
       toast.dismiss();
       toast.success('PDF gerado com sucesso!');

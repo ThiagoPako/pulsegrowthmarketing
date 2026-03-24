@@ -473,6 +473,33 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
       .then(({ data }) => { if (data) setHistory(data as TaskHistory[]); });
   }, [task?.id, open]);
 
+  // ─── LIVE REVIEWING PRESENCE ──────────────────────────────
+  useEffect(() => {
+    if (!open || !task?.id || task.kanban_column !== 'revisao' || !user?.id || !profile?.name) return;
+
+    const channel = supabase.channel(`review-presence-${task.id}`, {
+      config: { presence: { key: user.id } },
+    });
+
+    channel.on('presence', { event: 'sync' }, () => {
+      // presence synced
+    }).subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await channel.track({
+          user_id: user.id,
+          user_name: profile.name,
+          avatar_url: profile.avatarUrl || null,
+          started_at: new Date().toISOString(),
+        });
+      }
+    });
+
+    return () => {
+      channel.untrack();
+      supabase.removeChannel(channel);
+    };
+  }, [open, task?.id, task?.kanban_column, user?.id, profile?.name]);
+
   // Reset forms when task changes
   useEffect(() => {
     setShowAdjustmentForm(false);

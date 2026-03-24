@@ -130,7 +130,18 @@ export default function EndomarketingContracts() {
           <h1 className="text-2xl font-display font-bold">Contratos Endomarketing</h1>
           <p className="text-sm text-muted-foreground">{contracts.length} contratos</p>
         </div>
-        {isAdmin && <Button onClick={openAdd}><Plus size={16} className="mr-1" /> Novo Contrato</Button>}
+        {isAdmin && (
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={async () => {
+              const count = await syncEndoExpenses();
+              if (count > 0) toast.success(`${count} despesa(s) criada(s) com sucesso!`);
+              else toast.info('Todas as despesas já estão sincronizadas');
+            }}>
+              <RefreshCw size={16} className="mr-1" /> Sincronizar Despesas
+            </Button>
+            <Button onClick={openAdd}><Plus size={16} className="mr-1" /> Novo Contrato</Button>
+          </div>
+        )}
       </div>
 
       <Card className="glass-card">

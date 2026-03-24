@@ -138,6 +138,11 @@ export default function WelcomeRocket() {
     lines.push(`Hoje é ${dayName}. Iniciando briefing do dia...`);
     lines.push('');
 
+    const nameLower = (profile.display_name || profile.name || '').toLowerCase();
+    const isVictor = nameLower.includes('victor');
+    const isRayssa = nameLower.includes('rayssa');
+    const isThiago = nameLower.includes('thiago');
+
     try {
       if (role === 'videomaker') {
         const { data: recs } = await supabase.from('recordings')
@@ -207,6 +212,67 @@ export default function WelcomeRocket() {
         lines.push(`  ◦ DESIGN ATIVO ............ ${designTasks?.length || 0}`);
       } else {
         lines.push('▸ Sistemas prontos. Aguardando comandos.');
+      }
+
+      // === FINANCEIRO → só Victor (admin) ===
+      if (isVictor && role === 'admin') {
+        lines.push('');
+        const { data: pendingRevs } = await supabase.from('revenues')
+          .select('id, amount, due_date, status, client_id, clients(company_name)')
+          .eq('status', 'pendente').limit(50);
+        const overdue = (pendingRevs || []).filter((r: any) => r.due_date && r.due_date < today);
+        const totalOverdue = overdue.reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
+        lines.push(`▸ FINANCEIRO [ACESSO EXCLUSIVO]:`);
+        lines.push(`  ◦ RECEITAS PENDENTES ...... ${pendingRevs?.length || 0}`);
+        if (overdue.length > 0) {
+          lines.push(`  ⚠ INADIMPLENTES ........... ${overdue.length} (R$ ${totalOverdue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`);
+          overdue.slice(0, 3).forEach((r: any) => lines.push(`    → ${r.clients?.company_name || 'Cliente'} — R$ ${Number(r.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`));
+        } else {
+          lines.push(`  ✓ INADIMPLÊNCIA: Zero. Caixa seguro.`);
+        }
+      }
+
+      // === TRÁFEGO / TAREFAS ATRASADAS / CONTROLE DE TIMES → Victor + Rayssa ===
+      if (isVictor || isRayssa) {
+        lines.push('');
+        // Tarefas de conteúdo atrasadas (editing_deadline ultrapassado)
+        const { data: overdueTasks } = await supabase.from('content_tasks')
+          .select('id, title, editing_deadline, kanban_column, client_id, clients(company_name)')
+          .not('editing_deadline', 'is', null)
+          .lt('editing_deadline', new Date().toISOString())
+          .in('kanban_column', ['edicao', 'revisao', 'alteracao']).limit(20);
+        
+        const { data: overdueDesign } = await supabase.from('design_tasks')
+          .select('id, title, kanban_column, client_id, clients(company_name)')
+          .in('kanban_column', ['nova_tarefa', 'executando', 'em_analise']).limit(20);
+
+        lines.push(`▸ GESTÃO DE TAREFAS & TRÁFEGO:`);
+        if (overdueTasks && overdueTasks.length > 0) {
+          lines.push(`  ⚠ CONTEÚDOS EM ATRASO ..... ${overdueTasks.length}`);
+          overdueTasks.slice(0, 4).forEach((t: any) => lines.push(`    → ${t.clients?.company_name || ''} — ${t.title}`));
+        } else {
+          lines.push(`  ✓ CONTEÚDOS: Sem atrasos detectados.`);
+        }
+        if (overdueDesign && overdueDesign.length > 0) {
+          lines.push(`  ◦ DESIGN PENDENTE ......... ${overdueDesign.length} tarefas ativas`);
+        }
+      }
+
+      // === ROTEIROS → Victor + Rayssa + Thiago ===
+      if (isVictor || isRayssa || isThiago) {
+        lines.push('');
+        const { data: scripts } = await supabase.from('scripts')
+          .select('id, title, status, client_id, clients(company_name)')
+          .in('status', ['pendente', 'rascunho', 'em_producao']).limit(20);
+        
+        lines.push(`▸ ROTEIROS PENDENTES:`);
+        if (scripts && scripts.length > 0) {
+          lines.push(`  ◦ TOTAL NA FILA ........... ${scripts.length}`);
+          scripts.slice(0, 5).forEach((s: any) => lines.push(`    → ${s.clients?.company_name || ''} — ${s.title} [${s.status}]`));
+          if (scripts.length > 5) lines.push(`    ... +${scripts.length - 5} roteiros`);
+        } else {
+          lines.push(`  ✓ Todos os roteiros em dia!`);
+        }
       }
     } catch {
       lines.push('▸ Erro ao carregar dados. Sistemas em standby.');

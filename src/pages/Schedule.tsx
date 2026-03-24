@@ -192,7 +192,7 @@ export default function Schedule() {
   const getVideomakerName = (id: string) => getVideomaker(id)?.name || '—';
   const getClientColor = (id: string) => clients.find(c => c.id === id)?.color || '220 10% 50%';
 
-  const typeLabels: Record<RecordingType, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.', backup: 'Backup' };
+  const typeLabels: Record<RecordingType, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.', backup: 'Backup', endomarketing: 'Endo' };
 
   const handleRegenerate = async () => {
     if (!regenClientId) { toast.error('Selecione um cliente'); return; }
@@ -673,6 +673,7 @@ export default function Schedule() {
     if (rec.status === 'concluida') return <Badge className="bg-success/20 text-success border-success/30 text-[10px]">Gravado</Badge>;
     if (rec.status === 'cancelada') return <Badge className="bg-destructive/20 text-destructive border-destructive/30 text-[10px]">Não Gravou</Badge>;
     if (rec.type === 'backup') return <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[10px]">Backup</Badge>;
+    if (rec.type === 'endomarketing') return <Badge className="text-[10px] border-0" style={{ backgroundColor: `hsl(${ENDO_COLOR} / 0.2)`, color: `hsl(${ENDO_COLOR})` }}><Sparkles size={8} className="mr-0.5" /> Endo</Badge>;
     return <Badge variant="outline" className="text-[10px]">{typeLabels[rec.type]}</Badge>;
   };
 
@@ -1168,6 +1169,7 @@ export default function Schedule() {
                       <SelectItem value="extra">Extra</SelectItem>
                       <SelectItem value="secundaria">Secundária</SelectItem>
                       <SelectItem value="backup">Backup</SelectItem>
+                      <SelectItem value="endomarketing">Endomarketing</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

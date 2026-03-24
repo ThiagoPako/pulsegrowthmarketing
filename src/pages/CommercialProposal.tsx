@@ -451,6 +451,12 @@ export default function CommercialProposal() {
                       <p className="text-xs text-gray-500">Captações/mês</p>
                     </div>
                   )}
+                  {/* Tráfego Pago - always included */}
+                  <div className="border rounded-lg p-3 text-center">
+                    <BarChart3 className="h-5 w-5 mx-auto mb-1" style={{ color: 'hsl(16 82% 51%)' }} />
+                    <p className="text-2xl font-bold text-gray-800">✓</p>
+                    <p className="text-xs text-gray-500">Tráfego Pago</p>
+                  </div>
                 </div>
               </div>
             )}

@@ -16,8 +16,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
-  Plus, Pencil, Trash2, FileText, Download, Check, Eye, Search, Filter, AlertTriangle, Star, Eraser, Sparkles, Bell, BellOff
+  Plus, Pencil, Trash2, FileText, Download, Check, Eye, Search, Filter, AlertTriangle, Star, Eraser, Sparkles, Bell, BellOff, CheckSquare, Square, X
 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -144,6 +145,9 @@ export default function Scripts() {
     const stored = localStorage.getItem('pulse_script_alerts');
     return stored !== null ? stored === 'true' : true;
   });
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [downloadingBatch, setDownloadingBatch] = useState(false);
 
   const toggleScriptAlerts = (v: boolean) => {
     setScriptAlerts(v);
@@ -411,6 +415,81 @@ export default function Scripts() {
     }
   }, [clients]);
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selectedIds.size === filteredScripts.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredScripts.map(s => s.id)));
+    }
+  };
+
+  const handleDownloadSelectedPdf = useCallback(async () => {
+    const selected = filteredScripts.filter(s => selectedIds.has(s.id));
+    if (selected.length === 0) { toast.error('Selecione ao menos um roteiro'); return; }
+    setDownloadingBatch(true);
+    try {
+      const { default: html2canvas } = await import('html2canvas');
+      const { default: jsPDF } = await import('jspdf');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+
+      for (let i = 0; i < selected.length; i++) {
+        const script = selected[i];
+        const client = clients.find(c => c.id === script.clientId);
+        if (i > 0) pdf.addPage();
+
+        const container = document.createElement('div');
+        container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:white;padding:0;';
+        container.innerHTML = `
+          <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a;">
+            <div style="margin-bottom:0;">
+              <img src="${pulseHeader}" style="width:100%; display:block;" />
+            </div>
+            <div style="padding: 30px 40px;">
+              <h1 style="font-size:22px; margin:0 0 6px;">${script.title}</h1>
+              <p style="font-size:13px; color:#666; margin:0 0 20px;">
+                ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
+              </p>
+              <div style="font-size:14px; line-height:1.7;">
+                ${highlightQuotesForPdf(script.content)}
+              </div>
+              <div style="margin-top:40px; padding-top:16px; border-top:1px solid #e5e5e5; text-align:center;">
+                <p style="font-size:11px; color:#999;">Roteiro ${i + 1} de ${selected.length} · Pulse · ${new Date().toLocaleDateString('pt-BR')}</p>
+              </div>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(container);
+        try {
+          const canvas = await html2canvas(container, { scale: 2, useCORS: true });
+          const imgData = canvas.toDataURL('image/png');
+          const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+          pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        } finally {
+          document.body.removeChild(container);
+        }
+      }
+
+      pdf.save(`roteiros-selecionados-${selected.length}.pdf`);
+      toast.success(`PDF com ${selected.length} roteiro(s) baixado!`);
+      setSelectMode(false);
+      setSelectedIds(new Set());
+    } catch (err) {
+      console.error('Batch PDF error:', err);
+      toast.error('Erro ao gerar PDF');
+    } finally {
+      setDownloadingBatch(false);
+    }
+  }, [filteredScripts, selectedIds, clients]);
+
   const handleCleanAll = () => {
     let count = 0;
     scripts.forEach(script => {
@@ -504,12 +583,34 @@ export default function Scripts() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-display font-bold">Roteiros</h1>
         <div className="flex items-center gap-2">
-          {scripts.length > 0 && (
-            <Button variant="outline" size="sm" onClick={handleCleanAll}>
-              <Eraser size={14} className="mr-1.5" /> Limpar Formatação
-            </Button>
+          {selectMode ? (
+            <>
+              <Button variant="outline" size="sm" onClick={selectAll} className="gap-1.5">
+                <CheckSquare size={14} />
+                {selectedIds.size === filteredScripts.length ? 'Desmarcar todos' : 'Selecionar todos'}
+              </Button>
+              <Button size="sm" onClick={handleDownloadSelectedPdf} disabled={selectedIds.size === 0 || downloadingBatch}
+                className="gap-1.5 bg-gradient-to-r from-primary to-primary/80">
+                <Download size={14} className={downloadingBatch ? 'animate-spin' : ''} />
+                {downloadingBatch ? 'Gerando...' : `Baixar ${selectedIds.size} selecionado(s)`}
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}>
+                <X size={16} />
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setSelectMode(true)} className="gap-1.5">
+                <CheckSquare size={14} /> Selecionar
+              </Button>
+              {scripts.length > 0 && (
+                <Button variant="outline" size="sm" onClick={handleCleanAll}>
+                  <Eraser size={14} className="mr-1.5" /> Limpar Formatação
+                </Button>
+              )}
+              <Button onClick={() => handleOpen()}><Plus size={16} className="mr-2" /> Novo Roteiro</Button>
+            </>
           )}
-          <Button onClick={() => handleOpen()}><Plus size={16} className="mr-2" /> Novo Roteiro</Button>
         </div>
       </div>
 
@@ -584,10 +685,16 @@ export default function Scripts() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filteredScripts.map(script => (
-            <div key={script.id} className={`glass-card p-4 flex flex-col gap-3 transition-opacity ${script.recorded ? 'opacity-50 grayscale-[30%]' : ''}`}
-              style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${getClientColor(script.clientId)})` }}>
+            <div key={script.id} 
+              className={`glass-card p-4 flex flex-col gap-3 transition-all cursor-pointer ${script.recorded ? 'opacity-50 grayscale-[30%]' : ''} ${selectMode && selectedIds.has(script.id) ? 'ring-2 ring-primary bg-primary/5' : ''}`}
+              style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${getClientColor(script.clientId)})` }}
+              onClick={selectMode ? () => toggleSelect(script.id) : undefined}>
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 flex items-start gap-2">
+                  {selectMode && (
+                    <Checkbox checked={selectedIds.has(script.id)} onCheckedChange={() => toggleSelect(script.id)} className="mt-0.5 shrink-0" />
+                  )}
+                  <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     {(() => { const cl = clients.find(c => c.id === script.clientId); return cl ? <ClientLogo client={cl} size="sm" className="w-5 h-5 text-[8px] rounded" /> : null; })()}
                     {(script.priority === 'urgent') && <AlertTriangle size={13} className="text-destructive shrink-0" />}
@@ -597,6 +704,7 @@ export default function Scripts() {
                   <p className="text-[11px] text-muted-foreground truncate ml-6">
                     {getClientName(script.clientId)} · {SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · <span className="font-medium">{SCRIPT_CONTENT_FORMAT_LABELS[script.contentFormat || 'reels']}</span>
                   </p>
+                  </div>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   <Badge variant={script.recorded ? 'default' : 'outline'} className={`text-[10px] ${script.recorded ? 'bg-success text-success-foreground' : ''}`}>

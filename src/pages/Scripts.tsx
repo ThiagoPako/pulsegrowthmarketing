@@ -372,69 +372,199 @@ export default function Scripts() {
     toast.success(script.recorded ? 'Marcado como pendente' : 'Marcado como gravado');
   };
 
-  const handleDownloadPdf = useCallback(async (script: Script) => {
-    const client = clients.find(c => c.id === script.clientId);
+  const waitForPdfAssets = useCallback(async (element: HTMLElement) => {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+
+    const images = Array.from(element.querySelectorAll('img'));
+    await Promise.all(
+      images.map(
+        (img) =>
+          img.complete
+            ? Promise.resolve()
+            : new Promise<void>((resolve) => {
+                const done = () => resolve();
+                img.addEventListener('load', done, { once: true });
+                img.addEventListener('error', done, { once: true });
+              })
+      )
+    );
+
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  }, []);
+
+  const exportPdfPages = useCallback(async (pages: HTMLDivElement[], fileName: string) => {
     const { default: html2canvas } = await import('html2canvas');
     const { default: jsPDF } = await import('jspdf');
+    const pdfWidth = 210;
 
-    const container = document.createElement('div');
-    container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:white;padding:0;';
-    container.innerHTML = `
-      <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a;">
-        <div style="margin-bottom:0;">
-          <img src="${pulseHeader}" style="width:100%; display:block;" />
-        </div>
-        <div style="padding: 30px 40px;">
-          <h1 style="font-size:22px; margin:0 0 6px;">${script.title}</h1>
-          <p style="font-size:13px; color:#666; margin:0 0 20px;">
-            ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
-          </p>
-          <div style="font-size:14px; line-height:1.7;">
+    const renderedPages: Array<{ imgData: string; imgHeight: number }> = [];
+
+    for (const page of pages) {
+      await waitForPdfAssets(page);
+      const canvas = await html2canvas(page, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+      });
+
+      renderedPages.push({
+        imgData: canvas.toDataURL('image/jpeg', 0.95),
+        imgHeight: (canvas.height * pdfWidth) / canvas.width,
+      });
+    }
+
+    if (!renderedPages.length) return;
+
+    const pdf = new jsPDF({
+      orientation: 'p',
+      unit: 'mm',
+      format: [pdfWidth, renderedPages[0].imgHeight],
+    });
+
+    pdf.addImage(renderedPages[0].imgData, 'JPEG', 0, 0, pdfWidth, renderedPages[0].imgHeight);
+
+    for (let i = 1; i < renderedPages.length; i++) {
+      pdf.addPage([pdfWidth, renderedPages[i].imgHeight]);
+      pdf.addImage(renderedPages[i].imgData, 'JPEG', 0, 0, pdfWidth, renderedPages[i].imgHeight);
+    }
+
+    pdf.save(fileName);
+  }, [waitForPdfAssets]);
+
+  const buildPdfPages = useCallback(async (selectedScripts: Script[]) => {
+    const pdfWidthPx = 794;
+    const maxPageHeightPx = Math.floor((pdfWidthPx * 297) / 210);
+    const sourceRoot = document.createElement('div');
+    sourceRoot.style.cssText = `position:fixed;left:-20000px;top:0;width:${pdfWidthPx}px;background:white;pointer-events:none;z-index:-1;`;
+
+    let html = `<div style="font-family:'Segoe UI', Arial, sans-serif; color:#1a1a1a; background:white;">`;
+    html += `<div data-pdf-role="logo" style="margin:0;"><img src="${pulseHeader}" style="width:100%;display:block;" /></div>`;
+
+    for (let i = 0; i < selectedScripts.length; i++) {
+      const script = selectedScripts[i];
+      const client = clients.find(c => c.id === script.clientId);
+      html += `
+        <section data-pdf-role="script">
+          <div data-pdf-role="script-header" style="padding:${i === 0 ? '30' : '24'}px 40px 10px;">
+            ${i > 0 ? '<div style="border-top:2px solid #e5e5e5; margin:0 0 24px;"></div>' : ''}
+            <h1 style="font-size:22px; margin:0 0 6px;">${script.title}</h1>
+            <p style="font-size:13px; color:#666; margin:0 0 16px;">
+              ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
+            </p>
+          </div>
+          <div data-pdf-role="script-body" style="font-size:14px; line-height:1.7;">
             ${highlightQuotesForPdf(script.content)}
           </div>
-          <div style="margin-top:40px; padding-top:16px; border-top:1px solid #e5e5e5; text-align:center;">
-            <p style="font-size:11px; color:#999;">Roteiro gerado por Pulse · ${new Date().toLocaleDateString('pt-BR')}</p>
-          </div>
-        </div>
+        </section>
+      `;
+    }
+
+    html += `
+      <div data-pdf-role="footer" style="padding:10px 40px 20px; text-align:center;">
+        <p style="font-size:11px; color:#999; border-top:1px solid #e5e5e5; padding-top:12px; margin:0;">
+          ${selectedScripts.length > 1
+            ? `${selectedScripts.length} roteiro(s) · Pulse · ${new Date().toLocaleDateString('pt-BR')}`
+            : `Roteiro gerado por Pulse · ${new Date().toLocaleDateString('pt-BR')}`}
+        </p>
       </div>
     `;
-    document.body.appendChild(container);
+
+    html += `</div>`;
+    sourceRoot.innerHTML = html;
+    document.body.appendChild(sourceRoot);
+
+    const renderRoot = document.createElement('div');
+    renderRoot.style.cssText = `position:fixed;left:-10000px;top:0;width:${pdfWidthPx}px;background:transparent;pointer-events:none;z-index:-1;`;
+    document.body.appendChild(renderRoot);
 
     try {
-      const canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      await waitForPdfAssets(sourceRoot);
 
-      if (imgHeight <= pageHeight) {
-        const shortPdf = new jsPDF({ orientation: 'p', unit: 'mm', format: [pdfWidth, imgHeight] });
-        shortPdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
-        shortPdf.save(`roteiro-${script.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
-      } else {
-        let position = 0;
-        let page = 0;
-        while (position < imgHeight) {
-          if (page > 0) {
-            const remaining = imgHeight - position;
-            if (remaining < pageHeight) {
-              pdf.addPage([pdfWidth, remaining]);
-            } else {
-              pdf.addPage();
+      const pages: HTMLDivElement[] = [];
+      const createPage = () => {
+        const page = document.createElement('div');
+        page.style.cssText = `width:${pdfWidthPx}px;background:white;box-sizing:border-box;overflow:hidden;`;
+        renderRoot.appendChild(page);
+        pages.push(page);
+        return page;
+      };
+
+      let currentPage = createPage();
+      const appendBlock = (block: HTMLElement) => {
+        const clone = block.cloneNode(true) as HTMLElement;
+        currentPage.appendChild(clone);
+
+        if (currentPage.scrollHeight > maxPageHeightPx && currentPage.childElementCount > 1) {
+          currentPage.removeChild(clone);
+          currentPage = createPage();
+          currentPage.appendChild(clone);
+        }
+      };
+
+      const logo = sourceRoot.querySelector('[data-pdf-role="logo"]') as HTMLElement | null;
+      if (logo) appendBlock(logo);
+
+      const sections = Array.from(sourceRoot.querySelectorAll('[data-pdf-role="script"]')) as HTMLElement[];
+      for (const section of sections) {
+        const header = section.querySelector('[data-pdf-role="script-header"]') as HTMLElement | null;
+        if (header) appendBlock(header);
+
+        const body = section.querySelector('[data-pdf-role="script-body"]') as HTMLElement | null;
+        if (body) {
+          const bodyNodes = Array.from(body.childNodes).filter(
+            (node) => node.nodeType !== Node.TEXT_NODE || node.textContent?.trim()
+          );
+
+          if (!bodyNodes.length) {
+            appendBlock(body);
+          } else {
+            for (const node of bodyNodes) {
+              const block = document.createElement('div');
+              block.style.cssText = 'padding:0 40px; font-size:14px; line-height:1.7;';
+
+              if (node.nodeType === Node.TEXT_NODE) {
+                const paragraph = document.createElement('p');
+                paragraph.textContent = node.textContent ?? '';
+                block.appendChild(paragraph);
+              } else {
+                block.appendChild((node as HTMLElement).cloneNode(true));
+              }
+
+              appendBlock(block);
             }
           }
-          pdf.addImage(imgData, 'JPEG', 0, -position, pdfWidth, imgHeight);
-          position += pageHeight;
-          page++;
         }
-        pdf.save(`roteiro-${script.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
       }
+
+      const footer = sourceRoot.querySelector('[data-pdf-role="footer"]') as HTMLElement | null;
+      if (footer) appendBlock(footer);
+
+      await waitForPdfAssets(renderRoot);
+
+      return {
+        pages,
+        cleanup: () => {
+          document.body.removeChild(sourceRoot);
+          document.body.removeChild(renderRoot);
+        },
+      };
+    } catch (error) {
+      document.body.removeChild(sourceRoot);
+      document.body.removeChild(renderRoot);
+      throw error;
+    }
+  }, [clients, waitForPdfAssets]);
+
+  const handleDownloadPdf = useCallback(async (script: Script) => {
+    const { pages, cleanup } = await buildPdfPages([script]);
+
+    try {
+      await exportPdfPages(pages, `roteiro-${script.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
       toast.success('PDF baixado');
     } finally {
-      document.body.removeChild(container);
+      cleanup();
     }
-  }, [clients]);
+  }, [buildPdfPages, exportPdfPages]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
@@ -455,78 +585,15 @@ export default function Scripts() {
   const handleDownloadSelectedPdf = useCallback(async () => {
     const selected = filteredScripts.filter(s => selectedIds.has(s.id));
     if (selected.length === 0) { toast.error('Selecione ao menos um roteiro'); return; }
+
     setDownloadingBatch(true);
     try {
-      const { default: html2canvas } = await import('html2canvas');
-      const { default: jsPDF } = await import('jspdf');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-
-      const container = document.createElement('div');
-      container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:white;padding:0;';
-
-      let allHtml = `<div style="font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a;">`;
-      allHtml += `<div style="margin-bottom:0;"><img src="${pulseHeader}" style="width:100%; display:block;" /></div>`;
-
-      for (let i = 0; i < selected.length; i++) {
-        const script = selected[i];
-        const client = clients.find(c => c.id === script.clientId);
-        const separator = i > 0 ? `<div style="border-top:2px solid #e5e5e5; margin:30px 40px 0;"></div>` : '';
-        allHtml += `
-          ${separator}
-          <div style="padding: 24px 40px 10px;">
-            <h1 style="font-size:22px; margin:0 0 6px;">${script.title}</h1>
-            <p style="font-size:13px; color:#666; margin:0 0 16px;">
-              ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
-            </p>
-          </div>
-          <div style="padding: 0 40px 10px; font-size:14px; line-height:1.7;">
-            ${highlightQuotesForPdf(script.content)}
-          </div>
-        `;
-      }
-
-      allHtml += `
-        <div style="padding:10px 40px 20px; text-align:center;">
-          <p style="font-size:11px; color:#999; border-top:1px solid #e5e5e5; padding-top:12px;">
-            ${selected.length} roteiro(s) · Pulse · ${new Date().toLocaleDateString('pt-BR')}
-          </p>
-        </div>
-      </div>`;
-
-      container.innerHTML = allHtml;
-      document.body.appendChild(container);
+      const { pages, cleanup } = await buildPdfPages(selected);
 
       try {
-        const canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
-        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-        if (imgHeight <= pageHeight) {
-          const shortPdf = new jsPDF({ orientation: 'p', unit: 'mm', format: [pdfWidth, imgHeight] });
-          shortPdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
-          shortPdf.save(`roteiros-selecionados-${selected.length}.pdf`);
-        } else {
-          let position = 0;
-          let pg = 0;
-          while (position < imgHeight) {
-            if (pg > 0) {
-              const remaining = imgHeight - position;
-              if (remaining < pageHeight) {
-                pdf.addPage([pdfWidth, remaining]);
-              } else {
-                pdf.addPage();
-              }
-            }
-            pdf.addImage(imgData, 'JPEG', 0, -position, pdfWidth, imgHeight);
-            position += pageHeight;
-            pg++;
-          }
-          pdf.save(`roteiros-selecionados-${selected.length}.pdf`);
-        }
+        await exportPdfPages(pages, `roteiros-selecionados-${selected.length}.pdf`);
       } finally {
-        document.body.removeChild(container);
+        cleanup();
       }
 
       toast.success(`PDF com ${selected.length} roteiro(s) baixado!`);
@@ -538,7 +605,7 @@ export default function Scripts() {
     } finally {
       setDownloadingBatch(false);
     }
-  }, [filteredScripts, selectedIds, clients]);
+  }, [buildPdfPages, exportPdfPages, filteredScripts, selectedIds]);
 
   const handleCleanAll = () => {
     let count = 0;

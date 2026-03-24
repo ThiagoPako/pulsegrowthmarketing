@@ -269,6 +269,37 @@ export default function VideomakerDashboard() {
     setFinishStep('drive');
   };
 
+  // Cancel active recording and allow re-selecting scripts
+  const handleCancelActiveRecording = async () => {
+    if (!activeRecordingId) return;
+    const rec = recordings.find(r => r.id === activeRecordingId);
+    if (!rec) return;
+
+    // Get planned scripts to return them to pending
+    let planned = plannedScripts[activeRecordingId] || [];
+    if (planned.length === 0) {
+      const activeRec = activeRecordings.find(a => a.recordingId === activeRecordingId);
+      if (activeRec?.plannedScriptIds && activeRec.plannedScriptIds.length > 0) {
+        planned = activeRec.plannedScriptIds;
+      }
+    }
+
+    // Move content_tasks back to "ideias"
+    for (const scriptId of planned) {
+      await supabase.from('content_tasks').update({ kanban_column: 'ideias', recording_id: null } as any)
+        .eq('script_id', scriptId).in('kanban_column', ['captacao']);
+    }
+
+    // Delete active recording record
+    await supabase.from('active_recordings').delete().eq('recording_id', activeRecordingId);
+
+    // Clean up local state
+    setPlannedScripts(prev => { const next = { ...prev }; delete next[activeRecordingId]; return next; });
+    setLocalActiveRecordingId(null);
+
+    toast.success('Gravação cancelada. Você pode iniciar novamente e selecionar os roteiros.');
+  };
+
   // Editors list for optional assignment
   const editors = useMemo(() => 
     users.filter(u => u.role === 'editor' || u.role === 'admin'),
@@ -276,13 +307,7 @@ export default function VideomakerDashboard() {
   );
 
   const confirmFinish = async () => {
-    // All scripts that need drive links: completed + altered + verbal
-    const scriptsNeedingLinks = new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts]);
-    const missingLinks = Array.from(scriptsNeedingLinks).filter(id => !driveLinks[id]?.trim());
-    if (missingLinks.length > 0 && scriptsNeedingLinks.size > 0) {
-      toast.error('Adicione o link do Drive para todos os roteiros gravados');
-      return;
-    }
+    // Drive links are now optional — no validation blocking
 
     const rec = recordings.find(r => r.id === finishRecordingId);
     if (!rec) return;
@@ -349,18 +374,22 @@ export default function VideomakerDashboard() {
       const altType = isAltered ? 'altered' : isVerbal ? 'verbal' : null;
       const altNotes = alterationNotes[scriptId]?.trim() || null;
 
-      let description = `Roteiro gravado pelo videomaker. Link dos materiais: ${scriptDriveLink}`;
+      const linkPart = scriptDriveLink ? `Link dos materiais: ${scriptDriveLink}` : '⏳ Link do Drive ainda não informado';
+      let description = `Roteiro gravado pelo videomaker. ${linkPart}`;
       if (isAltered) {
-        description = `⚠️ ROTEIRO ALTERADO — O roteiro original foi modificado durante a gravação. ${altNotes ? `\n\n📝 Notas do videomaker: ${altNotes}` : 'Não seguir o roteiro original para editar.'}\n\nLink dos materiais: ${scriptDriveLink}`;
+        description = `⚠️ ROTEIRO ALTERADO — O roteiro original foi modificado durante a gravação. ${altNotes ? `\n\n📝 Notas do videomaker: ${altNotes}` : 'Não seguir o roteiro original para editar.'}\n\n${linkPart}`;
       } else if (isVerbal) {
-        description = `🗣️ ALTERAÇÃO VERBAL — A alteração do roteiro foi passada presencialmente/verbalmente ao editor. ${altNotes ? `\n\n📝 Notas adicionais: ${altNotes}` : ''}\n\nLink dos materiais: ${scriptDriveLink}`;
+        description = `🗣️ ALTERAÇÃO VERBAL — A alteração do roteiro foi passada presencialmente/verbalmente ao editor. ${altNotes ? `\n\n📝 Notas adicionais: ${altNotes}` : ''}\n\n${linkPart}`;
       }
+
+      // If no drive link, task goes to "captacao_concluida" (waiting for link); otherwise "edicao"
+      const targetColumn = scriptDriveLink ? 'edicao' : 'captacao_concluida';
 
       const assignedEditor = (selectedEditorId && selectedEditorId !== '__auto__') ? selectedEditorId : null;
 
       if (existing && existing.length > 0) {
         await supabase.from('content_tasks').update({
-          kanban_column: 'edicao',
+          kanban_column: targetColumn,
           drive_link: scriptDriveLink,
           recording_id: rec.id,
           editing_deadline: editingDeadline.toISOString(),
@@ -374,7 +403,7 @@ export default function VideomakerDashboard() {
           client_id: rec.clientId,
           title: script.title,
           content_type: script.contentFormat || 'reels',
-          kanban_column: 'edicao',
+          kanban_column: targetColumn,
           description,
           script_id: scriptId,
           recording_id: rec.id,
@@ -416,7 +445,10 @@ export default function VideomakerDashboard() {
       });
     }
 
-    let msg = `Gravação concluída! ${reelsCount} roteiro(s) enviado(s) para edição`;
+    const hasAnyLink = Array.from(allRecordedIds).some(id => driveLinks[id]?.trim());
+    let msg = hasAnyLink
+      ? `Gravação concluída! ${reelsCount} roteiro(s) enviado(s) para edição`
+      : `Captação finalizada! ${reelsCount} roteiro(s) aguardando link do Drive`;
     if (rejectedScripts.size > 0) msg += ` · ${rejectedScripts.size} rejeitado(s) e apagado(s)`;
     if (returnedCount > 0) msg += ` · ${returnedCount} retornado(s) ao banco`;
 
@@ -635,6 +667,7 @@ export default function VideomakerDashboard() {
             clientId={activeRec.clientId}
             onFinish={() => handleFinishRecording(activeRec)}
             onViewScripts={() => openScripts(activeRec.clientId)}
+            onCancel={handleCancelActiveRecording}
           />
         );
       })()}
@@ -1202,7 +1235,7 @@ export default function VideomakerDashboard() {
               </Alert>
 
               <p className="text-sm text-muted-foreground mb-3">
-                Adicione o link do Google Drive com os materiais de cada roteiro. O editor terá <strong>{settings.editingDeadlineHours || 48}h</strong> para editar.
+                Adicione o link do Google Drive com os materiais de cada roteiro <strong>(opcional)</strong>. Você pode finalizar agora e adicionar o link depois. O editor terá <strong>{settings.editingDeadlineHours || 48}h</strong> para editar.
               </p>
 
               <div className="space-y-3">
@@ -1234,7 +1267,7 @@ export default function VideomakerDashboard() {
                         <Input
                           value={driveLinks[id] || ''}
                           onChange={e => setDriveLinks(prev => ({ ...prev, [id]: e.target.value }))}
-                          placeholder="https://drive.google.com/drive/folders/..."
+                          placeholder="https://drive.google.com/drive/folders/... (opcional)"
                           className="h-9"
                         />
                       </div>
@@ -1278,7 +1311,6 @@ export default function VideomakerDashboard() {
                 <motion.div className="flex-1" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
                   <Button 
                     onClick={confirmFinish} 
-                    disabled={Array.from(new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts])).some(id => !driveLinks[id]?.trim())}
                     className="w-full gap-2 bg-gradient-to-r from-orange-600 via-red-500 to-orange-500 hover:from-orange-500 hover:via-red-400 hover:to-orange-400 text-white shadow-lg shadow-red-500/30 font-bold py-5 text-base rounded-xl relative overflow-hidden group"
                   >
                     <motion.div 
@@ -1287,7 +1319,6 @@ export default function VideomakerDashboard() {
                       className="relative"
                     >
                       <Rocket size={20} className="-rotate-45 relative z-10" />
-                      {/* Fire particles */}
                       <motion.div
                         animate={{ opacity: [0.8, 1, 0.6], scale: [1, 1.3, 0.8], y: [0, 6, 2] }}
                         transition={{ duration: 0.4, repeat: Infinity }}
@@ -1299,8 +1330,9 @@ export default function VideomakerDashboard() {
                         className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-2 h-3 rounded-full bg-gradient-to-t from-yellow-300 to-transparent blur-[1px] rotate-45"
                       />
                     </motion.div>
-                    Enviar para Edicao
-                    {/* Button glow effect */}
+                    {Array.from(new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts])).some(id => driveLinks[id]?.trim()) 
+                      ? 'Enviar para Edição' 
+                      : 'Finalizar Captação'}
                     <motion.div 
                       animate={{ x: ['-100%', '200%'] }}
                       transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}

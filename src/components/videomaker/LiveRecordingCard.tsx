@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Square, Clock, Video, FileText, Zap, Rocket, Hourglass, Play } from 'lucide-react';
+import { Square, Clock, Video, FileText, Zap, Rocket, Hourglass, Play, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/vpsDb';
@@ -18,6 +18,7 @@ interface LiveRecordingCardProps {
   clientId: string;
   onFinish: () => void;
   onViewScripts: () => void;
+  onCancel?: () => void;
 }
 
 export default function LiveRecordingCard({
@@ -32,6 +33,7 @@ export default function LiveRecordingCard({
   clientId,
   onFinish,
   onViewScripts,
+  onCancel,
 }: LiveRecordingCardProps) {
   const [elapsed, setElapsed] = useState(0);
   const [isWaiting, setIsWaiting] = useState(false);
@@ -322,7 +324,19 @@ export default function LiveRecordingCard({
         </AnimatePresence>
 
         {/* Actions */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {onCancel && (
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+              <Button
+                variant="outline"
+                onClick={onCancel}
+                className="gap-1.5 border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                <RotateCcw size={14} />
+                Reiniciar
+              </Button>
+            </motion.div>
+          )}
           <Button variant="outline" onClick={onViewScripts} className="gap-1.5">
             <FileText size={14} /> Ver Roteiros
           </Button>

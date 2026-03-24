@@ -113,6 +113,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (currentUser?.fontScale && currentUser.fontScale !== fontScale) {
       setFontScale(currentUser.fontScale);
+      localStorage.setItem('pulse_font_scale', currentUser.fontScale);
     }
   }, [currentUser?.fontScale]);
 

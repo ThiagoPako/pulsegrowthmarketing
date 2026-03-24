@@ -830,6 +830,16 @@ export default function ContentKanban() {
                             }
                             onSchedule={task.kanban_column === 'agendamentos' ? () => openScheduleDialog(task) : undefined}
                             onResubmit={task.kanban_column === 'alteracao' ? () => handleResubmitFromAlteracao(task) : undefined}
+                            onMoveForward={(() => {
+                              const { next } = getAdjacentColumns(task.kanban_column);
+                              return next ? () => handleMoveToColumn(task, next.id) : undefined;
+                            })()}
+                            onMoveBackward={(() => {
+                              const { prev } = getAdjacentColumns(task.kanban_column);
+                              return prev ? () => handleMoveToColumn(task, prev.id) : undefined;
+                            })()}
+                            forwardLabel={getAdjacentColumns(task.kanban_column).next?.label}
+                            backwardLabel={getAdjacentColumns(task.kanban_column).prev?.label}
                           />
                         </motion.div>
                       ))}

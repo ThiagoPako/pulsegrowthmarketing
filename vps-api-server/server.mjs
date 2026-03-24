@@ -387,7 +387,8 @@ app.post('/api/financial-chat', async (req, res) => {
       recordingsRes, contentTasksRes, designTasksRes, scriptsRes,
       deliveriesRes, socialDeliveriesRes, profilesRes, plansRes,
       goalsRes, portalContentsRes,
-      endoContractsRes, endoClientesRes, endoPartnerTasksRes, endoPackagesRes, onboardingTasksRes
+      endoContractsRes, endoClientesRes, endoPartnerTasksRes, endoPackagesRes, onboardingTasksRes,
+      waitLogsRes, taskHistoryRes
     ] = await Promise.all([
       pool.query(`SELECT r.*, c.company_name AS client_name FROM revenues r LEFT JOIN clients c ON c.id = r.client_id WHERE r.due_date >= $1 ORDER BY r.due_date DESC LIMIT 500`, [SYSTEM_START]),
       pool.query(`SELECT e.*, ec.name AS category_name FROM expenses e LEFT JOIN expense_categories ec ON ec.id = e.category_id WHERE e.date >= $1 ORDER BY e.date DESC LIMIT 500`, [SYSTEM_START]),
@@ -410,6 +411,8 @@ app.post('/api/financial-chat', async (req, res) => {
       pool.query(`SELECT ept.*, c.company_name AS client_name, pf.name AS partner_name FROM endomarketing_partner_tasks ept LEFT JOIN clients c ON c.id = ept.client_id LEFT JOIN profiles pf ON pf.id = ept.partner_id WHERE ept.date >= $1 ORDER BY ept.date DESC LIMIT 300`, [SYSTEM_START]).catch(() => ({ rows: [] })),
       pool.query(`SELECT * FROM endomarketing_packages ORDER BY category, package_name`).catch(() => ({ rows: [] })),
       pool.query(`SELECT ot.*, c.company_name AS client_name FROM onboarding_tasks ot LEFT JOIN clients c ON c.id = ot.client_id ORDER BY ot.created_at DESC LIMIT 100`).catch(() => ({ rows: [] })),
+      pool.query(`SELECT * FROM recording_wait_logs WHERE created_at >= $1`, [startOfMonth]).catch(() => ({ rows: [] })),
+      pool.query(`SELECT th.*, pf.name AS user_name FROM task_history th LEFT JOIN profiles pf ON pf.id = th.user_id WHERE th.created_at >= $1 ORDER BY th.created_at DESC LIMIT 500`, [startOfMonth]).catch(() => ({ rows: [] })),
     ]);
 
     const revenues = revenuesRes.rows || [];

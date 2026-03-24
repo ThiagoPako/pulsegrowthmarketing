@@ -269,6 +269,37 @@ export default function VideomakerDashboard() {
     setFinishStep('drive');
   };
 
+  // Cancel active recording and allow re-selecting scripts
+  const handleCancelActiveRecording = async () => {
+    if (!activeRecordingId) return;
+    const rec = recordings.find(r => r.id === activeRecordingId);
+    if (!rec) return;
+
+    // Get planned scripts to return them to pending
+    let planned = plannedScripts[activeRecordingId] || [];
+    if (planned.length === 0) {
+      const activeRec = activeRecordings.find(a => a.recordingId === activeRecordingId);
+      if (activeRec?.plannedScriptIds && activeRec.plannedScriptIds.length > 0) {
+        planned = activeRec.plannedScriptIds;
+      }
+    }
+
+    // Move content_tasks back to "ideias"
+    for (const scriptId of planned) {
+      await supabase.from('content_tasks').update({ kanban_column: 'ideias', recording_id: null } as any)
+        .eq('script_id', scriptId).in('kanban_column', ['captacao']);
+    }
+
+    // Delete active recording record
+    await supabase.from('active_recordings').delete().eq('recording_id', activeRecordingId);
+
+    // Clean up local state
+    setPlannedScripts(prev => { const next = { ...prev }; delete next[activeRecordingId]; return next; });
+    setLocalActiveRecordingId(null);
+
+    toast.success('Gravação cancelada. Você pode iniciar novamente e selecionar os roteiros.');
+  };
+
   // Editors list for optional assignment
   const editors = useMemo(() => 
     users.filter(u => u.role === 'editor' || u.role === 'admin'),
@@ -276,13 +307,7 @@ export default function VideomakerDashboard() {
   );
 
   const confirmFinish = async () => {
-    // All scripts that need drive links: completed + altered + verbal
-    const scriptsNeedingLinks = new Set([...completedScriptIds, ...alteredScripts, ...verbalScripts]);
-    const missingLinks = Array.from(scriptsNeedingLinks).filter(id => !driveLinks[id]?.trim());
-    if (missingLinks.length > 0 && scriptsNeedingLinks.size > 0) {
-      toast.error('Adicione o link do Drive para todos os roteiros gravados');
-      return;
-    }
+    // Drive links are now optional — no validation blocking
 
     const rec = recordings.find(r => r.id === finishRecordingId);
     if (!rec) return;

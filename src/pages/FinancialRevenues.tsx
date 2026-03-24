@@ -4,6 +4,7 @@ import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
@@ -121,7 +122,15 @@ export default function FinancialRevenues() {
   const [sendingAll, setSendingAll] = useState(false);
   const [showRocket, setShowRocket] = useState(false);
   const [showNewDialog, setShowNewDialog] = useState(false);
-  const [newRev, setNewRev] = useState({ client_id: '', amount: '', due_date: '', description: '' });
+  const [newRev, setNewRev] = useState({ client_id: '', amount: '', due_date: '', description: '', category: '', is_recurring: false });
+
+  const revenueCategories = [
+    { value: 'contrato', label: '📋 Contrato Mensal' },
+    { value: 'video_unitario', label: '🎬 Vídeo Unitário' },
+    { value: 'evento', label: '🎉 Evento' },
+    { value: 'site_sistemas', label: '🌐 Site e Sistemas' },
+    { value: 'outros', label: '📦 Outros' },
+  ];
 
   const monthOptions = useMemo(() => {
     const options = [];
@@ -155,24 +164,34 @@ export default function FinancialRevenues() {
   };
 
   const handleCreateRevenue = async () => {
-    if (!newRev.client_id || !newRev.amount || !newRev.due_date) {
-      toast.error('Preencha cliente, valor e vencimento');
+    if (!newRev.amount || !newRev.due_date) {
+      toast.error('Preencha valor e vencimento');
       return;
     }
     const refMonth = newRev.due_date.slice(0, 7) + '-01';
-    const ok = await addRevenue({
-      client_id: newRev.client_id,
+    const desc = [
+      newRev.category ? revenueCategories.find(c => c.value === newRev.category)?.label?.replace(/^.\s/, '') : '',
+      newRev.is_recurring ? '(Recorrente)' : '',
+      newRev.description,
+    ].filter(Boolean).join(' - ');
+
+    const payload: any = {
       amount: Number(newRev.amount),
       due_date: newRev.due_date,
       reference_month: refMonth,
       status: 'prevista',
-    } as any);
+    };
+    if (newRev.client_id) payload.client_id = newRev.client_id;
+    // Store category + description in a combined field if needed
+    if (desc) payload.description = desc;
+
+    const ok = await addRevenue(payload);
     if (ok) {
       toast.success('Receita cadastrada com sucesso!');
       setShowNewDialog(false);
-      setNewRev({ client_id: '', amount: '', due_date: '', description: '' });
+      setNewRev({ client_id: '', amount: '', due_date: '', description: '', category: '', is_recurring: false });
     } else {
-      toast.error('Erro ao cadastrar receita (pode já existir)');
+      toast.error('Erro ao cadastrar receita');
     }
   };
 
@@ -339,9 +358,20 @@ export default function FinancialRevenues() {
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label>Cliente *</Label>
+              <Label>Categoria *</Label>
+              <Select value={newRev.category} onValueChange={v => setNewRev(p => ({ ...p, category: v }))}>
+                <SelectTrigger><SelectValue placeholder="Tipo da receita" /></SelectTrigger>
+                <SelectContent>
+                  {revenueCategories.map(c => (
+                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Cliente (opcional)</Label>
               <Select value={newRev.client_id} onValueChange={v => setNewRev(p => ({ ...p, client_id: v }))}>
-                <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Sem cliente vinculado" /></SelectTrigger>
                 <SelectContent>
                   {clients.sort((a, b) => a.companyName.localeCompare(b.companyName)).map(c => (
                     <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
@@ -369,6 +399,13 @@ export default function FinancialRevenues() {
                   onChange={e => setNewRev(p => ({ ...p, due_date: e.target.value }))}
                 />
               </div>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <Label className="text-sm font-medium">Recorrente</Label>
+                <p className="text-xs text-muted-foreground">Repete todo mês automaticamente</p>
+              </div>
+              <Switch checked={newRev.is_recurring} onCheckedChange={v => setNewRev(p => ({ ...p, is_recurring: v }))} />
             </div>
             <div className="space-y-2">
               <Label>Descrição (opcional)</Label>

@@ -35,10 +35,10 @@ export default function EndoCapacityWidget({ contracts, tasks }: Props) {
     const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
 
     tasks
-      .filter(t => t.status === 'pendente' && t.date >= weekStartStr && t.date <= weekEndStr)
+      .filter(t => t.date >= weekStartStr && t.date <= weekEndStr && t.status !== 'cancelada')
       .forEach(t => {
         if (dailyHours[t.date] !== undefined) {
-          dailyHours[t.date] += t.duration_minutes / 60;
+          dailyHours[t.date] += Number(t.duration_minutes || 0) / 60;
         }
       });
 
@@ -76,7 +76,7 @@ export default function EndoCapacityWidget({ contracts, tasks }: Props) {
   };
 
   const getDayLabel = (dateStr: string) => {
-    return format(new Date(dateStr + 'T12:00:00'), 'EEE', { locale: ptBR });
+    return format(new Date(dateStr + 'T12:00:00'), 'EEEE', { locale: ptBR });
   };
 
   return (
@@ -138,7 +138,7 @@ export default function EndoCapacityWidget({ contracts, tasks }: Props) {
           {weeklyAnalysis.map(day => (
             <div key={day.date} className="space-y-1">
               <div className="flex items-center justify-between text-sm">
-                <span className="font-medium capitalize w-12">{getDayLabel(day.date)}</span>
+                <span className="font-medium capitalize w-20">{getDayLabel(day.date)}</span>
                 <div className="flex items-center gap-2">
                   {day.percentage >= 95 && <AlertTriangle size={12} className="text-red-500" />}
                   <span className="text-xs text-muted-foreground">

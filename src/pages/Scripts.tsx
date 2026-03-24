@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
-  Plus, Pencil, Trash2, FileText, Download, Check, Eye, Search, Filter, AlertTriangle, Star, Eraser, Sparkles
+  Plus, Pencil, Trash2, FileText, Download, Check, Eye, Search, Filter, AlertTriangle, Star, Eraser, Sparkles, Bell, BellOff
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useEditor, EditorContent } from '@tiptap/react';

@@ -1264,6 +1264,7 @@ export default function Schedule() {
                   })()}
                 </div>
 
+                {form.type !== 'avulso' && (
                 <div className="space-y-1">
                   <Label>Tipo</Label>
                   <Select value={form.type} onValueChange={v => setForm({ ...form, type: v as RecordingType })}>
@@ -1277,6 +1278,7 @@ export default function Schedule() {
                     </SelectContent>
                   </Select>
                 </div>
+                )}
 
                 <Button onClick={handleAdd} className="w-full" disabled={!form.date || !form.startTime}>
                   <CalendarDays size={16} className="mr-2" /> Agendar Gravação

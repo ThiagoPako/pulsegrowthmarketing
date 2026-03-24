@@ -170,11 +170,14 @@ export default function CommercialProposal() {
   return (
     <div className="space-y-6 p-4 md:p-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <FileText className="h-6 w-6 text-primary" /> Proposta Comercial
-          </h1>
-          <p className="text-sm text-muted-foreground">Crie propostas profissionais para novos clientes</p>
+        <div className="flex items-center gap-3">
+          <img src={pulseLogo} alt="Pulse" className="h-10 w-10 rounded-lg object-contain" />
+          <div>
+            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+              <FileText className="h-6 w-6 text-primary" /> Proposta Comercial
+            </h1>
+            <p className="text-sm text-muted-foreground">Crie propostas profissionais para novos clientes</p>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setShowPreview(!showPreview)}>

@@ -767,12 +767,14 @@ export default function VideomakerDashboard() {
                 const color = getClientColor(rec.clientId);
                 const isActive = activeRecordingId === rec.id;
                 const isDone = rec.status === 'concluida';
+                const isOrganizing = rec.status === 'organizando_material';
 
                 return (
                   <motion.div key={rec.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
                     className={`rounded-xl border-2 transition-all ${
                       isActive ? 'border-primary bg-primary/5 ring-1 ring-primary/30' :
                       waitingRecordingId === rec.id ? 'border-warning bg-warning/5 ring-1 ring-warning/30' :
+                      isOrganizing ? 'border-info/50 bg-info/5 ring-1 ring-info/30' :
                       isDone ? 'border-success/30 bg-success/5' : 'border-border bg-secondary/50'
                     }`}>
                     {/* Main row */}

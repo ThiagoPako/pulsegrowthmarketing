@@ -427,6 +427,11 @@ app.post('/api/financial-chat', async (req, res) => {
     const plans = plansRes.rows || [];
     const goals = goalsRes.rows || [];
     const portalContents = portalContentsRes.rows || [];
+    const endoContracts = endoContractsRes.rows || [];
+    const endoClientes = endoClientesRes.rows || [];
+    const endoPartnerTasks = endoPartnerTasksRes.rows || [];
+    const endoPackages = endoPackagesRes.rows || [];
+    const onboardingTasks = onboardingTasksRes.rows || [];
 
     const normalizeDate = value => {
       if (!value) return '';

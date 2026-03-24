@@ -114,12 +114,14 @@ const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'destruct
 
 export default function FinancialRevenues() {
   const navigate = useNavigate();
-  const { revenues, contracts, updateRevenue, generateMonthlyRevenues, paymentConfig, loading } = useFinancialData();
+  const { revenues, contracts, updateRevenue, addRevenue, generateMonthlyRevenues, paymentConfig, loading } = useFinancialData();
   const { clients } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
   const [sendingBilling, setSendingBilling] = useState<string | null>(null);
   const [sendingAll, setSendingAll] = useState(false);
   const [showRocket, setShowRocket] = useState(false);
+  const [showNewDialog, setShowNewDialog] = useState(false);
+  const [newRev, setNewRev] = useState({ client_id: '', amount: '', due_date: '', description: '' });
 
   const monthOptions = useMemo(() => {
     const options = [];

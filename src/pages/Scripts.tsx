@@ -450,9 +450,7 @@ export default function Scripts() {
         container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:white;padding:0;';
         container.innerHTML = `
           <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a;">
-            <div style="margin-bottom:0;">
-              <img src="${pulseHeader}" style="width:100%; display:block;" />
-            </div>
+            ${i === 0 ? `<div style="margin-bottom:0;"><img src="${pulseHeader}" style="width:100%; display:block;" /></div>` : ''}
             <div style="padding: 30px 40px;">
               <h1 style="font-size:22px; margin:0 0 6px;">${script.title}</h1>
               <p style="font-size:13px; color:#666; margin:0 0 20px;">

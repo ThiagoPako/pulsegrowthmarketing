@@ -106,7 +106,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { label: 'Padrão Victor', value: 'font-scale-victor', size: '22px' },
   ];
   const [fontScale, setFontScale] = useState(() => {
-    return currentUser?.fontScale || 'font-scale-base';
+    return currentUser?.fontScale || localStorage.getItem('pulse_font_scale') || 'font-scale-base';
   });
 
   // Sync from profile when user loads

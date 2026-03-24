@@ -250,6 +250,7 @@ export default function Dashboard() {
   const statusIcons: Record<string, React.ReactNode> = {
     agendada: <Clock size={12} className="text-info" />,
     concluida: <Check size={12} className="text-success" />,
+    organizando_material: <span className="text-[10px]">📦</span>,
   };
 
   const statItems = [

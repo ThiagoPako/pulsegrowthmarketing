@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { useApp } from '@/contexts/AppContext';
 import { highlightQuotes, highlightQuotesForPdf } from '@/lib/highlightQuotes';
-import type { Recording, Script } from '@/types';
+import type { Recording, Script, RecordingStatus } from '@/types';
 import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -227,6 +227,12 @@ export default function VideomakerDashboard() {
       setShowCelebration(true);
       return;
     }
+    // Stop active recording and set status to "organizando_material"
+    stopActiveRecording(rec.id);
+    updateRecording({ ...rec, status: 'organizando_material' as RecordingStatus });
+    setLocalActiveRecordingId(null);
+    toast.success(`Gravação finalizada — organizando material`);
+
     setFinishRecordingId(rec.id);
     setCompletedScriptIds(new Set());
     setRejectedScripts(new Set());
@@ -375,10 +381,17 @@ export default function VideomakerDashboard() {
 
     const reelsCount = allRecordedIds.size;
     const allRecordedArray = Array.from(allRecordedIds);
-    stopActiveRecording(finishRecordingId, {
-      reels_produced: reelsCount,
-      videos_recorded: Math.max(reelsCount, 1),
-    }, allRecordedArray);
+    // Active recording already stopped in handleFinishRecording, just update delivery data
+    try {
+      await supabase.from('delivery_records').insert({
+        client_id: rec.clientId,
+        videomaker_id: currentUser?.id || '',
+        date: rec.date,
+        recording_id: rec.id,
+        reels_produced: reelsCount,
+        videos_recorded: Math.max(reelsCount, 1),
+      });
+    } catch {}
     updateRecording({ ...rec, status: 'concluida' });
 
     // Create/update content_tasks for recorded scripts
@@ -754,12 +767,14 @@ export default function VideomakerDashboard() {
                 const color = getClientColor(rec.clientId);
                 const isActive = activeRecordingId === rec.id;
                 const isDone = rec.status === 'concluida';
+                const isOrganizing = rec.status === 'organizando_material';
 
                 return (
                   <motion.div key={rec.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
                     className={`rounded-xl border-2 transition-all ${
                       isActive ? 'border-primary bg-primary/5 ring-1 ring-primary/30' :
                       waitingRecordingId === rec.id ? 'border-warning bg-warning/5 ring-1 ring-warning/30' :
+                      isOrganizing ? 'border-info/50 bg-info/5 ring-1 ring-info/30' :
                       isDone ? 'border-success/30 bg-success/5' : 'border-border bg-secondary/50'
                     }`}>
                     {/* Main row */}
@@ -781,6 +796,13 @@ export default function VideomakerDashboard() {
                               <Badge className="bg-warning/20 text-warning border-warning/30 text-[9px] sm:text-[10px]">
                                 <Hourglass size={9} className="mr-0.5 animate-spin" style={{ animationDuration: '3s' }} />
                                 {formatWaitTime(waitingElapsed)}
+                              </Badge>
+                            </motion.div>
+                          )}
+                          {isOrganizing && (
+                            <motion.div animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 2, repeat: Infinity }}>
+                              <Badge className="bg-info/20 text-info border-info/30 text-[9px] sm:text-[10px]">
+                                📦 Organizando Material
                               </Badge>
                             </motion.div>
                           )}
@@ -827,6 +849,22 @@ export default function VideomakerDashboard() {
                             </Button>
                           </>
                         )}
+                        {isOrganizing && (
+                          <Button size="sm" onClick={() => {
+                            setFinishRecordingId(rec.id);
+                            setCompletedScriptIds(new Set());
+                            setRejectedScripts(new Set());
+                            setAlteredScripts(new Set());
+                            setVerbalScripts(new Set());
+                            setAlterationNotes({});
+                            setFinishStep('scripts');
+                            setDriveLinks({});
+                            setSelectedEditorId('__auto__');
+                            setFinishDialogOpen(true);
+                          }} className="gap-1 bg-info hover:bg-info/90 text-info-foreground">
+                            📦 Organizar Material
+                          </Button>
+                        )}
                       </div>
                     </div>
                     {/* Mobile action buttons - full width row */}
@@ -857,6 +895,22 @@ export default function VideomakerDashboard() {
                             <Square size={12} /> Finalizar
                           </Button>
                         </>
+                      )}
+                      {isOrganizing && (
+                        <Button size="sm" onClick={() => {
+                          setFinishRecordingId(rec.id);
+                          setCompletedScriptIds(new Set());
+                          setRejectedScripts(new Set());
+                          setAlteredScripts(new Set());
+                          setVerbalScripts(new Set());
+                          setAlterationNotes({});
+                          setFinishStep('scripts');
+                          setDriveLinks({});
+                          setSelectedEditorId('__auto__');
+                          setFinishDialogOpen(true);
+                        }} className="flex-1 gap-1 text-xs bg-info hover:bg-info/90 text-info-foreground h-8">
+                          📦 Organizar
+                        </Button>
                       )}
                     </div>
                   </motion.div>
@@ -961,11 +1015,25 @@ export default function VideomakerDashboard() {
                     const color = getClientColor(rec.clientId);
                     const isActive = activeRecordingId === rec.id;
                     const isDone = rec.status === 'concluida';
+                    const isOrganizingWeek = rec.status === 'organizando_material';
                     return (
                       <motion.div key={rec.id}
                         whileTap={{ scale: 0.97 }}
                         onClick={() => {
                           if (isDone) return;
+                          if (isOrganizingWeek) {
+                            setFinishRecordingId(rec.id);
+                            setCompletedScriptIds(new Set());
+                            setRejectedScripts(new Set());
+                            setAlteredScripts(new Set());
+                            setVerbalScripts(new Set());
+                            setAlterationNotes({});
+                            setFinishStep('scripts');
+                            setDriveLinks({});
+                            setSelectedEditorId('__auto__');
+                            setFinishDialogOpen(true);
+                            return;
+                          }
                           if (isActive) {
                             handleFinishRecording(rec);
                           } else if (rec.status === 'agendada') {
@@ -974,12 +1042,18 @@ export default function VideomakerDashboard() {
                         }}
                         className={`rounded-lg border-2 p-2 text-xs space-y-0.5 cursor-pointer transition-all active:shadow-md ${
                           isActive ? 'border-primary bg-primary/5 ring-1 ring-primary/30' :
+                          isOrganizingWeek ? 'border-info/50 bg-info/5' :
                           isDone ? 'border-success/30 bg-success/5 cursor-default' : 'border-border bg-card hover:border-primary/40'
                         }`}
                         style={{ borderLeftWidth: 3, borderLeftColor: `hsl(${color})` }}
                       >
                         <p className="font-medium truncate text-[11px]">{getClientName(rec.clientId)}</p>
                         <p className="text-muted-foreground text-[10px]">{rec.startTime}</p>
+                        {isOrganizingWeek && (
+                          <Badge className="bg-info/20 text-info border-info/30 text-[9px]">
+                            📦 Organizando
+                          </Badge>
+                        )}
                         {isDone && (
                           <Badge className="bg-success/20 text-success border-success/30 text-[9px]">
                             <Check size={8} className="mr-0.5" /> Gravado
@@ -992,7 +1066,7 @@ export default function VideomakerDashboard() {
                             </Badge>
                           </motion.div>
                         )}
-                        {!isActive && !isDone && rec.status === 'agendada' && (
+                        {!isActive && !isDone && !isOrganizingWeek && rec.status === 'agendada' && (
                           <div className="flex items-center gap-1 text-primary text-[9px]">
                             <Play size={8} /> Toque para iniciar
                           </div>

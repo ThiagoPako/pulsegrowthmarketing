@@ -114,7 +114,7 @@ export interface SocialAccount {
 }
 
 export type RecordingType = 'fixa' | 'extra' | 'secundaria' | 'backup' | 'endomarketing' | 'avulso';
-export type RecordingStatus = 'agendada' | 'concluida' | 'cancelada';
+export type RecordingStatus = 'agendada' | 'concluida' | 'cancelada' | 'organizando_material';
 export type ConfirmationStatus = 'pendente' | 'aguardando' | 'confirmada' | 'cancelada';
 
 export interface Recording {

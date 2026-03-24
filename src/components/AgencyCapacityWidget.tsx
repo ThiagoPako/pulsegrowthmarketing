@@ -51,8 +51,10 @@ export default function AgencyCapacityWidget({ clients, users, recordings, setti
       const d = parseISO(r.date);
       return isWithinInterval(d, { start: monthStart, end: monthEnd }) && r.status !== 'cancelada';
     });
-    const monthDone = monthRecs.filter(r => r.status === 'concluida').length;
-    const monthScheduled = monthRecs.filter(r => r.status === 'agendada').length;
+    // Backup recordings don't count as fixed demand
+    const nonBackupRecs = monthRecs.filter(r => r.type !== 'backup');
+    const monthDone = nonBackupRecs.filter(r => r.status === 'concluida').length;
+    const monthScheduled = nonBackupRecs.filter(r => r.status === 'agendada').length;
 
     // Occupation percentage
     const occupationPct = totalMonthlySlots > 0 ? Math.round((totalMonthlyDemand / totalMonthlySlots) * 100) : 0;

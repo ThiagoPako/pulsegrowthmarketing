@@ -17,7 +17,7 @@ import { motion } from 'framer-motion';
 
 export default function EndomarketingTasks() {
   const { tasks, loading, completeTask, cancelTask, generateTasks } = useEndoTasks();
-  const { contracts } = useEndoContracts();
+  const { contracts } = useEndoContracts(false);
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterDate, setFilterDate] = useState('');
   const [genDialogOpen, setGenDialogOpen] = useState(false);
@@ -29,6 +29,12 @@ export default function EndomarketingTasks() {
   const [completeNotes, setCompleteNotes] = useState('');
   const [generating, setGenerating] = useState(false);
   const [sendingNotifications, setSendingNotifications] = useState(false);
+
+  const formatTaskGroupDate = (dateValue: string) => {
+    const parsed = new Date(`${dateValue}T12:00:00`);
+    if (Number.isNaN(parsed.getTime())) return dateValue;
+    return format(parsed, "EEEE, dd 'de' MMMM", { locale: ptBR });
+  };
 
   const activeContracts = contracts.filter(c => c.status === 'ativo');
 
@@ -43,6 +49,7 @@ export default function EndomarketingTasks() {
   const grouped = useMemo(() => {
     const map = new Map<string, typeof filtered>();
     filtered.forEach(t => {
+      if (!t.date) return;
       const arr = map.get(t.date) || [];
       arr.push(t);
       map.set(t.date, arr);
@@ -210,7 +217,7 @@ export default function EndomarketingTasks() {
         {grouped.map(([date, dateTasks]) => (
           <motion.div key={date} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}>
             <h3 className="text-xs sm:text-sm font-semibold text-muted-foreground mb-2 capitalize">
-              {format(new Date(date + 'T12:00:00'), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+              {formatTaskGroupDate(date)}
             </h3>
             <div className="space-y-1.5 sm:space-y-2">
               {dateTasks.map((t, i) => (
@@ -227,9 +234,14 @@ export default function EndomarketingTasks() {
                     <div className="w-1.5 h-8 rounded-full shrink-0" style={{ backgroundColor: `hsl(${t.clients?.color || '217 91% 60%'})` }} />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs sm:text-sm font-medium truncate">{t.clients?.company_name}</p>
-                      <div className="flex gap-1.5 mt-0.5 flex-wrap">
+                      <div className="flex gap-1.5 mt-0.5 flex-wrap items-center">
                         <Badge variant="outline" className="text-[9px] sm:text-[10px]">{getTaskTypeLabel(t.task_type)}</Badge>
                         <span className="text-[10px] sm:text-xs text-muted-foreground">{t.duration_minutes}min</span>
+                        {t.start_time && (
+                          <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground">
+                            <Clock size={10} /> {t.start_time}
+                          </span>
+                        )}
                       </div>
                     </div>
                     {/* Desktop actions */}

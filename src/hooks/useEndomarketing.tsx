@@ -102,6 +102,21 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 export const getCategoryLabel = (cat: string) => CATEGORY_LABELS[cat] || cat;
 
+const normalizeDateOnly = (value: string | null | undefined) => {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  if (value.includes('T')) return value.split('T')[0];
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return format(parsed, 'yyyy-MM-dd');
+};
+
+const normalizeTimeOnly = (value: string | null | undefined) => {
+  if (!value) return null;
+  return value.slice(0, 5);
+};
+
 // ─── Packages ───────────────────────────────
 export function useEndoPackages() {
   const [packages, setPackages] = useState<EndoPackage[]>([]);
@@ -124,31 +139,41 @@ export function useEndoPackages() {
 }
 
 // ─── Contracts ──────────────────────────────
-export function useEndoContracts() {
+export function useEndoContracts(includePartnerProfiles = true) {
   const [contracts, setContracts] = useState<EndoContract[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchContracts = useCallback(async () => {
-    const { data } = await (supabase as any)
-      .from('client_endomarketing_contracts')
-      .select('*, clients(company_name, color, logo_url), endomarketing_packages(id, package_name, category, partner_cost, sessions_per_week, stories_per_day, duration_hours, description)')
-      .order('created_at', { ascending: false });
+    try {
+      const { data } = await (supabase as any)
+        .from('client_endomarketing_contracts')
+        .select('*, clients(company_name, color, logo_url), endomarketing_packages(id, package_name, category, partner_cost, sessions_per_week, stories_per_day, duration_hours, description)')
+        .order('created_at', { ascending: false });
 
-    if (data) {
-      // Fetch partner names separately
-      const partnerIds = [...new Set(data.filter((c: any) => c.partner_id).map((c: any) => c.partner_id))];
-      let partnerMap: Record<string, any> = {};
-      if (partnerIds.length > 0) {
-        const { data: profiles } = await supabase.from('profiles').select('id, name, display_name').in('id', partnerIds as string[]);
-        if (profiles) partnerMap = Object.fromEntries(profiles.map(p => [p.id, p]));
+      if (data) {
+        const normalizedContracts = data.map((c: any) => ({
+          ...c,
+          start_date: normalizeDateOnly(c.start_date),
+        }));
+
+        let partnerMap: Record<string, any> = {};
+        if (includePartnerProfiles) {
+          const partnerIds = [...new Set(normalizedContracts.filter((c: any) => c.partner_id).map((c: any) => c.partner_id))];
+          if (partnerIds.length > 0) {
+            const { data: profiles } = await supabase.from('profiles').select('id, name, display_name').in('id', partnerIds as string[]);
+            if (profiles) partnerMap = Object.fromEntries(profiles.map(p => [p.id, p]));
+          }
+        }
+
+        setContracts(normalizedContracts.map((c: any) => ({
+          ...c,
+          partner_profile: includePartnerProfiles && c.partner_id ? partnerMap[c.partner_id] || null : null,
+        })));
       }
-      setContracts(data.map((c: any) => ({
-        ...c,
-        partner_profile: c.partner_id ? partnerMap[c.partner_id] || null : null,
-      })));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, []);
+  }, [includePartnerProfiles]);
 
   useEffect(() => { fetchContracts(); }, [fetchContracts]);
 
@@ -166,7 +191,6 @@ export function useEndoContracts() {
     const { error } = await (supabase as any).from('client_endomarketing_contracts').insert(contract);
     if (!error) {
       fetchContracts();
-      // Create expense entry for partner cost
       await createEndoExpense(contract.partner_cost, contract.client_id, contract.start_date);
     }
     return !error;
@@ -214,11 +238,20 @@ export function useEndoTasks(partnerId?: string) {
   const [loading, setLoading] = useState(true);
 
   const fetchTasks = useCallback(async () => {
-    let query = (supabase as any).from('endomarketing_partner_tasks').select('*, clients(company_name, color)').order('date');
-    if (partnerId) query = query.eq('partner_id', partnerId);
-    const { data } = await query;
-    if (data) setTasks(data);
-    setLoading(false);
+    try {
+      let query = (supabase as any).from('endomarketing_partner_tasks').select('*, clients(company_name, color)').order('date');
+      if (partnerId) query = query.eq('partner_id', partnerId);
+      const { data } = await query;
+      if (data) {
+        setTasks(data.map((task: any) => ({
+          ...task,
+          date: normalizeDateOnly(task.date),
+          start_time: normalizeTimeOnly(task.start_time),
+        })));
+      }
+    } finally {
+      setLoading(false);
+    }
   }, [partnerId]);
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);

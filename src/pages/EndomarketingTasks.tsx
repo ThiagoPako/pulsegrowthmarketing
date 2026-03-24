@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useEndoTasks, useEndoContracts, getTaskTypeLabel } from '@/hooks/useEndomarketing';
 import { supabase } from '@/lib/vpsDb';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,11 +13,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Rocket, CheckCircle, XCircle, Clock, CalendarPlus, MessageCircle, RefreshCw } from 'lucide-react';
+import { Rocket, CheckCircle, XCircle, Clock, CalendarPlus, MessageCircle, RefreshCw, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function EndomarketingTasks() {
-  const { tasks, loading, completeTask, cancelTask, generateTasks } = useEndoTasks();
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
+  const { tasks, loading, completeTask, cancelTask, generateTasks, refresh } = useEndoTasks();
   const { contracts } = useEndoContracts(false);
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterDate, setFilterDate] = useState('');
@@ -29,6 +32,7 @@ export default function EndomarketingTasks() {
   const [completeNotes, setCompleteNotes] = useState('');
   const [generating, setGenerating] = useState(false);
   const [sendingNotifications, setSendingNotifications] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   const formatTaskGroupDate = (dateValue: string) => {
     const parsed = new Date(`${dateValue}T12:00:00`);
@@ -80,6 +84,17 @@ export default function EndomarketingTasks() {
     setGenerating(false);
     if (fail === 0) toast.success(`${success} contratos regenerados com sucesso!`);
     else toast.error(`${success} ok, ${fail} falharam`);
+  };
+
+  const handleClearAll = async () => {
+    if (!confirm('Tem certeza que deseja LIMPAR TODAS as tarefas de endomarketing? Esta ação não pode ser desfeita.')) return;
+    setClearing(true);
+    try {
+      const { error } = await (supabase as any).from('endomarketing_partner_tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (error) { toast.error('Erro ao limpar tarefas'); console.error(error); }
+      else { toast.success('Todas as tarefas foram removidas!'); refresh(); }
+    } catch (e) { toast.error('Erro inesperado'); console.error(e); }
+    setClearing(false);
   };
 
   const openComplete = (taskId: string) => {
@@ -167,6 +182,12 @@ export default function EndomarketingTasks() {
           <Button size="sm" onClick={() => setGenDialogOpen(true)} className="text-[10px] sm:text-sm h-8 px-2 sm:px-3 gap-1">
             <CalendarPlus size={13} /> <span className="truncate">Gerar Tarefas</span>
           </Button>
+          {isAdmin && (
+            <Button variant="destructive" size="sm" onClick={handleClearAll} disabled={clearing} className="text-[10px] sm:text-sm h-8 px-2 sm:px-3 gap-1">
+              <Trash2 size={13} />
+              <span className="truncate">{clearing ? 'Limpando...' : 'Limpar Todas'}</span>
+            </Button>
+          )}
         </div>
       </div>
 

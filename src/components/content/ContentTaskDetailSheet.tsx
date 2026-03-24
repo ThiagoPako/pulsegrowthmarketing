@@ -568,10 +568,11 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
 
   // ─── ACTIONS ──────────────────────────────────────────────
   const handleApprove = async () => {
+    const isReviewer = profile?.role === 'admin' || profile?.role === 'social_media';
     await supabase.from('content_tasks').update({
       kanban_column: 'envio',
       approved_at: new Date().toISOString(),
-      assigned_to: user?.id || task.assigned_to,
+      ...(isReviewer ? { assigned_to: user?.id } : {}),
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
 
@@ -586,11 +587,12 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
 
   const handleRequestAdjustments = async () => {
     if (!adjustmentNotes.trim()) { toast.error('Descreva os ajustes'); return; }
+    const isReviewer = profile?.role === 'admin' || profile?.role === 'social_media';
     await supabase.from('content_tasks').update({
       kanban_column: 'alteracao',
       adjustment_notes: adjustmentNotes.trim(),
       immediate_alteration: adjustmentImmediate,
-      assigned_to: user?.id || task.assigned_to,
+      ...(isReviewer ? { assigned_to: user?.id } : {}),
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
     await syncTask('alteracao');

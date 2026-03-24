@@ -134,10 +134,9 @@ export default function TeamPerformanceWidget() {
         const inEditing = editorTasks.filter(t => t.kanban_column === 'em_edicao').length;
         const alterations = editorTasks.filter(t => t.kanban_column === 'alteracao').length;
         const priorityTasks = editorTasks.filter(t => t.editing_priority === true).length;
-        // Aprovado/finalizado (ciclo completo) = 15pts, Em edição (esforço ativo) = 5pts
-        // Revisão (aguardando feedback) = 3pts, Alteração (retrabalho) = 8pts (exige atenção extra)
-        // Tarefa prioritária = bônus +5pts por tarefa
-        score = approved * 15 + inEditing * 5 + inRevision * 3 + alterations * 8 + priorityTasks * 5;
+        score = approved * EDITOR_SCORE.APROVADO + inEditing * EDITOR_SCORE.EM_EDICAO +
+          inRevision * EDITOR_SCORE.REVISAO + alterations * EDITOR_SCORE.ALTERACAO +
+          priorityTasks * EDITOR_SCORE.PRIORIDADE;
         metrics.push(
           { label: 'Aprovados', value: approved },
           { label: 'Editando', value: inEditing },

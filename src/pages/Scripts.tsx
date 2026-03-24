@@ -406,8 +406,16 @@ export default function Scripts() {
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      let position = 0;
+      let page = 0;
+      while (position < imgHeight) {
+        if (page > 0) pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, -position, pdfWidth, imgHeight);
+        position += pageHeight;
+        page++;
+      }
       pdf.save(`roteiro-${script.title.replace(/\s+/g, '-').toLowerCase()}.pdf`);
       toast.success('PDF baixado');
     } finally {

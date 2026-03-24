@@ -477,26 +477,28 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
   useEffect(() => {
     if (!open || !task?.id || task.kanban_column !== 'revisao' || !user?.id || !profile?.name) return;
 
-    const channel = supabase.channel(`review-presence-${task.id}`, {
-      config: { presence: { key: user.id } },
-    });
+    // Mark as reviewing
+    supabase.from('content_tasks').update({
+      reviewing_by: user.id,
+      reviewing_by_name: profile.name,
+      reviewing_at: new Date().toISOString(),
+    } as any).eq('id', task.id);
 
-    channel.on('presence', { event: 'sync' }, () => {
-      // presence synced
-    }).subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        await channel.track({
-          user_id: user.id,
-          user_name: profile.name,
-          avatar_url: profile.avatarUrl || null,
-          started_at: new Date().toISOString(),
-        });
-      }
-    });
+    // Heartbeat every 30s
+    const heartbeat = setInterval(() => {
+      supabase.from('content_tasks').update({
+        reviewing_at: new Date().toISOString(),
+      } as any).eq('id', task.id);
+    }, 30000);
 
     return () => {
-      channel.untrack();
-      supabase.removeChannel(channel);
+      clearInterval(heartbeat);
+      // Clear reviewing status on close
+      supabase.from('content_tasks').update({
+        reviewing_by: null,
+        reviewing_by_name: null,
+        reviewing_at: null,
+      } as any).eq('id', task.id);
     };
   }, [open, task?.id, task?.kanban_column, user?.id, profile?.name]);
 

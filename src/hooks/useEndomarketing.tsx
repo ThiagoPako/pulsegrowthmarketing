@@ -238,11 +238,20 @@ export function useEndoTasks(partnerId?: string) {
   const [loading, setLoading] = useState(true);
 
   const fetchTasks = useCallback(async () => {
-    let query = (supabase as any).from('endomarketing_partner_tasks').select('*, clients(company_name, color)').order('date');
-    if (partnerId) query = query.eq('partner_id', partnerId);
-    const { data } = await query;
-    if (data) setTasks(data);
-    setLoading(false);
+    try {
+      let query = (supabase as any).from('endomarketing_partner_tasks').select('*, clients(company_name, color)').order('date');
+      if (partnerId) query = query.eq('partner_id', partnerId);
+      const { data } = await query;
+      if (data) {
+        setTasks(data.map((task: any) => ({
+          ...task,
+          date: normalizeDateOnly(task.date),
+          start_time: normalizeTimeOnly(task.start_time),
+        })));
+      }
+    } finally {
+      setLoading(false);
+    }
   }, [partnerId]);
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);

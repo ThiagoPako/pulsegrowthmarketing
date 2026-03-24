@@ -2458,8 +2458,15 @@ app.post('/api/db/query', async (req, res) => {
           const whereClauses = [];
           for (const f of filters) {
             const col = sanitizeIdentifier(f.column);
-            if (f.op === 'eq') { whereClauses.push(`${col} = $${paramIdx}`); params.push(f.value); paramIdx++; }
-            else if (f.op === 'in') { whereClauses.push(`${col} = ANY($${paramIdx})`); params.push(f.value); paramIdx++; }
+            switch (f.op) {
+              case 'eq': whereClauses.push(`${col} = $${paramIdx}`); params.push(f.value); paramIdx++; break;
+              case 'neq': whereClauses.push(`${col} != $${paramIdx}`); params.push(f.value); paramIdx++; break;
+              case 'gt': whereClauses.push(`${col} > $${paramIdx}`); params.push(f.value); paramIdx++; break;
+              case 'gte': whereClauses.push(`${col} >= $${paramIdx}`); params.push(f.value); paramIdx++; break;
+              case 'lt': whereClauses.push(`${col} < $${paramIdx}`); params.push(f.value); paramIdx++; break;
+              case 'lte': whereClauses.push(`${col} <= $${paramIdx}`); params.push(f.value); paramIdx++; break;
+              case 'in': whereClauses.push(`${col} = ANY($${paramIdx})`); params.push(f.value); paramIdx++; break;
+            }
           }
           if (whereClauses.length > 0) query += ` WHERE ${whereClauses.join(' AND ')}`;
         }

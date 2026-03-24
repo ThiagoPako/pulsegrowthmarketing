@@ -1163,7 +1163,17 @@ export default function Schedule() {
                 {/* Selected client + videomaker summary */}
                 <div className="flex items-center gap-3 p-2.5 rounded-lg bg-accent/50 border">
                   <div className="flex items-center gap-2 flex-1">
-                    {(() => { const c = clients.find(c => c.id === form.clientId); return c ? <><ClientLogo client={c} size="sm" /><span className="text-xs font-medium">{c.companyName}</span></> : null; })()}
+                    {form.type === 'avulso' ? (
+                      <>
+                        <div className="w-7 h-7 rounded-full bg-sky-500/20 flex items-center justify-center shrink-0">
+                          <Video size={12} className="text-sky-500" />
+                        </div>
+                        <span className="text-xs font-medium truncate">{form.prospectName}</span>
+                        <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-sky-500/30">Avulso</Badge>
+                      </>
+                    ) : (
+                      (() => { const c = clients.find(c => c.id === form.clientId); return c ? <><ClientLogo client={c} size="sm" /><span className="text-xs font-medium">{c.companyName}</span></> : null; })()
+                    )}
                   </div>
                   <div className="h-4 w-px bg-border" />
                   <div className="flex items-center gap-2 flex-1">

@@ -477,8 +477,16 @@ export default function Scripts() {
         try {
           const canvas = await html2canvas(container, { scale: 2, useCORS: true });
           const imgData = canvas.toDataURL('image/png');
-          const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-          pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+          const pageHeight = pdf.internal.pageSize.getHeight();
+          const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+          let position = 0;
+          let pg = 0;
+          while (position < imgHeight) {
+            if (pg > 0 || i > 0) { if (pg > 0) pdf.addPage(); }
+            pdf.addImage(imgData, 'PNG', 0, -position, pdfWidth, imgHeight);
+            position += pageHeight;
+            pg++;
+          }
         } finally {
           document.body.removeChild(container);
         }

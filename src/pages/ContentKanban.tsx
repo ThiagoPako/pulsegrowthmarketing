@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, Send, Eye, Maximize2, Rocket, Download } from 'lucide-react';
+import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, ArrowLeft, Send, Eye, Maximize2, Rocket, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
@@ -576,20 +576,46 @@ export default function ContentKanban() {
     fetchTasks();
   };
 
-  // ─── QUICK MOVE TO NEXT COLUMN ────────────────────────────
-  const handleMoveToNext = async (task: ContentTask, targetColumn: string) => {
+  // ─── QUICK MOVE TO ANY COLUMN ────────────────────────────
+  const handleMoveToColumn = async (task: ContentTask, targetColumn: string) => {
     const validationError = validateKanbanTransition(task, targetColumn);
     if (validationError) { toast.error(validationError); return; }
 
-    const { error } = await supabase.from('content_tasks').update({
+    const updatePayload: Record<string, any> = {
       kanban_column: targetColumn,
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
-    if (error) { toast.error('Erro ao mover'); return; }
+    };
+    // Clear assigned_to when moving to revisao or envio
+    if (targetColumn === 'revisao' || targetColumn === 'envio') {
+      updatePayload.assigned_to = null;
+    }
+
+    const oldColumn = task.kanban_column;
+    // Optimistic
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, kanban_column: targetColumn } : t));
+
+    const { error } = await supabase.from('content_tasks').update(updatePayload as any).eq('id', task.id);
+    if (error) {
+      toast.error('Erro ao mover');
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, kanban_column: oldColumn } : t));
+      return;
+    }
 
     await syncOnColumnChange(task, targetColumn);
     toast.success(`Movido para ${KANBAN_COLUMNS.find(c => c.id === targetColumn)?.label}`);
     fetchTasks();
+  };
+
+  // Alias for backward compat
+  const handleMoveToNext = handleMoveToColumn;
+
+  // Get adjacent columns
+  const getAdjacentColumns = (currentCol: string) => {
+    const idx = KANBAN_COLUMNS.findIndex(c => c.id === currentCol);
+    return {
+      prev: idx > 0 ? KANBAN_COLUMNS[idx - 1] : null,
+      next: idx < KANBAN_COLUMNS.length - 1 ? KANBAN_COLUMNS[idx + 1] : null,
+    };
   };
 
   // ─── QUICK SCHEDULE (agendamentos) ────────────────────────

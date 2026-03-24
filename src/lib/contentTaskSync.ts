@@ -66,7 +66,11 @@ export async function syncContentTaskColumnChange(
   newColumn: string,
   ctx: SyncContext
 ) {
-  const updates: Record<string, any> = {};
+  const updates: Record<string, any> = {
+    reviewing_by: null,
+    reviewing_by_name: null,
+    reviewing_at: null,
+  };
 
   // Fetch deadline settings + work_days
   const { data: settingsRow } = await supabase.from('company_settings').select('editing_deadline_hours, review_deadline_hours, alteration_deadline_hours, approval_deadline_hours, work_days').limit(1).single();

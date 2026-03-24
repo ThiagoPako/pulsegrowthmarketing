@@ -227,6 +227,12 @@ export default function VideomakerDashboard() {
       setShowCelebration(true);
       return;
     }
+    // Stop active recording and set status to "organizando_material"
+    stopActiveRecording(rec.id);
+    updateRecording({ ...rec, status: 'organizando_material' as RecordingStatus });
+    setLocalActiveRecordingId(null);
+    toast.success(`Gravação finalizada — organizando material`);
+
     setFinishRecordingId(rec.id);
     setCompletedScriptIds(new Set());
     setRejectedScripts(new Set());

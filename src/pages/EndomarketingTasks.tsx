@@ -155,10 +155,14 @@ export default function EndomarketingTasks() {
             <p className="text-[10px] sm:text-sm text-muted-foreground">{stats.pending} pendentes · {stats.completed} concluídas</p>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-1.5 sm:flex sm:gap-2">
+        <div className="grid grid-cols-3 gap-1.5 sm:flex sm:gap-2">
           <Button variant="outline" size="sm" onClick={handleSendDailyNotifications} disabled={sendingNotifications} className="text-[10px] sm:text-sm h-8 px-2 sm:px-3 gap-1">
             <MessageCircle size={13} />
             <span className="truncate">{sendingNotifications ? 'Enviando...' : 'WhatsApp'}</span>
+          </Button>
+          <Button variant="secondary" size="sm" onClick={handleRegenerateAll} disabled={generating} className="text-[10px] sm:text-sm h-8 px-2 sm:px-3 gap-1">
+            <RefreshCw size={13} className={generating ? 'animate-spin' : ''} />
+            <span className="truncate">{generating ? 'Regenerando...' : 'Regenerar Todas'}</span>
           </Button>
           <Button size="sm" onClick={() => setGenDialogOpen(true)} className="text-[10px] sm:text-sm h-8 px-2 sm:px-3 gap-1">
             <CalendarPlus size={13} /> <span className="truncate">Gerar Tarefas</span>

@@ -358,9 +358,20 @@ export default function FinancialRevenues() {
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label>Cliente *</Label>
+              <Label>Categoria *</Label>
+              <Select value={newRev.category} onValueChange={v => setNewRev(p => ({ ...p, category: v }))}>
+                <SelectTrigger><SelectValue placeholder="Tipo da receita" /></SelectTrigger>
+                <SelectContent>
+                  {revenueCategories.map(c => (
+                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Cliente (opcional)</Label>
               <Select value={newRev.client_id} onValueChange={v => setNewRev(p => ({ ...p, client_id: v }))}>
-                <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Sem cliente vinculado" /></SelectTrigger>
                 <SelectContent>
                   {clients.sort((a, b) => a.companyName.localeCompare(b.companyName)).map(c => (
                     <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
@@ -388,6 +399,13 @@ export default function FinancialRevenues() {
                   onChange={e => setNewRev(p => ({ ...p, due_date: e.target.value }))}
                 />
               </div>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <Label className="text-sm font-medium">Recorrente</Label>
+                <p className="text-xs text-muted-foreground">Repete todo mês automaticamente</p>
+              </div>
+              <Switch checked={newRev.is_recurring} onCheckedChange={v => setNewRev(p => ({ ...p, is_recurring: v }))} />
             </div>
             <div className="space-y-2">
               <Label>Descrição (opcional)</Label>

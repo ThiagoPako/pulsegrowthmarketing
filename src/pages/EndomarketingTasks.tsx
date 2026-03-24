@@ -97,6 +97,7 @@ export default function EndomarketingTasks() {
     setClearing(false);
   };
 
+  const openComplete = (taskId: string) => {
     setCompletingTaskId(taskId);
     setCompleteNotes('');
     setCompleteDialogOpen(true);

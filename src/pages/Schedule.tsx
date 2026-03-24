@@ -1021,14 +1021,15 @@ export default function Schedule() {
                 <Tabs defaultValue="regular" className="w-full">
                   <TabsList className="w-full h-9">
                     <TabsTrigger value="regular" className="flex-1 text-xs gap-1"><Play size={12} /> Gravação</TabsTrigger>
-                    <TabsTrigger value="endo" className="flex-1 text-xs gap-1"><Sparkles size={12} /> Endomarketing</TabsTrigger>
+                    <TabsTrigger value="avulso" className="flex-1 text-xs gap-1"><Video size={12} /> Vídeo Avulso</TabsTrigger>
+                    <TabsTrigger value="endo" className="flex-1 text-xs gap-1"><Sparkles size={12} /> Endo</TabsTrigger>
                   </TabsList>
                   <TabsContent value="regular" className="mt-2">
                     <div className="grid gap-2 max-h-[300px] overflow-y-auto pr-1">
                       {clients.map(c => {
                         const isSelected = form.clientId === c.id;
                         return (
-                          <button key={c.id} onClick={() => { setForm({ ...form, clientId: c.id, type: 'fixa' }); setNewStep(1); }}
+                          <button key={c.id} onClick={() => { setForm({ ...form, clientId: c.id, type: 'fixa', prospectName: '' }); setNewStep(1); }}
                             className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 hover:scale-[1.01] ${
                               isSelected ? 'border-primary bg-primary/5 shadow-md' : 'border-border hover:border-primary/40 hover:bg-accent/50'
                             }`}>
@@ -1047,6 +1048,27 @@ export default function Schedule() {
                       })}
                     </div>
                   </TabsContent>
+                  <TabsContent value="avulso" className="mt-2">
+                    <div className="space-y-3">
+                      <p className="text-xs text-muted-foreground">Agende uma gravação para alguém que ainda não é cliente da agência.</p>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Nome do Prospect / Empresa</Label>
+                        <Input
+                          placeholder="Ex: João Silva - Padaria Bella"
+                          value={form.prospectName}
+                          onChange={e => setForm({ ...form, prospectName: e.target.value })}
+                          className="text-sm"
+                        />
+                      </div>
+                      <Button
+                        className="w-full"
+                        disabled={!form.prospectName.trim()}
+                        onClick={() => { setForm({ ...form, clientId: '', type: 'avulso' }); setNewStep(1); }}
+                      >
+                        Continuar <ChevronRight size={14} className="ml-1" />
+                      </Button>
+                    </div>
+                  </TabsContent>
                   <TabsContent value="endo" className="mt-2">
                     <div className="grid gap-2 max-h-[300px] overflow-y-auto pr-1">
                       {endoClientes.filter(ec => ec.active).length === 0 ? (
@@ -1059,7 +1081,7 @@ export default function Schedule() {
                           const isSelected = form.clientId === clientId;
                           return (
                             <button key={ec.id} onClick={() => {
-                              setForm({ ...form, clientId: clientId, type: 'endomarketing' as RecordingType });
+                              setForm({ ...form, clientId: clientId, type: 'endomarketing' as RecordingType, prospectName: '' });
                               setNewStep(1);
                             }}
                               className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 hover:scale-[1.01] ${

@@ -452,8 +452,8 @@ export function useEndoTasks(partnerId?: string) {
 export function useEndoMetrics(contracts: EndoContract[], tasks: EndoTask[]) {
   const activeContracts = contracts.filter(c => c.status === 'ativo');
   const totalClients = activeContracts.length;
-  const monthlyRevenue = activeContracts.reduce((s, c) => s + c.sale_price, 0);
-  const monthlyCosts = activeContracts.reduce((s, c) => s + c.partner_cost, 0);
+  const monthlyRevenue = activeContracts.reduce((s, c) => s + Number(c.sale_price || 0), 0);
+  const monthlyCosts = activeContracts.reduce((s, c) => s + Number(c.partner_cost || 0), 0);
   const monthlyProfit = monthlyRevenue - monthlyCosts;
   const avgMargin = monthlyRevenue > 0 ? (monthlyProfit / monthlyRevenue) * 100 : 0;
 

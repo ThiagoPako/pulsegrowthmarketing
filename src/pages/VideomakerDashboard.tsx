@@ -1456,10 +1456,15 @@ export default function VideomakerDashboard() {
                   {viewingScript.title}
                 </>
               ) : (
-                <>
-                  <FileText size={18} />
-                  Roteiros — {clients.find(c => c.id === scriptsClientId)?.companyName}
-                </>
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-2">
+                    <FileText size={18} />
+                    Roteiros — {clients.find(c => c.id === scriptsClientId)?.companyName}
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { refetchData(); toast.success('Roteiros atualizados!'); }}>
+                    <RefreshCw size={16} />
+                  </Button>
+                </div>
               )}
             </DialogTitle>
           </DialogHeader>

@@ -368,7 +368,7 @@ export default function Dashboard() {
                     const elapsedMin = startTime ? differenceInMinutes(new Date(), startTime) : 0;
                     const elapsedHrs = startTime ? differenceInHours(new Date(), startTime) : 0;
                     const elapsedLabel = startTime ? formatDistanceToNow(startTime, { locale: ptBR, addSuffix: false }) : '';
-                    const expectedDuration = (settings?.recordingDuration || 2) * 60;
+                    const expectedDuration = settings?.recordingDuration || 120;
                     const progressPct = Math.min((elapsedMin / expectedDuration) * 100, 100);
                     const isStale = elapsedMin > expectedDuration * 1.5;
                     const isWarning = elapsedMin > expectedDuration;

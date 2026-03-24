@@ -334,6 +334,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Production Assistant Mascot */}
       <ProductionAssistant />
+      <WelcomeRocket />
     </div>
   );
 }

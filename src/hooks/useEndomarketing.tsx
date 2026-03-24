@@ -454,8 +454,14 @@ export function useEndoMetrics(contracts: EndoContract[], tasks: EndoTask[]) {
   const totalClients = activeContracts.length;
   const monthlyRevenue = activeContracts.reduce((s, c) => s + Number(c.sale_price || 0), 0);
   const monthlyCosts = activeContracts.reduce((s, c) => s + Number(c.partner_cost || 0), 0);
-  const monthlyProfit = monthlyRevenue - monthlyCosts;
-  const avgMargin = monthlyRevenue > 0 ? (monthlyProfit / monthlyRevenue) * 100 : 0;
+  // Only count profit from contracts that have a sale_price; overdelivery (sale_price=0) doesn't generate negative profit
+  const monthlyProfit = activeContracts.reduce((s, c) => {
+    const sp = Number(c.sale_price || 0);
+    const pc = Number(c.partner_cost || 0);
+    return s + (sp > 0 ? sp - pc : 0);
+  }, 0);
+  const chargeableRevenue = activeContracts.reduce((s, c) => s + (Number(c.sale_price || 0) > 0 ? Number(c.sale_price || 0) : 0), 0);
+  const avgMargin = chargeableRevenue > 0 ? (monthlyProfit / chargeableRevenue) * 100 : 0;
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const todayTasks = tasks.filter(t => t.date === today);

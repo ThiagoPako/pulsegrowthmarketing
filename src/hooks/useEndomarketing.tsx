@@ -131,7 +131,7 @@ export function useEndoContracts() {
   const fetchContracts = useCallback(async () => {
     const { data } = await (supabase as any)
       .from('client_endomarketing_contracts')
-      .select('*, clients(company_name, color, logo_url), endomarketing_packages(*)')
+      .select('*, clients(company_name, color, logo_url), endomarketing_packages(id, package_name, category, partner_cost, sessions_per_week, stories_per_day, duration_hours, description)')
       .order('created_at', { ascending: false });
 
     if (data) {

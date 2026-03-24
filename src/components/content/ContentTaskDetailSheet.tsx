@@ -440,7 +440,7 @@ function getHistoryColor(action: string): string {
 
 export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRefresh }: Props) {
   const { clients, users, scripts, recordings } = useApp();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [history, setHistory] = useState<TaskHistory[]>([]);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
 

@@ -6,7 +6,7 @@ import { pt } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-import { syncPortalScriptPriority } from '@/lib/portalSync';
+import { syncPortalScriptPriority, syncPortalScriptEdit } from '@/lib/portalSync';
 import { highlightQuotes } from '@/lib/highlightQuotes';
 
 interface Script {

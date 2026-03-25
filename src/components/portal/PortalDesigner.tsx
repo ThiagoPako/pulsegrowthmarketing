@@ -498,43 +498,105 @@ export default function PortalDesigner({ clientId, clientColor }: Props) {
 
                 {/* Actions for pending approval */}
                 {selectedTask.kanban_column === 'enviar_cliente' && (
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap gap-3">
-                      <button
-                        onClick={() => handleApproveDesign(selectedTask.id)}
-                        className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full font-semibold text-sm bg-emerald-500 hover:bg-emerald-400 text-white transition-all hover:scale-105 active:scale-95"
-                      >
-                        <Check size={16} /> Aprovar Arte
-                      </button>
-                      <button
-                        onClick={() => setShowAdjustment(!showAdjustment)}
-                        className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full font-semibold text-sm bg-white/10 hover:bg-white/15 text-white transition-all hover:scale-105 active:scale-95"
-                      >
-                        <MessageSquare size={16} /> Solicitar Ajuste
-                      </button>
-                    </div>
+                  <div className="space-y-4">
+                    {/* Approve button - glowing & attractive */}
+                    <motion.button
+                      onClick={() => handleApproveDesign(selectedTask.id)}
+                      className="relative w-full py-4 rounded-2xl font-bold text-base text-white overflow-hidden group"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.97 }}
+                      style={{
+                        background: 'linear-gradient(135deg, #10b981, #34d399, #6ee7b7)',
+                        boxShadow: '0 0 30px rgba(16, 185, 129, 0.4), 0 0 60px rgba(16, 185, 129, 0.2), inset 0 1px 0 rgba(255,255,255,0.2)',
+                      }}
+                    >
+                      {/* Animated glow pulse */}
+                      <motion.div
+                        className="absolute inset-0 rounded-2xl"
+                        animate={{
+                          boxShadow: [
+                            '0 0 20px rgba(16, 185, 129, 0.3)',
+                            '0 0 40px rgba(16, 185, 129, 0.6)',
+                            '0 0 20px rgba(16, 185, 129, 0.3)',
+                          ],
+                        }}
+                        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                      />
+                      {/* Sparkle particles */}
+                      <motion.div
+                        className="absolute top-1/2 left-1/4 w-1 h-1 bg-white rounded-full"
+                        animate={{ opacity: [0, 1, 0], y: [-5, -15], scale: [0.5, 1.5, 0] }}
+                        transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }}
+                      />
+                      <motion.div
+                        className="absolute top-1/3 right-1/3 w-1.5 h-1.5 bg-white rounded-full"
+                        animate={{ opacity: [0, 1, 0], y: [-3, -12], scale: [0.5, 1.2, 0] }}
+                        transition={{ duration: 1.8, repeat: Infinity, delay: 0.8 }}
+                      />
+                      <motion.div
+                        className="absolute top-1/2 right-1/4 w-1 h-1 bg-white/80 rounded-full"
+                        animate={{ opacity: [0, 1, 0], y: [-4, -14], scale: [0.5, 1.3, 0] }}
+                        transition={{ duration: 1.6, repeat: Infinity, delay: 1.2 }}
+                      />
+                      {/* Shimmer effect */}
+                      <motion.div
+                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+                        animate={{ x: ['-100%', '200%'] }}
+                        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut', repeatDelay: 1 }}
+                      />
+                      <span className="relative flex items-center justify-center gap-2.5">
+                        <Sparkles size={20} />
+                        Aprovar Arte
+                        <Check size={18} />
+                      </span>
+                    </motion.button>
+
+                    {/* Adjustment request */}
+                    <button
+                      onClick={() => setShowAdjustment(!showAdjustment)}
+                      className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm bg-white/[0.06] border border-white/[0.08] hover:bg-white/[0.1] text-white/70 hover:text-white transition-all"
+                    >
+                      <PenLine size={15} />
+                      {showAdjustment ? 'Cancelar' : 'Solicitar Ajustes'}
+                    </button>
 
                     <AnimatePresence>
                       {showAdjustment && (
-                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
-                          <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-4 space-y-3">
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.25 }}
+                        >
+                          <div className="bg-white/[0.04] border border-orange-500/20 rounded-2xl p-4 space-y-3">
+                            <div className="flex items-center gap-2 text-orange-400 text-xs font-medium">
+                              <AlertCircle size={13} />
+                              Descreva detalhadamente o que precisa ser ajustado
+                            </div>
                             <textarea
                               value={adjustmentNote}
                               onChange={e => setAdjustmentNote(e.target.value)}
-                              placeholder="Descreva o ajuste necessário..."
-                              className="w-full bg-white/[0.06] border border-white/[0.08] rounded-xl p-3 text-sm text-white placeholder:text-white/30 resize-none focus:outline-none focus:ring-1 transition-all"
-                              style={{ '--tw-ring-color': `hsl(${clientColor})` } as any}
-                              rows={3}
+                              placeholder="Ex: Alterar a cor do fundo para azul, aumentar o tamanho do texto principal..."
+                              className="w-full bg-white/[0.06] border border-white/[0.08] rounded-xl p-3 text-sm text-white placeholder:text-white/25 resize-none focus:outline-none focus:ring-1 transition-all"
+                              style={{ '--tw-ring-color': 'hsl(25 95% 53%)' } as any}
+                              rows={4}
                             />
-                            <div className="flex justify-end">
+                            <div className="flex justify-end gap-2">
                               <button
+                                onClick={() => { setShowAdjustment(false); setAdjustmentNote(''); }}
+                                className="px-4 py-2 rounded-xl text-xs text-white/40 hover:text-white/60 transition-all"
+                              >
+                                Cancelar
+                              </button>
+                              <motion.button
                                 onClick={() => handleRequestDesignAdjustment(selectedTask.id)}
                                 disabled={!adjustmentNote.trim()}
-                                className="px-5 py-2 rounded-full text-sm font-semibold disabled:opacity-30 text-white transition-all hover:scale-105"
-                                style={{ background: `hsl(${clientColor})` }}
+                                className="px-5 py-2 rounded-xl text-sm font-semibold disabled:opacity-30 text-white bg-orange-500 hover:bg-orange-400 transition-all"
+                                whileHover={{ scale: 1.03 }}
+                                whileTap={{ scale: 0.97 }}
                               >
-                                Enviar ajuste
-                              </button>
+                                Enviar Ajuste
+                              </motion.button>
                             </div>
                           </div>
                         </motion.div>

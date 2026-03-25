@@ -985,70 +985,6 @@ app.post('/api/client-portal-auth', async (req, res) => {
     }
 
 
-    // ── Client: Edit script ──
-    if (action === 'client_edit_script') {
-      const { script_id, content, caption } = req.body;
-      if (!client_id || !script_id) return res.status(400).json({ error: 'client_id and script_id required' });
-
-      const plainContent = String(content || '').trim();
-      const htmlContent = plainContent ? `<p>${plainContent.replace(/\n/g, '</p><p>')}</p>` : '';
-
-      const { rows: [updatedScript] } = await pool.query(
-        `UPDATE scripts
-         SET content = $1,
-             caption = $2,
-             client_edited = true,
-             client_edited_at = NOW(),
-             updated_at = NOW()
-         WHERE id = $3 AND client_id = $4
-         RETURNING id, title`,
-        [htmlContent, caption || '', script_id, client_id]
-      );
-
-      if (!updatedScript) return res.status(404).json({ error: 'Roteiro não encontrado' });
-
-      const { rows: [clientInfo] } = await pool.query(
-        'SELECT company_name FROM clients WHERE id = $1 LIMIT 1',
-        [client_id]
-      );
-
-      return res.json({
-        success: true,
-        company_name: clientInfo?.company_name || 'Cliente',
-        script: updatedScript,
-      });
-    }
-
-    // ── Sync: Script edited by client ──
-    if (action === 'sync_script_edit') {
-      const { script_id, client_name } = req.body;
-      if (!script_id) return res.status(400).json({ error: 'script_id required' });
-
-      const { rows: [script] } = await pool.query(
-        'SELECT title FROM scripts WHERE id = $1 LIMIT 1',
-        [script_id]
-      );
-
-      const { rows: notifUsers } = await pool.query(
-        `SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`
-      );
-
-      for (const u of notifUsers) {
-        await pool.query(
-          `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [
-            u.user_id,
-            '✏️ Roteiro editado pelo cliente',
-            `${client_name || 'Cliente'} editou o roteiro "${script?.title || 'Roteiro'}" no Pulse Club`,
-            'info',
-            '/roteiros',
-          ]
-        );
-      }
-
-      return res.json({ success: true });
-    }
-
     res.status(400).json({ error: 'Invalid action' });
   } catch (err) {
     console.error('Portal auth error:', err);
@@ -1286,6 +1222,71 @@ app.post('/api/portal-actions', async (req, res) => {
       const { video_id } = req.body;
       if (!client_id || !video_id) return res.status(400).json({ error: 'client_id and video_id required' });
       await pool.query('INSERT INTO portal_video_views (video_id, client_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [video_id, client_id]);
+      return res.json({ success: true });
+    }
+
+
+    // ── Client: Edit script ──
+    if (action === 'client_edit_script') {
+      const { script_id, content, caption } = req.body;
+      if (!client_id || !script_id) return res.status(400).json({ error: 'client_id and script_id required' });
+
+      const plainContent = String(content || '').trim();
+      const htmlContent = plainContent ? `<p>${plainContent.replace(/\n/g, '</p><p>')}</p>` : '';
+
+      const { rows: [updatedScript] } = await pool.query(
+        `UPDATE scripts
+         SET content = $1,
+             caption = $2,
+             client_edited = true,
+             client_edited_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $3 AND client_id = $4
+         RETURNING id, title`,
+        [htmlContent, caption || '', script_id, client_id]
+      );
+
+      if (!updatedScript) return res.status(404).json({ error: 'Roteiro não encontrado' });
+
+      const { rows: [clientInfo] } = await pool.query(
+        'SELECT company_name FROM clients WHERE id = $1 LIMIT 1',
+        [client_id]
+      );
+
+      return res.json({
+        success: true,
+        company_name: clientInfo?.company_name || 'Cliente',
+        script: updatedScript,
+      });
+    }
+
+    // ── Sync: Script edited by client ──
+    if (action === 'sync_script_edit') {
+      const { script_id, client_name } = req.body;
+      if (!script_id) return res.status(400).json({ error: 'script_id required' });
+
+      const { rows: [script] } = await pool.query(
+        'SELECT title FROM scripts WHERE id = $1 LIMIT 1',
+        [script_id]
+      );
+
+      const { rows: notifUsers } = await pool.query(
+        `SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`
+      );
+
+      for (const u of notifUsers) {
+        await pool.query(
+          `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
+          [
+            u.user_id,
+            '✏️ Roteiro editado pelo cliente',
+            `${client_name || 'Cliente'} editou o roteiro "${script?.title || 'Roteiro'}" no Pulse Club`,
+            'info',
+            '/roteiros',
+          ]
+        );
+      }
+
       return res.json({ success: true });
     }
 

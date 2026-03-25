@@ -144,13 +144,6 @@ function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDel
       vid.load();
     }
   }, []);
-    setHovering(true);
-    const vid = videoRef.current;
-    if (vid) {
-      vid.currentTime = 0;
-      vid.play().catch(() => {});
-    }
-  }, []);
 
   const stopPreview = useCallback(() => {
     setHovering(false);

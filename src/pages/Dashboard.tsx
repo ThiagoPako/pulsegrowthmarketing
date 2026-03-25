@@ -415,13 +415,135 @@ export default function Dashboard() {
         </motion.div>
       )}
 
-      {/* LIVE ACTIVITY */}
+      {/* LIVE ACTIVITY — Redesigned with proper status separation */}
       {(() => {
         const organizingRecordings = recordings.filter(r => r.status === 'organizando_material' && normalizeDateKey(r.date) === today);
+        // Separate editor tasks by actual kanban_column
+        const editingTasks = liveEditorTasks.filter(t => t.kanban_column === 'em_edicao');
+        const reviewTasks = liveEditorTasks.filter(t => t.kanban_column === 'revisao');
+        const alterationTasks = liveEditorTasks.filter(t => t.kanban_column === 'alteracao');
         const totalActive = activeRecordings.length + liveEditorTasks.length + organizingRecordings.length;
+
+        const columnConfig = {
+          em_edicao: { label: 'Editando', icon: Film, color: 'info', dotColor: 'bg-info', badgeBg: 'bg-info', borderColor: 'border-info/20', bgColor: 'bg-info/5' },
+          revisao: { label: 'Revisão', icon: AlertTriangle, color: 'warning', dotColor: 'bg-warning', badgeBg: 'bg-warning', borderColor: 'border-warning/20', bgColor: 'bg-warning/5' },
+          alteracao: { label: 'Alteração', icon: RefreshCw, color: 'destructive', dotColor: 'bg-destructive', badgeBg: 'bg-destructive', borderColor: 'border-destructive/20', bgColor: 'bg-destructive/5' },
+        };
+
+        const renderEditorCard = (task: LiveEditorTask, config: typeof columnConfig.em_edicao) => {
+          const editor = users.find(u => u.id === task.assigned_to);
+          const client = clients.find(c => c.id === task.client_id);
+          const startTime = task.editing_started_at ? parseISO(task.editing_started_at) : null;
+          const elapsedMin = startTime ? differenceInMinutes(new Date(), startTime) : 0;
+          const elapsedHrs = startTime ? differenceInHours(new Date(), startTime) : 0;
+          const elapsedLabel = startTime ? formatDistanceToNow(startTime, { locale: ptBR, addSuffix: false }) : '';
+
+          const thresholds = task.kanban_column === 'alteracao' ? { warn: 120, stale: 360 } : task.kanban_column === 'revisao' ? { warn: 480, stale: 1440 } : { warn: 240, stale: 480 };
+          const isWarning = elapsedMin > thresholds.warn;
+          const isStale = elapsedMin > thresholds.stale;
+          const maxMin = thresholds.stale;
+          const progressPct = Math.min((elapsedMin / maxMin) * 100, 100);
+
+          const handleDemandNotification = async () => {
+            const targetId = task.assigned_to;
+            if (!targetId) return;
+            await supabase.from('notifications').insert({
+              user_id: targetId,
+              title: `Cobrança — ${config.label}`,
+              message: `A tarefa "${task.title}" (${client?.companyName || 'cliente'}) está em ${config.label} há ${elapsedLabel}. Atualize o status.`,
+              type: 'warning',
+              link: '/editor',
+            });
+            const { toast } = await import('@/hooks/use-toast');
+            toast({ title: 'Notificação enviada', description: `Cobrança enviada para ${editor?.name || 'editor'}` });
+          };
+
+          return (
+            <motion.div
+              key={task.id}
+              whileTap={{ scale: 0.97 }}
+              className={`relative p-2.5 sm:p-3 rounded-xl border transition-all ${
+                isStale ? 'bg-destructive/8 border-destructive/30 shadow-sm shadow-destructive/10' :
+                isWarning ? 'bg-warning/8 border-warning/30' :
+                `${config.bgColor} ${config.borderColor}`
+              }`}
+            >
+              {isStale && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-1.5 mb-2 px-2 py-1 rounded-md bg-destructive/15 text-destructive">
+                  <AlertTriangle size={11} />
+                  <span className="text-[10px] font-semibold">
+                    {task.kanban_column === 'alteracao' ? 'Alteração parada há muito tempo!' : task.kanban_column === 'revisao' ? 'Revisão pendente há muito tempo!' : 'Edição parada há muito tempo!'}
+                  </span>
+                </motion.div>
+              )}
+              {isWarning && !isStale && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-1.5 mb-2 px-2 py-1 rounded-md bg-warning/15 text-warning">
+                  <Clock size={11} />
+                  <span className="text-[10px] font-semibold">Tempo acima do esperado</span>
+                </motion.div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <div className="relative shrink-0">
+                  {editor ? <UserAvatar user={editor} size="sm" /> : (
+                    <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center">
+                      <UsersIcon size={12} className="text-muted-foreground" />
+                    </div>
+                  )}
+                  <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 ${config.dotColor} rounded-full border-2 border-background ${isStale ? '' : 'animate-pulse'}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold truncate">{editor?.name || 'Sem editor'}</p>
+                  <div className="flex items-center gap-1">
+                    {client && <ClientLogo client={client} size="sm" className="w-3.5 h-3.5" />}
+                    <p className="text-[10px] text-muted-foreground truncate">{task.title || client?.companyName || '—'}</p>
+                  </div>
+                </div>
+                <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                  <div className="flex items-center gap-1">
+                    <Clock size={10} className="text-muted-foreground" />
+                    <span className={`text-[10px] font-mono font-bold tabular-nums ${isStale ? 'text-destructive' : isWarning ? 'text-warning' : 'text-muted-foreground'}`}>
+                      {elapsedHrs > 0 ? `${elapsedHrs}h${String(elapsedMin % 60).padStart(2, '0')}` : `${elapsedMin}min`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-2">
+                <div className="flex justify-between text-[9px] text-muted-foreground mb-0.5">
+                  <span>Tempo dedicado</span>
+                  <span>{Math.round(progressPct)}%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                  <motion.div
+                    className={`h-full rounded-full ${isStale ? 'bg-destructive' : isWarning ? 'bg-warning' : config.color === 'info' ? 'bg-info/70' : config.color === 'warning' ? 'bg-warning/70' : 'bg-destructive/70'}`}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progressPct}%` }}
+                    transition={{ duration: 1, ease: 'easeOut' }}
+                  />
+                </div>
+              </div>
+
+              {(isWarning || isStale) && task.assigned_to && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleDemandNotification}
+                  className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-warning/15 hover:bg-warning/25 text-warning text-[10px] font-semibold transition-colors"
+                >
+                  <Send size={11} />
+                  Cobrar Atualização
+                </motion.button>
+              )}
+            </motion.div>
+          );
+        };
+
         return totalActive > 0 && (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-3 sm:p-5 border-primary/20">
-          <div className="flex items-center gap-2 mb-3 sm:mb-4">
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-3 sm:p-5 overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center gap-2 mb-4">
             <span className="relative flex h-3 w-3">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75" />
               <span className="relative inline-flex rounded-full h-3 w-3 bg-destructive" />
@@ -430,18 +552,25 @@ export default function Dashboard() {
             <Badge variant="outline" className="text-[9px] ml-auto">{totalActive} ativas</Badge>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-            {/* Videomakers Recording */}
-            <div>
-              <div className="flex items-center gap-1.5 mb-2 sm:mb-3">
-                <Clapperboard size={14} className="text-destructive" />
-                <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">Gravando</p>
-                <Badge variant="destructive" className="text-[9px] h-4 px-1 ml-1">{activeRecordings.length}</Badge>
+          {/* Two main columns: GRAVANDO | PÓS-PRODUÇÃO */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+            {/* ── COLUNA GRAVANDO ── */}
+            <div className="rounded-xl border-2 border-destructive/20 bg-destructive/[0.03] p-3">
+              <div className="flex items-center gap-2 mb-3 pb-2 border-b border-destructive/10">
+                <div className="w-7 h-7 rounded-lg bg-destructive/15 flex items-center justify-center">
+                  <Clapperboard size={14} className="text-destructive" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs sm:text-sm font-display font-bold text-destructive">GRAVANDO</p>
+                  <p className="text-[9px] text-muted-foreground">Videomakers em campo</p>
+                </div>
+                <Badge variant="destructive" className="text-[10px] h-5 px-2">{activeRecordings.length + organizingRecordings.length}</Badge>
               </div>
-              {activeRecordings.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-2">Nenhum videomaker gravando</p>
+              {activeRecordings.length === 0 && organizingRecordings.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-4 text-center">Nenhum videomaker gravando</p>
               ) : (
-                <div className="space-y-2 sm:space-y-2.5">
+                <div className="space-y-2">
                   {activeRecordings.map(ar => {
                     const vm = users.find(u => u.id === ar.videomarkerId);
                     const client = clients.find(c => c.id === ar.clientId);
@@ -465,7 +594,7 @@ export default function Dashboard() {
                       await supabase.from('notifications').insert({
                         user_id: vm.id,
                         title: 'Cobrança de Gravação',
-                        message: `A gravação de ${client?.companyName || 'cliente'} está em andamento há ${elapsedLabel}. Por favor, atualize o status.`,
+                        message: `A gravação de ${client?.companyName || 'cliente'} está em andamento há ${elapsedLabel}. Atualize o status.`,
                         type: 'warning',
                         link: '/agenda',
                       });
@@ -474,44 +603,30 @@ export default function Dashboard() {
                     };
 
                     return (
-                      <motion.div
-                        key={ar.recordingId}
-                        whileTap={{ scale: 0.97 }}
-                        className={`relative p-2.5 sm:p-3.5 rounded-xl border transition-all ${
+                      <motion.div key={ar.recordingId} whileTap={{ scale: 0.97 }}
+                        className={`relative p-2.5 sm:p-3 rounded-xl border transition-all ${
                           isStale ? 'bg-destructive/8 border-destructive/30 shadow-sm shadow-destructive/10' :
-                          isWarning ? 'bg-warning/8 border-warning/30' :
-                          'bg-destructive/5 border-destructive/15'
-                        }`}
-                      >
-                        {/* Stale alert banner */}
+                          isWarning ? 'bg-warning/8 border-warning/30' : 'bg-background border-destructive/10'
+                        }`}>
                         {isStale && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            className="flex items-center gap-1.5 mb-2 px-2 py-1 rounded-md bg-destructive/15 text-destructive"
-                          >
-                            <AlertTriangle size={12} />
+                          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-1.5 mb-2 px-2 py-1 rounded-md bg-destructive/15 text-destructive">
+                            <AlertTriangle size={11} />
                             <span className="text-[10px] font-semibold">Atividade parada há muito tempo!</span>
                           </motion.div>
                         )}
                         {isWarning && !isStale && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            className="flex items-center gap-1.5 mb-2 px-2 py-1 rounded-md bg-warning/15 text-warning"
-                          >
-                            <Clock size={12} />
+                          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-1.5 mb-2 px-2 py-1 rounded-md bg-warning/15 text-warning">
+                            <Clock size={11} />
                             <span className="text-[10px] font-semibold">Tempo acima do esperado</span>
                           </motion.div>
                         )}
-
-                        <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="flex items-center gap-2">
                           <div className="relative shrink-0">
                             {vm && <UserAvatar user={vm} size="sm" />}
                             <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-destructive rounded-full border-2 border-background animate-pulse" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs sm:text-sm font-semibold truncate">{vm?.name || '—'}</p>
+                            <p className="text-xs font-semibold truncate">{vm?.name || '—'}</p>
                             <div className="flex items-center gap-1">
                               {client && <ClientLogo client={client} size="sm" className="w-3.5 h-3.5" />}
                               <p className="text-[10px] text-muted-foreground truncate">{client?.companyName || '—'}</p>
@@ -523,201 +638,101 @@ export default function Dashboard() {
                             </Badge>
                             <div className="flex items-center gap-1">
                               <Clock size={10} className="text-muted-foreground" />
-                              <span className={`text-[10px] font-mono font-bold ${isStale ? 'text-destructive' : isWarning ? 'text-warning' : 'text-muted-foreground'}`}>
+                              <span className={`text-[10px] font-mono font-bold tabular-nums ${isStale ? 'text-destructive' : isWarning ? 'text-warning' : 'text-muted-foreground'}`}>
                                 {elapsedHrs > 0 ? `${elapsedHrs}h${String(elapsedMin % 60).padStart(2, '0')}` : `${elapsedMin}min`}
                               </span>
                             </div>
                           </div>
                         </div>
-
-                        {/* Progress bar */}
                         <div className="mt-2">
                           <div className="flex justify-between text-[9px] text-muted-foreground mb-0.5">
                             <span>Tempo dedicado</span>
                             <span>{Math.round(progressPct)}%</span>
                           </div>
                           <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-                            <motion.div
-                              className={`h-full rounded-full ${isStale ? 'bg-destructive' : isWarning ? 'bg-warning' : 'bg-destructive/70'}`}
-                              initial={{ width: 0 }}
-                              animate={{ width: `${progressPct}%` }}
-                              transition={{ duration: 1, ease: 'easeOut' }}
-                            />
+                            <motion.div className={`h-full rounded-full ${isStale ? 'bg-destructive' : isWarning ? 'bg-warning' : 'bg-destructive/70'}`}
+                              initial={{ width: 0 }} animate={{ width: `${progressPct}%` }} transition={{ duration: 1, ease: 'easeOut' }} />
                           </div>
                         </div>
-
-                        {/* Demand button */}
                         {(isWarning || isStale) && (
-                          <motion.button
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            whileTap={{ scale: 0.95 }}
+                          <motion.button initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} whileTap={{ scale: 0.95 }}
                             onClick={handleDemandNotification}
-                            className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-warning/15 hover:bg-warning/25 text-warning text-[10px] font-semibold transition-colors"
-                          >
-                            <Send size={11} />
-                            Cobrar Atualização
+                            className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-warning/15 hover:bg-warning/25 text-warning text-[10px] font-semibold transition-colors">
+                            <Send size={11} /> Cobrar Atualização
                           </motion.button>
                         )}
                       </motion.div>
                     );
                   })}
-                </div>
-              )}
-            </div>
-
-            {/* Editors */}
-            <div>
-              <div className="flex items-center gap-1.5 mb-2 sm:mb-3">
-                <Film size={14} className="text-info" />
-                <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">Editando</p>
-                <Badge className="text-[9px] h-4 px-1 ml-1 bg-info">{liveEditorTasks.length}</Badge>
-              </div>
-              {liveEditorTasks.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-2">Nenhum editor em atividade</p>
-              ) : (
-                <div className="space-y-2 sm:space-y-2.5">
-                  {liveEditorTasks.map(task => {
-                    const editor = users.find(u => u.id === task.assigned_to);
-                    const client = clients.find(c => c.id === task.client_id);
-                    const startTime = task.editing_started_at ? parseISO(task.editing_started_at) : null;
-                    const elapsedMin = startTime ? differenceInMinutes(new Date(), startTime) : 0;
-                    const elapsedHrs = startTime ? differenceInHours(new Date(), startTime) : 0;
-                    const elapsedLabel = startTime ? formatDistanceToNow(startTime, { locale: ptBR, addSuffix: false }) : '';
-                    const columnLabels: Record<string, string> = { em_edicao: 'Editando', revisao: 'Revisão', alteracao: 'Alteração' };
-
-                    // Stale thresholds: editing > 4h warning, > 8h stale
-                    const isWarning = elapsedMin > 240;
-                    const isStale = elapsedMin > 480;
-                    const maxMin = 480;
-                    const progressPct = Math.min((elapsedMin / maxMin) * 100, 100);
-
-                    const handleDemandNotification = async () => {
-                      const targetId = task.assigned_to;
-                      if (!targetId) return;
-                      await supabase.from('notifications').insert({
-                        user_id: targetId,
-                        title: 'Cobrança de Edição',
-                        message: `A tarefa "${task.title}" (${client?.companyName || 'cliente'}) está em ${columnLabels[task.kanban_column] || task.kanban_column} há ${elapsedLabel}. Atualize o status.`,
-                        type: 'warning',
-                        link: '/editor',
-                      });
-                      const { toast } = await import('@/hooks/use-toast');
-                      toast({ title: 'Notificação enviada', description: `Cobrança enviada para ${editor?.name || 'editor'}` });
-                    };
-
-                    return (
-                      <motion.div
-                        key={task.id}
-                        whileTap={{ scale: 0.97 }}
-                        className={`relative p-2.5 sm:p-3.5 rounded-xl border transition-all ${
-                          isStale ? 'bg-destructive/8 border-destructive/30 shadow-sm shadow-destructive/10' :
-                          isWarning ? 'bg-warning/8 border-warning/30' :
-                          'bg-info/5 border-info/15'
-                        }`}
-                      >
-                        {/* Stale alert banner */}
-                        {isStale && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            className="flex items-center gap-1.5 mb-2 px-2 py-1 rounded-md bg-destructive/15 text-destructive"
-                          >
-                            <AlertTriangle size={12} />
-                            <span className="text-[10px] font-semibold">Edição parada há muito tempo!</span>
-                          </motion.div>
-                        )}
-                        {isWarning && !isStale && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            className="flex items-center gap-1.5 mb-2 px-2 py-1 rounded-md bg-warning/15 text-warning"
-                          >
-                            <Clock size={12} />
-                            <span className="text-[10px] font-semibold">Tempo acima do esperado</span>
-                          </motion.div>
-                        )}
-
-                        <div className="flex items-center gap-2 sm:gap-3">
-                          <div className="relative shrink-0">
-                            {editor && <UserAvatar user={editor} size="sm" />}
-                            <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-info rounded-full border-2 border-background animate-pulse" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs sm:text-sm font-semibold truncate">{editor?.name || 'Sem editor'}</p>
-                            <div className="flex items-center gap-1">
-                              {client && <ClientLogo client={client} size="sm" className="w-3.5 h-3.5" />}
-                              <p className="text-[10px] text-muted-foreground truncate">{task.title || client?.companyName || '—'}</p>
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0 flex flex-col items-end gap-1">
-                            <Badge className="text-[9px] bg-info px-1.5">
-                              {columnLabels[task.kanban_column] || task.kanban_column}
-                            </Badge>
-                            <div className="flex items-center gap-1">
-                              <Clock size={10} className="text-muted-foreground" />
-                              <span className={`text-[10px] font-mono font-bold ${isStale ? 'text-destructive' : isWarning ? 'text-warning' : 'text-muted-foreground'}`}>
-                                {elapsedHrs > 0 ? `${elapsedHrs}h${String(elapsedMin % 60).padStart(2, '0')}` : `${elapsedMin}min`}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Progress bar */}
-                        <div className="mt-2">
-                          <div className="flex justify-between text-[9px] text-muted-foreground mb-0.5">
-                            <span>Tempo dedicado</span>
-                            <span>{Math.round(progressPct)}%</span>
-                          </div>
-                          <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-                            <motion.div
-                              className={`h-full rounded-full ${isStale ? 'bg-destructive' : isWarning ? 'bg-warning' : 'bg-info/70'}`}
-                              initial={{ width: 0 }}
-                              animate={{ width: `${progressPct}%` }}
-                              transition={{ duration: 1, ease: 'easeOut' }}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Demand button */}
-                        {(isWarning || isStale) && (
-                          <motion.button
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={handleDemandNotification}
-                            className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-warning/15 hover:bg-warning/25 text-warning text-[10px] font-semibold transition-colors"
-                          >
-                            <Send size={11} />
-                            Cobrar Atualização
-                          </motion.button>
-                        )}
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Organizando Material */}
-            {organizingRecordings.length > 0 && (
-              <div className="lg:col-span-2">
-                <div className="flex items-center gap-1.5 mb-2 sm:mb-3">
-                  <Package size={14} className="text-primary" />
-                  <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">Organizando Material</p>
-                  <Badge className="text-[9px] h-4 px-1 ml-1 bg-primary">{organizingRecordings.length}</Badge>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {/* Organizando Material inline */}
                   {organizingRecordings.map(rec => {
                     const vm = users.find(u => u.id === rec.videomakerId);
                     const client = clients.find(c => c.id === rec.clientId);
-                    return (
-                      <OrganizingMaterialCard key={rec.id} rec={rec} vm={vm} client={client} settings={settings} />
-                    );
+                    return <OrganizingMaterialCard key={rec.id} rec={rec} vm={vm} client={client} settings={settings} />;
                   })}
                 </div>
+              )}
+            </div>
+
+            {/* ── COLUNA PÓS-PRODUÇÃO (Editando / Revisão / Alteração) ── */}
+            <div className="rounded-xl border-2 border-info/20 bg-info/[0.03] p-3">
+              <div className="flex items-center gap-2 mb-3 pb-2 border-b border-info/10">
+                <div className="w-7 h-7 rounded-lg bg-info/15 flex items-center justify-center">
+                  <Film size={14} className="text-info" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs sm:text-sm font-display font-bold text-info">PÓS-PRODUÇÃO</p>
+                  <p className="text-[9px] text-muted-foreground">Editores e revisões</p>
+                </div>
+                <Badge className="text-[10px] h-5 px-2 bg-info">{liveEditorTasks.length}</Badge>
               </div>
-            )}
+
+              {liveEditorTasks.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-4 text-center">Nenhum editor em atividade</p>
+              ) : (
+                <div className="space-y-3">
+                  {/* Sub-section: Editando */}
+                  {editingTasks.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <Film size={12} className="text-info" />
+                        <span className="text-[10px] font-bold text-info uppercase tracking-wider">Editando</span>
+                        <span className="text-[9px] text-muted-foreground ml-auto">{editingTasks.length}</span>
+                      </div>
+                      <div className="space-y-2">
+                        {editingTasks.map(t => renderEditorCard(t, columnConfig.em_edicao))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Sub-section: Revisão */}
+                  {reviewTasks.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <AlertTriangle size={12} className="text-warning" />
+                        <span className="text-[10px] font-bold text-warning uppercase tracking-wider">Revisão</span>
+                        <span className="text-[9px] text-muted-foreground ml-auto">{reviewTasks.length}</span>
+                      </div>
+                      <div className="space-y-2">
+                        {reviewTasks.map(t => renderEditorCard(t, columnConfig.revisao))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Sub-section: Alteração */}
+                  {alterationTasks.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <RefreshCw size={12} className="text-destructive" />
+                        <span className="text-[10px] font-bold text-destructive uppercase tracking-wider">Alteração</span>
+                        <span className="text-[9px] text-muted-foreground ml-auto">{alterationTasks.length}</span>
+                      </div>
+                      <div className="space-y-2">
+                        {alterationTasks.map(t => renderEditorCard(t, columnConfig.alteracao))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </motion.div>
         );

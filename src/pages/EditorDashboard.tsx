@@ -21,7 +21,7 @@ import { highlightQuotes } from '@/lib/highlightQuotes';
 import { format, differenceInHours, isPast, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
-import { uploadFileToVps } from '@/services/vpsApi';
+import { uploadFileToVps, deleteFileFromVps } from '@/services/vpsApi';
 
 const CONTENT_TYPES = [
   { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400', points: 10 },
@@ -204,9 +204,10 @@ export default function EditorDashboard() {
   const [videoLink, setVideoLink] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
-  const [saving, setSaving] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const isEditorRole = profile?.role === 'editor';
+   const [saving, setSaving] = useState(false);
+   const [oldVideoLink, setOldVideoLink] = useState<string | null>(null);
+   const fileInputRef = useRef<HTMLInputElement>(null);
+   const isEditorRole = profile?.role === 'editor';
 
   const fetchTasks = useCallback(async () => {
     const { data } = await supabase.from('content_tasks').select('*')

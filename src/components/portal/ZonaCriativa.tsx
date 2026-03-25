@@ -546,9 +546,16 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
 
                         {/* Content */}
                         <div className="p-4 space-y-3">
-                          <h4 className="text-sm font-semibold text-white/90 line-clamp-2 group-hover:text-white transition-colors duration-200">
-                            {script.title}
-                          </h4>
+                          <div className="flex items-start gap-2">
+                            <h4 className="text-sm font-semibold text-white/90 line-clamp-2 group-hover:text-white transition-colors duration-200 flex-1">
+                              {script.title}
+                            </h4>
+                            {script.client_edited && (
+                              <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-400 border border-violet-500/20 text-[8px] font-bold whitespace-nowrap shrink-0">
+                                <Pencil size={7} /> Editado
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[11px] text-white/35 line-clamp-3 leading-relaxed">{excerpt || 'Sem descrição'}</p>
 
                           {author && (

@@ -642,7 +642,7 @@ export default function InternalReports() {
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold text-sm truncate">{r.editor.name}</p>
                             <p className="text-[10px] text-muted-foreground">
-                              {r.reels}R · {r.criativos}C · {r.stories}S · {r.total} total
+                              {r.approved}✅ · {r.inEditing}🎬 · {r.alterations}🔄 · {r.priorityTasks}⚡ · {r.total} total
                               {r.avgTime > 0 && ` · ~${hours > 0 ? `${hours}h` : ''}${mins}min`}
                             </p>
                           </div>

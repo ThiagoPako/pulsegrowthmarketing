@@ -819,7 +819,7 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                         />
                       </motion.div>
                     </>
-                  )
+                  )}
                 </div>
               </div>
             </motion.div>

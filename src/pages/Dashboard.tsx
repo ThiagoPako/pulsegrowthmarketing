@@ -430,7 +430,7 @@ export default function Dashboard() {
           alteracao: { label: 'Alteração', icon: RefreshCw, color: 'destructive', dotColor: 'bg-destructive', badgeBg: 'bg-destructive', borderColor: 'border-destructive/20', bgColor: 'bg-destructive/5' },
         };
 
-        const renderEditorCard = (task: LiveEditorTask, config: typeof columnConfig.em_edicao) => {
+        const renderEditorCard = (task: LiveEditorTask, config: typeof columnConfig.edicao) => {
           const editor = users.find(u => u.id === task.assigned_to);
           const client = clients.find(c => c.id === task.client_id);
           const startTime = task.editing_started_at ? parseISO(task.editing_started_at) : null;
@@ -700,7 +700,7 @@ export default function Dashboard() {
                         <span className="text-[9px] text-muted-foreground ml-auto">{editingTasks.length}</span>
                       </div>
                       <div className="space-y-2">
-                        {editingTasks.map(t => renderEditorCard(t, columnConfig.em_edicao))}
+                        {editingTasks.map(t => renderEditorCard(t, columnConfig.edicao))}
                       </div>
                     </div>
                   )}

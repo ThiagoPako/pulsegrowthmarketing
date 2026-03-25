@@ -712,8 +712,17 @@ export default function Scripts() {
     }
   };
 
-  const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || '—';
-  const getClientColor = (id: string) => clients.find(c => c.id === id)?.color || '220 10% 50%';
+  const getClientName = (id: string, script?: Script) => {
+    if (script?.recordingId) {
+      const rec = recordings.find(r => r.id === script.recordingId);
+      return rec?.prospectName ? `📹 ${rec.prospectName}` : '📹 Avulso';
+    }
+    return clients.find(c => c.id === id)?.companyName || '—';
+  };
+  const getClientColor = (id: string, script?: Script) => {
+    if (script?.recordingId) return '200 80% 55%';
+    return clients.find(c => c.id === id)?.color || '220 10% 50%';
+  };
 
   return (
     <div className="space-y-4">

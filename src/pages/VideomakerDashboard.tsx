@@ -142,8 +142,14 @@ export default function VideomakerDashboard() {
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
   };
 
-  const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || '—';
-  const getClientColor = (id: string) => clients.find(c => c.id === id)?.color || '220 10% 50%';
+  const getClientName = (id: string, rec?: Recording) => {
+    if (rec?.prospectName) return `📹 ${rec.prospectName}`;
+    return clients.find(c => c.id === id)?.companyName || '—';
+  };
+  const getClientColor = (id: string, rec?: Recording) => {
+    if (rec?.prospectName) return '200 80% 55%';
+    return clients.find(c => c.id === id)?.color || '220 10% 50%';
+  };
 
   const typeLabels: Record<string, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.', backup: 'Backup', endomarketing: 'Endo' };
   const timeToMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
@@ -692,8 +698,8 @@ export default function VideomakerDashboard() {
           : settings.recordingDuration;
         return (
           <LiveRecordingCard
-            clientName={getClientName(activeRec.clientId)}
-            clientColor={getClientColor(activeRec.clientId)}
+            clientName={getClientName(activeRec.clientId, activeRec as Recording)}
+            clientColor={getClientColor(activeRec.clientId, activeRec as Recording)}
             startedAt={activeRecMeta?.startedAt || new Date().toISOString()}
             recordingDurationMinutes={durationMin}
             scriptsCount={planned.length}
@@ -764,7 +770,7 @@ export default function VideomakerDashboard() {
           ) : (
             <div className="space-y-2">
               {todayRecs.map((rec, i) => {
-                const color = getClientColor(rec.clientId);
+                const color = getClientColor(rec.clientId, rec);
                 const isActive = activeRecordingId === rec.id;
                 const isDone = rec.status === 'concluida';
                 const isOrganizing = rec.status === 'organizando_material';
@@ -782,7 +788,7 @@ export default function VideomakerDashboard() {
                       <div className="w-1.5 h-10 sm:h-12 rounded-full shrink-0" style={{ backgroundColor: `hsl(${color})` }} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-medium text-sm truncate max-w-[140px] sm:max-w-none">{getClientName(rec.clientId)}</span>
+                          <span className="font-medium text-sm truncate max-w-[140px] sm:max-w-none">{getClientName(rec.clientId, rec)}</span>
                           <Badge variant="outline" className="text-[9px] sm:text-[10px]">{typeLabels[rec.type]}</Badge>
                           {isActive && (
                             <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
@@ -1012,7 +1018,7 @@ export default function VideomakerDashboard() {
                     </div>
                   )}
                   {dayRecs.map(rec => {
-                    const color = getClientColor(rec.clientId);
+                    const color = getClientColor(rec.clientId, rec);
                     const isActive = activeRecordingId === rec.id;
                     const isDone = rec.status === 'concluida';
                     const isOrganizingWeek = rec.status === 'organizando_material';
@@ -1047,7 +1053,7 @@ export default function VideomakerDashboard() {
                         }`}
                         style={{ borderLeftWidth: 3, borderLeftColor: `hsl(${color})` }}
                       >
-                        <p className="font-medium truncate text-[11px]">{getClientName(rec.clientId)}</p>
+                        <p className="font-medium truncate text-[11px]">{getClientName(rec.clientId, rec)}</p>
                         <p className="text-muted-foreground text-[10px]">{rec.startTime}</p>
                         {isOrganizingWeek && (
                           <Badge className="bg-info/20 text-info border-info/30 text-[9px]">
@@ -1091,7 +1097,7 @@ export default function VideomakerDashboard() {
               </motion.div>
               Finalizar Gravação — {(() => {
                 const rec = recordings.find(r => r.id === finishRecordingId);
-                return rec ? getClientName(rec.clientId) : '';
+                return rec ? getClientName(rec.clientId, rec) : '';
               })()}
             </DialogTitle>
           </DialogHeader>

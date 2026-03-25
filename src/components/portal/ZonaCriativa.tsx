@@ -717,11 +717,28 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                           <Pencil size={9} /> Editado pelo cliente
                         </span>
                       )}
+                      {selectedScript.recorded && (
+                        <motion.span
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 text-[11px] font-bold whitespace-nowrap shrink-0"
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ type: 'spring', damping: 10, stiffness: 200 }}
+                        >
+                          <motion.span
+                            animate={{ y: [0, -4, 0], rotate: [-8, 8, -8] }}
+                            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                            className="text-sm"
+                          >
+                            🚀
+                          </motion.span>
+                          Gravado ✓
+                        </motion.span>
+                      )}
                     </div>
                   </motion.div>
 
-                  {/* Priority actions + Edit button */}
-                  {isAuthenticated && (
+                  {/* Priority actions + Edit button — hidden when recorded */}
+                  {isAuthenticated && !selectedScript.recorded && (
                     <motion.div className="flex gap-2 flex-wrap" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
                       <motion.button
                         whileTap={{ scale: 0.96 }}

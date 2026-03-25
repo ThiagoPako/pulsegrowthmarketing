@@ -767,7 +767,7 @@ export default function Schedule() {
       if (showBackup) {
         const backupClients = clients.filter(c => c.backupDay === dayName && c.acceptsExtra);
         for (const client of backupClients) {
-          const vmId = client.videomakerId;
+          const vmId = client.videomaker;
           if (!vmId) continue;
           if (!hasConflict(vmId, dateStr, client.backupTime)) {
             const exists = recordings.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'backup' && r.status !== 'cancelada');
@@ -792,7 +792,7 @@ export default function Schedule() {
       if (showExtra) {
         const extraClients = clients.filter(c => c.acceptsExtra && c.extraDay === dayName);
         for (const client of extraClients) {
-          const vmId = client.videomakerId;
+          const vmId = client.videomaker;
           if (!vmId) continue;
           const extraTime = client.fixedTime; // Use fixed time for extra
           if (!hasConflict(vmId, dateStr, extraTime)) {

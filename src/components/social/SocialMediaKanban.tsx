@@ -400,6 +400,7 @@ export default function SocialMediaKanban({
                             onMoveBackward={adj.prev && onDragMove ? () => handleMoveToColumn(item, adj.prev!.id) : undefined}
                             forwardLabel={adj.next?.title}
                             backwardLabel={adj.prev?.title}
+                            isHighlighted={highlightTaskId != null && item.content_task_id === highlightTaskId}
                           />
                         );
                       })

@@ -78,9 +78,51 @@ function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDel
   const videoRef = useRef<HTMLVideoElement>(null);
   const [hovering, setHovering] = useState(false);
   const [videoLoaded, setVideoLoaded] = useState(false);
+  const [generatedThumb, setGeneratedThumb] = useState<string | null>(null);
 
   const isVideo = !!(content.file_url?.match(/\.(mp4|mov|webm|avi)(\?|$)/i) ||
     ['reel', 'institucional', 'anuncio'].includes(content.content_type));
+
+  // Generate thumbnail on mount for videos without one
+  useEffect(() => {
+    if (!isVideo || content.thumbnail_url || !content.file_url) return;
+    const vid = document.createElement('video');
+    vid.crossOrigin = 'anonymous';
+    vid.preload = 'metadata';
+    vid.muted = true;
+    vid.src = content.file_url;
+    vid.onloadeddata = () => {
+      vid.currentTime = 1;
+    };
+    vid.onseeked = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 480;
+        canvas.height = 480;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const size = Math.min(vid.videoWidth, vid.videoHeight);
+          const sx = (vid.videoWidth - size) / 2;
+          const sy = (vid.videoHeight - size) / 2;
+          ctx.drawImage(vid, sx, sy, size, size, 0, 0, 480, 480);
+          setGeneratedThumb(canvas.toDataURL('image/jpeg', 0.7));
+        }
+      } catch { /* CORS may block this */ }
+    };
+    vid.onerror = () => {};
+    return () => { vid.src = ''; };
+  }, [content.file_url, content.thumbnail_url, isVideo]);
+
+  // 6-second loop logic
+  useEffect(() => {
+    const vid = videoRef.current;
+    if (!vid || !hovering) return;
+    const handleTimeUpdate = () => {
+      if (vid.currentTime >= 6) vid.currentTime = 0;
+    };
+    vid.addEventListener('timeupdate', handleTimeUpdate);
+    return () => vid.removeEventListener('timeupdate', handleTimeUpdate);
+  }, [hovering]);
 
   const startPreview = useCallback(() => {
     setHovering(true);
@@ -93,12 +135,16 @@ function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDel
 
   const stopPreview = useCallback(() => {
     setHovering(false);
+    setVideoLoaded(false);
     const vid = videoRef.current;
     if (vid) {
       vid.pause();
       vid.currentTime = 0;
+      vid.removeAttribute('src');
+      vid.load();
     }
   }, []);
+
 
   const statusColor = (s: string) =>
     s === 'aprovado' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
@@ -119,8 +165,8 @@ function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDel
       onClick={() => content.file_url && onPlay(content)}
     >
       {/* Thumbnail / image layer */}
-      {content.thumbnail_url ? (
-        <img src={content.thumbnail_url} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+      {(content.thumbnail_url || generatedThumb) ? (
+        <img src={content.thumbnail_url || generatedThumb!} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
       ) : content.content_type === 'arte' && content.file_url ? (
         <img src={content.file_url} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
       ) : (

@@ -465,9 +465,10 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                     }}
                     className="relative group"
                   >
-                    {/* Glow effect for priority cards */}
-                    {isUrgent && <GlowBorder color="rgba(239,68,68,0.25)" intensity="high" />}
-                    {isPriority && <GlowBorder color="rgba(245,158,11,0.2)" intensity="low" />}
+                    {/* Glow effect for priority/recorded cards */}
+                    {isRecorded && <GlowBorder color="rgba(34,197,94,0.2)" intensity="low" />}
+                    {!isRecorded && isUrgent && <GlowBorder color="rgba(239,68,68,0.25)" intensity="high" />}
+                    {!isRecorded && isPriority && <GlowBorder color="rgba(245,158,11,0.2)" intensity="low" />}
 
                     <div className={`relative rounded-2xl overflow-hidden border transition-all duration-300 bg-white/[0.02] ${
                       isUrgent

@@ -511,8 +511,8 @@ export default function ClientPortal() {
           </div>
 
           {/* Nav tabs + notifications */}
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="hidden sm:flex min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-full bg-white/[0.06] p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+           <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
+             <div className="hidden sm:flex min-w-0 items-center gap-1 overflow-x-auto rounded-full bg-white/[0.06] p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <button
                 onClick={() => setActiveTab('library')}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'library' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}

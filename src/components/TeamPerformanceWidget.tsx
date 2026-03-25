@@ -65,7 +65,7 @@ export default function TeamPerformanceWidget() {
     const monthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
     Promise.all([
       supabase.from('delivery_records').select('*').gte('date', monthStart).lte('date', monthEnd),
-      supabase.from('content_tasks').select('*'),
+      supabase.from('content_tasks').select('*').gte('updated_at', monthStart),
       supabase.from('design_tasks').select('*'),
       supabase.from('social_media_deliveries').select('*').gte('delivered_at', monthStart).lte('delivered_at', monthEnd),
       supabase.from('endomarketing_partner_tasks').select('*').gte('date', monthStart).lte('date', monthEnd),
@@ -127,11 +127,11 @@ export default function TeamPerformanceWidget() {
         maxScore = Math.max(score, 200);
 
       } else if (user.role === 'editor') {
-        // Editor: edição de vídeo é trabalho intenso e técnico
-        const editorTasks = contentTasks.filter(t => t.assigned_to === user.id);
-        const approved = editorTasks.filter(t => ['aprovado', 'publicado', 'finalizado'].includes(t.kanban_column)).length;
+        // Editor: match by assigned_to OR edited_by (editor may edit without being assigned)
+        const editorTasks = contentTasks.filter(t => t.assigned_to === user.id || t.edited_by === user.id);
+        const approved = editorTasks.filter(t => t.approved_at || ['aprovado', 'publicado', 'finalizado', 'envio'].includes(t.kanban_column)).length;
         const inRevision = editorTasks.filter(t => t.kanban_column === 'revisao').length;
-        const inEditing = editorTasks.filter(t => t.kanban_column === 'em_edicao').length;
+        const inEditing = editorTasks.filter(t => t.kanban_column === 'em_edicao' || t.kanban_column === 'editando').length;
         const alterations = editorTasks.filter(t => t.kanban_column === 'alteracao').length;
         const priorityTasks = editorTasks.filter(t => t.editing_priority === true).length;
         score = approved * EDITOR_SCORE.APROVADO + inEditing * EDITOR_SCORE.EM_EDICAO +
@@ -140,6 +140,7 @@ export default function TeamPerformanceWidget() {
         metrics.push(
           { label: 'Aprovados', value: approved },
           { label: 'Editando', value: inEditing },
+          { label: 'Revisão', value: inRevision },
           { label: 'Alterações', value: alterations },
           { label: 'Prioritários', value: priorityTasks },
         );

@@ -16,7 +16,7 @@ import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, Cell } from 'recharts';
 import jsPDF from 'jspdf';
 import pulseHeaderImg from '@/assets/pulse_header.png';
-import { VM_SCORE, calcVmDeliveryScore, calcWaitPoints } from '@/lib/scoringSystem';
+import { VM_SCORE, EDITOR_SCORE, calcVmDeliveryScore, calcWaitPoints } from '@/lib/scoringSystem';
 
 interface DeliveryRecord {
   id: string;
@@ -38,14 +38,17 @@ function calcScore(r: DeliveryRecord) {
 
 // Aliases for display and editor scoring
 const SCORE_WEIGHTS = { reel: VM_SCORE.REEL, criativo: VM_SCORE.CRIATIVO, story: VM_SCORE.STORY, arte: VM_SCORE.ARTE, extra: VM_SCORE.EXTRA };
-const EDITOR_SCORE_WEIGHTS: Record<string, number> = { reels: 10, criativo: 5, story: 3 };
+// Use centralized EDITOR_SCORE from scoringSystem.ts
 
 interface EditorTask {
   id: string;
   content_type: string;
   kanban_column: string;
   assigned_to: string | null;
+  edited_by: string | null;
   editing_started_at: string | null;
+  editing_priority: boolean;
+  approved_at: string | null;
   updated_at: string;
   client_id: string;
 }
@@ -71,8 +74,7 @@ export default function InternalReports() {
   const fetchData = useCallback(async () => {
     const [deliveries, tasks, wl] = await Promise.all([
       supabase.from('delivery_records').select('*').order('date', { ascending: false }),
-      supabase.from('content_tasks').select('id, content_type, kanban_column, assigned_to, editing_started_at, updated_at, client_id')
-        .eq('kanban_column', 'envio'),
+      supabase.from('content_tasks').select('id, content_type, kanban_column, assigned_to, edited_by, editing_started_at, editing_priority, approved_at, updated_at, client_id'),
       supabase.from('recording_wait_logs').select('*'),
     ]);
     if (deliveries.data) setRecords(deliveries.data as DeliveryRecord[]);
@@ -199,8 +201,15 @@ export default function InternalReports() {
 
   const editorRanking = useMemo(() => {
     return editors.map(ed => {
-      const edTasks = editorFiltered.filter(t => t.assigned_to === ed.id);
-      const score = edTasks.reduce((sum, t) => sum + (EDITOR_SCORE_WEIGHTS[t.content_type] || 2), 0);
+      const edTasks = editorFiltered.filter(t => t.assigned_to === ed.id || t.edited_by === ed.id);
+      const approved = edTasks.filter(t => t.approved_at || ['aprovado', 'publicado', 'finalizado', 'envio'].includes(t.kanban_column)).length;
+      const inEditing = edTasks.filter(t => t.kanban_column === 'em_edicao' || t.kanban_column === 'editando').length;
+      const inRevision = edTasks.filter(t => t.kanban_column === 'revisao').length;
+      const alterations = edTasks.filter(t => t.kanban_column === 'alteracao').length;
+      const priorityTasks = edTasks.filter(t => t.editing_priority === true).length;
+      const score = approved * EDITOR_SCORE.APROVADO + inEditing * EDITOR_SCORE.EM_EDICAO +
+        inRevision * EDITOR_SCORE.REVISAO + alterations * EDITOR_SCORE.ALTERACAO +
+        priorityTasks * EDITOR_SCORE.PRIORIDADE;
       const reels = edTasks.filter(t => t.content_type === 'reels').length;
       const criativos = edTasks.filter(t => t.content_type === 'criativo').length;
       const stories = edTasks.filter(t => t.content_type === 'story').length;
@@ -214,7 +223,7 @@ export default function InternalReports() {
       }).filter(Boolean) as number[];
       const avgTime = times.length > 0 ? times.reduce((a, b) => a + b, 0) / times.length : 0;
 
-      return { editor: ed, score, reels, criativos, stories, artes, total, avgTime };
+      return { editor: ed, score, reels, criativos, stories, artes, total, avgTime, approved, inEditing, alterations, priorityTasks };
     }).sort((a, b) => b.score - a.score);
   }, [editors, editorFiltered]);
 
@@ -239,11 +248,16 @@ export default function InternalReports() {
     return weeks.map(w => {
       const entry: any = { semana: w.label };
       editors.forEach(ed => {
-        const edTasks = editorTasks.filter(t => t.assigned_to === ed.id && t.kanban_column === 'envio' && (() => {
+        const edTasks = editorTasks.filter(t => (t.assigned_to === ed.id || t.edited_by === ed.id) && (() => {
           const d = format(new Date(t.updated_at), 'yyyy-MM-dd');
           return d >= w.start && d <= w.end;
         })());
-        entry[ed.name.split(' ')[0]] = edTasks.reduce((sum, t) => sum + (EDITOR_SCORE_WEIGHTS[t.content_type] || 2), 0);
+        const approved = edTasks.filter(t => t.approved_at || ['aprovado', 'publicado', 'finalizado', 'envio'].includes(t.kanban_column)).length;
+        const inEditing = edTasks.filter(t => t.kanban_column === 'em_edicao' || t.kanban_column === 'editando').length;
+        const alterations = edTasks.filter(t => t.kanban_column === 'alteracao').length;
+        const priorityTasks = edTasks.filter(t => t.editing_priority === true).length;
+        entry[ed.name.split(' ')[0]] = approved * EDITOR_SCORE.APROVADO + inEditing * EDITOR_SCORE.EM_EDICAO +
+          alterations * EDITOR_SCORE.ALTERACAO + priorityTasks * EDITOR_SCORE.PRIORIDADE;
       });
       return entry;
     });
@@ -598,7 +612,7 @@ export default function InternalReports() {
           <Card>
             <CardContent className="p-4">
               <Badge variant="outline" className="text-xs">
-                Pontuação: Reels={EDITOR_SCORE_WEIGHTS.reels} · Criativos={EDITOR_SCORE_WEIGHTS.criativo} · Story={EDITOR_SCORE_WEIGHTS.story}
+                Pontuação: Aprovado={EDITOR_SCORE.APROVADO} · Editando={EDITOR_SCORE.EM_EDICAO} · Revisão={EDITOR_SCORE.REVISAO} · Alteração={EDITOR_SCORE.ALTERACAO} · Prioridade=+{EDITOR_SCORE.PRIORIDADE}
               </Badge>
             </CardContent>
           </Card>
@@ -628,7 +642,7 @@ export default function InternalReports() {
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold text-sm truncate">{r.editor.name}</p>
                             <p className="text-[10px] text-muted-foreground">
-                              {r.reels}R · {r.criativos}C · {r.stories}S · {r.total} total
+                              {r.approved}✅ · {r.inEditing}🎬 · {r.alterations}🔄 · {r.priorityTasks}⚡ · {r.total} total
                               {r.avgTime > 0 && ` · ~${hours > 0 ? `${hours}h` : ''}${mins}min`}
                             </p>
                           </div>

@@ -75,23 +75,12 @@ function shouldProxyPortalVideo(url: string) {
 }
 
 async function createPortalVideoObjectUrl(url: string, quality: VideoQuality = '480p') {
-  const response = await fetch(PORTAL_MEDIA_PROXY_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, quality }),
+  const params = new URLSearchParams({
+    url,
+    quality,
   });
 
-  if (!response.ok) {
-    throw new Error(`Falha ao carregar o vídeo (${response.status})`);
-  }
-
-  const blob = await response.blob();
-
-  if (!blob.size) {
-    throw new Error('O vídeo retornou vazio.');
-  }
-
-  return URL.createObjectURL(blob);
+  return `${PORTAL_MEDIA_PROXY_URL}?${params.toString()}`;
 }
 
 export default function ClientPortal() {

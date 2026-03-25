@@ -1994,17 +1994,20 @@ app.post('/api/portal-recordings', async (req, res) => {
   }
 });
 
-// ─── 7. Portal Media Proxy (with quality transcoding) ───────
+// ─── 7. Portal Media Proxy (streaming-first + 480p warmup) ───────
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { Readable } from 'stream';
+
 const execFileAsync = promisify(execFile);
 const TRANSCODE_CACHE_DIR = '/tmp/pulse-video-cache';
+const activePortalTranscodes = new Map();
+
 try { fs.mkdirSync(TRANSCODE_CACHE_DIR, { recursive: true }); } catch {}
 
-// Clean old cached files every 6 hours
 setInterval(() => {
   try {
     const files = fs.readdirSync(TRANSCODE_CACHE_DIR);
@@ -2012,91 +2015,191 @@ setInterval(() => {
     for (const f of files) {
       const fp = path.join(TRANSCODE_CACHE_DIR, f);
       const stat = fs.statSync(fp);
-      if (now - stat.mtimeMs > 24 * 60 * 60 * 1000) fs.unlinkSync(fp); // 24h TTL
+      if (now - stat.mtimeMs > 24 * 60 * 60 * 1000) fs.unlinkSync(fp);
     }
   } catch {}
 }, 6 * 60 * 60 * 1000);
 
+function getPortalMediaContentType(filePathOrUrl = '') {
+  if (/\.mp4(\?|$)/i.test(filePathOrUrl)) return 'video/mp4';
+  if (/\.webm(\?|$)/i.test(filePathOrUrl)) return 'video/webm';
+  if (/\.mov(\?|$)/i.test(filePathOrUrl)) return 'video/quicktime';
+  if (/\.png(\?|$)/i.test(filePathOrUrl)) return 'image/png';
+  if (/\.jpe?g(\?|$)/i.test(filePathOrUrl)) return 'image/jpeg';
+  return 'application/octet-stream';
+}
+
+function resolvePortalMediaLocalPath(targetUrl) {
+  const parsed = new URL(targetUrl);
+  const decodedPath = decodeURIComponent(parsed.pathname);
+  const primaryPath = path.join('/var/www/html', decodedPath);
+  const uploadsPath = primaryPath.replace('/var/www/html/uploads/', '/var/www/uploads/');
+
+  if (fs.existsSync(primaryPath)) return primaryPath;
+  if (fs.existsSync(uploadsPath)) return uploadsPath;
+  return null;
+}
+
+function setPortalMediaHeaders(res, { contentType, quality, contentLength, contentRange, acceptRanges = true, cacheControl = 'public, max-age=3600' }) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Content-Disposition', 'inline');
+  res.setHeader('Cache-Control', cacheControl);
+  res.setHeader('X-Video-Quality', quality);
+  if (contentType) res.setHeader('Content-Type', contentType);
+  if (acceptRanges) res.setHeader('Accept-Ranges', 'bytes');
+  if (typeof contentLength === 'number') res.setHeader('Content-Length', contentLength);
+  if (contentRange) res.setHeader('Content-Range', contentRange);
+}
+
+function streamLocalPortalMedia(req, res, filePath, quality) {
+  const stat = fs.statSync(filePath);
+  const totalSize = stat.size;
+  const contentType = getPortalMediaContentType(filePath);
+  const rangeHeader = req.headers.range;
+
+  if (rangeHeader) {
+    const match = /bytes=(\d*)-(\d*)/.exec(rangeHeader);
+    if (!match) {
+      return res.status(416).setHeader('Content-Range', `bytes */${totalSize}`).end();
+    }
+
+    let start = match[1] ? Number.parseInt(match[1], 10) : 0;
+    let end = match[2] ? Number.parseInt(match[2], 10) : totalSize - 1;
+
+    if (!match[1] && match[2]) {
+      const suffixLength = Number.parseInt(match[2], 10);
+      start = Math.max(totalSize - suffixLength, 0);
+      end = totalSize - 1;
+    }
+
+    if (Number.isNaN(start) || Number.isNaN(end) || start < 0 || end < start || start >= totalSize) {
+      return res.status(416).setHeader('Content-Range', `bytes */${totalSize}`).end();
+    }
+
+    end = Math.min(end, totalSize - 1);
+    const chunkSize = end - start + 1;
+
+    setPortalMediaHeaders(res, {
+      contentType,
+      quality,
+      contentLength: chunkSize,
+      contentRange: `bytes ${start}-${end}/${totalSize}`,
+    });
+
+    return fs.createReadStream(filePath, { start, end }).pipe(res.status(206));
+  }
+
+  setPortalMediaHeaders(res, {
+    contentType,
+    quality,
+    contentLength: totalSize,
+  });
+
+  return fs.createReadStream(filePath).pipe(res.status(200));
+}
+
+function warmPortal480pCache(sourcePath, cachedFile) {
+  if (fs.existsSync(cachedFile)) return Promise.resolve(cachedFile);
+  const existingJob = activePortalTranscodes.get(cachedFile);
+  if (existingJob) return existingJob;
+
+  const tempFile = `${cachedFile}.tmp`;
+  const job = execFileAsync('ffmpeg', [
+    '-i', sourcePath,
+    '-vf', 'scale=-2:480',
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
+    '-c:a', 'aac', '-b:a', '96k',
+    '-movflags', '+faststart',
+    '-y', tempFile,
+  ], { timeout: 120000 })
+    .then(() => {
+      fs.renameSync(tempFile, cachedFile);
+      return cachedFile;
+    })
+    .catch((error) => {
+      try { if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile); } catch {}
+      throw error;
+    })
+    .finally(() => {
+      activePortalTranscodes.delete(cachedFile);
+    });
+
+  activePortalTranscodes.set(cachedFile, job);
+  return job;
+}
+
 app.all('/api/portal-media-proxy', async (req, res) => {
   try {
     const targetUrl = req.method === 'GET' ? req.query.url : req.body?.url;
-    const quality = (req.method === 'GET' ? req.query.quality : req.body?.quality) || 'original';
-    if (!targetUrl) return res.status(400).json({ error: 'url is required' });
-    try { const parsed = new URL(targetUrl); if (parsed.origin !== 'https://agenciapulse.tech' || !parsed.pathname.startsWith('/uploads/')) return res.status(400).json({ error: 'URL not allowed' }); } catch { return res.status(400).json({ error: 'Invalid URL' }); }
+    const quality = String((req.method === 'GET' ? req.query.quality : req.body?.quality) || 'original');
 
-    // If quality is 480p, try to serve a transcoded version
-    if (quality === '480p' && /\.(mp4|mov|webm)(\?|$)/i.test(targetUrl)) {
+    if (!targetUrl) return res.status(400).json({ error: 'url is required' });
+
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(targetUrl);
+      if (parsedUrl.origin !== 'https://agenciapulse.tech' || !parsedUrl.pathname.startsWith('/uploads/')) {
+        return res.status(400).json({ error: 'URL not allowed' });
+      }
+    } catch {
+      return res.status(400).json({ error: 'Invalid URL' });
+    }
+
+    const localSourcePath = resolvePortalMediaLocalPath(targetUrl);
+    const isVideoFile = /\.(mp4|mov|webm)(\?|$)/i.test(targetUrl);
+
+    if (quality === '480p' && isVideoFile && localSourcePath) {
       const urlHash = crypto.createHash('md5').update(targetUrl).digest('hex');
       const cachedFile = path.join(TRANSCODE_CACHE_DIR, `${urlHash}_480p.mp4`);
 
-      // Serve from cache if available
       if (fs.existsSync(cachedFile)) {
-        const stat = fs.statSync(cachedFile);
-        res.setHeader('Content-Type', 'video/mp4');
-        res.setHeader('Content-Length', stat.size);
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-        res.setHeader('Content-Disposition', 'inline');
-        res.setHeader('X-Video-Quality', '480p-cached');
-        return fs.createReadStream(cachedFile).pipe(res);
+        return streamLocalPortalMedia(req, res, cachedFile, '480p-cached');
       }
 
-      // Try to extract the local file path from the URL
-      const parsed = new URL(targetUrl);
-      const localPath = `/var/www/html${parsed.pathname}`;
-      const uploadsPath = localPath.replace('/var/www/html/uploads/', '/var/www/uploads/');
-      const sourcePath = fs.existsSync(localPath) ? localPath : (fs.existsSync(uploadsPath) ? uploadsPath : null);
+      warmPortal480pCache(localSourcePath, cachedFile)
+        .catch((error) => console.error('ffmpeg warmup error:', error.message));
 
-      if (sourcePath) {
-        try {
-          // Transcode to 480p using ffmpeg with fast preset
-          await execFileAsync('ffmpeg', [
-            '-i', sourcePath,
-            '-vf', 'scale=-2:480',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
-            '-c:a', 'aac', '-b:a', '96k',
-            '-movflags', '+faststart',
-            '-y', cachedFile
-          ], { timeout: 120000 });
-
-          const stat = fs.statSync(cachedFile);
-          res.setHeader('Content-Type', 'video/mp4');
-          res.setHeader('Content-Length', stat.size);
-          res.setHeader('Access-Control-Allow-Origin', '*');
-          res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-          res.setHeader('Content-Disposition', 'inline');
-          res.setHeader('X-Video-Quality', '480p-transcoded');
-          return fs.createReadStream(cachedFile).pipe(res);
-        } catch (ffErr) {
-          console.error('ffmpeg transcode error:', ffErr.message);
-          // Fall through to serve original
-        }
-      }
+      return streamLocalPortalMedia(req, res, localSourcePath, 'original-warming-480p');
     }
 
-    // Serve original quality (or fallback)
+    if (localSourcePath) {
+      return streamLocalPortalMedia(req, res, localSourcePath, quality === '480p' ? '480p-fallback' : 'original-local');
+    }
+
     const headers = {};
     if (req.headers.range) headers.Range = req.headers.range;
     if (req.headers.accept) headers.Accept = req.headers.accept;
-    const upstream = await fetch(targetUrl, { headers, redirect: 'follow' });
-    if (!upstream.ok && upstream.status !== 206) return res.status(upstream.status).json({ error: 'Failed to fetch media' });
 
-    const passthroughHeaders = ['content-type', 'content-length', 'content-range', 'accept-ranges', 'cache-control', 'etag', 'last-modified'];
-    for (const h of passthroughHeaders) { const v = upstream.headers.get(h); if (v) res.setHeader(h, v); }
-    if (!upstream.headers.get('content-type')) {
-      if (/\.mp4(\?|$)/i.test(targetUrl)) res.setHeader('content-type', 'video/mp4');
-      else res.setHeader('content-type', 'application/octet-stream');
+    const upstream = await fetch(targetUrl, { headers, redirect: 'follow' });
+    if (!upstream.ok && upstream.status !== 206) {
+      return res.status(upstream.status).json({ error: 'Failed to fetch media' });
     }
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.setHeader('Content-Disposition', 'inline');
-    res.setHeader('X-Video-Quality', 'original');
-    
+
+    const passthroughHeaders = ['content-length', 'content-range', 'accept-ranges', 'etag', 'last-modified'];
+    for (const h of passthroughHeaders) {
+      const v = upstream.headers.get(h);
+      if (v) res.setHeader(h, v);
+    }
+
+    setPortalMediaHeaders(res, {
+      contentType: upstream.headers.get('content-type') || getPortalMediaContentType(targetUrl),
+      quality: quality === '480p' ? '480p-upstream-fallback' : 'original-upstream',
+      cacheControl: upstream.headers.get('cache-control') || 'public, max-age=3600',
+      acceptRanges: upstream.headers.get('accept-ranges') !== 'none',
+    });
+
+    res.status(upstream.status);
+
+    if (upstream.body) {
+      return Readable.fromWeb(upstream.body).pipe(res);
+    }
+
     const buffer = Buffer.from(await upstream.arrayBuffer());
-    res.status(upstream.status).send(buffer);
+    return res.send(buffer);
   } catch (error) {
     console.error('portal-media-proxy error:', error);
-    res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message });
   }
 });
 

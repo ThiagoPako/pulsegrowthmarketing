@@ -78,9 +78,40 @@ function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDel
   const videoRef = useRef<HTMLVideoElement>(null);
   const [hovering, setHovering] = useState(false);
   const [videoLoaded, setVideoLoaded] = useState(false);
+  const [generatedThumb, setGeneratedThumb] = useState<string | null>(null);
 
   const isVideo = !!(content.file_url?.match(/\.(mp4|mov|webm|avi)(\?|$)/i) ||
     ['reel', 'institucional', 'anuncio'].includes(content.content_type));
+
+  // Generate thumbnail on mount for videos without one
+  useEffect(() => {
+    if (!isVideo || content.thumbnail_url || !content.file_url) return;
+    const vid = document.createElement('video');
+    vid.crossOrigin = 'anonymous';
+    vid.preload = 'metadata';
+    vid.muted = true;
+    vid.src = content.file_url;
+    vid.onloadeddata = () => {
+      vid.currentTime = 1;
+    };
+    vid.onseeked = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 480;
+        canvas.height = 480;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const size = Math.min(vid.videoWidth, vid.videoHeight);
+          const sx = (vid.videoWidth - size) / 2;
+          const sy = (vid.videoHeight - size) / 2;
+          ctx.drawImage(vid, sx, sy, size, size, 0, 0, 480, 480);
+          setGeneratedThumb(canvas.toDataURL('image/jpeg', 0.7));
+        }
+      } catch { /* CORS may block this */ }
+    };
+    vid.onerror = () => {};
+    return () => { vid.src = ''; };
+  }, [content.file_url, content.thumbnail_url, isVideo]);
 
   // 6-second loop logic
   useEffect(() => {
@@ -94,6 +125,25 @@ function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDel
   }, [hovering]);
 
   const startPreview = useCallback(() => {
+    setHovering(true);
+    const vid = videoRef.current;
+    if (vid) {
+      vid.currentTime = 0;
+      vid.play().catch(() => {});
+    }
+  }, []);
+
+  const stopPreview = useCallback(() => {
+    setHovering(false);
+    setVideoLoaded(false);
+    const vid = videoRef.current;
+    if (vid) {
+      vid.pause();
+      vid.currentTime = 0;
+      vid.removeAttribute('src');
+      vid.load();
+    }
+  }, []);
     setHovering(true);
     const vid = videoRef.current;
     if (vid) {

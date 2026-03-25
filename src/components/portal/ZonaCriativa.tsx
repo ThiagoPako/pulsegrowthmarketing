@@ -448,6 +448,7 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                 const excerpt = plainContent.length > 120 ? plainContent.slice(0, 120) + '...' : plainContent;
                 const isUrgent = script.client_priority === 'urgent';
                 const isPriority = script.client_priority === 'priority';
+                const isRecorded = script.recorded;
 
                 return (
                   <motion.div

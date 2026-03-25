@@ -228,7 +228,7 @@ export default function Scripts() {
           endoClientId: script.endoClientId || '',
           scheduledDate: script.scheduledDate || '',
           directToEditing: script.directToEditing || false,
-          isAvulso: !!script.recordingId,
+          isAvulso: !!script.recordingId || !script.clientId,
           recordingId: script.recordingId || '',
           prospectName: script.recordingId ? (recordings.find(r => r.id === script.recordingId)?.prospectName || '') : '',
         });
@@ -876,7 +876,7 @@ export default function Scripts() {
                       🎬 Direto p/ Edição
                     </Badge>
                   )}
-                  {script.recordingId && (
+                  {(script.recordingId || !script.clientId) && (
                     <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-sky-500/30">
                       📹 Avulso
                     </Badge>

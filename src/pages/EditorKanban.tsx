@@ -372,6 +372,7 @@ export default function EditorKanban() {
     const updateData: any = { kanban_column: targetColumn, updated_at: new Date().toISOString() };
     if (targetColumn === 'edicao' && !draggedTask.editing_started_at) {
       updateData.editing_started_at = new Date().toISOString();
+      if (user) updateData.edited_by = user.id;
     }
     // Auto-assign to current editor if not yet assigned
     if (!draggedTask.assigned_to && user) {

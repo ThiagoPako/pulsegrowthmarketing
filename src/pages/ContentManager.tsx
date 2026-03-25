@@ -145,17 +145,6 @@ function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDel
     }
   }, []);
 
-  const stopPreview = useCallback(() => {
-    setHovering(false);
-    setVideoLoaded(false);
-    const vid = videoRef.current;
-    if (vid) {
-      vid.pause();
-      vid.currentTime = 0;
-      vid.removeAttribute('src');
-      vid.load();
-    }
-  }, []);
 
   const statusColor = (s: string) =>
     s === 'aprovado' ? 'bg-green-500/20 text-green-400 border-green-500/30' :

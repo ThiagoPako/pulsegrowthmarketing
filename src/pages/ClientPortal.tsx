@@ -959,9 +959,26 @@ export default function ClientPortal() {
                                 {formatDuration(videoProgress)} / {formatDuration(videoDuration)}
                               </span>
                             </div>
-                            <button onClick={toggleFullscreen} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
-                              <Maximize size={16} />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              {/* Quality selector */}
+                              <button
+                                onClick={() => {
+                                  const next: VideoQuality = videoQuality === '480p' ? 'original' : '480p';
+                                  setVideoQuality(next);
+                                }}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                                  videoQuality === 'original'
+                                    ? 'bg-white/25 text-white'
+                                    : 'bg-white/10 text-white/60 hover:bg-white/20'
+                                }`}
+                                title={videoQuality === '480p' ? 'Clique para qualidade HD' : 'Clique para 480p (mais rápido)'}
+                              >
+                                {videoQuality === '480p' ? '480p' : 'HD'}
+                              </button>
+                              <button onClick={toggleFullscreen} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
+                                <Maximize size={16} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                         {/* Center play button */}

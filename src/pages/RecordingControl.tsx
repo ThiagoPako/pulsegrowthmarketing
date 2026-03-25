@@ -378,7 +378,7 @@ function RecordingCard({
       animate={{ opacity: isDragging ? 0.5 : 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
       draggable={!isCompleted}
-      onDragStart={e => onDragStart(e, recording)}
+      onDragStart={e => onDragStart(e as unknown as React.DragEvent, recording)}
       className={`group relative p-3 rounded-lg border transition-all cursor-grab active:cursor-grabbing ${
         isDragging
           ? 'border-primary/50 bg-primary/5 ring-2 ring-primary/20'

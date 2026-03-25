@@ -622,7 +622,7 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm overflow-y-auto"
-            onClick={() => setSelectedScript(null)}
+            onClick={() => { setSelectedScript(null); setEditing(false); }}
           >
             <motion.div
               initial={{ opacity: 0, y: 40, filter: 'blur(10px)' }}
@@ -673,7 +673,7 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                           </motion.span>
                         )}
                       </div>
-                      <button onClick={() => setSelectedScript(null)} className="absolute top-3 right-3 p-1.5 rounded-full bg-black/30 backdrop-blur-sm hover:bg-black/50 transition-colors active:scale-95">
+                      <button onClick={() => { setSelectedScript(null); setEditing(false); }} className="absolute top-3 right-3 p-1.5 rounded-full bg-black/30 backdrop-blur-sm hover:bg-black/50 transition-colors active:scale-95">
                         <span className="text-white/70 text-sm">✕</span>
                       </button>
                     </div>

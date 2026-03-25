@@ -1458,7 +1458,7 @@ app.post('/api/portal-actions', async (req, res) => {
 
     // ── Create design request from portal ──
     if (action === 'create_design_request') {
-      const { title, description, format_type } = req.body;
+      const { title, description, format_type, references_links } = req.body;
       if (!client_id || !title) return res.status(400).json({ error: 'client_id and title required' });
 
       // Check limit
@@ -1475,9 +1475,9 @@ app.post('/api/portal-actions', async (req, res) => {
       }
 
       const { rows: [task] } = await pool.query(
-        `INSERT INTO design_tasks (client_id, title, description, format_type, priority, kanban_column)
-         VALUES ($1, $2, $3, $4, 'media', 'nova_tarefa') RETURNING id`,
-        [client_id, title, description || null, format_type || 'feed']
+        `INSERT INTO design_tasks (client_id, title, description, format_type, priority, kanban_column, references_links)
+         VALUES ($1, $2, $3, $4, 'media', 'nova_tarefa', $5) RETURNING id`,
+        [client_id, title, description || null, format_type || 'feed', references_links || null]
       );
 
       // Add history

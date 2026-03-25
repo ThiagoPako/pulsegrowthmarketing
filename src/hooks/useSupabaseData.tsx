@@ -42,6 +42,7 @@ function rowToClient(r: any): Client {
     editorial: r.editorial || '',
     fullShiftRecording: r.full_shift_recording || false,
     preferredShift: r.preferred_shift || 'manha',
+    selectedWeeks: r.selected_weeks || [1, 2, 3, 4],
   };
 }
 
@@ -82,6 +83,7 @@ function clientToRow(c: Client) {
     editorial: c.editorial || '',
     full_shift_recording: c.fullShiftRecording || false,
     preferred_shift: c.preferredShift || 'manha',
+    selected_weeks: c.selectedWeeks || [1, 2, 3, 4],
   };
 }
 

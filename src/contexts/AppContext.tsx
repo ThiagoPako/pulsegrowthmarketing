@@ -133,7 +133,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const addRecording = useCallback(async (recording: Recording): Promise<boolean> => {
     if (hasConflict(recording.videomakerId, recording.date, recording.startTime)) return false;
     const ok = await data.addRecording(recording);
-    if (!ok) return false;
+    if (!ok) {
+      console.error('addRecording: VPS insert failed for recording', recording);
+      return false;
+    }
     // Send WhatsApp notification
     const client = data.clients.find(c => c.id === recording.clientId);
     const vm = users.find(u => u.id === recording.videomakerId);

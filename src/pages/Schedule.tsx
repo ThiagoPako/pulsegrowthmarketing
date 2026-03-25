@@ -100,6 +100,7 @@ export default function Schedule() {
   const [form, setForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '09:00', type: 'fixa' as RecordingType, prospectName: '' });
   const [editForm, setEditForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '', type: 'fixa' as RecordingType, status: 'agendada' as Recording['status'] });
   const [filterVideomaker, setFilterVideomaker] = useState('all');
+  const [weekOffset, setWeekOffset] = useState(0);
   const [showEndo, setShowEndo] = useState(true);
   const [showBackup, setShowBackup] = useState(false);
   const [showExtra, setShowExtra] = useState(false);
@@ -457,7 +458,7 @@ export default function Schedule() {
   };
 
 
-  const kanbanWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const kanbanWeekStart = addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), weekOffset * 7);
   const kanbanAllDays = Array.from({ length: 7 }, (_, i) => addDays(kanbanWeekStart, i));
   const kanbanDays = kanbanAllDays.filter(day => {
     const dayNum = getDay(day);
@@ -1040,7 +1041,25 @@ export default function Schedule() {
                 {videomakers.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <span className="text-sm text-muted-foreground">Semana atual</span>
+            <div className="flex items-center gap-1 ml-auto">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setWeekOffset(o => o - 1)}>
+                <ChevronLeft size={16} />
+              </Button>
+              <Button
+                variant={weekOffset === 0 ? "default" : "outline"}
+                size="sm"
+                className="text-xs h-8 px-3"
+                onClick={() => setWeekOffset(0)}
+              >
+                Hoje
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setWeekOffset(o => o + 1)}>
+                <ChevronRight size={16} />
+              </Button>
+              <span className="text-xs text-muted-foreground ml-2">
+                {format(kanbanWeekStart, "dd/MM", { locale: ptBR })} – {format(addDays(kanbanWeekStart, 6), "dd/MM", { locale: ptBR })}
+              </span>
+            </div>
           </div>
 
           <div className={`grid grid-cols-1 gap-2 min-h-[400px]`} style={{ gridTemplateColumns: `repeat(${kanbanDays.length}, minmax(0, 1fr))` }}>

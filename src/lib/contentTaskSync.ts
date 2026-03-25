@@ -126,6 +126,10 @@ export async function syncContentTaskColumnChange(
       const deadline = addBusinessHours(new Date(), deadlineHours.alteration, workDays);
       updates.alteration_deadline = deadline.toISOString();
     }
+    // Reset editing_started_at so timer only starts when editor clicks "Iniciar Alteração"
+    updates.editing_started_at = null;
+    updates.editing_paused_at = null;
+    updates.editing_paused_seconds = 0;
   }
   if (newColumn === 'envio') {
     const deadline = addBusinessHours(new Date(), deadlineHours.approval, workDays);

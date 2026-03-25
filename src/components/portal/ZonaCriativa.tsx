@@ -256,6 +256,7 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
       setScripts(prev => prev.map(s => s.id === selectedScript.id ? { ...s, content: `<p>${editContent.replace(/\n/g, '</p><p>')}</p>`, caption: editCaption, client_edited: true, client_edited_at: new Date().toISOString() } : s));
       setSelectedScript(prev => prev ? { ...prev, content: `<p>${editContent.replace(/\n/g, '</p><p>')}</p>`, caption: editCaption, client_edited: true, client_edited_at: new Date().toISOString() } : null);
       setEditing(false);
+      syncPortalScriptEdit(clientId, selectedScript.id, result?.company_name || '').catch(console.error);
     }
     setSaving(false);
   };

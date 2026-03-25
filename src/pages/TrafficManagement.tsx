@@ -145,7 +145,7 @@ export default function TrafficManagement() {
       // Sync with delivery system
       const client = clients.find(c => c.id === alterationCreative.client_id);
       const ctx = buildSyncContext(alterationCreative as any, client as any);
-      await syncContentTaskColumnChange(ctx, 'alteracao', users);
+      await syncContentTaskColumnChange('alteracao', ctx);
 
       toast.success('Criativo enviado para alteração');
       setAlterationDialogOpen(false);

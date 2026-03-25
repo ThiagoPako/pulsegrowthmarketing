@@ -21,7 +21,7 @@ import { highlightQuotes } from '@/lib/highlightQuotes';
 import { format, differenceInHours, isPast, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
-import { uploadFileToVps } from '@/services/vpsApi';
+import { uploadFileToVps, deleteFileFromVps } from '@/services/vpsApi';
 
 const CONTENT_TYPES = [
   { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400', points: 10 },
@@ -204,9 +204,10 @@ export default function EditorDashboard() {
   const [videoLink, setVideoLink] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
-  const [saving, setSaving] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const isEditorRole = profile?.role === 'editor';
+   const [saving, setSaving] = useState(false);
+   const [oldVideoLink, setOldVideoLink] = useState<string | null>(null);
+   const fileInputRef = useRef<HTMLInputElement>(null);
+   const isEditorRole = profile?.role === 'editor';
 
   const fetchTasks = useCallback(async () => {
     const { data } = await supabase.from('content_tasks').select('*')
@@ -309,53 +310,80 @@ export default function EditorDashboard() {
   }, [queueTasks, filterClient, filterType, searchQuery, clients]);
 
   /* ─── Actions ──────────────────────────────────────────── */
-  const handleStartEditing = async (task: EditorTask) => {
-    if (!user) return;
-    const { error } = await supabase.from('content_tasks').update({
-      assigned_to: user.id,
-      edited_by: user.id,
-      editing_started_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
-    if (error) { toast.error('Erro ao iniciar edição'); return; }
-    await supabase.from('task_history').insert({ task_id: task.id, user_id: user.id, action: 'Edição iniciada' });
-    toast.success('Edição iniciada!');
-    const updated = { ...task, assigned_to: user.id, edited_by: user.id, editing_started_at: new Date().toISOString() };
-    setActiveEditTask(updated);
-    setShowUpload(false);
-    setShowScript(false);
-    setVideoLink('');
-    fetchTasks();
-  };
+   const handleStartEditing = async (task: EditorTask) => {
+     if (!user) return;
+     const isAlteration = task.kanban_column === 'alteracao';
+     const { error } = await supabase.from('content_tasks').update({
+       assigned_to: user.id,
+       edited_by: user.id,
+       editing_started_at: new Date().toISOString(),
+       updated_at: new Date().toISOString(),
+     } as any).eq('id', task.id);
+     if (error) { toast.error(`Erro ao iniciar ${isAlteration ? 'alteração' : 'edição'}`); return; }
+     await supabase.from('task_history').insert({ task_id: task.id, user_id: user.id, action: isAlteration ? 'Alteração iniciada' : 'Edição iniciada' });
+     toast.success(isAlteration ? 'Alteração iniciada!' : 'Edição iniciada!');
+     const updated = { ...task, assigned_to: user.id, edited_by: user.id, editing_started_at: new Date().toISOString() };
+     setActiveEditTask(updated);
+     // Track old video for deletion when it's an alteration
+     if (isAlteration && task.edited_video_link) {
+       setOldVideoLink(task.edited_video_link);
+     } else {
+       setOldVideoLink(null);
+     }
+     setShowUpload(false);
+     setShowScript(false);
+     setVideoLink('');
+     fetchTasks();
+   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !activeEditTask) return;
-    if (file.size > 500 * 1024 * 1024) { toast.error('Máximo: 500MB'); return; }
-    setUploading(true);
-    setUploadProgress(`Enviando ${file.name}...`);
-    try {
-      const folder = `content/${activeEditTask.client_id}/${activeEditTask.id}`;
-      const url = await uploadFileToVps(file, folder);
-      await supabase.from('content_tasks').update({
-        edited_video_link: url, edited_video_type: 'upload', updated_at: new Date().toISOString()
-      }).eq('id', activeEditTask.id);
-      setVideoLink(url);
-      await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo enviado via upload', details: url });
-      toast.success('Vídeo enviado!');
-      fetchTasks();
-    } catch (err: any) {
-      toast.error(`Erro: ${err.message}`);
-    } finally {
-      setUploading(false);
-      setUploadProgress('');
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
+   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+     const file = e.target.files?.[0];
+     if (!file || !activeEditTask) return;
+     if (file.size > 500 * 1024 * 1024) { toast.error('Máximo: 500MB'); return; }
+     setUploading(true);
+     setUploadProgress(`Enviando ${file.name}...`);
+     try {
+       const folder = `content/${activeEditTask.client_id}/${activeEditTask.id}`;
+       const url = await uploadFileToVps(file, folder);
+       // Delete old video if this is an alteration
+       if (oldVideoLink && oldVideoLink !== url) {
+         try {
+           await deleteFileFromVps(oldVideoLink);
+           await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo anterior removido (alteração)' });
+         } catch (delErr) {
+           console.warn('Falha ao remover vídeo anterior:', delErr);
+         }
+         setOldVideoLink(null);
+       }
+       await supabase.from('content_tasks').update({
+         edited_video_link: url, edited_video_type: 'upload', updated_at: new Date().toISOString()
+       }).eq('id', activeEditTask.id);
+       setVideoLink(url);
+       await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo enviado via upload', details: url });
+       toast.success('Vídeo enviado!');
+       fetchTasks();
+     } catch (err: any) {
+       toast.error(`Erro: ${err.message}`);
+     } finally {
+       setUploading(false);
+       setUploadProgress('');
+       if (fileInputRef.current) fileInputRef.current.value = '';
+     }
+   };
 
   const saveVideoLink = async () => {
     if (!videoLink.trim() || !activeEditTask) return;
     setSaving(true);
+    // Delete old video if this is an alteration with link replacement
+    if (oldVideoLink) {
+      try {
+        await deleteFileFromVps(oldVideoLink);
+        await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo anterior removido (alteração)' });
+      } catch (delErr) {
+        console.warn('Falha ao remover vídeo anterior:', delErr);
+      }
+      setOldVideoLink(null);
+    }
     await supabase.from('content_tasks').update({
       edited_video_link: videoLink.trim(), edited_video_type: 'link', updated_at: new Date().toISOString()
     }).eq('id', activeEditTask.id);
@@ -507,7 +535,7 @@ export default function EditorDashboard() {
             className="relative rounded-2xl overflow-hidden"
           >
             {/* Animated glowing border */}
-            <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary via-blue-500 to-primary bg-[length:200%_100%] animate-[shimmer_3s_linear_infinite] p-[2px]">
+            <div className={`absolute inset-0 rounded-2xl bg-[length:200%_100%] animate-[shimmer_3s_linear_infinite] p-[2px] ${activeEditTask.kanban_column === 'alteracao' ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500' : 'bg-gradient-to-r from-primary via-blue-500 to-primary'}`}>
               <div className="w-full h-full bg-card rounded-2xl" />
             </div>
             <div className="relative z-10 p-5 space-y-4">
@@ -519,7 +547,7 @@ export default function EditorDashboard() {
                   </motion.div>
                   <div>
                     <p className="text-[10px] uppercase tracking-widest text-primary font-bold">
-                      {activeEditTask.editing_paused_at ? '⏸️ Edição pausada' : 'Edição em andamento'}
+                      {activeEditTask.editing_paused_at ? '⏸️ Edição pausada' : activeEditTask.kanban_column === 'alteracao' ? '🔧 Alteração em andamento' : 'Edição em andamento'}
                     </p>
                     <p className="text-base font-bold text-foreground leading-tight">{activeEditTask.title}</p>
                   </div>
@@ -623,10 +651,14 @@ export default function EditorDashboard() {
                       else { setShowUpload(true); }
                     }}
                     disabled={saving}
-                    className="gap-2 text-sm font-bold bg-gradient-to-r from-primary via-blue-500 to-primary bg-[length:200%_100%] animate-[shimmer_3s_linear_infinite] text-primary-foreground shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-shadow"
+                    className={`gap-2 text-sm font-bold bg-[length:200%_100%] animate-[shimmer_3s_linear_infinite] text-white shadow-lg transition-shadow ${
+                      activeEditTask.kanban_column === 'alteracao'
+                        ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 shadow-amber-500/25 hover:shadow-amber-500/40'
+                        : 'bg-gradient-to-r from-primary via-blue-500 to-primary shadow-primary/25 hover:shadow-primary/40'
+                    }`}
                   >
-                    <Rocket size={16} />
-                    {hasVideo ? 'Enviar para Revisão' : 'Finalizar'}
+                    {activeEditTask.kanban_column === 'alteracao' ? <Zap size={16} /> : <Rocket size={16} />}
+                    {hasVideo ? 'Enviar para Revisão' : activeEditTask.kanban_column === 'alteracao' ? 'Substituir Vídeo' : 'Finalizar'}
                   </Button>
                 </motion.div>
               </div>
@@ -660,7 +692,7 @@ export default function EditorDashboard() {
                     <div className="bg-muted/30 border border-border rounded-xl p-4 space-y-3">
                       <div className="flex items-center justify-between">
                         <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                          <Upload size={13} className="text-primary" /> Enviar vídeo editado
+                          <Upload size={13} className={activeEditTask.kanban_column === 'alteracao' ? 'text-amber-500' : 'text-primary'} /> {activeEditTask.kanban_column === 'alteracao' ? 'Substituir vídeo (Alteração)' : 'Enviar vídeo editado'}
                         </p>
                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowUpload(false)}>
                           <X size={12} />
@@ -940,8 +972,15 @@ function QueueCard({ task, clients, index, onStartEditing, currentUserId, users 
           {task.drive_link && <span className="flex items-center gap-0.5"><ExternalLink size={10} /> Drive</span>}
         </div>
 
-        {/* Start Editing CTA */}
-        {!task.assigned_to && (
+        {/* Start Editing / Alteration CTA */}
+        {task.kanban_column === 'alteracao' ? (
+          <motion.div whileTap={{ scale: 0.95 }}>
+            <Button size="sm" className="w-full gap-1.5 h-8 text-xs bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md"
+              onClick={(e) => { e.stopPropagation(); onStartEditing(); }}>
+              <Zap size={13} /> Iniciar Alteração
+            </Button>
+          </motion.div>
+        ) : !task.assigned_to && (
           <motion.div whileTap={{ scale: 0.95 }}>
             <Button size="sm" className="w-full gap-1.5 h-8 text-xs bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-md"
               onClick={(e) => { e.stopPropagation(); onStartEditing(); }}>

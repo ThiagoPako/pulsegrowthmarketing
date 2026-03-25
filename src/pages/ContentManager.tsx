@@ -82,6 +82,17 @@ function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDel
   const isVideo = !!(content.file_url?.match(/\.(mp4|mov|webm|avi)(\?|$)/i) ||
     ['reel', 'institucional', 'anuncio'].includes(content.content_type));
 
+  // 6-second loop logic
+  useEffect(() => {
+    const vid = videoRef.current;
+    if (!vid || !hovering) return;
+    const handleTimeUpdate = () => {
+      if (vid.currentTime >= 6) vid.currentTime = 0;
+    };
+    vid.addEventListener('timeupdate', handleTimeUpdate);
+    return () => vid.removeEventListener('timeupdate', handleTimeUpdate);
+  }, [hovering]);
+
   const startPreview = useCallback(() => {
     setHovering(true);
     const vid = videoRef.current;
@@ -93,10 +104,13 @@ function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDel
 
   const stopPreview = useCallback(() => {
     setHovering(false);
+    setVideoLoaded(false);
     const vid = videoRef.current;
     if (vid) {
       vid.pause();
       vid.currentTime = 0;
+      vid.removeAttribute('src');
+      vid.load();
     }
   }, []);
 

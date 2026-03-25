@@ -345,22 +345,24 @@ export default function EditorDashboard() {
      try {
        const folder = `content/${activeEditTask.client_id}/${activeEditTask.id}`;
        const url = await uploadFileToVps(file, folder);
-       // Delete old video if this is an alteration
-       if (oldVideoLink && oldVideoLink !== url) {
+       // Delete previous video if replacing
+       const previousVideo = oldVideoLink || activeEditTask.edited_video_link;
+       if (previousVideo && previousVideo !== url && previousVideo.includes('agenciapulse.tech')) {
          try {
-           await deleteFileFromVps(oldVideoLink);
-           await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo anterior removido (alteração)' });
+           await deleteFileFromVps(previousVideo);
+           await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo anterior removido (substituição)' });
          } catch (delErr) {
            console.warn('Falha ao remover vídeo anterior:', delErr);
          }
-         setOldVideoLink(null);
        }
+       setOldVideoLink(null);
        await supabase.from('content_tasks').update({
          edited_video_link: url, edited_video_type: 'upload', updated_at: new Date().toISOString()
        }).eq('id', activeEditTask.id);
        setVideoLink(url);
        await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo enviado via upload', details: url });
        toast.success('Vídeo enviado!');
+       setShowUpload(false);
        fetchTasks();
      } catch (err: any) {
        toast.error(`Erro: ${err.message}`);
@@ -374,20 +376,22 @@ export default function EditorDashboard() {
   const saveVideoLink = async () => {
     if (!videoLink.trim() || !activeEditTask) return;
     setSaving(true);
-    // Delete old video if this is an alteration with link replacement
-    if (oldVideoLink) {
+    // Delete previous video if replacing
+    const previousVideo = oldVideoLink || activeEditTask.edited_video_link;
+    if (previousVideo && previousVideo !== videoLink.trim() && previousVideo.includes('agenciapulse.tech')) {
       try {
-        await deleteFileFromVps(oldVideoLink);
-        await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo anterior removido (alteração)' });
+        await deleteFileFromVps(previousVideo);
+        await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo anterior removido (substituição)' });
       } catch (delErr) {
         console.warn('Falha ao remover vídeo anterior:', delErr);
       }
-      setOldVideoLink(null);
     }
+    setOldVideoLink(null);
     await supabase.from('content_tasks').update({
       edited_video_link: videoLink.trim(), edited_video_type: 'link', updated_at: new Date().toISOString()
     }).eq('id', activeEditTask.id);
     toast.success('Link salvo!');
+    setShowUpload(false);
     fetchTasks();
     setSaving(false);
   };
@@ -633,11 +637,22 @@ export default function EditorDashboard() {
                   </Button>
                 </motion.div>
 
-                {/* Vídeo anexado indicator */}
-                {hasVideo && (
-                  <Badge className="text-xs bg-green-500/10 text-green-600 border-green-500/30 gap-1">
-                    <Check size={12} /> Vídeo pronto
-                  </Badge>
+                {/* Vídeo anexado indicator + replace button */}
+                {hasVideo && !showUpload && (
+                  <div className="flex items-center gap-1.5">
+                    <Badge className="text-xs bg-green-500/10 text-green-600 border-green-500/30 gap-1">
+                      <Check size={12} /> Vídeo pronto
+                    </Badge>
+                    <motion.div whileTap={{ scale: 0.93 }}>
+                      <Button variant="outline" size="sm" className="gap-1 text-[10px] h-6 px-2 border-amber-500/30 text-amber-600 hover:bg-amber-500/10"
+                        onClick={() => {
+                          setOldVideoLink(activeEditTask?.edited_video_link || videoLink || null);
+                          setShowUpload(true);
+                        }}>
+                        <Upload size={11} /> Trocar
+                      </Button>
+                    </motion.div>
+                  </div>
                 )}
 
                 {/* Spacer */}

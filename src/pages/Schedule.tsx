@@ -101,6 +101,8 @@ export default function Schedule() {
   const [editForm, setEditForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '', type: 'fixa' as RecordingType, status: 'agendada' as Recording['status'] });
   const [filterVideomaker, setFilterVideomaker] = useState('all');
   const [showEndo, setShowEndo] = useState(true);
+  const [showBackup, setShowBackup] = useState(false);
+  const [showExtra, setShowExtra] = useState(false);
   const [regenOpen, setRegenOpen] = useState(false);
   const [regenClientId, setRegenClientId] = useState('');
   const [regenLoading, setRegenLoading] = useState(false);
@@ -146,8 +148,11 @@ export default function Schedule() {
   const filteredRecordings = useMemo(() => {
     let recs = recordings;
     if (filterVideomaker !== 'all') recs = recs.filter(r => r.videomakerId === filterVideomaker);
+    // Hide backup/extra unless toggled on
+    if (!showBackup) recs = recs.filter(r => r.type !== 'backup');
+    if (!showExtra) recs = recs.filter(r => r.type !== 'extra');
     return recs;
-  }, [recordings, filterVideomaker]);
+  }, [recordings, filterVideomaker, showBackup, showExtra]);
 
   // Low-script warning
   const lowScriptClients = useMemo(() => {
@@ -784,6 +789,28 @@ export default function Schedule() {
             >
               <Sparkles size={12} />
               Endomarketing
+            </button>
+            <button
+              onClick={() => setShowBackup(!showBackup)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                showBackup
+                  ? 'border-transparent text-white bg-amber-500'
+                  : 'border-border text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              <Undo2 size={12} />
+              Backup
+            </button>
+            <button
+              onClick={() => setShowExtra(!showExtra)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                showExtra
+                  ? 'border-transparent text-white bg-emerald-500'
+                  : 'border-border text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              <Plus size={12} />
+              Extra
             </button>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" onClick={() => setMonthOffset(m => m - 1)}><ChevronLeft size={18} /></Button>

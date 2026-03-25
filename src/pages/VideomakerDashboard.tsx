@@ -151,7 +151,7 @@ export default function VideomakerDashboard() {
     return clients.find(c => c.id === id)?.color || '220 10% 50%';
   };
 
-  const typeLabels: Record<string, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.', backup: 'Backup', endomarketing: 'Endo' };
+  const typeLabels: Record<string, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.', backup: 'Backup', endomarketing: 'Endo', avulso: 'Avulso' };
   const timeToMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 
   // ── Active recording (use local backup to survive polling race conditions) ──

@@ -157,11 +157,14 @@ export default function TrafficManagement() {
     }
   };
 
+  // Rayssa (Social Media) - always assigned to story tasks
+  const RAYSSA_ID = '13be1a49-2856-4adc-94b7-6efc2c797330';
+
   // Request social media to post story with this criativo
   const handleRequestStory = async () => {
     if (!storyCreative) return;
     try {
-      // Create a new content_task of type 'story' linked to this criativo
+      // Create a new content_task of type 'story' assigned to Rayssa
       const { data: inserted, error } = await supabase.from('content_tasks').insert({
         client_id: storyCreative.client_id,
         title: `Story - ${storyCreative.title}`,
@@ -171,6 +174,7 @@ export default function TrafficManagement() {
         edited_video_link: storyCreative.edited_video_link,
         drive_link: storyCreative.drive_link,
         created_by: user?.id || null,
+        assigned_to: RAYSSA_ID,
         position: 0,
       } as any).select('id').single();
       if (error) throw error;
@@ -190,11 +194,11 @@ export default function TrafficManagement() {
         content_task_id: taskId || null,
       } as any);
 
-      // Notify social media role with direct link to the task in agendamentos
-      await supabase.rpc('notify_role', {
-        _role: 'social_media',
-        _title: '📢 Story solicitado pelo Tráfego',
-        _message: `Agendar story do criativo "${storyCreative.title}" - ${clientName}. Baixe o vídeo e poste!`,
+      // Notify Rayssa directly
+      await supabase.rpc('notify_user', {
+        _user_id: RAYSSA_ID,
+        _title: '📢 Story para postar!',
+        _message: `Postar story do criativo "${storyCreative.title}" - ${clientName}. Baixe o vídeo e poste!`,
         _type: 'info',
         _link: `/social-media?highlight=${taskId}`,
       });

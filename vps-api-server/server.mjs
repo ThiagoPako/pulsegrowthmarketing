@@ -37,6 +37,71 @@ const pool = new Pool({
   ...(typeof pgPassword === 'string' && pgPassword.length > 0 ? { password: pgPassword } : {}),
 });
 
+const CLIENT_PORTAL_BASE_FIELDS = [
+  'id',
+  'company_name',
+  'logo_url',
+  'color',
+  'weekly_reels',
+  'weekly_creatives',
+  'weekly_stories',
+  'monthly_recordings',
+  'plan_id',
+  'show_metrics',
+  'has_vehicle_flyer',
+  'niche',
+  'whatsapp',
+  'city',
+].join(', ');
+
+let clientsArtRequestsLimitColumnPromise;
+
+async function hasClientsArtRequestsLimitColumn() {
+  if (!clientsArtRequestsLimitColumnPromise) {
+    clientsArtRequestsLimitColumnPromise = pool
+      .query(`
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'clients'
+            AND column_name = 'art_requests_limit'
+        ) AS exists
+      `)
+      .then(({ rows }) => Boolean(rows[0]?.exists))
+      .catch((error) => {
+        clientsArtRequestsLimitColumnPromise = null;
+        throw error;
+      });
+  }
+
+  return clientsArtRequestsLimitColumnPromise;
+}
+
+async function getPortalClientSelectClause() {
+  const hasArtLimitColumn = await hasClientsArtRequestsLimitColumn();
+  return hasArtLimitColumn
+    ? `${CLIENT_PORTAL_BASE_FIELDS}, art_requests_limit`
+    : `${CLIENT_PORTAL_BASE_FIELDS}, NULL::integer AS art_requests_limit`;
+}
+
+async function getClientArtLimitInfo(clientId, includeCompanyName = false) {
+  const hasArtLimitColumn = await hasClientsArtRequestsLimitColumn();
+  const selectClause = [
+    includeCompanyName ? 'company_name' : null,
+    hasArtLimitColumn ? 'art_requests_limit' : 'NULL::integer AS art_requests_limit',
+  ]
+    .filter(Boolean)
+    .join(', ');
+
+  const { rows: [clientInfo] } = await pool.query(
+    `SELECT ${selectClause} FROM clients WHERE id = $1`,
+    [clientId]
+  );
+
+  return clientInfo || null;
+}
+
 // ─── JWT Config ─────────────────────────────────────────────
 const JWT_SECRET = process.env.JWT_SECRET || 'CHANGE_ME_IN_PRODUCTION';
 const JWT_EXPIRES_IN = '7d';
@@ -1001,12 +1066,13 @@ app.post('/api/portal-actions', async (req, res) => {
     if (action === 'get_client') {
       if (!client_id) return res.status(400).json({ error: 'client_id required' });
       const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(client_id);
+      const selectClause = await getPortalClientSelectClause();
       let query, params;
       if (isUUID) {
-        query = 'SELECT id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city, art_requests_limit FROM clients WHERE id = $1 LIMIT 1';
+        query = `SELECT ${selectClause} FROM clients WHERE id = $1 LIMIT 1`;
         params = [client_id];
       } else {
-        query = `SELECT id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city, art_requests_limit FROM clients WHERE trim(both '-' from regexp_replace(lower(trim(company_name)), '\\s+', '-', 'g')) = trim(both '-' from regexp_replace(lower(trim($1)), '\\s+', '-', 'g')) LIMIT 1`;
+        query = `SELECT ${selectClause} FROM clients WHERE trim(both '-' from regexp_replace(lower(trim(company_name)), '\\s+', '-', 'g')) = trim(both '-' from regexp_replace(lower(trim($1)), '\\s+', '-', 'g')) LIMIT 1`;
         params = [client_id];
       }
       const { rows } = await pool.query(query, params);
@@ -1386,11 +1452,8 @@ app.post('/api/portal-actions', async (req, res) => {
          ORDER BY created_at DESC`,
         [client_id]
       );
-      const { rows: [clientInfo] } = await pool.query(
-        'SELECT art_requests_limit FROM clients WHERE id = $1',
-        [client_id]
-      );
-      return res.json({ tasks, art_requests_limit: clientInfo?.art_requests_limit || null });
+      const clientInfo = await getClientArtLimitInfo(client_id);
+      return res.json({ tasks, art_requests_limit: clientInfo?.art_requests_limit ?? null });
     }
 
     // ── Create design request from portal ──
@@ -1399,11 +1462,8 @@ app.post('/api/portal-actions', async (req, res) => {
       if (!client_id || !title) return res.status(400).json({ error: 'client_id and title required' });
 
       // Check limit
-      const { rows: [clientInfo] } = await pool.query(
-        'SELECT art_requests_limit, company_name FROM clients WHERE id = $1',
-        [client_id]
-      );
-      if (clientInfo?.art_requests_limit) {
+      const clientInfo = await getClientArtLimitInfo(client_id, true);
+      if (clientInfo?.art_requests_limit !== null && clientInfo?.art_requests_limit !== undefined) {
         const { rows: [countRow] } = await pool.query(
           `SELECT COUNT(*) as cnt FROM design_tasks
            WHERE client_id = $1 AND created_at >= date_trunc('month', CURRENT_DATE)`,

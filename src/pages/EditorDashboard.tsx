@@ -376,20 +376,22 @@ export default function EditorDashboard() {
   const saveVideoLink = async () => {
     if (!videoLink.trim() || !activeEditTask) return;
     setSaving(true);
-    // Delete old video if this is an alteration with link replacement
-    if (oldVideoLink) {
+    // Delete previous video if replacing
+    const previousVideo = oldVideoLink || activeEditTask.edited_video_link;
+    if (previousVideo && previousVideo !== videoLink.trim() && previousVideo.includes('agenciapulse.tech')) {
       try {
-        await deleteFileFromVps(oldVideoLink);
-        await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo anterior removido (alteração)' });
+        await deleteFileFromVps(previousVideo);
+        await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo anterior removido (substituição)' });
       } catch (delErr) {
         console.warn('Falha ao remover vídeo anterior:', delErr);
       }
-      setOldVideoLink(null);
     }
+    setOldVideoLink(null);
     await supabase.from('content_tasks').update({
       edited_video_link: videoLink.trim(), edited_video_type: 'link', updated_at: new Date().toISOString()
     }).eq('id', activeEditTask.id);
     toast.success('Link salvo!');
+    setShowUpload(false);
     fetchTasks();
     setSaving(false);
   };

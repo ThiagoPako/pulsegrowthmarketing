@@ -675,15 +675,24 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
 
                 <div className="p-6 space-y-4">
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-                    <h2 className="text-xl font-bold">{selectedScript.title}</h2>
-                    <p className="text-xs text-white/40 mt-1">
-                      {format(new Date(selectedScript.created_at), "dd 'de' MMMM 'de' yyyy", { locale: pt })}
-                    </p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h2 className="text-xl font-bold">{selectedScript.title}</h2>
+                        <p className="text-xs text-white/40 mt-1">
+                          {format(new Date(selectedScript.created_at), "dd 'de' MMMM 'de' yyyy", { locale: pt })}
+                        </p>
+                      </div>
+                      {selectedScript.client_edited && (
+                        <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-violet-500/15 text-violet-400 border border-violet-500/20 text-[10px] font-bold whitespace-nowrap shrink-0">
+                          <Pencil size={9} /> Editado pelo cliente
+                        </span>
+                      )}
+                    </div>
                   </motion.div>
 
-                  {/* Priority actions in modal */}
+                  {/* Priority actions + Edit button */}
                   {isAuthenticated && (
-                    <motion.div className="flex gap-2" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+                    <motion.div className="flex gap-2 flex-wrap" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
                       <motion.button
                         whileTap={{ scale: 0.96 }}
                         onClick={() => handleSetClientPriority(selectedScript.id, 'priority')}
@@ -706,6 +715,15 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                       >
                         <Flame size={12} /> {selectedScript.client_priority === 'urgent' ? '🔥 Urgente ativo' : 'Urgente'}
                       </motion.button>
+                      {!editing && (
+                        <motion.button
+                          whileTap={{ scale: 0.96 }}
+                          onClick={() => handleStartEdit(selectedScript)}
+                          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 border bg-white/[0.04] text-white/40 border-white/[0.06] hover:bg-violet-500/10 hover:text-violet-300 hover:border-violet-500/20 ml-auto"
+                        >
+                          <Pencil size={12} /> Editar roteiro
+                        </motion.button>
+                      )}
                     </motion.div>
                   )}
 
@@ -737,26 +755,71 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                     );
                   })()}
 
-                  {/* Caption */}
-                  {selectedScript.caption && (
-                    <motion.div
-                      className="p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.25 }}
-                    >
-                      <p className="text-[10px] uppercase tracking-wider font-semibold text-white/40 mb-1.5">📝 Legenda</p>
-                      <p className="text-sm text-white/70 leading-relaxed">{selectedScript.caption}</p>
+                  {/* Editing mode */}
+                  {editing ? (
+                    <motion.div className="space-y-3" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider font-semibold text-white/40 mb-1.5 block">📝 Legenda</label>
+                        <textarea
+                          value={editCaption}
+                          onChange={e => setEditCaption(e.target.value)}
+                          className="w-full min-h-[60px] rounded-xl bg-white/[0.06] border border-white/[0.1] text-sm text-white/80 p-3 resize-y focus:outline-none focus:border-violet-500/40 placeholder:text-white/20"
+                          placeholder="Legenda do conteúdo..."
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider font-semibold text-white/40 mb-1.5 block">📄 Roteiro</label>
+                        <textarea
+                          value={editContent}
+                          onChange={e => setEditContent(e.target.value)}
+                          className="w-full min-h-[200px] rounded-xl bg-white/[0.06] border border-white/[0.1] text-sm text-white/80 p-3 resize-y focus:outline-none focus:border-violet-500/40 placeholder:text-white/20 leading-relaxed"
+                          placeholder="Conteúdo do roteiro..."
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <motion.button
+                          whileTap={{ scale: 0.96 }}
+                          onClick={handleCancelEdit}
+                          disabled={saving}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-white/[0.04] text-white/40 border border-white/[0.06] hover:bg-white/[0.08]"
+                        >
+                          <XIcon size={12} /> Cancelar
+                        </motion.button>
+                        <motion.button
+                          whileTap={{ scale: 0.96 }}
+                          onClick={handleSaveEdit}
+                          disabled={saving}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-violet-500/20 text-violet-300 border border-violet-500/30 hover:bg-violet-500/30 disabled:opacity-50"
+                        >
+                          {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                          {saving ? 'Salvando...' : 'Salvar edição'}
+                        </motion.button>
+                      </div>
                     </motion.div>
-                  )}
+                  ) : (
+                    <>
+                      {/* Caption */}
+                      {selectedScript.caption && (
+                        <motion.div
+                          className="p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.25 }}
+                        >
+                          <p className="text-[10px] uppercase tracking-wider font-semibold text-white/40 mb-1.5">📝 Legenda</p>
+                          <p className="text-sm text-white/70 leading-relaxed">{selectedScript.caption}</p>
+                        </motion.div>
+                      )}
 
-                  {/* Script content */}
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
-                    <div
-                      className="prose prose-invert prose-sm max-w-none text-white/75 leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: highlightQuotes(selectedScript.content) }}
-                    />
-                  </motion.div>
+                      {/* Script content */}
+                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
+                        <div
+                          className="prose prose-invert prose-sm max-w-none text-white/75 leading-relaxed"
+                          dangerouslySetInnerHTML={{ __html: highlightQuotes(selectedScript.content) }}
+                        />
+                      </motion.div>
+                    </>
+                  )
                 </div>
               </div>
             </motion.div>

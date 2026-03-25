@@ -478,6 +478,7 @@ function DeliveryCard({
   onMoveBackward,
   forwardLabel,
   backwardLabel,
+  isHighlighted,
 }: {
   delivery: SocialDelivery;
   index: number;

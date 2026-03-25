@@ -500,9 +500,9 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                           </div>
 
                           {/* Fire particles for urgent */}
-                          {isUrgent && <FireParticles />}
-                          {/* Rocket for priority */}
-                          {isPriority && <RocketAnimation />}
+                          {!isRecorded && isUrgent && <FireParticles />}
+                          {/* Rocket for priority or recorded */}
+                          {(isRecorded || isPriority) && <RocketAnimation />}
 
                           {/* Format badge */}
                           <motion.div
@@ -524,8 +524,25 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                             <Tag size={8} /> {tag.label}
                           </motion.div>
 
+                          {/* Recorded badge */}
+                          {isRecorded && (
+                            <motion.div
+                              className="absolute bottom-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/25 backdrop-blur-sm text-[10px] font-bold text-emerald-300 border border-emerald-500/30"
+                              initial={{ scale: 0, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              transition={{ type: 'spring', damping: 12, stiffness: 200 }}
+                            >
+                              <motion.span
+                                animate={{ y: [0, -3, 0], rotate: [-5, 5, -5] }}
+                                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                              >
+                                🚀
+                              </motion.span>
+                              Gravado ✓
+                            </motion.div>
+                          )}
                           {/* Priority badge */}
-                          {isUrgent && (
+                          {!isRecorded && isUrgent && (
                             <motion.div
                               className="absolute bottom-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/25 backdrop-blur-sm text-[10px] font-bold text-red-300 border border-red-500/30"
                               animate={{ scale: [1, 1.05, 1] }}
@@ -534,7 +551,7 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                               <Flame size={10} /> Urgente 🔥
                             </motion.div>
                           )}
-                          {isPriority && (
+                          {!isRecorded && isPriority && (
                             <motion.div
                               className="absolute bottom-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/25 backdrop-blur-sm text-[10px] font-bold text-amber-300 border border-amber-500/30"
                               animate={{ y: [0, -2, 0] }}

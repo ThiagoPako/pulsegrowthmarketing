@@ -23,6 +23,24 @@ import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTask
 import ContentTaskDetailSheet from '@/components/content/ContentTaskDetailSheet';
 import { motion, AnimatePresence } from 'framer-motion';
 
+const normalizeDateValue = (value?: string | null) => {
+  if (!value) return null;
+  const normalized = value.includes('T') ? value.slice(0, 10) : value;
+  const parsed = new Date(`${normalized}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const safeFormatDate = (value?: string | null, pattern = 'dd/MM/yyyy') => {
+  const parsed = normalizeDateValue(value);
+  if (!parsed) return '—';
+
+  try {
+    return format(parsed, pattern, { locale: ptBR });
+  } catch {
+    return '—';
+  }
+};
+
 /* ─── Mini Rocket Icon for headers ─────────────────────────── */
 function MiniRocket({ size = 18 }: { size?: number }) {
   return (

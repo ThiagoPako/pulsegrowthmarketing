@@ -539,6 +539,12 @@ export default function ClientPortal() {
                   Métricas
                 </button>
               )}
+              <button
+                onClick={() => setActiveTab('designer')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'designer' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+              >
+                🎨 Designer
+              </button>
               {client.has_vehicle_flyer && (
                 <button
                   onClick={() => setActiveTab('panfletagem')}
@@ -610,6 +616,9 @@ export default function ClientPortal() {
             Métricas
           </button>
         )}
+        <button onClick={() => setActiveTab('designer')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'designer' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'designer' ? { borderColor: `hsl(${clientColor})` } : {}}>
+          🎨 Designer
+        </button>
         {client.has_vehicle_flyer && (
           <button onClick={() => setActiveTab('panfletagem')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'panfletagem' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'panfletagem' ? { borderColor: `hsl(${clientColor})` } : {}}>
             🚗 Panfleto

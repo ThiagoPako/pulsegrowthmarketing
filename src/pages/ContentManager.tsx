@@ -183,8 +183,8 @@ function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDel
       onClick={() => content.file_url && onPlay(content)}
     >
       {/* Thumbnail / image layer */}
-      {content.thumbnail_url ? (
-        <img src={content.thumbnail_url} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+      {(content.thumbnail_url || generatedThumb) ? (
+        <img src={content.thumbnail_url || generatedThumb!} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
       ) : content.content_type === 'arte' && content.file_url ? (
         <img src={content.file_url} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
       ) : (

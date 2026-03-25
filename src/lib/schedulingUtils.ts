@@ -98,7 +98,13 @@ export function generateFixedRecordings(
   existingRecordings: Recording[],
   settings: CompanySettings
 ): Recording[] {
-  const dates = getDatesUntilEndOfMonth(client.fixedDay);
+  // Guard: cannot generate without a videomaker
+  if (!client.videomaker) {
+    console.warn(`[generateFixedRecordings] Client "${client.companyName}" has no videomaker assigned — skipping.`);
+    return [];
+  }
+  
+  const dates = getDatesUntilEndOfMonth(client.fixedDay, client.selectedWeeks);
   const newRecordings: Recording[] = [];
   let allRecs = [...existingRecordings];
   const duration = settings.recordingDuration;

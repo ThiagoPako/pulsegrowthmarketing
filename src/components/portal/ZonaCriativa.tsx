@@ -471,7 +471,9 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                     {!isRecorded && isPriority && <GlowBorder color="rgba(245,158,11,0.2)" intensity="low" />}
 
                     <div className={`relative rounded-2xl overflow-hidden border transition-all duration-300 bg-white/[0.02] ${
-                      isUrgent
+                      isRecorded
+                        ? 'border-emerald-500/30 hover:border-emerald-500/50'
+                        : isUrgent
                         ? 'border-red-500/30 hover:border-red-500/50'
                         : isPriority
                         ? 'border-amber-500/25 hover:border-amber-500/40'

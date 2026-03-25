@@ -261,6 +261,8 @@ export default function ContentKanban() {
     return tasks.filter(t => {
       // Hide archived cards
       if (t.kanban_column === 'arquivado') return false;
+      // Rule: approved criativos only appear in Traffic Management
+      if (t.content_type === 'criativo' && t.approved_at) return false;
       if (filterClient !== 'all' && t.client_id !== filterClient) return false;
       if (filterType !== 'all' && t.content_type !== filterType) return false;
       if (searchQuery) {

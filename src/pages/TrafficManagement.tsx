@@ -5,10 +5,14 @@ import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import ClientLogo from '@/components/ClientLogo';
-import { Megaphone, Search, Play, Pause, Palette, Flame, Zap, Eye } from 'lucide-react';
+import { Megaphone, Search, Play, Pause, Palette, Flame, Zap, Eye, RefreshCw, Send, MessageSquare } from 'lucide-react';
+import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 
 interface Creative {
   id: string;
@@ -20,6 +24,11 @@ interface Creative {
   approved_at: string | null;
   kanban_column: string;
   created_at: string;
+  description: string | null;
+  script_id: string | null;
+  recording_id: string | null;
+  assigned_to: string | null;
+  adjustment_notes: string | null;
 }
 
 interface Campaign {
@@ -31,7 +40,7 @@ interface Campaign {
 }
 
 export default function TrafficManagement() {
-  const { clients } = useApp();
+  const { clients, users } = useApp();
   const { user } = useAuth();
   const [creatives, setCreatives] = useState<Creative[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -40,14 +49,25 @@ export default function TrafficManagement() {
   const [filterClient, setFilterClient] = useState('all');
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
 
+  // Alteration dialog
+  const [alterationDialogOpen, setAlterationDialogOpen] = useState(false);
+  const [alterationCreative, setAlterationCreative] = useState<Creative | null>(null);
+  const [alterationNotes, setAlterationNotes] = useState('');
+
+  // Story request dialog
+  const [storyDialogOpen, setStoryDialogOpen] = useState(false);
+  const [storyCreative, setStoryCreative] = useState<Creative | null>(null);
+  const [storyNotes, setStoryNotes] = useState('');
+
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     setLoading(true);
     const [creativesRes, campaignsRes] = await Promise.all([
       supabase.from('content_tasks')
-        .select('id, client_id, title, content_type, edited_video_link, drive_link, approved_at, kanban_column, created_at')
+        .select('id, client_id, title, content_type, edited_video_link, drive_link, approved_at, kanban_column, created_at, description, script_id, recording_id, assigned_to, adjustment_notes')
         .eq('content_type', 'criativo')
+        .not('approved_at', 'is', null)
         .order('created_at', { ascending: false }),
       supabase.from('traffic_campaigns').select('id, client_id, design_task_id, title, status').order('created_at', { ascending: false }),
     ]);
@@ -80,7 +100,6 @@ export default function TrafficManagement() {
 
     try {
       if (!existing) {
-        // Create new active campaign
         const { error } = await supabase.from('traffic_campaigns').insert({
           client_id: creative.client_id,
           design_task_id: creative.id,
@@ -108,6 +127,72 @@ export default function TrafficManagement() {
     }
   };
 
+  // Send criativo back to alteração
+  const handleSendToAlteration = async () => {
+    if (!alterationCreative || !alterationNotes.trim()) {
+      toast.error('Descreva o que precisa ser alterado');
+      return;
+    }
+    try {
+      const { error } = await supabase.from('content_tasks').update({
+        kanban_column: 'alteracao',
+        adjustment_notes: alterationNotes.trim(),
+        approved_at: null,
+        updated_at: new Date().toISOString(),
+      } as any).eq('id', alterationCreative.id);
+      if (error) throw error;
+
+      // Sync with delivery system
+      const client = clients.find(c => c.id === alterationCreative.client_id);
+      const ctx = buildSyncContext(alterationCreative as any, client as any);
+      await syncContentTaskColumnChange('alteracao', ctx);
+
+      toast.success('Criativo enviado para alteração');
+      setAlterationDialogOpen(false);
+      setAlterationNotes('');
+      setAlterationCreative(null);
+      await loadData();
+    } catch {
+      toast.error('Erro ao enviar para alteração');
+    }
+  };
+
+  // Request social media to post story with this criativo
+  const handleRequestStory = async () => {
+    if (!storyCreative) return;
+    try {
+      // Create a new content_task of type 'story' linked to this criativo
+      const { error } = await supabase.from('content_tasks').insert({
+        client_id: storyCreative.client_id,
+        title: `Story - ${storyCreative.title}`,
+        content_type: 'story',
+        kanban_column: 'agendamentos',
+        description: `Story solicitado pelo gestor de tráfego a partir do criativo "${storyCreative.title}".${storyNotes ? `\n\nObservações: ${storyNotes}` : ''}`,
+        edited_video_link: storyCreative.edited_video_link,
+        drive_link: storyCreative.drive_link,
+        created_by: user?.id || null,
+        position: 0,
+      } as any);
+      if (error) throw error;
+
+      // Notify social media role
+      await supabase.rpc('notify_role', {
+        _role: 'social_media',
+        _title: 'Story solicitado pelo Tráfego',
+        _message: `Postar story do criativo "${storyCreative.title}" - ${clients.find(c => c.id === storyCreative.client_id)?.companyName || ''}`,
+        _type: 'info',
+        _link: '/social-media',
+      });
+
+      toast.success('Solicitação de story enviada para Social Media!');
+      setStoryDialogOpen(false);
+      setStoryNotes('');
+      setStoryCreative(null);
+    } catch {
+      toast.error('Erro ao solicitar story');
+    }
+  };
+
   const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || '—';
   const getClientObj = (id: string) => clients.find(c => c.id === id);
   const activeCount = creatives.filter(c => isActive(c.id)).length;
@@ -120,7 +205,7 @@ export default function TrafficManagement() {
           <h1 className="text-2xl font-display font-bold flex items-center gap-2">
             <Megaphone className="text-primary" size={24} /> Gestão de Tráfego
           </h1>
-          <p className="text-sm text-muted-foreground">Ative e gerencie campanhas dos criativos</p>
+          <p className="text-sm text-muted-foreground">Criativos aprovados — gerencie campanhas, alterações e stories</p>
         </div>
         <div className="flex items-center gap-3">
           <Badge variant="outline" className="text-sm px-3 py-1.5 gap-1.5 border-emerald-500/30 text-emerald-500">
@@ -153,7 +238,7 @@ export default function TrafficManagement() {
       ) : filtered.length === 0 ? (
         <div className="glass-card p-12 text-center text-muted-foreground">
           <Palette size={40} className="mx-auto mb-3 opacity-50" />
-          <p>Nenhum criativo encontrado</p>
+          <p>Nenhum criativo aprovado encontrado</p>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -244,9 +329,42 @@ export default function TrafficManagement() {
                       </a>
                     )}
 
-                    {/* Etapa */}
-                    <div className="text-[10px] text-muted-foreground">
-                      Etapa: <span className="font-medium text-foreground capitalize">{creative.kanban_column.replace(/_/g, ' ')}</span>
+                    {/* Status badge */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Badge variant="outline" className="text-[10px] px-2 py-0.5 bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                        ✓ Aprovado
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground capitalize">
+                        {creative.kanban_column.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+
+                    {/* Action Buttons: Traffic manager exclusive */}
+                    <div className="flex gap-2 mt-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 text-xs gap-1.5 border-amber-500/30 text-amber-600 hover:bg-amber-500/10"
+                        onClick={() => {
+                          setAlterationCreative(creative);
+                          setAlterationNotes('');
+                          setAlterationDialogOpen(true);
+                        }}
+                      >
+                        <RefreshCw size={12} /> Alteração
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 text-xs gap-1.5 border-pink-500/30 text-pink-600 hover:bg-pink-500/10"
+                        onClick={() => {
+                          setStoryCreative(creative);
+                          setStoryNotes('');
+                          setStoryDialogOpen(true);
+                        }}
+                      >
+                        <Send size={12} /> Story
+                      </Button>
                     </div>
 
                     {/* Toggle Campaign Button */}
@@ -263,7 +381,6 @@ export default function TrafficManagement() {
                             : 'bg-primary/5 border-primary/20 text-primary hover:bg-primary/10 hover:border-primary/40'
                       }`}
                     >
-                      {/* Glow border animation */}
                       <motion.div
                         className="absolute inset-0 rounded-xl opacity-0 pointer-events-none"
                         style={{
@@ -306,6 +423,80 @@ export default function TrafficManagement() {
           </AnimatePresence>
         </div>
       )}
+
+      {/* Alteration Dialog */}
+      <Dialog open={alterationDialogOpen} onOpenChange={setAlterationDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw size={18} className="text-amber-500" />
+              Enviar para Alteração
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Criativo: <span className="font-medium text-foreground">{alterationCreative?.title}</span>
+            </p>
+            <div>
+              <label className="text-sm font-medium mb-1 block">O que precisa ser alterado?</label>
+              <Textarea
+                value={alterationNotes}
+                onChange={e => setAlterationNotes(e.target.value)}
+                placeholder="Descreva as alterações necessárias..."
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAlterationDialogOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={handleSendToAlteration}
+              className="bg-amber-500 hover:bg-amber-600 text-white"
+              disabled={!alterationNotes.trim()}
+            >
+              <RefreshCw size={14} className="mr-1.5" /> Enviar para Alteração
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Story Request Dialog */}
+      <Dialog open={storyDialogOpen} onOpenChange={setStoryDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send size={18} className="text-pink-500" />
+              Solicitar Story
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Criativo: <span className="font-medium text-foreground">{storyCreative?.title}</span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Um card de story será criado automaticamente na fila da Social Media com o material deste criativo.
+            </p>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Observações (opcional)</label>
+              <Textarea
+                value={storyNotes}
+                onChange={e => setStoryNotes(e.target.value)}
+                placeholder="Instruções para o story..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStoryDialogOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={handleRequestStory}
+              className="bg-pink-500 hover:bg-pink-600 text-white"
+            >
+              <Send size={14} className="mr-1.5" /> Solicitar Story
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

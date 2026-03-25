@@ -269,7 +269,9 @@ export default function EditorKanban() {
     const { data } = await supabase.from('content_tasks').select('*')
       .in('kanban_column', ['edicao', 'revisao', 'alteracao', 'envio'])
       .order('position', { ascending: true });
-    if (data) setTasks(data as EditorTask[]);
+    // Filter out approved criativos — they belong exclusively to Traffic Management
+    const filtered = (data || []).filter((t: any) => !(t.content_type === 'criativo' && t.approved_at));
+    setTasks(filtered as EditorTask[]);
     setLoading(false);
   }, []);
 

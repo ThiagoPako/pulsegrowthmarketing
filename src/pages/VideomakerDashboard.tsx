@@ -770,7 +770,7 @@ export default function VideomakerDashboard() {
           ) : (
             <div className="space-y-2">
               {todayRecs.map((rec, i) => {
-                const color = getClientColor(rec.clientId);
+                const color = getClientColor(rec.clientId, rec);
                 const isActive = activeRecordingId === rec.id;
                 const isDone = rec.status === 'concluida';
                 const isOrganizing = rec.status === 'organizando_material';
@@ -788,7 +788,7 @@ export default function VideomakerDashboard() {
                       <div className="w-1.5 h-10 sm:h-12 rounded-full shrink-0" style={{ backgroundColor: `hsl(${color})` }} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-medium text-sm truncate max-w-[140px] sm:max-w-none">{getClientName(rec.clientId)}</span>
+                          <span className="font-medium text-sm truncate max-w-[140px] sm:max-w-none">{getClientName(rec.clientId, rec)}</span>
                           <Badge variant="outline" className="text-[9px] sm:text-[10px]">{typeLabels[rec.type]}</Badge>
                           {isActive && (
                             <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
@@ -1053,7 +1053,7 @@ export default function VideomakerDashboard() {
                         }`}
                         style={{ borderLeftWidth: 3, borderLeftColor: `hsl(${color})` }}
                       >
-                        <p className="font-medium truncate text-[11px]">{getClientName(rec.clientId)}</p>
+                        <p className="font-medium truncate text-[11px]">{getClientName(rec.clientId, rec)}</p>
                         <p className="text-muted-foreground text-[10px]">{rec.startTime}</p>
                         {isOrganizingWeek && (
                           <Badge className="bg-info/20 text-info border-info/30 text-[9px]">

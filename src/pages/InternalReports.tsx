@@ -45,7 +45,10 @@ interface EditorTask {
   content_type: string;
   kanban_column: string;
   assigned_to: string | null;
+  edited_by: string | null;
   editing_started_at: string | null;
+  editing_priority: boolean;
+  approved_at: string | null;
   updated_at: string;
   client_id: string;
 }
@@ -71,8 +74,7 @@ export default function InternalReports() {
   const fetchData = useCallback(async () => {
     const [deliveries, tasks, wl] = await Promise.all([
       supabase.from('delivery_records').select('*').order('date', { ascending: false }),
-      supabase.from('content_tasks').select('id, content_type, kanban_column, assigned_to, editing_started_at, updated_at, client_id')
-        .eq('kanban_column', 'envio'),
+      supabase.from('content_tasks').select('id, content_type, kanban_column, assigned_to, edited_by, editing_started_at, editing_priority, approved_at, updated_at, client_id'),
       supabase.from('recording_wait_logs').select('*'),
     ]);
     if (deliveries.data) setRecords(deliveries.data as DeliveryRecord[]);

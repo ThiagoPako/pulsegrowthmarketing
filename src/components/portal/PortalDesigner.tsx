@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Palette, Plus, Check, MessageSquare, X, Loader2, AlertCircle,
-  Eye, Clock, Image as ImageIcon, Send, ChevronDown
+  Eye, Clock, Image as ImageIcon, Send, ChevronDown, Link2, Sparkles, PenLine
 } from 'lucide-react';
 
 interface DesignTask {
@@ -53,6 +53,7 @@ export default function PortalDesigner({ clientId, clientColor }: Props) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [formatType, setFormatType] = useState('feed');
+  const [referencesLinks, setReferencesLinks] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [selectedTask, setSelectedTask] = useState<DesignTask | null>(null);
   const [adjustmentNote, setAdjustmentNote] = useState('');
@@ -73,18 +74,21 @@ export default function PortalDesigner({ clientId, clientColor }: Props) {
   const handleSubmit = async () => {
     if (!title.trim()) return;
     setSubmitting(true);
+    const links = referencesLinks.split('\n').map(l => l.trim()).filter(Boolean);
     const result = await portalAction({
       action: 'create_design_request',
       client_id: clientId,
       title: title.trim(),
       description: description.trim() || null,
       format_type: formatType,
+      references_links: links.length > 0 ? links : null,
     });
     if (result?.success) {
       toast.success('Solicitação de arte enviada com sucesso!');
       setTitle('');
       setDescription('');
       setFormatType('feed');
+      setReferencesLinks('');
       setShowForm(false);
       loadDesignData();
     } else {
@@ -342,19 +346,26 @@ export default function PortalDesigner({ clientId, clientColor }: Props) {
               </div>
 
               <div>
-                <label className="text-xs font-medium text-white/60 mb-1 block">Formato</label>
+                <label className="text-xs font-medium text-white/60 mb-1 block">Formato *</label>
                 <div className="grid grid-cols-2 gap-2">
-                  {Object.entries(FORMAT_LABELS).map(([key, label]) => (
+                  {[
+                    { key: 'feed', label: '📐 Feed', desc: 'Post quadrado/retangular' },
+                    { key: 'story', label: '📱 Story', desc: 'Formato vertical' },
+                    { key: 'logomarca', label: '🎨 Logomarca', desc: 'Identidade visual' },
+                    { key: 'midia_fisica', label: '🖨️ Mídia Física', desc: 'Cartão, banner, etc.' },
+                  ].map(item => (
                     <button
-                      key={key}
-                      onClick={() => setFormatType(key)}
-                      className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all ${
-                        formatType === key
-                          ? 'border-white/20 bg-white/10 text-white'
-                          : 'border-white/[0.06] bg-white/[0.03] text-white/50 hover:text-white/70'
+                      key={item.key}
+                      onClick={() => setFormatType(item.key)}
+                      className={`px-3 py-2.5 rounded-xl text-left border transition-all ${
+                        formatType === item.key
+                          ? 'border-white/25 bg-white/10 text-white shadow-lg'
+                          : 'border-white/[0.06] bg-white/[0.03] text-white/50 hover:text-white/70 hover:bg-white/[0.05]'
                       }`}
+                      style={formatType === item.key ? { boxShadow: `0 0 20px hsl(${clientColor} / 0.15)` } : undefined}
                     >
-                      {label}
+                      <span className="text-xs font-semibold block">{item.label}</span>
+                      <span className="text-[10px] text-white/30 block mt-0.5">{item.desc}</span>
                     </button>
                   ))}
                 </div>
@@ -370,6 +381,22 @@ export default function PortalDesigner({ clientId, clientColor }: Props) {
                   style={{ '--tw-ring-color': `hsl(${clientColor})` } as any}
                   rows={4}
                 />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-white/60 mb-1 block flex items-center gap-1.5">
+                  <Link2 size={12} className="text-white/40" />
+                  Referências (links — um por linha)
+                </label>
+                <textarea
+                  value={referencesLinks}
+                  onChange={e => setReferencesLinks(e.target.value)}
+                  placeholder={"https://pinterest.com/pin/...\nhttps://instagram.com/p/..."}
+                  className="w-full bg-white/[0.06] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-1 transition-all resize-none"
+                  style={{ '--tw-ring-color': `hsl(${clientColor})` } as any}
+                  rows={3}
+                />
+                <p className="text-[10px] text-white/25 mt-1">Cole links do Pinterest, Instagram ou qualquer referência visual</p>
               </div>
 
               {artLimit !== null && (

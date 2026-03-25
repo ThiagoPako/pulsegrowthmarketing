@@ -64,20 +64,21 @@ type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem' | '
 const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
 
+type VideoQuality = '480p' | 'original';
+
 function isPortalVideo(content: Pick<PortalContent, 'content_type' | 'file_url'>) {
   return content.content_type !== 'arte' && !!content.file_url;
 }
 
 function shouldProxyPortalVideo(url: string) {
-  // Keep VPS videos behind the media proxy to avoid ORB/CORS inconsistencies in browsers
   return url.startsWith(VPS_UPLOADS_URL);
 }
 
-async function createPortalVideoObjectUrl(url: string) {
+async function createPortalVideoObjectUrl(url: string, quality: VideoQuality = '480p') {
   const response = await fetch(PORTAL_MEDIA_PROXY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url, quality }),
   });
 
   if (!response.ok) {
@@ -114,6 +115,7 @@ export default function ClientPortal() {
   const [resolvedVideoUrl, setResolvedVideoUrl] = useState<string | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoLoadError, setVideoLoadError] = useState<string | null>(null);
+  const [videoQuality, setVideoQuality] = useState<VideoQuality>('480p');
   const commentsEndRef = useRef<HTMLDivElement>(null);
   const [portalVideoState, setPortalVideoState] = useState({ hasNews: false, hasWelcome: false, isNewClient: false });
 
@@ -224,6 +226,7 @@ export default function ClientPortal() {
     setVideoDuration(0);
     setResolvedVideoUrl(null);
     setVideoLoadError(null);
+    setVideoQuality('480p');
     loadComments(content.id);
   };
 
@@ -255,7 +258,7 @@ export default function ClientPortal() {
       setVideoLoading(true);
 
       try {
-        const objectUrl = await createPortalVideoObjectUrl(selectedContent.file_url);
+        const objectUrl = await createPortalVideoObjectUrl(selectedContent.file_url, videoQuality);
 
         if (cancelled) {
           URL.revokeObjectURL(objectUrl);
@@ -284,7 +287,7 @@ export default function ClientPortal() {
         URL.revokeObjectURL(objectUrlToRevoke);
       }
     };
-  }, [selectedContent?.id, selectedContent?.file_url, selectedContent?.content_type]);
+  }, [selectedContent?.id, selectedContent?.file_url, selectedContent?.content_type, videoQuality]);
 
   const handleApprove = async () => {
     if (!selectedContent || !client) return;
@@ -890,7 +893,7 @@ export default function ClientPortal() {
                     {videoLoading ? (
                       <div className="aspect-video flex flex-col items-center justify-center gap-3 bg-[#0c0c14] text-white/60">
                         <Loader2 className="w-8 h-8 animate-spin" />
-                        <p className="text-sm">Carregando vídeo...</p>
+                        <p className="text-sm">Carregando em {videoQuality === '480p' ? '480p' : 'qualidade original'}...</p>
                       </div>
                     ) : videoLoadError ? (
                       <div className="aspect-video flex flex-col items-center justify-center gap-3 bg-[#0c0c14] text-center px-6 text-white/60">
@@ -902,7 +905,7 @@ export default function ClientPortal() {
                             setResolvedVideoUrl(null);
                             setVideoLoading(true);
                             if (selectedContent?.file_url && shouldProxyPortalVideo(selectedContent.file_url)) {
-                              createPortalVideoObjectUrl(selectedContent.file_url)
+                              createPortalVideoObjectUrl(selectedContent.file_url, videoQuality)
                                 .then(url => { setResolvedVideoUrl(url); setVideoLoading(false); })
                                 .catch(err => { setVideoLoadError(err instanceof Error ? err.message : 'Erro'); setVideoLoading(false); });
                             } else if (selectedContent?.file_url) {
@@ -957,9 +960,26 @@ export default function ClientPortal() {
                                 {formatDuration(videoProgress)} / {formatDuration(videoDuration)}
                               </span>
                             </div>
-                            <button onClick={toggleFullscreen} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
-                              <Maximize size={16} />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              {/* Quality selector */}
+                              <button
+                                onClick={() => {
+                                  const next: VideoQuality = videoQuality === '480p' ? 'original' : '480p';
+                                  setVideoQuality(next);
+                                }}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                                  videoQuality === 'original'
+                                    ? 'bg-white/25 text-white'
+                                    : 'bg-white/10 text-white/60 hover:bg-white/20'
+                                }`}
+                                title={videoQuality === '480p' ? 'Clique para qualidade HD' : 'Clique para 480p (mais rápido)'}
+                              >
+                                {videoQuality === '480p' ? '480p' : 'HD'}
+                              </button>
+                              <button onClick={toggleFullscreen} className="p-1.5 rounded-full hover:bg-white/20 transition-colors">
+                                <Maximize size={16} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                         {/* Center play button */}

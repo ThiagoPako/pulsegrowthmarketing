@@ -1994,13 +1994,87 @@ app.post('/api/portal-recordings', async (req, res) => {
   }
 });
 
-// ─── 7. Portal Media Proxy ──────────────────────────────────
+// ─── 7. Portal Media Proxy (with quality transcoding) ───────
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
+const execFileAsync = promisify(execFile);
+const TRANSCODE_CACHE_DIR = '/tmp/pulse-video-cache';
+try { fs.mkdirSync(TRANSCODE_CACHE_DIR, { recursive: true }); } catch {}
+
+// Clean old cached files every 6 hours
+setInterval(() => {
+  try {
+    const files = fs.readdirSync(TRANSCODE_CACHE_DIR);
+    const now = Date.now();
+    for (const f of files) {
+      const fp = path.join(TRANSCODE_CACHE_DIR, f);
+      const stat = fs.statSync(fp);
+      if (now - stat.mtimeMs > 24 * 60 * 60 * 1000) fs.unlinkSync(fp); // 24h TTL
+    }
+  } catch {}
+}, 6 * 60 * 60 * 1000);
+
 app.all('/api/portal-media-proxy', async (req, res) => {
   try {
     const targetUrl = req.method === 'GET' ? req.query.url : req.body?.url;
+    const quality = (req.method === 'GET' ? req.query.quality : req.body?.quality) || 'original';
     if (!targetUrl) return res.status(400).json({ error: 'url is required' });
     try { const parsed = new URL(targetUrl); if (parsed.origin !== 'https://agenciapulse.tech' || !parsed.pathname.startsWith('/uploads/')) return res.status(400).json({ error: 'URL not allowed' }); } catch { return res.status(400).json({ error: 'Invalid URL' }); }
 
+    // If quality is 480p, try to serve a transcoded version
+    if (quality === '480p' && /\.(mp4|mov|webm)(\?|$)/i.test(targetUrl)) {
+      const urlHash = crypto.createHash('md5').update(targetUrl).digest('hex');
+      const cachedFile = path.join(TRANSCODE_CACHE_DIR, `${urlHash}_480p.mp4`);
+
+      // Serve from cache if available
+      if (fs.existsSync(cachedFile)) {
+        const stat = fs.statSync(cachedFile);
+        res.setHeader('Content-Type', 'video/mp4');
+        res.setHeader('Content-Length', stat.size);
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        res.setHeader('Content-Disposition', 'inline');
+        res.setHeader('X-Video-Quality', '480p-cached');
+        return fs.createReadStream(cachedFile).pipe(res);
+      }
+
+      // Try to extract the local file path from the URL
+      const parsed = new URL(targetUrl);
+      const localPath = `/var/www/html${parsed.pathname}`;
+      const uploadsPath = localPath.replace('/var/www/html/uploads/', '/var/www/uploads/');
+      const sourcePath = fs.existsSync(localPath) ? localPath : (fs.existsSync(uploadsPath) ? uploadsPath : null);
+
+      if (sourcePath) {
+        try {
+          // Transcode to 480p using ffmpeg with fast preset
+          await execFileAsync('ffmpeg', [
+            '-i', sourcePath,
+            '-vf', 'scale=-2:480',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
+            '-c:a', 'aac', '-b:a', '96k',
+            '-movflags', '+faststart',
+            '-y', cachedFile
+          ], { timeout: 120000 });
+
+          const stat = fs.statSync(cachedFile);
+          res.setHeader('Content-Type', 'video/mp4');
+          res.setHeader('Content-Length', stat.size);
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+          res.setHeader('Content-Disposition', 'inline');
+          res.setHeader('X-Video-Quality', '480p-transcoded');
+          return fs.createReadStream(cachedFile).pipe(res);
+        } catch (ffErr) {
+          console.error('ffmpeg transcode error:', ffErr.message);
+          // Fall through to serve original
+        }
+      }
+    }
+
+    // Serve original quality (or fallback)
     const headers = {};
     if (req.headers.range) headers.Range = req.headers.range;
     if (req.headers.accept) headers.Accept = req.headers.accept;
@@ -2016,6 +2090,7 @@ app.all('/api/portal-media-proxy', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('X-Video-Quality', 'original');
     
     const buffer = Buffer.from(await upstream.arrayBuffer());
     res.status(upstream.status).send(buffer);

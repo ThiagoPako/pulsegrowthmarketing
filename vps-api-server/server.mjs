@@ -2774,10 +2774,16 @@ app.post('/api/recordings', async (req, res) => {
     const items = Array.isArray(req.body) ? req.body : [req.body];
     const results = [];
     for (const r of items) {
+      const cols = ['id', 'client_id', 'videomaker_id', 'date', 'start_time', 'type', 'status', 'confirmation_status'];
+      const vals = [r.id || crypto.randomUUID(), r.client_id || null, r.videomaker_id, r.date, r.start_time, r.type || 'fixa', r.status || 'agendada', r.confirmation_status || 'pendente'];
+      if (r.prospect_name) {
+        cols.push('prospect_name');
+        vals.push(r.prospect_name);
+      }
+      const placeholders = cols.map((_, i) => `$${i + 1}`).join(',');
       const { rows } = await pool.query(
-        `INSERT INTO recordings (id, client_id, videomaker_id, date, start_time, type, status, confirmation_status, prospect_name)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-        [r.id || crypto.randomUUID(), r.client_id || null, r.videomaker_id, r.date, r.start_time, r.type || 'fixa', r.status || 'agendada', r.confirmation_status || 'pendente', r.prospect_name || null]
+        `INSERT INTO recordings (${cols.join(', ')}) VALUES (${placeholders}) RETURNING *`,
+        vals
       );
       results.push(rows[0]);
     }

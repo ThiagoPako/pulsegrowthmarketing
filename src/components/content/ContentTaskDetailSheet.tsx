@@ -36,6 +36,24 @@ const CONTENT_TYPES = [
   { value: 'arte', label: 'Arte', icon: Palette, color: 'text-amber-700 bg-amber-50 border border-amber-200/60 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800' },
 ];
 
+const normalizeDateValue = (value?: string | null, withTime = false) => {
+  if (!value) return null;
+  const normalized = value.includes('T') ? value : `${value}${withTime ? '' : 'T12:00:00'}`;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const safeFormatDate = (value?: string | null, pattern = "dd/MM/yyyy") => {
+  const parsed = normalizeDateValue(value);
+  if (!parsed) return '—';
+
+  try {
+    return format(parsed, pattern, { locale: ptBR });
+  } catch {
+    return '—';
+  }
+};
+
 const KANBAN_COLUMNS = [
   { id: 'ideias', label: 'Zona de Ideias', icon: '💡' },
   { id: 'captacao', label: 'Captação', icon: '📹' },
@@ -240,7 +258,7 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
     {
       ...JOURNEY_STAGES[1],
       person: recordingVideomaker ? { name: recordingVideomaker.name, avatarUrl: recordingVideomaker.avatarUrl } : (captacaoEntry ? getUserFromHistory(captacaoEntry) : null),
-      detail: task.scheduled_recording_date ? `Gravação: ${format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}${task.scheduled_recording_time ? ` às ${task.scheduled_recording_time}` : ''}` : null,
+      detail: task.scheduled_recording_date ? `Gravação: ${safeFormatDate(task.scheduled_recording_date)}${task.scheduled_recording_time ? ` às ${task.scheduled_recording_time}` : ''}` : null,
       date: captacaoEntry?.created_at || null,
     },
     {
@@ -252,7 +270,7 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
     {
       ...JOURNEY_STAGES[3],
       person: revisaoEntry ? getUserFromHistory(revisaoEntry) : null,
-      detail: task.approved_at ? `Aprovado em ${format(new Date(task.approved_at), "dd/MM HH:mm", { locale: ptBR })}` : null,
+      detail: task.approved_at ? `Aprovado em ${safeFormatDate(task.approved_at, 'dd/MM HH:mm')}` : null,
       date: revisaoEntry?.created_at || null,
     },
     {
@@ -391,7 +409,7 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
                   </span>
                   {stage.date && (
                     <span className="text-[9px] text-muted-foreground/60 ml-auto font-medium">
-                      {format(new Date(stage.date), "dd/MM/yy 'às' HH:mm", { locale: ptBR })}
+                      {safeFormatDate(stage.date, "dd/MM/yy 'às' HH:mm")}
                     </span>
                   )}
                 </div>

@@ -673,14 +673,15 @@ CREATE TABLE IF NOT EXISTS profiles (
 -- Table: recordings
 CREATE TABLE IF NOT EXISTS recordings (
   id UUID NOT NULL DEFAULT gen_random_uuid(),
-  client_id UUID NOT NULL,
+  client_id UUID,
   videomaker_id UUID NOT NULL,
   date DATE NOT NULL,
   start_time TEXT NOT NULL,
   type TEXT NOT NULL DEFAULT 'fixa'::text,
   status TEXT NOT NULL DEFAULT 'agendada'::text,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  confirmation_status TEXT NOT NULL DEFAULT 'pendente'::text
+  confirmation_status TEXT NOT NULL DEFAULT 'pendente'::text,
+  prospect_name TEXT
 );
 
 -- Table: revenues

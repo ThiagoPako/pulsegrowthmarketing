@@ -1224,7 +1224,7 @@ function ContentRow({ label, items, clientColor, onSelect, delay = 0 }: {
   );
 }
 
-/* ── Reels Card with smart preview ── */
+/* ── Reels Card with always-on 6s loop preview ── */
 function ReelsCard({ content, clientColor, onSelect }: {
   content: PortalContent;
   clientColor: string;
@@ -1235,50 +1235,60 @@ function ReelsCard({ content, clientColor, onSelect }: {
   const statusStyle = STATUS_COLORS[content.status];
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewVisible, setPreviewVisible] = useState(false);
-  const [isHovering, setIsHovering] = useState(false);
-  const loadingRef = useRef(false);
+  const cardRef = useRef<HTMLButtonElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
 
-  // Only load video when user hovers — NOT on mount
+  // IntersectionObserver: load preview only when card scrolls into view
   useEffect(() => {
-    if (!isHovering || !isVideo || !content.file_url || loadingRef.current || previewUrl) return;
+    if (!isVideo || !content.file_url) return;
+    const el = cardRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isVideo, content.file_url]);
+
+  // Resolve streaming URL once card becomes visible
+  useEffect(() => {
+    if (!isVisible || !isVideo || !content.file_url || previewUrl) return;
+
     if (!shouldProxyPortalVideo(content.file_url)) {
       setPreviewUrl(content.file_url);
       return;
     }
 
     let cancelled = false;
-    loadingRef.current = true;
-
     createPortalVideoObjectUrl(content.file_url)
       .then((url) => {
-        if (cancelled) return;
-        setPreviewUrl(url);
+        if (!cancelled) setPreviewUrl(url);
       })
-      .catch(() => {
-        if (!cancelled) setPreviewUrl(null);
-      })
-      .finally(() => {
-        loadingRef.current = false;
-      });
+      .catch(() => {});
 
-    return () => {
-      cancelled = true;
-    };
-  }, [isHovering, isVideo, content.file_url, previewUrl]);
+    return () => { cancelled = true; };
+  }, [isVisible, isVideo, content.file_url, previewUrl]);
 
-  const canAutoplayPreview = isVideo && !!previewUrl && isHovering;
+  const showPreview = isVideo && !!previewUrl;
 
   return (
     <button
+      ref={cardRef}
       onClick={() => onSelect(content)}
-      onMouseEnter={() => setIsHovering(true)}
-      onMouseLeave={() => { setIsHovering(false); setPreviewVisible(false); }}
       className="group relative shrink-0 w-[120px] sm:w-[170px] snap-start rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.04] hover:ring-1 focus:outline-none bg-white/[0.03]"
       style={{ '--tw-ring-color': `hsl(${clientColor} / 0.5)` } as any}
     >
       <div className="aspect-[9/16] relative overflow-hidden">
+        {/* Static fallback — fades out once video preview loads */}
         {content.thumbnail_url ? (
-          <img src={content.thumbnail_url} alt={content.title} loading="lazy" className="w-full h-full object-cover" />
+          <img src={content.thumbnail_url} alt={content.title} loading="lazy" className={`w-full h-full object-cover transition-opacity duration-500 ${previewVisible ? 'opacity-0' : 'opacity-100'}`} />
         ) : content.file_url && content.content_type === 'arte' ? (
           <img src={content.file_url} alt={content.title} loading="lazy" className="w-full h-full object-cover" />
         ) : (
@@ -1287,15 +1297,15 @@ function ReelsCard({ content, clientColor, onSelect }: {
           </div>
         )}
 
-        {canAutoplayPreview && (
+        {/* Always-on 6s loop video preview */}
+        {showPreview && (
           <video
             src={previewUrl!}
             muted
             playsInline
             autoPlay
-            loop
-            preload="metadata"
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${previewVisible ? 'opacity-100' : 'opacity-0'}`}
+            preload="auto"
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${previewVisible ? 'opacity-100' : 'opacity-0'}`}
             onLoadedData={() => setPreviewVisible(true)}
             onError={() => {
               setPreviewVisible(false);
@@ -1312,7 +1322,8 @@ function ReelsCard({ content, clientColor, onSelect }: {
 
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
 
-        {isVideo && (
+        {/* Play icon only shows before video preview loads */}
+        {isVideo && !previewVisible && (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="w-10 h-10 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center transition-colors group-hover:bg-white/25">
               <Play size={18} fill="white" className="ml-0.5" />

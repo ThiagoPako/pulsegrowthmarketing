@@ -56,6 +56,7 @@ export interface EditorTask {
   approval_deadline: string | null;
   editing_paused_at: string | null;
   editing_paused_seconds: number;
+  edited_by: string | null;
   position: number;
   created_at: string;
   updated_at: string;
@@ -254,6 +255,8 @@ export default function EditorDashboard() {
     if (!isEditorRole || !user) return tasks;
     return tasks.filter(t => {
       if (t.kanban_column === 'edicao') return !t.assigned_to || t.assigned_to === user.id;
+      // For review tasks, only show tasks this editor edited
+      if (t.kanban_column === 'revisao') return t.edited_by === user.id;
       return !t.assigned_to || t.assigned_to === user.id;
     });
   }, [tasks, isEditorRole, user]);
@@ -310,6 +313,7 @@ export default function EditorDashboard() {
     if (!user) return;
     const { error } = await supabase.from('content_tasks').update({
       assigned_to: user.id,
+      edited_by: user.id,
       editing_started_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
@@ -368,6 +372,7 @@ export default function EditorDashboard() {
     // Auto-resume if paused before sending
     const updateData: any = {
       kanban_column: 'revisao', 
+      assigned_to: null,
       editing_paused_at: null,
       updated_at: new Date().toISOString(),
     };
@@ -789,7 +794,7 @@ export default function EditorDashboard() {
                         </Badge>
                       </div>
                       <p className="text-sm font-semibold text-foreground leading-tight">{task.title}</p>
-                      {task.editing_started_at && (
+                      {task.edited_by === user?.id && (
                         <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 bg-emerald-500/10 rounded-md px-2 py-1">
                           <Check size={10} />
                           <span>Editado por você</span>

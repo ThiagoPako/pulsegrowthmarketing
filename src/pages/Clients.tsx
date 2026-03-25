@@ -83,7 +83,7 @@ const STEP_LABELS_NO_META = [
 ];
 
 export default function Clients() {
-  const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient, currentUser } = useApp();
+  const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient, regenerateScheduleForClient, currentUser } = useApp();
   const { createOnboardingForClient } = useOnboarding();
   const isDesignerOnly = currentUser?.role === 'designer' || currentUser?.role === 'fotografo';
   const [briefingClient, setBriefingClient] = useState<Client | null>(null);
@@ -371,7 +371,8 @@ export default function Clients() {
     try {
     if (editing) {
       const logoUrl = await uploadLogo(editing.id);
-      updateClient({ ...editing, ...form, logoUrl: logoUrl || undefined } as Client);
+      const updatedClient = { ...editing, ...form, logoUrl: logoUrl || undefined } as Client;
+      updateClient(updatedClient);
       // Update plan fields
       await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, contract_duration_months: contractDurationMonths, show_metrics: showMetrics } as any).eq('id', editing.id);
       // Upsert financial contract
@@ -386,7 +387,24 @@ export default function Clients() {
       } as any, { onConflict: 'client_id' });
       // Save social accounts
       await saveSocialAccounts(editing.id);
-      toast.success('Cliente atualizado');
+      // Auto-regenerate schedule if scheduling fields changed
+      const scheduleFieldsChanged =
+        editing.fixedDay !== updatedClient.fixedDay ||
+        editing.fixedTime !== updatedClient.fixedTime ||
+        editing.videomaker !== updatedClient.videomaker ||
+        editing.backupDay !== updatedClient.backupDay ||
+        editing.backupTime !== updatedClient.backupTime ||
+        editing.extraDay !== updatedClient.extraDay ||
+        editing.acceptsExtra !== updatedClient.acceptsExtra ||
+        editing.fullShiftRecording !== updatedClient.fullShiftRecording ||
+        editing.preferredShift !== updatedClient.preferredShift ||
+        editing.monthlyRecordings !== updatedClient.monthlyRecordings;
+      if (scheduleFieldsChanged) {
+        const { deleted, created } = await regenerateScheduleForClient(updatedClient);
+        toast.success(`Cliente atualizado — agenda regenerada: ${deleted} removida(s), ${created} criada(s)`);
+      } else {
+        toast.success('Cliente atualizado');
+      }
     } else {
       const clientId = crypto.randomUUID();
       const logoUrl = await uploadLogo(clientId);

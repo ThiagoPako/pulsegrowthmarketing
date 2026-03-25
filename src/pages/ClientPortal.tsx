@@ -257,7 +257,7 @@ export default function ClientPortal() {
       setVideoLoading(true);
 
       try {
-        const objectUrl = await createPortalVideoObjectUrl(selectedContent.file_url);
+        const objectUrl = await createPortalVideoObjectUrl(selectedContent.file_url, videoQuality);
 
         if (cancelled) {
           URL.revokeObjectURL(objectUrl);
@@ -286,7 +286,7 @@ export default function ClientPortal() {
         URL.revokeObjectURL(objectUrlToRevoke);
       }
     };
-  }, [selectedContent?.id, selectedContent?.file_url, selectedContent?.content_type]);
+  }, [selectedContent?.id, selectedContent?.file_url, selectedContent?.content_type, videoQuality]);
 
   const handleApprove = async () => {
     if (!selectedContent || !client) return;

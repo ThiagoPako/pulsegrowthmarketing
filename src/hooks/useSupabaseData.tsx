@@ -43,6 +43,7 @@ function rowToClient(r: any): Client {
     fullShiftRecording: r.full_shift_recording || false,
     preferredShift: r.preferred_shift || 'manha',
     selectedWeeks: r.selected_weeks || [1, 2, 3, 4],
+    artRequestsLimit: r.art_requests_limit ?? null,
   };
 }
 
@@ -84,6 +85,7 @@ function clientToRow(c: Client) {
     full_shift_recording: c.fullShiftRecording || false,
     preferred_shift: c.preferredShift || 'manha',
     selected_weeks: c.selectedWeeks || [1, 2, 3, 4],
+    art_requests_limit: c.artRequestsLimit ?? null,
   };
 }
 

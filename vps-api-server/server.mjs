@@ -1003,10 +1003,10 @@ app.post('/api/portal-actions', async (req, res) => {
       const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(client_id);
       let query, params;
       if (isUUID) {
-        query = 'SELECT id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city FROM clients WHERE id = $1 LIMIT 1';
+        query = 'SELECT id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city, art_requests_limit FROM clients WHERE id = $1 LIMIT 1';
         params = [client_id];
       } else {
-        query = `SELECT id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city FROM clients WHERE trim(both '-' from regexp_replace(lower(trim(company_name)), '\\s+', '-', 'g')) = trim(both '-' from regexp_replace(lower(trim($1)), '\\s+', '-', 'g')) LIMIT 1`;
+        query = `SELECT id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city, art_requests_limit FROM clients WHERE trim(both '-' from regexp_replace(lower(trim(company_name)), '\\s+', '-', 'g')) = trim(both '-' from regexp_replace(lower(trim($1)), '\\s+', '-', 'g')) LIMIT 1`;
         params = [client_id];
       }
       const { rows } = await pool.query(query, params);

@@ -1228,65 +1228,57 @@ function ReelsCard({ content, clientColor, onSelect }: {
   const statusStyle = STATUS_COLORS[content.status];
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewVisible, setPreviewVisible] = useState(false);
+  const [isHovering, setIsHovering] = useState(false);
+  const loadingRef = useRef(false);
+  const objectUrlRef = useRef<string | null>(null);
 
+  // Only load video when user hovers — NOT on mount
   useEffect(() => {
+    if (!isHovering || !isVideo || !content.file_url || loadingRef.current || previewUrl) return;
+    if (!shouldProxyPortalVideo(content.file_url)) {
+      setPreviewUrl(content.file_url);
+      return;
+    }
+
     let cancelled = false;
-    let objectUrlToRevoke: string | null = null;
+    loadingRef.current = true;
 
-    const loadPreview = async () => {
-      setPreviewVisible(false);
+    createPortalVideoObjectUrl(content.file_url)
+      .then(url => {
+        if (cancelled) { URL.revokeObjectURL(url); return; }
+        objectUrlRef.current = url;
+        setPreviewUrl(url);
+      })
+      .catch(() => { if (!cancelled) setPreviewUrl(null); })
+      .finally(() => { loadingRef.current = false; });
 
-      if (!isVideo || !content.file_url) {
-        setPreviewUrl(null);
-        return;
-      }
+    return () => { cancelled = true; };
+  }, [isHovering, isVideo, content.file_url, previewUrl]);
 
-      if (!shouldProxyPortalVideo(content.file_url)) {
-        setPreviewUrl(content.file_url);
-        return;
-      }
-
-      try {
-        const objectUrl = await createPortalVideoObjectUrl(content.file_url);
-
-        if (cancelled) {
-          URL.revokeObjectURL(objectUrl);
-          return;
-        }
-
-        objectUrlToRevoke = objectUrl;
-        setPreviewUrl(objectUrl);
-      } catch (error) {
-        console.error('[Portal Preview] Failed to load proxied video preview', error);
-        if (!cancelled) {
-          setPreviewUrl(null);
-        }
-      }
-    };
-
-    loadPreview();
-
+  // Cleanup object URL on unmount
+  useEffect(() => {
     return () => {
-      cancelled = true;
-      if (objectUrlToRevoke) {
-        URL.revokeObjectURL(objectUrlToRevoke);
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
       }
     };
-  }, [content.file_url, isVideo]);
+  }, []);
 
-  const canAutoplayPreview = isVideo && !!previewUrl;
+  const canAutoplayPreview = isVideo && !!previewUrl && isHovering;
 
   return (
     <button
       onClick={() => onSelect(content)}
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => { setIsHovering(false); setPreviewVisible(false); }}
       className="group relative shrink-0 w-[120px] sm:w-[170px] snap-start rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.04] hover:ring-1 focus:outline-none bg-white/[0.03]"
       style={{ '--tw-ring-color': `hsl(${clientColor} / 0.5)` } as any}
     >
       <div className="aspect-[9/16] relative overflow-hidden">
         {content.thumbnail_url ? (
-          <img src={content.thumbnail_url} alt={content.title} className="w-full h-full object-cover" />
+          <img src={content.thumbnail_url} alt={content.title} loading="lazy" className="w-full h-full object-cover" />
         ) : content.file_url && content.content_type === 'arte' ? (
-          <img src={content.file_url} alt={content.title} className="w-full h-full object-cover" />
+          <img src={content.file_url} alt={content.title} loading="lazy" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-white/[0.04]">
             <Icon size={32} className="text-white/10" />

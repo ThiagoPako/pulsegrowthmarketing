@@ -232,6 +232,40 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
     }
   };
 
+  const handleStartEdit = (script: Script) => {
+    const plain = stripHtml(script.content);
+    setEditContent(plain);
+    setEditCaption(script.caption || '');
+    setEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedScript) return;
+    setSaving(true);
+    const result = await portalAction({
+      action: 'client_edit_script',
+      client_id: clientId,
+      script_id: selectedScript.id,
+      content: editContent,
+      caption: editCaption,
+    });
+    if (result?.error) {
+      toast.error('Erro ao salvar edição');
+    } else {
+      toast.success('Roteiro editado com sucesso!');
+      setScripts(prev => prev.map(s => s.id === selectedScript.id ? { ...s, content: `<p>${editContent.replace(/\n/g, '</p><p>')}</p>`, caption: editCaption, client_edited: true, client_edited_at: new Date().toISOString() } : s));
+      setSelectedScript(prev => prev ? { ...prev, content: `<p>${editContent.replace(/\n/g, '</p><p>')}</p>`, caption: editCaption, client_edited: true, client_edited_at: new Date().toISOString() } : null);
+      setEditing(false);
+    }
+    setSaving(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditing(false);
+    setEditContent('');
+    setEditCaption('');
+  };
+
   const getCoverConfig = (script: Script) => {
     const vtCover = VIDEO_TYPE_COVERS[script.video_type];
     const fmtConfig = FORMAT_CONFIG[script.content_format] || DEFAULT_FORMAT;

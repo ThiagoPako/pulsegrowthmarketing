@@ -877,6 +877,7 @@ export default function Scripts() {
                     <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-sky-500/30">
                       📹 Avulso
                     </Badge>
+                  )}
                   {script.priority === 'urgent' && (
                     <Badge className="text-[9px] bg-destructive/20 text-destructive border-destructive/30">Urgente</Badge>
                   )}

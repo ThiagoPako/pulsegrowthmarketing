@@ -910,7 +910,7 @@ export default function Scripts() {
       {/* Create/Edit Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editing ? 'Editar Roteiro' : 'Novo Roteiro'}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? 'Editar Roteiro' : form.isAvulso ? '📹 Novo Roteiro Avulso' : 'Novo Roteiro'}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1">

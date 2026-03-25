@@ -480,26 +480,28 @@ export default function VideomakerDashboard() {
         .eq('script_id', scriptId).in('kanban_column', ['captacao']);
     }
 
-    // Check remaining scripts for this client and notify if low
-    const remainingScripts = scripts.filter(
-      s => s.clientId === rec.clientId && !s.recorded && !s.isEndomarketing && !allRecordedIds.has(s.id) && !rejectedScripts.has(s.id)
-    );
-    if (remainingScripts.length <= 2) {
-      const clientName = clients.find(c => c.id === rec.clientId)?.companyName || 'Cliente';
-      await supabase.rpc('notify_role', {
-        _role: 'social_media',
-        _title: '📝 Estoque baixo de roteiros',
-        _message: `${clientName} possui apenas ${remainingScripts.length} roteiro(s) pendente(s). Crie novos roteiros para as próximas gravações.`,
-        _type: 'script_low',
-        _link: '/roteiros',
-      });
-      await supabase.rpc('notify_role', {
-        _role: 'admin',
-        _title: '📝 Estoque baixo de roteiros',
-        _message: `${clientName} possui apenas ${remainingScripts.length} roteiro(s) pendente(s). Crie novos roteiros para as próximas gravações.`,
-        _type: 'script_low',
-        _link: '/roteiros',
-      });
+    // Check remaining scripts for this client and notify if low (only for regular clients)
+    if (rec.clientId) {
+      const remainingScripts = scripts.filter(
+        s => s.clientId === rec.clientId && !s.recorded && !s.isEndomarketing && !allRecordedIds.has(s.id) && !rejectedScripts.has(s.id)
+      );
+      if (remainingScripts.length <= 2) {
+        const clientName = clients.find(c => c.id === rec.clientId)?.companyName || 'Cliente';
+        await supabase.rpc('notify_role', {
+          _role: 'social_media',
+          _title: '📝 Estoque baixo de roteiros',
+          _message: `${clientName} possui apenas ${remainingScripts.length} roteiro(s) pendente(s). Crie novos roteiros para as próximas gravações.`,
+          _type: 'script_low',
+          _link: '/roteiros',
+        });
+        await supabase.rpc('notify_role', {
+          _role: 'admin',
+          _title: '📝 Estoque baixo de roteiros',
+          _message: `${clientName} possui apenas ${remainingScripts.length} roteiro(s) pendente(s). Crie novos roteiros para as próximas gravações.`,
+          _type: 'script_low',
+          _link: '/roteiros',
+        });
+      }
     }
 
     const hasAnyLink = Array.from(allRecordedIds).some(id => driveLinks[id]?.trim());

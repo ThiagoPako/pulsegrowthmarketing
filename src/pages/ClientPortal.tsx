@@ -904,7 +904,7 @@ export default function ClientPortal() {
                             setResolvedVideoUrl(null);
                             setVideoLoading(true);
                             if (selectedContent?.file_url && shouldProxyPortalVideo(selectedContent.file_url)) {
-                              createPortalVideoObjectUrl(selectedContent.file_url)
+                              createPortalVideoObjectUrl(selectedContent.file_url, videoQuality)
                                 .then(url => { setResolvedVideoUrl(url); setVideoLoading(false); })
                                 .catch(err => { setVideoLoadError(err instanceof Error ? err.message : 'Erro'); setVideoLoading(false); });
                             } else if (selectedContent?.file_url) {

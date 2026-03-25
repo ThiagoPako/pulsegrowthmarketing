@@ -180,7 +180,15 @@ export default function Scripts() {
     endoClientId: '' as string,
     scheduledDate: '' as string,
     directToEditing: false,
+    isAvulso: false,
+    recordingId: '' as string,
+    prospectName: '' as string,
   });
+
+  // Avulso recordings (type=avulso, with prospect_name)
+  const avulsoRecordings = useMemo(() => {
+    return recordings.filter(r => r.type === 'avulso' && r.prospectName);
+  }, [recordings]);
 
   const printRef = useRef<HTMLDivElement>(null);
 

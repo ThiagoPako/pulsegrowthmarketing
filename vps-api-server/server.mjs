@@ -2772,11 +2772,32 @@ app.post('/api/recordings', async (req, res) => {
   try {
     await verifyUser(req);
     const items = Array.isArray(req.body) ? req.body : [req.body];
+    const schemaResult = await pool.query(`
+      SELECT column_name, is_nullable
+      FROM information_schema.columns
+      WHERE table_name = 'recordings'
+        AND column_name IN ('client_id', 'prospect_name')
+    `);
+    const hasProspectName = schemaResult.rows.some((row) => row.column_name === 'prospect_name');
+    const clientIdNullable = schemaResult.rows.some((row) => row.column_name === 'client_id' && row.is_nullable === 'YES');
+
     const results = [];
     for (const r of items) {
+      const isAvulso = r.type === 'avulso' || Boolean(r.prospect_name);
+      if (isAvulso && !clientIdNullable && !r.client_id) {
+        return res.status(500).json({
+          error: 'Schema da VPS desatualizado: client_id da tabela recordings ainda está NOT NULL e bloqueia vídeo avulso.'
+        });
+      }
+      if (isAvulso && r.prospect_name && !hasProspectName) {
+        return res.status(500).json({
+          error: 'Schema da VPS desatualizado: coluna prospect_name não existe na tabela recordings.'
+        });
+      }
+
       const cols = ['id', 'client_id', 'videomaker_id', 'date', 'start_time', 'type', 'status', 'confirmation_status'];
       const vals = [r.id || crypto.randomUUID(), r.client_id || null, r.videomaker_id, r.date, r.start_time, r.type || 'fixa', r.status || 'agendada', r.confirmation_status || 'pendente'];
-      if (r.prospect_name) {
+      if (hasProspectName && r.prospect_name) {
         cols.push('prospect_name');
         vals.push(r.prospect_name);
       }
@@ -2796,7 +2817,18 @@ app.put('/api/recordings/:id', async (req, res) => {
     await verifyUser(req);
     const { id } = req.params;
     const r = req.body;
-    const allowed = ['client_id','videomaker_id','date','start_time','type','status','confirmation_status','prospect_name'];
+    const schemaResult = await pool.query(`
+      SELECT column_name, is_nullable
+      FROM information_schema.columns
+      WHERE table_name = 'recordings'
+        AND column_name IN ('client_id', 'prospect_name')
+    `);
+    const hasProspectName = schemaResult.rows.some((row) => row.column_name === 'prospect_name');
+    const clientIdNullable = schemaResult.rows.some((row) => row.column_name === 'client_id' && row.is_nullable === 'YES');
+    if ((r.type === 'avulso' || r.prospect_name) && r.client_id == null && !clientIdNullable) {
+      return res.status(500).json({ error: 'Schema da VPS desatualizado: client_id da tabela recordings ainda está NOT NULL e bloqueia vídeo avulso.' });
+    }
+    const allowed = ['client_id','videomaker_id','date','start_time','type','status','confirmation_status', ...(hasProspectName ? ['prospect_name'] : [])];
     const sets = []; const vals = []; let idx = 1;
     for (const key of allowed) { if (r[key] !== undefined) { sets.push(`${key} = $${idx}`); vals.push(r[key]); idx++; } }
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });

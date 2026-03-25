@@ -157,7 +157,7 @@ export default function Dashboard() {
         .from('content_tasks')
         .select('id, title, client_id, assigned_to, kanban_column, editing_started_at, content_type')
         .not('editing_started_at', 'is', null)
-        .in('kanban_column', ['em_edicao', 'revisao', 'alteracao']);
+        .in('kanban_column', ['edicao', 'revisao', 'alteracao']);
       if (data) setLiveEditorTasks(data);
     };
     fetchLiveTasks();
@@ -419,13 +419,13 @@ export default function Dashboard() {
       {(() => {
         const organizingRecordings = recordings.filter(r => r.status === 'organizando_material' && normalizeDateKey(r.date) === today);
         // Separate editor tasks by actual kanban_column
-        const editingTasks = liveEditorTasks.filter(t => t.kanban_column === 'em_edicao');
+        const editingTasks = liveEditorTasks.filter(t => t.kanban_column === 'edicao');
         const reviewTasks = liveEditorTasks.filter(t => t.kanban_column === 'revisao');
         const alterationTasks = liveEditorTasks.filter(t => t.kanban_column === 'alteracao');
         const totalActive = activeRecordings.length + liveEditorTasks.length + organizingRecordings.length;
 
         const columnConfig = {
-          em_edicao: { label: 'Editando', icon: Film, color: 'info', dotColor: 'bg-info', badgeBg: 'bg-info', borderColor: 'border-info/20', bgColor: 'bg-info/5' },
+          edicao: { label: 'Editando', icon: Film, color: 'info', dotColor: 'bg-info', badgeBg: 'bg-info', borderColor: 'border-info/20', bgColor: 'bg-info/5' },
           revisao: { label: 'Revisão', icon: AlertTriangle, color: 'warning', dotColor: 'bg-warning', badgeBg: 'bg-warning', borderColor: 'border-warning/20', bgColor: 'bg-warning/5' },
           alteracao: { label: 'Alteração', icon: RefreshCw, color: 'destructive', dotColor: 'bg-destructive', badgeBg: 'bg-destructive', borderColor: 'border-destructive/20', bgColor: 'bg-destructive/5' },
         };

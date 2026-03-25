@@ -86,9 +86,9 @@ function calculateScoreForMonth(
     score = reels * VM_SCORE.REEL + creatives * VM_SCORE.CRIATIVO + stories * VM_SCORE.STORY +
       extras * VM_SCORE.EXTRA + arts * VM_SCORE.ARTE + recDone * VM_SCORE.GRAVACAO + endoDone * VM_SCORE.ENDO;
   } else if (role === 'editor') {
-    const editorTasks = contentTasks.filter(t => t.assigned_to === userId);
-    const approved = editorTasks.filter(t => ['aprovado', 'publicado', 'finalizado'].includes(t.kanban_column)).length;
-    const inEditing = editorTasks.filter(t => t.kanban_column === 'em_edicao').length;
+    const editorTasks = contentTasks.filter(t => t.assigned_to === userId || t.edited_by === userId);
+    const approved = editorTasks.filter(t => t.approved_at || ['aprovado', 'publicado', 'finalizado', 'envio'].includes(t.kanban_column)).length;
+    const inEditing = editorTasks.filter(t => t.kanban_column === 'em_edicao' || t.kanban_column === 'editando').length;
     const alterations = editorTasks.filter(t => t.kanban_column === 'alteracao').length;
     const priority = editorTasks.filter(t => t.editing_priority === true).length;
     score = approved * EDITOR_SCORE.APROVADO + inEditing * EDITOR_SCORE.EM_EDICAO +

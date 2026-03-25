@@ -612,7 +612,7 @@ export default function InternalReports() {
           <Card>
             <CardContent className="p-4">
               <Badge variant="outline" className="text-xs">
-                Pontuação: Reels={EDITOR_SCORE_WEIGHTS.reels} · Criativos={EDITOR_SCORE_WEIGHTS.criativo} · Story={EDITOR_SCORE_WEIGHTS.story}
+                Pontuação: Aprovado={EDITOR_SCORE.APROVADO} · Editando={EDITOR_SCORE.EM_EDICAO} · Revisão={EDITOR_SCORE.REVISAO} · Alteração={EDITOR_SCORE.ALTERACAO} · Prioridade=+{EDITOR_SCORE.PRIORIDADE}
               </Badge>
             </CardContent>
           </Card>

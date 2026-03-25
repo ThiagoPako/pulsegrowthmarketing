@@ -484,7 +484,7 @@ export default function ClientPortal() {
       />
       {/* ── HEADER ── */}
       <header className="sticky top-0 z-50 bg-[#080810]/80 backdrop-blur-xl border-b border-white/[0.06]">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-8 h-16 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             {client.logo_url ? (
               <img src={client.logo_url} alt={client.company_name} className="w-9 h-9 rounded-lg object-cover ring-1 ring-white/10" />
@@ -511,8 +511,8 @@ export default function ClientPortal() {
           </div>
 
           {/* Nav tabs + notifications */}
-          <div className="flex items-center gap-2">
-            <div className="hidden sm:flex items-center gap-1 bg-white/[0.06] rounded-full p-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="hidden sm:flex min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-full bg-white/[0.06] p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <button
                 onClick={() => setActiveTab('library')}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'library' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}

@@ -830,9 +830,21 @@ export default function Schedule() {
         <h1 className="text-2xl font-display font-bold">Agenda</h1>
         <div className="flex gap-2 flex-wrap">
           {(showBackup || showExtra) && (
-            <Button variant="outline" className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateBackupExtra}>
-              <RefreshCw size={16} className="mr-2" /> Gerar Backup/Extra
-            </Button>
+            <>
+              <Button variant="outline" className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateBackupExtra}>
+                <RefreshCw size={16} className="mr-2" /> Gerar Backup/Extra
+              </Button>
+              {showBackup && (
+                <Button variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllBackup}>
+                  <Trash2 size={16} className="mr-2" /> Apagar Backups
+                </Button>
+              )}
+              {showExtra && (
+                <Button variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllExtra}>
+                  <Trash2 size={16} className="mr-2" /> Apagar Extras
+                </Button>
+              )}
+            </>
           )}
           <Button variant="outline" onClick={() => { setRegenClientId(''); setRegenOpen(true); }}>
             <RefreshCw size={16} className="mr-2" /> Regenerar Agenda

@@ -953,7 +953,7 @@ export default function ContentKanban() {
                       <SelectItem value="none">Nenhuma</SelectItem>
                       {clientRecordings.map(r => (
                         <SelectItem key={r.id} value={r.id}>
-                          {format(new Date(r.date + 'T12:00:00'), 'dd/MM', { locale: ptBR })} {r.startTime}
+                          {safeFormatDate(r.date, 'dd/MM')} {r.startTime}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1187,12 +1187,21 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
   const isCaptacao = task.kanban_column === 'captacao';
   const isRevisao = task.kanban_column === 'revisao' || task.kanban_column === 'alteracao';
   const isAcompanhamento = task.kanban_column === 'acompanhamento';
-  const isOverdue = isAcompanhamento && task.scheduled_recording_date && 
-    new Date(task.scheduled_recording_date + 'T23:59:59') < new Date();
+  const scheduledRecordingDate = normalizeDateValue(task.scheduled_recording_date);
+  const reviewHeartbeatAt = task.reviewing_at ? new Date(task.reviewing_at) : null;
+  const hasValidReviewHeartbeat = reviewHeartbeatAt && !Number.isNaN(reviewHeartbeatAt.getTime());
+  const isOverdue = Boolean(
+    isAcompanhamento && scheduledRecordingDate && scheduledRecordingDate.getTime() < Date.now()
+  );
 
   // Check if someone is actively reviewing (within last 60s)
-  const isBeingReviewed = task.kanban_column === 'revisao' && task.reviewing_by_name && task.reviewing_at &&
-    (Date.now() - new Date(task.reviewing_at).getTime()) < 60000;
+  const isBeingReviewed = Boolean(
+    task.kanban_column === 'revisao' &&
+    task.reviewing_by_name &&
+    hasValidReviewHeartbeat &&
+    reviewHeartbeatAt &&
+    (Date.now() - reviewHeartbeatAt.getTime()) < 60000
+  );
 
   return (
     <>
@@ -1354,7 +1363,7 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
               <div>
                 <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground/70 block leading-none mb-0.5">Agendado para</span>
                 <span className={`text-[12px] font-bold ${isOverdue ? 'text-destructive' : 'text-foreground'}`} style={{ fontFamily: 'var(--font-display)' }}>
-                  {format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
+                  {safeFormatDate(task.scheduled_recording_date)}
                   {task.scheduled_recording_time ? ` às ${task.scheduled_recording_time}` : ''}
                 </span>
               </div>
@@ -1366,7 +1375,7 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
             <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <Calendar size={11} className="shrink-0" />
               <span>
-                {format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
+                {safeFormatDate(task.scheduled_recording_date)}
                 {task.scheduled_recording_time ? ` ${task.scheduled_recording_time}` : ''}
               </span>
             </div>

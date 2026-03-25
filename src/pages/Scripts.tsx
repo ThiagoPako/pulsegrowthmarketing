@@ -720,6 +720,7 @@ export default function Scripts() {
       const rec = recordings.find(r => r.id === script.recordingId);
       return rec?.prospectName ? `📹 ${rec.prospectName}` : '📹 Avulso';
     }
+    if (!id) return '📹 Avulso';
     return clients.find(c => c.id === id)?.companyName || '—';
   };
   const getClientColor = (id: string, script?: Script) => {

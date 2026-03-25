@@ -1,0 +1,1 @@
+ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS edited_by UUID;

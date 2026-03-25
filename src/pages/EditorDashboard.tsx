@@ -310,24 +310,31 @@ export default function EditorDashboard() {
   }, [queueTasks, filterClient, filterType, searchQuery, clients]);
 
   /* ─── Actions ──────────────────────────────────────────── */
-  const handleStartEditing = async (task: EditorTask) => {
-    if (!user) return;
-    const { error } = await supabase.from('content_tasks').update({
-      assigned_to: user.id,
-      edited_by: user.id,
-      editing_started_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
-    if (error) { toast.error('Erro ao iniciar edição'); return; }
-    await supabase.from('task_history').insert({ task_id: task.id, user_id: user.id, action: 'Edição iniciada' });
-    toast.success('Edição iniciada!');
-    const updated = { ...task, assigned_to: user.id, edited_by: user.id, editing_started_at: new Date().toISOString() };
-    setActiveEditTask(updated);
-    setShowUpload(false);
-    setShowScript(false);
-    setVideoLink('');
-    fetchTasks();
-  };
+   const handleStartEditing = async (task: EditorTask) => {
+     if (!user) return;
+     const isAlteration = task.kanban_column === 'alteracao';
+     const { error } = await supabase.from('content_tasks').update({
+       assigned_to: user.id,
+       edited_by: user.id,
+       editing_started_at: new Date().toISOString(),
+       updated_at: new Date().toISOString(),
+     } as any).eq('id', task.id);
+     if (error) { toast.error(`Erro ao iniciar ${isAlteration ? 'alteração' : 'edição'}`); return; }
+     await supabase.from('task_history').insert({ task_id: task.id, user_id: user.id, action: isAlteration ? 'Alteração iniciada' : 'Edição iniciada' });
+     toast.success(isAlteration ? 'Alteração iniciada!' : 'Edição iniciada!');
+     const updated = { ...task, assigned_to: user.id, edited_by: user.id, editing_started_at: new Date().toISOString() };
+     setActiveEditTask(updated);
+     // Track old video for deletion when it's an alteration
+     if (isAlteration && task.edited_video_link) {
+       setOldVideoLink(task.edited_video_link);
+     } else {
+       setOldVideoLink(null);
+     }
+     setShowUpload(false);
+     setShowScript(false);
+     setVideoLink('');
+     fetchTasks();
+   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

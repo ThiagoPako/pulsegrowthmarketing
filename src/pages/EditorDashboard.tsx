@@ -641,10 +641,14 @@ export default function EditorDashboard() {
                       else { setShowUpload(true); }
                     }}
                     disabled={saving}
-                    className="gap-2 text-sm font-bold bg-gradient-to-r from-primary via-blue-500 to-primary bg-[length:200%_100%] animate-[shimmer_3s_linear_infinite] text-primary-foreground shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-shadow"
+                    className={`gap-2 text-sm font-bold bg-[length:200%_100%] animate-[shimmer_3s_linear_infinite] text-white shadow-lg transition-shadow ${
+                      activeEditTask.kanban_column === 'alteracao'
+                        ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 shadow-amber-500/25 hover:shadow-amber-500/40'
+                        : 'bg-gradient-to-r from-primary via-blue-500 to-primary shadow-primary/25 hover:shadow-primary/40'
+                    }`}
                   >
-                    <Rocket size={16} />
-                    {hasVideo ? 'Enviar para Revisão' : 'Finalizar'}
+                    {activeEditTask.kanban_column === 'alteracao' ? <Zap size={16} /> : <Rocket size={16} />}
+                    {hasVideo ? 'Enviar para Revisão' : activeEditTask.kanban_column === 'alteracao' ? 'Substituir Vídeo' : 'Finalizar'}
                   </Button>
                 </motion.div>
               </div>

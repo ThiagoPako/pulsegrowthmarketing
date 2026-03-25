@@ -174,8 +174,8 @@ export default function Schedule() {
       events.push({
         id: rec.id,
         type: 'recording',
-        clientName: clients.find(c => c.id === rec.clientId)?.companyName || '—',
-        color: clients.find(c => c.id === rec.clientId)?.color || '220 10% 50%',
+        clientName: getClientName(rec.clientId, rec),
+        color: getClientColor(rec.clientId, rec),
         startTime: rec.startTime,
         date: rec.date,
         status: rec.status,

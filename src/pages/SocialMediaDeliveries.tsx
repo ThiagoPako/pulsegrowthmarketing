@@ -1198,6 +1198,7 @@ export default function SocialMediaDeliveries() {
           onTogglePriority={handleTogglePriorityFromQueue}
           sendingWhatsApp={sendingWhatsApp}
           onDragMove={handleKanbanDragMove}
+          highlightTaskId={highlightTaskId}
         />
 
         {/* Dialogs */}

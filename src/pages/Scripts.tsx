@@ -363,17 +363,20 @@ export default function Scripts() {
         }
       }
 
-      const { error } = await supabase.from('content_tasks').insert({
-        client_id: form.clientId,
-        title: form.title,
-        content_type: form.contentFormat || 'reels',
-        kanban_column: kanbanColumn,
-        script_id: scriptId,
-        description: form.directToEditing ? 'Material pronto do cliente — direto para edição' : null,
-        created_by: user?.id || null,
-        assigned_to: assignedTo,
-      } as any);
-      if (error) console.error('Auto content_task creation error:', error);
+      // Only create content_task for non-avulso scripts (avulso has no client_id)
+      if (form.clientId) {
+        const { error } = await supabase.from('content_tasks').insert({
+          client_id: form.clientId,
+          title: form.title,
+          content_type: form.contentFormat || 'reels',
+          kanban_column: kanbanColumn,
+          script_id: scriptId,
+          description: form.directToEditing ? 'Material pronto do cliente — direto para edição' : null,
+          created_by: user?.id || null,
+          assigned_to: assignedTo,
+        } as any);
+        if (error) console.error('Auto content_task creation error:', error);
+      }
       
       toast.success('Roteiro criado');
     }

@@ -658,6 +658,7 @@ export default function Schedule() {
 
       if (existing && existing.length > 0) {
         await supabase.from('content_tasks').update({
+          title: script.title,
           kanban_column: 'edicao',
           drive_link: scriptDriveLink,
           recording_id: finishRecording.id,

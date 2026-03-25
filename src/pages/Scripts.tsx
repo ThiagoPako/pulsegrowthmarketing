@@ -995,6 +995,7 @@ export default function Scripts() {
                 </Select>
               </div>
             </div>
+            )}
 
             {/* Client editorial context + Generate button */}
             {form.clientId && (() => {

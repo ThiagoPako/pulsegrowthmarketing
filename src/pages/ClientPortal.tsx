@@ -226,6 +226,7 @@ export default function ClientPortal() {
     setVideoDuration(0);
     setResolvedVideoUrl(null);
     setVideoLoadError(null);
+    setVideoQuality('480p');
     loadComments(content.id);
   };
 

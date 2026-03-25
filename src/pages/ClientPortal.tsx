@@ -220,7 +220,6 @@ export default function ClientPortal() {
   };
 
   useEffect(() => {
-    let objectUrlToRevoke: string | null = null;
     let cancelled = false;
 
     const loadSelectedVideo = async () => {
@@ -247,17 +246,15 @@ export default function ClientPortal() {
       setVideoLoading(true);
 
       try {
-        const objectUrl = await createPortalVideoObjectUrl(selectedContent.file_url, videoQuality);
+        const streamUrl = await createPortalVideoObjectUrl(selectedContent.file_url, videoQuality);
 
         if (cancelled) {
-          URL.revokeObjectURL(objectUrl);
           return;
         }
 
-        objectUrlToRevoke = objectUrl;
-        setResolvedVideoUrl(objectUrl);
+        setResolvedVideoUrl(streamUrl);
       } catch (error) {
-        console.error('[Portal Video] Failed to load proxied video', error);
+        console.error('[Portal Video] Failed to resolve video stream URL', error);
         if (!cancelled) {
           setVideoLoadError(error instanceof Error ? error.message : 'Não foi possível carregar o vídeo.');
         }
@@ -272,9 +269,6 @@ export default function ClientPortal() {
 
     return () => {
       cancelled = true;
-      if (objectUrlToRevoke) {
-        URL.revokeObjectURL(objectUrlToRevoke);
-      }
     };
   }, [selectedContent?.id, selectedContent?.file_url, selectedContent?.content_type, videoQuality]);
 
@@ -914,13 +908,17 @@ export default function ClientPortal() {
                           ref={videoRef}
                           src={resolvedVideoUrl}
                           playsInline
-                          preload="metadata"
+                          preload="auto"
                           className="w-full aspect-video object-contain bg-black"
                           onPlay={() => setIsPlaying(true)}
                           onPause={() => setIsPlaying(false)}
                           onEnded={() => setIsPlaying(false)}
                           onTimeUpdate={handleTimeUpdate}
                           onLoadedMetadata={handleTimeUpdate}
+                          onError={() => {
+                            setVideoLoadError('Não foi possível carregar o vídeo.');
+                            setIsPlaying(false);
+                          }}
                           onClick={() => void togglePlay()}
                         />
                         {/* Custom controls */}
@@ -1239,7 +1237,6 @@ function ReelsCard({ content, clientColor, onSelect }: {
   const [previewVisible, setPreviewVisible] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
   const loadingRef = useRef(false);
-  const objectUrlRef = useRef<string | null>(null);
 
   // Only load video when user hovers — NOT on mount
   useEffect(() => {
@@ -1253,25 +1250,21 @@ function ReelsCard({ content, clientColor, onSelect }: {
     loadingRef.current = true;
 
     createPortalVideoObjectUrl(content.file_url)
-      .then(url => {
-        if (cancelled) { URL.revokeObjectURL(url); return; }
-        objectUrlRef.current = url;
+      .then((url) => {
+        if (cancelled) return;
         setPreviewUrl(url);
       })
-      .catch(() => { if (!cancelled) setPreviewUrl(null); })
-      .finally(() => { loadingRef.current = false; });
+      .catch(() => {
+        if (!cancelled) setPreviewUrl(null);
+      })
+      .finally(() => {
+        loadingRef.current = false;
+      });
 
-    return () => { cancelled = true; };
-  }, [isHovering, isVideo, content.file_url, previewUrl]);
-
-  // Cleanup object URL on unmount
-  useEffect(() => {
     return () => {
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-      }
+      cancelled = true;
     };
-  }, []);
+  }, [isHovering, isVideo, content.file_url, previewUrl]);
 
   const canAutoplayPreview = isVideo && !!previewUrl && isHovering;
 

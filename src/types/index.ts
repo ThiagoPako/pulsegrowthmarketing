@@ -220,6 +220,7 @@ export interface Script {
   createdBy?: string; // user id
   directToEditing?: boolean; // goes straight to editing queue
   caption?: string; // Instagram caption
+  recordingId?: string; // linked avulso recording
 }
 
 export interface ActiveRecording {

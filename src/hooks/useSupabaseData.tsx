@@ -148,7 +148,7 @@ function taskToRow(t: KanbanTask) {
 function rowToScript(r: any): Script {
   return {
     id: r.id,
-    clientId: r.client_id,
+    clientId: r.client_id || '',
     title: r.title,
     videoType: r.video_type as ScriptVideoType,
     contentFormat: (r.content_format || 'reels') as ScriptContentFormat,
@@ -162,13 +162,14 @@ function rowToScript(r: any): Script {
     scheduledDate: r.scheduled_date || undefined,
     createdBy: r.created_by || undefined,
     directToEditing: r.direct_to_editing || false,
+    recordingId: r.recording_id || undefined,
   };
 }
 
 function scriptToRow(s: Script) {
   return {
     id: s.id,
-    client_id: s.clientId,
+    client_id: s.clientId || null,
     title: s.title,
     video_type: s.videoType,
     content_format: s.contentFormat,
@@ -182,6 +183,7 @@ function scriptToRow(s: Script) {
     scheduled_date: s.scheduledDate || null,
     created_by: s.createdBy || null,
     direct_to_editing: s.directToEditing || false,
+    recording_id: s.recordingId || null,
   };
 }
 

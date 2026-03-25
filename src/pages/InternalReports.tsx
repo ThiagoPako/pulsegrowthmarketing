@@ -201,8 +201,15 @@ export default function InternalReports() {
 
   const editorRanking = useMemo(() => {
     return editors.map(ed => {
-      const edTasks = editorFiltered.filter(t => t.assigned_to === ed.id);
-      const score = edTasks.reduce((sum, t) => sum + (EDITOR_SCORE_WEIGHTS[t.content_type] || 2), 0);
+      const edTasks = editorFiltered.filter(t => t.assigned_to === ed.id || t.edited_by === ed.id);
+      const approved = edTasks.filter(t => t.approved_at || ['aprovado', 'publicado', 'finalizado', 'envio'].includes(t.kanban_column)).length;
+      const inEditing = edTasks.filter(t => t.kanban_column === 'em_edicao' || t.kanban_column === 'editando').length;
+      const inRevision = edTasks.filter(t => t.kanban_column === 'revisao').length;
+      const alterations = edTasks.filter(t => t.kanban_column === 'alteracao').length;
+      const priorityTasks = edTasks.filter(t => t.editing_priority === true).length;
+      const score = approved * EDITOR_SCORE.APROVADO + inEditing * EDITOR_SCORE.EM_EDICAO +
+        inRevision * EDITOR_SCORE.REVISAO + alterations * EDITOR_SCORE.ALTERACAO +
+        priorityTasks * EDITOR_SCORE.PRIORIDADE;
       const reels = edTasks.filter(t => t.content_type === 'reels').length;
       const criativos = edTasks.filter(t => t.content_type === 'criativo').length;
       const stories = edTasks.filter(t => t.content_type === 'story').length;
@@ -216,7 +223,7 @@ export default function InternalReports() {
       }).filter(Boolean) as number[];
       const avgTime = times.length > 0 ? times.reduce((a, b) => a + b, 0) / times.length : 0;
 
-      return { editor: ed, score, reels, criativos, stories, artes, total, avgTime };
+      return { editor: ed, score, reels, criativos, stories, artes, total, avgTime, approved, inEditing, alterations, priorityTasks };
     }).sort((a, b) => b.score - a.score);
   }, [editors, editorFiltered]);
 
@@ -241,11 +248,16 @@ export default function InternalReports() {
     return weeks.map(w => {
       const entry: any = { semana: w.label };
       editors.forEach(ed => {
-        const edTasks = editorTasks.filter(t => t.assigned_to === ed.id && t.kanban_column === 'envio' && (() => {
+        const edTasks = editorTasks.filter(t => (t.assigned_to === ed.id || t.edited_by === ed.id) && (() => {
           const d = format(new Date(t.updated_at), 'yyyy-MM-dd');
           return d >= w.start && d <= w.end;
         })());
-        entry[ed.name.split(' ')[0]] = edTasks.reduce((sum, t) => sum + (EDITOR_SCORE_WEIGHTS[t.content_type] || 2), 0);
+        const approved = edTasks.filter(t => t.approved_at || ['aprovado', 'publicado', 'finalizado', 'envio'].includes(t.kanban_column)).length;
+        const inEditing = edTasks.filter(t => t.kanban_column === 'em_edicao' || t.kanban_column === 'editando').length;
+        const alterations = edTasks.filter(t => t.kanban_column === 'alteracao').length;
+        const priorityTasks = edTasks.filter(t => t.editing_priority === true).length;
+        entry[ed.name.split(' ')[0]] = approved * EDITOR_SCORE.APROVADO + inEditing * EDITOR_SCORE.EM_EDICAO +
+          alterations * EDITOR_SCORE.ALTERACAO + priorityTasks * EDITOR_SCORE.PRIORIDADE;
       });
       return entry;
     });

@@ -99,6 +99,7 @@ export interface Client {
   editorial?: string;
   fullShiftRecording?: boolean; // client uses entire shift (morning or afternoon)
   preferredShift?: 'manha' | 'tarde'; // which shift the client prefers
+  selectedWeeks: number[]; // which weeks of the month to schedule (e.g. [1,2,3,4])
 }
 
 export interface SocialAccount {

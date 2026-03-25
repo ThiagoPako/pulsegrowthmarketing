@@ -893,7 +893,7 @@ export default function ClientPortal() {
                     {videoLoading ? (
                       <div className="aspect-video flex flex-col items-center justify-center gap-3 bg-[#0c0c14] text-white/60">
                         <Loader2 className="w-8 h-8 animate-spin" />
-                        <p className="text-sm">Carregando vídeo...</p>
+                        <p className="text-sm">Carregando em {videoQuality === '480p' ? '480p' : 'qualidade original'}...</p>
                       </div>
                     ) : videoLoadError ? (
                       <div className="aspect-video flex flex-col items-center justify-center gap-3 bg-[#0c0c14] text-center px-6 text-white/60">

@@ -251,7 +251,9 @@ CREATE TABLE IF NOT EXISTS content_tasks (
   approval_deadline TIMESTAMPTZ,
   reviewing_by UUID,
   reviewing_by_name TEXT,
-  reviewing_at TIMESTAMPTZ
+  reviewing_at TIMESTAMPTZ,
+  editing_paused_at TIMESTAMPTZ,
+  editing_paused_seconds INTEGER NOT NULL DEFAULT 0
 );
 
 -- Table: delivery_records

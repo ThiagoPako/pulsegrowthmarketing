@@ -91,7 +91,7 @@ export default function VideomakerDashboard() {
     setWaitingLogId(logId);
     setWaitingStartedAt(now);
     setWaitingElapsed(0);
-    toast.info(`Aguardando cliente ${getClientName(rec.clientId)}...`, { icon: '⏳' });
+    toast.info(`Aguardando cliente ${getClientName(rec.clientId, rec)}...`, { icon: '⏳' });
   };
 
   const handleStopWaiting = async () => {
@@ -171,7 +171,7 @@ export default function VideomakerDashboard() {
         startedAt: new Date().toISOString(),
         plannedScriptIds: [],
       });
-      toast.success(`Gravação endomarketing iniciada — ${getClientName(rec.clientId)}`);
+      toast.success(`Gravação endomarketing iniciada — ${getClientName(rec.clientId, rec)}`);
       return;
     }
     setScriptsClientId(rec.clientId);
@@ -217,7 +217,7 @@ export default function VideomakerDashboard() {
       if (error) console.error('Move to captacao error:', error);
     }
     
-    toast.success(`Gravação iniciada com ${selectedScriptIds.size} roteiro(s) — ${getClientName(rec.clientId)}`);
+    toast.success(`Gravação iniciada com ${selectedScriptIds.size} roteiro(s) — ${getClientName(rec.clientId, rec)}`);
     setScriptsOpen(false);
   };
 
@@ -228,7 +228,7 @@ export default function VideomakerDashboard() {
       stopActiveRecording(rec.id, { videos_recorded: 1 });
       updateRecording({ ...rec, status: 'concluida' });
       setLocalActiveRecordingId(null);
-      toast.success(`Gravação endomarketing finalizada — ${getClientName(rec.clientId)}`);
+      toast.success(`Gravação endomarketing finalizada — ${getClientName(rec.clientId, rec)}`);
       setCelebrationScore(8);
       setShowCelebration(true);
       return;

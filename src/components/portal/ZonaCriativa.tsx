@@ -22,6 +22,7 @@ interface Script {
   client_priority: string;
   client_edited: boolean;
   client_edited_at: string | null;
+  recorded: boolean;
 }
 
 interface Author {

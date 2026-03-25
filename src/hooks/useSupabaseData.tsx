@@ -165,6 +165,8 @@ function rowToScript(r: any): Script {
     createdBy: r.created_by || undefined,
     directToEditing: r.direct_to_editing || false,
     recordingId: r.recording_id || undefined,
+    clientEdited: r.client_edited || false,
+    clientEditedAt: r.client_edited_at || undefined,
   };
 }
 

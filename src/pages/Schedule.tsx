@@ -333,7 +333,7 @@ export default function Schedule() {
       type: 'backup',
       status: 'agendada',
     };
-    addRecording(newRec);
+    await addRecording(newRec);
 
     // Send backup invite to the backup client
     if (backupClient.whatsapp) {
@@ -800,7 +800,7 @@ export default function Schedule() {
                 type: 'backup',
                 status: 'agendada',
               };
-              addRecording(rec);
+              await addRecording(rec);
               created++;
             }
           }
@@ -826,7 +826,7 @@ export default function Schedule() {
                 type: 'extra',
                 status: 'agendada',
               };
-              addRecording(rec);
+              await addRecording(rec);
               created++;
             }
           }

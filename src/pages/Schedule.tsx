@@ -742,6 +742,24 @@ export default function Schedule() {
     </Badge>
   );
 
+  // Delete all backup recordings (future, non-concluded)
+  const handleDeleteAllBackup = async () => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const backupRecs = recordings.filter(r => r.type === 'backup' && r.date >= todayStr && r.status !== 'concluida');
+    if (backupRecs.length === 0) { toast.info('Nenhuma gravação backup para apagar'); return; }
+    for (const rec of backupRecs) { deleteRecording(rec.id); }
+    toast.success(`${backupRecs.length} gravação(ões) backup apagada(s)`);
+  };
+
+  // Delete all extra recordings (future, non-concluded)
+  const handleDeleteAllExtra = async () => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const extraRecs = recordings.filter(r => r.type === 'extra' && r.date >= todayStr && r.status !== 'concluida');
+    if (extraRecs.length === 0) { toast.info('Nenhuma gravação extra para apagar'); return; }
+    for (const rec of extraRecs) { deleteRecording(rec.id); }
+    toast.success(`${extraRecs.length} gravação(ões) extra apagada(s)`);
+  };
+
   // Generate backup & extra recordings for eligible clients into available slots
   const handleGenerateBackupExtra = async () => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { portalAction } from '@/lib/portalApi';
-import { FileText, Film, Palette, Video, Image, Sparkles, User, Tag, AlertTriangle, Flame, Rocket, ChevronRight } from 'lucide-react';
+import { FileText, Film, Palette, Video, Image, Sparkles, User, Tag, AlertTriangle, Flame, Rocket, ChevronRight, Pencil, Save, X as XIcon, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -20,6 +20,8 @@ interface Script {
   created_by: string | null;
   priority: string;
   client_priority: string;
+  client_edited: boolean;
+  client_edited_at: string | null;
 }
 
 interface Author {

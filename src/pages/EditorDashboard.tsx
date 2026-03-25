@@ -374,6 +374,16 @@ export default function EditorDashboard() {
   const saveVideoLink = async () => {
     if (!videoLink.trim() || !activeEditTask) return;
     setSaving(true);
+    // Delete old video if this is an alteration with link replacement
+    if (oldVideoLink) {
+      try {
+        await deleteFileFromVps(oldVideoLink);
+        await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo anterior removido (alteração)' });
+      } catch (delErr) {
+        console.warn('Falha ao remover vídeo anterior:', delErr);
+      }
+      setOldVideoLink(null);
+    }
     await supabase.from('content_tasks').update({
       edited_video_link: videoLink.trim(), edited_video_type: 'link', updated_at: new Date().toISOString()
     }).eq('id', activeEditTask.id);
@@ -682,7 +692,7 @@ export default function EditorDashboard() {
                     <div className="bg-muted/30 border border-border rounded-xl p-4 space-y-3">
                       <div className="flex items-center justify-between">
                         <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                          <Upload size={13} className="text-primary" /> Enviar vídeo editado
+                          <Upload size={13} className={activeEditTask.kanban_column === 'alteracao' ? 'text-amber-500' : 'text-primary'} /> {activeEditTask.kanban_column === 'alteracao' ? 'Substituir vídeo (Alteração)' : 'Enviar vídeo editado'}
                         </p>
                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowUpload(false)}>
                           <X size={12} />

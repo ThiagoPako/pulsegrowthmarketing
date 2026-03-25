@@ -1,4 +1,4 @@
-import { format, endOfMonth, addDays, getDay } from 'date-fns';
+import { format, endOfMonth, addDays, getDay, startOfMonth, differenceInCalendarWeeks } from 'date-fns';
 import type { Client, Recording, DayOfWeek, CompanySettings } from '@/types';
 
 /** Buffer time (in minutes) between recordings for the videomaker to upload materials */
@@ -17,8 +17,16 @@ function timeToMinutes(t: string) {
   return h * 60 + m;
 }
 
-/** Get all dates for a specific day of week from today until end of current month */
-export function getDatesUntilEndOfMonth(dayOfWeek: DayOfWeek): string[] {
+/** Get the week number (1-5) of a date within its month */
+function getWeekOfMonth(date: Date): number {
+  const monthStart = startOfMonth(date);
+  // Week 1 starts on the 1st, week 2 on the 8th, etc.
+  return Math.ceil(date.getDate() / 7);
+}
+
+/** Get all dates for a specific day of week from today until end of current month,
+ *  filtered by selectedWeeks (e.g. [1,2,3] means only weeks 1, 2, 3 of the month) */
+export function getDatesUntilEndOfMonth(dayOfWeek: DayOfWeek, selectedWeeks?: number[]): string[] {
   const today = new Date();
   const todayStr = format(today, 'yyyy-MM-dd');
   const monthEnd = endOfMonth(today);
@@ -35,7 +43,10 @@ export function getDatesUntilEndOfMonth(dayOfWeek: DayOfWeek): string[] {
   while (current <= monthEnd) {
     const dateStr = format(current, 'yyyy-MM-dd');
     if (dateStr >= todayStr) {
-      dates.push(dateStr);
+      // Filter by selectedWeeks if provided
+      if (!selectedWeeks || selectedWeeks.length === 0 || selectedWeeks.includes(getWeekOfMonth(current))) {
+        dates.push(dateStr);
+      }
     }
     current = addDays(current, 7);
   }

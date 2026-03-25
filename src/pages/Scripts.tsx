@@ -840,7 +840,7 @@ export default function Scripts() {
           {filteredScripts.map(script => (
             <div key={script.id} 
               className={`glass-card p-4 flex flex-col gap-3 transition-all cursor-pointer ${script.recorded ? 'opacity-50 grayscale-[30%]' : ''} ${selectMode && selectedIds.has(script.id) ? 'ring-2 ring-primary bg-primary/5' : ''}`}
-              style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${getClientColor(script.clientId)})` }}
+              style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${getClientColor(script.clientId, script)})` }}
               onClick={selectMode ? () => toggleSelect(script.id) : undefined}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1 flex items-start gap-2">

@@ -888,6 +888,11 @@ export default function Scripts() {
                   {script.priority === 'priority' && (
                     <Badge className="text-[9px] bg-warning/20 text-warning border-warning/30">Prioritário</Badge>
                   )}
+                  {script.clientEdited && (
+                    <Badge className="text-[9px] bg-violet-500/20 text-violet-600 border-violet-500/30">
+                      <Pencil size={8} className="mr-0.5" /> Editado pelo cliente
+                    </Badge>
+                  )}
                   {script.scheduledDate && (
                     <span className="text-[9px] text-muted-foreground">{new Date(script.scheduledDate + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
                   )}

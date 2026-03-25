@@ -111,6 +111,7 @@ interface SocialMediaKanbanProps {
   onTogglePriority: (taskId: string, current: boolean) => void;
   sendingWhatsApp: boolean;
   onDragMove?: (delivery: SocialDelivery, targetColumnId: string, socialStatus: string, contentColumn: string) => void;
+  highlightTaskId?: string | null;
 }
 
 const CONTENT_TYPES = [
@@ -215,6 +216,7 @@ export default function SocialMediaKanban({
   onTogglePriority,
   sendingWhatsApp,
   onDragMove,
+  highlightTaskId,
 }: SocialMediaKanbanProps) {
   const [showRocket, setShowRocket] = useState(false);
   const [draggedDelivery, setDraggedDelivery] = useState<SocialDelivery | null>(null);
@@ -398,6 +400,7 @@ export default function SocialMediaKanban({
                             onMoveBackward={adj.prev && onDragMove ? () => handleMoveToColumn(item, adj.prev!.id) : undefined}
                             forwardLabel={adj.next?.title}
                             backwardLabel={adj.prev?.title}
+                            isHighlighted={highlightTaskId != null && item.content_task_id === highlightTaskId}
                           />
                         );
                       })
@@ -476,6 +479,7 @@ function DeliveryCard({
   onMoveBackward,
   forwardLabel,
   backwardLabel,
+  isHighlighted,
 }: {
   delivery: SocialDelivery;
   index: number;
@@ -495,12 +499,21 @@ function DeliveryCard({
   onMoveBackward?: () => void;
   forwardLabel?: string;
   backwardLabel?: string;
+  isHighlighted?: boolean;
 }) {
   const typeConf = getTypeConfig(d.content_type);
   const td = d.content_task_id ? taskDeadlines[d.content_task_id] : null;
+  const highlightRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isHighlighted && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [isHighlighted]);
 
   return (
     <motion.div
+      ref={highlightRef}
       layout
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -513,7 +526,7 @@ function DeliveryCard({
         onDragStart={onDragStart}
         className={`border shadow-sm hover:shadow-md transition-all group hover:border-primary/30 cursor-grab active:cursor-grabbing ${
           isDragging ? 'opacity-40 scale-95' : 'border-border'
-        }`}
+        } ${isHighlighted ? 'ring-2 ring-pink-500 ring-offset-2 ring-offset-background shadow-lg shadow-pink-500/20 animate-pulse' : ''}`}
       >
         <CardContent className="p-3 space-y-2">
           {/* Title */}

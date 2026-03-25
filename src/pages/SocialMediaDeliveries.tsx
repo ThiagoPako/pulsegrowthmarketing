@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/vpsDb';
@@ -114,11 +115,13 @@ function ReviewVideoLink({ contentTaskId, clientId }: { contentTaskId: string | 
 export default function SocialMediaDeliveries() {
   const { clients } = useApp();
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [deliveries, setDeliveries] = useState<SocialDelivery[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [clientPlans, setClientPlans] = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState(true);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [highlightTaskId, setHighlightTaskId] = useState<string | null>(null);
 
   // Dialogs
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -126,6 +129,21 @@ export default function SocialMediaDeliveries() {
   const [schedulingItem, setSchedulingItem] = useState<SocialDelivery | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('kanban');
+
+  // Handle highlight from notification link
+  useEffect(() => {
+    const hl = searchParams.get('highlight');
+    if (hl) {
+      setHighlightTaskId(hl);
+      setActiveTab('kanban');
+      // Clean up URL
+      searchParams.delete('highlight');
+      setSearchParams(searchParams, { replace: true });
+      // Auto-clear highlight after 5s
+      const timer = setTimeout(() => setHighlightTaskId(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   // Form state
   const [formClientId, setFormClientId] = useState('');
@@ -1180,6 +1198,7 @@ export default function SocialMediaDeliveries() {
           onTogglePriority={handleTogglePriorityFromQueue}
           sendingWhatsApp={sendingWhatsApp}
           onDragMove={handleKanbanDragMove}
+          highlightTaskId={highlightTaskId}
         />
 
         {/* Dialogs */}

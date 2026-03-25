@@ -162,7 +162,7 @@ export default function TrafficManagement() {
     if (!storyCreative) return;
     try {
       // Create a new content_task of type 'story' linked to this criativo
-      const { error } = await supabase.from('content_tasks').insert({
+      const { data: inserted, error } = await supabase.from('content_tasks').insert({
         client_id: storyCreative.client_id,
         title: `Story - ${storyCreative.title}`,
         content_type: 'story',
@@ -172,16 +172,31 @@ export default function TrafficManagement() {
         drive_link: storyCreative.drive_link,
         created_by: user?.id || null,
         position: 0,
-      } as any);
+      } as any).select('id').single();
       if (error) throw error;
 
-      // Notify social media role
+      const taskId = inserted?.id || '';
+      const clientName = clients.find(c => c.id === storyCreative.client_id)?.companyName || '';
+
+      // Also create social_media_deliveries entry so it appears in SM kanban
+      await supabase.from('social_media_deliveries').insert({
+        client_id: storyCreative.client_id,
+        content_type: 'story',
+        title: `Story - ${storyCreative.title}`,
+        description: `Story solicitado pelo tráfego. Criativo: "${storyCreative.title}".${storyNotes ? ` Obs: ${storyNotes}` : ''}`,
+        delivered_at: new Date().toISOString().split('T')[0],
+        status: 'entregue',
+        created_by: user?.id || null,
+        content_task_id: taskId || null,
+      } as any);
+
+      // Notify social media role with direct link to the task in agendamentos
       await supabase.rpc('notify_role', {
         _role: 'social_media',
-        _title: 'Story solicitado pelo Tráfego',
-        _message: `Postar story do criativo "${storyCreative.title}" - ${clients.find(c => c.id === storyCreative.client_id)?.companyName || ''}`,
+        _title: '📢 Story solicitado pelo Tráfego',
+        _message: `Agendar story do criativo "${storyCreative.title}" - ${clientName}. Baixe o vídeo e poste!`,
         _type: 'info',
-        _link: '/social-media',
+        _link: `/social-media?highlight=${taskId}`,
       });
 
       toast.success('Solicitação de story enviada para Social Media!');

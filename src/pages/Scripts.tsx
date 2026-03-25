@@ -228,11 +228,14 @@ export default function Scripts() {
           endoClientId: script.endoClientId || '',
           scheduledDate: script.scheduledDate || '',
           directToEditing: script.directToEditing || false,
+          isAvulso: !!script.recordingId,
+          recordingId: script.recordingId || '',
+          prospectName: script.recordingId ? (recordings.find(r => r.id === script.recordingId)?.prospectName || '') : '',
         });
       });
     } else {
       setEditing(null);
-      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: false });
+      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: false, isAvulso: false, recordingId: '', prospectName: '' });
     }
     setOpen(true);
   };

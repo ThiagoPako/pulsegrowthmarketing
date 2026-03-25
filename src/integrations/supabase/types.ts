@@ -939,6 +939,7 @@ export type Database = {
           created_by: string | null
           description: string | null
           drive_link: string | null
+          edited_by: string | null
           edited_video_link: string | null
           edited_video_type: string | null
           editing_deadline: string | null
@@ -976,6 +977,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           drive_link?: string | null
+          edited_by?: string | null
           edited_video_link?: string | null
           edited_video_type?: string | null
           editing_deadline?: string | null
@@ -1013,6 +1015,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           drive_link?: string | null
+          edited_by?: string | null
           edited_video_link?: string | null
           edited_video_type?: string | null
           editing_deadline?: string | null

@@ -191,9 +191,12 @@ export default function VideomakerDashboard() {
 
   const confirmStartRecording = async (rec: Recording) => {
     // Validate all urgent scripts are selected
-    const urgentScripts = scripts.filter(
-      s => s.clientId === rec.clientId && !s.recorded && !s.isEndomarketing && s.priority === 'urgent'
-    );
+    const urgentScripts = scripts.filter(s => {
+      if (s.recorded || s.isEndomarketing || s.priority !== 'urgent') return false;
+      if (rec.clientId && s.clientId === rec.clientId) return true;
+      if (s.recordingId === rec.id) return true;
+      return false;
+    });
     const allUrgentSelected = urgentScripts.every(s => selectedScriptIds.has(s.id));
     if (urgentScripts.length > 0 && !allUrgentSelected) {
       toast.error('Todos os roteiros urgentes devem ser selecionados para iniciar a gravação');
@@ -268,11 +271,15 @@ export default function VideomakerDashboard() {
       }
     }
     if (!planned || planned.length === 0) {
-      // Last fallback: show all pending scripts for this client
+      // Last fallback: show all pending scripts for this client or recording
       const rec = recordings.find(r => r.id === finishRecordingId);
       if (!rec) return [];
-      return scripts.filter(s => s.clientId === rec.clientId && !s.isEndomarketing && !s.recorded)
-        .sort((a, b) => {
+      return scripts.filter(s => {
+        if (s.isEndomarketing || s.recorded) return false;
+        if (rec.clientId && s.clientId === rec.clientId) return true;
+        if (s.recordingId === rec.id) return true;
+        return false;
+      }).sort((a, b) => {
           const priorityOrder: Record<string, number> = { urgent: 0, priority: 1, normal: 2 };
           return (priorityOrder[a.priority] || 2) - (priorityOrder[b.priority] || 2);
         });
@@ -392,16 +399,19 @@ export default function VideomakerDashboard() {
     const reelsCount = allRecordedIds.size;
     const allRecordedArray = Array.from(allRecordedIds);
     // Active recording already stopped in handleFinishRecording, just update delivery data
-    try {
-      await supabase.from('delivery_records').insert({
-        client_id: rec.clientId,
-        videomaker_id: currentUser?.id || '',
-        date: rec.date,
-        recording_id: rec.id,
-        reels_produced: reelsCount,
-        videos_recorded: Math.max(reelsCount, 1),
-      });
-    } catch {}
+    // For avulso recordings without clientId, skip delivery_records (requires client_id NOT NULL)
+    if (rec.clientId) {
+      try {
+        await supabase.from('delivery_records').insert({
+          client_id: rec.clientId,
+          videomaker_id: currentUser?.id || '',
+          date: rec.date,
+          recording_id: rec.id,
+          reels_produced: reelsCount,
+          videos_recorded: Math.max(reelsCount, 1),
+        });
+      } catch {}
+    }
     updateRecording({ ...rec, status: 'concluida' });
 
     // Create/update content_tasks for recorded scripts
@@ -444,7 +454,8 @@ export default function VideomakerDashboard() {
           script_alteration_notes: altNotes,
           assigned_to: assignedEditor,
         } as any).eq('id', existing[0].id);
-      } else {
+      } else if (rec.clientId) {
+        // Only create content_task if there's a clientId (avulso recordings may not have one)
         await supabase.from('content_tasks').insert({
           client_id: rec.clientId,
           title: script.title,
@@ -469,26 +480,28 @@ export default function VideomakerDashboard() {
         .eq('script_id', scriptId).in('kanban_column', ['captacao']);
     }
 
-    // Check remaining scripts for this client and notify if low
-    const remainingScripts = scripts.filter(
-      s => s.clientId === rec.clientId && !s.recorded && !s.isEndomarketing && !allRecordedIds.has(s.id) && !rejectedScripts.has(s.id)
-    );
-    if (remainingScripts.length <= 2) {
-      const clientName = clients.find(c => c.id === rec.clientId)?.companyName || 'Cliente';
-      await supabase.rpc('notify_role', {
-        _role: 'social_media',
-        _title: '📝 Estoque baixo de roteiros',
-        _message: `${clientName} possui apenas ${remainingScripts.length} roteiro(s) pendente(s). Crie novos roteiros para as próximas gravações.`,
-        _type: 'script_low',
-        _link: '/roteiros',
-      });
-      await supabase.rpc('notify_role', {
-        _role: 'admin',
-        _title: '📝 Estoque baixo de roteiros',
-        _message: `${clientName} possui apenas ${remainingScripts.length} roteiro(s) pendente(s). Crie novos roteiros para as próximas gravações.`,
-        _type: 'script_low',
-        _link: '/roteiros',
-      });
+    // Check remaining scripts for this client and notify if low (only for regular clients)
+    if (rec.clientId) {
+      const remainingScripts = scripts.filter(
+        s => s.clientId === rec.clientId && !s.recorded && !s.isEndomarketing && !allRecordedIds.has(s.id) && !rejectedScripts.has(s.id)
+      );
+      if (remainingScripts.length <= 2) {
+        const clientName = clients.find(c => c.id === rec.clientId)?.companyName || 'Cliente';
+        await supabase.rpc('notify_role', {
+          _role: 'social_media',
+          _title: '📝 Estoque baixo de roteiros',
+          _message: `${clientName} possui apenas ${remainingScripts.length} roteiro(s) pendente(s). Crie novos roteiros para as próximas gravações.`,
+          _type: 'script_low',
+          _link: '/roteiros',
+        });
+        await supabase.rpc('notify_role', {
+          _role: 'admin',
+          _title: '📝 Estoque baixo de roteiros',
+          _message: `${clientName} possui apenas ${remainingScripts.length} roteiro(s) pendente(s). Crie novos roteiros para as próximas gravações.`,
+          _type: 'script_low',
+          _link: '/roteiros',
+        });
+      }
     }
 
     const hasAnyLink = Array.from(allRecordedIds).some(id => driveLinks[id]?.trim());
@@ -521,9 +534,9 @@ export default function VideomakerDashboard() {
   };
 
   // ── Scripts ──
-  const openScripts = (clientId: string) => {
+  const openScripts = (clientId: string, recordingId?: string) => {
     setScriptsClientId(clientId);
-    setScriptsRecordingId('');
+    setScriptsRecordingId(recordingId || '');
     setSelectedScriptIds(new Set());
     setViewingScript(null);
     setScriptsOpen(true);
@@ -718,7 +731,7 @@ export default function VideomakerDashboard() {
             videomakerId={vmId}
             clientId={activeRec.clientId}
             onFinish={() => handleFinishRecording(activeRec)}
-            onViewScripts={() => openScripts(activeRec.clientId)}
+            onViewScripts={() => openScripts(activeRec.clientId, activeRec.id)}
             onCancel={handleCancelActiveRecording}
           />
         );
@@ -857,7 +870,7 @@ export default function VideomakerDashboard() {
                         )}
                         {isActive && (
                           <>
-                            <Button size="sm" variant="outline" onClick={() => openScripts(rec.clientId)} className="gap-1">
+                            <Button size="sm" variant="outline" onClick={() => openScripts(rec.clientId, rec.id)} className="gap-1">
                               <FileText size={14} /> Roteiros
                             </Button>
                             <Button size="sm" onClick={() => handleFinishRecording(rec)} className="gap-1 bg-success hover:bg-success/90 text-success-foreground">
@@ -904,7 +917,7 @@ export default function VideomakerDashboard() {
                       )}
                       {isActive && (
                         <>
-                          <Button size="sm" variant="outline" onClick={() => openScripts(rec.clientId)} className="flex-1 gap-1 text-xs h-8">
+                          <Button size="sm" variant="outline" onClick={() => openScripts(rec.clientId, rec.id)} className="flex-1 gap-1 text-xs h-8">
                             <FileText size={12} /> Roteiros
                           </Button>
                           <Button size="sm" onClick={() => handleFinishRecording(rec)} className="flex-1 gap-1 text-xs bg-success hover:bg-success/90 text-success-foreground h-8">

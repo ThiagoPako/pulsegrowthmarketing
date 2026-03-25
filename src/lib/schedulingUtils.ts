@@ -162,6 +162,7 @@ export function generateExtraRecordings(
   allVideomakerIds: string[]
 ): Recording[] {
   if (!client.acceptsExtra) return [];
+  if (!client.videomaker) return [];
   
   const dates = getDatesUntilEndOfMonth(client.extraDay);
   const newRecordings: Recording[] = [];

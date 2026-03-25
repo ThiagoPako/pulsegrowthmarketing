@@ -130,9 +130,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return inA || inB;
   }, [data.settings]);
 
-  const addRecording = useCallback((recording: Recording): boolean => {
+  const addRecording = useCallback(async (recording: Recording): Promise<boolean> => {
     if (hasConflict(recording.videomakerId, recording.date, recording.startTime)) return false;
-    data.addRecording(recording);
+    const ok = await data.addRecording(recording);
+    if (!ok) return false;
     // Send WhatsApp notification
     const client = data.clients.find(c => c.id === recording.clientId);
     const vm = users.find(u => u.id === recording.videomakerId);

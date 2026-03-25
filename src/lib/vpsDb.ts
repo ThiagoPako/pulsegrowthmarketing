@@ -257,17 +257,25 @@ class QueryBuilder {
     const joins: any[] = [];
     let selectStr = select;
 
-    const relationPattern = /(\w+)\(([^)]+)\)/g;
+    // Support both "table(cols)" and "table!fk_hint(cols)" patterns
+    const relationPattern = /(\w+)(?:!(\w+))?\(([^)]+)\)/g;
     let match;
     const extraSelects: string[] = [];
 
     while ((match = relationPattern.exec(select)) !== null) {
       const joinTable = match[1];
-      const joinColumns = match[2].split(',').map(c => c.trim());
+      const fkHint = match[2] || null; // e.g. "design_tasks_assigned_to_fkey"
+      const joinColumns = match[3].split(',').map(c => c.trim());
 
-      // Use FK map if available, otherwise fall back to simple pattern
-      const fkColumn = QueryBuilder.FK_MAP[this._table]?.[joinTable]
-        || `${joinTable.replace(/s$/, '')}_id`;
+      // Resolve FK column: use FK map, then try to extract from FK hint, then fallback
+      let fkColumn = QueryBuilder.FK_MAP[this._table]?.[joinTable];
+      if (!fkColumn && fkHint) {
+        // Extract column from FK hint like "design_tasks_assigned_to_fkey"
+        // Pattern: tablename_columnname_fkey
+        const hintMatch = fkHint.match(/^\w+?_(.+)_fkey$/);
+        if (hintMatch) fkColumn = hintMatch[1];
+      }
+      if (!fkColumn) fkColumn = `${joinTable.replace(/s$/, '')}_id`;
 
       joins.push({
         table: joinTable,

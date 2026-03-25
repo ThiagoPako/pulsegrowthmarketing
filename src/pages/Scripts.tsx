@@ -273,8 +273,14 @@ export default function Scripts() {
   };
 
   const handleSave = async () => {
-    if (!form.clientId || !form.title) {
-      toast.error('Preencha o cliente e o título'); return;
+    if (form.isAvulso) {
+      if (!form.recordingId || !form.title) {
+        toast.error('Selecione a gravação avulsa e preencha o título'); return;
+      }
+    } else {
+      if (!form.clientId || !form.title) {
+        toast.error('Preencha o cliente e o título'); return;
+      }
     }
     if (form.isEndomarketing && !form.endoClientId) {
       toast.error('Selecione o cliente de endomarketing'); return;
@@ -282,7 +288,7 @@ export default function Scripts() {
 
     // Auto-generate caption if content exists but caption is empty (skip for stories)
     let captionToSave = form.contentFormat === 'story' ? '' : form.caption;
-    if (form.contentFormat !== 'story' && form.content && form.content.trim() && !form.caption.trim()) {
+    if (form.contentFormat !== 'story' && form.content && form.content.trim() && !form.caption.trim() && form.clientId) {
       toast.info('Gerando legenda automaticamente...');
       const autoCaption = await generateCaptionFromContent(form.content, form.clientId);
       if (autoCaption) {
@@ -294,10 +300,12 @@ export default function Scripts() {
     const now = new Date().toISOString();
     const scriptData = {
       ...form,
+      clientId: form.isAvulso ? '' : form.clientId,
       caption: captionToSave,
       endoClientId: form.endoClientId || undefined,
       scheduledDate: form.scheduledDate || undefined,
       directToEditing: form.directToEditing,
+      recordingId: form.isAvulso ? form.recordingId : undefined,
     };
     if (editing) {
       updateScript({ ...editing, ...scriptData, updatedAt: now });

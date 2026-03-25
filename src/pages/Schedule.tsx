@@ -748,7 +748,12 @@ export default function Schedule() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-display font-bold">Agenda</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {(showBackup || showExtra) && (
+            <Button variant="outline" className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateBackupExtra}>
+              <RefreshCw size={16} className="mr-2" /> Gerar Backup/Extra
+            </Button>
+          )}
           <Button variant="outline" onClick={() => { setRegenClientId(''); setRegenOpen(true); }}>
             <RefreshCw size={16} className="mr-2" /> Regenerar Agenda
           </Button>

@@ -663,10 +663,11 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                   const tag = getTag(selectedScript.video_type);
                   const isUrgent = selectedScript.client_priority === 'urgent';
                   const isPriority = selectedScript.client_priority === 'priority';
+                  const isRecordedModal = selectedScript.recorded;
                   return (
                     <div className={`relative h-32 bg-gradient-to-br ${cover.gradient}`} style={{ backgroundImage: cover.pattern }}>
-                      {isUrgent && <FireParticles />}
-                      {isPriority && <RocketAnimation />}
+                      {!isRecordedModal && isUrgent && <FireParticles />}
+                      {(isRecordedModal || isPriority) && <RocketAnimation />}
                       <div className="absolute inset-0 flex items-center justify-center">
                         <Icon size={40} className="text-white/10" />
                       </div>
@@ -677,7 +678,18 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                         <span className={`flex items-center gap-1 px-2 py-1 rounded-full ${tag.bg} ${tag.text} border ${tag.border} backdrop-blur-sm text-[10px] font-bold`}>
                           <Tag size={9} /> {tag.label}
                         </span>
-                        {isUrgent && (
+                        {isRecordedModal && (
+                          <motion.span
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 backdrop-blur-sm text-[10px] font-bold"
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ type: 'spring', damping: 10, stiffness: 200 }}
+                          >
+                            <motion.span animate={{ y: [0, -3, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>🚀</motion.span>
+                            Gravado ✓
+                          </motion.span>
+                        )}
+                        {!isRecordedModal && isUrgent && (
                           <motion.span
                             className="flex items-center gap-1 px-2 py-1 rounded-full bg-red-500/25 text-red-300 border border-red-500/30 backdrop-blur-sm text-[10px] font-bold"
                             animate={{ scale: [1, 1.05, 1] }}
@@ -686,7 +698,7 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                             <Flame size={9} /> Urgente 🔥
                           </motion.span>
                         )}
-                        {isPriority && (
+                        {!isRecordedModal && isPriority && (
                           <motion.span
                             className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/25 text-amber-300 border border-amber-500/30 backdrop-blur-sm text-[10px] font-bold"
                             animate={{ y: [0, -2, 0] }}

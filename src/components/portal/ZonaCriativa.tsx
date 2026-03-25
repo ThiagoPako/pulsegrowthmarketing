@@ -600,8 +600,8 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                         </div>
                       </button>
 
-                      {/* Priority buttons */}
-                      {isAuthenticated && (
+                      {/* Priority buttons or Recorded badge */}
+                      {isAuthenticated && !isRecorded && (
                         <div className="px-4 pb-3 flex gap-2">
                           <motion.button
                             whileTap={{ scale: 0.95 }}

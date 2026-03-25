@@ -742,6 +742,86 @@ export default function Schedule() {
     </Badge>
   );
 
+  // Generate backup & extra recordings for eligible clients into available slots
+  const handleGenerateBackupExtra = async () => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const endStr = format(endOfMonth(addMonths(new Date(), 1)), 'yyyy-MM-dd');
+    let created = 0;
+
+    // Get all future dates from today to end of next month
+    const days: Date[] = [];
+    let d = new Date();
+    const end = new Date(endStr);
+    while (d <= end) {
+      days.push(new Date(d));
+      d = addDays(d, 1);
+    }
+
+    for (const day of days) {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const dayNum = getDay(day);
+      const dayName = DATE_TO_DAY[dayNum];
+      if (!settings.workDays.includes(dayName)) continue;
+
+      // Try backup clients
+      if (showBackup) {
+        const backupClients = clients.filter(c => c.backupDay === dayName && c.acceptsExtra);
+        for (const client of backupClients) {
+          const vmId = client.videomakerId;
+          if (!vmId) continue;
+          if (!hasConflict(vmId, dateStr, client.backupTime)) {
+            const exists = recordings.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'backup' && r.status !== 'cancelada');
+            if (!exists) {
+              const rec: Recording = {
+                id: crypto.randomUUID(),
+                clientId: client.id,
+                videomakerId: vmId,
+                date: dateStr,
+                startTime: client.backupTime,
+                type: 'backup',
+                status: 'agendada',
+              };
+              addRecording(rec);
+              created++;
+            }
+          }
+        }
+      }
+
+      // Try extra clients
+      if (showExtra) {
+        const extraClients = clients.filter(c => c.acceptsExtra && c.extraDay === dayName);
+        for (const client of extraClients) {
+          const vmId = client.videomakerId;
+          if (!vmId) continue;
+          const extraTime = client.fixedTime; // Use fixed time for extra
+          if (!hasConflict(vmId, dateStr, extraTime)) {
+            const exists = recordings.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'extra' && r.status !== 'cancelada');
+            if (!exists) {
+              const rec: Recording = {
+                id: crypto.randomUUID(),
+                clientId: client.id,
+                videomakerId: vmId,
+                date: dateStr,
+                startTime: extraTime,
+                type: 'extra',
+                status: 'agendada',
+              };
+              addRecording(rec);
+              created++;
+            }
+          }
+        }
+      }
+    }
+
+    if (created > 0) {
+      toast.success(`${created} gravação(ões) backup/extra gerada(s) com sucesso`);
+    } else {
+      toast.info('Nenhuma vaga disponível para gerar gravações backup/extra');
+    }
+  };
+
   const today = new Date();
 
   return (

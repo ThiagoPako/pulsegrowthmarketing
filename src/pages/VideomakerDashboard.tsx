@@ -698,8 +698,8 @@ export default function VideomakerDashboard() {
           : settings.recordingDuration;
         return (
           <LiveRecordingCard
-            clientName={getClientName(activeRec.clientId)}
-            clientColor={getClientColor(activeRec.clientId)}
+            clientName={getClientName(activeRec.clientId, activeRec as Recording)}
+            clientColor={getClientColor(activeRec.clientId, activeRec as Recording)}
             startedAt={activeRecMeta?.startedAt || new Date().toISOString()}
             recordingDurationMinutes={durationMin}
             scriptsCount={planned.length}
@@ -1018,7 +1018,7 @@ export default function VideomakerDashboard() {
                     </div>
                   )}
                   {dayRecs.map(rec => {
-                    const color = getClientColor(rec.clientId);
+                    const color = getClientColor(rec.clientId, rec);
                     const isActive = activeRecordingId === rec.id;
                     const isDone = rec.status === 'concluida';
                     const isOrganizingWeek = rec.status === 'organizando_material';
@@ -1097,7 +1097,7 @@ export default function VideomakerDashboard() {
               </motion.div>
               Finalizar Gravação — {(() => {
                 const rec = recordings.find(r => r.id === finishRecordingId);
-                return rec ? getClientName(rec.clientId) : '';
+                return rec ? getClientName(rec.clientId, rec) : '';
               })()}
             </DialogTitle>
           </DialogHeader>

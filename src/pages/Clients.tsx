@@ -1489,6 +1489,7 @@ export default function Clients() {
               placeholder="Sem limite"
             />
             <p className="text-[10px] text-muted-foreground">Vazio = sem limite de solicitações</p>
+          </div>
           <div className="space-y-1">
             <Label>Meta Total/Sem.</Label>
             <Input type="number" min={0} value={form.weeklyGoal ?? 0} onChange={e => setForm({ ...form, weeklyGoal: Number(e.target.value) })} />

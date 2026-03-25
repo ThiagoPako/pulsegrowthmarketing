@@ -629,6 +629,7 @@ export type Database = {
         Row: {
           accepts_extra: boolean
           accepts_photo_shoot_cost: boolean
+          art_requests_limit: number | null
           auto_renewal: boolean
           backup_day: string
           backup_time: string
@@ -681,6 +682,7 @@ export type Database = {
         Insert: {
           accepts_extra?: boolean
           accepts_photo_shoot_cost?: boolean
+          art_requests_limit?: number | null
           auto_renewal?: boolean
           backup_day?: string
           backup_time?: string
@@ -733,6 +735,7 @@ export type Database = {
         Update: {
           accepts_extra?: boolean
           accepts_photo_shoot_cost?: boolean
+          art_requests_limit?: number | null
           auto_renewal?: boolean
           backup_day?: string
           backup_time?: string

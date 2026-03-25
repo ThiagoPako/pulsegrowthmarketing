@@ -34,7 +34,7 @@ const emptyClient = (): Partial<Client> & { clientType?: string } => ({
   extraContentTypes: [], acceptsExtra: false, extraClientAppears: false,
   weeklyReels: 0, weeklyCreatives: 0, weeklyGoal: 0,
   hasEndomarketing: false, hasVehicleFlyer: false, weeklyStories: 0, presenceDays: 1,
-  monthlyRecordings: 4, niche: '',
+  monthlyRecordings: 4, niche: '', artRequestsLimit: null as number | null,
   clientLogin: '', clientPassword: '', driveLink: '', driveFotos: '', driveIdentidadeVisual: '',
   editorial: '',
   fullShiftRecording: false, preferredShift: 'manha',
@@ -1478,6 +1478,17 @@ export default function Clients() {
           <div className="space-y-1">
             <Label>Meta Stories/Sem.</Label>
             <Input type="number" min={0} value={form.weeklyStories ?? 0} onChange={e => setForm({ ...form, weeklyStories: Number(e.target.value) })} />
+          </div>
+          <div className="space-y-1">
+            <Label>Limite Artes/Mês</Label>
+            <Input
+              type="number"
+              min={0}
+              value={form.artRequestsLimit ?? ''}
+              onChange={e => setForm({ ...form, artRequestsLimit: e.target.value ? Number(e.target.value) : null })}
+              placeholder="Sem limite"
+            />
+            <p className="text-[10px] text-muted-foreground">Vazio = sem limite de solicitações</p>
           </div>
           <div className="space-y-1">
             <Label>Meta Total/Sem.</Label>

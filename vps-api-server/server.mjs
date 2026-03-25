@@ -1003,10 +1003,10 @@ app.post('/api/portal-actions', async (req, res) => {
       const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(client_id);
       let query, params;
       if (isUUID) {
-        query = 'SELECT id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city FROM clients WHERE id = $1 LIMIT 1';
+        query = 'SELECT id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city, art_requests_limit FROM clients WHERE id = $1 LIMIT 1';
         params = [client_id];
       } else {
-        query = `SELECT id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city FROM clients WHERE trim(both '-' from regexp_replace(lower(trim(company_name)), '\\s+', '-', 'g')) = trim(both '-' from regexp_replace(lower(trim($1)), '\\s+', '-', 'g')) LIMIT 1`;
+        query = `SELECT id, company_name, logo_url, color, weekly_reels, weekly_creatives, weekly_stories, monthly_recordings, plan_id, show_metrics, has_vehicle_flyer, niche, whatsapp, city, art_requests_limit FROM clients WHERE trim(both '-' from regexp_replace(lower(trim(company_name)), '\\s+', '-', 'g')) = trim(both '-' from regexp_replace(lower(trim($1)), '\\s+', '-', 'g')) LIMIT 1`;
         params = [client_id];
       }
       const { rows } = await pool.query(query, params);
@@ -1372,6 +1372,123 @@ app.post('/api/portal-actions', async (req, res) => {
           await pool.query(`INSERT INTO client_portal_notifications (client_id, title, message, type, link_script_id) VALUES ($1, $2, $3, $4, $5)`,
             [client_id, `${emoji} Roteiro ${label}`, `"${script_title}" foi marcado como ${label}`, 'priority', script.id]);
         }
+      }
+      return res.json({ success: true });
+    }
+
+    // ── Get design tasks for portal ──
+    if (action === 'get_design_tasks') {
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      const { rows: tasks } = await pool.query(
+        `SELECT id, title, description, format_type, priority, kanban_column, attachment_url, mockup_url,
+                created_at, completed_at, client_approved_at, observations
+         FROM design_tasks WHERE client_id = $1
+         ORDER BY created_at DESC`,
+        [client_id]
+      );
+      const { rows: [clientInfo] } = await pool.query(
+        'SELECT art_requests_limit FROM clients WHERE id = $1',
+        [client_id]
+      );
+      return res.json({ tasks, art_requests_limit: clientInfo?.art_requests_limit || null });
+    }
+
+    // ── Create design request from portal ──
+    if (action === 'create_design_request') {
+      const { title, description, format_type } = req.body;
+      if (!client_id || !title) return res.status(400).json({ error: 'client_id and title required' });
+
+      // Check limit
+      const { rows: [clientInfo] } = await pool.query(
+        'SELECT art_requests_limit, company_name FROM clients WHERE id = $1',
+        [client_id]
+      );
+      if (clientInfo?.art_requests_limit) {
+        const { rows: [countRow] } = await pool.query(
+          `SELECT COUNT(*) as cnt FROM design_tasks
+           WHERE client_id = $1 AND created_at >= date_trunc('month', CURRENT_DATE)`,
+          [client_id]
+        );
+        if (parseInt(countRow.cnt) >= clientInfo.art_requests_limit) {
+          return res.status(400).json({ error: 'Limite de solicitações de arte atingido neste mês' });
+        }
+      }
+
+      const { rows: [task] } = await pool.query(
+        `INSERT INTO design_tasks (client_id, title, description, format_type, priority, kanban_column)
+         VALUES ($1, $2, $3, $4, 'media', 'nova_tarefa') RETURNING id`,
+        [client_id, title, description || null, format_type || 'feed']
+      );
+
+      // Add history
+      await pool.query(
+        `INSERT INTO design_task_history (task_id, action, details)
+         VALUES ($1, $2, $3)`,
+        [task.id, '📩 Solicitação criada pelo cliente via Pulse Club', description || null]
+      );
+
+      // Notify designers (fotografo + designer roles)
+      const { rows: notifUsers } = await pool.query(
+        `SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'fotografo', 'designer')`
+      );
+      for (const u of notifUsers) {
+        await pool.query(
+          `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
+          [u.user_id, '🎨 Nova solicitação de arte do cliente', `${clientInfo?.company_name || 'Cliente'} solicitou: "${title}"`, 'design', '/designer']
+        );
+      }
+
+      return res.json({ success: true, task_id: task.id });
+    }
+
+    // ── Approve design task from portal ──
+    if (action === 'approve_design_task') {
+      const { task_id } = req.body;
+      if (!task_id) return res.status(400).json({ error: 'task_id required' });
+      await pool.query(
+        `UPDATE design_tasks SET kanban_column = 'aprovado', client_approved_at = NOW(), completed_at = NOW(), updated_at = NOW() WHERE id = $1`,
+        [task_id]
+      );
+      await pool.query(
+        `INSERT INTO design_task_history (task_id, action) VALUES ($1, $2)`,
+        [task_id, '✅ Aprovado pelo cliente via Pulse Club']
+      );
+      // Notify designers
+      const { rows: notifUsers } = await pool.query(
+        `SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'fotografo', 'designer')`
+      );
+      const { rows: [taskInfo] } = await pool.query('SELECT title FROM design_tasks WHERE id = $1', [task_id]);
+      for (const u of notifUsers) {
+        await pool.query(
+          `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
+          [u.user_id, '✅ Arte aprovada pelo cliente', `"${taskInfo?.title || 'Arte'}" foi aprovada no Pulse Club`, 'design', '/designer']
+        );
+      }
+      return res.json({ success: true });
+    }
+
+    // ── Request design adjustment from portal ──
+    if (action === 'request_design_adjustment') {
+      const { task_id, note } = req.body;
+      if (!task_id || !note) return res.status(400).json({ error: 'task_id and note required' });
+      await pool.query(
+        `UPDATE design_tasks SET kanban_column = 'ajustes', observations = $1, updated_at = NOW() WHERE id = $2`,
+        [note, task_id]
+      );
+      await pool.query(
+        `INSERT INTO design_task_history (task_id, action, details) VALUES ($1, $2, $3)`,
+        [task_id, '🔧 Ajuste solicitado pelo cliente via Pulse Club', note]
+      );
+      // Notify designers
+      const { rows: [taskInfo] } = await pool.query('SELECT title, assigned_to FROM design_tasks WHERE id = $1', [task_id]);
+      const { rows: notifUsers } = await pool.query(
+        `SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'fotografo', 'designer')`
+      );
+      for (const u of notifUsers) {
+        await pool.query(
+          `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
+          [u.user_id, '🔧 Ajuste solicitado na arte', `Cliente pediu ajuste em "${taskInfo?.title || 'Arte'}": ${(note || '').substring(0, 80)}`, 'design', '/designer']
+        );
       }
       return res.json({ success: true });
     }

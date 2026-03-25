@@ -100,6 +100,7 @@ export interface Client {
   fullShiftRecording?: boolean; // client uses entire shift (morning or afternoon)
   preferredShift?: 'manha' | 'tarde'; // which shift the client prefers
   selectedWeeks: number[]; // which weeks of the month to schedule (e.g. [1,2,3,4])
+  artRequestsLimit?: number | null; // monthly art request limit (null = unlimited)
 }
 
 export interface SocialAccount {

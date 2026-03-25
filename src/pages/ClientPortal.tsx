@@ -18,6 +18,7 @@ import ZonaCriativa from '@/components/portal/ZonaCriativa';
 import PortalTutorial from '@/components/portal/PortalTutorial';
 import PortalRecordingCalendar from '@/components/portal/PortalRecordingCalendar';
 import PortalPanfletagem from '@/components/portal/PortalPanfletagem';
+import PortalDesigner from '@/components/portal/PortalDesigner';
 import { syncPortalApproval, syncPortalAdjustment, syncPortalComment } from '@/lib/portalSync';
 import PortalWelcomeOverlay from '@/components/portal/PortalWelcomeOverlay';
 import { PortalVideoButtons } from '@/components/portal/PortalWelcomeOverlay';
@@ -58,7 +59,7 @@ interface ClientData {
   whatsapp?: string; city?: string;
 }
 
-type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem';
+type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem' | 'designer';
 
 const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
@@ -538,6 +539,12 @@ export default function ClientPortal() {
                   Métricas
                 </button>
               )}
+              <button
+                onClick={() => setActiveTab('designer')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'designer' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+              >
+                🎨 Designer
+              </button>
               {client.has_vehicle_flyer && (
                 <button
                   onClick={() => setActiveTab('panfletagem')}
@@ -609,6 +616,9 @@ export default function ClientPortal() {
             Métricas
           </button>
         )}
+        <button onClick={() => setActiveTab('designer')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'designer' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'designer' ? { borderColor: `hsl(${clientColor})` } : {}}>
+          🎨 Designer
+        </button>
         {client.has_vehicle_flyer && (
           <button onClick={() => setActiveTab('panfletagem')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'panfletagem' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'panfletagem' ? { borderColor: `hsl(${clientColor})` } : {}}>
             🚗 Panfleto
@@ -729,6 +739,8 @@ export default function ClientPortal() {
           </motion.div>
         ) : activeTab === 'criativa' ? (
           <ZonaCriativa clientId={client.id} clientColor={clientColor} isAuthenticated={isAuthenticated} />
+        ) : activeTab === 'designer' ? (
+          <PortalDesigner clientId={client.id} clientColor={clientColor} />
         ) : activeTab === 'agenda' ? (
           <PortalRecordingCalendar clientId={client.id} clientColor={clientColor} />
         ) : activeTab === 'panfletagem' && client.has_vehicle_flyer ? (

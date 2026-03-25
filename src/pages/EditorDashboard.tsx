@@ -320,7 +320,7 @@ export default function EditorDashboard() {
     if (error) { toast.error('Erro ao iniciar edição'); return; }
     await supabase.from('task_history').insert({ task_id: task.id, user_id: user.id, action: 'Edição iniciada' });
     toast.success('Edição iniciada!');
-    const updated = { ...task, assigned_to: user.id, editing_started_at: new Date().toISOString() };
+    const updated = { ...task, assigned_to: user.id, edited_by: user.id, editing_started_at: new Date().toISOString() };
     setActiveEditTask(updated);
     setShowUpload(false);
     setShowScript(false);

@@ -22,7 +22,7 @@ interface AppContextType {
   addClient: (client: Client) => boolean;
   updateClient: (client: Client) => void;
   deleteClient: (id: string) => Promise<boolean>;
-  addRecording: (recording: Recording) => boolean;
+  addRecording: (recording: Recording) => Promise<boolean>;
   updateRecording: (recording: Recording) => void;
   cancelRecording: (id: string) => void;
   deleteRecording: (id: string) => Promise<boolean>;

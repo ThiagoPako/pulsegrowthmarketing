@@ -2745,7 +2745,7 @@ export type Database = {
       scripts: {
         Row: {
           caption: string | null
-          client_id: string
+          client_id: string | null
           client_priority: string
           content: string
           content_format: string
@@ -2757,6 +2757,7 @@ export type Database = {
           is_endomarketing: boolean
           priority: string
           recorded: boolean
+          recording_id: string | null
           scheduled_date: string | null
           title: string
           updated_at: string
@@ -2764,7 +2765,7 @@ export type Database = {
         }
         Insert: {
           caption?: string | null
-          client_id: string
+          client_id?: string | null
           client_priority?: string
           content?: string
           content_format?: string
@@ -2776,6 +2777,7 @@ export type Database = {
           is_endomarketing?: boolean
           priority?: string
           recorded?: boolean
+          recording_id?: string | null
           scheduled_date?: string | null
           title: string
           updated_at?: string
@@ -2783,7 +2785,7 @@ export type Database = {
         }
         Update: {
           caption?: string | null
-          client_id?: string
+          client_id?: string | null
           client_priority?: string
           content?: string
           content_format?: string
@@ -2795,6 +2797,7 @@ export type Database = {
           is_endomarketing?: boolean
           priority?: string
           recorded?: boolean
+          recording_id?: string | null
           scheduled_date?: string | null
           title?: string
           updated_at?: string
@@ -2820,6 +2823,13 @@ export type Database = {
             columns: ["endo_client_id"]
             isOneToOne: false
             referencedRelation: "endomarketing_clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scripts_recording_id_fkey"
+            columns: ["recording_id"]
+            isOneToOne: false
+            referencedRelation: "recordings"
             referencedColumns: ["id"]
           },
         ]

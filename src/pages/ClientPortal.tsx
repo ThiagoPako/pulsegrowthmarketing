@@ -520,6 +520,12 @@ export default function ClientPortal() {
                 Biblioteca
               </button>
               <button
+                onClick={() => setActiveTab('designer')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'designer' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+              >
+                🎨 Designer
+              </button>
+              <button
                 onClick={() => setActiveTab('criativa')}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'criativa' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
               >
@@ -539,12 +545,6 @@ export default function ClientPortal() {
                   Métricas
                 </button>
               )}
-              <button
-                onClick={() => setActiveTab('designer')}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'designer' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
-              >
-                🎨 Designer
-              </button>
               {client.has_vehicle_flyer && (
                 <button
                   onClick={() => setActiveTab('panfletagem')}

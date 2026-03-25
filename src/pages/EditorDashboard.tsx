@@ -525,7 +525,7 @@ export default function EditorDashboard() {
             className="relative rounded-2xl overflow-hidden"
           >
             {/* Animated glowing border */}
-            <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary via-blue-500 to-primary bg-[length:200%_100%] animate-[shimmer_3s_linear_infinite] p-[2px]">
+            <div className={`absolute inset-0 rounded-2xl bg-[length:200%_100%] animate-[shimmer_3s_linear_infinite] p-[2px] ${activeEditTask.kanban_column === 'alteracao' ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500' : 'bg-gradient-to-r from-primary via-blue-500 to-primary'}`}>
               <div className="w-full h-full bg-card rounded-2xl" />
             </div>
             <div className="relative z-10 p-5 space-y-4">
@@ -537,7 +537,7 @@ export default function EditorDashboard() {
                   </motion.div>
                   <div>
                     <p className="text-[10px] uppercase tracking-widest text-primary font-bold">
-                      {activeEditTask.editing_paused_at ? '⏸️ Edição pausada' : 'Edição em andamento'}
+                      {activeEditTask.editing_paused_at ? '⏸️ Edição pausada' : activeEditTask.kanban_column === 'alteracao' ? '🔧 Alteração em andamento' : 'Edição em andamento'}
                     </p>
                     <p className="text-base font-bold text-foreground leading-tight">{activeEditTask.title}</p>
                   </div>
@@ -958,8 +958,15 @@ function QueueCard({ task, clients, index, onStartEditing, currentUserId, users 
           {task.drive_link && <span className="flex items-center gap-0.5"><ExternalLink size={10} /> Drive</span>}
         </div>
 
-        {/* Start Editing CTA */}
-        {!task.assigned_to && (
+        {/* Start Editing / Alteration CTA */}
+        {task.kanban_column === 'alteracao' ? (
+          <motion.div whileTap={{ scale: 0.95 }}>
+            <Button size="sm" className="w-full gap-1.5 h-8 text-xs bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md"
+              onClick={(e) => { e.stopPropagation(); onStartEditing(); }}>
+              <Zap size={13} /> Iniciar Alteração
+            </Button>
+          </motion.div>
+        ) : !task.assigned_to && (
           <motion.div whileTap={{ scale: 0.95 }}>
             <Button size="sm" className="w-full gap-1.5 h-8 text-xs bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-md"
               onClick={(e) => { e.stopPropagation(); onStartEditing(); }}>

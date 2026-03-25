@@ -2775,9 +2775,9 @@ app.post('/api/recordings', async (req, res) => {
     const results = [];
     for (const r of items) {
       const { rows } = await pool.query(
-        `INSERT INTO recordings (id, client_id, videomaker_id, date, start_time, type, status, confirmation_status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-        [r.id || crypto.randomUUID(), r.client_id, r.videomaker_id, r.date, r.start_time, r.type || 'fixa', r.status || 'agendada', r.confirmation_status || 'pendente']
+        `INSERT INTO recordings (id, client_id, videomaker_id, date, start_time, type, status, confirmation_status, prospect_name)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+        [r.id || crypto.randomUUID(), r.client_id || null, r.videomaker_id, r.date, r.start_time, r.type || 'fixa', r.status || 'agendada', r.confirmation_status || 'pendente', r.prospect_name || null]
       );
       results.push(rows[0]);
     }
@@ -2790,7 +2790,7 @@ app.put('/api/recordings/:id', async (req, res) => {
     await verifyUser(req);
     const { id } = req.params;
     const r = req.body;
-    const allowed = ['client_id','videomaker_id','date','start_time','type','status','confirmation_status'];
+    const allowed = ['client_id','videomaker_id','date','start_time','type','status','confirmation_status','prospect_name'];
     const sets = []; const vals = []; let idx = 1;
     for (const key of allowed) { if (r[key] !== undefined) { sets.push(`${key} = $${idx}`); vals.push(r[key]); idx++; } }
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });

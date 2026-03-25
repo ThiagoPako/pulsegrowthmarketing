@@ -912,6 +912,53 @@ export default function Scripts() {
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editing ? 'Editar Roteiro' : form.isAvulso ? '📹 Novo Roteiro Avulso' : 'Novo Roteiro'}</DialogTitle></DialogHeader>
           <div className="space-y-4">
+            {form.isAvulso ? (
+              /* Avulso mode: select recording instead of client */
+              <div className="p-4 rounded-xl border-2 border-sky-500/30 bg-sky-500/5 space-y-3">
+                <p className="text-sm font-semibold text-sky-600 flex items-center gap-2">
+                  <Video size={16} /> Gravação Avulsa Vinculada
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Gravação Avulsa *</Label>
+                    <Select value={form.recordingId} onValueChange={v => {
+                      const rec = avulsoRecordings.find(r => r.id === v);
+                      setForm({ ...form, recordingId: v, prospectName: rec?.prospectName || '' });
+                    }}>
+                      <SelectTrigger><SelectValue placeholder="Selecione a gravação" /></SelectTrigger>
+                      <SelectContent>
+                        {avulsoRecordings.length === 0 ? (
+                          <div className="p-3 text-center text-xs text-muted-foreground">Nenhuma gravação avulsa encontrada</div>
+                        ) : (
+                          avulsoRecordings.map(r => (
+                            <SelectItem key={r.id} value={r.id}>
+                              <span className="flex items-center gap-2">
+                                <Video size={12} className="text-sky-500" />
+                                📹 {r.prospectName} — {new Date(r.date + 'T12:00:00').toLocaleDateString('pt-BR')} às {r.startTime}
+                              </span>
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Tipo de Vídeo</Label>
+                    <Select value={form.videoType} onValueChange={v => setForm({ ...form, videoType: v as ScriptVideoType })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {VIDEO_TYPES.map(t => <SelectItem key={t} value={t}>{SCRIPT_VIDEO_TYPE_LABELS[t]}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {form.prospectName && (
+                  <p className="text-xs text-muted-foreground">
+                    Prospect: <strong>{form.prospectName}</strong>
+                  </p>
+                )}
+              </div>
+            ) : (
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1">
                 <Label>Cliente *</Label>

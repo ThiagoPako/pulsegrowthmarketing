@@ -239,7 +239,7 @@ export default function Schedule() {
     setRegenLoading(false);
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const isAvulso = form.type === 'avulso';
     if (!isAvulso && !form.clientId) { toast.error('Selecione um cliente'); return; }
     if (isAvulso && !form.prospectName.trim()) { toast.error('Informe o nome do prospect'); return; }
@@ -257,8 +257,8 @@ export default function Schedule() {
       status: 'agendada',
       ...(isAvulso ? { prospectName: form.prospectName.trim() } : {}),
     };
-    const ok = addRecording(rec);
-    if (!ok) { toast.error('Conflito de horário!'); return; }
+    const ok = await addRecording(rec);
+    if (!ok) { toast.error('Erro ao salvar gravação!'); return; }
     toast.success(isAvulso ? 'Gravação avulsa agendada' : 'Gravação agendada');
     setNewOpen(false);
   };

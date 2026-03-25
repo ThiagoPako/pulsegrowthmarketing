@@ -49,3 +49,13 @@ export async function syncPortalScriptPriority(clientId: string, scriptTitle: st
     client_name: clientName,
   });
 }
+
+/** When client edits a script in Zona Criativa, notify team */
+export async function syncPortalScriptEdit(clientId: string, scriptId: string, clientName: string) {
+  await portalAction({
+    action: 'sync_script_edit',
+    client_id: clientId,
+    script_id: scriptId,
+    client_name: clientName,
+  });
+}

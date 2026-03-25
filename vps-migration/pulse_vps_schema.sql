@@ -701,7 +701,7 @@ CREATE TABLE IF NOT EXISTS revenues (
 -- Table: scripts
 CREATE TABLE IF NOT EXISTS scripts (
   id UUID NOT NULL DEFAULT gen_random_uuid(),
-  client_id UUID NOT NULL,
+  client_id UUID,
   title TEXT NOT NULL,
   video_type TEXT NOT NULL DEFAULT 'vendas'::text,
   content TEXT NOT NULL DEFAULT ''::text,
@@ -715,7 +715,9 @@ CREATE TABLE IF NOT EXISTS scripts (
   content_format TEXT NOT NULL DEFAULT 'reels'::text,
   created_by UUID,
   client_priority TEXT NOT NULL DEFAULT 'normal'::text,
-  caption TEXT DEFAULT ''::text
+  caption TEXT DEFAULT ''::text,
+  recording_id UUID,
+  direct_to_editing BOOLEAN NOT NULL DEFAULT false
 );
 
 -- Table: social_accounts

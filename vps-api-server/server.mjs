@@ -2930,11 +2930,11 @@ app.post('/api/scripts', async (req, res) => {
     await verifyUser(req);
     const s = req.body;
     const { rows } = await pool.query(
-      `INSERT INTO scripts (id, client_id, title, video_type, content_format, content, recorded, priority, is_endomarketing, endo_client_id, scheduled_date, created_by, caption, client_priority)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+      `INSERT INTO scripts (id, client_id, title, video_type, content_format, content, recorded, priority, is_endomarketing, endo_client_id, scheduled_date, created_by, caption, client_priority, direct_to_editing, recording_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
       [s.id || crypto.randomUUID(), s.client_id, s.title, s.video_type || 'reels', s.content_format || 'reels',
        s.content || '', s.recorded ?? false, s.priority || 'normal', s.is_endomarketing ?? false,
-       s.endo_client_id || null, s.scheduled_date || null, s.created_by || null, s.caption || null, s.client_priority || 'normal']
+       s.endo_client_id || null, s.scheduled_date || null, s.created_by || null, s.caption || null, s.client_priority || 'normal', s.direct_to_editing ?? false, s.recording_id || null]
     );
     // Create portal notification
     try {

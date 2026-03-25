@@ -1165,12 +1165,12 @@ export default function Scripts() {
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-3">
-                  <span className="w-4 h-4 rounded-full" style={{ backgroundColor: `hsl(${getClientColor(viewing.clientId)})` }} />
+                  <span className="w-4 h-4 rounded-full" style={{ backgroundColor: `hsl(${getClientColor(viewing.clientId, viewing)})` }} />
                   {viewing.title}
                 </DialogTitle>
               </DialogHeader>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>{getClientName(viewing.clientId)}</span>
+                <span>{getClientName(viewing.clientId, viewing)}</span>
                 <span>·</span>
                 <Badge variant="outline" className="text-[10px]">{SCRIPT_VIDEO_TYPE_LABELS[viewing.videoType]}</Badge>
                 <span>·</span>

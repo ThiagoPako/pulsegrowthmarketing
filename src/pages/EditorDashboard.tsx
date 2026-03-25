@@ -336,30 +336,40 @@ export default function EditorDashboard() {
      fetchTasks();
    };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !activeEditTask) return;
-    if (file.size > 500 * 1024 * 1024) { toast.error('Máximo: 500MB'); return; }
-    setUploading(true);
-    setUploadProgress(`Enviando ${file.name}...`);
-    try {
-      const folder = `content/${activeEditTask.client_id}/${activeEditTask.id}`;
-      const url = await uploadFileToVps(file, folder);
-      await supabase.from('content_tasks').update({
-        edited_video_link: url, edited_video_type: 'upload', updated_at: new Date().toISOString()
-      }).eq('id', activeEditTask.id);
-      setVideoLink(url);
-      await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo enviado via upload', details: url });
-      toast.success('Vídeo enviado!');
-      fetchTasks();
-    } catch (err: any) {
-      toast.error(`Erro: ${err.message}`);
-    } finally {
-      setUploading(false);
-      setUploadProgress('');
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
+   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+     const file = e.target.files?.[0];
+     if (!file || !activeEditTask) return;
+     if (file.size > 500 * 1024 * 1024) { toast.error('Máximo: 500MB'); return; }
+     setUploading(true);
+     setUploadProgress(`Enviando ${file.name}...`);
+     try {
+       const folder = `content/${activeEditTask.client_id}/${activeEditTask.id}`;
+       const url = await uploadFileToVps(file, folder);
+       // Delete old video if this is an alteration
+       if (oldVideoLink && oldVideoLink !== url) {
+         try {
+           await deleteFileFromVps(oldVideoLink);
+           await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo anterior removido (alteração)' });
+         } catch (delErr) {
+           console.warn('Falha ao remover vídeo anterior:', delErr);
+         }
+         setOldVideoLink(null);
+       }
+       await supabase.from('content_tasks').update({
+         edited_video_link: url, edited_video_type: 'upload', updated_at: new Date().toISOString()
+       }).eq('id', activeEditTask.id);
+       setVideoLink(url);
+       await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo enviado via upload', details: url });
+       toast.success('Vídeo enviado!');
+       fetchTasks();
+     } catch (err: any) {
+       toast.error(`Erro: ${err.message}`);
+     } finally {
+       setUploading(false);
+       setUploadProgress('');
+       if (fileInputRef.current) fileInputRef.current.value = '';
+     }
+   };
 
   const saveVideoLink = async () => {
     if (!videoLink.trim() || !activeEditTask) return;

@@ -101,6 +101,8 @@ export default function Schedule() {
   const [editForm, setEditForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '', type: 'fixa' as RecordingType, status: 'agendada' as Recording['status'] });
   const [filterVideomaker, setFilterVideomaker] = useState('all');
   const [showEndo, setShowEndo] = useState(true);
+  const [showBackup, setShowBackup] = useState(false);
+  const [showExtra, setShowExtra] = useState(false);
   const [regenOpen, setRegenOpen] = useState(false);
   const [regenClientId, setRegenClientId] = useState('');
   const [regenLoading, setRegenLoading] = useState(false);
@@ -146,8 +148,11 @@ export default function Schedule() {
   const filteredRecordings = useMemo(() => {
     let recs = recordings;
     if (filterVideomaker !== 'all') recs = recs.filter(r => r.videomakerId === filterVideomaker);
+    // Hide backup/extra unless toggled on
+    if (!showBackup) recs = recs.filter(r => r.type !== 'backup');
+    if (!showExtra) recs = recs.filter(r => r.type !== 'extra');
     return recs;
-  }, [recordings, filterVideomaker]);
+  }, [recordings, filterVideomaker, showBackup, showExtra]);
 
   // Low-script warning
   const lowScriptClients = useMemo(() => {
@@ -737,13 +742,98 @@ export default function Schedule() {
     </Badge>
   );
 
+  // Generate backup & extra recordings for eligible clients into available slots
+  const handleGenerateBackupExtra = async () => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const endStr = format(endOfMonth(addMonths(new Date(), 1)), 'yyyy-MM-dd');
+    let created = 0;
+
+    // Get all future dates from today to end of next month
+    const days: Date[] = [];
+    let d = new Date();
+    const end = new Date(endStr);
+    while (d <= end) {
+      days.push(new Date(d));
+      d = addDays(d, 1);
+    }
+
+    for (const day of days) {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const dayNum = getDay(day);
+      const dayName = DATE_TO_DAY[dayNum];
+      if (!settings.workDays.includes(dayName)) continue;
+
+      // Try backup clients
+      if (showBackup) {
+        const backupClients = clients.filter(c => c.backupDay === dayName && c.acceptsExtra);
+        for (const client of backupClients) {
+          const vmId = client.videomaker;
+          if (!vmId) continue;
+          if (!hasConflict(vmId, dateStr, client.backupTime)) {
+            const exists = recordings.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'backup' && r.status !== 'cancelada');
+            if (!exists) {
+              const rec: Recording = {
+                id: crypto.randomUUID(),
+                clientId: client.id,
+                videomakerId: vmId,
+                date: dateStr,
+                startTime: client.backupTime,
+                type: 'backup',
+                status: 'agendada',
+              };
+              addRecording(rec);
+              created++;
+            }
+          }
+        }
+      }
+
+      // Try extra clients
+      if (showExtra) {
+        const extraClients = clients.filter(c => c.acceptsExtra && c.extraDay === dayName);
+        for (const client of extraClients) {
+          const vmId = client.videomaker;
+          if (!vmId) continue;
+          const extraTime = client.fixedTime; // Use fixed time for extra
+          if (!hasConflict(vmId, dateStr, extraTime)) {
+            const exists = recordings.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'extra' && r.status !== 'cancelada');
+            if (!exists) {
+              const rec: Recording = {
+                id: crypto.randomUUID(),
+                clientId: client.id,
+                videomakerId: vmId,
+                date: dateStr,
+                startTime: extraTime,
+                type: 'extra',
+                status: 'agendada',
+              };
+              addRecording(rec);
+              created++;
+            }
+          }
+        }
+      }
+    }
+
+    if (created > 0) {
+      toast.success(`${created} gravação(ões) backup/extra gerada(s) com sucesso`);
+    } else {
+      toast.info('Nenhuma vaga disponível para gerar gravações backup/extra');
+    }
+  };
+
   const today = new Date();
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-display font-bold">Agenda</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {(showBackup || showExtra) && (
+            <Button variant="outline" className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateBackupExtra}>
+              <RefreshCw size={16} className="mr-2" /> Gerar Backup/Extra
+            </Button>
+          )}
           <Button variant="outline" onClick={() => { setRegenClientId(''); setRegenOpen(true); }}>
             <RefreshCw size={16} className="mr-2" /> Regenerar Agenda
           </Button>
@@ -784,6 +874,28 @@ export default function Schedule() {
             >
               <Sparkles size={12} />
               Endomarketing
+            </button>
+            <button
+              onClick={() => setShowBackup(!showBackup)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                showBackup
+                  ? 'border-transparent text-white bg-amber-500'
+                  : 'border-border text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              <Undo2 size={12} />
+              Backup
+            </button>
+            <button
+              onClick={() => setShowExtra(!showExtra)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                showExtra
+                  ? 'border-transparent text-white bg-emerald-500'
+                  : 'border-border text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              <Plus size={12} />
+              Extra
             </button>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" onClick={() => setMonthOffset(m => m - 1)}><ChevronLeft size={18} /></Button>

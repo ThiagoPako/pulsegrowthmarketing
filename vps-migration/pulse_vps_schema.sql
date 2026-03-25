@@ -253,7 +253,8 @@ CREATE TABLE IF NOT EXISTS content_tasks (
   reviewing_by_name TEXT,
   reviewing_at TIMESTAMPTZ,
   editing_paused_at TIMESTAMPTZ,
-  editing_paused_seconds INTEGER NOT NULL DEFAULT 0
+  editing_paused_seconds INTEGER NOT NULL DEFAULT 0,
+  edited_by UUID
 );
 
 -- Table: delivery_records

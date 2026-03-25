@@ -345,22 +345,24 @@ export default function EditorDashboard() {
      try {
        const folder = `content/${activeEditTask.client_id}/${activeEditTask.id}`;
        const url = await uploadFileToVps(file, folder);
-       // Delete old video if this is an alteration
-       if (oldVideoLink && oldVideoLink !== url) {
+       // Delete previous video if replacing
+       const previousVideo = oldVideoLink || activeEditTask.edited_video_link;
+       if (previousVideo && previousVideo !== url && previousVideo.includes('agenciapulse.tech')) {
          try {
-           await deleteFileFromVps(oldVideoLink);
-           await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo anterior removido (alteração)' });
+           await deleteFileFromVps(previousVideo);
+           await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo anterior removido (substituição)' });
          } catch (delErr) {
            console.warn('Falha ao remover vídeo anterior:', delErr);
          }
-         setOldVideoLink(null);
        }
+       setOldVideoLink(null);
        await supabase.from('content_tasks').update({
          edited_video_link: url, edited_video_type: 'upload', updated_at: new Date().toISOString()
        }).eq('id', activeEditTask.id);
        setVideoLink(url);
        await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo enviado via upload', details: url });
        toast.success('Vídeo enviado!');
+       setShowUpload(false);
        fetchTasks();
      } catch (err: any) {
        toast.error(`Erro: ${err.message}`);

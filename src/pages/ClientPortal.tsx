@@ -64,20 +64,21 @@ type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem' | '
 const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
 
+type VideoQuality = '480p' | 'original';
+
 function isPortalVideo(content: Pick<PortalContent, 'content_type' | 'file_url'>) {
   return content.content_type !== 'arte' && !!content.file_url;
 }
 
 function shouldProxyPortalVideo(url: string) {
-  // Keep VPS videos behind the media proxy to avoid ORB/CORS inconsistencies in browsers
   return url.startsWith(VPS_UPLOADS_URL);
 }
 
-async function createPortalVideoObjectUrl(url: string) {
+async function createPortalVideoObjectUrl(url: string, quality: VideoQuality = '480p') {
   const response = await fetch(PORTAL_MEDIA_PROXY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url, quality }),
   });
 
   if (!response.ok) {
@@ -114,6 +115,7 @@ export default function ClientPortal() {
   const [resolvedVideoUrl, setResolvedVideoUrl] = useState<string | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoLoadError, setVideoLoadError] = useState<string | null>(null);
+  const [videoQuality, setVideoQuality] = useState<VideoQuality>('480p');
   const commentsEndRef = useRef<HTMLDivElement>(null);
   const [portalVideoState, setPortalVideoState] = useState({ hasNews: false, hasWelcome: false, isNewClient: false });
 

@@ -178,7 +178,11 @@ export default function VideomakerDashboard() {
     setScriptsRecordingId(rec.id);
     // Auto-select all urgent scripts (mandatory)
     const urgentIds = scripts
-      .filter(s => s.clientId === rec.clientId && !s.recorded && !s.isEndomarketing && s.priority === 'urgent')
+      .filter(s => {
+        const matchesClient = rec.clientId ? s.clientId === rec.clientId : false;
+        const matchesRecording = s.recordingId === rec.id;
+        return (matchesClient || matchesRecording) && !s.recorded && !s.isEndomarketing && s.priority === 'urgent';
+      })
       .map(s => s.id);
     setSelectedScriptIds(new Set(urgentIds));
     setViewingScript(null);
@@ -526,8 +530,14 @@ export default function VideomakerDashboard() {
   };
 
   const clientScripts = useMemo(() => {
-    if (!scriptsClientId) return [];
-    const pending = scripts.filter(s => s.clientId === scriptsClientId && !s.recorded);
+    // For avulso recordings (no clientId), match by recordingId
+    if (!scriptsClientId && !scriptsRecordingId) return [];
+    const pending = scripts.filter(s => {
+      if (s.recorded) return false;
+      if (scriptsClientId && s.clientId === scriptsClientId) return true;
+      if (scriptsRecordingId && s.recordingId === scriptsRecordingId) return true;
+      return false;
+    });
     const priorityOrder: Record<string, number> = { urgent: 0, priority: 1, normal: 2 };
     return pending.sort((a, b) => {
       const pA = priorityOrder[a.priority || 'normal'];
@@ -535,7 +545,7 @@ export default function VideomakerDashboard() {
       if (pA !== pB) return pA - pB;
       return b.updatedAt.localeCompare(a.updatedAt);
     });
-  }, [scripts, scriptsClientId]);
+  }, [scripts, scriptsClientId, scriptsRecordingId]);
 
   const handleMarkScriptsRecorded = () => {
     const now = new Date().toISOString();
@@ -1562,7 +1572,7 @@ export default function VideomakerDashboard() {
                 <div className="flex items-center justify-between w-full">
                   <div className="flex items-center gap-2">
                     <FileText size={18} />
-                    Roteiros — {clients.find(c => c.id === scriptsClientId)?.companyName}
+                    Roteiros — {scriptsClientId ? clients.find(c => c.id === scriptsClientId)?.companyName : (() => { const rec = recordings.find(r => r.id === scriptsRecordingId); return rec?.prospectName ? `📹 ${rec.prospectName}` : 'Avulso'; })()}
                   </div>
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { refetchData(); toast.success('Roteiros atualizados!'); }}>
                     <RefreshCw size={16} />
@@ -1672,7 +1682,12 @@ export default function VideomakerDashboard() {
 
               {/* Already recorded */}
               {(() => {
-                const recorded = scripts.filter(s => s.clientId === scriptsClientId && s.recorded);
+                const recorded = scripts.filter(s => {
+                  if (!s.recorded) return false;
+                  if (scriptsClientId && s.clientId === scriptsClientId) return true;
+                  if (scriptsRecordingId && s.recordingId === scriptsRecordingId) return true;
+                  return false;
+                });
                 if (recorded.length === 0) return null;
                 return (
                   <div className="mt-4 pt-4 border-t border-border">

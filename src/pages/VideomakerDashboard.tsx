@@ -142,8 +142,14 @@ export default function VideomakerDashboard() {
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
   };
 
-  const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || '—';
-  const getClientColor = (id: string) => clients.find(c => c.id === id)?.color || '220 10% 50%';
+  const getClientName = (id: string, rec?: Recording) => {
+    if (rec?.prospectName) return `📹 ${rec.prospectName}`;
+    return clients.find(c => c.id === id)?.companyName || '—';
+  };
+  const getClientColor = (id: string, rec?: Recording) => {
+    if (rec?.prospectName) return '200 80% 55%';
+    return clients.find(c => c.id === id)?.color || '220 10% 50%';
+  };
 
   const typeLabels: Record<string, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.', backup: 'Backup', endomarketing: 'Endo' };
   const timeToMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };

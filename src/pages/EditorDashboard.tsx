@@ -633,11 +633,22 @@ export default function EditorDashboard() {
                   </Button>
                 </motion.div>
 
-                {/* Vídeo anexado indicator */}
-                {hasVideo && (
-                  <Badge className="text-xs bg-green-500/10 text-green-600 border-green-500/30 gap-1">
-                    <Check size={12} /> Vídeo pronto
-                  </Badge>
+                {/* Vídeo anexado indicator + replace button */}
+                {hasVideo && !showUpload && (
+                  <div className="flex items-center gap-1.5">
+                    <Badge className="text-xs bg-green-500/10 text-green-600 border-green-500/30 gap-1">
+                      <Check size={12} /> Vídeo pronto
+                    </Badge>
+                    <motion.div whileTap={{ scale: 0.93 }}>
+                      <Button variant="outline" size="sm" className="gap-1 text-[10px] h-6 px-2 border-amber-500/30 text-amber-600 hover:bg-amber-500/10"
+                        onClick={() => {
+                          setOldVideoLink(activeEditTask?.edited_video_link || videoLink || null);
+                          setShowUpload(true);
+                        }}>
+                        <Upload size={11} /> Trocar
+                      </Button>
+                    </motion.div>
+                  </div>
                 )}
 
                 {/* Spacer */}

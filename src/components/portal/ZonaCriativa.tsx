@@ -186,6 +186,10 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
   const [selectedScript, setSelectedScript] = useState<Script | null>(null);
   const [filterType, setFilterType] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [editContent, setEditContent] = useState('');
+  const [editCaption, setEditCaption] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => { loadScripts(); }, [clientId]);
 

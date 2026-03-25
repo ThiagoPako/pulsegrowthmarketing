@@ -2953,7 +2953,7 @@ app.put('/api/scripts/:id', async (req, res) => {
     await verifyUser(req);
     const { id } = req.params;
     const s = req.body;
-    const allowed = ['client_id','title','video_type','content_format','content','recorded','priority','is_endomarketing','endo_client_id','scheduled_date','created_by','caption','client_priority'];
+    const allowed = ['client_id','title','video_type','content_format','content','recorded','priority','is_endomarketing','endo_client_id','scheduled_date','created_by','caption','client_priority','direct_to_editing','recording_id'];
     const sets = []; const vals = []; let idx = 1;
     for (const key of allowed) { if (s[key] !== undefined) { sets.push(`${key} = $${idx}`); vals.push(s[key]); idx++; } }
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });

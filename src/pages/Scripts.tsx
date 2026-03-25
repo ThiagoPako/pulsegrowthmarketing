@@ -746,6 +746,13 @@ export default function Scripts() {
                 </Button>
               )}
               <Button onClick={() => handleOpen()}><Plus size={16} className="mr-2" /> Novo Roteiro</Button>
+              <Button variant="outline" className="gap-1.5 border-sky-500/40 text-sky-600 hover:bg-sky-500/10" onClick={() => {
+                setEditing(null);
+                setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: false, isAvulso: true, recordingId: '', prospectName: '' });
+                setOpen(true);
+              }}>
+                <Video size={16} /> Roteiro Avulso
+              </Button>
             </>
           )}
         </div>

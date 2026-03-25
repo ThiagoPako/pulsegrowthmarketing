@@ -4,6 +4,7 @@ import { getUpcomingSeasonalDates, NICHE_OPTIONS } from '@/lib/seasonalDates';
 import { highlightQuotes, highlightQuotesForPdf, cleanHtml } from '@/lib/highlightQuotes';
 import { supabase } from '@/lib/vpsDb';
 import { useApp } from '@/contexts/AppContext';
+import type { Recording } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS, SCRIPT_CONTENT_FORMAT_LABELS } from '@/types';
 import type { Script, ScriptVideoType, ScriptPriority, ScriptContentFormat } from '@/types';
@@ -16,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
-  Plus, Pencil, Trash2, FileText, Download, Check, Eye, Search, Filter, AlertTriangle, Star, Eraser, Sparkles, Bell, BellOff, CheckSquare, Square, X
+  Plus, Pencil, Trash2, FileText, Download, Check, Eye, Search, Filter, AlertTriangle, Star, Eraser, Sparkles, Bell, BellOff, CheckSquare, Square, X, Video
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
@@ -127,7 +128,7 @@ function RichEditor({ content, onChange }: { content: string; onChange: (html: s
 }
 
 export default function Scripts() {
-  const { clients, scripts, addScript, updateScript, deleteScript } = useApp();
+  const { clients, scripts, recordings, addScript, updateScript, deleteScript } = useApp();
   const { user } = useAuth();
   const { clientes: endoClientes } = useEndoClientes();
   const [open, setOpen] = useState(false);
@@ -179,7 +180,15 @@ export default function Scripts() {
     endoClientId: '' as string,
     scheduledDate: '' as string,
     directToEditing: false,
+    isAvulso: false,
+    recordingId: '' as string,
+    prospectName: '' as string,
   });
+
+  // Avulso recordings (type=avulso, with prospect_name)
+  const avulsoRecordings = useMemo(() => {
+    return recordings.filter(r => r.type === 'avulso' && r.prospectName);
+  }, [recordings]);
 
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -219,11 +228,14 @@ export default function Scripts() {
           endoClientId: script.endoClientId || '',
           scheduledDate: script.scheduledDate || '',
           directToEditing: script.directToEditing || false,
+          isAvulso: !!script.recordingId,
+          recordingId: script.recordingId || '',
+          prospectName: script.recordingId ? (recordings.find(r => r.id === script.recordingId)?.prospectName || '') : '',
         });
       });
     } else {
       setEditing(null);
-      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: false });
+      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: false, isAvulso: false, recordingId: '', prospectName: '' });
     }
     setOpen(true);
   };
@@ -261,8 +273,14 @@ export default function Scripts() {
   };
 
   const handleSave = async () => {
-    if (!form.clientId || !form.title) {
-      toast.error('Preencha o cliente e o título'); return;
+    if (form.isAvulso) {
+      if (!form.recordingId || !form.title) {
+        toast.error('Selecione a gravação avulsa e preencha o título'); return;
+      }
+    } else {
+      if (!form.clientId || !form.title) {
+        toast.error('Preencha o cliente e o título'); return;
+      }
     }
     if (form.isEndomarketing && !form.endoClientId) {
       toast.error('Selecione o cliente de endomarketing'); return;
@@ -270,7 +288,7 @@ export default function Scripts() {
 
     // Auto-generate caption if content exists but caption is empty (skip for stories)
     let captionToSave = form.contentFormat === 'story' ? '' : form.caption;
-    if (form.contentFormat !== 'story' && form.content && form.content.trim() && !form.caption.trim()) {
+    if (form.contentFormat !== 'story' && form.content && form.content.trim() && !form.caption.trim() && form.clientId) {
       toast.info('Gerando legenda automaticamente...');
       const autoCaption = await generateCaptionFromContent(form.content, form.clientId);
       if (autoCaption) {
@@ -282,10 +300,12 @@ export default function Scripts() {
     const now = new Date().toISOString();
     const scriptData = {
       ...form,
+      clientId: form.isAvulso ? '' : form.clientId,
       caption: captionToSave,
       endoClientId: form.endoClientId || undefined,
       scheduledDate: form.scheduledDate || undefined,
       directToEditing: form.directToEditing,
+      recordingId: form.isAvulso ? form.recordingId : undefined,
     };
     if (editing) {
       updateScript({ ...editing, ...scriptData, updatedAt: now });
@@ -343,17 +363,20 @@ export default function Scripts() {
         }
       }
 
-      const { error } = await supabase.from('content_tasks').insert({
-        client_id: form.clientId,
-        title: form.title,
-        content_type: form.contentFormat || 'reels',
-        kanban_column: kanbanColumn,
-        script_id: scriptId,
-        description: form.directToEditing ? 'Material pronto do cliente — direto para edição' : null,
-        created_by: user?.id || null,
-        assigned_to: assignedTo,
-      } as any);
-      if (error) console.error('Auto content_task creation error:', error);
+      // Only create content_task for non-avulso scripts (avulso has no client_id)
+      if (form.clientId) {
+        const { error } = await supabase.from('content_tasks').insert({
+          client_id: form.clientId,
+          title: form.title,
+          content_type: form.contentFormat || 'reels',
+          kanban_column: kanbanColumn,
+          script_id: scriptId,
+          description: form.directToEditing ? 'Material pronto do cliente — direto para edição' : null,
+          created_by: user?.id || null,
+          assigned_to: assignedTo,
+        } as any);
+        if (error) console.error('Auto content_task creation error:', error);
+      }
       
       toast.success('Roteiro criado');
     }
@@ -692,8 +715,17 @@ export default function Scripts() {
     }
   };
 
-  const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || '—';
-  const getClientColor = (id: string) => clients.find(c => c.id === id)?.color || '220 10% 50%';
+  const getClientName = (id: string, script?: Script) => {
+    if (script?.recordingId) {
+      const rec = recordings.find(r => r.id === script.recordingId);
+      return rec?.prospectName ? `📹 ${rec.prospectName}` : '📹 Avulso';
+    }
+    return clients.find(c => c.id === id)?.companyName || '—';
+  };
+  const getClientColor = (id: string, script?: Script) => {
+    if (script?.recordingId) return '200 80% 55%';
+    return clients.find(c => c.id === id)?.color || '220 10% 50%';
+  };
 
   return (
     <div className="space-y-4">
@@ -726,6 +758,13 @@ export default function Scripts() {
                 </Button>
               )}
               <Button onClick={() => handleOpen()}><Plus size={16} className="mr-2" /> Novo Roteiro</Button>
+              <Button variant="outline" className="gap-1.5 border-sky-500/40 text-sky-600 hover:bg-sky-500/10" onClick={() => {
+                setEditing(null);
+                setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: false, isAvulso: true, recordingId: '', prospectName: '' });
+                setOpen(true);
+              }}>
+                <Video size={16} /> Roteiro Avulso
+              </Button>
             </>
           )}
         </div>
@@ -804,7 +843,7 @@ export default function Scripts() {
           {filteredScripts.map(script => (
             <div key={script.id} 
               className={`glass-card p-4 flex flex-col gap-3 transition-all cursor-pointer ${script.recorded ? 'opacity-50 grayscale-[30%]' : ''} ${selectMode && selectedIds.has(script.id) ? 'ring-2 ring-primary bg-primary/5' : ''}`}
-              style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${getClientColor(script.clientId)})` }}
+              style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${getClientColor(script.clientId, script)})` }}
               onClick={selectMode ? () => toggleSelect(script.id) : undefined}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1 flex items-start gap-2">
@@ -813,13 +852,13 @@ export default function Scripts() {
                   )}
                   <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    {(() => { const cl = clients.find(c => c.id === script.clientId); return cl ? <ClientLogo client={cl} size="sm" className="w-5 h-5 text-[8px] rounded" /> : null; })()}
+                    {(() => { const cl = clients.find(c => c.id === script.clientId); return cl ? <ClientLogo client={cl} size="sm" className="w-5 h-5 text-[8px] rounded" /> : script.recordingId ? <Video size={14} className="text-sky-500" /> : null; })()}
                     {(script.priority === 'urgent') && <AlertTriangle size={13} className="text-destructive shrink-0" />}
                     {(script.priority === 'priority') && <Star size={13} className="text-warning shrink-0" />}
                     <p className="font-medium text-sm truncate">{script.title}</p>
                   </div>
                   <p className="text-[11px] text-muted-foreground truncate ml-6">
-                    {getClientName(script.clientId)} · {SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · <span className="font-medium">{SCRIPT_CONTENT_FORMAT_LABELS[script.contentFormat || 'reels']}</span>
+                    {getClientName(script.clientId, script)} · {SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · <span className="font-medium">{SCRIPT_CONTENT_FORMAT_LABELS[script.contentFormat || 'reels']}</span>
                   </p>
                   </div>
                 </div>
@@ -835,6 +874,11 @@ export default function Scripts() {
                   {script.directToEditing && (
                     <Badge className="text-[9px] bg-blue-500/20 text-blue-600 border-blue-500/30">
                       🎬 Direto p/ Edição
+                    </Badge>
+                  )}
+                  {script.recordingId && (
+                    <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-sky-500/30">
+                      📹 Avulso
                     </Badge>
                   )}
                   {script.priority === 'urgent' && (
@@ -883,8 +927,55 @@ export default function Scripts() {
       {/* Create/Edit Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editing ? 'Editar Roteiro' : 'Novo Roteiro'}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? 'Editar Roteiro' : form.isAvulso ? '📹 Novo Roteiro Avulso' : 'Novo Roteiro'}</DialogTitle></DialogHeader>
           <div className="space-y-4">
+            {form.isAvulso ? (
+              /* Avulso mode: select recording instead of client */
+              <div className="p-4 rounded-xl border-2 border-sky-500/30 bg-sky-500/5 space-y-3">
+                <p className="text-sm font-semibold text-sky-600 flex items-center gap-2">
+                  <Video size={16} /> Gravação Avulsa Vinculada
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Gravação Avulsa *</Label>
+                    <Select value={form.recordingId} onValueChange={v => {
+                      const rec = avulsoRecordings.find(r => r.id === v);
+                      setForm({ ...form, recordingId: v, prospectName: rec?.prospectName || '' });
+                    }}>
+                      <SelectTrigger><SelectValue placeholder="Selecione a gravação" /></SelectTrigger>
+                      <SelectContent>
+                        {avulsoRecordings.length === 0 ? (
+                          <div className="p-3 text-center text-xs text-muted-foreground">Nenhuma gravação avulsa encontrada</div>
+                        ) : (
+                          avulsoRecordings.map(r => (
+                            <SelectItem key={r.id} value={r.id}>
+                              <span className="flex items-center gap-2">
+                                <Video size={12} className="text-sky-500" />
+                                📹 {r.prospectName} — {new Date(r.date + 'T12:00:00').toLocaleDateString('pt-BR')} às {r.startTime}
+                              </span>
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Tipo de Vídeo</Label>
+                    <Select value={form.videoType} onValueChange={v => setForm({ ...form, videoType: v as ScriptVideoType })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {VIDEO_TYPES.map(t => <SelectItem key={t} value={t}>{SCRIPT_VIDEO_TYPE_LABELS[t]}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {form.prospectName && (
+                  <p className="text-xs text-muted-foreground">
+                    Prospect: <strong>{form.prospectName}</strong>
+                  </p>
+                )}
+              </div>
+            ) : (
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1">
                 <Label>Cliente *</Label>
@@ -921,6 +1012,7 @@ export default function Scripts() {
                 </Select>
               </div>
             </div>
+            )}
 
             {/* Client editorial context + Generate button */}
             {form.clientId && (() => {
@@ -1073,12 +1165,12 @@ export default function Scripts() {
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-3">
-                  <span className="w-4 h-4 rounded-full" style={{ backgroundColor: `hsl(${getClientColor(viewing.clientId)})` }} />
+                  <span className="w-4 h-4 rounded-full" style={{ backgroundColor: `hsl(${getClientColor(viewing.clientId, viewing)})` }} />
                   {viewing.title}
                 </DialogTitle>
               </DialogHeader>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>{getClientName(viewing.clientId)}</span>
+                <span>{getClientName(viewing.clientId, viewing)}</span>
                 <span>·</span>
                 <Badge variant="outline" className="text-[10px]">{SCRIPT_VIDEO_TYPE_LABELS[viewing.videoType]}</Badge>
                 <span>·</span>

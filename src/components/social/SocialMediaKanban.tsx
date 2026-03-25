@@ -216,6 +216,7 @@ export default function SocialMediaKanban({
   onTogglePriority,
   sendingWhatsApp,
   onDragMove,
+  highlightTaskId,
 }: SocialMediaKanbanProps) {
   const [showRocket, setShowRocket] = useState(false);
   const [draggedDelivery, setDraggedDelivery] = useState<SocialDelivery | null>(null);

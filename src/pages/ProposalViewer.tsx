@@ -535,6 +535,7 @@ export default function ProposalViewer() {
           {proposalType === 'marketing' && renderMarketingContent()}
           {proposalType === 'sistema' && renderSystemContent()}
           {proposalType === 'endomarketing' && renderEndoContent()}
+          {proposalType === 'personalizada' && renderCustomContent()}
 
           {/* Bonus */}
           {bonus.length > 0 && (

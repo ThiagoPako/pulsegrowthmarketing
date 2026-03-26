@@ -413,6 +413,13 @@ export default function CommercialProposal() {
         if (discount > 0) totalValue = totalValue * (1 - discount / 100);
         installments = 12;
         description = `Endomarketing - ${proposal.client_company}`;
+      } else if (pType === 'personalizada') {
+        const custom = proposal.system_data || {};
+        totalValue = custom.monthlyValue || 0;
+        const discount = proposal.custom_discount || 0;
+        if (discount > 0) totalValue = totalValue * (1 - discount / 100);
+        installments = custom.installments || 12;
+        description = `Proposta Única - ${proposal.client_company}`;
       }
 
       if (totalValue <= 0) return;

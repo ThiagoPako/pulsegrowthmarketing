@@ -1890,7 +1890,7 @@ export default function CommercialProposal() {
               <div className="relative p-6 md:p-10 text-white">
                 <img src={pulseLogo} alt="Pulse Growth Marketing" className="h-12 md:h-14 mb-4 drop-shadow-2xl" />
                 <h1 className="text-2xl md:text-3xl font-bold mb-1">
-                  {proposalType === 'sistema' ? 'Proposta de Sistema' : proposalType === 'endomarketing' ? 'Proposta de Endomarketing' : 'Proposta Comercial'}
+                  {proposalType === 'sistema' ? 'Proposta de Sistema' : proposalType === 'endomarketing' ? 'Proposta de Endomarketing' : proposalType === 'cronograma' ? 'Cronograma Completo' : 'Proposta Comercial'}
                 </h1>
                 <p className="text-white/80 text-sm">Preparada exclusivamente para</p>
                 <p className="text-xl font-bold mt-0.5">{clientCompany || 'Nome da Empresa'}</p>

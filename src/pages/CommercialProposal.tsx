@@ -1732,6 +1732,9 @@ export default function CommercialProposal() {
           <Button variant="outline" size="sm" onClick={() => setShowPreview(!showPreview)}>
             <Eye className="h-4 w-4 mr-1" /> {showPreview ? 'Editar' : 'Preview'}
           </Button>
+          <Button variant="destructive" size="sm" onClick={clearProposal}>
+            <Trash2 className="h-4 w-4 mr-1" /> Limpar Proposta
+          </Button>
           {showPreview && (
             <>
               <Button size="sm" onClick={downloadPDF}>

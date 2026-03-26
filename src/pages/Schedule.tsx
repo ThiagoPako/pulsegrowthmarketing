@@ -34,7 +34,7 @@ const ENDO_COLOR = '292 84% 61%';
 // Unified calendar event
 interface CalendarEvent {
   id: string;
-  type: 'recording' | 'endomarketing';
+  type: 'recording' | 'endomarketing' | 'event';
   clientName: string;
   color: string;
   startTime: string;
@@ -45,6 +45,8 @@ interface CalendarEvent {
   // Endo-specific
   endoDuration?: number;
   endoClientId?: string;
+  // Event-specific
+  eventRecording?: EventRecording;
 }
 
 const DATE_TO_DAY: Record<number, DayOfWeek> = {

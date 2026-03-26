@@ -526,6 +526,7 @@ export default function CommercialProposal() {
       setShareLink(link);
       await copyToClipboard(link);
       toast.success('Proposta salva! Link copiado para a área de transferência.');
+      localStorage.removeItem(DRAFT_KEY);
       refetchProposals();
     } catch (e: any) {
       const message = e?.message || e?.error?.message || e?.details || 'Falha desconhecida ao salvar proposta';

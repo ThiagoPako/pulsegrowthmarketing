@@ -120,6 +120,17 @@ export default function Dashboard() {
   const [contractAlerts, setContractAlerts] = useState<{ clientName: string; daysLeft: number; endDate: string }[]>([]);
   const [expandedWeekDay, setExpandedWeekDay] = useState<string | null>(null);
   const [waitLogs, setWaitLogs] = useState<any[]>([]);
+  const [aiSeasonalAlerts, setAiSeasonalAlerts] = useState<AISeasonalAlert[]>([]);
+  const [seasonalLoading, setSeasonalLoading] = useState(false);
+
+  const loadAIAlerts = async () => {
+    setSeasonalLoading(true);
+    try {
+      const alerts = await fetchAISeasonalAlerts(clients.map(c => c.id));
+      setAiSeasonalAlerts(alerts);
+    } catch { /* ignore */ }
+    setSeasonalLoading(false);
+  };
 
   useEffect(() => { getMessageStats().then(setWaStats); }, []);
   useEffect(() => {

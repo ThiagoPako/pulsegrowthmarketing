@@ -56,6 +56,7 @@ const CLIENT_PORTAL_BASE_FIELDS = [
 
 let clientsArtRequestsLimitColumnPromise;
 let proposalTablesEnsuredPromise;
+const tableJsonColumnsPromiseCache = new Map();
 
 async function hasClientsArtRequestsLimitColumn() {
   if (!clientsArtRequestsLimitColumnPromise) {
@@ -101,6 +102,39 @@ async function getClientArtLimitInfo(clientId, includeCompanyName = false) {
   );
 
   return clientInfo || null;
+}
+
+async function getTableJsonColumns(tableName) {
+  if (!tableJsonColumnsPromiseCache.has(tableName)) {
+    tableJsonColumnsPromiseCache.set(
+      tableName,
+      pool.query(
+        `
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = $1
+            AND udt_name IN ('json', 'jsonb')
+        `,
+        [tableName],
+      )
+        .then(({ rows }) => new Set(rows.map((row) => row.column_name)))
+        .catch((error) => {
+          tableJsonColumnsPromiseCache.delete(tableName);
+          throw error;
+        })
+    );
+  }
+
+  return tableJsonColumnsPromiseCache.get(tableName);
+}
+
+function serializeValueForColumn(columnName, value, jsonColumns) {
+  if (jsonColumns.has(columnName) && value !== null && typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+
+  return value;
 }
 
 async function ensureProposalTables() {
@@ -3011,9 +3045,11 @@ app.post('/api/db/query', async (req, res) => {
       case 'insert': {
         const items = Array.isArray(data) ? data : [data];
         const allResults = [];
+        const jsonColumns = await getTableJsonColumns(safeTable);
         for (const item of items) {
-          const keys = Object.keys(item).map(sanitizeIdentifier);
-          const values = Object.values(item).map(v => typeof v === 'object' && v !== null && !Array.isArray(v) ? JSON.stringify(v) : v);
+          const entries = Object.entries(item).map(([key, value]) => [sanitizeIdentifier(key), value]);
+          const keys = entries.map(([key]) => key);
+          const values = entries.map(([key, value]) => serializeValueForColumn(key, value, jsonColumns));
           const placeholders = values.map((_, i) => `$${i + 1}`);
           const { rows } = await pool.query(
             `INSERT INTO ${safeTable} (${keys.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`,
@@ -3026,8 +3062,10 @@ app.post('/api/db/query', async (req, res) => {
       }
 
       case 'update': {
-        const keys = Object.keys(data).map(sanitizeIdentifier);
-        const values = Object.values(data).map(v => typeof v === 'object' && v !== null && !Array.isArray(v) ? JSON.stringify(v) : v);
+        const jsonColumns = await getTableJsonColumns(safeTable);
+        const entries = Object.entries(data).map(([key, value]) => [sanitizeIdentifier(key), value]);
+        const keys = entries.map(([key]) => key);
+        const values = entries.map(([key, value]) => serializeValueForColumn(key, value, jsonColumns));
         let paramIdx = 1;
         const setClauses = keys.map(k => `${k} = $${paramIdx++}`);
 

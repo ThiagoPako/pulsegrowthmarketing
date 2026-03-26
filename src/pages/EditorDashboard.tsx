@@ -918,6 +918,7 @@ export default function EditorDashboard() {
             {filteredQueue.map((task, i) => (
               <QueueCard key={task.id} task={task} clients={clients} index={i}
                 onStartEditing={() => handleStartEditing(task)}
+                onClaimTask={() => handleClaimTask(task)}
                 currentUserId={user?.id}
                 users={users} />
             ))}

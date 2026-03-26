@@ -311,6 +311,19 @@ export default function EditorDashboard() {
   }, [queueTasks, filterClient, filterType, searchQuery, clients]);
 
   /* ─── Actions ──────────────────────────────────────────── */
+   const handleClaimTask = async (task: EditorTask) => {
+     if (!user) return;
+     const { error } = await supabase.from('content_tasks').update({
+       assigned_to: user.id,
+       updated_at: new Date().toISOString(),
+     } as any).eq('id', task.id);
+     if (error) { toast.error('Erro ao marcar tarefa'); return; }
+     const editorName = users.find(u => u.id === user.id)?.name || 'Você';
+     await supabase.from('task_history').insert({ task_id: task.id, user_id: user.id, action: `Tarefa reivindicada por ${editorName}` });
+     toast.success('🚩 Tarefa marcada como sua!');
+     fetchTasks();
+   };
+
    const handleStartEditing = async (task: EditorTask) => {
      if (!user) return;
      const isAlteration = task.kanban_column === 'alteracao';

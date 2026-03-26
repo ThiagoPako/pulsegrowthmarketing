@@ -68,6 +68,7 @@ const LandingPageAdmin = lazy(() => import("@/pages/LandingPageAdmin"));
 const CommercialProposal = lazy(() => import("@/pages/CommercialProposal"));
 const ProposalViewer = lazy(() => import("@/pages/ProposalViewer"));
 const RecordingControl = lazy(() => import("@/pages/RecordingControl"));
+const EditingControl = lazy(() => import("@/pages/EditingControl"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -172,6 +173,7 @@ function AppRoutes() {
         <Route path="/landing-admin" element={<ProtectedRoute><LandingPageAdmin /></ProtectedRoute>} />
         <Route path="/propostas" element={<ProtectedRoute><CommercialProposal /></ProtectedRoute>} />
         <Route path="/controle-gravacoes" element={<ProtectedRoute><RecordingControl /></ProtectedRoute>} />
+        <Route path="/controle-edicao" element={<ProtectedRoute><EditingControl /></ProtectedRoute>} />
         <Route path="/proposta/:token" element={<ProposalViewer />} />
         <Route path="/feedback" element={<ClientFeedback />} />
         <Route path="*" element={<NotFound />} />

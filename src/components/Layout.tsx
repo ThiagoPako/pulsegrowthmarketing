@@ -33,6 +33,7 @@ const navCategories: NavCategory[] = [
       { path: '/conteudo', label: 'Conteúdo', icon: Kanban, roles: ['admin', 'social_media', 'videomaker', 'editor'] },
       { path: '/agenda', label: 'Agenda', icon: Calendar, roles: ['admin', 'videomaker', 'social_media'] },
       { path: '/controle-gravacoes', label: 'Controle Grav.', icon: Video, roles: ['admin'] },
+      { path: '/controle-edicao', label: 'Controle Edição', icon: Scissors, roles: ['admin'] },
       { path: '/roteiros', label: 'Roteiros', icon: FileText, roles: ['admin', 'social_media', 'videomaker'] },
     ],
   },

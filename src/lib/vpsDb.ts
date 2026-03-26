@@ -185,6 +185,7 @@ class QueryBuilder {
       if (this._head) body.head = true;
     } else if (this._operation === 'insert') {
       body.data = this._data;
+      if (this._returning) { body.returning = true; body.single = this._single; }
     } else if (this._operation === 'update') {
       body.data = this._data;
       body.filters = this._filters;

@@ -118,17 +118,27 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
         let end: number;
 
         if (t.editing_paused_at) {
+          // Currently paused — count time up to pause moment only
           end = new Date(t.editing_paused_at).getTime();
-        } else if (['revisao', 'envio', 'agendamentos', 'acompanhamento', 'arquivado'].includes(col)) {
-          end = new Date(t.updated_at).getTime();
-        } else {
+        } else if (['revisao', 'envio', 'agendamentos', 'acompanhamento', 'arquivado', 'alteracao'].includes(col)) {
+          // Task moved past editing — use approved_at or updated_at
+          end = new Date(t.approved_at || t.updated_at).getTime();
+        } else if (col === 'edicao') {
+          // Still actively editing right now (not paused)
           end = Date.now();
+        } else {
+          // In queue or other non-editing column — don't count time
+          end = start; // zero time
         }
 
-        const realTime = Math.max(0, Math.floor((end - start) / 1000) - pausedSecs);
-        totalEditingTime += realTime;
+        const elapsed = Math.max(0, Math.floor((end - start) / 1000));
+        const realTime = Math.max(0, elapsed - pausedSecs);
+        
+        // Sanity check: cap at 24h per task to avoid data bugs
+        const cappedTime = Math.min(realTime, 86400);
+        totalEditingTime += cappedTime;
         tasksWithTime++;
-        metricsMap[cType].totalTime += realTime;
+        metricsMap[cType].totalTime += cappedTime;
       }
 
       if (['agendamentos', 'acompanhamento', 'arquivado', 'envio'].includes(col)) {

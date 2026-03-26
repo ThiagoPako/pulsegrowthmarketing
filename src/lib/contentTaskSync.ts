@@ -170,29 +170,31 @@ export async function syncContentTaskColumnChange(
     } as any).eq('id', ctx.taskId);
   }
 
-  // 3. Sync social_media_deliveries
-  const socialStatus = COLUMN_TO_SOCIAL_STATUS[newColumn];
-  if (socialStatus) {
-    const existing = await supabase.from('social_media_deliveries')
-      .select('id').eq('content_task_id', ctx.taskId).limit(1);
+  // 3. Sync social_media_deliveries (skip for avulso - no client)
+  if (ctx.clientId) {
+    const socialStatus = COLUMN_TO_SOCIAL_STATUS[newColumn];
+    if (socialStatus) {
+      const existing = await supabase.from('social_media_deliveries')
+        .select('id').eq('content_task_id', ctx.taskId).limit(1);
 
-    if (!existing.data?.length) {
-      await supabase.from('social_media_deliveries').insert({
-        client_id: ctx.clientId,
-        content_type: ctx.contentType,
-        title: ctx.title,
-        description: ctx.description || null,
-        status: socialStatus,
-        delivered_at: format(new Date(), 'yyyy-MM-dd'),
-        recording_id: ctx.recordingId || null,
-        script_id: ctx.scriptId || null,
-        created_by: ctx.userId || null,
-        content_task_id: ctx.taskId,
-      } as any);
-    } else {
-      await supabase.from('social_media_deliveries').update({
-        status: socialStatus,
-      } as any).eq('content_task_id', ctx.taskId);
+      if (!existing.data?.length) {
+        await supabase.from('social_media_deliveries').insert({
+          client_id: ctx.clientId,
+          content_type: ctx.contentType,
+          title: ctx.title,
+          description: ctx.description || null,
+          status: socialStatus,
+          delivered_at: format(new Date(), 'yyyy-MM-dd'),
+          recording_id: ctx.recordingId || null,
+          script_id: ctx.scriptId || null,
+          created_by: ctx.userId || null,
+          content_task_id: ctx.taskId,
+        } as any);
+      } else {
+        await supabase.from('social_media_deliveries').update({
+          status: socialStatus,
+        } as any).eq('content_task_id', ctx.taskId);
+      }
     }
   }
 

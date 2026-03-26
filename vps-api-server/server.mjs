@@ -55,6 +55,7 @@ const CLIENT_PORTAL_BASE_FIELDS = [
 ].join(', ');
 
 let clientsArtRequestsLimitColumnPromise;
+let proposalTablesEnsuredPromise;
 
 async function hasClientsArtRequestsLimitColumn() {
   if (!clientsArtRequestsLimitColumnPromise) {
@@ -101,6 +102,63 @@ async function getClientArtLimitInfo(clientId, includeCompanyName = false) {
 
   return clientInfo || null;
 }
+
+async function ensureProposalTables() {
+  if (!proposalTablesEnsuredPromise) {
+    proposalTablesEnsuredPromise = pool.query(`
+      CREATE TABLE IF NOT EXISTS commercial_proposals (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_name TEXT NOT NULL DEFAULT ''::text,
+        client_company TEXT NOT NULL DEFAULT ''::text,
+        plan_id UUID,
+        plan_snapshot JSONB DEFAULT '{}'::jsonb,
+        bonus_services JSONB DEFAULT '[]'::jsonb,
+        team_members JSONB DEFAULT '[]'::jsonb,
+        has_contract BOOLEAN NOT NULL DEFAULT true,
+        custom_discount NUMERIC NOT NULL DEFAULT 0,
+        observations TEXT DEFAULT ''::text,
+        validity_date DATE NOT NULL DEFAULT (CURRENT_DATE + '7 days'::interval),
+        whatsapp_number TEXT DEFAULT ''::text,
+        created_by UUID,
+        token TEXT NOT NULL DEFAULT encode(gen_random_bytes(16), 'hex'),
+        proposal_type TEXT NOT NULL DEFAULT 'marketing'::text,
+        status TEXT NOT NULL DEFAULT 'pendente'::text,
+        endomarketing_data JSONB DEFAULT '{}'::jsonb,
+        system_data JSONB DEFAULT '{}'::jsonb,
+        client_response_at TIMESTAMPTZ,
+        client_response_note TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_commercial_proposals_token
+        ON commercial_proposals (token);
+
+      CREATE INDEX IF NOT EXISTS idx_commercial_proposals_created_at
+        ON commercial_proposals (created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS proposal_comments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        proposal_id UUID NOT NULL REFERENCES commercial_proposals(id) ON DELETE CASCADE,
+        author_name TEXT NOT NULL DEFAULT ''::text,
+        message TEXT NOT NULL DEFAULT ''::text,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_proposal_comments_proposal_id
+        ON proposal_comments (proposal_id, created_at);
+    `).catch((error) => {
+      proposalTablesEnsuredPromise = null;
+      throw error;
+    });
+  }
+
+  return proposalTablesEnsuredPromise;
+}
+
+ensureProposalTables().catch((error) => {
+  console.error('Failed to ensure proposal tables:', error);
+});
 
 // ─── JWT Config ─────────────────────────────────────────────
 const JWT_SECRET = process.env.JWT_SECRET || 'CHANGE_ME_IN_PRODUCTION';
@@ -2857,7 +2915,7 @@ const ALLOWED_TABLES = [
   'endomarketing_profissionais','endomarketing_logs','endomarketing_packages',
   'endomarketing_partner_tasks','client_endomarketing_contracts','partners',
   'traffic_campaigns','whatsapp_config','whatsapp_messages','whatsapp_confirmations',
-  'recording_wait_logs','portal_videos','portal_video_views','commercial_proposals',
+  'recording_wait_logs','portal_videos','portal_video_views','commercial_proposals','proposal_comments',
 ];
 
 function sanitizeIdentifier(name) {
@@ -2874,6 +2932,10 @@ app.post('/api/db/query', async (req, res) => {
     const safeTable = sanitizeIdentifier(table);
     if (!ALLOWED_TABLES.includes(safeTable)) {
       return res.status(403).json({ error: `Table "${safeTable}" is not allowed` });
+    }
+
+    if (safeTable === 'commercial_proposals' || safeTable === 'proposal_comments') {
+      await ensureProposalTables();
     }
 
     let result;

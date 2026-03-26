@@ -200,7 +200,7 @@ export default function TrafficManagement() {
         _title: '📢 Story para postar!',
         _message: `Postar story do criativo "${storyCreative.title}" - ${clientName}. Baixe o vídeo e poste!`,
         _type: 'info',
-        _link: `/social-media?highlight=${taskId}`,
+        _link: `/conteudo?highlight=${taskId}`,
       });
 
       toast.success('Solicitação de story enviada para Social Media!');

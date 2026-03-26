@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
@@ -174,6 +175,8 @@ export default function ContentKanban() {
   const { user, profile } = useAuth();
   const [tasks, setTasks] = useState<ContentTask[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const highlightId = searchParams.get('highlight');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<ContentTask | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -230,6 +233,28 @@ export default function ContentKanban() {
   }, []);
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
+
+  // Deep-link highlight: scroll to card and open detail
+  useEffect(() => {
+    if (!highlightId || loading || tasks.length === 0) return;
+    const task = tasks.find(t => t.id === highlightId);
+    if (task) {
+      // Open detail sheet
+      setDetailTask(task);
+      setDetailOpen(true);
+      // Scroll card into view
+      setTimeout(() => {
+        const el = document.getElementById(`task-card-${highlightId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+          el.classList.add('ring-2', 'ring-pink-500', 'shadow-lg', 'shadow-pink-500/20');
+          setTimeout(() => el.classList.remove('ring-2', 'ring-pink-500', 'shadow-lg', 'shadow-pink-500/20'), 4000);
+        }
+      }, 300);
+      // Clear highlight param
+      setSearchParams({}, { replace: true });
+    }
+  }, [highlightId, loading, tasks]);
 
   // Realtime
   useEffect(() => {
@@ -853,6 +878,7 @@ export default function ContentKanban() {
                     <div className="space-y-2.5">
                       {colTasks.map((task, taskIdx) => (
                         <motion.div
+                          id={`task-card-${task.id}`}
                           key={task.id}
                           layout
                           initial={{ opacity: 0, scale: 0.92, y: 10 }}

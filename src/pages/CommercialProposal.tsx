@@ -1759,6 +1759,7 @@ export default function CommercialProposal() {
           {proposalType === 'sistema' && renderSystemForm()}
           {proposalType === 'endomarketing' && renderEndoForm()}
           {proposalType === 'personalizada' && renderCustomForm()}
+          {proposalType === 'cronograma' && renderCronogramaForm()}
 
           {/* Bonus - available for all types */}
           <Card>

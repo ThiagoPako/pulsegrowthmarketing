@@ -1324,10 +1324,12 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, viewOn
   return (
     <>
       <div
-        draggable
-        onDragStart={onDragStart}
+        draggable={!viewOnly}
+        onDragStart={viewOnly ? undefined : onDragStart}
         onClick={onCardClick}
-        className={`group relative bg-card rounded-xl cursor-grab active:cursor-grabbing transition-all duration-300 overflow-hidden ${
+        className={`group relative bg-card rounded-xl transition-all duration-300 overflow-hidden ${
+          viewOnly ? 'cursor-default opacity-80' : 'cursor-grab active:cursor-grabbing'
+        } ${
           isDragging ? 'opacity-40 scale-95 shadow-none' : 'shadow-sm hover:shadow-xl hover:shadow-primary/10'
         } ${isOverdue ? 'ring-1 ring-destructive/40' : ''} ${
           isCaptacao ? 'ring-1 ring-orange-400/30' : ''

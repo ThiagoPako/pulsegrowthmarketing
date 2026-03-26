@@ -804,7 +804,7 @@ export default function ContentKanban() {
       {/* Kanban Board */}
       <DragScrollContainer className="flex-1">
         <div className="flex gap-3 h-full min-w-max pb-2">
-          {KANBAN_COLUMNS.map((col, colIdx) => {
+          {visibleColumns.map((col, colIdx) => {
             const colTasks = tasksByColumn[col.id] || [];
             const isDragOver = dragOverColumn === col.id;
 

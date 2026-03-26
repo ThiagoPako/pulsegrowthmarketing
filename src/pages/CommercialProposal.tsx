@@ -1145,15 +1145,15 @@ export default function CommercialProposal() {
                 <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full border-[40px] border-white/20" />
                 <div className="absolute -bottom-10 -left-10 w-40 h-40 rounded-full border-[30px] border-white/10" />
               </div>
-              <div className="relative p-8 md:p-12 text-white">
-                <img src={pulseLogo} alt="Pulse Growth Marketing" className="h-20 mb-6 drop-shadow-lg" />
-                <h1 className="text-3xl md:text-4xl font-bold mb-2">
+              <div className="relative p-6 md:p-10 text-white">
+                <img src={pulseLogo} alt="Pulse Growth Marketing" className="h-12 md:h-14 mb-4 drop-shadow-2xl" />
+                <h1 className="text-2xl md:text-3xl font-bold mb-1">
                   {proposalType === 'sistema' ? 'Proposta de Sistema' : proposalType === 'endomarketing' ? 'Proposta de Endomarketing' : 'Proposta Comercial'}
                 </h1>
-                <p className="text-white/80 text-lg">Preparada exclusivamente para</p>
-                <p className="text-2xl font-bold mt-1">{clientCompany || 'Nome da Empresa'}</p>
-                <p className="text-white/70 mt-1">Aos cuidados de {clientName || 'Nome do Cliente'}</p>
-                <div className="mt-6 flex gap-4 text-sm text-white/70">
+                <p className="text-white/80 text-sm">Preparada exclusivamente para</p>
+                <p className="text-xl font-bold mt-0.5">{clientCompany || 'Nome da Empresa'}</p>
+                <p className="text-white/70 text-sm mt-0.5">Aos cuidados de {clientName || 'Nome do Cliente'}</p>
+                <div className="mt-4 flex gap-4 text-xs text-white/60">
                   <span>📅 {format(new Date(), "dd/MM/yyyy")}</span>
                   <span>⏰ Válida até {format(validityDate, "dd/MM/yyyy")}</span>
                 </div>

@@ -69,6 +69,7 @@ const CommercialProposal = lazy(() => import("@/pages/CommercialProposal"));
 const ProposalViewer = lazy(() => import("@/pages/ProposalViewer"));
 const RecordingControl = lazy(() => import("@/pages/RecordingControl"));
 const EditingControl = lazy(() => import("@/pages/EditingControl"));
+const AvulsoApproval = lazy(() => import("@/pages/AvulsoApproval"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -175,6 +176,7 @@ function AppRoutes() {
         <Route path="/controle-gravacoes" element={<ProtectedRoute><RecordingControl /></ProtectedRoute>} />
         <Route path="/controle-edicao" element={<ProtectedRoute><EditingControl /></ProtectedRoute>} />
         <Route path="/proposta/:token" element={<ProposalViewer />} />
+        <Route path="/avulso/:taskId" element={<AvulsoApproval />} />
         <Route path="/feedback" element={<ClientFeedback />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

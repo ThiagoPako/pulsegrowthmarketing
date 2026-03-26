@@ -1,7 +1,7 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/vpsDb';
-import type { Recording, RecordingType, Script, DayOfWeek, Client } from '@/types';
+import type { Recording, RecordingType, Script, DayOfWeek, Client, EventRecording } from '@/types';
 import { SCRIPT_VIDEO_TYPE_LABELS, DAY_LABELS } from '@/types';
 import { useEndoClientes, useEndoAgendamentos, useEndoContracts } from '@/hooks/useEndomarketing';
 import AgencyCapacityWidget from '@/components/AgencyCapacityWidget';
@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles, RefreshCw, MessageSquare, Play, Square, Star, Link, ThumbsDown, MessageCircle, Trash2, Video } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles, RefreshCw, MessageSquare, Play, Square, Star, Link, ThumbsDown, MessageCircle, Trash2, Video, MapPin, Calendar } from 'lucide-react';
 import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
@@ -34,7 +34,7 @@ const ENDO_COLOR = '292 84% 61%';
 // Unified calendar event
 interface CalendarEvent {
   id: string;
-  type: 'recording' | 'endomarketing';
+  type: 'recording' | 'endomarketing' | 'event';
   clientName: string;
   color: string;
   startTime: string;
@@ -45,6 +45,8 @@ interface CalendarEvent {
   // Endo-specific
   endoDuration?: number;
   endoClientId?: string;
+  // Event-specific
+  eventRecording?: EventRecording;
 }
 
 const DATE_TO_DAY: Record<number, DayOfWeek> = {
@@ -102,6 +104,7 @@ export default function Schedule() {
   const [filterVideomaker, setFilterVideomaker] = useState('all');
   const [weekOffset, setWeekOffset] = useState(0);
   const [showEndo, setShowEndo] = useState(true);
+  const [showEvents, setShowEvents] = useState(true);
   const [showBackup, setShowBackup] = useState(false);
   const [showExtra, setShowExtra] = useState(false);
   const [regenOpen, setRegenOpen] = useState(false);
@@ -109,6 +112,39 @@ export default function Schedule() {
   const [regenLoading, setRegenLoading] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
   const [cancellingRec, setCancellingRec] = useState<Recording | null>(null);
+
+  // Event recordings state
+  const [eventRecordings, setEventRecordings] = useState<EventRecording[]>([]);
+  const [eventOpen, setEventOpen] = useState(false);
+  const [editEventOpen, setEditEventOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<EventRecording | null>(null);
+  const [eventForm, setEventForm] = useState({
+    clientId: '', videomakerId: '', title: '', date: '', startTime: '08:00', endTime: '18:00', address: '', description: '',
+  });
+
+  // Fetch event recordings
+  const fetchEvents = useCallback(async () => {
+    const { data } = await supabase.from('event_recordings').select('*').order('date', { ascending: true });
+    if (data) {
+      setEventRecordings(data.map((e: any) => ({
+        id: e.id,
+        clientId: e.client_id || '',
+        videomakerId: e.videomaker_id || '',
+        title: e.title || '',
+        date: e.date,
+        startTime: e.start_time,
+        endTime: e.end_time,
+        address: e.address || '',
+        description: e.description || '',
+        status: e.status,
+        createdBy: e.created_by,
+        createdAt: e.created_at,
+        updatedAt: e.updated_at,
+      })));
+    }
+  }, []);
+
+  useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
   // Start recording dialog state
   const [startRecOpen, setStartRecOpen] = useState(false);
@@ -202,8 +238,25 @@ export default function Schedule() {
       });
     }
 
+    // Event recordings
+    if (showEvents) {
+      eventRecordings.filter(e => e.date === dateStr && e.status !== 'cancelado').forEach(evt => {
+        const client = clients.find(c => c.id === evt.clientId);
+        events.push({
+          id: `event-${evt.id}`,
+          type: 'event',
+          clientName: evt.title || client?.companyName || 'Evento',
+          color: '25 95% 53%', // orange for events
+          startTime: evt.startTime,
+          date: evt.date,
+          status: evt.status,
+          eventRecording: evt,
+        });
+      });
+    }
+
     return events.sort((a, b) => a.startTime.localeCompare(b.startTime));
-  }, [filteredRecordings, clients, showEndo, endoAgendamentos, endoClientes]);
+  }, [filteredRecordings, clients, showEndo, endoAgendamentos, endoClientes, showEvents, eventRecordings]);
 
   // Keep legacy helper for internal use
   const getRecsForDay = (date: Date) => {
@@ -223,6 +276,70 @@ export default function Schedule() {
   };
 
   const typeLabels: Record<RecordingType, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.', backup: 'Backup', endomarketing: 'Endo', avulso: 'Avulso' };
+
+  // Event CRUD
+  const handleAddEvent = async () => {
+    if (!eventForm.clientId || !eventForm.videomakerId || !eventForm.date || !eventForm.title) {
+      toast.error('Preencha todos os campos obrigatórios'); return;
+    }
+    const { error } = await supabase.from('event_recordings').insert({
+      client_id: eventForm.clientId,
+      videomaker_id: eventForm.videomakerId,
+      title: eventForm.title,
+      date: eventForm.date,
+      start_time: eventForm.startTime,
+      end_time: eventForm.endTime,
+      address: eventForm.address,
+      description: eventForm.description,
+      created_by: currentUser?.id || null,
+    } as any);
+    if (error) { toast.error('Erro ao criar evento'); return; }
+    toast.success('Evento agendado com sucesso');
+    setEventOpen(false);
+    fetchEvents();
+  };
+
+  const handleEditEvent = async () => {
+    if (!editingEvent) return;
+    const { error } = await supabase.from('event_recordings').update({
+      client_id: eventForm.clientId,
+      videomaker_id: eventForm.videomakerId,
+      title: eventForm.title,
+      date: eventForm.date,
+      start_time: eventForm.startTime,
+      end_time: eventForm.endTime,
+      address: eventForm.address,
+      description: eventForm.description,
+    } as any).eq('id', editingEvent.id);
+    if (error) { toast.error('Erro ao atualizar evento'); return; }
+    toast.success('Evento atualizado');
+    setEditEventOpen(false);
+    setEditingEvent(null);
+    fetchEvents();
+  };
+
+  const handleDeleteEvent = async (id: string) => {
+    if (!window.confirm('Apagar este evento permanentemente?')) return;
+    await supabase.from('event_recordings').delete().eq('id', id);
+    toast.success('Evento apagado');
+    fetchEvents();
+  };
+
+  const handleCompleteEvent = async (id: string) => {
+    await supabase.from('event_recordings').update({ status: 'concluido' } as any).eq('id', id);
+    toast.success('Evento concluído');
+    fetchEvents();
+  };
+
+  const openEditEvent = (evt: EventRecording) => {
+    setEditingEvent(evt);
+    setEventForm({
+      clientId: evt.clientId, videomakerId: evt.videomakerId, title: evt.title,
+      date: evt.date, startTime: evt.startTime, endTime: evt.endTime,
+      address: evt.address, description: evt.description || '',
+    });
+    setEditEventOpen(true);
+  };
 
   const handleRegenerate = async () => {
     if (!regenClientId) { toast.error('Selecione um cliente'); return; }
@@ -744,6 +861,12 @@ export default function Schedule() {
     </Badge>
   );
 
+  const eventTag = (evt: EventRecording) => (
+    <Badge className="text-[10px] border-0 bg-orange-500/20 text-orange-600">
+      <MapPin size={8} className="mr-0.5" /> {evt.status === 'concluido' ? 'Concluído' : 'Evento'}
+    </Badge>
+  );
+
   // Delete all backup recordings (future, non-concluded)
   const handleDeleteAllBackup = async () => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -872,6 +995,12 @@ export default function Schedule() {
           <Button onClick={() => { setForm({ clientId: '', videomakerId: '', date: format(new Date(), 'yyyy-MM-dd'), startTime: '09:00', type: 'fixa', prospectName: '' }); setNewOpen(true); }}>
             <Plus size={16} className="mr-2" /> Nova Gravação
           </Button>
+          <Button variant="outline" className="border-orange-500/50 text-orange-600 hover:bg-orange-500/10" onClick={() => {
+            setEventForm({ clientId: '', videomakerId: '', title: '', date: format(new Date(), 'yyyy-MM-dd'), startTime: '08:00', endTime: '18:00', address: '', description: '' });
+            setEventOpen(true);
+          }}>
+            <MapPin size={16} className="mr-2" /> Novo Evento
+          </Button>
         </div>
       </div>
 
@@ -906,6 +1035,17 @@ export default function Schedule() {
             >
               <Sparkles size={12} />
               Endomarketing
+            </button>
+            <button
+              onClick={() => setShowEvents(!showEvents)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                showEvents
+                  ? 'border-transparent text-white bg-orange-500'
+                  : 'border-border text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              <MapPin size={12} />
+              Eventos
             </button>
             <button
               onClick={() => setShowBackup(!showBackup)}
@@ -974,6 +1114,7 @@ export default function Schedule() {
                         style={{ backgroundColor: `hsl(${evt.color} / 0.15)`, borderLeft: `2px solid hsl(${evt.color})` }}
                       >
                         {evt.type === 'endomarketing' && <Sparkles size={7} className="inline mr-0.5" style={{ color: `hsl(${ENDO_COLOR})` }} />}
+                        {evt.type === 'event' && <MapPin size={7} className="inline mr-0.5 text-orange-500" />}
                         <span className="font-medium">{evt.clientName}</span>
                         <span className="text-muted-foreground ml-1">{evt.startTime}</span>
                         {active && <span className="inline ml-0.5 text-primary font-bold">●</span>}
@@ -982,7 +1123,21 @@ export default function Schedule() {
 
                         {/* Hover tooltip */}
                         <div className="absolute left-0 top-full mt-0.5 hidden group-hover:flex flex-col gap-1 bg-card rounded-lg p-2 shadow-lg border border-border z-20 min-w-[140px]">
-                          {evt.type === 'endomarketing' ? (
+                          {evt.type === 'event' && evt.eventRecording ? (
+                            <>
+                              <div className="flex items-center gap-1">
+                                <MapPin size={10} className="text-orange-500" />
+                                <span className="text-[10px] font-semibold text-orange-600">Evento</span>
+                              </div>
+                              <span className="text-[10px] text-muted-foreground">{evt.eventRecording.startTime} - {evt.eventRecording.endTime}</span>
+                              {evt.eventRecording.address && <span className="text-[10px] text-muted-foreground truncate">📍 {evt.eventRecording.address}</span>}
+                              <div className="flex gap-0.5 pt-0.5">
+                                <button onClick={() => openEditEvent(evt.eventRecording!)} className="p-0.5 rounded hover:bg-muted text-muted-foreground" title="Editar"><Pencil size={10} /></button>
+                                {evt.eventRecording.status === 'agendado' && <button onClick={() => handleCompleteEvent(evt.eventRecording!.id)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Concluir"><Check size={10} /></button>}
+                                <button onClick={() => handleDeleteEvent(evt.eventRecording!.id)} className="p-0.5 rounded hover:bg-destructive/20 text-destructive" title="Apagar"><Trash2 size={10} /></button>
+                              </div>
+                            </>
+                          ) : evt.type === 'endomarketing' ? (
                             <>
                               <div className="flex items-center gap-1">
                                 <Sparkles size={10} style={{ color: `hsl(${ENDO_COLOR})` }} />
@@ -1098,17 +1253,38 @@ export default function Schedule() {
                       >
                         <div className="flex items-start justify-between gap-1">
                           <div className="flex items-center gap-1.5 min-w-0">
-                            {(() => { const cl = clients.find(c => c.id === (evt.recording?.clientId || '')); return cl ? <ClientLogo client={cl} size="sm" className="w-5 h-5 text-[8px] rounded" /> : null; })()}
+                            {(() => { const cl = clients.find(c => c.id === (evt.recording?.clientId || evt.eventRecording?.clientId || '')); return cl ? <ClientLogo client={cl} size="sm" className="w-5 h-5 text-[8px] rounded" /> : null; })()}
                             <p className="font-medium text-xs truncate">{evt.clientName}</p>
                           </div>
-                          {evt.type === 'endomarketing' ? endoTag() : evt.recording && statusTag(evt.recording)}
+                          {evt.type === 'event' && evt.eventRecording ? eventTag(evt.eventRecording) : evt.type === 'endomarketing' ? endoTag() : evt.recording && statusTag(evt.recording)}
                         </div>
-                        {evt.type === 'endomarketing' ? (
+                        {evt.type === 'event' && evt.eventRecording ? (
+                          <div className="space-y-0.5">
+                            <p className="text-[10px] text-muted-foreground">{evt.eventRecording.startTime} - {evt.eventRecording.endTime}</p>
+                            {evt.eventRecording.address && <p className="text-[10px] text-muted-foreground truncate flex items-center gap-0.5"><MapPin size={8} /> {evt.eventRecording.address}</p>}
+                          </div>
+                        ) : evt.type === 'endomarketing' ? (
                           <p className="text-[10px] text-muted-foreground">{evt.startTime} · {evt.endoDuration}min</p>
                         ) : (
                           <div className="flex items-center gap-1.5">
                             {(() => { const vm = getVideomaker(evt.recording!.videomakerId); return vm ? <UserAvatar user={vm} size="sm" className="w-5 h-5 text-[8px]" /> : null; })()}
                             <p className="text-[10px] text-muted-foreground">{evt.startTime} — {getVideomakerName(evt.recording!.videomakerId)}</p>
+                          </div>
+                        )}
+
+                        {evt.type === 'event' && evt.eventRecording && (
+                          <div className="grid grid-cols-2 gap-1 pt-1.5 border-t border-border/50 hidden group-hover:grid transition-all">
+                            <button onClick={() => openEditEvent(evt.eventRecording!)} className="text-[10px] py-1.5 rounded-md bg-muted/60 text-muted-foreground hover:bg-muted transition-colors flex items-center justify-center gap-1">
+                              <Pencil size={10} /> Editar
+                            </button>
+                            {evt.eventRecording.status === 'agendado' && (
+                              <button onClick={() => handleCompleteEvent(evt.eventRecording!.id)} className="text-[10px] py-1.5 rounded-md bg-success/10 text-success hover:bg-success/20 transition-colors flex items-center justify-center gap-1">
+                                <Check size={10} /> Concluir
+                              </button>
+                            )}
+                            <button onClick={() => handleDeleteEvent(evt.eventRecording!.id)} className="text-[10px] py-1.5 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/15 transition-colors flex items-center justify-center gap-1">
+                              <Trash2 size={10} /> Apagar
+                            </button>
                           </div>
                         )}
 
@@ -1933,6 +2109,120 @@ export default function Schedule() {
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Event Creation Dialog */}
+      <Dialog open={eventOpen} onOpenChange={setEventOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin size={18} className="text-orange-500" /> Agendar Evento / Cobertura
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label>Título do Evento *</Label>
+              <Input value={eventForm.title} onChange={e => setEventForm({ ...eventForm, title: e.target.value })} placeholder="Ex: Cobertura Feira Empresarial" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Cliente *</Label>
+                <Select value={eventForm.clientId} onValueChange={v => setEventForm({ ...eventForm, clientId: v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Videomaker *</Label>
+                <Select value={eventForm.videomakerId} onValueChange={v => setEventForm({ ...eventForm, videomakerId: v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>{videomakers.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Data *</Label>
+              <Input type="date" value={eventForm.date} onChange={e => setEventForm({ ...eventForm, date: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Horário Início</Label>
+                <Input type="time" value={eventForm.startTime} onChange={e => setEventForm({ ...eventForm, startTime: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label>Horário Fim</Label>
+                <Input type="time" value={eventForm.endTime} onChange={e => setEventForm({ ...eventForm, endTime: e.target.value })} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="flex items-center gap-1.5"><MapPin size={14} /> Endereço</Label>
+              <Input value={eventForm.address} onChange={e => setEventForm({ ...eventForm, address: e.target.value })} placeholder="Rua, número, bairro, cidade..." />
+            </div>
+            <div className="space-y-1">
+              <Label>Descrição (opcional)</Label>
+              <Textarea value={eventForm.description} onChange={e => setEventForm({ ...eventForm, description: e.target.value })} placeholder="Detalhes do evento, o que gravar..." rows={3} />
+            </div>
+            <Button onClick={handleAddEvent} className="w-full bg-orange-500 hover:bg-orange-600 text-white">
+              <MapPin size={16} className="mr-2" /> Agendar Evento
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Event Edit Dialog */}
+      <Dialog open={editEventOpen} onOpenChange={(v) => { setEditEventOpen(v); if (!v) setEditingEvent(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil size={18} /> Editar Evento
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label>Título do Evento *</Label>
+              <Input value={eventForm.title} onChange={e => setEventForm({ ...eventForm, title: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Cliente</Label>
+                <Select value={eventForm.clientId} onValueChange={v => setEventForm({ ...eventForm, clientId: v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Videomaker</Label>
+                <Select value={eventForm.videomakerId} onValueChange={v => setEventForm({ ...eventForm, videomakerId: v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>{videomakers.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Data</Label>
+              <Input type="date" value={eventForm.date} onChange={e => setEventForm({ ...eventForm, date: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Horário Início</Label>
+                <Input type="time" value={eventForm.startTime} onChange={e => setEventForm({ ...eventForm, startTime: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label>Horário Fim</Label>
+                <Input type="time" value={eventForm.endTime} onChange={e => setEventForm({ ...eventForm, endTime: e.target.value })} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="flex items-center gap-1.5"><MapPin size={14} /> Endereço</Label>
+              <Input value={eventForm.address} onChange={e => setEventForm({ ...eventForm, address: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>Descrição</Label>
+              <Textarea value={eventForm.description} onChange={e => setEventForm({ ...eventForm, description: e.target.value })} rows={3} />
+            </div>
+            <Button onClick={handleEditEvent} className="w-full">Salvar Alterações</Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

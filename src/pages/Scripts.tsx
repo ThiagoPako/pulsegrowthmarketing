@@ -30,7 +30,7 @@ import { Color } from '@tiptap/extension-color';
 import pulseHeader from '@/assets/pulse_header.png';
 import ClientLogo from '@/components/ClientLogo';
 
-const VIDEO_TYPES: ScriptVideoType[] = ['vendas', 'institucional', 'reconhecimento', 'educacional', 'bastidores', 'depoimento', 'lancamento'];
+const VIDEO_TYPES: ScriptVideoType[] = ['vendas', 'institucional', 'reconhecimento', 'educacional', 'bastidores', 'depoimento', 'lancamento', 'evento'];
 const CONTENT_FORMATS: ScriptContentFormat[] = ['reels', 'story', 'criativo'];
 
 function RichEditor({ content, onChange }: { content: string; onChange: (html: string) => void }) {

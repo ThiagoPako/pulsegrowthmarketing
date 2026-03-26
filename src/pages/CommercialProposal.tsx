@@ -408,6 +408,21 @@ export default function CommercialProposal() {
         recordings: parseInt(customRecordings) || 0,
       } : {};
 
+      const cronogramaData = proposalType === 'cronograma' ? {
+        projectName: cronogramaProjectName,
+        methodology: cronogramaMethodology,
+        deliverables: cronogramaDeliverables,
+        phases: cronogramaPhases,
+        totalDays: parseInt(cronogramaTotalDays) || 60,
+        paymentMethod: cronogramaPaymentMethod,
+        installments: parseInt(cronogramaInstallments) || 1,
+        totalValue: cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0),
+      } : {};
+
+      let saveSystemData = systemData;
+      if (proposalType === 'personalizada') saveSystemData = customData;
+      if (proposalType === 'cronograma') saveSystemData = cronogramaData;
+
       const { data, error } = await supabase.from('commercial_proposals').insert({
         client_name: clientName,
         client_company: clientCompany,
@@ -422,7 +437,7 @@ export default function CommercialProposal() {
         whatsapp_number: whatsappNumber,
         created_by: user?.id || null,
         proposal_type: proposalType,
-        system_data: proposalType === 'personalizada' ? customData : systemData,
+        system_data: saveSystemData,
         endomarketing_data: endoData,
       } as any).select().single();
       if (error) throw error;

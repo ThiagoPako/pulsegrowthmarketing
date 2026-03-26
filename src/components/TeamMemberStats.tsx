@@ -339,13 +339,13 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
           <div className="py-8 text-center text-muted-foreground text-sm">Carregando...</div>
         ) : stats ? (
           <div className="space-y-4">
-            {/* KPI Cards */}
+            {/* KPI Cards - top row */}
             <div className="grid grid-cols-2 gap-2">
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                 className="p-3 rounded-lg bg-primary/5 border border-primary/20 text-center">
                 <CheckCircle2 size={18} className="mx-auto text-primary mb-1" />
                 <p className="text-xl font-bold text-primary">{stats.totalTasks}</p>
-                <p className="text-[10px] text-muted-foreground">Entregas / Tarefas</p>
+                <p className="text-[10px] text-muted-foreground">Total de Edições</p>
               </motion.div>
 
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
@@ -355,24 +355,62 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
                 <p className="text-[10px] text-muted-foreground">Pontuação</p>
               </motion.div>
 
-              {stats.avgTimeSeconds > 0 && (
-                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-                  className="p-3 rounded-lg bg-info/5 border border-info/20 text-center">
-                  <Clock size={18} className="mx-auto text-info mb-1" />
-                  <p className="text-xl font-bold text-info">{formatTime(stats.avgTimeSeconds)}</p>
-                  <p className="text-[10px] text-muted-foreground">Tempo médio / tarefa</p>
-                </motion.div>
-              )}
-
               {stats.totalTimeSeconds > 0 && (
-                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-                  className="p-3 rounded-lg bg-success/5 border border-success/20 text-center">
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+                  className="p-3 rounded-lg bg-success/5 border border-success/20 text-center col-span-2">
                   <TrendingUp size={18} className="mx-auto text-success mb-1" />
                   <p className="text-xl font-bold text-success">{formatTime(stats.totalTimeSeconds)}</p>
-                  <p className="text-[10px] text-muted-foreground">Tempo dedicado total</p>
+                  <p className="text-[10px] text-muted-foreground">Horas totais de edição</p>
                 </motion.div>
               )}
             </div>
+
+            {/* Per content type metrics */}
+            {stats.byContentTypeMetrics && Object.keys(stats.byContentTypeMetrics).length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Edições por Tipo de Conteúdo</p>
+                <div className="space-y-2">
+                  {Object.entries(stats.byContentTypeMetrics)
+                    .sort((a, b) => b[1].count - a[1].count)
+                    .map(([type, m], i) => {
+                      const label = contentTypeLabels[type] || type;
+                      const icon = type === 'reels' ? <Film size={14} /> : type === 'criativo' ? <Palette size={14} /> : <Film size={14} />;
+                      return (
+                        <motion.div key={type} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
+                          className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/40 border border-border">
+                          <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                            {icon}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold">{label}</p>
+                            <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-0.5">
+                              <span>{m.count} edições</span>
+                              {m.avgTime > 0 && <span>⏱ média: {formatTime(m.avgTime)}</span>}
+                              {m.totalTime > 0 && <span>∑ {formatTime(m.totalTime)}</span>}
+                            </div>
+                          </div>
+                          <Badge variant="secondary" className="text-xs font-bold">{m.count}</Badge>
+                        </motion.div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
+            {/* Fallback: generic content type badges (non-editor) */}
+            {!stats.byContentTypeMetrics && Object.keys(stats.byContentType).length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Por Tipo de Conteúdo</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(stats.byContentType).map(([type, count]) => (
+                    <Badge key={type} variant="secondary" className="text-xs gap-1">
+                      {type === 'reels' ? <Film size={10} /> : type === 'arte' ? <Palette size={10} /> : null}
+                      {contentTypeLabels[type] || type}: {count}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* By Status */}
             {Object.keys(stats.byStatus).length > 0 && (
@@ -384,21 +422,6 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
                       <span className="text-xs">{statusLabels[status] || status}</span>
                       <Badge variant="outline" className="text-xs">{count}</Badge>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* By Content Type */}
-            {Object.keys(stats.byContentType).length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Por Tipo de Conteúdo</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {Object.entries(stats.byContentType).map(([type, count]) => (
-                    <Badge key={type} variant="secondary" className="text-xs gap-1">
-                      {type === 'reels' ? <Film size={10} /> : type === 'arte' ? <Palette size={10} /> : null}
-                      {type}: {count}
-                    </Badge>
                   ))}
                 </div>
               </div>

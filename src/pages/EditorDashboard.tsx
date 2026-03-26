@@ -324,6 +324,18 @@ export default function EditorDashboard() {
      fetchTasks();
    };
 
+   const handleUnclaimTask = async (task: EditorTask) => {
+     if (!user) return;
+     const { error } = await supabase.from('content_tasks').update({
+       assigned_to: null,
+       updated_at: new Date().toISOString(),
+     } as any).eq('id', task.id);
+     if (error) { toast.error('Erro ao liberar tarefa'); return; }
+     await supabase.from('task_history').insert({ task_id: task.id, user_id: user.id, action: 'Bandeira removida — tarefa liberada para fila' });
+     toast.success('🏳️ Tarefa liberada para a fila!');
+     fetchTasks();
+   };
+
    const handleStartEditing = async (task: EditorTask) => {
      if (!user) return;
      const isAlteration = task.kanban_column === 'alteracao';

@@ -372,6 +372,17 @@ export default function EditorKanban() {
     fetchTasks();
   };
 
+  const handleUnclaimTask = async (task: EditorTask) => {
+    if (!user) return;
+    const { error } = await supabase.from('content_tasks').update({
+      assigned_to: null,
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', task.id);
+    if (error) { toast.error('Erro ao liberar tarefa'); return; }
+    toast.success('🏳️ Tarefa liberada para a fila!');
+    fetchTasks();
+  };
+
   const handleDragStart = (e: React.DragEvent, task: EditorTask) => {
     setDraggedTask(task);
     e.dataTransfer.effectAllowed = 'move';

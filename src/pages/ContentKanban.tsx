@@ -492,7 +492,8 @@ export default function ContentKanban() {
   };
 
   // ─── EXECUTION COLUMNS THAT REQUIRE assigned_to ────────────
-  const EXECUTION_COLUMNS = ['edicao', 'alteracao'];
+  // Note: alteracao does NOT require assigned_to — editor is only assigned when they click "Iniciar Alteração"
+  const EXECUTION_COLUMNS = ['edicao'];
 
   // ─── ROLE-BASED COLUMN PERMISSIONS ────────────────────────
   const ROLE_ALLOWED_COLUMNS: Record<string, string[]> = {
@@ -596,6 +597,7 @@ export default function ContentKanban() {
       kanban_column: 'alteracao',
       adjustment_notes: adjustmentNotes.trim(),
       immediate_alteration: adjustmentImmediate,
+      assigned_to: null,
       updated_at: new Date().toISOString(),
     } as any).eq('id', adjustmentTask.id);
     if (error) { toast.error('Erro ao solicitar ajustes'); return; }

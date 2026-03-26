@@ -12,10 +12,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, KeyRound, Users, Handshake, Trash2, Shield, Lock, Cake, CalendarDays } from 'lucide-react';
+import { Plus, KeyRound, Users, Handshake, Trash2, Shield, Lock, Cake, CalendarDays, BarChart3 } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import { useUserPermissions, AVAILABLE_MODULES } from '@/hooks/useUserPermissions';
 import BirthdayCountdown from '@/components/BirthdayCountdown';
+import TeamMemberStats from '@/components/TeamMemberStats';
 
 const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'fotografo', 'designer'];
 
@@ -72,6 +73,8 @@ export default function Team() {
   const [permTarget, setPermTarget] = useState<TeamMember | null>(null);
   const [permModules, setPermModules] = useState<string[]>([]);
   const { permissionsQuery, setPermissions } = useUserPermissions(permTarget?.id);
+
+  const [statsTarget, setStatsTarget] = useState<TeamMember | null>(null);
 
   const fetchMembers = async () => {
     const { data } = await supabase.from('profiles').select('*');
@@ -473,7 +476,7 @@ export default function Team() {
         ) : (
           <div className="grid gap-3">
             {teamMembers.map(u => (
-              <div key={u.id} className="glass-card p-4 flex items-center justify-between">
+              <div key={u.id} className="glass-card p-4 flex items-center justify-between cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all" onClick={() => setStatsTarget(u)}>
                 <div className="flex items-center gap-4">
                   <UserAvatar user={u} size="lg" />
                    <div>
@@ -594,6 +597,13 @@ export default function Team() {
           </div>
         )
       )}
+
+      {/* Member Stats Dialog */}
+      <TeamMemberStats
+        member={statsTarget}
+        open={!!statsTarget}
+        onOpenChange={(v) => { if (!v) setStatsTarget(null); }}
+      />
     </div>
   );
 }

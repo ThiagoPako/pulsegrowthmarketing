@@ -218,7 +218,7 @@ export default function CommercialProposal() {
   const { data: savedProposals = [], refetch: refetchProposals } = useQuery({
     queryKey: ['saved-proposals'],
     queryFn: async () => {
-      const { data } = await supabase.from('commercial_proposals').select('*').order('created_at', { ascending: false });
+      const { data } = await vpsDb.from('commercial_proposals').select('*').order('created_at', { ascending: false });
       return (data as any[]) || [];
     },
   });
@@ -423,7 +423,7 @@ export default function CommercialProposal() {
       if (proposalType === 'personalizada') saveSystemData = customData;
       if (proposalType === 'cronograma') saveSystemData = cronogramaData;
 
-      const { data, error } = await supabase.from('commercial_proposals').insert({
+      const { data, error } = await vpsDb.from('commercial_proposals').insert({
         client_name: clientName,
         client_company: clientCompany,
         plan_id: proposalType === 'marketing' ? selectedPlanId : null,
@@ -530,7 +530,7 @@ export default function CommercialProposal() {
       if (inserted > 0) {
         toast.success(`${inserted} receita(s) criada(s) para ${proposal.client_company}`);
         // Mark proposal as having revenues generated
-        await supabase.from('commercial_proposals').update({
+        await vpsDb.from('commercial_proposals').update({
           observations: `${proposal.observations || ''}\n[RECEITAS GERADAS: ${inserted} parcelas de R$ ${installmentValue.toFixed(2)}]`.trim(),
         } as any).eq('id', proposal.id);
       }

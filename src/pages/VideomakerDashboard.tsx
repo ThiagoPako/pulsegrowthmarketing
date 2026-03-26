@@ -59,6 +59,14 @@ export default function VideomakerDashboard() {
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationScore, setCelebrationScore] = useState(0);
 
+  // Story upload state
+  const [storyClientId, setStoryClientId] = useState('');
+  const [storyUploading, setStoryUploading] = useState(false);
+  const [storyUploadProgress, setStoryUploadProgress] = useState('');
+  const [storyTitle, setStoryTitle] = useState('');
+  const [storiesUploaded, setStoriesUploaded] = useState(0);
+  const storyFileRef = useRef<HTMLInputElement>(null);
+
   // ── Waiting for client state ──
   const [waitingRecordingId, setWaitingRecordingId] = useState<string | null>(null);
   const [waitingLogId, setWaitingLogId] = useState<string | null>(null);

@@ -866,6 +866,189 @@ export default function CommercialProposal() {
     </>
   );
 
+  const CATEGORY_ICONS: Record<string, any> = {
+    video: Film, design: Palette, social_media: Share2, traffic: BarChart3,
+    event: Camera, consulting: FileText, photography: Camera, other: Layers,
+  };
+
+  const CATEGORY_LABELS: Record<string, string> = {
+    video: 'Vídeo', design: 'Design', social_media: 'Social Media', traffic: 'Tráfego',
+    event: 'Evento', consulting: 'Consultoria', photography: 'Fotografia', other: 'Outros',
+  };
+
+  const renderCronogramaForm = () => {
+    const totalValue = cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0);
+    const discountedVal = totalValue * (1 - customDiscount / 100);
+    return (
+      <>
+        <Card>
+          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> Descrição do Projeto (IA)</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">Descreva o projeto e a IA vai gerar o cronograma completo com entregas, datas, valores e metodologia</p>
+            <Textarea
+              value={cronogramaDesc}
+              onChange={e => setCronogramaDesc(e.target.value)}
+              placeholder="Ex: Precisamos de uma campanha completa de marketing digital com 8 reels, 20 stories, cobertura de evento de inauguração, criação de identidade visual, gestão de redes sociais por 3 meses, gestão de tráfego pago..."
+              rows={4}
+            />
+            <Button onClick={generateTimelineWithAI} disabled={generatingTimeline || !cronogramaDesc.trim()} className="w-full">
+              {generatingTimeline ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Gerando cronograma...</> : <><Sparkles className="h-4 w-4 mr-2" /> Gerar Cronograma com IA</>}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {cronogramaProjectName && (
+          <Card>
+            <CardHeader><CardTitle className="text-base flex items-center gap-2"><CalendarDays className="h-4 w-4 text-primary" /> {cronogramaProjectName}</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              {cronogramaMethodology && (
+                <div className="bg-accent/30 rounded-lg p-3">
+                  <Label className="text-xs font-semibold">Metodologia</Label>
+                  <p className="text-sm text-muted-foreground mt-1">{cronogramaMethodology}</p>
+                </div>
+              )}
+              <div>
+                <Label>Nome do projeto</Label>
+                <Input value={cronogramaProjectName} onChange={e => setCronogramaProjectName(e.target.value)} />
+              </div>
+              <div>
+                <Label>Metodologia de trabalho</Label>
+                <Textarea value={cronogramaMethodology} onChange={e => setCronogramaMethodology(e.target.value)} rows={2} />
+              </div>
+              <div>
+                <Label>Prazo total estimado (dias)</Label>
+                <Input type="number" value={cronogramaTotalDays} onChange={e => setCronogramaTotalDays(e.target.value)} />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {cronogramaPhases.length > 0 && (
+          <Card>
+            <CardHeader><CardTitle className="text-base flex items-center gap-2"><ListChecks className="h-4 w-4 text-primary" /> Fases do Projeto</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              {cronogramaPhases.map((phase, i) => (
+                <div key={i} className="border rounded-lg p-3 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold bg-primary text-primary-foreground">{phase.number}</div>
+                    <Input value={phase.name} onChange={e => {
+                      const updated = [...cronogramaPhases];
+                      updated[i] = { ...updated[i], name: e.target.value };
+                      setCronogramaPhases(updated);
+                    }} className="flex-1 h-8 text-sm font-semibold" />
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">{phase.durationDays} dias</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground pl-8">{phase.description}</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {cronogramaDeliverables.length > 0 && (
+          <Card className="lg:col-span-2">
+            <CardHeader><CardTitle className="text-base flex items-center gap-2"><Layers className="h-4 w-4 text-primary" /> Entregas e Valores Unitários</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              {cronogramaDeliverables.map((d, i) => {
+                const CatIcon = CATEGORY_ICONS[d.category] || Layers;
+                return (
+                  <div key={d.id} className="border rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <CatIcon className="h-4 w-4 text-primary shrink-0" />
+                      <Input value={d.name} onChange={e => {
+                        const updated = [...cronogramaDeliverables];
+                        updated[i] = { ...updated[i], name: e.target.value };
+                        setCronogramaDeliverables(updated);
+                      }} className="flex-1 h-7 text-sm font-semibold" />
+                      <Badge variant="secondary" className="text-[10px]">{CATEGORY_LABELS[d.category] || d.category}</Badge>
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setCronogramaDeliverables(prev => prev.filter(x => x.id !== d.id))}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-2 pl-6">{d.description}</p>
+                    <div className="grid grid-cols-4 gap-2 pl-6">
+                      <div>
+                        <Label className="text-[10px]">Qtd</Label>
+                        <Input type="number" value={d.quantity} onChange={e => {
+                          const updated = [...cronogramaDeliverables];
+                          updated[i] = { ...updated[i], quantity: parseInt(e.target.value) || 1 };
+                          setCronogramaDeliverables(updated);
+                        }} className="h-7 text-xs" min={1} />
+                      </div>
+                      <div>
+                        <Label className="text-[10px]">Valor Unit. (R$)</Label>
+                        <Input type="number" value={d.unitPrice} onChange={e => {
+                          const updated = [...cronogramaDeliverables];
+                          updated[i] = { ...updated[i], unitPrice: parseFloat(e.target.value) || 0 };
+                          setCronogramaDeliverables(updated);
+                        }} className="h-7 text-xs" />
+                      </div>
+                      <div>
+                        <Label className="text-[10px]">Subtotal</Label>
+                        <p className="text-sm font-bold text-primary mt-1">{fmt(d.unitPrice * d.quantity)}</p>
+                      </div>
+                      <div>
+                        <Label className="text-[10px]">Prazo (dias)</Label>
+                        <Input type="number" value={d.estimatedDays} onChange={e => {
+                          const updated = [...cronogramaDeliverables];
+                          updated[i] = { ...updated[i], estimatedDays: parseInt(e.target.value) || 7 };
+                          setCronogramaDeliverables(updated);
+                        }} className="h-7 text-xs" />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="border-t pt-3 flex items-center justify-between">
+                <span className="font-bold text-sm">Total das Entregas</span>
+                <span className="text-xl font-bold text-primary">{fmt(totalValue)}</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader><CardTitle className="text-base">Valores e Pagamento</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="bg-accent/30 rounded-lg p-3 space-y-1">
+              <div className="flex justify-between text-sm">
+                <span>Total das entregas</span>
+                <span className="font-bold">{fmt(totalValue)}</span>
+              </div>
+              {customDiscount > 0 && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span>Desconto ({customDiscount}%)</span>
+                  <span className="font-bold">-{fmt(totalValue - discountedVal)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-base border-t pt-1">
+                <span className="font-bold">Valor final</span>
+                <span className="font-bold text-primary">{fmt(discountedVal)}</span>
+              </div>
+            </div>
+            <div>
+              <Label>Forma de pagamento</Label>
+              <Select value={cronogramaPaymentMethod} onValueChange={setCronogramaPaymentMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Parcelas</Label>
+              <Input type="number" value={cronogramaInstallments} onChange={e => setCronogramaInstallments(e.target.value)} min={1} max={24} />
+            </div>
+            <div>
+              <Label>Desconto (%)</Label>
+              <Input type="number" value={customDiscount} onChange={e => setCustomDiscount(Number(e.target.value))} min={0} max={50} />
+            </div>
+          </CardContent>
+        </Card>
+      </>
+    );
+  };
+
   // ===== PREVIEW SECTIONS =====
 
   const renderSystemPreview = () => {

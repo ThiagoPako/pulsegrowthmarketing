@@ -354,6 +354,85 @@ export default function CommercialProposal() {
     copyToClipboard(link).then(() => toast.success('Link copiado!'));
   };
 
+  // Generate revenues for an approved proposal
+  const generateRevenuesForProposal = useCallback(async (proposal: any) => {
+    try {
+      const pType = proposal.proposal_type || 'marketing';
+      let totalValue = 0;
+      let installments = 1;
+      let description = '';
+
+      if (pType === 'marketing') {
+        const plan = proposal.plan_snapshot || {};
+        const bonus = (proposal.bonus_services || []).reduce((s: number, b: any) => s + (b.value || 0), 0);
+        totalValue = (plan.price || 0) + bonus;
+        const discount = proposal.custom_discount || 0;
+        if (discount > 0) totalValue = totalValue * (1 - discount / 100);
+        installments = 12; // Monthly recurring
+        description = `Contrato Marketing - ${proposal.client_company}`;
+      } else if (pType === 'sistema') {
+        const sys = proposal.system_data || {};
+        totalValue = sys.value || 0;
+        const discount = proposal.custom_discount || 0;
+        if (discount > 0) totalValue = totalValue * (1 - discount / 100);
+        installments = sys.installments || 1;
+        description = `Sistema/Software - ${proposal.client_company}`;
+      } else if (pType === 'endomarketing') {
+        const endo = proposal.endomarketing_data || {};
+        totalValue = endo.monthlyValue || 0;
+        const discount = proposal.custom_discount || 0;
+        if (discount > 0) totalValue = totalValue * (1 - discount / 100);
+        installments = 12;
+        description = `Endomarketing - ${proposal.client_company}`;
+      }
+
+      if (totalValue <= 0) return;
+
+      const installmentValue = totalValue / installments;
+      const startDate = new Date(proposal.client_response_at || new Date());
+      const revenues = [];
+
+      for (let i = 0; i < installments; i++) {
+        const dueDate = addMonths(startDate, i);
+        revenues.push({
+          client_id: null,
+          contract_id: null,
+          reference_month: format(dueDate, 'yyyy-MM-01'),
+          amount: Math.round(installmentValue * 100) / 100,
+          due_date: format(dueDate, 'yyyy-MM-dd'),
+          status: 'prevista',
+          description: `${description} (${i + 1}/${installments})`,
+        });
+      }
+
+      let inserted = 0;
+      for (const rev of revenues) {
+        const { error } = await vpsDb.from('revenues').insert(rev as any);
+        if (!error) inserted++;
+      }
+
+      if (inserted > 0) {
+        toast.success(`${inserted} receita(s) criada(s) para ${proposal.client_company}`);
+        // Mark proposal as having revenues generated
+        await supabase.from('commercial_proposals').update({
+          observations: `${proposal.observations || ''}\n[RECEITAS GERADAS: ${inserted} parcelas de R$ ${installmentValue.toFixed(2)}]`.trim(),
+        } as any).eq('id', proposal.id);
+      }
+    } catch (err) {
+      console.error('[CommercialProposal] generateRevenues error:', err);
+      toast.error('Erro ao gerar receitas');
+    }
+  }, []);
+
+  // Check for newly approved proposals and generate revenues
+  useEffect(() => {
+    const approved = savedProposals.filter((p: any) =>
+      p.status === 'aceita' &&
+      !(p.observations || '').includes('[RECEITAS GERADAS')
+    );
+    approved.forEach((p: any) => generateRevenuesForProposal(p));
+  }, [savedProposals, generateRevenuesForProposal]);
+
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   const statusColors: Record<string, string> = {

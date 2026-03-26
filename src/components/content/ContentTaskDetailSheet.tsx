@@ -492,8 +492,10 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
   }, [task?.id, open]);
 
   // ─── LIVE REVIEWING PRESENCE ──────────────────────────────
+  // Only admin and social_media should mark as "reviewing" — editors don't review
+  const canReview = profile?.role === 'admin' || profile?.role === 'social_media';
   useEffect(() => {
-    if (!open || !task?.id || task.kanban_column !== 'revisao' || !user?.id || !profile?.name) return;
+    if (!open || !task?.id || task.kanban_column !== 'revisao' || !user?.id || !profile?.name || !canReview) return;
 
     // Mark as reviewing
     supabase.from('content_tasks').update({
@@ -518,7 +520,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
         reviewing_at: null,
       } as any).eq('id', task.id);
     };
-  }, [open, task?.id, task?.kanban_column, user?.id, profile?.name]);
+  }, [open, task?.id, task?.kanban_column, user?.id, profile?.name, canReview]);
 
   // Reset forms when task changes
   useEffect(() => {
@@ -1123,187 +1125,208 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                     Ações da Etapa
                   </span>
 
-                  {/* Add links */}
-                  {(task.kanban_column === 'captacao' || task.kanban_column === 'edicao') && !task.drive_link && (
-                    <Button variant="outline" size="sm" className="w-full gap-2 justify-start" onClick={() => { setShowLinkForm('drive'); setLinkValue(''); }}>
-                      <Link2 size={14} className="text-blue-600" /> Adicionar Link Drive
-                    </Button>
-                  )}
-                  
-                  {/* Video: Upload file OR paste link */}
-                  {(task.kanban_column === 'edicao' || task.kanban_column === 'alteracao') && !task.edited_video_link && (
-                    <div className="space-y-2">
-                      <input
-                        ref={videoInputRef}
-                        type="file"
-                        accept="video/*"
-                        className="hidden"
-                        onChange={handleVideoUpload}
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full gap-2 justify-start border-teal-300 text-teal-700 hover:bg-teal-50 dark:text-teal-400 dark:border-teal-700"
-                        onClick={() => videoInputRef.current?.click()}
-                        disabled={uploadingVideo}
-                      >
-                        {uploadingVideo ? (
-                          <><Loader2 size={14} className="animate-spin" /> Enviando vídeo...</>
-                        ) : (
-                          <><Upload size={14} /> Enviar Arquivo de Vídeo</>
+                  {/* Role-based action permissions */}
+                  {(() => {
+                    const role = profile?.role || '';
+                    const isEditor = role === 'editor';
+                    const isVideomaker = role === 'videomaker';
+                    const isAdmin = role === 'admin';
+                    const isSocialMedia = role === 'social_media';
+                    const canManage = isAdmin || isSocialMedia;
+
+                    return (
+                      <>
+                        {/* Add links - videomaker can add drive link in captacao, editor can add video link in edicao/alteracao */}
+                        {(task.kanban_column === 'captacao' || task.kanban_column === 'edicao') && !task.drive_link && !isEditor && (
+                          <Button variant="outline" size="sm" className="w-full gap-2 justify-start" onClick={() => { setShowLinkForm('drive'); setLinkValue(''); }}>
+                            <Link2 size={14} className="text-blue-600" /> Adicionar Link Drive
+                          </Button>
                         )}
-                      </Button>
-                      <Button variant="outline" size="sm" className="w-full gap-2 justify-start" onClick={() => { setShowLinkForm('video'); setLinkValue(''); }}>
-                        <Film size={14} className="text-teal-600" /> Colar Link do Vídeo
-                      </Button>
-                    </div>
-                  )}
+                        
+                        {/* Video: Upload file OR paste link - only editors and admins */}
+                        {(task.kanban_column === 'edicao' || task.kanban_column === 'alteracao') && !task.edited_video_link && !isVideomaker && (
+                          <div className="space-y-2">
+                            <input
+                              ref={videoInputRef}
+                              type="file"
+                              accept="video/*"
+                              className="hidden"
+                              onChange={handleVideoUpload}
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full gap-2 justify-start border-teal-300 text-teal-700 hover:bg-teal-50 dark:text-teal-400 dark:border-teal-700"
+                              onClick={() => videoInputRef.current?.click()}
+                              disabled={uploadingVideo}
+                            >
+                              {uploadingVideo ? (
+                                <><Loader2 size={14} className="animate-spin" /> Enviando vídeo...</>
+                              ) : (
+                                <><Upload size={14} /> Enviar Arquivo de Vídeo</>
+                              )}
+                            </Button>
+                            <Button variant="outline" size="sm" className="w-full gap-2 justify-start" onClick={() => { setShowLinkForm('video'); setLinkValue(''); }}>
+                              <Film size={14} className="text-teal-600" /> Colar Link do Vídeo
+                            </Button>
+                          </div>
+                        )}
 
-                  {/* Link form inline */}
-                  {showLinkForm && (
-                    <div className="p-3 rounded-lg bg-muted/50 border border-border space-y-2">
-                      <Label className="text-xs">{showLinkForm === 'drive' ? 'URL do Google Drive' : 'URL do vídeo editado'}</Label>
-                      <Input value={linkValue} onChange={e => setLinkValue(e.target.value)} placeholder="https://..." autoFocus className="h-9" />
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={handleSaveLink} className="flex-1">Salvar</Button>
-                        <Button size="sm" variant="outline" onClick={() => setShowLinkForm(null)}>Cancelar</Button>
-                      </div>
-                    </div>
-                  )}
+                        {/* Link form inline */}
+                        {showLinkForm && (
+                          <div className="p-3 rounded-lg bg-muted/50 border border-border space-y-2">
+                            <Label className="text-xs">{showLinkForm === 'drive' ? 'URL do Google Drive' : 'URL do vídeo editado'}</Label>
+                            <Input value={linkValue} onChange={e => setLinkValue(e.target.value)} placeholder="https://..." autoFocus className="h-9" />
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={handleSaveLink} className="flex-1">Salvar</Button>
+                              <Button size="sm" variant="outline" onClick={() => setShowLinkForm(null)}>Cancelar</Button>
+                            </div>
+                          </div>
+                        )}
 
-                  {/* Finalizar Etapa buttons */}
-                  {task.kanban_column === 'ideias' && (
-                    <RocketLaunchButton label="Captação" onClick={() => handleMoveToNext('captacao')} />
-                  )}
+                        {/* Finalizar Etapa buttons - role restricted */}
+                        {task.kanban_column === 'ideias' && !isEditor && (
+                          <RocketLaunchButton label="Captação" onClick={() => handleMoveToNext('captacao')} />
+                        )}
 
-                  {task.kanban_column === 'captacao' && (
-                    <RocketLaunchButton label="Edição" onClick={() => handleMoveToNext('edicao')} disabled={!task.drive_link} />
-                  )}
+                        {task.kanban_column === 'captacao' && !isEditor && (
+                          <RocketLaunchButton label="Edição" onClick={() => handleMoveToNext('edicao')} disabled={!task.drive_link} />
+                        )}
 
-                  {task.kanban_column === 'edicao' && task.edited_video_link && (
-                    <RocketLaunchButton label="Revisão" onClick={() => handleMoveToNext('revisao')} />
-                  )}
+                        {task.kanban_column === 'edicao' && task.edited_video_link && !isVideomaker && (
+                          <RocketLaunchButton label="Revisão" onClick={() => handleMoveToNext('revisao')} />
+                        )}
 
-                  {/* Toggle priority (edição) */}
-                  {task.kanban_column === 'edicao' && (
-                    <Button
-                      variant={task.editing_priority ? 'default' : 'outline'}
-                      size="sm"
-                      className={`w-full gap-2 justify-start ${task.editing_priority ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}`}
-                      onClick={handleTogglePriority}
-                    >
-                      <Zap size={14} /> {task.editing_priority ? '⚡ Prioritário' : 'Marcar Prioridade'}
-                    </Button>
-                  )}
+                        {/* Toggle priority (edição) - admin/social media only */}
+                        {task.kanban_column === 'edicao' && canManage && (
+                          <Button
+                            variant={task.editing_priority ? 'default' : 'outline'}
+                            size="sm"
+                            className={`w-full gap-2 justify-start ${task.editing_priority ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}`}
+                            onClick={handleTogglePriority}
+                          >
+                            <Zap size={14} /> {task.editing_priority ? '⚡ Prioritário' : 'Marcar Prioridade'}
+                          </Button>
+                        )}
 
-                  {/* Revisão: Approve / Adjustments */}
-                  {task.kanban_column === 'revisao' && (
-                    <>
-                      <Button size="sm" className="w-full gap-2 justify-start bg-green-600 hover:bg-green-700" onClick={handleApprove}>
-                        <ThumbsUp size={14} /> Aprovar e Enviar ao Portal
-                      </Button>
-                      <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700" onClick={() => setShowAdjustmentForm(true)}>
-                        <MessageSquareWarning size={14} /> Solicitar Ajustes
-                      </Button>
-                    </>
-                  )}
+                        {/* Revisão: Approve / Adjustments - ONLY admin/social_media (NOT editors) */}
+                        {task.kanban_column === 'revisao' && canReview && (
+                          <>
+                            <Button size="sm" className="w-full gap-2 justify-start bg-green-600 hover:bg-green-700" onClick={handleApprove}>
+                              <ThumbsUp size={14} /> Aprovar e Enviar ao Portal
+                            </Button>
+                            <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700" onClick={() => setShowAdjustmentForm(true)}>
+                              <MessageSquareWarning size={14} /> Solicitar Ajustes
+                            </Button>
+                          </>
+                        )}
+                        {task.kanban_column === 'revisao' && isEditor && (
+                          <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                            <p className="text-xs text-muted-foreground text-center">
+                              👁 Aguardando revisão da Social Media ou Administrador
+                            </p>
+                          </div>
+                        )}
 
-                  {/* Alteração: Resubmit */}
-                  {task.kanban_column === 'alteracao' && (
-                    <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-teal-600 border-teal-300 hover:bg-teal-50 dark:text-teal-400 dark:border-teal-700" onClick={handleResubmitFromAlteracao}>
-                      <Send size={14} /> Reenviar para Revisão
-                    </Button>
-                  )}
+                        {/* Alteração: Resubmit - editor or admin */}
+                        {task.kanban_column === 'alteracao' && (isEditor || canManage) && (
+                          <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-teal-600 border-teal-300 hover:bg-teal-50 dark:text-teal-400 dark:border-teal-700" onClick={handleResubmitFromAlteracao}>
+                            <Send size={14} /> Reenviar para Revisão
+                          </Button>
+                        )}
 
-                  {/* Envio: Client approved / Send WhatsApp / Request alteration */}
-                  {task.kanban_column === 'envio' && (
-                    <>
-                      <Button size="sm" className="w-full gap-2 justify-start bg-green-600 hover:bg-green-700" onClick={handleClientApproved}>
-                        <CheckCircle2 size={14} /> Cliente Aprovou
-                      </Button>
-                      <Button variant="outline" size="sm" className="w-full gap-2 justify-start" onClick={handleSendWhatsApp} disabled={sendingWhatsApp}>
-                        <MessageSquare size={14} className="text-green-600" /> {sendingWhatsApp ? 'Enviando...' : 'Convidar via WhatsApp'}
-                      </Button>
-                      <p className="text-[10px] text-muted-foreground/60 px-1">
-                        💡 A mensagem convida o cliente a visitar a Área do Cliente Pulse para aprovar o vídeo
-                      </p>
-                      <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700" onClick={() => setShowAdjustmentForm(true)}>
-                        <MessageSquareWarning size={14} /> Solicitar Alteração
-                      </Button>
-                    </>
-                  )}
+                        {/* Envio: Client approved / Send WhatsApp / Request alteration - admin/social_media only */}
+                        {task.kanban_column === 'envio' && canManage && (
+                          <>
+                            <Button size="sm" className="w-full gap-2 justify-start bg-green-600 hover:bg-green-700" onClick={handleClientApproved}>
+                              <CheckCircle2 size={14} /> Cliente Aprovou
+                            </Button>
+                            <Button variant="outline" size="sm" className="w-full gap-2 justify-start" onClick={handleSendWhatsApp} disabled={sendingWhatsApp}>
+                              <MessageSquare size={14} className="text-green-600" /> {sendingWhatsApp ? 'Enviando...' : 'Convidar via WhatsApp'}
+                            </Button>
+                            <p className="text-[10px] text-muted-foreground/60 px-1">
+                              💡 A mensagem convida o cliente a visitar a Área do Cliente Pulse para aprovar o vídeo
+                            </p>
+                            <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700" onClick={() => setShowAdjustmentForm(true)}>
+                              <MessageSquareWarning size={14} /> Solicitar Alteração
+                            </Button>
+                          </>
+                        )}
 
-                  {/* Agendamentos: Schedule */}
-                  {task.kanban_column === 'agendamentos' && (
-                    <Button size="sm" className="w-full gap-2 justify-start" onClick={() => { setShowScheduleForm(true); setSchedDate(''); setSchedTime(''); setSchedPlatform(''); }}>
-                      <CalendarClock size={14} /> Agendar Postagem
-                    </Button>
-                  )}
+                        {/* Agendamentos: Schedule - admin/social_media only */}
+                        {task.kanban_column === 'agendamentos' && canManage && (
+                          <Button size="sm" className="w-full gap-2 justify-start" onClick={() => { setShowScheduleForm(true); setSchedDate(''); setSchedTime(''); setSchedPlatform(''); }}>
+                            <CalendarClock size={14} /> Agendar Postagem
+                          </Button>
+                        )}
 
-                  {/* Acompanhamento: Confirm posted */}
-                  {task.kanban_column === 'acompanhamento' && (
-                    <Button size="sm" className="w-full gap-2 justify-start" onClick={handleConfirmPosted}>
-                      <CheckCircle2 size={14} /> Confirmar Postagem
-                    </Button>
-                  )}
+                        {/* Acompanhamento: Confirm posted - admin/social_media only */}
+                        {task.kanban_column === 'acompanhamento' && canManage && (
+                          <Button size="sm" className="w-full gap-2 justify-start" onClick={handleConfirmPosted}>
+                            <CheckCircle2 size={14} /> Confirmar Postagem
+                          </Button>
+                        )}
 
-                  {/* Adjustment form inline */}
-                  {showAdjustmentForm && (
-                    <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 space-y-3">
-                      <Label className="text-xs font-semibold text-amber-700">Descreva os ajustes necessários</Label>
-                      <Textarea
-                        value={adjustmentNotes}
-                        onChange={e => setAdjustmentNotes(e.target.value)}
-                        rows={3}
-                        placeholder="Ex: Ajustar corte no segundo 15..."
-                        autoFocus
-                      />
-                      <div className="flex items-center gap-3 p-2.5 rounded-lg bg-destructive/5 border border-destructive/20">
-                        <input
-                          type="checkbox"
-                          checked={adjustmentImmediate}
-                          onChange={e => setAdjustmentImmediate(e.target.checked)}
-                          className="h-4 w-4 rounded border-destructive/40"
-                          id="detail-immediate"
-                        />
-                        <label htmlFor="detail-immediate" className="text-xs cursor-pointer">
-                          <span className="font-semibold text-destructive">🚨 Alteração Imediata</span>
-                        </label>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" className="flex-1 bg-amber-500 hover:bg-amber-600 text-white" onClick={handleRequestAdjustments}>
-                          <MessageSquareWarning size={14} /> Enviar
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => setShowAdjustmentForm(false)}>Cancelar</Button>
-                      </div>
-                    </div>
-                  )}
+                        {/* Adjustment form inline */}
+                        {showAdjustmentForm && (
+                          <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 space-y-3">
+                            <Label className="text-xs font-semibold text-amber-700">Descreva os ajustes necessários</Label>
+                            <Textarea
+                              value={adjustmentNotes}
+                              onChange={e => setAdjustmentNotes(e.target.value)}
+                              rows={3}
+                              placeholder="Ex: Ajustar corte no segundo 15..."
+                              autoFocus
+                            />
+                            <div className="flex items-center gap-3 p-2.5 rounded-lg bg-destructive/5 border border-destructive/20">
+                              <input
+                                type="checkbox"
+                                checked={adjustmentImmediate}
+                                onChange={e => setAdjustmentImmediate(e.target.checked)}
+                                className="h-4 w-4 rounded border-destructive/40"
+                                id="detail-immediate"
+                              />
+                              <label htmlFor="detail-immediate" className="text-xs cursor-pointer">
+                                <span className="font-semibold text-destructive">🚨 Alteração Imediata</span>
+                              </label>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button size="sm" className="flex-1 bg-amber-500 hover:bg-amber-600 text-white" onClick={handleRequestAdjustments}>
+                                <MessageSquareWarning size={14} /> Enviar
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => setShowAdjustmentForm(false)}>Cancelar</Button>
+                            </div>
+                          </div>
+                        )}
 
-                  {/* Schedule form inline */}
-                  {showScheduleForm && (
-                    <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-3">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <Label className="text-xs">Data *</Label>
-                          <Input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)} className="h-9" />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Horário *</Label>
-                          <Input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)} className="h-9" />
-                        </div>
-                      </div>
-                      <div className="p-2 rounded-lg bg-muted/30 border border-border">
-                        <Label className="text-xs text-muted-foreground">Plataformas</Label>
-                        <p className="text-sm font-medium mt-1">📸 Instagram + Facebook</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" className="flex-1" onClick={handleSchedulePost}>
-                          <Calendar size={14} /> Agendar
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => setShowScheduleForm(false)}>Cancelar</Button>
-                      </div>
-                    </div>
-                  )}
+                        {/* Schedule form inline */}
+                        {showScheduleForm && (
+                          <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-3">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label className="text-xs">Data *</Label>
+                                <Input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)} className="h-9" />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Horário *</Label>
+                                <Input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)} className="h-9" />
+                              </div>
+                            </div>
+                            <div className="p-2 rounded-lg bg-muted/30 border border-border">
+                              <Label className="text-xs text-muted-foreground">Plataformas</Label>
+                              <p className="text-sm font-medium mt-1">📸 Instagram + Facebook</p>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button size="sm" className="flex-1" onClick={handleSchedulePost}>
+                                <Calendar size={14} /> Agendar
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => setShowScheduleForm(false)}>Cancelar</Button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             </div>

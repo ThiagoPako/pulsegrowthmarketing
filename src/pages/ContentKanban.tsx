@@ -468,8 +468,33 @@ export default function ContentKanban() {
   // ─── EXECUTION COLUMNS THAT REQUIRE assigned_to ────────────
   const EXECUTION_COLUMNS = ['edicao', 'alteracao'];
 
+  // ─── ROLE-BASED COLUMN PERMISSIONS ────────────────────────
+  const ROLE_ALLOWED_COLUMNS: Record<string, string[]> = {
+    editor: ['edicao', 'alteracao', 'revisao'], // editor can move to edicao/alteracao/revisao only
+    videomaker: ['ideias', 'captacao'], // videomaker only works in ideias and captacao
+  };
+
+  const userRole = profile?.role || '';
+  const isRestricted = userRole === 'editor' || userRole === 'videomaker';
+
   // ─── VALIDATION FOR TRANSITIONS ───────────────────────────
   const validateKanbanTransition = (task: ContentTask, targetColumn: string): string | null => {
+    // Role-based restrictions
+    if (isRestricted) {
+      const allowed = ROLE_ALLOWED_COLUMNS[userRole];
+      if (allowed && !allowed.includes(targetColumn)) {
+        const roleLabel = userRole === 'editor' ? 'Editores' : 'Videomakers';
+        return `${roleLabel} não têm permissão para mover cards para esta coluna.`;
+      }
+      // Editor can only move FROM their allowed columns
+      if (userRole === 'editor' && !['edicao', 'alteracao'].includes(task.kanban_column)) {
+        return 'Editores só podem mover cards que estejam em Edição ou Alteração.';
+      }
+      // Videomaker can only move FROM their allowed columns
+      if (userRole === 'videomaker' && !['ideias', 'captacao'].includes(task.kanban_column)) {
+        return 'Videomakers só podem mover cards que estejam em Ideias ou Captação.';
+      }
+    }
     // Rule: tasks in execution columns MUST have a responsible person
     if (EXECUTION_COLUMNS.includes(targetColumn) && !task.assigned_to) {
       return 'Esta tarefa precisa ter um responsável atribuído antes de entrar em execução. Edite o card e selecione o responsável.';
@@ -833,14 +858,14 @@ export default function ContentKanban() {
                             onEdit={() => openEdit(task)}
                             onDelete={profile?.role === 'admin' ? () => openDeleteConfirm(task) : undefined}
                             onCardClick={() => { setDetailTask(task); setDetailOpen(true); }}
-                            onConfirmPosted={task.kanban_column === 'acompanhamento' ? () => handleConfirmPosted(task) : undefined}
-                            onApprove={task.kanban_column === 'revisao' ? () => handleApproveTask(task) : undefined}
-                            onRequestAdjustments={task.kanban_column === 'revisao' ? () => openAdjustmentDialog(task) : undefined}
-                            onAddDriveLink={task.kanban_column === 'captacao' || task.kanban_column === 'edicao' ? () => openLinkDialog(task, 'drive') : undefined}
-                            onAddVideoLink={task.kanban_column === 'edicao' || task.kanban_column === 'alteracao' ? () => openLinkDialog(task, 'video') : undefined}
+                            onConfirmPosted={task.kanban_column === 'acompanhamento' && !isRestricted ? () => handleConfirmPosted(task) : undefined}
+                            onApprove={task.kanban_column === 'revisao' && (userRole === 'admin' || userRole === 'social_media') ? () => handleApproveTask(task) : undefined}
+                            onRequestAdjustments={task.kanban_column === 'revisao' && (userRole === 'admin' || userRole === 'social_media') ? () => openAdjustmentDialog(task) : undefined}
+                            onAddDriveLink={(task.kanban_column === 'captacao' || task.kanban_column === 'edicao') && userRole !== 'videomaker' || (userRole === 'videomaker' && task.kanban_column === 'captacao') ? () => openLinkDialog(task, 'drive') : undefined}
+                            onAddVideoLink={(task.kanban_column === 'edicao' || task.kanban_column === 'alteracao') && userRole !== 'videomaker' ? () => openLinkDialog(task, 'video') : undefined}
                             onMoveToNext={
-                              task.kanban_column === 'captacao' && task.drive_link ? () => handleMoveToNext(task, 'edicao') :
-                              task.kanban_column === 'envio' ? () => handleMoveToNext(task, 'agendamentos') :
+                              task.kanban_column === 'captacao' && task.drive_link && (userRole !== 'editor') ? () => handleMoveToNext(task, 'edicao') :
+                              task.kanban_column === 'envio' && (userRole === 'admin' || userRole === 'social_media') ? () => handleMoveToNext(task, 'agendamentos') :
                               undefined
                             }
                             nextColumnLabel={
@@ -848,18 +873,46 @@ export default function ContentKanban() {
                               task.kanban_column === 'envio' ? 'Agendamentos' :
                               undefined
                             }
-                            onSchedule={task.kanban_column === 'agendamentos' ? () => openScheduleDialog(task) : undefined}
-                            onResubmit={task.kanban_column === 'alteracao' ? () => handleResubmitFromAlteracao(task) : undefined}
+                            onSchedule={task.kanban_column === 'agendamentos' && (userRole === 'admin' || userRole === 'social_media') ? () => openScheduleDialog(task) : undefined}
+                            onResubmit={task.kanban_column === 'alteracao' && (userRole === 'editor' || userRole === 'admin') ? () => handleResubmitFromAlteracao(task) : undefined}
                             onMoveForward={(() => {
+                              if (isRestricted) {
+                                // Editor: only forward from edicao→revisao or alteracao→revisao
+                                if (userRole === 'editor' && (task.kanban_column === 'edicao' || task.kanban_column === 'alteracao')) {
+                                  return () => handleMoveToColumn(task, 'revisao');
+                                }
+                                // Videomaker: only forward from ideias→captacao
+                                if (userRole === 'videomaker' && task.kanban_column === 'ideias') {
+                                  return () => handleMoveToColumn(task, 'captacao');
+                                }
+                                return undefined;
+                              }
                               const { next } = getAdjacentColumns(task.kanban_column);
                               return next ? () => handleMoveToColumn(task, next.id) : undefined;
                             })()}
                             onMoveBackward={(() => {
+                              if (isRestricted) {
+                                // Videomaker: backward from captacao→ideias
+                                if (userRole === 'videomaker' && task.kanban_column === 'captacao') {
+                                  return () => handleMoveToColumn(task, 'ideias');
+                                }
+                                // Editor: no backward (edicao is their start)
+                                return undefined;
+                              }
                               const { prev } = getAdjacentColumns(task.kanban_column);
                               return prev ? () => handleMoveToColumn(task, prev.id) : undefined;
                             })()}
-                            forwardLabel={getAdjacentColumns(task.kanban_column).next?.label}
-                            backwardLabel={getAdjacentColumns(task.kanban_column).prev?.label}
+                            forwardLabel={(() => {
+                              if (userRole === 'editor' && (task.kanban_column === 'edicao' || task.kanban_column === 'alteracao')) return 'Revisão';
+                              if (userRole === 'videomaker' && task.kanban_column === 'ideias') return 'Captação';
+                              if (isRestricted) return undefined;
+                              return getAdjacentColumns(task.kanban_column).next?.label;
+                            })()}
+                            backwardLabel={(() => {
+                              if (userRole === 'videomaker' && task.kanban_column === 'captacao') return 'Ideias';
+                              if (isRestricted) return undefined;
+                              return getAdjacentColumns(task.kanban_column).prev?.label;
+                            })()}
                           />
                         </motion.div>
                       ))}

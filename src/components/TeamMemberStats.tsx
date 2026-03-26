@@ -28,6 +28,12 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
+interface ContentTypeMetric {
+  count: number;
+  totalTime: number;
+  avgTime: number;
+}
+
 interface TaskStats {
   totalTasks: number;
   avgTimeSeconds: number;
@@ -35,6 +41,7 @@ interface TaskStats {
   score: number;
   byStatus: Record<string, number>;
   byContentType: Record<string, number>;
+  byContentTypeMetrics?: Record<string, ContentTypeMetric>;
 }
 
 export default function TeamMemberStats({ member, open, onOpenChange }: Props) {

@@ -130,6 +130,8 @@ export async function syncContentTaskColumnChange(
     updates.editing_started_at = null;
     updates.editing_paused_at = null;
     updates.editing_paused_seconds = 0;
+    // Don't assign anyone until they explicitly start the alteration
+    updates.assigned_to = null;
   }
   if (newColumn === 'envio') {
     const deadline = addBusinessHours(new Date(), deadlineHours.approval, workDays);

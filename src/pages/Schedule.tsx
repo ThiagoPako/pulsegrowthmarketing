@@ -1037,6 +1037,16 @@ export default function Schedule() {
               Endomarketing
             </button>
             <button
+              onClick={() => setShowEvents(!showEvents)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                showEvents
+                  ? 'border-transparent text-white bg-orange-500'
+                  : 'border-border text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              <MapPin size={12} />
+              Eventos
+            <button
               onClick={() => setShowBackup(!showBackup)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
                 showBackup

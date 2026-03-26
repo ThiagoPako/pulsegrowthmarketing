@@ -87,7 +87,6 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
   };
 
   const loadEditorStats = async (userId: string, startStr: string, endStr: string) => {
-    // Get tasks where this editor worked (edited_by or assigned_to)
     const { data: tasks } = await supabase
       .from('content_tasks')
       .select('id, kanban_column, content_type, editing_started_at, editing_paused_seconds, editing_paused_at, approved_at, updated_at, edited_by, assigned_to')
@@ -95,17 +94,10 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
       .gte('created_at', startStr)
       .lte('created_at', endStr);
 
-    // Get task_history for time calculations
-    const { data: history } = await supabase
-      .from('task_history')
-      .select('task_id, action, created_at, user_id')
-      .eq('user_id', userId)
-      .gte('created_at', startStr)
-      .lte('created_at', endStr);
-
     const editorTasks = tasks || [];
     const byStatus: Record<string, number> = {};
     const byContentType: Record<string, number> = {};
+    const metricsMap: Record<string, { count: number; totalTime: number }> = {};
     let totalEditingTime = 0;
     let tasksWithTime = 0;
     let score = 0;
@@ -113,19 +105,20 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
     editorTasks.forEach(t => {
       const col = t.kanban_column;
       byStatus[col] = (byStatus[col] || 0) + 1;
-      byContentType[t.content_type] = (byContentType[t.content_type] || 0) + 1;
+      
+      const cType = t.content_type || 'outro';
+      byContentType[cType] = (byContentType[cType] || 0) + 1;
+      if (!metricsMap[cType]) metricsMap[cType] = { count: 0, totalTime: 0 };
+      metricsMap[cType].count++;
 
-      // Calculate real editing time (excluding paused time)
       if (t.editing_started_at) {
         const start = new Date(t.editing_started_at).getTime();
         const pausedSecs = t.editing_paused_seconds || 0;
         let end: number;
 
         if (t.editing_paused_at) {
-          // Currently paused — count time up to pause
           end = new Date(t.editing_paused_at).getTime();
         } else if (['revisao', 'envio', 'agendamentos', 'acompanhamento', 'arquivado'].includes(col)) {
-          // Task already moved past editing — use updated_at as end
           end = new Date(t.updated_at).getTime();
         } else {
           end = Date.now();
@@ -134,9 +127,9 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
         const realTime = Math.max(0, Math.floor((end - start) / 1000) - pausedSecs);
         totalEditingTime += realTime;
         tasksWithTime++;
+        metricsMap[cType].totalTime += realTime;
       }
 
-      // Score
       if (['agendamentos', 'acompanhamento', 'arquivado', 'envio'].includes(col)) {
         score += EDITOR_SCORE.APROVADO;
       } else if (col === 'edicao') {
@@ -148,6 +141,15 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
       }
     });
 
+    const byContentTypeMetrics: Record<string, ContentTypeMetric> = {};
+    Object.entries(metricsMap).forEach(([type, m]) => {
+      byContentTypeMetrics[type] = {
+        count: m.count,
+        totalTime: m.totalTime,
+        avgTime: m.count > 0 ? Math.floor(m.totalTime / m.count) : 0,
+      };
+    });
+
     setStats({
       totalTasks: editorTasks.length,
       avgTimeSeconds: tasksWithTime > 0 ? Math.floor(totalEditingTime / tasksWithTime) : 0,
@@ -155,6 +157,7 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
       score,
       byStatus,
       byContentType,
+      byContentTypeMetrics,
     });
   };
 

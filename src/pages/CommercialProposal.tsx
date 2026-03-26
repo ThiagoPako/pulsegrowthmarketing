@@ -3,7 +3,6 @@ import { useApp } from '@/contexts/AppContext';
 import { supabase as vpsDb } from '@/lib/vpsDb';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
-import { useQuery } from '@tanstack/react-query';
 import { format, addDays, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import pulseLogo from '@/assets/pulse_logo.png';

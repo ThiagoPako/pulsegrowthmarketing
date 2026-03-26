@@ -175,6 +175,8 @@ export default function ContentKanban() {
   const { user, profile } = useAuth();
   const [tasks, setTasks] = useState<ContentTask[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const highlightId = searchParams.get('highlight');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<ContentTask | null>(null);
   const [searchQuery, setSearchQuery] = useState('');

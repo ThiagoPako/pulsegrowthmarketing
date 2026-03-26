@@ -923,89 +923,190 @@ export default function CommercialProposal() {
           </Card>
         )}
 
-        {cronogramaPhases.length > 0 && (
-          <Card>
-            <CardHeader><CardTitle className="text-base flex items-center gap-2"><ListChecks className="h-4 w-4 text-primary" /> Fases do Projeto</CardTitle></CardHeader>
-            <CardContent className="space-y-2">
-              {cronogramaPhases.map((phase, i) => (
-                <div key={i} className="border rounded-lg p-3 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <div className="rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold bg-primary text-primary-foreground">{phase.number}</div>
-                    <Input value={phase.name} onChange={e => {
+        <Card>
+          <CardHeader><CardTitle className="text-base flex items-center gap-2"><ListChecks className="h-4 w-4 text-primary" /> Fases do Projeto</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {cronogramaPhases.map((phase, i) => (
+              <div key={i} className="border rounded-lg p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold bg-primary text-primary-foreground">{phase.number}</div>
+                  <Input value={phase.name} onChange={e => {
+                    const updated = [...cronogramaPhases];
+                    updated[i] = { ...updated[i], name: e.target.value };
+                    setCronogramaPhases(updated);
+                  }} className="flex-1 h-8 text-sm font-semibold" />
+                  <div className="flex items-center gap-1">
+                    <Input type="number" value={phase.durationDays} onChange={e => {
                       const updated = [...cronogramaPhases];
-                      updated[i] = { ...updated[i], name: e.target.value };
+                      updated[i] = { ...updated[i], durationDays: parseInt(e.target.value) || 1 };
                       setCronogramaPhases(updated);
-                    }} className="flex-1 h-8 text-sm font-semibold" />
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">{phase.durationDays} dias</span>
+                    }} className="w-16 h-8 text-xs text-center" min={1} />
+                    <span className="text-xs text-muted-foreground">dias</span>
                   </div>
-                  <p className="text-xs text-muted-foreground pl-8">{phase.description}</p>
+                  <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => setCronogramaPhases(prev => prev.filter((_, idx) => idx !== i))}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+                <Textarea value={phase.description} onChange={e => {
+                  const updated = [...cronogramaPhases];
+                  updated[i] = { ...updated[i], description: e.target.value };
+                  setCronogramaPhases(updated);
+                }} className="text-xs min-h-[40px] pl-8" rows={1} placeholder="Descrição da fase..." />
+              </div>
+            ))}
+            <div className="border border-dashed rounded-lg p-3 space-y-2">
+              <p className="text-xs text-muted-foreground font-medium">Adicionar nova fase</p>
+              <div className="flex gap-2">
+                <Input placeholder="Nome da fase" id="new-phase-name" className="flex-1 h-8 text-sm" />
+                <Input type="number" placeholder="Dias" id="new-phase-days" className="w-20 h-8 text-xs" min={1} defaultValue={7} />
+                <Button size="sm" className="h-8" onClick={() => {
+                  const nameEl = document.getElementById('new-phase-name') as HTMLInputElement;
+                  const daysEl = document.getElementById('new-phase-days') as HTMLInputElement;
+                  if (!nameEl?.value) return;
+                  setCronogramaPhases(prev => [...prev, {
+                    number: prev.length + 1,
+                    name: nameEl.value,
+                    description: '',
+                    durationDays: parseInt(daysEl?.value) || 7,
+                  }]);
+                  nameEl.value = '';
+                }}><Plus className="h-3 w-3 mr-1" /> Fase</Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-        {cronogramaDeliverables.length > 0 && (
-          <Card className="lg:col-span-2">
-            <CardHeader><CardTitle className="text-base flex items-center gap-2"><Layers className="h-4 w-4 text-primary" /> Entregas e Valores Unitários</CardTitle></CardHeader>
-            <CardContent className="space-y-2">
-              {cronogramaDeliverables.map((d, i) => {
-                const CatIcon = CATEGORY_ICONS[d.category] || Layers;
-                return (
-                  <div key={d.id} className="border rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-1">
-                      <CatIcon className="h-4 w-4 text-primary shrink-0" />
-                      <Input value={d.name} onChange={e => {
+        <Card className="lg:col-span-2">
+          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Layers className="h-4 w-4 text-primary" /> Entregas e Valores Unitários</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {cronogramaDeliverables.map((d, i) => {
+              const CatIcon = CATEGORY_ICONS[d.category] || Layers;
+              return (
+                <div key={d.id} className="border rounded-lg p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <CatIcon className="h-4 w-4 text-primary shrink-0" />
+                    <Input value={d.name} onChange={e => {
+                      const updated = [...cronogramaDeliverables];
+                      updated[i] = { ...updated[i], name: e.target.value };
+                      setCronogramaDeliverables(updated);
+                    }} className="flex-1 h-7 text-sm font-semibold" />
+                    <Select value={d.category} onValueChange={val => {
+                      const updated = [...cronogramaDeliverables];
+                      updated[i] = { ...updated[i], category: val };
+                      setCronogramaDeliverables(updated);
+                    }}>
+                      <SelectTrigger className="w-32 h-7 text-[10px]"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
+                          <SelectItem key={k} value={k}>{v}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => setCronogramaDeliverables(prev => prev.filter(x => x.id !== d.id))}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <Textarea value={d.description} onChange={e => {
+                    const updated = [...cronogramaDeliverables];
+                    updated[i] = { ...updated[i], description: e.target.value };
+                    setCronogramaDeliverables(updated);
+                  }} className="text-xs min-h-[36px] pl-6" rows={1} placeholder="Descrição da entrega..." />
+                  <div className="grid grid-cols-4 gap-2 pl-6">
+                    <div>
+                      <Label className="text-[10px]">Qtd</Label>
+                      <Input type="number" value={d.quantity} onChange={e => {
                         const updated = [...cronogramaDeliverables];
-                        updated[i] = { ...updated[i], name: e.target.value };
+                        updated[i] = { ...updated[i], quantity: parseInt(e.target.value) || 1 };
                         setCronogramaDeliverables(updated);
-                      }} className="flex-1 h-7 text-sm font-semibold" />
-                      <Badge variant="secondary" className="text-[10px]">{CATEGORY_LABELS[d.category] || d.category}</Badge>
-                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setCronogramaDeliverables(prev => prev.filter(x => x.id !== d.id))}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                      }} className="h-7 text-xs" min={1} />
                     </div>
-                    <p className="text-xs text-muted-foreground mb-2 pl-6">{d.description}</p>
-                    <div className="grid grid-cols-4 gap-2 pl-6">
-                      <div>
-                        <Label className="text-[10px]">Qtd</Label>
-                        <Input type="number" value={d.quantity} onChange={e => {
-                          const updated = [...cronogramaDeliverables];
-                          updated[i] = { ...updated[i], quantity: parseInt(e.target.value) || 1 };
-                          setCronogramaDeliverables(updated);
-                        }} className="h-7 text-xs" min={1} />
-                      </div>
-                      <div>
-                        <Label className="text-[10px]">Valor Unit. (R$)</Label>
-                        <Input type="number" value={d.unitPrice} onChange={e => {
-                          const updated = [...cronogramaDeliverables];
-                          updated[i] = { ...updated[i], unitPrice: parseFloat(e.target.value) || 0 };
-                          setCronogramaDeliverables(updated);
-                        }} className="h-7 text-xs" />
-                      </div>
-                      <div>
-                        <Label className="text-[10px]">Subtotal</Label>
-                        <p className="text-sm font-bold text-primary mt-1">{fmt(d.unitPrice * d.quantity)}</p>
-                      </div>
-                      <div>
-                        <Label className="text-[10px]">Prazo (dias)</Label>
-                        <Input type="number" value={d.estimatedDays} onChange={e => {
-                          const updated = [...cronogramaDeliverables];
-                          updated[i] = { ...updated[i], estimatedDays: parseInt(e.target.value) || 7 };
-                          setCronogramaDeliverables(updated);
-                        }} className="h-7 text-xs" />
-                      </div>
+                    <div>
+                      <Label className="text-[10px]">Valor Unit. (R$)</Label>
+                      <Input type="number" value={d.unitPrice} onChange={e => {
+                        const updated = [...cronogramaDeliverables];
+                        updated[i] = { ...updated[i], unitPrice: parseFloat(e.target.value) || 0 };
+                        setCronogramaDeliverables(updated);
+                      }} className="h-7 text-xs" />
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">Subtotal</Label>
+                      <p className="text-sm font-bold text-primary mt-1">{fmt(d.unitPrice * d.quantity)}</p>
+                    </div>
+                    <div>
+                      <Label className="text-[10px]">Prazo (dias)</Label>
+                      <Input type="number" value={d.estimatedDays} onChange={e => {
+                        const updated = [...cronogramaDeliverables];
+                        updated[i] = { ...updated[i], estimatedDays: parseInt(e.target.value) || 7 };
+                        setCronogramaDeliverables(updated);
+                      }} className="h-7 text-xs" />
                     </div>
                   </div>
-                );
-              })}
+                  <div className="pl-6">
+                    <Label className="text-[10px]">Fase</Label>
+                    <Select value={String(d.phase)} onValueChange={val => {
+                      const updated = [...cronogramaDeliverables];
+                      updated[i] = { ...updated[i], phase: parseInt(val) || 1 };
+                      setCronogramaDeliverables(updated);
+                    }}>
+                      <SelectTrigger className="w-40 h-7 text-[10px]"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {cronogramaPhases.length > 0 ? cronogramaPhases.map(p => (
+                          <SelectItem key={p.number} value={String(p.number)}>Fase {p.number}: {p.name}</SelectItem>
+                        )) : (
+                          <SelectItem value="1">Fase 1</SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              );
+            })}
+            {/* Add new deliverable manually */}
+            <div className="border border-dashed rounded-lg p-3 space-y-2">
+              <p className="text-xs text-muted-foreground font-medium">Adicionar nova entrega</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Input placeholder="Nome da entrega" id="new-deliv-name" className="h-8 text-sm" />
+                <Select defaultValue="other">
+                  <SelectTrigger className="h-8 text-xs" id="new-deliv-cat"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>{v}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <Input type="number" placeholder="Qtd" id="new-deliv-qty" className="h-8 text-xs" defaultValue={1} min={1} />
+                <Input type="number" placeholder="Valor unit." id="new-deliv-price" className="h-8 text-xs" defaultValue={0} />
+                <Input type="number" placeholder="Prazo (dias)" id="new-deliv-days" className="h-8 text-xs" defaultValue={7} />
+              </div>
+              <Button size="sm" className="h-8" onClick={() => {
+                const nameEl = document.getElementById('new-deliv-name') as HTMLInputElement;
+                const qtyEl = document.getElementById('new-deliv-qty') as HTMLInputElement;
+                const priceEl = document.getElementById('new-deliv-price') as HTMLInputElement;
+                const daysEl = document.getElementById('new-deliv-days') as HTMLInputElement;
+                if (!nameEl?.value) return;
+                setCronogramaDeliverables(prev => [...prev, {
+                  id: crypto.randomUUID(),
+                  name: nameEl.value,
+                  description: '',
+                  category: 'other',
+                  quantity: parseInt(qtyEl?.value) || 1,
+                  unitPrice: parseFloat(priceEl?.value) || 0,
+                  estimatedDays: parseInt(daysEl?.value) || 7,
+                  phase: 1,
+                }]);
+                nameEl.value = '';
+              }}><Plus className="h-3 w-3 mr-1" /> Entrega</Button>
+            </div>
+            {cronogramaDeliverables.length > 0 && (
               <div className="border-t pt-3 flex items-center justify-between">
                 <span className="font-bold text-sm">Total das Entregas</span>
                 <span className="text-xl font-bold text-primary">{fmt(totalValue)}</span>
               </div>
-            </CardContent>
-          </Card>
-        )}
+            )}
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader><CardTitle className="text-base">Valores e Pagamento</CardTitle></CardHeader>

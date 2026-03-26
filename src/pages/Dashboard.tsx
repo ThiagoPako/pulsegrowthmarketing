@@ -829,7 +829,7 @@ export default function Dashboard() {
       )}
 
       {/* SEASONAL DATES - AI POWERED */}
-      {aiSeasonalAlerts.length > 0 && (
+      {(aiSeasonalAlerts.length > 0 || seasonalLoading) && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-3 sm:p-5 border-warning/30">
           <div className="flex items-center gap-2 mb-3">
             <AlertTriangle size={14} className="text-warning" />

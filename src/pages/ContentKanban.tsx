@@ -492,16 +492,17 @@ export default function ContentKanban() {
   const userRole = profile?.role || '';
   const isRestricted = userRole === 'editor' || userRole === 'videomaker';
 
-  // Filter visible columns based on role
-  const visibleColumns = useMemo(() => {
-    if (userRole === 'editor') {
-      return KANBAN_COLUMNS.filter(c => ['edicao', 'revisao', 'alteracao'].includes(c.id));
-    }
-    if (userRole === 'videomaker') {
-      return KANBAN_COLUMNS.filter(c => ['ideias', 'captacao'].includes(c.id));
-    }
-    return [...KANBAN_COLUMNS];
+  // All columns visible to everyone (view-only for non-permitted columns)
+  const visibleColumns = useMemo(() => [...KANBAN_COLUMNS], []);
+
+  // Columns where user can interact (drag, add, execute actions)
+  const interactiveColumns = useMemo(() => {
+    if (userRole === 'editor') return ['edicao', 'revisao', 'alteracao'];
+    if (userRole === 'videomaker') return ['ideias', 'captacao'];
+    return KANBAN_COLUMNS.map(c => c.id) as string[];
   }, [userRole]);
+
+  const isColumnInteractive = (colId: string) => interactiveColumns.includes(colId);
 
   // ─── VALIDATION FOR TRANSITIONS ───────────────────────────
   const validateKanbanTransition = (task: ContentTask, targetColumn: string): string | null => {

@@ -1613,6 +1613,8 @@ export default function CommercialProposal() {
                       totalValue = (p.endomarketing_data || {}).monthlyValue || 0;
                     } else if (pType === 'personalizada') {
                       totalValue = sys.monthlyValue || 0;
+                    } else if (pType === 'cronograma') {
+                      totalValue = sys.totalValue || (sys.deliverables || []).reduce((s: number, d: any) => s + ((d.unitPrice || 0) * (d.quantity || 1)), 0);
                     }
                     const discount = p.custom_discount || 0;
                     if (discount > 0) totalValue = totalValue * (1 - discount / 100);

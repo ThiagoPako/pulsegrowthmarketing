@@ -37,14 +37,27 @@ export default function AvulsoApproval() {
 
   useEffect(() => {
     if (!taskId) return;
-    supabase.from('content_tasks')
-      .select('*, recordings(prospect_name)')
-      .eq('id', taskId)
-      .single()
-      .then(({ data }) => {
-        setTask(data);
-        setLoading(false);
-      });
+    const loadTask = async () => {
+      const { data: taskData } = await supabase.from('content_tasks')
+        .select('*')
+        .eq('id', taskId)
+        .single();
+      if (taskData) {
+        // Load prospect name from recording if available
+        if (taskData.recording_id) {
+          const { data: rec } = await supabase.from('recordings')
+            .select('prospect_name')
+            .eq('id', taskData.recording_id)
+            .single();
+          if (rec) {
+            (taskData as any)._prospect_name = rec.prospect_name;
+          }
+        }
+        setTask(taskData);
+      }
+      setLoading(false);
+    };
+    loadTask();
   }, [taskId]);
 
   const handleApprove = async () => {

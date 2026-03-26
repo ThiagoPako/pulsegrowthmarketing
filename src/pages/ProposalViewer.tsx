@@ -13,7 +13,7 @@ import { toast, Toaster } from 'sonner';
 import {
   Rocket, Film, Palette, Camera, Monitor, Share2, BarChart3,
   CheckCircle2, Gift, FileText, Scissors, Users, MessageCircle,
-  ThumbsUp, ThumbsDown, Clock, Send
+  ThumbsUp, ThumbsDown, Clock, Send, Code, Megaphone
 } from 'lucide-react';
 
 const INTERNAL_PROCESS_STEPS = [
@@ -30,6 +30,13 @@ const IMPLEMENTATION_FEES = {
   adAccounts: { label: 'Implementação de contas de anúncios', value: 800 },
   profileRedesign: { label: 'Reformulação de perfil', value: 750 },
   internalIntegration: { label: 'Integração interna, editorial e portal do cliente', value: 1250 },
+};
+
+const PAYMENT_METHODS: Record<string, string> = {
+  pix: 'PIX',
+  boleto: 'Boleto Bancário',
+  cartao: 'Cartão de Crédito',
+  transferencia: 'Transferência Bancária',
 };
 
 export default function ProposalViewer() {
@@ -131,15 +138,308 @@ export default function ProposalViewer() {
     );
   }
 
+  const proposalType = proposal.proposal_type || 'marketing';
   const plan = proposal.plan_snapshot || {};
   const bonus: any[] = proposal.bonus_services || [];
   const team: any[] = proposal.team_members || [];
+  const systemData = proposal.system_data || {};
+  const endoData = proposal.endomarketing_data || {};
   const planPrice = plan.price || 0;
   const bonusTotal = bonus.reduce((s: number, b: any) => s + (b.value || 0), 0);
   const monthlyTotal = planPrice + bonusTotal;
   const discount = proposal.custom_discount || 0;
   const isExpired = new Date(proposal.validity_date) < new Date();
   const isResolved = proposal.status === 'aceita' || proposal.status === 'recusada';
+
+  const headerTitle = proposalType === 'sistema' ? 'Proposta de Sistema' : proposalType === 'endomarketing' ? 'Proposta de Endomarketing' : 'Proposta Comercial';
+
+  const renderMarketingContent = () => (
+    <>
+      {plan.name && (
+        <div className="p-8 md:p-12">
+          <h2 className="text-xl font-bold text-gray-800 mb-1 flex items-center gap-2">
+            <Rocket className="h-5 w-5" style={{ color: 'hsl(16 82% 51%)' }} /> Pacote {plan.name}
+          </h2>
+          <p className="text-sm text-gray-500 mb-6">{plan.description || 'Solução completa de marketing digital'}</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {plan.reels_qty > 0 && (
+              <div className="border rounded-lg p-3 text-center">
+                <Film className="h-5 w-5 mx-auto mb-1" style={{ color: 'hsl(16 82% 51%)' }} />
+                <p className="text-2xl font-bold text-gray-800">{plan.reels_qty}</p>
+                <p className="text-xs text-gray-500">Reels/mês</p>
+              </div>
+            )}
+            {plan.creatives_qty > 0 && (
+              <div className="border rounded-lg p-3 text-center">
+                <Palette className="h-5 w-5 mx-auto mb-1" style={{ color: 'hsl(16 82% 51%)' }} />
+                <p className="text-2xl font-bold text-gray-800">{plan.creatives_qty}</p>
+                <p className="text-xs text-gray-500">Criativos/mês</p>
+              </div>
+            )}
+            {plan.stories_qty > 0 && (
+              <div className="border rounded-lg p-3 text-center">
+                <Camera className="h-5 w-5 mx-auto mb-1" style={{ color: 'hsl(16 82% 51%)' }} />
+                <p className="text-2xl font-bold text-gray-800">{plan.stories_qty}</p>
+                <p className="text-xs text-gray-500">Stories/mês</p>
+              </div>
+            )}
+            {plan.arts_qty > 0 && (
+              <div className="border rounded-lg p-3 text-center">
+                <Palette className="h-5 w-5 mx-auto mb-1" style={{ color: 'hsl(16 82% 51%)' }} />
+                <p className="text-2xl font-bold text-gray-800">{plan.arts_qty}</p>
+                <p className="text-xs text-gray-500">Artes/mês</p>
+              </div>
+            )}
+            {plan.recording_sessions > 0 && (
+              <div className="border rounded-lg p-3 text-center">
+                <Film className="h-5 w-5 mx-auto mb-1" style={{ color: 'hsl(16 82% 51%)' }} />
+                <p className="text-2xl font-bold text-gray-800">{plan.recording_sessions}</p>
+                <p className="text-xs text-gray-500">Captações/mês</p>
+              </div>
+            )}
+            <div className="border rounded-lg p-3 text-center">
+              <BarChart3 className="h-5 w-5 mx-auto mb-1" style={{ color: 'hsl(16 82% 51%)' }} />
+              <p className="text-2xl font-bold text-gray-800">✓</p>
+              <p className="text-xs text-gray-500">Tráfego Pago</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Process */}
+      <div className="px-8 md:px-12 pb-8">
+        <h2 className="text-xl font-bold text-gray-800 mb-1">Como Funciona</h2>
+        <p className="text-sm text-gray-500 mb-6">Nosso processo interno para garantir resultados</p>
+        <div className="space-y-3">
+          {INTERNAL_PROCESS_STEPS.map((step, i) => {
+            const Icon = step.icon;
+            return (
+              <div key={i} className="flex items-start gap-3 p-3 rounded-lg border" style={{ borderColor: 'hsl(16 82% 80%)' }}>
+                <div className="rounded-full p-2 shrink-0" style={{ background: 'hsl(16 82% 96%)' }}>
+                  <Icon className="h-4 w-4" style={{ color: 'hsl(16 82% 51%)' }} />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm text-gray-800 flex items-center gap-2">
+                    {step.title}
+                    <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full text-white" style={{ background: 'hsl(16 82% 51%)' }}>Incluso no pacote</span>
+                  </p>
+                  <p className="text-xs text-gray-500">{step.description}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Pricing */}
+      <div className="px-8 md:px-12 pb-8">
+        <h2 className="text-xl font-bold text-gray-800 mb-6">Investimento</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="border rounded-xl p-6">
+            <h3 className="text-lg font-bold text-gray-800">Plano Semestral</h3>
+            <p className="text-xs text-gray-500 mb-4">Contrato de 6 meses</p>
+            <p className="text-3xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(monthlyTotal)}<span className="text-sm font-normal text-gray-500">/mês</span></p>
+            <div className="mt-3 space-y-1 text-xs text-gray-500">
+              <p>✅ Sem taxa de implementação</p>
+              <p>✅ Todos os serviços do pacote</p>
+              <p>✅ Tráfego pago incluso</p>
+              {bonus.length > 0 && <p>✅ {bonus.length} bônus exclusivos</p>}
+              <p>✅ Equipe dedicada</p>
+              <p>✅ Portal do cliente</p>
+            </div>
+          </div>
+          <div className="border-2 rounded-xl p-6 relative" style={{ borderColor: 'hsl(16 82% 51%)' }}>
+            <div className="absolute -top-3 left-4 px-3 py-0.5 rounded-full text-xs font-bold text-white" style={{ background: 'hsl(16 82% 51%)' }}>RECOMENDADO</div>
+            <h3 className="text-lg font-bold text-gray-800 mt-2">Plano Anual</h3>
+            <p className="text-xs text-gray-500 mb-4">Contrato de 12 meses{discount > 0 ? ` com ${discount}% de desconto` : ''}</p>
+            <p className="text-3xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>
+              {fmt(discount > 0 ? monthlyTotal * (1 - discount / 100) : monthlyTotal)}
+              <span className="text-sm font-normal text-gray-500">/mês</span>
+            </p>
+            {discount > 0 && <p className="text-xs text-gray-400 line-through">{fmt(monthlyTotal)}/mês</p>}
+            <div className="mt-3 space-y-1 text-xs text-gray-500">
+              <p>✅ Sem taxa de implementação</p>
+              <p>✅ Todos os serviços do pacote</p>
+              {bonus.length > 0 && <p>✅ {bonus.length} bônus exclusivos</p>}
+              <p>✅ Equipe dedicada</p>
+              <p>✅ Portal do cliente</p>
+            </div>
+            {discount > 0 && (
+              <div className="mt-4 rounded-lg p-3 text-center" style={{ background: 'hsl(142 71% 95%)' }}>
+                <p className="text-xs text-gray-500">Economia total no plano anual</p>
+                <p className="text-xl font-bold" style={{ color: 'hsl(142 71% 35%)' }}>
+                  {fmt(monthlyTotal * 12 - monthlyTotal * 12 * (1 - discount / 100))}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="mt-4 bg-gray-50 border rounded-xl p-4">
+          <p className="text-xs font-semibold text-gray-600 mb-2">Sem contrato de fidelidade</p>
+          <p className="text-xs text-gray-500 mb-2">Caso opte por não aderir ao contrato de 6 meses, serão cobradas as seguintes taxas:</p>
+          <div className="space-y-1">
+            {Object.entries(IMPLEMENTATION_FEES).map(([k, f]) => (
+              <div key={k} className="flex justify-between text-xs">
+                <span className="text-gray-600">{f.label}</span>
+                <span className="font-semibold text-gray-800">{fmt(f.value)}</span>
+              </div>
+            ))}
+            <div className="border-t pt-1 mt-1 flex justify-between text-sm">
+              <span className="font-semibold text-gray-700">Total implementação</span>
+              <span className="font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(Object.values(IMPLEMENTATION_FEES).reduce((s, f) => s + f.value, 0))}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
+  const renderSystemContent = () => {
+    const sysVal = systemData.value || 0;
+    const discountedVal = sysVal * (1 - discount / 100);
+    const installments = systemData.installments || 1;
+    const installmentVal = discountedVal / installments;
+    return (
+      <>
+        {systemData.scope?.length > 0 && (
+          <div className="p-8 md:p-12">
+            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <Code className="h-5 w-5" style={{ color: 'hsl(16 82% 51%)' }} /> Escopo do Projeto
+            </h2>
+            <div className="space-y-2">
+              {systemData.scope.map((item: any, i: number) => (
+                <div key={item.id || i} className="flex items-start gap-3 p-3 rounded-lg border" style={{ borderColor: 'hsl(16 82% 80%)' }}>
+                  <div className="rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: 'hsl(16 82% 51%)' }}>{i + 1}</div>
+                  <p className="text-sm text-gray-700">{item.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {systemData.deliverables?.length > 0 && (
+          <div className="px-8 md:px-12 pb-8">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Entregas</h2>
+            <div className="space-y-2">
+              {systemData.deliverables.map((item: any, i: number) => (
+                <div key={item.id || i} className="flex items-start gap-3 p-3 rounded-lg bg-gray-50">
+                  <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" style={{ color: 'hsl(16 82% 51%)' }} />
+                  <div>
+                    <p className="font-medium text-sm text-gray-800">{item.name}</p>
+                    {item.description && <p className="text-xs text-gray-500">{item.description}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="px-8 md:px-12 pb-8">
+          <h2 className="text-xl font-bold text-gray-800 mb-6">Investimento</h2>
+          <div className="border-2 rounded-xl p-6" style={{ borderColor: 'hsl(16 82% 51%)' }}>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Valor do projeto</span>
+                <span className="text-xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(sysVal)}</span>
+              </div>
+              {discount > 0 && (
+                <>
+                  <div className="flex justify-between items-center text-green-600">
+                    <span>Desconto ({discount}%)</span>
+                    <span className="font-bold">-{fmt(sysVal - discountedVal)}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-t pt-2">
+                    <span className="font-bold text-gray-800">Total</span>
+                    <span className="text-2xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(discountedVal)}</span>
+                  </div>
+                </>
+              )}
+              <Separator />
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Forma de pagamento</span>
+                <span className="font-medium">{PAYMENT_METHODS[systemData.paymentMethod] || systemData.paymentMethod}</span>
+              </div>
+              {installments > 1 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">{installments}x de</span>
+                  <span className="font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(installmentVal)}</span>
+                </div>
+              )}
+              {systemData.timeline && (
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Prazo de entrega</span>
+                  <span className="font-medium">{systemData.timeline}</span>
+                </div>
+              )}
+            </div>
+          </div>
+          {systemData.additionalCosts && (
+            <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p className="text-xs font-semibold text-yellow-800 mb-1">Custos adicionais</p>
+              <p className="text-sm text-yellow-700 whitespace-pre-wrap">{systemData.additionalCosts}</p>
+            </div>
+          )}
+        </div>
+      </>
+    );
+  };
+
+  const renderEndoContent = () => {
+    const endoVal = endoData.monthlyValue || 0;
+    const discountedVal = endoVal * (1 - discount / 100);
+    return (
+      <>
+        <div className="p-8 md:p-12">
+          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <Megaphone className="h-5 w-5" style={{ color: 'hsl(16 82% 51%)' }} /> Plano de Endomarketing
+          </h2>
+          {endoData.plan && (
+            <div className="rounded-xl p-4 mb-4" style={{ background: 'linear-gradient(135deg, hsl(16 82% 96%), hsl(16 82% 92%))' }}>
+              <p className="font-bold text-lg text-gray-800">
+                {endoData.plan === 'presenca_completa' ? 'Presença Completa' : endoData.plan === 'gravacao_concentrada' ? 'Gravação Concentrada' : endoData.plan}
+              </p>
+            </div>
+          )}
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="border rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-gray-800">{endoData.daysPerWeek || 3}</p>
+              <p className="text-xs text-gray-500">Dias/semana</p>
+            </div>
+            <div className="border rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-gray-800">{endoData.sessionDuration || 2}h</p>
+              <p className="text-xs text-gray-500">Por sessão</p>
+            </div>
+            <div className="border rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-gray-800">{endoData.storiesPerDay || 5}</p>
+              <p className="text-xs text-gray-500">Stories/dia</p>
+            </div>
+          </div>
+          {endoData.description && <p className="text-sm text-gray-600">{endoData.description}</p>}
+        </div>
+        <div className="px-8 md:px-12 pb-8">
+          <h2 className="text-xl font-bold text-gray-800 mb-6">Investimento</h2>
+          <div className="border-2 rounded-xl p-6" style={{ borderColor: 'hsl(16 82% 51%)' }}>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Valor mensal</span>
+                <span className="text-2xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(endoVal)}<span className="text-sm font-normal text-gray-500">/mês</span></span>
+              </div>
+              {discount > 0 && (
+                <>
+                  <div className="flex justify-between items-center text-green-600">
+                    <span>Desconto ({discount}%)</span>
+                    <span className="font-bold">-{fmt(endoVal - discountedVal)}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-t pt-2">
+                    <span className="font-bold text-gray-800">Total mensal</span>
+                    <span className="text-2xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(discountedVal)}<span className="text-sm font-normal text-gray-500">/mês</span></span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -163,7 +463,6 @@ export default function ProposalViewer() {
       )}
 
       <div className="max-w-[800px] mx-auto">
-        {/* Proposal content */}
         <div className="bg-white shadow-xl" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
           {/* Header */}
           <div className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, hsl(16 82% 51%), hsl(16 82% 38%))' }}>
@@ -173,7 +472,7 @@ export default function ProposalViewer() {
             </div>
             <div className="relative p-8 md:p-12 text-white">
               <img src={pulseLogo} alt="Pulse Growth Marketing" className="h-20 mb-6 drop-shadow-lg" />
-              <h1 className="text-3xl md:text-4xl font-bold mb-2">Proposta Comercial</h1>
+              <h1 className="text-3xl md:text-4xl font-bold mb-2">{headerTitle}</h1>
               <p className="text-white/80 text-lg">Preparada exclusivamente para</p>
               <p className="text-2xl font-bold mt-1">{proposal.client_company || 'Sua Empresa'}</p>
               <p className="text-white/70 mt-1">Aos cuidados de {proposal.client_name || 'Cliente'}</p>
@@ -184,57 +483,10 @@ export default function ProposalViewer() {
             </div>
           </div>
 
-          {/* Plan details */}
-          {plan.name && (
-            <div className="p-8 md:p-12">
-              <h2 className="text-xl font-bold text-gray-800 mb-1 flex items-center gap-2">
-                <Rocket className="h-5 w-5" style={{ color: 'hsl(16 82% 51%)' }} /> Pacote {plan.name}
-              </h2>
-              <p className="text-sm text-gray-500 mb-6">{plan.description || 'Solução completa de marketing digital'}</p>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {plan.reels_qty > 0 && (
-                  <div className="border rounded-lg p-3 text-center">
-                    <Film className="h-5 w-5 mx-auto mb-1" style={{ color: 'hsl(16 82% 51%)' }} />
-                    <p className="text-2xl font-bold text-gray-800">{plan.reels_qty}</p>
-                    <p className="text-xs text-gray-500">Reels/mês</p>
-                  </div>
-                )}
-                {plan.creatives_qty > 0 && (
-                  <div className="border rounded-lg p-3 text-center">
-                    <Palette className="h-5 w-5 mx-auto mb-1" style={{ color: 'hsl(16 82% 51%)' }} />
-                    <p className="text-2xl font-bold text-gray-800">{plan.creatives_qty}</p>
-                    <p className="text-xs text-gray-500">Criativos/mês</p>
-                  </div>
-                )}
-                {plan.stories_qty > 0 && (
-                  <div className="border rounded-lg p-3 text-center">
-                    <Camera className="h-5 w-5 mx-auto mb-1" style={{ color: 'hsl(16 82% 51%)' }} />
-                    <p className="text-2xl font-bold text-gray-800">{plan.stories_qty}</p>
-                    <p className="text-xs text-gray-500">Stories/mês</p>
-                  </div>
-                )}
-                {plan.arts_qty > 0 && (
-                  <div className="border rounded-lg p-3 text-center">
-                    <Palette className="h-5 w-5 mx-auto mb-1" style={{ color: 'hsl(16 82% 51%)' }} />
-                    <p className="text-2xl font-bold text-gray-800">{plan.arts_qty}</p>
-                    <p className="text-xs text-gray-500">Artes/mês</p>
-                  </div>
-                )}
-                {plan.recording_sessions > 0 && (
-                  <div className="border rounded-lg p-3 text-center">
-                    <Film className="h-5 w-5 mx-auto mb-1" style={{ color: 'hsl(16 82% 51%)' }} />
-                    <p className="text-2xl font-bold text-gray-800">{plan.recording_sessions}</p>
-                    <p className="text-xs text-gray-500">Captações/mês</p>
-                  </div>
-                )}
-                <div className="border rounded-lg p-3 text-center">
-                  <BarChart3 className="h-5 w-5 mx-auto mb-1" style={{ color: 'hsl(16 82% 51%)' }} />
-                  <p className="text-2xl font-bold text-gray-800">✓</p>
-                  <p className="text-xs text-gray-500">Tráfego Pago</p>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Type-specific content */}
+          {proposalType === 'marketing' && renderMarketingContent()}
+          {proposalType === 'sistema' && renderSystemContent()}
+          {proposalType === 'endomarketing' && renderEndoContent()}
 
           {/* Bonus */}
           {bonus.length > 0 && (
@@ -263,31 +515,6 @@ export default function ProposalViewer() {
             </div>
           )}
 
-          {/* Process */}
-          <div className="px-8 md:px-12 pb-8">
-            <h2 className="text-xl font-bold text-gray-800 mb-1">Como Funciona</h2>
-            <p className="text-sm text-gray-500 mb-6">Nosso processo interno para garantir resultados</p>
-            <div className="space-y-3">
-              {INTERNAL_PROCESS_STEPS.map((step, i) => {
-                const Icon = step.icon;
-                return (
-                  <div key={i} className="flex items-start gap-3 p-3 rounded-lg border" style={{ borderColor: 'hsl(16 82% 80%)' }}>
-                    <div className="rounded-full p-2 shrink-0" style={{ background: 'hsl(16 82% 96%)' }}>
-                      <Icon className="h-4 w-4" style={{ color: 'hsl(16 82% 51%)' }} />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm text-gray-800 flex items-center gap-2">
-                        {step.title}
-                        <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full text-white" style={{ background: 'hsl(16 82% 51%)' }}>Incluso no pacote</span>
-                      </p>
-                      <p className="text-xs text-gray-500">{step.description}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
           {/* Team */}
           {team.length > 0 && (
             <div className="px-8 md:px-12 pb-8">
@@ -313,72 +540,6 @@ export default function ProposalViewer() {
             </div>
           )}
 
-          {/* Pricing */}
-          <div className="px-8 md:px-12 pb-8">
-            <h2 className="text-xl font-bold text-gray-800 mb-6">Investimento</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="border rounded-xl p-6">
-                <h3 className="text-lg font-bold text-gray-800">Plano Semestral</h3>
-                <p className="text-xs text-gray-500 mb-4">Contrato de 6 meses</p>
-                <p className="text-3xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(monthlyTotal)}<span className="text-sm font-normal text-gray-500">/mês</span></p>
-                <div className="mt-3 space-y-1 text-xs text-gray-500">
-                  <p>✅ Sem taxa de implementação</p>
-                  <p>✅ Todos os serviços do pacote</p>
-                  <p>✅ Tráfego pago incluso</p>
-                  {bonus.length > 0 && <p>✅ {bonus.length} bônus exclusivos</p>}
-                  <p>✅ Equipe dedicada</p>
-                  <p>✅ Portal do cliente</p>
-                </div>
-              </div>
-
-              <div className="border-2 rounded-xl p-6 relative" style={{ borderColor: 'hsl(16 82% 51%)' }}>
-                <div className="absolute -top-3 left-4 px-3 py-0.5 rounded-full text-xs font-bold text-white" style={{ background: 'hsl(16 82% 51%)' }}>
-                  RECOMENDADO
-                </div>
-                <h3 className="text-lg font-bold text-gray-800 mt-2">Plano Anual</h3>
-                <p className="text-xs text-gray-500 mb-4">Contrato de 12 meses{discount > 0 ? ` com ${discount}% de desconto` : ''}</p>
-                <p className="text-3xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>
-                  {fmt(discount > 0 ? monthlyTotal * (1 - discount / 100) : monthlyTotal)}
-                  <span className="text-sm font-normal text-gray-500">/mês</span>
-                </p>
-                {discount > 0 && <p className="text-xs text-gray-400 line-through">{fmt(monthlyTotal)}/mês</p>}
-                <div className="mt-3 space-y-1 text-xs text-gray-500">
-                  <p>✅ Sem taxa de implementação</p>
-                  <p>✅ Todos os serviços do pacote</p>
-                  <p>✅ Tráfego pago incluso</p>
-                  {bonus.length > 0 && <p>✅ {bonus.length} bônus exclusivos</p>}
-                  <p>✅ Equipe dedicada</p>
-                  <p>✅ Portal do cliente</p>
-                </div>
-                {discount > 0 && (
-                  <div className="mt-4 rounded-lg p-3 text-center" style={{ background: 'hsl(142 71% 95%)' }}>
-                    <p className="text-xs text-gray-500">Economia total no plano anual</p>
-                    <p className="text-xl font-bold" style={{ color: 'hsl(142 71% 35%)' }}>
-                      {fmt(monthlyTotal * 12 - monthlyTotal * 12 * (1 - discount / 100))}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="mt-4 bg-gray-50 border rounded-xl p-4">
-              <p className="text-xs font-semibold text-gray-600 mb-2">Sem contrato de fidelidade</p>
-              <p className="text-xs text-gray-500 mb-2">Caso opte por não aderir ao contrato de 6 meses, serão cobradas as seguintes taxas:</p>
-              <div className="space-y-1">
-                {Object.entries(IMPLEMENTATION_FEES).map(([k, f]) => (
-                  <div key={k} className="flex justify-between text-xs">
-                    <span className="text-gray-600">{f.label}</span>
-                    <span className="font-semibold text-gray-800">{fmt(f.value)}</span>
-                  </div>
-                ))}
-                <div className="border-t pt-1 mt-1 flex justify-between text-sm">
-                  <span className="font-semibold text-gray-700">Total implementação</span>
-                  <span className="font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(Object.values(IMPLEMENTATION_FEES).reduce((s, f) => s + f.value, 0))}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Observations */}
           {proposal.observations && (
             <div className="px-8 md:px-12 pb-8">
@@ -397,7 +558,6 @@ export default function ProposalViewer() {
 
         {/* === INTERACTIVE SECTION === */}
         <div className="bg-white shadow-xl mt-4 rounded-xl p-6 md:p-8 space-y-6">
-          {/* Accept / Decline */}
           {!isResolved && !isExpired && (
             <div className="space-y-4">
               <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">

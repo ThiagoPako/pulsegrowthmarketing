@@ -812,12 +812,15 @@ export type Database = {
           created_at: string
           created_by: string | null
           custom_discount: number
+          endomarketing_data: Json | null
           has_contract: boolean
           id: string
           observations: string | null
           plan_id: string | null
           plan_snapshot: Json | null
+          proposal_type: string
           status: string
+          system_data: Json | null
           team_members: Json | null
           token: string
           updated_at: string
@@ -833,12 +836,15 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           custom_discount?: number
+          endomarketing_data?: Json | null
           has_contract?: boolean
           id?: string
           observations?: string | null
           plan_id?: string | null
           plan_snapshot?: Json | null
+          proposal_type?: string
           status?: string
+          system_data?: Json | null
           team_members?: Json | null
           token?: string
           updated_at?: string
@@ -854,12 +860,15 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           custom_discount?: number
+          endomarketing_data?: Json | null
           has_contract?: boolean
           id?: string
           observations?: string | null
           plan_id?: string | null
           plan_snapshot?: Json | null
+          proposal_type?: string
           status?: string
+          system_data?: Json | null
           team_members?: Json | null
           token?: string
           updated_at?: string

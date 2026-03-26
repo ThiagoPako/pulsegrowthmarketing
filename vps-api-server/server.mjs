@@ -3640,6 +3640,172 @@ Gere uma mensagem curta e divertida para este momento.`;
   }
 });
 
+// ─── Repair missing content_tasks for completed recordings ──
+app.post('/api/repair-content-tasks', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { recording_id } = req.body;
+
+    // Find recording
+    let recordings;
+    if (recording_id) {
+      const { rows } = await pool.query('SELECT * FROM recordings WHERE id = $1', [recording_id]);
+      recordings = rows;
+    } else {
+      // Find all completed recordings that have scripts without content_tasks
+      const { rows } = await pool.query(`
+        SELECT r.* FROM recordings r
+        WHERE r.status = 'concluida'
+        AND EXISTS (
+          SELECT 1 FROM scripts s
+          WHERE s.recording_id = r.id
+          AND s.recorded = true
+          AND NOT EXISTS (
+            SELECT 1 FROM content_tasks ct WHERE ct.script_id = s.id
+          )
+        )
+        ORDER BY r.date DESC LIMIT 20
+      `);
+      recordings = rows;
+    }
+
+    const created = [];
+    for (const rec of recordings) {
+      const clientId = rec.client_id;
+      if (!clientId) continue;
+
+      // Find recorded scripts linked to this recording
+      const { rows: recScripts } = await pool.query(
+        `SELECT s.* FROM scripts s
+         WHERE (s.recording_id = $1 OR s.client_id = $2)
+         AND s.recorded = true
+         AND NOT EXISTS (SELECT 1 FROM content_tasks ct WHERE ct.script_id = s.id)`,
+        [rec.id, clientId]
+      );
+
+      for (const script of recScripts) {
+        const deadline = new Date();
+        deadline.setHours(deadline.getHours() + 48);
+        const { rows: inserted } = await pool.query(
+          `INSERT INTO content_tasks (client_id, title, content_type, kanban_column, description, script_id, recording_id, drive_link, editing_deadline, created_by)
+           VALUES ($1, $2, $3, 'edicao', $4, $5, $6, $7, $8, $9) RETURNING id, title`,
+          [
+            clientId,
+            script.title,
+            script.content_format || 'reels',
+            `Roteiro gravado pelo videomaker. Reparado automaticamente.`,
+            script.id,
+            rec.id,
+            script.drive_link || null,
+            deadline.toISOString(),
+            rec.videomaker_id || null,
+          ]
+        );
+        if (inserted[0]) created.push(inserted[0]);
+      }
+    }
+
+    res.json({ repaired: created.length, tasks: created });
+  } catch (e) {
+    console.error('POST /api/repair-content-tasks error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Find and fix specific content task by title ──
+app.post('/api/fix-content-task', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { title_search, drive_link } = req.body;
+
+    // Find recording by searching for matching scripts or client names
+    const { rows: matchingRecordings } = await pool.query(`
+      SELECT r.*, c.company_name FROM recordings r
+      LEFT JOIN clients c ON c.id = r.client_id
+      WHERE r.status = 'concluida'
+      AND r.date >= CURRENT_DATE - INTERVAL '7 days'
+      ORDER BY r.date DESC
+    `);
+
+    // Find scripts matching the title
+    const { rows: matchingScripts } = await pool.query(
+      `SELECT s.*, r.client_id as rec_client_id, r.id as rec_id FROM scripts s
+       LEFT JOIN recordings r ON r.id = s.recording_id
+       WHERE s.title ILIKE $1 AND s.recorded = true`,
+      [`%${title_search}%`]
+    );
+
+    // Check if content_task already exists
+    const { rows: existingTasks } = await pool.query(
+      `SELECT * FROM content_tasks WHERE title ILIKE $1`,
+      [`%${title_search}%`]
+    );
+
+    if (existingTasks.length > 0) {
+      // Task exists — update it to edicao if needed
+      const task = existingTasks[0];
+      if (drive_link) {
+        await pool.query(
+          `UPDATE content_tasks SET drive_link = $1, kanban_column = 'edicao', updated_at = NOW() WHERE id = $2`,
+          [drive_link, task.id]
+        );
+      }
+      return res.json({ status: 'updated', task: { ...task, drive_link: drive_link || task.drive_link } });
+    }
+
+    // No existing task — create one from script/recording data
+    if (matchingScripts.length > 0) {
+      const script = matchingScripts[0];
+      const clientId = script.rec_client_id || script.client_id;
+      if (!clientId) return res.status(400).json({ error: 'No client_id found for this script/recording' });
+
+      const deadline = new Date();
+      deadline.setHours(deadline.getHours() + 48);
+      const { rows: inserted } = await pool.query(
+        `INSERT INTO content_tasks (client_id, title, content_type, kanban_column, description, script_id, recording_id, drive_link, editing_deadline)
+         VALUES ($1, $2, $3, 'edicao', $4, $5, $6, $7, $8) RETURNING *`,
+        [
+          clientId,
+          script.title,
+          script.content_format || 'reels',
+          `Reparado manualmente. Link dos materiais: ${drive_link || 'N/A'}`,
+          script.id,
+          script.rec_id || script.recording_id || null,
+          drive_link || null,
+          deadline.toISOString(),
+        ]
+      );
+      return res.json({ status: 'created', task: inserted[0] });
+    }
+
+    // Fallback: search by client name matching the title
+    for (const rec of matchingRecordings) {
+      if (rec.company_name && title_search.toLowerCase().includes(rec.company_name.toLowerCase().substring(0, 5))) {
+        const deadline = new Date();
+        deadline.setHours(deadline.getHours() + 48);
+        const { rows: inserted } = await pool.query(
+          `INSERT INTO content_tasks (client_id, title, content_type, kanban_column, description, drive_link, recording_id, editing_deadline)
+           VALUES ($1, $2, 'reels', 'edicao', $3, $4, $5, $6) RETURNING *`,
+          [
+            rec.client_id,
+            title_search,
+            `Conteúdo reparado. Link dos materiais: ${drive_link || 'N/A'}`,
+            drive_link || null,
+            rec.id,
+            deadline.toISOString(),
+          ]
+        );
+        return res.json({ status: 'created', task: inserted[0] });
+      }
+    }
+
+    res.status(404).json({ error: 'Could not find matching recording/script', matchingRecordings: matchingRecordings.map(r => ({ id: r.id, date: r.date, client: r.company_name })) });
+  } catch (e) {
+    console.error('POST /api/fix-content-task error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Health check ───────────────────────────────────────────
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 

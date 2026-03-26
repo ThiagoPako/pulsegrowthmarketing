@@ -774,7 +774,7 @@ export default function Schedule() {
       }
 
       if (existing && existing.length > 0) {
-        await supabase.from('content_tasks').update({
+        const { error: updateErr } = await supabase.from('content_tasks').update({
           title: script.title,
           kanban_column: 'edicao',
           drive_link: scriptDriveLink,
@@ -784,9 +784,17 @@ export default function Schedule() {
           script_alteration_type: altType,
           script_alteration_notes: altNotes,
         } as any).eq('id', existing[0].id);
+        if (updateErr) console.error('content_task update error:', updateErr);
       } else {
-        await supabase.from('content_tasks').insert({
-          client_id: finishRecording.clientId,
+        // For avulso recordings (empty clientId), use script.clientId or find client from recording
+        const taskClientId = finishRecording.clientId || script.clientId || '';
+        if (!taskClientId) {
+          console.error(`Skipping content_task creation for script "${script.title}" — no client_id available (avulso recording)`);
+          toast.error(`⚠️ Conteúdo "${script.title}" não pôde ser enviado para edição: sem cliente vinculado.`);
+          continue;
+        }
+        const { error: insertErr } = await supabase.from('content_tasks').insert({
+          client_id: taskClientId,
           title: script.title,
           content_type: script.contentFormat || 'reels',
           kanban_column: 'edicao',
@@ -799,6 +807,10 @@ export default function Schedule() {
           script_alteration_notes: altNotes,
           created_by: currentUser?.id || null,
         } as any);
+        if (insertErr) {
+          console.error('content_task insert error:', insertErr);
+          toast.error(`Erro ao criar tarefa de edição para "${script.title}": ${insertErr.message}`);
+        }
       }
     }
 

@@ -878,6 +878,7 @@ export default function ContentKanban() {
                     <div className="space-y-2.5">
                       {colTasks.map((task, taskIdx) => (
                         <motion.div
+                          id={`task-card-${task.id}`}
                           key={task.id}
                           layout
                           initial={{ opacity: 0, scale: 0.92, y: 10 }}

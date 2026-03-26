@@ -812,35 +812,22 @@ export default function Dashboard() {
         </motion.div>
       )}
 
-      {/* SEASONAL DATES */}
-      {(() => {
-        const allAlerts: { clientName: string; clientColor: string; label: string; date: Date; daysUntil: number; urgency: 'high' | 'medium' | 'low' }[] = [];
-        clients.forEach(c => {
-          if (!c.niche || c.niche === 'outro') return;
-          const alerts = getSeasonalAlerts(c.niche);
-          alerts.forEach(a => {
-            if (!allAlerts.some(x => x.label === a.label && x.clientName === c.companyName)) {
-              allAlerts.push({ ...a, clientName: c.companyName, clientColor: c.color });
-            }
-          });
-        });
-        const grouped = new Map<string, { label: string; date: Date; daysUntil: number; urgency: 'high' | 'medium' | 'low'; clients: { name: string; color: string }[] }>();
-        allAlerts.forEach(a => {
-          const key = a.label;
-          if (!grouped.has(key)) grouped.set(key, { label: a.label, date: a.date, daysUntil: a.daysUntil, urgency: a.urgency, clients: [] });
-          grouped.get(key)!.clients.push({ name: a.clientName, color: a.clientColor });
-        });
-        const sortedAlerts = Array.from(grouped.values()).sort((a, b) => a.daysUntil - b.daysUntil);
-        if (sortedAlerts.length === 0) return null;
-        return (
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-3 sm:p-5 border-warning/30">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle size={14} className="text-warning" />
-              <h3 className="font-display font-semibold text-xs sm:text-sm">📅 Datas Sazonais</h3>
-              <Badge variant="outline" className="text-[9px] h-4 px-1 border-warning/40 text-warning">{sortedAlerts.length}</Badge>
-            </div>
+      {/* SEASONAL DATES - AI POWERED */}
+      {aiSeasonalAlerts.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-3 sm:p-5 border-warning/30">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle size={14} className="text-warning" />
+            <h3 className="font-display font-semibold text-xs sm:text-sm">🤖 Datas Sazonais (IA)</h3>
+            <Badge variant="outline" className="text-[9px] h-4 px-1 border-warning/40 text-warning">{aiSeasonalAlerts.reduce((s, a) => s + a.dates.length, 0)}</Badge>
+            <button onClick={() => { clearSeasonalCache(); loadAIAlerts(); }} className="ml-auto text-[9px] text-muted-foreground hover:text-foreground flex items-center gap-1">
+              <RefreshCw size={10} className={seasonalLoading ? 'animate-spin' : ''} /> Atualizar
+            </button>
+          </div>
+          {seasonalLoading ? (
+            <div className="text-xs text-muted-foreground text-center py-4">🔄 IA analisando datas sazonais...</div>
+          ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 sm:gap-2">
-              {sortedAlerts.slice(0, 6).map((alert, i) => (
+              {aiSeasonalAlerts.flatMap(a => a.dates.map(d => ({ ...d, clientName: a.clientName, clientId: a.clientId, niche: a.niche }))).sort((a, b) => a.days_until - b.days_until).slice(0, 9).map((alert, i) => (
                 <motion.div key={i} whileTap={{ scale: 0.97 }} className={`p-2 sm:p-3 rounded-lg border transition-all ${
                   alert.urgency === 'high' ? 'bg-destructive/5 border-destructive/30' :
                   alert.urgency === 'medium' ? 'bg-warning/5 border-warning/30' :
@@ -854,28 +841,21 @@ export default function Dashboard() {
                       alert.urgency === 'high' ? 'bg-destructive/15 text-destructive' :
                       alert.urgency === 'medium' ? 'bg-warning/15 text-warning' :
                       'bg-muted text-muted-foreground'
-                    }`}>{alert.daysUntil}d</span>
+                    }`}>{alert.days_until}d</span>
                   </div>
-                  <p className="text-[9px] text-muted-foreground mb-1">
-                    {alert.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })}
-                  </p>
-                  <div className="flex flex-wrap gap-0.5">
-                    {alert.clients.slice(0, 3).map((c, j) => (
-                      <span key={j} className="text-[8px] px-1 py-0.5 rounded font-medium"
-                        style={{ backgroundColor: `hsl(${c.color} / 0.12)`, color: `hsl(${c.color})` }}>
-                        {c.name}
-                      </span>
-                    ))}
-                    {alert.clients.length > 3 && (
-                      <span className="text-[8px] px-1 py-0.5 rounded bg-muted text-muted-foreground">+{alert.clients.length - 3}</span>
-                    )}
-                  </div>
+                  <p className="text-[9px] text-muted-foreground mb-1">{alert.date}</p>
+                  {alert.suggestion && (
+                    <p className="text-[9px] text-foreground/70 italic mb-1">💡 {alert.suggestion}</p>
+                  )}
+                  <span className="text-[8px] px-1 py-0.5 rounded font-medium bg-muted text-muted-foreground">
+                    {alert.clientName}
+                  </span>
                 </motion.div>
               ))}
             </div>
-          </motion.div>
-        );
-      })()}
+          )}
+        </motion.div>
+      )}
 
       {/* TODAY SCHEDULE + VM PROGRESS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">

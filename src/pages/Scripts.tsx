@@ -424,10 +424,14 @@ export default function Scripts() {
 
     for (const page of pages) {
       await waitForPdfAssets(page);
+      // Ensure html2canvas captures the FULL scrollHeight (not clipped by overflow:hidden)
+      const actualHeight = page.scrollHeight;
       const canvas = await html2canvas(page, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
+        height: actualHeight,
+        windowHeight: actualHeight,
       });
 
       renderedPages.push({
@@ -457,6 +461,8 @@ export default function Scripts() {
   const buildPdfPages = useCallback(async (selectedScripts: Script[]) => {
     const pdfWidthPx = 794;
     const maxPageHeightPx = Math.floor((pdfWidthPx * 297) / 210);
+    const bottomPadding = 40; // Safety margin to prevent text clipping
+    const effectiveMaxHeight = maxPageHeightPx - bottomPadding;
     const sourceRoot = document.createElement('div');
     sourceRoot.style.cssText = `position:fixed;left:-20000px;top:0;width:${pdfWidthPx}px;background:white;pointer-events:none;z-index:-1;`;
 
@@ -506,7 +512,7 @@ export default function Scripts() {
       const pages: HTMLDivElement[] = [];
       const createPage = () => {
         const page = document.createElement('div');
-        page.style.cssText = `width:${pdfWidthPx}px;background:white;box-sizing:border-box;overflow:hidden;`;
+        page.style.cssText = `width:${pdfWidthPx}px;background:white;box-sizing:border-box;overflow:hidden;padding-bottom:${bottomPadding}px;`;
         renderRoot.appendChild(page);
         pages.push(page);
         return page;
@@ -517,10 +523,14 @@ export default function Scripts() {
         const clone = block.cloneNode(true) as HTMLElement;
         currentPage.appendChild(clone);
 
-        if (currentPage.scrollHeight > maxPageHeightPx && currentPage.childElementCount > 1) {
+        // Use effective max to leave breathing room at the bottom
+        if (currentPage.scrollHeight > effectiveMaxHeight && currentPage.childElementCount > 1) {
           currentPage.removeChild(clone);
           currentPage = createPage();
           currentPage.appendChild(clone);
+
+          // If a single block still exceeds the page, allow it (avoid infinite loop)
+          // but it will be captured fully via scrollHeight-based page size
         }
       };
 

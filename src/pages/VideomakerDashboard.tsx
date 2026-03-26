@@ -1210,6 +1210,108 @@ export default function VideomakerDashboard() {
         </div>
       </div>
 
+      {/* ── Upload Stories Section ── */}
+      <div className="glass-card p-3 sm:p-5">
+        <div className="flex items-center gap-2 mb-3 sm:mb-4">
+          <motion.div
+            animate={{ scale: [1, 1.15, 1], rotate: [0, -5, 0] }}
+            transition={{ duration: 2, repeat: Infinity }}
+          >
+            <Camera size={16} className="text-primary" />
+          </motion.div>
+          <h3 className="font-display font-semibold text-sm">Subir Stories Editados</h3>
+          {storiesUploaded > 0 && (
+            <Badge className="bg-success/20 text-success border-success/30 text-[10px]">
+              +{storiesUploaded * VM_SCORE.STORY_EDITADO} pts hoje
+            </Badge>
+          )}
+        </div>
+
+        <p className="text-xs text-muted-foreground mb-3">
+          Suba stories que você gravou e editou. Cada story gera <strong className="text-primary">+{VM_SCORE.STORY_EDITADO} pontos</strong> e cria uma tarefa automática para a equipe de Social Media agendar.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Client selection */}
+          <div>
+            <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Cliente</label>
+            <Select value={storyClientId} onValueChange={setStoryClientId}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Selecione o cliente..." />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.filter(c => c.companyName).sort((a, b) => a.companyName.localeCompare(b.companyName)).map(c => (
+                  <SelectItem key={c.id} value={c.id}>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: `hsl(${c.color})` }} />
+                      {c.companyName}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Title */}
+          <div>
+            <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Título (opcional)</label>
+            <Input
+              value={storyTitle}
+              onChange={e => setStoryTitle(e.target.value)}
+              placeholder={`Story ${format(new Date(), 'dd/MM')}`}
+              className="h-9"
+            />
+          </div>
+
+          {/* Upload button */}
+          <div className="flex items-end">
+            <input
+              ref={storyFileRef}
+              type="file"
+              accept="video/*"
+              onChange={handleStoryUpload}
+              className="hidden"
+              id="story-upload-input"
+            />
+            <motion.div className="w-full" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+              <Button
+                onClick={() => {
+                  if (!storyClientId) { toast.error('Selecione um cliente primeiro'); return; }
+                  storyFileRef.current?.click();
+                }}
+                disabled={storyUploading || !storyClientId}
+                className="w-full gap-2 h-9"
+              >
+                {storyUploading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                    {storyUploadProgress}
+                  </>
+                ) : (
+                  <>
+                    <Upload size={14} />
+                    Enviar Story
+                  </>
+                )}
+              </Button>
+            </motion.div>
+          </div>
+        </div>
+
+        {storiesUploaded > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-3 p-2 rounded-lg bg-success/10 border border-success/20 flex items-center gap-2"
+          >
+            <Check size={14} className="text-success" />
+            <span className="text-xs text-success font-medium">
+              {storiesUploaded} story(s) enviado(s) hoje — tarefas criadas para agendamento
+            </span>
+          </motion.div>
+        )}
+      </div>
+
       {/* ── Finish Recording Dialog (Multi-step: 3 steps) ── */}
       <Dialog open={finishDialogOpen} onOpenChange={v => { if (!v) { setFinishDialogOpen(false); setFinishStep('scripts'); setDriveLinks({}); setSelectedEditorId('__auto__'); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] sm:max-h-[85vh] overflow-y-auto mx-2 sm:mx-auto p-4 sm:p-6">

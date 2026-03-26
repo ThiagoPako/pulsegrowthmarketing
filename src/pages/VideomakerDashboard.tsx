@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { useApp } from '@/contexts/AppContext';
 import { highlightQuotes, highlightQuotesForPdf } from '@/lib/highlightQuotes';
@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Square, FileText, Check, Clock, Video, Users as UsersIcon,
   TrendingUp, BarChart3, Undo2, AlertTriangle, Star, Eye, ChevronLeft, Download, Link, ArrowRight,
-  ThumbsDown, Pencil, MessageCircle, Send, UserCheck, Rocket, Hourglass, RefreshCw
+  ThumbsDown, Pencil, MessageCircle, Send, UserCheck, Rocket, Hourglass, RefreshCw, Upload, Camera
 } from 'lucide-react';
 import LiveRecordingCard from '@/components/videomaker/LiveRecordingCard';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -22,6 +22,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import pulseHeader from '@/assets/pulse_header.png';
+import { uploadFileToVps } from '@/services/vpsApi';
+import { VM_SCORE } from '@/lib/scoringSystem';
 import { format, addDays, startOfWeek, startOfMonth, endOfMonth, endOfWeek, isWithinInterval, parseISO, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -56,6 +58,14 @@ export default function VideomakerDashboard() {
   // Celebration state
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationScore, setCelebrationScore] = useState(0);
+
+  // Story upload state
+  const [storyClientId, setStoryClientId] = useState('');
+  const [storyUploading, setStoryUploading] = useState(false);
+  const [storyUploadProgress, setStoryUploadProgress] = useState('');
+  const [storyTitle, setStoryTitle] = useState('');
+  const [storiesUploaded, setStoriesUploaded] = useState(0);
+  const storyFileRef = useRef<HTMLInputElement>(null);
 
   // ── Waiting for client state ──
   const [waitingRecordingId, setWaitingRecordingId] = useState<string | null>(null);
@@ -648,6 +658,96 @@ export default function VideomakerDashboard() {
     }
   }, [selectedScriptIds, scripts, scriptsClientId, clients]);
 
+  // ── Story Upload Handler ──
+  const handleStoryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!storyClientId) { toast.error('Selecione um cliente primeiro'); return; }
+    const maxSize = 500 * 1024 * 1024;
+    if (file.size > maxSize) { toast.error('Máximo: 500MB'); return; }
+
+    setStoryUploading(true);
+    setStoryUploadProgress(`Enviando ${file.name}...`);
+    try {
+      const folder = `stories/${storyClientId}`;
+      const url = await uploadFileToVps(file, folder);
+      const client = clients.find(c => c.id === storyClientId);
+      const title = storyTitle.trim() || `Story ${format(new Date(), 'dd/MM HH:mm')}`;
+
+      // 1. Create content_task for social media (agendamentos column = ready to schedule)
+      const taskId = crypto.randomUUID();
+      await supabase.from('content_tasks').insert({
+        id: taskId,
+        client_id: storyClientId,
+        title: `📱 ${title}`,
+        content_type: 'story',
+        kanban_column: 'agendamentos',
+        description: `Story gravado e editado pelo videomaker.\n\n📥 Download: ${url}`,
+        edited_video_link: url,
+        edited_video_type: 'upload',
+        created_by: vmId,
+        approved_at: new Date().toISOString(),
+      } as any);
+
+      // 2. Create social_media_delivery for scheduling
+      await supabase.from('social_media_deliveries').insert({
+        client_id: storyClientId,
+        content_type: 'story',
+        title: `📱 ${title}`,
+        description: `Story editado pelo videomaker. Download: ${url}`,
+        status: 'entregue',
+        delivered_at: format(new Date(), 'yyyy-MM-dd'),
+        created_by: vmId,
+        content_task_id: taskId,
+      } as any);
+
+      // 3. Notify social_media role (Rayssa)
+      await supabase.rpc('notify_role', {
+        _role: 'social_media',
+        _title: '📱 Novo Story para agendar',
+        _message: `${client?.companyName || 'Cliente'} — "${title}" foi editado pelo videomaker e está pronto para agendamento.`,
+        _type: 'story_upload',
+        _link: '/entregas-social',
+      });
+
+      // 4. Upload to client portal
+      const now = new Date();
+      await supabase.from('client_portal_contents').insert({
+        client_id: storyClientId,
+        title: `📱 ${title}`,
+        content_type: 'story',
+        file_url: url,
+        status: 'pendente',
+        season_month: now.getMonth() + 1,
+        season_year: now.getFullYear(),
+        uploaded_by: vmId,
+      } as any);
+
+      // 5. Portal notification
+      await supabase.from('client_portal_notifications').insert({
+        client_id: storyClientId,
+        title: '📱 Novo Story enviado',
+        message: `"${title}" foi gravado e editado. Acesse para visualizar.`,
+        type: 'story_upload',
+      } as any);
+
+      setStoriesUploaded(prev => prev + 1);
+      setStoryTitle('');
+      toast.success(`Story enviado! +${VM_SCORE.STORY_EDITADO} pts 🚀`);
+      
+      // Show mini celebration
+      setCelebrationScore(VM_SCORE.STORY_EDITADO);
+      setShowCelebration(true);
+      setTimeout(() => setShowCelebration(false), 2500);
+    } catch (err: any) {
+      toast.error(`Erro: ${err.message}`);
+    } finally {
+      setStoryUploading(false);
+      setStoryUploadProgress('');
+      if (storyFileRef.current) storyFileRef.current.value = '';
+    }
+  };
+
 
   const stats = useMemo(() => {
     const monthStart2 = startOfMonth(today);
@@ -1108,6 +1208,108 @@ export default function VideomakerDashboard() {
             );
           })}
         </div>
+      </div>
+
+      {/* ── Upload Stories Section ── */}
+      <div className="glass-card p-3 sm:p-5">
+        <div className="flex items-center gap-2 mb-3 sm:mb-4">
+          <motion.div
+            animate={{ scale: [1, 1.15, 1], rotate: [0, -5, 0] }}
+            transition={{ duration: 2, repeat: Infinity }}
+          >
+            <Camera size={16} className="text-primary" />
+          </motion.div>
+          <h3 className="font-display font-semibold text-sm">Subir Stories Editados</h3>
+          {storiesUploaded > 0 && (
+            <Badge className="bg-success/20 text-success border-success/30 text-[10px]">
+              +{storiesUploaded * VM_SCORE.STORY_EDITADO} pts hoje
+            </Badge>
+          )}
+        </div>
+
+        <p className="text-xs text-muted-foreground mb-3">
+          Suba stories que você gravou e editou. Cada story gera <strong className="text-primary">+{VM_SCORE.STORY_EDITADO} pontos</strong> e cria uma tarefa automática para a equipe de Social Media agendar.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Client selection */}
+          <div>
+            <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Cliente</label>
+            <Select value={storyClientId} onValueChange={setStoryClientId}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Selecione o cliente..." />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.filter(c => c.companyName).sort((a, b) => a.companyName.localeCompare(b.companyName)).map(c => (
+                  <SelectItem key={c.id} value={c.id}>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: `hsl(${c.color})` }} />
+                      {c.companyName}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Title */}
+          <div>
+            <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Título (opcional)</label>
+            <Input
+              value={storyTitle}
+              onChange={e => setStoryTitle(e.target.value)}
+              placeholder={`Story ${format(new Date(), 'dd/MM')}`}
+              className="h-9"
+            />
+          </div>
+
+          {/* Upload button */}
+          <div className="flex items-end">
+            <input
+              ref={storyFileRef}
+              type="file"
+              accept="video/*"
+              onChange={handleStoryUpload}
+              className="hidden"
+              id="story-upload-input"
+            />
+            <motion.div className="w-full" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+              <Button
+                onClick={() => {
+                  if (!storyClientId) { toast.error('Selecione um cliente primeiro'); return; }
+                  storyFileRef.current?.click();
+                }}
+                disabled={storyUploading || !storyClientId}
+                className="w-full gap-2 h-9"
+              >
+                {storyUploading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                    {storyUploadProgress}
+                  </>
+                ) : (
+                  <>
+                    <Upload size={14} />
+                    Enviar Story
+                  </>
+                )}
+              </Button>
+            </motion.div>
+          </div>
+        </div>
+
+        {storiesUploaded > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-3 p-2 rounded-lg bg-success/10 border border-success/20 flex items-center gap-2"
+          >
+            <Check size={14} className="text-success" />
+            <span className="text-xs text-success font-medium">
+              {storiesUploaded} story(s) enviado(s) hoje — tarefas criadas para agendamento
+            </span>
+          </motion.div>
+        )}
       </div>
 
       {/* ── Finish Recording Dialog (Multi-step: 3 steps) ── */}

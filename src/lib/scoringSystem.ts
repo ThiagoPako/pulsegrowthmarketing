@@ -31,6 +31,8 @@ export const VM_SCORE = {
   ENDO: 8,
   /** Pontos a cada 10 minutos de espera (waiting for client) */
   WAIT_PER_10MIN: 2,
+  /** Cada story editado e subido pelo videomaker */
+  STORY_EDITADO: 2,
 } as const;
 
 // ── Editor Scoring ──

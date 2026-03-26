@@ -419,7 +419,7 @@ export default function CommercialProposal() {
         totalValue: cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0),
       } : {};
 
-      let saveSystemData = systemData;
+      let saveSystemData: any = systemData;
       if (proposalType === 'personalizada') saveSystemData = customData;
       if (proposalType === 'cronograma') saveSystemData = cronogramaData;
 

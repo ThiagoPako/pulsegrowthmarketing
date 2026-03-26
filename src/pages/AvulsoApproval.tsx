@@ -93,15 +93,15 @@ export default function AvulsoApproval() {
     };
     loadTask();
 
-    // Load team and clients in parallel
+    // Load team and clients via public avulso endpoint
     const loadExtras = async () => {
       try {
         const [teamRes, clientsRes] = await Promise.all([
-          fetch(`${VPS_API_BASE}/data/profiles?select=name,role,avatar_url&order=name.asc`).then(r => r.json()),
-          fetch(`${VPS_API_BASE}/data/clients?select=id,company_name,logo_url,color&order=company_name.asc`).then(r => r.json()),
+          avulsoAction({ action: 'get_team' }),
+          avulsoAction({ action: 'get_client_logos' }),
         ]);
-        if (Array.isArray(teamRes)) setTeamMembers(teamRes.filter((m: any) => m.name && m.role));
-        if (Array.isArray(clientsRes)) setClientLogos(clientsRes.filter((c: any) => c.logo_url));
+        if (Array.isArray(teamRes?.team)) setTeamMembers(teamRes.team.filter((m: any) => m.name && m.role));
+        if (Array.isArray(clientsRes?.clients)) setClientLogos(clientsRes.clients.filter((c: any) => c.logo_url));
       } catch (e) {
         console.warn('Failed to load extras:', e);
       }

@@ -437,9 +437,25 @@ export default function CommercialProposal() {
   const renderSystemForm = () => (
     <>
       <Card>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> Funções do Sistema (IA)</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">Descreva o que o sistema precisa fazer e a IA vai gerar os módulos automaticamente</p>
+          <Textarea
+            value={systemFunctionsDesc}
+            onChange={e => setSystemFunctionsDesc(e.target.value)}
+            placeholder="Ex: O sistema precisa gerenciar estoque, controlar vendas, emitir relatórios financeiros, ter cadastro de clientes com histórico de compras, controle de funcionários com ponto eletrônico..."
+            rows={4}
+          />
+          <Button onClick={generateModulesWithAI} disabled={generatingModules || !systemFunctionsDesc.trim()} className="w-full">
+            {generatingModules ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Gerando módulos...</> : <><Sparkles className="h-4 w-4 mr-2" /> Gerar Módulos com IA</>}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader><CardTitle className="text-base flex items-center gap-2"><Code className="h-4 w-4 text-primary" /> Escopo do Sistema</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-xs text-muted-foreground">Descreva os módulos e funcionalidades do sistema</p>
+          <p className="text-xs text-muted-foreground">Módulos e funcionalidades (adicione manualmente ou via IA)</p>
           {systemScope.map(item => (
             <div key={item.id} className="flex items-center justify-between bg-accent/30 rounded-lg p-2">
               <p className="text-sm">{item.description}</p>
@@ -1040,38 +1056,56 @@ export default function CommercialProposal() {
           </Card>
 
           {/* Team */}
-          <Card>
+          <Card className="lg:col-span-2">
             <CardHeader><CardTitle className="text-base flex items-center gap-2"><Users className="h-4 w-4" /> Equipe do Projeto</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <Label>Adicionar da equipe</Label>
-                <Select onValueChange={addFromTeam}>
-                  <SelectTrigger><SelectValue placeholder="Selecionar colaborador" /></SelectTrigger>
-                  <SelectContent>
-                    {users.filter(u => !teamMembers.find(t => t.name === (u.displayName || u.name))).map(u => (
-                      <SelectItem key={u.id} value={u.id}>{u.displayName || u.name} ({u.role})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <CardContent className="space-y-4">
+              <p className="text-xs text-muted-foreground">Clique nos membros para adicionar ou remover da proposta</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                {users.map(u => {
+                  const memberName = u.displayName || u.name;
+                  const isSelected = teamMembers.some(t => t.name === memberName);
+                  const roleLabels: Record<string, string> = {
+                    admin: 'Gestor', videomaker: 'Videomaker', social_media: 'Social Media',
+                    editor: 'Editor', designer: 'Designer', fotografo: 'Fotógrafo',
+                    endomarketing: 'Endomarketing', parceiro: 'Parceiro',
+                  };
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => toggleTeamMember(u.id)}
+                      className={cn(
+                        "relative rounded-xl border-2 p-3 text-center transition-all",
+                        isSelected ? "border-primary bg-primary/10 shadow-md" : "border-border hover:border-primary/40 hover:bg-accent/30"
+                      )}
+                    >
+                      {isSelected && <CheckCircle2 className="absolute top-1.5 right-1.5 h-4 w-4 text-primary" />}
+                      {u.avatarUrl ? (
+                        <img src={u.avatarUrl} alt={memberName} className="w-10 h-10 rounded-full mx-auto mb-1.5 object-cover border-2 border-border" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full mx-auto mb-1.5 flex items-center justify-center bg-primary text-primary-foreground font-bold text-xs">
+                          {memberName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
+                      <p className="font-medium text-xs truncate">{memberName}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{u.jobTitle || roleLabels[u.role] || u.role}</p>
+                    </button>
+                  );
+                })}
               </div>
-              {teamMembers.map(m => (
-                <div key={m.id} className="flex items-center justify-between bg-secondary/50 rounded-lg p-2">
-                  <div>
-                    <p className="font-medium text-sm">{m.name}</p>
-                    <p className="text-xs text-muted-foreground">{m.role}</p>
-                  </div>
-                  <Button size="icon" variant="ghost" onClick={() => setTeamMembers(prev => prev.filter(x => x.id !== m.id))}>
-                    <Trash2 className="h-3 w-3" />
+              {/* Manual add */}
+              <details className="group">
+                <summary className="text-xs text-muted-foreground cursor-pointer flex items-center gap-1 hover:text-foreground">
+                  <UserPlus className="h-3 w-3" /> Adicionar membro externo manualmente
+                </summary>
+                <div className="border rounded-lg p-3 space-y-2 mt-2">
+                  <Input placeholder="Nome" value={newMemberName} onChange={e => setNewMemberName(e.target.value)} />
+                  <Input placeholder="Função" value={newMemberRole} onChange={e => setNewMemberRole(e.target.value)} />
+                  <Button size="sm" onClick={addTeamMember} disabled={!newMemberName || !newMemberRole}>
+                    <Plus className="h-3 w-3 mr-1" /> Adicionar
                   </Button>
                 </div>
-              ))}
-              <div className="border rounded-lg p-3 space-y-2">
-                <Input placeholder="Nome" value={newMemberName} onChange={e => setNewMemberName(e.target.value)} />
-                <Input placeholder="Função" value={newMemberRole} onChange={e => setNewMemberRole(e.target.value)} />
-                <Button size="sm" onClick={addTeamMember} disabled={!newMemberName || !newMemberRole}>
-                  <Plus className="h-3 w-3 mr-1" /> Adicionar Manual
-                </Button>
-              </div>
+              </details>
             </CardContent>
           </Card>
 

@@ -1233,6 +1233,8 @@ export default function CommercialProposal() {
                       totalValue = sys.value || 0;
                     } else if (pType === 'endomarketing') {
                       totalValue = (p.endomarketing_data || {}).monthlyValue || 0;
+                    } else if (pType === 'personalizada') {
+                      totalValue = sys.monthlyValue || 0;
                     }
                     const discount = p.custom_discount || 0;
                     if (discount > 0) totalValue = totalValue * (1 - discount / 100);

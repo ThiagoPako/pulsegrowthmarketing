@@ -177,7 +177,7 @@ export default function ProposalViewer() {
   const discount = proposal.custom_discount || 0;
   const isExpired = new Date(proposal.validity_date) < new Date();
   const isResolved = proposal.status === 'aceita' || proposal.status === 'recusada';
-  const headerTitle = proposalType === 'sistema' ? 'Proposta de Sistema' : proposalType === 'endomarketing' ? 'Proposta de Endomarketing' : 'Proposta Comercial';
+  const headerTitle = proposalType === 'sistema' ? 'Proposta de Sistema' : proposalType === 'endomarketing' ? 'Proposta de Endomarketing' : proposalType === 'personalizada' ? 'Proposta Personalizada' : 'Proposta Comercial';
 
   const accentColor = 'hsl(16 82% 51%)';
   const accentDark = 'hsl(16 82% 38%)';

@@ -140,7 +140,11 @@ export default function Dashboard() {
     supabase.from('recording_wait_logs').select('*').then(({ data }) => { if (data) setWaitLogs(data); });
   }, []);
 
+  // Load AI seasonal alerts when clients are available
   useEffect(() => {
+    if (clients.length > 0) loadAIAlerts();
+  }, [clients.length]);
+
     const fetchContractAlerts = async () => {
       const { data } = await supabase.from('clients').select('company_name, contract_start_date, contract_duration_months').not('contract_start_date', 'is', null);
       if (!data) return;

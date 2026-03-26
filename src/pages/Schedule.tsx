@@ -766,7 +766,7 @@ export default function Schedule() {
       const altType = isAltered ? 'altered' : isVerbal ? 'verbal' : null;
       const altNotes = finishAlterationNotes[scriptId]?.trim() || null;
       const isAvulsoTask = !finishRecording.clientId && !script.clientId && finishRecording.type === 'avulso';
-      const taskClientId = finishRecording.clientId || script.clientId || (isAvulsoTask ? finishRecording.id : '');
+      const taskClientId = finishRecording.clientId || script.clientId || null;
 
       let description = `Roteiro gravado pelo videomaker. Link dos materiais: ${scriptDriveLink}`;
       if (isAltered) {

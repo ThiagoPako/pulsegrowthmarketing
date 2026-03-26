@@ -202,22 +202,59 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
           <DeadlineBadge deadline={task.approval_deadline} label="Aprovação" startedAt={task.approval_sent_at} />
         )}
 
-        {/* Assigned editor badge - show "editado por" in review */}
+        {/* Animated editor claim flag */}
         {task.assigned_to && (
-          <div className={`flex items-center gap-1.5 text-[10px] rounded-md px-2 py-1 ${
-            isReview ? 'text-teal-700 dark:text-teal-300 bg-teal-500/10 border border-teal-500/20' : 'text-muted-foreground bg-muted/50'
-          }`}>
-            <Scissors size={10} />
-            <span>{isReview ? 'Editado por' : 'Editor'}: <strong className="text-foreground">{users.find(u => u.id === task.assigned_to)?.name || 'Editor'}</strong></span>
-          </div>
+          <AnimatePresence>
+            <motion.div
+              initial={{ scale: 0, rotate: -20 }}
+              animate={{ scale: 1, rotate: 0 }}
+              className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 border ${
+                isReview 
+                  ? 'bg-teal-500/10 border-teal-500/30' 
+                  : 'bg-primary/5 border-primary/20'
+              }`}
+            >
+              <motion.div
+                className="relative"
+                animate={{ y: [0, -2, 0] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <UserAvatar 
+                  user={{ name: users.find(u => u.id === task.assigned_to)?.name || 'Editor', avatarUrl: users.find(u => u.id === task.assigned_to)?.avatarUrl }} 
+                  size="sm" 
+                  className="ring-2 ring-primary/40"
+                />
+                <motion.div
+                  className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-primary flex items-center justify-center"
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                >
+                  <Flag size={7} className="text-primary-foreground" />
+                </motion.div>
+              </motion.div>
+              <div className="min-w-0">
+                <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-medium">
+                  {isReview ? '🎬 Editado por' : '🚩 Marcado por'}
+                </p>
+                <p className="text-xs font-bold text-foreground truncate">
+                  {users.find(u => u.id === task.assigned_to)?.name || 'Editor'}
+                </p>
+              </div>
+            </motion.div>
+          </AnimatePresence>
         )}
 
         {/* Action buttons based on column */}
         {task.kanban_column === 'edicao' && !task.assigned_to && (
-          <Button size="sm" className="w-full gap-1.5 h-7 text-xs mt-1 bg-primary hover:bg-primary/90" 
-            onClick={(e) => { e.stopPropagation(); onClaimTask(task); }}>
-            <Scissors size={11} /> Pegar para Editar
-          </Button>
+          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+            <Button size="sm" className="w-full gap-2 h-8 text-xs mt-1 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-sm" 
+              onClick={(e) => { e.stopPropagation(); onClaimTask(task); }}>
+              <motion.div animate={{ rotate: [0, -15, 15, 0] }} transition={{ duration: 1.5, repeat: Infinity, repeatDelay: 2 }}>
+                <Flag size={12} />
+              </motion.div>
+              🚩 Marcar como Meu
+            </Button>
+          </motion.div>
         )}
         {task.kanban_column === 'edicao' && task.assigned_to === currentUserId && (
           <Button size="sm" variant={hasVideoLink ? 'default' : 'outline'} 

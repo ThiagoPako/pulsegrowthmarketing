@@ -53,6 +53,7 @@ interface EditorTask {
   review_deadline: string | null;
   alteration_deadline: string | null;
   approval_deadline: string | null;
+  approval_sent_at: string | null;
   immediate_alteration: boolean;
   position: number;
   created_at: string;

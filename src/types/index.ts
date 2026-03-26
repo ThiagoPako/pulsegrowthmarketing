@@ -240,6 +240,7 @@ export interface Script {
   directToEditing?: boolean; // goes straight to editing queue
   caption?: string; // Instagram caption
   recordingId?: string; // linked avulso recording
+  eventRecordingId?: string; // linked event recording
   clientEdited?: boolean; // edited by client in portal
   clientEditedAt?: string; // ISO date of client edit
 }

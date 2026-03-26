@@ -177,6 +177,7 @@ function AppRoutes() {
         <Route path="/controle-edicao" element={<ProtectedRoute><EditingControl /></ProtectedRoute>} />
         <Route path="/proposta/:token" element={<ProposalViewer />} />
         <Route path="/avulso/:taskId" element={<AvulsoApproval />} />
+        <Route path="/video-avulso/:taskId" element={<AvulsoApproval />} />
         <Route path="/feedback" element={<ClientFeedback />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

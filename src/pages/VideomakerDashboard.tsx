@@ -447,6 +447,9 @@ export default function VideomakerDashboard() {
       } else if (isVerbal) {
         description = `🗣️ ALTERAÇÃO VERBAL — A alteração do roteiro foi passada presencialmente/verbalmente ao editor. ${altNotes ? `\n\n📝 Notas adicionais: ${altNotes}` : ''}\n\n${linkPart}`;
       }
+      if (!rec.clientId && rec.prospectName) {
+        description = `📹 VÍDEO AVULSO — Prospect: ${rec.prospectName}\n\n${description}`;
+      }
 
       // If no drive link, task goes to "captacao_concluida" (waiting for link); otherwise "edicao"
       const targetColumn = scriptDriveLink ? 'edicao' : 'captacao_concluida';
@@ -454,7 +457,7 @@ export default function VideomakerDashboard() {
       const assignedEditor = (selectedEditorId && selectedEditorId !== '__auto__') ? selectedEditorId : null;
 
       if (existing && existing.length > 0) {
-        await supabase.from('content_tasks').update({
+        const { error: updateError } = await supabase.from('content_tasks').update({
           kanban_column: targetColumn,
           drive_link: scriptDriveLink,
           recording_id: rec.id,
@@ -464,10 +467,14 @@ export default function VideomakerDashboard() {
           script_alteration_notes: altNotes,
           assigned_to: assignedEditor,
         } as any).eq('id', existing[0].id);
+        if (updateError) {
+          console.error('content_task update error:', updateError);
+          toast.error(`Erro ao atualizar a fila de edição para "${script.title}".`);
+        }
       } else {
         // Create content_task for both regular and avulso recordings
         // Avulso recordings have client_id = null
-        await supabase.from('content_tasks').insert({
+        const { error: insertError } = await supabase.from('content_tasks').insert({
           client_id: rec.clientId || null,
           title: script.title,
           content_type: script.contentFormat || 'reels',
@@ -482,6 +489,10 @@ export default function VideomakerDashboard() {
           script_alteration_type: altType,
           script_alteration_notes: altNotes,
         } as any);
+        if (insertError) {
+          console.error('content_task insert error:', insertError);
+          toast.error(`Erro ao enviar "${script.title}" para a fila de edição: ${insertError.message}`);
+        }
       }
     }
 

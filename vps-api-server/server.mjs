@@ -104,6 +104,18 @@ async function getClientArtLimitInfo(clientId, includeCompanyName = false) {
   return clientInfo || null;
 }
 
+async function hasNullableClientIdOnContentTasks() {
+  const { rows } = await pool.query(`
+    SELECT is_nullable
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'content_tasks'
+      AND column_name = 'client_id'
+    LIMIT 1
+  `);
+  return rows[0]?.is_nullable === 'YES';
+}
+
 async function getTableJsonColumns(tableName) {
   if (!tableJsonColumnsPromiseCache.has(tableName)) {
     tableJsonColumnsPromiseCache.set(
@@ -1649,6 +1661,65 @@ app.post('/api/portal-actions', async (req, res) => {
   } catch (err) {
     console.error('Portal actions error:', err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/avulso-actions', async (req, res) => {
+  try {
+    const { action, task_id, message } = req.body;
+
+    if (!task_id) return res.status(400).json({ error: 'task_id required' });
+
+    if (action === 'get_task') {
+      const { rows: [task] } = await pool.query(
+        `SELECT ct.id, ct.title, ct.edited_video_link, ct.edited_video_type, ct.kanban_column,
+                ct.adjustment_notes, ct.approved_at, ct.updated_at, ct.recording_id, r.prospect_name
+         FROM content_tasks ct
+         LEFT JOIN recordings r ON r.id = ct.recording_id
+         WHERE ct.id = $1 AND ct.client_id IS NULL
+         LIMIT 1`,
+        [task_id]
+      );
+      if (!task) return res.status(404).json({ error: 'Vídeo avulso não encontrado' });
+      return res.json({ task });
+    }
+
+    if (action === 'approve') {
+      const { rowCount } = await pool.query(
+        `UPDATE content_tasks
+         SET kanban_column = 'arquivado', approved_at = NOW(), updated_at = NOW()
+         WHERE id = $1 AND client_id IS NULL`,
+        [task_id]
+      );
+      if (!rowCount) return res.status(404).json({ error: 'Vídeo avulso não encontrado' });
+      await pool.query(
+        `INSERT INTO task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, $4)`,
+        [task_id, 'Cliente avulso aprovou o vídeo', null, null]
+      );
+      return res.json({ success: true });
+    }
+
+    if (action === 'request_revision') {
+      if (!message) return res.status(400).json({ error: 'message required' });
+      const { rowCount } = await pool.query(
+        `UPDATE content_tasks
+         SET kanban_column = 'alteracao', adjustment_notes = $2, editing_started_at = NULL,
+             editing_paused_at = NULL, editing_paused_seconds = 0, updated_at = NOW()
+         WHERE id = $1 AND client_id IS NULL`,
+        [task_id, message]
+      );
+      if (!rowCount) return res.status(404).json({ error: 'Vídeo avulso não encontrado' });
+      await pool.query(
+        `INSERT INTO task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, $4)`,
+        [task_id, 'Cliente avulso solicitou revisão', message, null]
+      );
+      return res.json({ success: true });
+    }
+
+    return res.status(400).json({ error: 'Invalid action' });
+  } catch (e) {
+    console.error('POST /api/avulso-actions error:', e);
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -3655,6 +3726,7 @@ app.post('/api/repair-content-tasks', async (req, res) => {
   try {
     await verifyUser(req);
     const { recording_id } = req.body;
+    const contentTasksClientIdNullable = await hasNullableClientIdOnContentTasks();
 
     // Find recording
     let recordings;
@@ -3682,7 +3754,8 @@ app.post('/api/repair-content-tasks', async (req, res) => {
     const created = [];
     for (const rec of recordings) {
       const clientId = rec.client_id;
-      if (!clientId) continue;
+      const isAvulso = !clientId;
+      if (isAvulso && !contentTasksClientIdNullable) continue;
 
       // Find recorded scripts linked to this recording
       const { rows: recScripts } = await pool.query(
@@ -3696,6 +3769,9 @@ app.post('/api/repair-content-tasks', async (req, res) => {
       for (const script of recScripts) {
         const deadline = new Date();
         deadline.setHours(deadline.getHours() + 48);
+        const description = isAvulso
+          ? `📹 VÍDEO AVULSO${rec.prospect_name ? ` — Prospect: ${rec.prospect_name}` : ''}\n\nRoteiro gravado pelo videomaker. Reparado automaticamente.`
+          : `Roteiro gravado pelo videomaker. Reparado automaticamente.`;
         const { rows: inserted } = await pool.query(
           `INSERT INTO content_tasks (client_id, title, content_type, kanban_column, description, script_id, recording_id, drive_link, editing_deadline, created_by)
            VALUES ($1, $2, $3, 'edicao', $4, $5, $6, $7, $8, $9) RETURNING id, title`,
@@ -3703,7 +3779,7 @@ app.post('/api/repair-content-tasks', async (req, res) => {
             clientId,
             script.title,
             script.content_format || 'reels',
-            `Roteiro gravado pelo videomaker. Reparado automaticamente.`,
+            description,
             script.id,
             rec.id,
             script.drive_link || null,
@@ -3727,6 +3803,7 @@ app.post('/api/fix-content-task', async (req, res) => {
   try {
     await verifyUser(req);
     const { title_search, drive_link } = req.body;
+    const contentTasksClientIdNullable = await hasNullableClientIdOnContentTasks();
 
     // Find recording by searching for matching scripts or client names
     const { rows: matchingRecordings } = await pool.query(`
@@ -3739,7 +3816,7 @@ app.post('/api/fix-content-task', async (req, res) => {
 
     // Find scripts matching the title
     const { rows: matchingScripts } = await pool.query(
-      `SELECT s.*, r.client_id as rec_client_id, r.id as rec_id FROM scripts s
+       `SELECT s.*, r.client_id as rec_client_id, r.id as rec_id, r.prospect_name FROM scripts s
        LEFT JOIN recordings r ON r.id = s.recording_id
        WHERE s.title ILIKE $1 AND s.recorded = true`,
       [`%${title_search}%`]
@@ -3766,11 +3843,16 @@ app.post('/api/fix-content-task', async (req, res) => {
     // No existing task — create one from script/recording data
     if (matchingScripts.length > 0) {
       const script = matchingScripts[0];
-      const clientId = script.rec_client_id || script.client_id;
-      if (!clientId) return res.status(400).json({ error: 'No client_id found for this script/recording' });
+      const clientId = script.rec_client_id || script.client_id || null;
+      if (!clientId && !contentTasksClientIdNullable) {
+        return res.status(400).json({ error: 'Schema da VPS desatualizado: content_tasks.client_id ainda está NOT NULL.' });
+      }
 
       const deadline = new Date();
       deadline.setHours(deadline.getHours() + 48);
+      const description = clientId
+        ? `Reparado manualmente. Link dos materiais: ${drive_link || 'N/A'}`
+        : `📹 VÍDEO AVULSO${script.prospect_name ? ` — Prospect: ${script.prospect_name}` : ''}\n\nReparado manualmente. Link dos materiais: ${drive_link || 'N/A'}`;
       const { rows: inserted } = await pool.query(
         `INSERT INTO content_tasks (client_id, title, content_type, kanban_column, description, script_id, recording_id, drive_link, editing_deadline)
          VALUES ($1, $2, $3, 'edicao', $4, $5, $6, $7, $8) RETURNING *`,
@@ -3778,7 +3860,7 @@ app.post('/api/fix-content-task', async (req, res) => {
           clientId,
           script.title,
           script.content_format || 'reels',
-          `Reparado manualmente. Link dos materiais: ${drive_link || 'N/A'}`,
+          description,
           script.id,
           script.rec_id || script.recording_id || null,
           drive_link || null,

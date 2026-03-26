@@ -23,3 +23,22 @@ export async function portalAction(body: Record<string, any>): Promise<any> {
     return { error: error.message || 'Network error' };
   }
 }
+
+export async function avulsoAction(body: Record<string, any>): Promise<any> {
+  try {
+    const response = await fetch(`${VPS_API_BASE}/avulso-actions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      console.error('[avulsoAction] error:', data);
+      return { error: data.error || `HTTP ${response.status}` };
+    }
+    return data;
+  } catch (error: any) {
+    console.error('[avulsoAction] network error:', error);
+    return { error: error.message || 'Network error' };
+  }
+}

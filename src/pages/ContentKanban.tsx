@@ -232,40 +232,28 @@ export default function ContentKanban() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchTasks(); }, [fetchTasks]);
+  useEffect(() => {
+    fetchTasks();
+    // Poll every 15s for near real-time updates (VPS has no websocket channels)
+    const interval = setInterval(fetchTasks, 15000);
+    return () => clearInterval(interval);
+  }, [fetchTasks]);
 
   // Deep-link highlight: scroll to card and open detail
   useEffect(() => {
-    if (!highlightId || loading || tasks.length === 0) return;
-    const task = tasks.find(t => t.id === highlightId);
-    if (task) {
-      // Open detail sheet
-      setDetailTask(task);
-      setDetailOpen(true);
-      // Scroll card into view
-      setTimeout(() => {
-        const el = document.getElementById(`task-card-${highlightId}`);
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-          el.classList.add('ring-2', 'ring-pink-500', 'shadow-lg', 'shadow-pink-500/20');
-          setTimeout(() => el.classList.remove('ring-2', 'ring-pink-500', 'shadow-lg', 'shadow-pink-500/20'), 4000);
-        }
-      }, 300);
-      // Clear highlight param
-      setSearchParams({}, { replace: true });
+    if (highlightId && tasks.length > 0) {
+      const task = tasks.find(t => t.id === highlightId);
+      if (task) {
+        setEditingTask(task);
+        setDialogOpen(true);
+        setSearchParams({}, { replace: true });
+        setTimeout(() => {
+          const el = document.getElementById(`task-card-${highlightId}`);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 300);
+      }
     }
-  }, [highlightId, loading, tasks]);
-
-  // Realtime
-  useEffect(() => {
-    const channel = supabase
-      .channel('content_tasks_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'content_tasks' }, () => {
-        fetchTasks();
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [fetchTasks]);
+  }, [highlightId, tasks]);
 
   // ─── HELPERS ───────────────────────────────────────────────
   const getClient = (id: string) => clients.find(c => c.id === id);

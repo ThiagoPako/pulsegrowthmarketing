@@ -276,13 +276,11 @@ export default function EditorKanban() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchTasks(); }, [fetchTasks]);
-
   useEffect(() => {
-    const channel = supabase.channel('editor_kanban_rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'content_tasks' }, () => fetchTasks())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    fetchTasks();
+    // Poll every 15s for near real-time updates (VPS has no websocket channels)
+    const interval = setInterval(fetchTasks, 15000);
+    return () => clearInterval(interval);
   }, [fetchTasks]);
 
   const { profile } = useAuth();

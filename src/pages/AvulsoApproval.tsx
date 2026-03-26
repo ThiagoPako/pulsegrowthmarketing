@@ -112,7 +112,7 @@ export default function AvulsoApproval() {
   }
 
   const videoUrl = task.edited_video_link;
-  const prospectName = (task.recordings as any)?.prospect_name || task.title;
+  const prospectName = task._prospect_name || task.title;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white">

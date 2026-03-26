@@ -1005,15 +1005,18 @@ function QueueCard({ task, clients, index, onStartEditing, onClaimTask, onUnclai
 
         {task.editing_deadline && <DeadlineBadge deadline={task.editing_deadline} label="Edição" startedAt={task.editing_started_at} />}
 
-        {/* Animated claim flag badge */}
         {task.assigned_to && claimedUser && (
           <AnimatePresence>
             <motion.div
               initial={{ scale: 0, rotate: -20 }}
               animate={{ scale: 1, rotate: 0 }}
-              className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 border ${
-                isMine ? 'bg-primary/5 border-primary/20' : 'bg-muted/50 border-border'
+              className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 border transition-colors ${
+                isMine 
+                  ? 'bg-primary/5 border-primary/20 hover:bg-destructive/10 hover:border-destructive/30 cursor-pointer group/flag' 
+                  : 'bg-muted/50 border-border'
               }`}
+              onClick={isMine ? (e) => { e.stopPropagation(); onUnclaimTask(); } : undefined}
+              title={isMine ? 'Clique para liberar tarefa' : undefined}
             >
               <motion.div
                 className="relative"
@@ -1023,18 +1026,22 @@ function QueueCard({ task, clients, index, onStartEditing, onClaimTask, onUnclai
                 <UserAvatar 
                   user={{ name: claimedUser.name || 'Editor', avatarUrl: claimedUser.avatarUrl }} 
                   size="sm" 
-                  className="ring-2 ring-primary/40"
+                  className="ring-2 ring-primary/40 group-hover/flag:ring-destructive/40"
                 />
                 <motion.div
-                  className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-primary flex items-center justify-center"
+                  className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-primary group-hover/flag:bg-destructive flex items-center justify-center"
                   animate={{ scale: [1, 1.2, 1] }}
                   transition={{ duration: 1.5, repeat: Infinity }}
                 >
-                  <Flag size={7} className="text-primary-foreground" />
+                  <Flag size={7} className="text-primary-foreground group-hover/flag:hidden" />
+                  <X size={7} className="text-primary-foreground hidden group-hover/flag:block" />
                 </motion.div>
               </motion.div>
               <div className="min-w-0">
-                <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-medium">🚩 Marcado por</p>
+                <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-medium group-hover/flag:text-destructive">
+                  {isMine ? <span className="group-hover/flag:hidden">🚩 Marcado por</span> : '🚩 Marcado por'}
+                  {isMine && <span className="hidden group-hover/flag:inline">🏳️ Clique para liberar</span>}
+                </p>
                 <p className="text-xs font-bold text-foreground truncate">{claimedUser.name || 'Editor'}</p>
               </div>
             </motion.div>

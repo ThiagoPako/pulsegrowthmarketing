@@ -704,6 +704,87 @@ export default function CommercialProposal() {
     </>
   );
 
+  const renderCustomForm = () => (
+    <>
+      <Card>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Target className="h-4 w-4 text-primary" /> Serviços da Proposta</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Vídeos/mês</Label>
+              <Input type="number" value={customVideos} onChange={e => setCustomVideos(e.target.value)} min={0} placeholder="0" />
+            </div>
+            <div>
+              <Label>Stories/mês</Label>
+              <Input type="number" value={customStories} onChange={e => setCustomStories(e.target.value)} min={0} placeholder="0" />
+            </div>
+            <div>
+              <Label>Artes/mês</Label>
+              <Input type="number" value={customArts} onChange={e => setCustomArts(e.target.value)} min={0} placeholder="0" />
+            </div>
+            <div>
+              <Label>Captações/mês</Label>
+              <Input type="number" value={customRecordings} onChange={e => setCustomRecordings(e.target.value)} min={0} placeholder="0" />
+            </div>
+            <div>
+              <Label>Cobertura de eventos/mês</Label>
+              <Input type="number" value={customEventCoverage} onChange={e => setCustomEventCoverage(e.target.value)} min={0} placeholder="0" />
+            </div>
+          </div>
+          <Separator />
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Social Media (Gestão de Redes)</Label>
+                <p className="text-xs text-muted-foreground">Publicação, programação e gerenciamento</p>
+              </div>
+              <Switch checked={customSocialMedia} onCheckedChange={setCustomSocialMedia} />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Gestão de Tráfego</Label>
+                <p className="text-xs text-muted-foreground">Campanhas patrocinadas e anúncios</p>
+              </div>
+              <Switch checked={customTrafficMgmt} onCheckedChange={setCustomTrafficMgmt} />
+            </div>
+          </div>
+          <Separator />
+          <div>
+            <Label>Descrição do serviço</Label>
+            <Textarea value={customDescription} onChange={e => setCustomDescription(e.target.value)} placeholder="Descreva os detalhes do serviço personalizado..." rows={3} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Valores e Pagamento</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <Label>Valor total (R$)</Label>
+            <Input type="number" value={customMonthlyValue} onChange={e => setCustomMonthlyValue(e.target.value)} placeholder="0.00" />
+          </div>
+          <div>
+            <Label>Forma de pagamento</Label>
+            <Select value={customPaymentMethod} onValueChange={setCustomPaymentMethod}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {PAYMENT_METHODS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Parcelas</Label>
+            <Input type="number" value={customInstallments} onChange={e => setCustomInstallments(e.target.value)} min={1} max={24} />
+          </div>
+          <div>
+            <Label>Desconto (%)</Label>
+            <Input type="number" value={customDiscount} onChange={e => setCustomDiscount(Number(e.target.value))} min={0} max={50} />
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
+
   // ===== PREVIEW SECTIONS =====
 
   const renderSystemPreview = () => {
@@ -1174,8 +1255,8 @@ export default function CommercialProposal() {
           <Card className="lg:col-span-2">
             <CardHeader><CardTitle className="text-base">Tipo de Proposta</CardTitle></CardHeader>
             <CardContent>
-              <div className="grid grid-cols-3 gap-3">
-                {(['marketing', 'sistema', 'endomarketing'] as ProposalType[]).map(type => {
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {(['marketing', 'sistema', 'endomarketing', 'personalizada'] as ProposalType[]).map(type => {
                   const Icon = typeIcons[type];
                   return (
                     <button
@@ -1218,6 +1299,7 @@ export default function CommercialProposal() {
           {proposalType === 'marketing' && renderMarketingForm()}
           {proposalType === 'sistema' && renderSystemForm()}
           {proposalType === 'endomarketing' && renderEndoForm()}
+          {proposalType === 'personalizada' && renderCustomForm()}
 
           {/* Bonus - available for all types */}
           <Card>
@@ -1364,6 +1446,7 @@ export default function CommercialProposal() {
             {proposalType === 'marketing' && renderMarketingPreview()}
             {proposalType === 'sistema' && renderSystemPreview()}
             {proposalType === 'endomarketing' && renderEndoPreview()}
+            {proposalType === 'personalizada' && renderCustomPreview()}
 
             {/* Bonus Section */}
             {bonusServices.length > 0 && (

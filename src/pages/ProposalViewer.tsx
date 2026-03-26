@@ -459,6 +459,81 @@ export default function ProposalViewer() {
           </motion.div>
         </AnimatedSection>
       </>
+  );
+  };
+
+  // ===== CUSTOM / PERSONALIZADA =====
+  const renderCustomContent = () => {
+    const customData = systemData; // stored in system_data
+    const val = customData.monthlyValue || 0;
+    const discountedVal = val * (1 - discount / 100);
+    const installs = customData.installments || 1;
+    const installmentVal = discountedVal / installs;
+    const services: { icon: any; value: string | number; label: string }[] = [];
+    if (customData.videos > 0) services.push({ icon: Film, value: customData.videos, label: 'Vídeos/mês' });
+    if (customData.stories > 0) services.push({ icon: Camera, value: customData.stories, label: 'Stories/mês' });
+    if (customData.arts > 0) services.push({ icon: Palette, value: customData.arts, label: 'Artes/mês' });
+    if (customData.recordings > 0) services.push({ icon: Film, value: customData.recordings, label: 'Captações/mês' });
+    if (customData.eventCoverage > 0) services.push({ icon: Camera, value: customData.eventCoverage, label: 'Coberturas/mês' });
+    if (customData.socialMedia) services.push({ icon: Share2, value: '✓', label: 'Social Media' });
+    if (customData.trafficManagement) services.push({ icon: BarChart3, value: '✓', label: 'Gestão de Tráfego' });
+
+    return (
+      <>
+        {services.length > 0 && (
+          <AnimatedSection className="px-6 md:px-10 py-8">
+            <div className="flex items-center gap-2 mb-1">
+              <Rocket className="h-5 w-5" style={{ color: accentColor }} />
+              <h2 className="text-xl font-bold text-gray-800">Serviços Inclusos</h2>
+            </div>
+            <p className="text-sm text-gray-500 mb-5">Proposta personalizada para sua empresa</p>
+            <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+              {services.map((s, i) => (
+                <StatCard key={i} icon={s.icon} value={s.value} label={s.label} delay={0.1 + i * 0.05} />
+              ))}
+            </div>
+          </AnimatedSection>
+        )}
+        {customData.description && (
+          <AnimatedSection className="px-6 md:px-10 pb-4">
+            <p className="text-sm text-gray-600 bg-gray-50 rounded-xl p-4">{customData.description}</p>
+          </AnimatedSection>
+        )}
+        <AnimatedSection className="px-6 md:px-10 pb-8">
+          <h2 className="text-lg font-bold text-gray-800 mb-4">Investimento</h2>
+          <motion.div whileHover={{ scale: 1.01 }} className="border-2 rounded-2xl p-6" style={{ borderColor: accentColor }}>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600 text-sm">Valor</span>
+                <span className="text-xl font-bold" style={{ color: accentColor }}>{fmt(val)}</span>
+              </div>
+              {discount > 0 && (
+                <>
+                  <div className="flex justify-between items-center text-green-600 text-sm">
+                    <span>Desconto ({discount}%)</span>
+                    <span className="font-bold">-{fmt(val - discountedVal)}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-t pt-2">
+                    <span className="font-bold text-gray-800">Total</span>
+                    <motion.span animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 1, delay: 0.5 }} className="text-2xl font-bold" style={{ color: accentColor }}>{fmt(discountedVal)}</motion.span>
+                  </div>
+                </>
+              )}
+              <Separator />
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-600">Pagamento</span>
+                <span className="font-medium">{PAYMENT_METHODS[customData.paymentMethod] || customData.paymentMethod || 'PIX'}</span>
+              </div>
+              {installs > 1 && (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-600">{installs}x de</span>
+                  <span className="font-bold" style={{ color: accentColor }}>{fmt(installmentVal)}</span>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </AnimatedSection>
+      </>
     );
   };
 

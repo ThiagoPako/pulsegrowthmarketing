@@ -805,7 +805,7 @@ export default function ProposalViewer() {
           {/* Footer */}
           <div className="p-6 md:p-8 text-center relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${accentColor}, ${accentDark})` }}>
             <motion.div animate={{ rotate: 360 }} transition={{ duration: 60, repeat: Infinity, ease: 'linear' }} className="absolute -top-10 -right-10 w-32 h-32 rounded-full border-[20px] border-white/5" />
-            <img src={pulseLogo} alt="Pulse Growth Marketing" className="h-14 mx-auto mb-3 brightness-0 invert drop-shadow-lg" />
+            <img src={pulseLogo} alt="Pulse Growth Marketing" className="h-14 mx-auto mb-3 drop-shadow-lg" style={{ mixBlendMode: 'screen' }} />
             <p className="text-white/80 text-xs">Transformando marcas em movimentos.</p>
             <p className="text-white/50 text-[10px] mt-1">Válida até {format(new Date(proposal.validity_date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</p>
             <p className="text-white/40 text-[10px] mt-0.5">© {new Date().getFullYear()} Pulse Growth Marketing</p>

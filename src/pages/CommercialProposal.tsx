@@ -22,7 +22,8 @@ import { cn } from '@/lib/utils';
 import {
   FileText, Plus, Trash2, CalendarIcon, Download, Eye, Users, Rocket,
   CheckCircle2, Film, Palette, Scissors, Camera, Monitor, Share2, BarChart3,
-  Clock, Gift, AlertTriangle, X, Link2, Copy, ExternalLink, List, Code, Megaphone
+  Clock, Gift, AlertTriangle, X, Link2, Copy, ExternalLink, List, Code, Megaphone,
+  Sparkles, Loader2, UserPlus
 } from 'lucide-react';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
@@ -212,23 +213,64 @@ export default function CommercialProposal() {
     setNewMemberName(''); setNewMemberRole('');
   };
 
-  const addFromTeam = (userId: string) => {
+  const toggleTeamMember = (userId: string) => {
     const u = users.find(x => x.id === userId);
     if (!u) return;
-    const roleLabels: Record<string, string> = {
-      admin: 'Gestor de Projetos', videomaker: 'Videomaker', social_media: 'Social Media',
-      editor: 'Editor de Vídeo', designer: 'Designer Gráfico', fotografo: 'Fotógrafo',
-      endomarketing: 'Endomarketing', parceiro: 'Parceiro',
-    };
-    if (teamMembers.find(t => t.name === (u.displayName || u.name))) {
-      toast.error('Membro já adicionado'); return;
+    const memberName = u.displayName || u.name;
+    const existing = teamMembers.find(t => t.name === memberName);
+    if (existing) {
+      setTeamMembers(prev => prev.filter(t => t.name !== memberName));
+    } else {
+      const roleLabels: Record<string, string> = {
+        admin: 'Gestor de Projetos', videomaker: 'Videomaker', social_media: 'Social Media',
+        editor: 'Editor de Vídeo', designer: 'Designer Gráfico', fotografo: 'Fotógrafo',
+        endomarketing: 'Endomarketing', parceiro: 'Parceiro',
+      };
+      setTeamMembers(prev => [...prev, {
+        id: crypto.randomUUID(),
+        name: memberName,
+        role: u.jobTitle || roleLabels[u.role] || u.role,
+        avatarUrl: u.avatarUrl,
+      }]);
     }
-    setTeamMembers(prev => [...prev, {
-      id: crypto.randomUUID(),
-      name: u.displayName || u.name,
-      role: u.jobTitle || roleLabels[u.role] || u.role,
-      avatarUrl: u.avatarUrl,
-    }]);
+  };
+
+  const generateModulesWithAI = async () => {
+    if (!systemFunctionsDesc.trim()) { toast.error('Descreva as funções do sistema'); return; }
+    setGeneratingModules(true);
+    try {
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const res = await fetch(`https://${projectId}.supabase.co/functions/v1/ai-content-suggestions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+        body: JSON.stringify({
+          type: 'system_modules',
+          description: systemFunctionsDesc,
+        }),
+      });
+      const data = await res.json();
+      if (data.modules && Array.isArray(data.modules)) {
+        const newScope = data.modules.map((m: any) => ({
+          id: crypto.randomUUID(),
+          description: typeof m === 'string' ? m : `${m.name}: ${m.description}`,
+        }));
+        setSystemScope(prev => [...prev, ...newScope]);
+        if (data.deliverables && Array.isArray(data.deliverables)) {
+          const newDeliverables = data.deliverables.map((d: any) => ({
+            id: crypto.randomUUID(),
+            name: typeof d === 'string' ? d : d.name,
+            description: typeof d === 'string' ? '' : d.description || '',
+          }));
+          setSystemDeliverables(prev => [...prev, ...newDeliverables]);
+        }
+        toast.success(`${newScope.length} módulos gerados pela IA!`);
+      } else {
+        toast.error('Não foi possível gerar módulos. Tente novamente.');
+      }
+    } catch {
+      toast.error('Erro ao conectar com a IA');
+    }
+    setGeneratingModules(false);
   };
 
   const downloadPDF = useCallback(async () => {

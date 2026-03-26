@@ -65,8 +65,14 @@ class QueryBuilder {
   }
 
   select(columns?: string, options?: { count?: 'exact'; head?: boolean }): this {
-    this._operation = 'select';
-    if (columns) this._select = columns;
+    // If called after insert/update/upsert, it means "RETURNING" — don't override operation
+    if (this._operation === 'insert' || this._operation === 'update' || this._operation === 'upsert') {
+      this._returning = true;
+      if (columns) this._select = columns;
+    } else {
+      this._operation = 'select';
+      if (columns) this._select = columns;
+    }
     if (options?.count) this._count = options.count;
     if (options?.head) this._head = true;
     return this;

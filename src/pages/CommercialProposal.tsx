@@ -364,7 +364,7 @@ export default function CommercialProposal() {
         whatsapp_number: whatsappNumber,
         created_by: user?.id || null,
         proposal_type: proposalType,
-        system_data: systemData,
+        system_data: proposalType === 'personalizada' ? customData : systemData,
         endomarketing_data: endoData,
       } as any).select().single();
       if (error) throw error;

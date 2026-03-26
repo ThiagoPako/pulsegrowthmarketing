@@ -658,6 +658,96 @@ export default function VideomakerDashboard() {
     }
   }, [selectedScriptIds, scripts, scriptsClientId, clients]);
 
+  // ── Story Upload Handler ──
+  const handleStoryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!storyClientId) { toast.error('Selecione um cliente primeiro'); return; }
+    const maxSize = 500 * 1024 * 1024;
+    if (file.size > maxSize) { toast.error('Máximo: 500MB'); return; }
+
+    setStoryUploading(true);
+    setStoryUploadProgress(`Enviando ${file.name}...`);
+    try {
+      const folder = `stories/${storyClientId}`;
+      const url = await uploadFileToVps(file, folder);
+      const client = clients.find(c => c.id === storyClientId);
+      const title = storyTitle.trim() || `Story ${format(new Date(), 'dd/MM HH:mm')}`;
+
+      // 1. Create content_task for social media (agendamentos column = ready to schedule)
+      const taskId = crypto.randomUUID();
+      await supabase.from('content_tasks').insert({
+        id: taskId,
+        client_id: storyClientId,
+        title: `📱 ${title}`,
+        content_type: 'story',
+        kanban_column: 'agendamentos',
+        description: `Story gravado e editado pelo videomaker.\n\n📥 Download: ${url}`,
+        edited_video_link: url,
+        edited_video_type: 'upload',
+        created_by: vmId,
+        approved_at: new Date().toISOString(),
+      } as any);
+
+      // 2. Create social_media_delivery for scheduling
+      await supabase.from('social_media_deliveries').insert({
+        client_id: storyClientId,
+        content_type: 'story',
+        title: `📱 ${title}`,
+        description: `Story editado pelo videomaker. Download: ${url}`,
+        status: 'entregue',
+        delivered_at: format(new Date(), 'yyyy-MM-dd'),
+        created_by: vmId,
+        content_task_id: taskId,
+      } as any);
+
+      // 3. Notify social_media role (Rayssa)
+      await supabase.rpc('notify_role', {
+        _role: 'social_media',
+        _title: '📱 Novo Story para agendar',
+        _message: `${client?.companyName || 'Cliente'} — "${title}" foi editado pelo videomaker e está pronto para agendamento.`,
+        _type: 'story_upload',
+        _link: '/entregas-social',
+      });
+
+      // 4. Upload to client portal
+      const now = new Date();
+      await supabase.from('client_portal_contents').insert({
+        client_id: storyClientId,
+        title: `📱 ${title}`,
+        content_type: 'story',
+        file_url: url,
+        status: 'pendente',
+        season_month: now.getMonth() + 1,
+        season_year: now.getFullYear(),
+        uploaded_by: vmId,
+      } as any);
+
+      // 5. Portal notification
+      await supabase.from('client_portal_notifications').insert({
+        client_id: storyClientId,
+        title: '📱 Novo Story enviado',
+        message: `"${title}" foi gravado e editado. Acesse para visualizar.`,
+        type: 'story_upload',
+      } as any);
+
+      setStoriesUploaded(prev => prev + 1);
+      setStoryTitle('');
+      toast.success(`Story enviado! +${VM_SCORE.STORY_EDITADO} pts 🚀`);
+      
+      // Show mini celebration
+      setCelebrationScore(VM_SCORE.STORY_EDITADO);
+      setShowCelebration(true);
+      setTimeout(() => setShowCelebration(false), 2500);
+    } catch (err: any) {
+      toast.error(`Erro: ${err.message}`);
+    } finally {
+      setStoryUploading(false);
+      setStoryUploadProgress('');
+      if (storyFileRef.current) storyFileRef.current.value = '';
+    }
+  };
+
 
   const stats = useMemo(() => {
     const monthStart2 = startOfMonth(today);

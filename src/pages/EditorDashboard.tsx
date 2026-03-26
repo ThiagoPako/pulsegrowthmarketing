@@ -12,10 +12,11 @@ import { useNavigate } from 'react-router-dom';
 import {
   Film, Megaphone, Image, Palette, ExternalLink, Clock, AlertTriangle,
   Eye, Star, TrendingUp, BarChart3, Timer, Scissors, ArrowRight, Check,
-  Search, Users, Upload, Send, History, Zap, Flame,
+  Search, Users, Upload, Send, History, Zap, Flame, Flag,
   Play, Rocket, Trophy, FileText, FolderOpen, X, Link2, Video, Pause
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
+import UserAvatar from '@/components/UserAvatar';
 import DeadlineBadge from '@/components/DeadlineBadge';
 import { highlightQuotes } from '@/lib/highlightQuotes';
 import { format, differenceInHours, isPast, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, startOfDay, endOfDay } from 'date-fns';

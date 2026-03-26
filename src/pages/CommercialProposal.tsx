@@ -24,13 +24,13 @@ import {
   FileText, Plus, Trash2, CalendarIcon, Download, Eye, Users, Rocket,
   CheckCircle2, Film, Palette, Scissors, Camera, Monitor, Share2, BarChart3,
   Clock, Gift, AlertTriangle, X, Link2, Copy, ExternalLink, List, Code, Megaphone,
-  Sparkles, Loader2, UserPlus, DollarSign, Target
+  Sparkles, Loader2, UserPlus, DollarSign, Target, CalendarDays, ListChecks, Layers
 } from 'lucide-react';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
-type ProposalType = 'marketing' | 'sistema' | 'endomarketing' | 'personalizada';
+type ProposalType = 'marketing' | 'sistema' | 'endomarketing' | 'personalizada' | 'cronograma';
 
 interface BonusService {
   id: string;
@@ -57,6 +57,24 @@ interface SystemDeliverable {
   description: string;
 }
 
+interface TimelineDeliverable {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  quantity: number;
+  unitPrice: number;
+  estimatedDays: number;
+  phase: number;
+}
+
+interface TimelinePhase {
+  number: number;
+  name: string;
+  description: string;
+  durationDays: number;
+}
+
 const IMPLEMENTATION_FEES = {
   adAccounts: { label: 'Implementação de contas de anúncios', value: 800 },
   profileRedesign: { label: 'Reformulação de perfil', value: 750 },
@@ -78,6 +96,7 @@ const PROPOSAL_TYPE_LABELS: Record<ProposalType, string> = {
   sistema: 'Sistema / Software',
   endomarketing: 'Endomarketing',
   personalizada: 'Proposta Única',
+  cronograma: 'Cronograma Completo',
 };
 
 const PAYMENT_METHODS = [

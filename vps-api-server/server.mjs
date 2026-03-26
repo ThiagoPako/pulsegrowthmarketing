@@ -3368,6 +3368,16 @@ app.delete('/api/recordings/:id', async (req, res) => {
     await pool.query('DELETE FROM active_recordings WHERE recording_id = $1', [id]);
     await pool.query('DELETE FROM delivery_records WHERE recording_id = $1', [id]);
     await pool.query('DELETE FROM recording_wait_logs WHERE recording_id = $1', [id]);
+    // Remove content_tasks linked to this recording (and their history/deliveries)
+    const { rows: linkedTasks } = await pool.query('SELECT id FROM content_tasks WHERE recording_id = $1', [id]);
+    if (linkedTasks.length > 0) {
+      const taskIds = linkedTasks.map(t => t.id);
+      await pool.query('DELETE FROM task_history WHERE task_id = ANY($1)', [taskIds]);
+      await pool.query('DELETE FROM social_media_deliveries WHERE content_task_id = ANY($1)', [taskIds]);
+      await pool.query('DELETE FROM content_tasks WHERE recording_id = $1', [id]);
+    }
+    // Mark linked scripts as not recorded
+    await pool.query("UPDATE scripts SET recorded = false, updated_at = NOW() WHERE recording_id = $1", [id]);
     await pool.query('DELETE FROM recordings WHERE id = $1', [id]);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }

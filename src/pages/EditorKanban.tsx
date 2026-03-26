@@ -12,7 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import {
   Film, Megaphone, Image, Palette, ExternalLink, Clock, AlertTriangle,
-  Check, Eye, Search, Scissors, Send, Link2, Flag
+  Check, Eye, Search, Scissors, Send, Link2, Flag, X
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
@@ -77,11 +77,12 @@ function getTypeConfig(type: string) {
   return CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];
 }
 
-function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink, onClaimTask, draggedId, onDragStart, currentUserId, users }: {
+function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink, onClaimTask, onUnclaimTask, draggedId, onDragStart, currentUserId, users }: {
   task: EditorTask; clients: any[]; onOpenScript: (id: string) => void;
   onSendToReview: (task: EditorTask) => void;
   onAddVideoLink: (task: EditorTask) => void;
   onClaimTask: (task: EditorTask) => void;
+  onUnclaimTask: (task: EditorTask) => void;
   draggedId: string | null; onDragStart: (e: React.DragEvent, task: EditorTask) => void;
   currentUserId: string | undefined;
   users: any[];
@@ -94,6 +95,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
   const hasVideoLink = !!task.edited_video_link;
 
   const isReview = task.kanban_column === 'revisao';
+  const isMine = task.assigned_to === currentUserId;
 
   return (
     <div draggable onDragStart={e => onDragStart(e, task)}
@@ -208,11 +210,15 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
             <motion.div
               initial={{ scale: 0, rotate: -20 }}
               animate={{ scale: 1, rotate: 0 }}
-              className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 border ${
+              className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 border transition-colors ${
                 isReview 
                   ? 'bg-teal-500/10 border-teal-500/30' 
-                  : 'bg-primary/5 border-primary/20'
+                  : isMine
+                    ? 'bg-primary/5 border-primary/20 hover:bg-destructive/10 hover:border-destructive/30 cursor-pointer group/flag'
+                    : 'bg-primary/5 border-primary/20'
               }`}
+              onClick={isMine && !isReview ? (e) => { e.stopPropagation(); onUnclaimTask(task); } : undefined}
+              title={isMine && !isReview ? 'Clique para liberar tarefa' : undefined}
             >
               <motion.div
                 className="relative"
@@ -222,19 +228,22 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
                 <UserAvatar 
                   user={{ name: users.find(u => u.id === task.assigned_to)?.name || 'Editor', avatarUrl: users.find(u => u.id === task.assigned_to)?.avatarUrl }} 
                   size="sm" 
-                  className="ring-2 ring-primary/40"
+                  className="ring-2 ring-primary/40 group-hover/flag:ring-destructive/40"
                 />
                 <motion.div
-                  className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-primary flex items-center justify-center"
+                  className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-primary group-hover/flag:bg-destructive flex items-center justify-center"
                   animate={{ scale: [1, 1.2, 1] }}
                   transition={{ duration: 1.5, repeat: Infinity }}
                 >
-                  <Flag size={7} className="text-primary-foreground" />
+                  <Flag size={7} className="text-primary-foreground group-hover/flag:hidden" />
+                  <X size={7} className="text-primary-foreground hidden group-hover/flag:block" />
                 </motion.div>
               </motion.div>
               <div className="min-w-0">
-                <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-medium">
-                  {isReview ? '🎬 Editado por' : '🚩 Marcado por'}
+                <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-medium group-hover/flag:text-destructive">
+                  {isReview ? '🎬 Editado por' : isMine ? (
+                    <><span className="group-hover/flag:hidden">🚩 Marcado por</span><span className="hidden group-hover/flag:inline">🏳️ Clique para liberar</span></>
+                  ) : '🚩 Marcado por'}
                 </p>
                 <p className="text-xs font-bold text-foreground truncate">
                   {users.find(u => u.id === task.assigned_to)?.name || 'Editor'}
@@ -369,6 +378,17 @@ export default function EditorKanban() {
     if (error) { toast.error('Erro ao marcar tarefa'); return; }
     const editorName = users.find(u => u.id === user.id)?.name || 'Você';
     toast.success(`🚩 ${editorName} marcou esta tarefa!`, { description: task.title });
+    fetchTasks();
+  };
+
+  const handleUnclaimTask = async (task: EditorTask) => {
+    if (!user) return;
+    const { error } = await supabase.from('content_tasks').update({
+      assigned_to: null,
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', task.id);
+    if (error) { toast.error('Erro ao liberar tarefa'); return; }
+    toast.success('🏳️ Tarefa liberada para a fila!');
     fetchTasks();
   };
 
@@ -610,7 +630,7 @@ export default function EditorKanban() {
                     {colTasks.map(task => (
                       <TaskCard key={task.id} task={task} clients={clients} onOpenScript={openScript}
                         onSendToReview={handleSendToReview} onAddVideoLink={openVideoLinkDialog}
-                        onClaimTask={handleClaimTask} currentUserId={user?.id} users={users}
+                        onClaimTask={handleClaimTask} onUnclaimTask={handleUnclaimTask} currentUserId={user?.id} users={users}
                         draggedId={draggedTask?.id || null} onDragStart={handleDragStart} />
                     ))}
                     {colTasks.length === 0 && (

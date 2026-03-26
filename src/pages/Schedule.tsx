@@ -1114,6 +1114,7 @@ export default function Schedule() {
                         style={{ backgroundColor: `hsl(${evt.color} / 0.15)`, borderLeft: `2px solid hsl(${evt.color})` }}
                       >
                         {evt.type === 'endomarketing' && <Sparkles size={7} className="inline mr-0.5" style={{ color: `hsl(${ENDO_COLOR})` }} />}
+                        {evt.type === 'event' && <MapPin size={7} className="inline mr-0.5 text-orange-500" />}
                         <span className="font-medium">{evt.clientName}</span>
                         <span className="text-muted-foreground ml-1">{evt.startTime}</span>
                         {active && <span className="inline ml-0.5 text-primary font-bold">●</span>}
@@ -1122,7 +1123,21 @@ export default function Schedule() {
 
                         {/* Hover tooltip */}
                         <div className="absolute left-0 top-full mt-0.5 hidden group-hover:flex flex-col gap-1 bg-card rounded-lg p-2 shadow-lg border border-border z-20 min-w-[140px]">
-                          {evt.type === 'endomarketing' ? (
+                          {evt.type === 'event' && evt.eventRecording ? (
+                            <>
+                              <div className="flex items-center gap-1">
+                                <MapPin size={10} className="text-orange-500" />
+                                <span className="text-[10px] font-semibold text-orange-600">Evento</span>
+                              </div>
+                              <span className="text-[10px] text-muted-foreground">{evt.eventRecording.startTime} - {evt.eventRecording.endTime}</span>
+                              {evt.eventRecording.address && <span className="text-[10px] text-muted-foreground truncate">📍 {evt.eventRecording.address}</span>}
+                              <div className="flex gap-0.5 pt-0.5">
+                                <button onClick={() => openEditEvent(evt.eventRecording!)} className="p-0.5 rounded hover:bg-muted text-muted-foreground" title="Editar"><Pencil size={10} /></button>
+                                {evt.eventRecording.status === 'agendado' && <button onClick={() => handleCompleteEvent(evt.eventRecording!.id)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Concluir"><Check size={10} /></button>}
+                                <button onClick={() => handleDeleteEvent(evt.eventRecording!.id)} className="p-0.5 rounded hover:bg-destructive/20 text-destructive" title="Apagar"><Trash2 size={10} /></button>
+                              </div>
+                            </>
+                          ) : evt.type === 'endomarketing' ? (
                             <>
                               <div className="flex items-center gap-1">
                                 <Sparkles size={10} style={{ color: `hsl(${ENDO_COLOR})` }} />

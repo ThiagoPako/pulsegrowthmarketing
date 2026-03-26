@@ -525,7 +525,7 @@ export default function Scripts() {
               ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
             </p>
           </div>
-          <div data-pdf-role="script-body" style="font-size:14px; line-height:1.7;">
+          <div data-pdf-role="script-body" style="font-size:14px; line-height:1.7; max-width:100%; box-sizing:border-box; overflow:hidden;">
             ${highlightQuotesForPdf(script.content)}
           </div>
         </section>
@@ -597,7 +597,7 @@ export default function Scripts() {
           } else {
             for (const node of bodyNodes) {
               const block = document.createElement('div');
-              block.style.cssText = 'padding:0 40px; font-size:14px; line-height:1.7;';
+              block.style.cssText = 'padding:0 40px; font-size:14px; line-height:1.7; box-sizing:border-box; max-width:100%; overflow:hidden; word-wrap:break-word;';
 
               if (node.nodeType === Node.TEXT_NODE) {
                 const paragraph = document.createElement('p');

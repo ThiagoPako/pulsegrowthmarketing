@@ -366,8 +366,9 @@ export default function EditorKanban() {
       assigned_to: user.id,
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
-    if (error) { toast.error('Erro ao pegar tarefa'); return; }
-    toast.success('Tarefa atribuída a você!');
+    if (error) { toast.error('Erro ao marcar tarefa'); return; }
+    const editorName = users.find(u => u.id === user.id)?.name || 'Você';
+    toast.success(`🚩 ${editorName} marcou esta tarefa!`, { description: task.title });
     fetchTasks();
   };
 

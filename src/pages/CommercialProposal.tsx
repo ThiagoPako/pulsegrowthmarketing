@@ -188,6 +188,16 @@ export default function CommercialProposal() {
   const [customInstallments, setCustomInstallments] = useState('1');
   const [customRecordings, setCustomRecordings] = useState('');
 
+  // Cronograma fields
+  const [cronogramaDesc, setCronogramaDesc] = useState('');
+  const [cronogramaDeliverables, setCronogramaDeliverables] = useState<TimelineDeliverable[]>([]);
+  const [cronogramaPhases, setCronogramaPhases] = useState<TimelinePhase[]>([]);
+  const [cronogramaMethodology, setCronogramaMethodology] = useState('');
+  const [cronogramaProjectName, setCronogramaProjectName] = useState('');
+  const [cronogramaTotalDays, setCronogramaTotalDays] = useState('');
+  const [cronogramaPaymentMethod, setCronogramaPaymentMethod] = useState('pix');
+  const [cronogramaInstallments, setCronogramaInstallments] = useState('1');
+  const [generatingTimeline, setGeneratingTimeline] = useState(false);
   const { data: plans = [] } = useQuery({
     queryKey: ['plans-proposal'],
     queryFn: async () => {

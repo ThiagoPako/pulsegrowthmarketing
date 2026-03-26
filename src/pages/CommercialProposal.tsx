@@ -1906,7 +1906,8 @@ export default function CommercialProposal() {
             {proposalType === 'marketing' && renderMarketingPreview()}
             {proposalType === 'sistema' && renderSystemPreview()}
             {proposalType === 'endomarketing' && renderEndoPreview()}
-            {proposalType === 'personalizada' && renderCustomPreview()}
+          {proposalType === 'personalizada' && renderCustomPreview()}
+            {proposalType === 'cronograma' && renderCronogramaPreview()}
 
             {/* Bonus Section */}
             {bonusServices.length > 0 && (

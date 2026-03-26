@@ -1007,7 +1007,7 @@ export default function ContentKanban() {
                 <Select value={formColumn} onValueChange={v => setFormColumn(v as KanbanColumnId)}>
                   <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {KANBAN_COLUMNS.map(c => (
+                    {visibleColumns.map(c => (
                       <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
                     ))}
                   </SelectContent>

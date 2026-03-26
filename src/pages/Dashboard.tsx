@@ -493,7 +493,7 @@ export default function Dashboard() {
                   <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 ${config.dotColor} rounded-full border-2 border-background ${isStale ? '' : 'animate-pulse'}`} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold truncate">{editor?.name || 'Sem editor'}</p>
+                  <p className="text-xs font-semibold truncate">{editor?.name || (task.kanban_column === 'alteracao' ? 'Na fila' : 'Sem editor')}</p>
                   <div className="flex items-center gap-1">
                     {client && <ClientLogo client={client} size="sm" className="w-3.5 h-3.5" />}
                     <p className="text-[10px] text-muted-foreground truncate">{task.title || client?.companyName || '—'}</p>

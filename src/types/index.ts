@@ -131,6 +131,22 @@ export interface Recording {
   prospectName?: string;
 }
 
+export interface EventRecording {
+  id: string;
+  clientId: string;
+  videomakerId: string;
+  title: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  address: string;
+  description?: string;
+  status: 'agendado' | 'concluido' | 'cancelado';
+  createdBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export type KanbanColumn = 'backlog' | 'em_producao' | 'gravado' | 'finalizado';
 
 export interface KanbanTask {
@@ -177,7 +193,7 @@ export const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
   produto: 'Produto',
 };
 
-export type ScriptVideoType = 'vendas' | 'institucional' | 'reconhecimento' | 'educacional' | 'bastidores' | 'depoimento' | 'lancamento';
+export type ScriptVideoType = 'vendas' | 'institucional' | 'reconhecimento' | 'educacional' | 'bastidores' | 'depoimento' | 'lancamento' | 'evento';
 
 export const SCRIPT_VIDEO_TYPE_LABELS: Record<ScriptVideoType, string> = {
   vendas: 'Vendas',
@@ -187,6 +203,7 @@ export const SCRIPT_VIDEO_TYPE_LABELS: Record<ScriptVideoType, string> = {
   bastidores: 'Bastidores',
   depoimento: 'Depoimento',
   lancamento: 'Lançamento',
+  evento: 'Evento',
 };
 
 export type ScriptContentFormat = 'reels' | 'story' | 'criativo';

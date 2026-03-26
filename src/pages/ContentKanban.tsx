@@ -1413,16 +1413,16 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
             )}
             {/* Deadline badges */}
             {task.kanban_column === 'edicao' && task.editing_deadline && (
-              <DeadlineBadge deadline={task.editing_deadline} label="Edição" />
+              <DeadlineBadge deadline={task.editing_deadline} label="Edição" startedAt={task.editing_started_at} />
             )}
             {task.kanban_column === 'revisao' && task.review_deadline && (
-              <DeadlineBadge deadline={task.review_deadline} label="Revisão" />
+              <DeadlineBadge deadline={task.review_deadline} label="Revisão" startedAt={task.approval_sent_at} />
             )}
             {task.kanban_column === 'alteracao' && task.alteration_deadline && !task.immediate_alteration && (
-              <DeadlineBadge deadline={task.alteration_deadline} label="Alteração" />
+              <DeadlineBadge deadline={task.alteration_deadline} label="Alteração" startedAt={task.editing_started_at} />
             )}
             {task.kanban_column === 'envio' && task.approval_deadline && (
-              <DeadlineBadge deadline={task.approval_deadline} label="Aprovação" />
+              <DeadlineBadge deadline={task.approval_deadline} label="Aprovação" startedAt={task.approval_sent_at} />
             )}
             {/* Status tags */}
             {task.kanban_column === 'envio' && (

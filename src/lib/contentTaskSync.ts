@@ -170,29 +170,31 @@ export async function syncContentTaskColumnChange(
     } as any).eq('id', ctx.taskId);
   }
 
-  // 3. Sync social_media_deliveries
-  const socialStatus = COLUMN_TO_SOCIAL_STATUS[newColumn];
-  if (socialStatus) {
-    const existing = await supabase.from('social_media_deliveries')
-      .select('id').eq('content_task_id', ctx.taskId).limit(1);
+  // 3. Sync social_media_deliveries (skip for avulso - no client)
+  if (ctx.clientId) {
+    const socialStatus = COLUMN_TO_SOCIAL_STATUS[newColumn];
+    if (socialStatus) {
+      const existing = await supabase.from('social_media_deliveries')
+        .select('id').eq('content_task_id', ctx.taskId).limit(1);
 
-    if (!existing.data?.length) {
-      await supabase.from('social_media_deliveries').insert({
-        client_id: ctx.clientId,
-        content_type: ctx.contentType,
-        title: ctx.title,
-        description: ctx.description || null,
-        status: socialStatus,
-        delivered_at: format(new Date(), 'yyyy-MM-dd'),
-        recording_id: ctx.recordingId || null,
-        script_id: ctx.scriptId || null,
-        created_by: ctx.userId || null,
-        content_task_id: ctx.taskId,
-      } as any);
-    } else {
-      await supabase.from('social_media_deliveries').update({
-        status: socialStatus,
-      } as any).eq('content_task_id', ctx.taskId);
+      if (!existing.data?.length) {
+        await supabase.from('social_media_deliveries').insert({
+          client_id: ctx.clientId,
+          content_type: ctx.contentType,
+          title: ctx.title,
+          description: ctx.description || null,
+          status: socialStatus,
+          delivered_at: format(new Date(), 'yyyy-MM-dd'),
+          recording_id: ctx.recordingId || null,
+          script_id: ctx.scriptId || null,
+          created_by: ctx.userId || null,
+          content_task_id: ctx.taskId,
+        } as any);
+      } else {
+        await supabase.from('social_media_deliveries').update({
+          status: socialStatus,
+        } as any).eq('content_task_id', ctx.taskId);
+      }
     }
   }
 
@@ -210,8 +212,8 @@ export async function syncContentTaskColumnChange(
     });
 
     // Auto-upsert to client_portal_contents with 'revisao_interna' status
-    // This makes the video visible to team in the portal but NOT to the client
-    if (ctx.editedVideoLink) {
+    // Skip for avulso (no client_id)
+    if (ctx.editedVideoLink && ctx.clientId) {
       const now = new Date();
       const { data: existing } = await supabase
         .from('client_portal_contents')
@@ -257,73 +259,75 @@ export async function syncContentTaskColumnChange(
   }
 
   if (newColumn === 'envio') {
-    // Update portal content from revisao_interna → pendente (now visible to client)
-    try {
-      const { data: portalContentToPublish } = await supabase
-        .from('client_portal_contents')
-        .select('id')
-        .eq('client_id', ctx.clientId)
-        .eq('title', ctx.title)
-        .eq('status', 'revisao_interna')
-        .order('created_at', { ascending: false })
-        .limit(1);
+    // Skip portal/WhatsApp for avulso (no client)
+    if (ctx.clientId) {
+      // Update portal content from revisao_interna → pendente (now visible to client)
+      try {
+        const { data: portalContentToPublish } = await supabase
+          .from('client_portal_contents')
+          .select('id')
+          .eq('client_id', ctx.clientId)
+          .eq('title', ctx.title)
+          .eq('status', 'revisao_interna')
+          .order('created_at', { ascending: false })
+          .limit(1);
 
-      if (portalContentToPublish?.length) {
-        await supabase.from('client_portal_contents').update({
-          status: 'pendente',
-          updated_at: new Date().toISOString(),
-        } as any).eq('id', portalContentToPublish[0].id);
-      }
-    } catch (err) {
-      console.error('Portal content publish error:', err);
-    }
-    // Auto-send WhatsApp portal invite message
-    try {
-      const whatsConfig = await getWhatsAppConfig();
-      if (whatsConfig?.integrationActive && whatsConfig?.autoVideoApproval && ctx.clientWhatsapp) {
-        const portalUrl = `https://agenciapulse.tech/portal/${ctx.clientId}`;
-        let msg = whatsConfig.msgVideoApproval
-          .replace('{nome_cliente}', ctx.clientName || '')
-          .replace('{link_video}', portalUrl)
-          .replace('{titulo}', ctx.title)
-          .replace('{link_portal}', portalUrl);
-
-        // If template still has the old drive link pattern, override with portal message
-        if (!msg.includes('portal') && !msg.includes('Área do Cliente')) {
-          msg = `Olá, ${ctx.clientName || ''}! 😊\n\nSeu conteúdo "${ctx.title}" ficou pronto! 🎬\n\n📱 Acesse sua Área do Cliente Pulse para assistir e aprovar:\n${portalUrl}\n\nEquipe Pulse Growth Marketing 🚀`;
+        if (portalContentToPublish?.length) {
+          await supabase.from('client_portal_contents').update({
+            status: 'pendente',
+            updated_at: new Date().toISOString(),
+          } as any).eq('id', portalContentToPublish[0].id);
         }
-
-        await sendWhatsAppMessage({
-          number: ctx.clientWhatsapp,
-          message: msg,
-          clientId: ctx.clientId,
-          triggerType: 'auto_confirmation',
-        });
+      } catch (err) {
+        console.error('Portal content publish error:', err);
       }
-    } catch (err) {
-      console.error('WhatsApp auto-send error:', err);
-    }
+      // Auto-send WhatsApp portal invite message
+      try {
+        const whatsConfig = await getWhatsAppConfig();
+        if (whatsConfig?.integrationActive && whatsConfig?.autoVideoApproval && ctx.clientWhatsapp) {
+          const portalUrl = `https://agenciapulse.tech/portal/${ctx.clientId}`;
+          let msg = whatsConfig.msgVideoApproval
+            .replace('{nome_cliente}', ctx.clientName || '')
+            .replace('{link_video}', portalUrl)
+            .replace('{titulo}', ctx.title)
+            .replace('{link_portal}', portalUrl);
 
-    // Create portal notification for the client
-    try {
-      // Find the matching portal content if it exists
-      const { data: portalContent } = await supabase
-        .from('client_portal_contents')
-        .select('id')
-        .eq('client_id', ctx.clientId)
-        .eq('title', ctx.title)
-        .order('created_at', { ascending: false })
-        .limit(1);
+          // If template still has the old drive link pattern, override with portal message
+          if (!msg.includes('portal') && !msg.includes('Área do Cliente')) {
+            msg = `Olá, ${ctx.clientName || ''}! 😊\n\nSeu conteúdo "${ctx.title}" ficou pronto! 🎬\n\n📱 Acesse sua Área do Cliente Pulse para assistir e aprovar:\n${portalUrl}\n\nEquipe Pulse Growth Marketing 🚀`;
+          }
 
-      await supabase.from('client_portal_notifications').insert({
-        client_id: ctx.clientId,
-        title: '🎬 Novo vídeo para aprovação',
-        message: `"${ctx.title}" está pronto para sua análise e aprovação.`,
-        type: 'video_approval',
-        link_content_id: portalContent?.[0]?.id || null,
-      } as any);
-    } catch (err) {
-      console.error('Portal notification error:', err);
+          await sendWhatsAppMessage({
+            number: ctx.clientWhatsapp,
+            message: msg,
+            clientId: ctx.clientId,
+            triggerType: 'auto_confirmation',
+          });
+        }
+      } catch (err) {
+        console.error('WhatsApp auto-send error:', err);
+      }
+
+      // Create portal notification for the client
+      try {
+        const { data: portalContent } = await supabase
+          .from('client_portal_contents')
+          .select('id')
+          .eq('client_id', ctx.clientId)
+          .eq('title', ctx.title)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        await supabase.from('client_portal_notifications').insert({
+          client_id: ctx.clientId,
+          title: '🎬 Novo vídeo para aprovação',
+          message: `"${ctx.title}" está pronto para sua análise e aprovação.`,
+          type: 'video_approval',
+          link_content_id: portalContent?.[0]?.id || null,
+        } as any);
+      } catch (err) {
+        console.error('Portal notification error:', err);
+      }
     }
   }
 
@@ -362,7 +366,7 @@ export async function syncContentTaskColumnChange(
   };
 
   const portalNotif = portalNotifMap[newColumn];
-  if (portalNotif && newColumn !== 'envio') {
+  if (portalNotif && newColumn !== 'envio' && ctx.clientId) {
     try {
       await supabase.from('client_portal_notifications').insert({
         client_id: ctx.clientId,

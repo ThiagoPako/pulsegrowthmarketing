@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Check, RotateCcw, Rocket, Video, Palette, Users, BarChart3, Shield, Calendar, Star, Sparkles, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 import { toast } from 'sonner';
 
 const WHATSAPP_CTA = 'https://wa.me/5562985382981?text=Olá!%20Vi%20meu%20vídeo%20avulso%20e%20quero%20saber%20mais%20sobre%20os%20planos%20da%20Pulse!';
@@ -37,14 +37,27 @@ export default function AvulsoApproval() {
 
   useEffect(() => {
     if (!taskId) return;
-    supabase.from('content_tasks')
-      .select('*, recordings(prospect_name)')
-      .eq('id', taskId)
-      .single()
-      .then(({ data }) => {
-        setTask(data);
-        setLoading(false);
-      });
+    const loadTask = async () => {
+      const { data: taskData } = await supabase.from('content_tasks')
+        .select('*')
+        .eq('id', taskId)
+        .single();
+      if (taskData) {
+        // Load prospect name from recording if available
+        if (taskData.recording_id) {
+          const { data: rec } = await supabase.from('recordings')
+            .select('prospect_name')
+            .eq('id', taskData.recording_id)
+            .single();
+          if (rec) {
+            (taskData as any)._prospect_name = rec.prospect_name;
+          }
+        }
+        setTask(taskData);
+      }
+      setLoading(false);
+    };
+    loadTask();
   }, [taskId]);
 
   const handleApprove = async () => {
@@ -99,7 +112,7 @@ export default function AvulsoApproval() {
   }
 
   const videoUrl = task.edited_video_link;
-  const prospectName = (task.recordings as any)?.prospect_name || task.title;
+  const prospectName = task._prospect_name || task.title;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white">

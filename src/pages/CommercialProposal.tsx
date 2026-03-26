@@ -197,6 +197,82 @@ export default function CommercialProposal() {
   const [cronogramaPaymentMethod, setCronogramaPaymentMethod] = useState('pix');
   const [cronogramaInstallments, setCronogramaInstallments] = useState('1');
   const [generatingTimeline, setGeneratingTimeline] = useState(false);
+
+  // ── Auto-save draft to localStorage ──
+  const DRAFT_KEY = 'pulse_proposal_draft';
+
+  // Restore draft on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (!saved) return;
+      const d = JSON.parse(saved);
+      if (d.proposalType) setProposalType(d.proposalType);
+      if (d.clientName) setClientName(d.clientName);
+      if (d.clientCompany) setClientCompany(d.clientCompany);
+      if (d.validityDate) setValidityDate(new Date(d.validityDate));
+      if (d.bonusServices?.length) setBonusServices(d.bonusServices);
+      if (d.teamMembers?.length) setTeamMembers(d.teamMembers);
+      if (d.customDiscount) setCustomDiscount(d.customDiscount);
+      if (d.observations) setObservations(d.observations);
+      if (d.whatsappNumber) setWhatsappNumber(d.whatsappNumber);
+      if (d.selectedPlanId) setSelectedPlanId(d.selectedPlanId);
+      if (d.hasContract !== undefined) setHasContract(d.hasContract);
+      // System
+      if (d.systemScope?.length) setSystemScope(d.systemScope);
+      if (d.systemDeliverables?.length) setSystemDeliverables(d.systemDeliverables);
+      if (d.systemValue) setSystemValue(d.systemValue);
+      if (d.systemPaymentMethod) setSystemPaymentMethod(d.systemPaymentMethod);
+      if (d.systemInstallments) setSystemInstallments(d.systemInstallments);
+      if (d.systemAdditionalCosts) setSystemAdditionalCosts(d.systemAdditionalCosts);
+      if (d.systemTimeline) setSystemTimeline(d.systemTimeline);
+      // Endo
+      if (d.endoPlan) setEndoPlan(d.endoPlan);
+      if (d.endoDaysPerWeek) setEndoDaysPerWeek(d.endoDaysPerWeek);
+      if (d.endoSessionDuration) setEndoSessionDuration(d.endoSessionDuration);
+      if (d.endoStoriesPerDay) setEndoStoriesPerDay(d.endoStoriesPerDay);
+      if (d.endoMonthlyValue) setEndoMonthlyValue(d.endoMonthlyValue);
+      if (d.endoDescription) setEndoDescription(d.endoDescription);
+      // Personalizada
+      if (d.customVideos) setCustomVideos(d.customVideos);
+      if (d.customStories) setCustomStories(d.customStories);
+      if (d.customEventCoverage) setCustomEventCoverage(d.customEventCoverage);
+      if (d.customSocialMedia) setCustomSocialMedia(d.customSocialMedia);
+      if (d.customArts) setCustomArts(d.customArts);
+      if (d.customTrafficMgmt) setCustomTrafficMgmt(d.customTrafficMgmt);
+      if (d.customMonthlyValue) setCustomMonthlyValue(d.customMonthlyValue);
+      if (d.customDescription) setCustomDescription(d.customDescription);
+      if (d.customPaymentMethod) setCustomPaymentMethod(d.customPaymentMethod);
+      if (d.customInstallments) setCustomInstallments(d.customInstallments);
+      if (d.customRecordings) setCustomRecordings(d.customRecordings);
+      // Cronograma
+      if (d.cronogramaDesc) setCronogramaDesc(d.cronogramaDesc);
+      if (d.cronogramaDeliverables?.length) setCronogramaDeliverables(d.cronogramaDeliverables);
+      if (d.cronogramaPhases?.length) setCronogramaPhases(d.cronogramaPhases);
+      if (d.cronogramaMethodology) setCronogramaMethodology(d.cronogramaMethodology);
+      if (d.cronogramaProjectName) setCronogramaProjectName(d.cronogramaProjectName);
+      if (d.cronogramaTotalDays) setCronogramaTotalDays(d.cronogramaTotalDays);
+      if (d.cronogramaPaymentMethod) setCronogramaPaymentMethod(d.cronogramaPaymentMethod);
+      if (d.cronogramaInstallments) setCronogramaInstallments(d.cronogramaInstallments);
+    } catch { /* ignore corrupt data */ }
+  }, []);
+
+  // Save draft on every change (debounced via effect)
+  useEffect(() => {
+    const draft = {
+      proposalType, clientName, clientCompany, validityDate: validityDate.toISOString(),
+      bonusServices, teamMembers, customDiscount, observations, whatsappNumber,
+      selectedPlanId, hasContract,
+      systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline,
+      endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription,
+      customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings,
+      cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments,
+    };
+    const timer = setTimeout(() => {
+      try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* quota */ }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [proposalType, clientName, clientCompany, validityDate, bonusServices, teamMembers, customDiscount, observations, whatsappNumber, selectedPlanId, hasContract, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription, customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings, cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments]);
   const { data: plans = [] } = useQuery({
     queryKey: ['plans-proposal'],
     queryFn: async () => {

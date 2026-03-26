@@ -145,6 +145,7 @@ export default function Dashboard() {
     if (clients.length > 0) loadAIAlerts();
   }, [clients.length]);
 
+  useEffect(() => {
     const fetchContractAlerts = async () => {
       const { data } = await supabase.from('clients').select('company_name, contract_start_date, contract_duration_months').not('contract_start_date', 'is', null);
       if (!data) return;

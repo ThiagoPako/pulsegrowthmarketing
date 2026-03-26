@@ -1667,6 +1667,76 @@ export type Database = {
         }
         Relationships: []
       }
+      event_recordings: {
+        Row: {
+          address: string
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          date: string
+          description: string | null
+          end_time: string
+          id: string
+          start_time: string
+          status: string
+          title: string
+          updated_at: string
+          videomaker_id: string | null
+        }
+        Insert: {
+          address?: string
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          date: string
+          description?: string | null
+          end_time?: string
+          id?: string
+          start_time?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          videomaker_id?: string | null
+        }
+        Update: {
+          address?: string
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          description?: string | null
+          end_time?: string
+          id?: string
+          start_time?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          videomaker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_recordings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_recordings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_public_logos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_recordings_videomaker_id_fkey"
+            columns: ["videomaker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expense_categories: {
         Row: {
           created_at: string
@@ -2768,6 +2838,7 @@ export type Database = {
           created_by: string | null
           direct_to_editing: boolean
           endo_client_id: string | null
+          event_recording_id: string | null
           id: string
           is_endomarketing: boolean
           priority: string
@@ -2788,6 +2859,7 @@ export type Database = {
           created_by?: string | null
           direct_to_editing?: boolean
           endo_client_id?: string | null
+          event_recording_id?: string | null
           id?: string
           is_endomarketing?: boolean
           priority?: string
@@ -2808,6 +2880,7 @@ export type Database = {
           created_by?: string | null
           direct_to_editing?: boolean
           endo_client_id?: string | null
+          event_recording_id?: string | null
           id?: string
           is_endomarketing?: boolean
           priority?: string
@@ -2838,6 +2911,13 @@ export type Database = {
             columns: ["endo_client_id"]
             isOneToOne: false
             referencedRelation: "endomarketing_clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scripts_event_recording_id_fkey"
+            columns: ["event_recording_id"]
+            isOneToOne: false
+            referencedRelation: "event_recordings"
             referencedColumns: ["id"]
           },
           {

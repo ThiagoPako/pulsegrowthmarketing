@@ -2111,6 +2111,120 @@ export default function Schedule() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Event Creation Dialog */}
+      <Dialog open={eventOpen} onOpenChange={setEventOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin size={18} className="text-orange-500" /> Agendar Evento / Cobertura
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label>Título do Evento *</Label>
+              <Input value={eventForm.title} onChange={e => setEventForm({ ...eventForm, title: e.target.value })} placeholder="Ex: Cobertura Feira Empresarial" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Cliente *</Label>
+                <Select value={eventForm.clientId} onValueChange={v => setEventForm({ ...eventForm, clientId: v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Videomaker *</Label>
+                <Select value={eventForm.videomakerId} onValueChange={v => setEventForm({ ...eventForm, videomakerId: v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>{videomakers.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Data *</Label>
+              <Input type="date" value={eventForm.date} onChange={e => setEventForm({ ...eventForm, date: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Horário Início</Label>
+                <Input type="time" value={eventForm.startTime} onChange={e => setEventForm({ ...eventForm, startTime: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label>Horário Fim</Label>
+                <Input type="time" value={eventForm.endTime} onChange={e => setEventForm({ ...eventForm, endTime: e.target.value })} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="flex items-center gap-1.5"><MapPin size={14} /> Endereço</Label>
+              <Input value={eventForm.address} onChange={e => setEventForm({ ...eventForm, address: e.target.value })} placeholder="Rua, número, bairro, cidade..." />
+            </div>
+            <div className="space-y-1">
+              <Label>Descrição (opcional)</Label>
+              <Textarea value={eventForm.description} onChange={e => setEventForm({ ...eventForm, description: e.target.value })} placeholder="Detalhes do evento, o que gravar..." rows={3} />
+            </div>
+            <Button onClick={handleAddEvent} className="w-full bg-orange-500 hover:bg-orange-600 text-white">
+              <MapPin size={16} className="mr-2" /> Agendar Evento
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Event Edit Dialog */}
+      <Dialog open={editEventOpen} onOpenChange={(v) => { setEditEventOpen(v); if (!v) setEditingEvent(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil size={18} /> Editar Evento
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label>Título do Evento *</Label>
+              <Input value={eventForm.title} onChange={e => setEventForm({ ...eventForm, title: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Cliente</Label>
+                <Select value={eventForm.clientId} onValueChange={v => setEventForm({ ...eventForm, clientId: v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Videomaker</Label>
+                <Select value={eventForm.videomakerId} onValueChange={v => setEventForm({ ...eventForm, videomakerId: v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>{videomakers.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Data</Label>
+              <Input type="date" value={eventForm.date} onChange={e => setEventForm({ ...eventForm, date: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Horário Início</Label>
+                <Input type="time" value={eventForm.startTime} onChange={e => setEventForm({ ...eventForm, startTime: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label>Horário Fim</Label>
+                <Input type="time" value={eventForm.endTime} onChange={e => setEventForm({ ...eventForm, endTime: e.target.value })} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="flex items-center gap-1.5"><MapPin size={14} /> Endereço</Label>
+              <Input value={eventForm.address} onChange={e => setEventForm({ ...eventForm, address: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>Descrição</Label>
+              <Textarea value={eventForm.description} onChange={e => setEventForm({ ...eventForm, description: e.target.value })} rows={3} />
+            </div>
+            <Button onClick={handleEditEvent} className="w-full">Salvar Alterações</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

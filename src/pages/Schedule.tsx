@@ -104,6 +104,7 @@ export default function Schedule() {
   const [filterVideomaker, setFilterVideomaker] = useState('all');
   const [weekOffset, setWeekOffset] = useState(0);
   const [showEndo, setShowEndo] = useState(true);
+  const [showEvents, setShowEvents] = useState(true);
   const [showBackup, setShowBackup] = useState(false);
   const [showExtra, setShowExtra] = useState(false);
   const [regenOpen, setRegenOpen] = useState(false);
@@ -111,6 +112,39 @@ export default function Schedule() {
   const [regenLoading, setRegenLoading] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
   const [cancellingRec, setCancellingRec] = useState<Recording | null>(null);
+
+  // Event recordings state
+  const [eventRecordings, setEventRecordings] = useState<EventRecording[]>([]);
+  const [eventOpen, setEventOpen] = useState(false);
+  const [editEventOpen, setEditEventOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<EventRecording | null>(null);
+  const [eventForm, setEventForm] = useState({
+    clientId: '', videomakerId: '', title: '', date: '', startTime: '08:00', endTime: '18:00', address: '', description: '',
+  });
+
+  // Fetch event recordings
+  const fetchEvents = useCallback(async () => {
+    const { data } = await supabase.from('event_recordings').select('*').order('date', { ascending: true });
+    if (data) {
+      setEventRecordings(data.map((e: any) => ({
+        id: e.id,
+        clientId: e.client_id || '',
+        videomakerId: e.videomaker_id || '',
+        title: e.title || '',
+        date: e.date,
+        startTime: e.start_time,
+        endTime: e.end_time,
+        address: e.address || '',
+        description: e.description || '',
+        status: e.status,
+        createdBy: e.created_by,
+        createdAt: e.created_at,
+        updatedAt: e.updated_at,
+      })));
+    }
+  }, []);
+
+  useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
   // Start recording dialog state
   const [startRecOpen, setStartRecOpen] = useState(false);

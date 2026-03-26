@@ -1664,11 +1664,52 @@ app.post('/api/portal-actions', async (req, res) => {
   }
 });
 
+// ─── Avulso: create content task (dedicated endpoint) ─────────
+app.post('/api/avulso-create-task', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { title, content_type, kanban_column, description, script_id, recording_id,
+            assigned_to, created_by, drive_link, editing_deadline,
+            script_alteration_type, script_alteration_notes } = req.body;
+
+    if (!title) return res.status(400).json({ error: 'title required' });
+
+    // Ensure client_id column accepts NULL
+    try {
+      await pool.query(`ALTER TABLE content_tasks ALTER COLUMN client_id DROP NOT NULL`);
+    } catch (_) { /* already nullable */ }
+
+    const { rows: [task] } = await pool.query(
+      `INSERT INTO content_tasks
+         (client_id, title, content_type, kanban_column, description, script_id, recording_id,
+          assigned_to, created_by, drive_link, editing_deadline,
+          script_alteration_type, script_alteration_notes)
+       VALUES (NULL, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       RETURNING *`,
+      [title, content_type || 'reels', kanban_column || 'edicao', description || '',
+       script_id || null, recording_id || null, assigned_to || null, created_by || null,
+       drive_link || null, editing_deadline || null,
+       script_alteration_type || null, script_alteration_notes || null]
+    );
+
+    console.log('[avulso-create-task] Created content_task:', task.id);
+    res.json({ data: task, error: null });
+  } catch (e) {
+    console.error('POST /api/avulso-create-task error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/avulso-actions', async (req, res) => {
   try {
     const { action, task_id, message } = req.body;
 
     if (!task_id) return res.status(400).json({ error: 'task_id required' });
+
+    // Ensure client_id column accepts NULL
+    try {
+      await pool.query(`ALTER TABLE content_tasks ALTER COLUMN client_id DROP NOT NULL`);
+    } catch (_) { /* already nullable */ }
 
     if (action === 'get_task') {
       const { rows: [task] } = await pool.query(

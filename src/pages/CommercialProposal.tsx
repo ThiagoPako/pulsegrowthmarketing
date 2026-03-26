@@ -1,9 +1,10 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/integrations/supabase/client';
+import { supabase as vpsDb } from '@/lib/vpsDb';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
-import { format, addDays } from 'date-fns';
+import { format, addDays, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import pulseLogo from '@/assets/pulse_logo.png';
 import { Button } from '@/components/ui/button';
@@ -23,7 +24,7 @@ import {
   FileText, Plus, Trash2, CalendarIcon, Download, Eye, Users, Rocket,
   CheckCircle2, Film, Palette, Scissors, Camera, Monitor, Share2, BarChart3,
   Clock, Gift, AlertTriangle, X, Link2, Copy, ExternalLink, List, Code, Megaphone,
-  Sparkles, Loader2, UserPlus
+  Sparkles, Loader2, UserPlus, DollarSign, Target
 } from 'lucide-react';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';

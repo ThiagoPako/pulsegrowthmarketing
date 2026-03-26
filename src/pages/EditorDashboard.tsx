@@ -33,7 +33,7 @@ const CONTENT_TYPES = [
 
 export interface EditorTask {
   id: string;
-  client_id: string;
+  client_id: string | null;
   title: string;
   content_type: string;
   kanban_column: string;

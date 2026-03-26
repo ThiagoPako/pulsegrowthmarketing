@@ -277,6 +277,70 @@ export default function Schedule() {
 
   const typeLabels: Record<RecordingType, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.', backup: 'Backup', endomarketing: 'Endo', avulso: 'Avulso' };
 
+  // Event CRUD
+  const handleAddEvent = async () => {
+    if (!eventForm.clientId || !eventForm.videomakerId || !eventForm.date || !eventForm.title) {
+      toast.error('Preencha todos os campos obrigatórios'); return;
+    }
+    const { error } = await supabase.from('event_recordings').insert({
+      client_id: eventForm.clientId,
+      videomaker_id: eventForm.videomakerId,
+      title: eventForm.title,
+      date: eventForm.date,
+      start_time: eventForm.startTime,
+      end_time: eventForm.endTime,
+      address: eventForm.address,
+      description: eventForm.description,
+      created_by: currentUser?.id || null,
+    } as any);
+    if (error) { toast.error('Erro ao criar evento'); return; }
+    toast.success('Evento agendado com sucesso');
+    setEventOpen(false);
+    fetchEvents();
+  };
+
+  const handleEditEvent = async () => {
+    if (!editingEvent) return;
+    const { error } = await supabase.from('event_recordings').update({
+      client_id: eventForm.clientId,
+      videomaker_id: eventForm.videomakerId,
+      title: eventForm.title,
+      date: eventForm.date,
+      start_time: eventForm.startTime,
+      end_time: eventForm.endTime,
+      address: eventForm.address,
+      description: eventForm.description,
+    } as any).eq('id', editingEvent.id);
+    if (error) { toast.error('Erro ao atualizar evento'); return; }
+    toast.success('Evento atualizado');
+    setEditEventOpen(false);
+    setEditingEvent(null);
+    fetchEvents();
+  };
+
+  const handleDeleteEvent = async (id: string) => {
+    if (!window.confirm('Apagar este evento permanentemente?')) return;
+    await supabase.from('event_recordings').delete().eq('id', id);
+    toast.success('Evento apagado');
+    fetchEvents();
+  };
+
+  const handleCompleteEvent = async (id: string) => {
+    await supabase.from('event_recordings').update({ status: 'concluido' } as any).eq('id', id);
+    toast.success('Evento concluído');
+    fetchEvents();
+  };
+
+  const openEditEvent = (evt: EventRecording) => {
+    setEditingEvent(evt);
+    setEventForm({
+      clientId: evt.clientId, videomakerId: evt.videomakerId, title: evt.title,
+      date: evt.date, startTime: evt.startTime, endTime: evt.endTime,
+      address: evt.address, description: evt.description || '',
+    });
+    setEditEventOpen(true);
+  };
+
   const handleRegenerate = async () => {
     if (!regenClientId) { toast.error('Selecione um cliente'); return; }
     const client = clients.find(c => c.id === regenClientId);

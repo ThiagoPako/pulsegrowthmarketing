@@ -44,6 +44,77 @@ interface TaskStats {
   byContentTypeMetrics?: Record<string, ContentTypeMetric>;
 }
 
+interface AgencyHoursSettings {
+  shiftAStart: string;
+  shiftAEnd: string;
+  shiftBStart: string;
+  shiftBEnd: string;
+  workDays: string[];
+}
+
+const DEFAULT_AGENCY_HOURS: AgencyHoursSettings = {
+  shiftAStart: '08:30',
+  shiftAEnd: '12:00',
+  shiftBStart: '14:30',
+  shiftBEnd: '18:00',
+  workDays: ['segunda', 'terca', 'quarta', 'quinta', 'sexta'],
+};
+
+const EDITING_START_ACTIONS = new Set(['Edição iniciada', 'Alteração iniciada', 'Edição retomada']);
+const EDITING_STOP_ACTIONS = new Set(['Edição pausada', 'Enviado para revisão']);
+const FINISHED_EDITING_COLUMNS = new Set(['revisao', 'envio', 'agendamentos', 'acompanhamento', 'arquivado']);
+const WEEK_DAY_KEYS = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+
+function timeToMinutes(value: string) {
+  const [hours, minutes] = value.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+function buildDateAtMinutes(baseDate: Date, totalMinutes: number) {
+  const next = new Date(baseDate);
+  next.setHours(Math.floor(totalMinutes / 60), totalMinutes % 60, 0, 0);
+  return next;
+}
+
+function getOverlapSeconds(startA: Date, endA: Date, startB: Date, endB: Date) {
+  const start = Math.max(startA.getTime(), startB.getTime());
+  const end = Math.min(endA.getTime(), endB.getTime());
+  return end > start ? Math.floor((end - start) / 1000) : 0;
+}
+
+function getBusinessActiveSeconds(start: Date, end: Date, settings: AgencyHoursSettings) {
+  if (end <= start) return 0;
+
+  let totalSeconds = 0;
+  const cursor = new Date(start);
+  cursor.setHours(0, 0, 0, 0);
+  const lastDay = new Date(end);
+  lastDay.setHours(0, 0, 0, 0);
+
+  while (cursor <= lastDay) {
+    const dayKey = WEEK_DAY_KEYS[cursor.getDay()];
+
+    if (settings.workDays.includes(dayKey)) {
+      const shifts = [
+        [settings.shiftAStart, settings.shiftAEnd],
+        [settings.shiftBStart, settings.shiftBEnd],
+      ];
+
+      for (const [shiftStart, shiftEnd] of shifts) {
+        if (!shiftStart || !shiftEnd) continue;
+
+        const shiftStartDate = buildDateAtMinutes(cursor, timeToMinutes(shiftStart));
+        const shiftEndDate = buildDateAtMinutes(cursor, timeToMinutes(shiftEnd));
+        totalSeconds += getOverlapSeconds(start, end, shiftStartDate, shiftEndDate);
+      }
+    }
+
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return totalSeconds;
+}
+
 export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
   const [period, setPeriod] = useState('current');
   const [stats, setStats] = useState<TaskStats | null>(null);
@@ -70,14 +141,27 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
     const endStr = dateRange.end.toISOString();
 
     try {
+      const { data: settingsRows } = await supabase
+        .from('company_settings')
+        .select('shift_a_start, shift_a_end, shift_b_start, shift_b_end, work_days')
+        .limit(1);
+
+      const settingsRow = settingsRows?.[0];
+      const agencyHours: AgencyHoursSettings = settingsRow ? {
+        shiftAStart: settingsRow.shift_a_start || DEFAULT_AGENCY_HOURS.shiftAStart,
+        shiftAEnd: settingsRow.shift_a_end || DEFAULT_AGENCY_HOURS.shiftAEnd,
+        shiftBStart: settingsRow.shift_b_start || DEFAULT_AGENCY_HOURS.shiftBStart,
+        shiftBEnd: settingsRow.shift_b_end || DEFAULT_AGENCY_HOURS.shiftBEnd,
+        workDays: settingsRow.work_days || DEFAULT_AGENCY_HOURS.workDays,
+      } : DEFAULT_AGENCY_HOURS;
+
       if (role === 'editor') {
-        await loadEditorStats(member.id, startStr, endStr);
+        await loadEditorStats(member.id, startStr, endStr, agencyHours);
       } else if (role === 'videomaker') {
         await loadVideomakerStats(member.id, startStr, endStr);
       } else if (role === 'designer') {
         await loadDesignerStats(member.id, startStr, endStr);
       } else {
-        // Generic: content tasks created_by
         await loadGenericStats(member.id, startStr, endStr);
       }
     } catch (err) {
@@ -86,16 +170,36 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
     setLoading(false);
   };
 
-  const loadEditorStats = async (userId: string, startStr: string, endStr: string) => {
-    // Query tasks this editor actually worked on (edited_by) — filter by editing_started_at, not created_at
-    const { data: tasks } = await supabase
-      .from('content_tasks')
-      .select('id, kanban_column, content_type, editing_started_at, editing_paused_seconds, editing_paused_at, approved_at, updated_at, edited_by, assigned_to')
-      .eq('edited_by', userId)
-      .gte('editing_started_at', startStr)
-      .lte('editing_started_at', endStr);
+  const loadEditorStats = async (
+    userId: string,
+    startStr: string,
+    endStr: string,
+    agencyHours: AgencyHoursSettings,
+  ) => {
+    const [{ data: tasks }, { data: history }] = await Promise.all([
+      supabase
+        .from('content_tasks')
+        .select('id, kanban_column, content_type, editing_started_at, approved_at, updated_at, edited_by')
+        .eq('edited_by', userId)
+        .gte('editing_started_at', startStr)
+        .lte('editing_started_at', endStr),
+      supabase
+        .from('task_history')
+        .select('task_id, action, created_at, user_id')
+        .eq('user_id', userId)
+        .gte('created_at', startStr)
+        .lte('created_at', endStr)
+        .order('created_at', { ascending: true }),
+    ]);
 
     const editorTasks = tasks || [];
+    const historyByTask = new Map<string, Array<{ action: string; created_at: string }>>();
+
+    (history || []).forEach((entry: any) => {
+      if (!historyByTask.has(entry.task_id)) historyByTask.set(entry.task_id, []);
+      historyByTask.get(entry.task_id)!.push({ action: entry.action, created_at: entry.created_at });
+    });
+
     const byStatus: Record<string, number> = {};
     const byContentType: Record<string, number> = {};
     const metricsMap: Record<string, { count: number; totalTime: number }> = {};
@@ -103,43 +207,43 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
     let tasksWithTime = 0;
     let score = 0;
 
-    editorTasks.forEach(t => {
-      const col = t.kanban_column;
+    editorTasks.forEach((task: any) => {
+      const col = task.kanban_column;
       byStatus[col] = (byStatus[col] || 0) + 1;
-      
-      const cType = t.content_type || 'outro';
+
+      const cType = task.content_type || 'outro';
       byContentType[cType] = (byContentType[cType] || 0) + 1;
       if (!metricsMap[cType]) metricsMap[cType] = { count: 0, totalTime: 0 };
-      metricsMap[cType].count++;
 
-      if (t.editing_started_at) {
-        const start = new Date(t.editing_started_at).getTime();
-        const pausedSecs = t.editing_paused_seconds || 0;
-        let end: number;
+      const taskEvents = historyByTask.get(task.id) || [];
+      let activeStart: Date | null = null;
+      let activeSeconds = 0;
 
-        if (t.editing_paused_at) {
-          // Currently paused — count time up to pause moment only
-          end = new Date(t.editing_paused_at).getTime();
-        } else if (['revisao', 'envio', 'agendamentos', 'acompanhamento', 'arquivado', 'alteracao'].includes(col)) {
-          // Task moved past editing — use approved_at or updated_at
-          end = new Date(t.approved_at || t.updated_at).getTime();
-        } else if (col === 'edicao') {
-          // Still actively editing right now (not paused)
-          end = Date.now();
-        } else {
-          // In queue or other non-editing column — don't count time
-          end = start; // zero time
+      taskEvents.forEach((event) => {
+        const eventDate = new Date(event.created_at);
+
+        if (EDITING_START_ACTIONS.has(event.action)) {
+          activeStart = eventDate;
+          return;
         }
 
-        const elapsed = Math.max(0, Math.floor((end - start) / 1000));
-        const realTime = Math.max(0, elapsed - pausedSecs);
-        
-        // Sanity check: cap at 24h per task to avoid data bugs
-        const cappedTime = Math.min(realTime, 86400);
-        totalEditingTime += cappedTime;
-        tasksWithTime++;
-        metricsMap[cType].totalTime += cappedTime;
+        if (EDITING_STOP_ACTIONS.has(event.action) && activeStart) {
+          activeSeconds += getBusinessActiveSeconds(activeStart, eventDate, agencyHours);
+          activeStart = null;
+        }
+      });
+
+      if (activeStart) {
+        const endDate = FINISHED_EDITING_COLUMNS.has(col)
+          ? new Date(task.approved_at || task.updated_at || activeStart)
+          : new Date();
+        activeSeconds += getBusinessActiveSeconds(activeStart, endDate, agencyHours);
       }
+
+      metricsMap[cType].count += 1;
+      metricsMap[cType].totalTime += activeSeconds;
+      totalEditingTime += activeSeconds;
+      if (activeSeconds > 0) tasksWithTime++;
 
       if (['agendamentos', 'acompanhamento', 'arquivado', 'envio'].includes(col)) {
         score += EDITOR_SCORE.APROVADO;
@@ -153,11 +257,11 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
     });
 
     const byContentTypeMetrics: Record<string, ContentTypeMetric> = {};
-    Object.entries(metricsMap).forEach(([type, m]) => {
+    Object.entries(metricsMap).forEach(([type, metric]) => {
       byContentTypeMetrics[type] = {
-        count: m.count,
-        totalTime: m.totalTime,
-        avgTime: m.count > 0 ? Math.floor(m.totalTime / m.count) : 0,
+        count: metric.count,
+        totalTime: metric.totalTime,
+        avgTime: metric.count > 0 ? Math.floor(metric.totalTime / metric.count) : 0,
       };
     });
 

@@ -169,12 +169,19 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchLiveTasks = async () => {
-      const { data } = await supabase
+      // Fetch active editing/review tasks (have editing_started_at)
+      const { data: activeTasks } = await supabase
         .from('content_tasks')
         .select('id, title, client_id, assigned_to, kanban_column, editing_started_at, content_type')
         .not('editing_started_at', 'is', null)
-        .in('kanban_column', ['edicao', 'revisao', 'alteracao']);
-      if (data) setLiveEditorTasks(data);
+        .in('kanban_column', ['edicao', 'revisao']);
+      // Fetch ALL alteration tasks (including queued ones without editing_started_at)
+      const { data: alterationTasks } = await supabase
+        .from('content_tasks')
+        .select('id, title, client_id, assigned_to, kanban_column, editing_started_at, content_type')
+        .eq('kanban_column', 'alteracao');
+      const combined = [...(activeTasks || []), ...(alterationTasks || [])];
+      setLiveEditorTasks(combined);
     };
     fetchLiveTasks();
     const channel = supabase

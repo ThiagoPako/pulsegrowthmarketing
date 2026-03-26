@@ -472,26 +472,62 @@ export default function VideomakerDashboard() {
           toast.error(`Erro ao atualizar a fila de edição para "${script.title}".`);
         }
       } else {
-        // Create content_task for both regular and avulso recordings
-        // Avulso recordings have client_id = null
-        const { error: insertError } = await supabase.from('content_tasks').insert({
-          client_id: rec.clientId || null,
-          title: script.title,
-          content_type: script.contentFormat || 'reels',
-          kanban_column: targetColumn,
-          description,
-          script_id: scriptId,
-          recording_id: rec.id,
-          assigned_to: assignedEditor,
-          created_by: vmId,
-          drive_link: scriptDriveLink,
-          editing_deadline: editingDeadline.toISOString(),
-          script_alteration_type: altType,
-          script_alteration_notes: altNotes,
-        } as any);
-        if (insertError) {
-          console.error('content_task insert error:', insertError);
-          toast.error(`Erro ao enviar "${script.title}" para a fila de edição: ${insertError.message}`);
+        // For avulso (no client), use dedicated endpoint to avoid NOT NULL constraint
+        if (!rec.clientId) {
+          try {
+            const token = localStorage.getItem('pulse_jwt');
+            const resp = await fetch('https://agenciapulse.tech/api/avulso-create-task', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+              body: JSON.stringify({
+                title: script.title,
+                content_type: script.contentFormat || 'reels',
+                kanban_column: targetColumn,
+                description,
+                script_id: scriptId,
+                recording_id: rec.id,
+                assigned_to: assignedEditor,
+                created_by: vmId,
+                drive_link: scriptDriveLink,
+                editing_deadline: editingDeadline.toISOString(),
+                script_alteration_type: altType,
+                script_alteration_notes: altNotes,
+              }),
+            });
+            const result = await resp.json();
+            if (!resp.ok || result.error) {
+              console.error('avulso-create-task error:', result);
+              toast.error(`Erro ao criar tarefa avulso: ${result.error || 'Erro desconhecido'}`);
+            } else {
+              console.log('Avulso content_task created:', result.data?.id);
+            }
+          } catch (err: any) {
+            console.error('avulso-create-task fetch error:', err);
+            toast.error(`Erro de rede ao criar tarefa avulso: ${err.message}`);
+          }
+        } else {
+          const { error: insertError } = await supabase.from('content_tasks').insert({
+            client_id: rec.clientId,
+            title: script.title,
+            content_type: script.contentFormat || 'reels',
+            kanban_column: targetColumn,
+            description,
+            script_id: scriptId,
+            recording_id: rec.id,
+            assigned_to: assignedEditor,
+            created_by: vmId,
+            drive_link: scriptDriveLink,
+            editing_deadline: editingDeadline.toISOString(),
+            script_alteration_type: altType,
+            script_alteration_notes: altNotes,
+          } as any);
+          if (insertError) {
+            console.error('content_task insert error:', insertError);
+            toast.error(`Erro ao enviar "${script.title}" para a fila de edição: ${insertError.message}`);
+          }
         }
       }
     }

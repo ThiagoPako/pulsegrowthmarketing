@@ -1253,10 +1253,10 @@ export default function Schedule() {
                       >
                         <div className="flex items-start justify-between gap-1">
                           <div className="flex items-center gap-1.5 min-w-0">
-                            {(() => { const cl = clients.find(c => c.id === (evt.recording?.clientId || '')); return cl ? <ClientLogo client={cl} size="sm" className="w-5 h-5 text-[8px] rounded" /> : null; })()}
+                            {(() => { const cl = clients.find(c => c.id === (evt.recording?.clientId || evt.eventRecording?.clientId || '')); return cl ? <ClientLogo client={cl} size="sm" className="w-5 h-5 text-[8px] rounded" /> : null; })()}
                             <p className="font-medium text-xs truncate">{evt.clientName}</p>
                           </div>
-                          {evt.type === 'endomarketing' ? endoTag() : evt.recording && statusTag(evt.recording)}
+                          {evt.type === 'event' && evt.eventRecording ? eventTag(evt.eventRecording) : evt.type === 'endomarketing' ? endoTag() : evt.recording && statusTag(evt.recording)}
                         </div>
                         {evt.type === 'endomarketing' ? (
                           <p className="text-[10px] text-muted-foreground">{evt.startTime} · {evt.endoDuration}min</p>

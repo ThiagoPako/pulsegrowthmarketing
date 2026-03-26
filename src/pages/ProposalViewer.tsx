@@ -538,6 +538,125 @@ export default function ProposalViewer() {
     );
   };
 
+  // ===== CRONOGRAMA =====
+  const renderCronogramaContent = () => {
+    const cronoData = systemData;
+    const totalValue = (cronoData.deliverables || []).reduce((s: number, d: any) => s + ((d.unitPrice || 0) * (d.quantity || 1)), 0);
+    const discountedVal = totalValue * (1 - discount / 100);
+    const installs = cronoData.installments || 1;
+    const installmentVal = discountedVal / installs;
+    const fmt2 = fmt;
+    return (
+      <>
+        {cronoData.methodology && (
+          <AnimatedSection className="px-6 md:px-10 py-8">
+            <h2 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
+              <CalendarDays className="h-5 w-5" style={{ color: accentColor }} /> {cronoData.projectName || 'Cronograma do Projeto'}
+            </h2>
+            <div className="bg-gray-50 rounded-xl p-4 mb-3">
+              <p className="text-[10px] font-semibold text-gray-500 mb-1">METODOLOGIA</p>
+              <p className="text-sm text-gray-700">{cronoData.methodology}</p>
+            </div>
+            {cronoData.totalDays && <p className="text-sm text-gray-500">⏱️ Prazo estimado: <strong>{cronoData.totalDays} dias</strong></p>}
+          </AnimatedSection>
+        )}
+        {cronoData.phases?.length > 0 && (
+          <AnimatedSection className="px-6 md:px-10 pb-6">
+            <h2 className="text-lg font-bold text-gray-800 mb-3">Fases do Projeto</h2>
+            <div className="space-y-2">
+              {cronoData.phases.map((phase: any, i: number) => (
+                <motion.div key={i} initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.1 * i }}
+                  className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 hover:shadow-md transition-all">
+                  <div className="rounded-full w-7 h-7 flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: accentColor }}>{phase.number}</div>
+                  <div>
+                    <p className="font-semibold text-sm text-gray-800">{phase.name} <span className="text-xs font-normal text-gray-500">({phase.durationDays} dias)</span></p>
+                    <p className="text-xs text-gray-500">{phase.description}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </AnimatedSection>
+        )}
+        {cronoData.deliverables?.length > 0 && (
+          <AnimatedSection className="px-6 md:px-10 pb-6">
+            <h2 className="text-lg font-bold text-gray-800 mb-3">Entregas e Investimento</h2>
+            <div className="border rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[10px] text-gray-500 uppercase tracking-wider" style={{ background: 'hsl(16 82% 96%)' }}>
+                    <th className="p-3">Entrega</th>
+                    <th className="p-3 text-center">Qtd</th>
+                    <th className="p-3 text-right">Unit.</th>
+                    <th className="p-3 text-right">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cronoData.deliverables.map((d: any, i: number) => (
+                    <motion.tr key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.05 * i }}
+                      className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="p-3">
+                        <p className="font-medium text-xs text-gray-800">{d.name}</p>
+                        <p className="text-[10px] text-gray-500">{d.description}</p>
+                      </td>
+                      <td className="p-3 text-center text-xs font-medium">{d.quantity}</td>
+                      <td className="p-3 text-right text-xs text-gray-600">{fmt2(d.unitPrice)}</td>
+                      <td className="p-3 text-right text-xs font-bold" style={{ color: accentColor }}>{fmt2((d.unitPrice || 0) * (d.quantity || 1))}</td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 font-bold">
+                    <td colSpan={3} className="p-3 text-right text-xs text-gray-800">Total</td>
+                    <td className="p-3 text-right text-base" style={{ color: accentColor }}>{fmt2(totalValue)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </AnimatedSection>
+        )}
+        <AnimatedSection className="px-6 md:px-10 pb-8">
+          <motion.div whileHover={{ scale: 1.01 }} className="border-2 rounded-2xl p-6" style={{ borderColor: accentColor }}>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600 text-sm">Valor total</span>
+                <span className="text-xl font-bold" style={{ color: accentColor }}>{fmt2(totalValue)}</span>
+              </div>
+              {discount > 0 && (
+                <>
+                  <div className="flex justify-between items-center text-green-600 text-sm">
+                    <span>Desconto ({discount}%)</span>
+                    <span className="font-bold">-{fmt2(totalValue - discountedVal)}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-t pt-2">
+                    <span className="font-bold text-gray-800">Valor final</span>
+                    <motion.span animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 1, delay: 0.5 }} className="text-2xl font-bold" style={{ color: accentColor }}>{fmt2(discountedVal)}</motion.span>
+                  </div>
+                </>
+              )}
+              <Separator />
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-600">Pagamento</span>
+                <span className="font-medium">{PAYMENT_METHODS[cronoData.paymentMethod] || cronoData.paymentMethod || 'PIX'}</span>
+              </div>
+              {installs > 1 && (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-600">{installs}x de</span>
+                  <span className="font-bold" style={{ color: accentColor }}>{fmt2(installmentVal)}</span>
+                </div>
+              )}
+              {cronoData.totalDays && (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-600">Prazo</span>
+                  <span className="font-medium">{cronoData.totalDays} dias</span>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </AnimatedSection>
+      </>
+    );
+  };
+
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(180deg, hsl(16 82% 97%), #f8f8f8)' }}>
       <Toaster position="top-center" />

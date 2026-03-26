@@ -234,6 +234,28 @@ export default function ContentKanban() {
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
 
+  // Deep-link highlight: scroll to card and open detail
+  useEffect(() => {
+    if (!highlightId || loading || tasks.length === 0) return;
+    const task = tasks.find(t => t.id === highlightId);
+    if (task) {
+      // Open detail sheet
+      setDetailTask(task);
+      setDetailOpen(true);
+      // Scroll card into view
+      setTimeout(() => {
+        const el = document.getElementById(`task-card-${highlightId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+          el.classList.add('ring-2', 'ring-pink-500', 'shadow-lg', 'shadow-pink-500/20');
+          setTimeout(() => el.classList.remove('ring-2', 'ring-pink-500', 'shadow-lg', 'shadow-pink-500/20'), 4000);
+        }
+      }, 300);
+      // Clear highlight param
+      setSearchParams({}, { replace: true });
+    }
+  }, [highlightId, loading, tasks]);
+
   // Realtime
   useEffect(() => {
     const channel = supabase

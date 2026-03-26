@@ -95,6 +95,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
   const hasVideoLink = !!task.edited_video_link;
 
   const isReview = task.kanban_column === 'revisao';
+  const isMine = task.assigned_to === currentUserId;
 
   return (
     <div draggable onDragStart={e => onDragStart(e, task)}

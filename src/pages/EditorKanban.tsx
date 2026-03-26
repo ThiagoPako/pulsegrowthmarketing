@@ -341,6 +341,22 @@ export default function EditorKanban() {
 
   // ─── VALIDATION RULES ─────────────────────────────────────
   const validateTransition = (task: EditorTask, targetColumn: string): string | null => {
+    // Editor role restrictions: can only interact with edicao and alteracao
+    if (isEditorRole) {
+      // Editor can move: edicao→revisao, alteracao→revisao (sending finished work)
+      // Editor CANNOT move: revisao→anywhere (that's for admin/social_media)
+      // Editor CANNOT move: envio→anywhere
+      if (task.kanban_column === 'revisao') {
+        return 'A revisão é responsabilidade da Social Media ou Administrador. Editores não podem mover cards da revisão.';
+      }
+      if (task.kanban_column === 'envio') {
+        return 'Cards concluídos são gerenciados pela Social Media ou Administrador.';
+      }
+      // Editor can only move TO revisao (from edicao or alteracao)
+      if (targetColumn !== 'revisao' && targetColumn !== 'edicao' && targetColumn !== 'alteracao') {
+        return 'Editores só podem enviar para Revisão ou mover entre Edição e Alteração.';
+      }
+    }
     // Moving to revisao requires edited_video_link
     if (targetColumn === 'revisao' && !task.edited_video_link) {
       return 'Adicione o link do vídeo editado antes de enviar para revisão';

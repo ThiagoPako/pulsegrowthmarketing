@@ -74,3 +74,36 @@ export const vpsConfirmationCron = (body?: any) => invokeVpsFunction('whatsapp-c
 export const vpsApprovalDeadlineCron = (body?: any) => invokeVpsFunction('approval-deadline-cron', { body });
 export const vpsGenerateMonthlyRevenues = (body?: any) => invokeVpsFunction('generate-monthly-revenues', { body });
 export const vpsEndoDailyTasksNotify = (body?: any) => invokeVpsFunction('endo-daily-tasks-notify', { body });
+
+/**
+ * Call Lovable Cloud edge functions (Supabase-hosted)
+ */
+export async function invokeCloudFunction(
+  functionName: string,
+  body?: any
+): Promise<{ data: any; error: any }> {
+  try {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/${functionName}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify(body || {}),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      return { data: null, error: { message: data.error || `HTTP ${response.status}` } };
+    }
+    return { data, error: null };
+  } catch (error: any) {
+    return { data: null, error: { message: error.message || 'Network error' } };
+  }
+}
+
+export const cloudContentSuggestions = (body: any) => invokeCloudFunction('ai-content-suggestions', body);
+export const cloudScriptGenerator = (body: any) => invokeCloudFunction('ai-script-generator', body);

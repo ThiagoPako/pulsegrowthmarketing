@@ -1,0 +1,1 @@
+CREATE POLICY "auth_insert_proposals" ON public.commercial_proposals FOR INSERT TO authenticated WITH CHECK (true);

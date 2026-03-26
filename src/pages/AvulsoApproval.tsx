@@ -1,29 +1,43 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, RotateCcw, Rocket, Video, Palette, Users, BarChart3, Shield, Calendar, Star, Sparkles, MessageCircle } from 'lucide-react';
+import {
+  Check, RotateCcw, Rocket, Video, Palette, Users, BarChart3,
+  Shield, Calendar, Star, Sparkles, MessageCircle, Download,
+  Camera, TrendingUp, MonitorPlay, Award
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { avulsoAction } from '@/lib/portalApi';
 import { toast } from 'sonner';
+import pulseLogo from '@/assets/pulse-logo.png';
 
 const WHATSAPP_CTA = 'https://wa.me/5562985382981?text=Olá!%20Vi%20meu%20vídeo%20avulso%20e%20quero%20saber%20mais%20sobre%20os%20planos%20da%20Pulse!';
 
 const TEAM_MEMBERS = [
-  { name: 'Victor Morais', role: 'CEO & Estrategista', emoji: '🚀' },
-  { name: 'Fabyely', role: 'Videomaker', emoji: '🎬' },
-  { name: 'Time de Editores', role: 'Pós-Produção', emoji: '✂️' },
-  { name: 'Time de Design', role: 'Identidade Visual', emoji: '🎨' },
-  { name: 'Social Media', role: 'Gestão de Conteúdo', emoji: '📱' },
+  { name: 'Victor Morais', role: 'CEO & Estrategista', emoji: '🚀', color: 'from-orange-500 to-amber-500' },
+  { name: 'Thiago', role: 'Gestor de Tráfego', emoji: '📊', color: 'from-blue-500 to-cyan-500' },
+  { name: 'Fabyely', role: 'Videomaker', emoji: '🎬', color: 'from-pink-500 to-rose-500' },
+  { name: 'Time de Editores', role: 'Pós-Produção', emoji: '✂️', color: 'from-purple-500 to-violet-500' },
+  { name: 'Time de Design', role: 'Identidade Visual', emoji: '🎨', color: 'from-emerald-500 to-teal-500' },
+  { name: 'Rayssa', role: 'Social Media', emoji: '📱', color: 'from-yellow-500 to-orange-500' },
 ];
 
 const BENEFITS = [
-  { icon: Video, title: 'Gravações Profissionais', desc: 'Videomaker dedicado com equipamento profissional' },
-  { icon: Palette, title: 'Design Exclusivo', desc: 'Artes, thumbnails e identidade visual personalizada' },
-  { icon: BarChart3, title: 'Tráfego Pago', desc: 'Gestão de anúncios no Meta Ads e Google Ads' },
-  { icon: Users, title: 'Portal do Cliente', desc: 'Acompanhe tudo em tempo real pela sua Área do Cliente' },
+  { icon: Video, title: 'Gravações Profissionais', desc: 'Videomaker dedicado com equipamento cinematográfico' },
+  { icon: Palette, title: 'Design Exclusivo', desc: 'Artes, thumbnails e identidade visual sob medida' },
+  { icon: BarChart3, title: 'Tráfego Pago', desc: 'Gestão estratégica de Meta Ads e Google Ads' },
+  { icon: MonitorPlay, title: 'Portal do Cliente', desc: 'Acompanhe tudo em tempo real pela sua área exclusiva' },
   { icon: Calendar, title: 'Calendário Editorial', desc: 'Planejamento estratégico semanal de conteúdo' },
-  { icon: Shield, title: 'Equipe Completa', desc: 'Videomaker, Editor, Designer, Social Media e Gestor de Tráfego' },
+  { icon: Shield, title: 'Equipe Completa', desc: 'Videomaker, Editor, Designer, Social Media e Tráfego' },
+  { icon: Camera, title: 'Ensaio Fotográfico', desc: 'Fotos profissionais para feed e campanhas' },
+  { icon: TrendingUp, title: 'Relatórios', desc: 'Métricas detalhadas e análise de resultados' },
+];
+
+const CLIENT_LOGOS = [
+  'Silveira Calhas', 'Pastor João', 'Dr. Marcos', 'Studio Bella',
+  'Auto Peças Central', 'Padaria Trigo & Mel', 'Clínica Saúde+', 'Loja ModaFit',
+  'Restaurante Tempero', 'Imobiliária Norte', 'Pet Shop Amigo', 'Academia Power',
 ];
 
 export default function AvulsoApproval() {
@@ -81,9 +95,28 @@ export default function AvulsoApproval() {
     toast.success('Solicitação de revisão enviada! Nosso editor vai ajustar seu vídeo.');
   };
 
+  const handleDownload = () => {
+    if (!task?.edited_video_link) return;
+    const a = document.createElement('a');
+    a.href = task.edited_video_link;
+    a.download = `${task.title || 'video-pulse'}.mp4`;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0a0a0f] flex flex-col items-center justify-center gap-4">
+        <motion.img
+          src={pulseLogo}
+          alt="Pulse"
+          className="w-16 h-16"
+          animate={{ rotate: [0, 360] }}
+          transition={{ repeat: Infinity, duration: 2, ease: 'linear' }}
+        />
         <div className="w-10 h-10 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
       </div>
     );
@@ -91,8 +124,11 @@ export default function AvulsoApproval() {
 
   if (!task) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex items-center justify-center text-white">
-        <p>Vídeo não encontrado.</p>
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center text-white">
+        <div className="text-center space-y-4">
+          <Rocket className="w-12 h-12 text-orange-400 mx-auto" />
+          <p className="text-xl">Vídeo não encontrado.</p>
+        </div>
       </div>
     );
   }
@@ -101,79 +137,144 @@ export default function AvulsoApproval() {
   const prospectName = task.prospect_name || task.title;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white">
+    <div className="min-h-screen bg-[#0a0a0f] text-white overflow-x-hidden">
+      {/* Ambient background effects */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-orange-500/5 rounded-full blur-[120px]" />
+        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-orange-600/5 rounded-full blur-[100px]" />
+      </div>
+
       {/* Header */}
-      <header className="py-6 px-4 border-b border-white/10">
-        <div className="max-w-4xl mx-auto flex items-center justify-center gap-3">
-          <motion.div
-            animate={{ rotate: [0, -10, 10, 0] }}
-            transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
-          >
-            <Rocket className="w-8 h-8 text-orange-400" />
-          </motion.div>
-          <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
-            Pulse <span className="text-orange-400">Growth Marketing</span>
+      <header className="relative py-5 px-4 border-b border-white/5 backdrop-blur-sm bg-black/30 sticky top-0 z-50">
+        <div className="max-w-5xl mx-auto flex items-center justify-center gap-3">
+          <motion.img
+            src={pulseLogo}
+            alt="Pulse Growth Marketing"
+            className="w-10 h-10"
+            animate={{ rotate: [0, -5, 5, 0] }}
+            transition={{ repeat: Infinity, duration: 4, ease: 'easeInOut' }}
+          />
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+            Pulse <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-400">Growth Marketing</span>
           </h1>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 py-10">
+      <main className="relative max-w-5xl mx-auto px-4 py-8 md:py-12">
         {approved ? (
+          /* ===== APPROVED STATE ===== */
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="text-center py-20"
+            className="text-center py-16 space-y-8"
           >
             <motion.div
-              animate={{ scale: [1, 1.2, 1] }}
+              animate={{ scale: [1, 1.15, 1] }}
               transition={{ repeat: Infinity, duration: 2 }}
-              className="w-24 h-24 mx-auto mb-6 rounded-full bg-green-500/20 flex items-center justify-center"
+              className="w-28 h-28 mx-auto rounded-full bg-gradient-to-br from-green-500/20 to-emerald-500/20 border border-green-500/30 flex items-center justify-center"
             >
-              <Check className="w-12 h-12 text-green-400" />
+              <Check className="w-14 h-14 text-green-400" />
             </motion.div>
-            <h2 className="text-3xl font-bold mb-3">Vídeo Aprovado! 🎉</h2>
-            <p className="text-gray-400 text-lg">Obrigado pela aprovação. Seu vídeo está pronto para uso!</p>
+            <div>
+              <h2 className="text-3xl md:text-4xl font-bold mb-3" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                Vídeo Aprovado! 🎉
+              </h2>
+              <p className="text-gray-400 text-lg">Obrigado pela aprovação. Seu vídeo está pronto para uso!</p>
+            </div>
+
+            {/* Download Button */}
+            {videoUrl && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+              >
+                <Button
+                  onClick={handleDownload}
+                  className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold px-10 py-6 text-lg rounded-xl shadow-2xl shadow-orange-500/20"
+                >
+                  <Download className="w-6 h-6 mr-3" />
+                  Baixar Vídeo
+                </Button>
+              </motion.div>
+            )}
           </motion.div>
         ) : (
           <>
-            {/* Video Section */}
+            {/* Title */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-center mb-8"
+              className="text-center mb-8 md:mb-10"
             >
-              <h2 className="text-3xl font-bold mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', bounce: 0.5 }}
+                className="inline-flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-full px-4 py-1.5 mb-4"
+              >
+                <Award className="w-4 h-4 text-orange-400" />
+                <span className="text-sm text-orange-300 font-medium">Conteúdo Exclusivo</span>
+              </motion.div>
+              <h2 className="text-2xl md:text-4xl font-bold mb-3" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
                 Seu vídeo está pronto! 🎬
               </h2>
-              <p className="text-gray-400 text-lg">
-                Olá, <span className="text-orange-400 font-semibold">{prospectName}</span>! Confira seu conteúdo abaixo.
+              <p className="text-gray-400 text-base md:text-lg">
+                Olá, <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-400 font-bold">{prospectName}</span>! Confira seu conteúdo abaixo.
               </p>
             </motion.div>
 
-            {/* Video Player with Pulse Frame */}
+            {/* Video Player with Premium Glow Frame */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.2 }}
-              className="relative mx-auto max-w-2xl mb-10"
+              transition={{ delay: 0.2, type: 'spring', bounce: 0.3 }}
+              className="relative mx-auto w-full max-w-sm md:max-w-md mb-10"
             >
-              {/* Glow Effect */}
-              <div className="absolute -inset-1 bg-gradient-to-r from-orange-500/30 via-orange-400/20 to-orange-500/30 rounded-2xl blur-lg" />
+              {/* Outer animated glow */}
+              <motion.div
+                className="absolute -inset-2 md:-inset-3 rounded-3xl"
+                style={{
+                  background: 'linear-gradient(135deg, #f97316, #f59e0b, #ef4444, #f97316, #f59e0b)',
+                  backgroundSize: '300% 300%',
+                }}
+                animate={{
+                  backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
+                  opacity: [0.6, 1, 0.6],
+                }}
+                transition={{ repeat: Infinity, duration: 4, ease: 'easeInOut' }}
+              />
+              {/* Blur layer for glow */}
+              <motion.div
+                className="absolute -inset-4 md:-inset-6 rounded-3xl blur-2xl"
+                style={{
+                  background: 'linear-gradient(135deg, #f97316, #f59e0b, #ef4444, #f97316)',
+                  backgroundSize: '300% 300%',
+                }}
+                animate={{
+                  backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
+                  opacity: [0.2, 0.5, 0.2],
+                }}
+                transition={{ repeat: Infinity, duration: 4, ease: 'easeInOut' }}
+              />
 
-              <div className="relative bg-gray-900 rounded-2xl overflow-hidden border-2 border-orange-500/40">
+              <div className="relative bg-[#111118] rounded-2xl overflow-hidden border border-orange-500/50">
                 {/* Top Bar */}
-                <div className="flex items-center justify-between px-4 py-2 bg-gradient-to-r from-orange-600 to-orange-500">
+                <div className="flex items-center justify-between px-3 md:px-4 py-2 bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500">
                   <div className="flex items-center gap-2">
-                    <Rocket className="w-4 h-4 text-white" />
-                    <span className="text-sm font-bold text-white tracking-wide">PULSE GROWTH MARKETING</span>
+                    <img src={pulseLogo} alt="Pulse" className="w-5 h-5" />
+                    <span className="text-xs md:text-sm font-bold text-white tracking-wider">PULSE GROWTH</span>
                   </div>
-                  <span className="text-xs text-white/80">Conteúdo Exclusivo</span>
+                  <div className="flex items-center gap-1">
+                    <Star className="w-3 h-3 text-white fill-white" />
+                    <span className="text-[10px] md:text-xs text-white/90 font-medium">Premium</span>
+                  </div>
                 </div>
 
                 {/* Video */}
                 {videoUrl ? (
-                  <div className="aspect-[9/16] max-h-[70vh] bg-black">
+                  <div className="aspect-[9/16] bg-black flex items-center justify-center">
                     <video
                       src={videoUrl}
                       controls
@@ -182,17 +283,25 @@ export default function AvulsoApproval() {
                     />
                   </div>
                 ) : (
-                  <div className="aspect-[9/16] max-h-[70vh] bg-gray-800 flex items-center justify-center">
-                    <p className="text-gray-500">Vídeo em processamento...</p>
+                  <div className="aspect-[9/16] bg-[#111118] flex flex-col items-center justify-center gap-3">
+                    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 3, ease: 'linear' }}>
+                      <Video className="w-10 h-10 text-orange-400/50" />
+                    </motion.div>
+                    <p className="text-gray-600 text-sm">Vídeo em processamento...</p>
                   </div>
                 )}
 
                 {/* Bottom Bar */}
-                <div className="px-4 py-2 bg-gradient-to-r from-gray-800 to-gray-900 flex items-center justify-between">
-                  <span className="text-xs text-gray-400">{task.title}</span>
-                  <div className="flex items-center gap-1">
-                    <Star className="w-3 h-3 text-orange-400 fill-orange-400" />
-                    <span className="text-xs text-orange-400">Qualidade Pulse</span>
+                <div className="px-3 md:px-4 py-2.5 bg-gradient-to-r from-[#111118] to-[#0d0d14] flex items-center justify-between">
+                  <span className="text-xs text-gray-500 truncate max-w-[60%]">{task.title}</span>
+                  <div className="flex items-center gap-1.5">
+                    <motion.div
+                      animate={{ scale: [1, 1.3, 1] }}
+                      transition={{ repeat: Infinity, duration: 2 }}
+                    >
+                      <Star className="w-3 h-3 text-orange-400 fill-orange-400" />
+                    </motion.div>
+                    <span className="text-[10px] text-orange-400/80 font-medium">Qualidade Pulse</span>
                   </div>
                 </div>
               </div>
@@ -202,27 +311,27 @@ export default function AvulsoApproval() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="flex flex-col sm:flex-row gap-4 justify-center items-center max-w-md mx-auto mb-6"
+              transition={{ delay: 0.5 }}
+              className="flex flex-col sm:flex-row gap-4 justify-center items-center max-w-lg mx-auto mb-8"
             >
-              {/* Approve Button - Glowing */}
+              {/* Approve Button - Premium Glow */}
               <motion.div className="relative w-full sm:w-auto">
                 <motion.div
-                  className="absolute -inset-1 bg-gradient-to-r from-green-400 via-emerald-400 to-green-500 rounded-xl opacity-75 blur-md"
-                  animate={{ opacity: [0.5, 1, 0.5] }}
+                  className="absolute -inset-1 bg-gradient-to-r from-green-400 via-emerald-400 to-green-500 rounded-2xl blur-lg"
+                  animate={{ opacity: [0.4, 0.9, 0.4], scale: [0.98, 1.02, 0.98] }}
                   transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
                 />
                 <Button
                   onClick={handleApprove}
                   disabled={submitting}
-                  className="relative w-full sm:w-auto bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold px-10 py-6 text-lg rounded-xl shadow-2xl"
+                  className="relative w-full sm:w-auto bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold px-12 py-7 text-lg rounded-2xl shadow-2xl shadow-green-500/25 border-0"
                 >
                   <motion.div
-                    animate={{ scale: [1, 1.1, 1] }}
+                    animate={{ scale: [1, 1.2, 1], rotate: [0, 5, -5, 0] }}
                     transition={{ repeat: Infinity, duration: 1.5 }}
                     className="mr-2"
                   >
-                    <Check className="w-6 h-6" />
+                    <Check className="w-7 h-7" />
                   </motion.div>
                   Aprovar Vídeo ✅
                 </Button>
@@ -232,7 +341,7 @@ export default function AvulsoApproval() {
               <Button
                 onClick={() => setShowRevisionForm(!showRevisionForm)}
                 variant="outline"
-                className="w-full sm:w-auto border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white px-8 py-6 text-base rounded-xl"
+                className="w-full sm:w-auto border-gray-700 text-gray-400 hover:bg-white/5 hover:text-white hover:border-orange-500/30 px-8 py-7 text-base rounded-2xl transition-all duration-300"
               >
                 <RotateCcw className="w-5 h-5 mr-2" />
                 Solicitar Revisão
@@ -248,18 +357,18 @@ export default function AvulsoApproval() {
                   exit={{ opacity: 0, height: 0 }}
                   className="max-w-md mx-auto mb-10 overflow-hidden"
                 >
-                  <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 space-y-4">
-                    <p className="text-sm text-gray-300">Descreva o que gostaria de ajustar:</p>
+                  <div className="bg-white/5 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-5 space-y-4">
+                    <p className="text-sm text-gray-300 font-medium">Descreva o que gostaria de ajustar:</p>
                     <Textarea
                       value={revisionNotes}
                       onChange={(e) => setRevisionNotes(e.target.value)}
                       placeholder="Ex: Gostaria que o texto final fosse diferente, a música mais suave..."
-                      className="bg-gray-900 border-gray-700 text-white min-h-[100px]"
+                      className="bg-black/40 border-gray-700/50 text-white min-h-[100px] rounded-xl focus:border-orange-500/50"
                     />
                     <Button
                       onClick={handleRequestRevision}
                       disabled={submitting || !revisionNotes.trim()}
-                      className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                      className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold rounded-xl py-5"
                     >
                       Enviar Solicitação de Revisão
                     </Button>
@@ -270,13 +379,39 @@ export default function AvulsoApproval() {
           </>
         )}
 
-        {/* Divider */}
-        <div className="relative my-16">
+        {/* ===== CLIENTS CAROUSEL ===== */}
+        <div className="relative my-16 overflow-hidden">
+          <div className="text-center mb-8">
+            <p className="text-xs uppercase tracking-[0.2em] text-orange-400/60 font-semibold mb-2">Empresas que confiam na Pulse</p>
+            <div className="w-12 h-0.5 bg-gradient-to-r from-transparent via-orange-500 to-transparent mx-auto" />
+          </div>
+          <div className="relative">
+            <div className="absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-[#0a0a0f] to-transparent z-10" />
+            <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-[#0a0a0f] to-transparent z-10" />
+            <motion.div
+              className="flex gap-6 whitespace-nowrap"
+              animate={{ x: ['0%', '-50%'] }}
+              transition={{ repeat: Infinity, duration: 20, ease: 'linear' }}
+            >
+              {[...CLIENT_LOGOS, ...CLIENT_LOGOS].map((name, i) => (
+                <div
+                  key={`${name}-${i}`}
+                  className="flex-shrink-0 px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 text-sm font-medium"
+                >
+                  {name}
+                </div>
+              ))}
+            </motion.div>
+          </div>
+        </div>
+
+        {/* ===== DIVIDER ===== */}
+        <div className="relative my-12">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-800" />
+            <div className="w-full border-t border-white/5" />
           </div>
           <div className="relative flex justify-center">
-            <span className="bg-gray-950 px-6 text-gray-500 text-sm flex items-center gap-2">
+            <span className="bg-[#0a0a0f] px-6 text-gray-600 text-sm flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-orange-400" />
               Conheça a Pulse
               <Sparkles className="w-4 h-4 text-orange-400" />
@@ -284,72 +419,88 @@ export default function AvulsoApproval() {
           </div>
         </div>
 
-        {/* Promotion Section */}
+        {/* ===== PROMOTION SECTION ===== */}
         <motion.section
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
-          className="space-y-12"
+          className="space-y-14"
         >
           <div className="text-center space-y-4">
             <motion.h2
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              className="text-3xl md:text-4xl font-bold"
+              className="text-2xl md:text-4xl font-bold leading-tight"
               style={{ fontFamily: 'Space Grotesk, sans-serif' }}
             >
               Imagine ter uma{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-orange-600">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-amber-400 to-orange-500">
                 equipe completa
               </span>{' '}
               trabalhando para você
             </motion.h2>
-            <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+            <p className="text-gray-500 text-base md:text-lg max-w-2xl mx-auto">
               Na Pulse, você não contrata apenas um serviço. Você ganha um time inteiro dedicado ao crescimento do seu negócio.
             </p>
           </div>
 
           {/* Benefits Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
             {BENEFITS.map((b, i) => (
               <motion.div
                 key={b.title}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-5 hover:border-orange-500/30 transition-colors"
+                transition={{ delay: i * 0.08 }}
+                whileHover={{ scale: 1.03, y: -2 }}
+                className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 hover:border-orange-500/30 transition-all duration-300 group"
               >
-                <b.icon className="w-8 h-8 text-orange-400 mb-3" />
-                <h3 className="font-bold text-white mb-1">{b.title}</h3>
-                <p className="text-sm text-gray-400">{b.desc}</p>
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500/20 to-amber-500/10 flex items-center justify-center mb-3 group-hover:from-orange-500/30 transition-colors">
+                  <b.icon className="w-5 h-5 text-orange-400" />
+                </div>
+                <h3 className="font-bold text-white text-sm mb-1">{b.title}</h3>
+                <p className="text-xs text-gray-500 leading-relaxed">{b.desc}</p>
               </motion.div>
             ))}
           </div>
 
           {/* Team Section */}
-          <div className="bg-gradient-to-r from-gray-800/30 to-gray-900/30 border border-gray-800 rounded-2xl p-8">
-            <h3 className="text-2xl font-bold text-center mb-6" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
-              Nossa Equipe 👥
-            </h3>
-            <div className="flex flex-wrap justify-center gap-6">
-              {TEAM_MEMBERS.map((m, i) => (
+          <div className="relative">
+            <div className="absolute inset-0 bg-gradient-to-b from-orange-500/5 via-transparent to-transparent rounded-3xl" />
+            <div className="relative bg-white/[0.02] border border-white/[0.06] rounded-3xl p-6 md:p-10">
+              <div className="text-center mb-8">
                 <motion.div
-                  key={m.name}
                   initial={{ opacity: 0, scale: 0.8 }}
                   whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true }}
-                  transition={{ delay: i * 0.1 }}
-                  className="text-center"
                 >
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-2xl mb-2 mx-auto">
-                    {m.emoji}
-                  </div>
-                  <p className="font-semibold text-white text-sm">{m.name}</p>
-                  <p className="text-xs text-gray-400">{m.role}</p>
+                  <h3 className="text-2xl md:text-3xl font-bold mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                    Nossa Equipe 🔥
+                  </h3>
+                  <p className="text-gray-500 text-sm">Profissionais dedicados ao seu crescimento</p>
                 </motion.div>
-              ))}
+              </div>
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-4 md:gap-6">
+                {TEAM_MEMBERS.map((m, i) => (
+                  <motion.div
+                    key={m.name}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.1 }}
+                    whileHover={{ scale: 1.1 }}
+                    className="text-center"
+                  >
+                    <div className={`w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-gradient-to-br ${m.color} flex items-center justify-center text-xl md:text-2xl mb-2 mx-auto shadow-lg`}>
+                      {m.emoji}
+                    </div>
+                    <p className="font-semibold text-white text-xs md:text-sm">{m.name}</p>
+                    <p className="text-[10px] md:text-xs text-gray-500">{m.role}</p>
+                  </motion.div>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -358,27 +509,28 @@ export default function AvulsoApproval() {
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center space-y-6 py-8"
+            className="text-center space-y-6 py-10"
           >
             <h3 className="text-2xl md:text-3xl font-bold" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
               Pronto para{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-orange-600">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-amber-400 to-orange-500">
                 crescer de verdade
               </span>
               ?
             </h3>
-            <p className="text-gray-400 max-w-lg mx-auto">
-              Junte-se aos nossos clientes que já estão transformando seus resultados com a Pulse Growth Marketing.
+            <p className="text-gray-500 max-w-lg mx-auto text-sm md:text-base">
+              Junte-se aos nossos clientes que já estão transformando seus resultados.
             </p>
 
             <motion.div className="relative inline-block">
               <motion.div
-                className="absolute -inset-2 bg-gradient-to-r from-orange-500/40 via-orange-400/30 to-orange-500/40 rounded-2xl blur-xl"
-                animate={{ opacity: [0.4, 1, 0.4], scale: [0.98, 1.02, 0.98] }}
+                className="absolute -inset-3 rounded-2xl blur-xl"
+                style={{ background: 'linear-gradient(135deg, #f97316, #f59e0b, #ef4444)' }}
+                animate={{ opacity: [0.3, 0.7, 0.3], scale: [0.97, 1.03, 0.97] }}
                 transition={{ repeat: Infinity, duration: 3 }}
               />
               <a href={WHATSAPP_CTA} target="_blank" rel="noopener noreferrer">
-                <Button className="relative bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold px-12 py-7 text-xl rounded-2xl shadow-2xl">
+                <Button className="relative bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500 hover:from-orange-600 hover:to-orange-600 text-white font-bold px-10 md:px-14 py-6 md:py-7 text-lg md:text-xl rounded-2xl shadow-2xl shadow-orange-500/25 border-0">
                   <MessageCircle className="w-6 h-6 mr-3" />
                   Vem fazer parte da Pulse 🚀
                 </Button>
@@ -389,12 +541,14 @@ export default function AvulsoApproval() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-gray-800 py-6 text-center text-gray-500 text-sm">
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <Rocket className="w-4 h-4 text-orange-400" />
-          <span>Pulse Growth Marketing</span>
+      <footer className="border-t border-white/5 py-8 bg-black/30">
+        <div className="max-w-5xl mx-auto px-4 flex flex-col items-center gap-3">
+          <div className="flex items-center gap-2">
+            <img src={pulseLogo} alt="Pulse" className="w-6 h-6" />
+            <span className="text-gray-500 font-medium text-sm">Pulse Growth Marketing</span>
+          </div>
+          <p className="text-gray-600 text-xs">Minaçu - GO | © {new Date().getFullYear()} — Todos os direitos reservados</p>
         </div>
-        <p>Minaçu - GO | © {new Date().getFullYear()}</p>
       </footer>
     </div>
   );

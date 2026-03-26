@@ -424,7 +424,11 @@ export default function Scripts() {
 
     for (const page of pages) {
       await waitForPdfAssets(page);
-      // Ensure html2canvas captures the FULL scrollHeight (not clipped by overflow:hidden)
+
+      // Temporarily remove overflow:hidden so html2canvas captures everything
+      const prevOverflow = page.style.overflow;
+      page.style.overflow = 'visible';
+
       const actualHeight = page.scrollHeight;
       const canvas = await html2canvas(page, {
         scale: 2,
@@ -434,9 +438,47 @@ export default function Scripts() {
         windowHeight: actualHeight,
       });
 
+      page.style.overflow = prevOverflow;
+
+      // Crop trailing whitespace from the canvas bottom
+      const ctx = canvas.getContext('2d');
+      let cropHeight = canvas.height;
+      if (ctx) {
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const { data, width } = imgData;
+        // Scan from bottom up to find the last non-white row
+        for (let row = canvas.height - 1; row > 0; row--) {
+          let hasContent = false;
+          // Sample every 4th pixel for speed
+          for (let col = 0; col < width; col += 4) {
+            const idx = (row * width + col) * 4;
+            const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+            if (r < 250 || g < 250 || b < 250) {
+              hasContent = true;
+              break;
+            }
+          }
+          if (hasContent) {
+            cropHeight = Math.min(canvas.height, row + 20); // 20px padding
+            break;
+          }
+        }
+      }
+
+      // Create cropped canvas
+      const croppedCanvas = document.createElement('canvas');
+      croppedCanvas.width = canvas.width;
+      croppedCanvas.height = cropHeight;
+      const croppedCtx = croppedCanvas.getContext('2d');
+      if (croppedCtx) {
+        croppedCtx.fillStyle = '#ffffff';
+        croppedCtx.fillRect(0, 0, croppedCanvas.width, croppedCanvas.height);
+        croppedCtx.drawImage(canvas, 0, 0, canvas.width, cropHeight, 0, 0, canvas.width, cropHeight);
+      }
+
       renderedPages.push({
-        imgData: canvas.toDataURL('image/jpeg', 0.95),
-        imgHeight: (canvas.height * pdfWidth) / canvas.width,
+        imgData: croppedCanvas.toDataURL('image/jpeg', 0.95),
+        imgHeight: (croppedCanvas.height * pdfWidth) / croppedCanvas.width,
       });
     }
 

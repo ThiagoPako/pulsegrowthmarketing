@@ -141,14 +141,27 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
     const endStr = dateRange.end.toISOString();
 
     try {
+      const { data: settingsRows } = await supabase
+        .from('company_settings')
+        .select('shift_a_start, shift_a_end, shift_b_start, shift_b_end, work_days')
+        .limit(1);
+
+      const settingsRow = settingsRows?.[0];
+      const agencyHours: AgencyHoursSettings = settingsRow ? {
+        shiftAStart: settingsRow.shift_a_start || DEFAULT_AGENCY_HOURS.shiftAStart,
+        shiftAEnd: settingsRow.shift_a_end || DEFAULT_AGENCY_HOURS.shiftAEnd,
+        shiftBStart: settingsRow.shift_b_start || DEFAULT_AGENCY_HOURS.shiftBStart,
+        shiftBEnd: settingsRow.shift_b_end || DEFAULT_AGENCY_HOURS.shiftBEnd,
+        workDays: settingsRow.work_days || DEFAULT_AGENCY_HOURS.workDays,
+      } : DEFAULT_AGENCY_HOURS;
+
       if (role === 'editor') {
-        await loadEditorStats(member.id, startStr, endStr);
+        await loadEditorStats(member.id, startStr, endStr, agencyHours);
       } else if (role === 'videomaker') {
         await loadVideomakerStats(member.id, startStr, endStr);
       } else if (role === 'designer') {
         await loadDesignerStats(member.id, startStr, endStr);
       } else {
-        // Generic: content tasks created_by
         await loadGenericStats(member.id, startStr, endStr);
       }
     } catch (err) {

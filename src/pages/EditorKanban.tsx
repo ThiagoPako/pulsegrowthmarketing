@@ -12,14 +12,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import {
   Film, Megaphone, Image, Palette, ExternalLink, Clock, AlertTriangle,
-  Check, Eye, Search, Scissors, Send, Link2
+  Check, Eye, Search, Scissors, Send, Link2, Flag
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
+import UserAvatar from '@/components/UserAvatar';
 import { highlightQuotes } from '@/lib/highlightQuotes';
 import { format, differenceInHours, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const CONTENT_TYPES = [
   { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400', points: 10 },

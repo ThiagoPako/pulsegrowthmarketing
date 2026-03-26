@@ -932,6 +932,85 @@ export default function CommercialProposal() {
     );
   };
 
+  const renderCustomPreview = () => {
+    const val = parseFloat(customMonthlyValue) || 0;
+    const discountedVal = val * (1 - customDiscount / 100);
+    const installs = parseInt(customInstallments) || 1;
+    const installmentVal = discountedVal / installs;
+    const services: { icon: any; value: string | number; label: string }[] = [];
+    if (parseInt(customVideos) > 0) services.push({ icon: Film, value: customVideos, label: 'Vídeos/mês' });
+    if (parseInt(customStories) > 0) services.push({ icon: Camera, value: customStories, label: 'Stories/mês' });
+    if (parseInt(customArts) > 0) services.push({ icon: Palette, value: customArts, label: 'Artes/mês' });
+    if (parseInt(customRecordings) > 0) services.push({ icon: Film, value: customRecordings, label: 'Captações/mês' });
+    if (parseInt(customEventCoverage) > 0) services.push({ icon: Camera, value: customEventCoverage, label: 'Coberturas/mês' });
+    if (customSocialMedia) services.push({ icon: Share2, value: '✓', label: 'Social Media' });
+    if (customTrafficMgmt) services.push({ icon: BarChart3, value: '✓', label: 'Gestão de Tráfego' });
+
+    return (
+      <>
+        {services.length > 0 && (
+          <div data-pdf-section className="p-8 md:p-12">
+            <h2 className="text-xl font-bold text-gray-800 mb-1 flex items-center gap-2">
+              <Target className="h-5 w-5" style={{ color: 'hsl(16 82% 51%)' }} /> Serviços Inclusos
+            </h2>
+            <p className="text-sm text-gray-500 mb-6">Proposta personalizada para sua empresa</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {services.map((s, i) => {
+                const Icon = s.icon;
+                return (
+                  <div key={i} className="border rounded-lg p-3 text-center">
+                    <Icon className="h-5 w-5 mx-auto mb-1" style={{ color: 'hsl(16 82% 51%)' }} />
+                    <p className="text-2xl font-bold text-gray-800">{s.value}</p>
+                    <p className="text-xs text-gray-500">{s.label}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {customDescription && (
+          <div data-pdf-section className="px-8 md:px-12 pb-4">
+            <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-4">{customDescription}</p>
+          </div>
+        )}
+        <div data-pdf-section className="px-8 md:px-12 pb-8">
+          <h2 className="text-xl font-bold text-gray-800 mb-6">Investimento</h2>
+          <div className="border-2 rounded-xl p-6" style={{ borderColor: 'hsl(16 82% 51%)' }}>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Valor total</span>
+                <span className="text-xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val)}</span>
+              </div>
+              {customDiscount > 0 && (
+                <>
+                  <div className="flex justify-between items-center text-green-600">
+                    <span>Desconto ({customDiscount}%)</span>
+                    <span className="font-bold">-{fmt(val - discountedVal)}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-t pt-2">
+                    <span className="font-bold text-gray-800">Total</span>
+                    <span className="text-2xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(discountedVal)}</span>
+                  </div>
+                </>
+              )}
+              <Separator />
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Forma de pagamento</span>
+                <span className="font-medium">{PAYMENT_METHODS.find(m => m.value === customPaymentMethod)?.label}</span>
+              </div>
+              {installs > 1 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">{customInstallments}x de</span>
+                  <span className="font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(installmentVal)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  };
+
   const renderMarketingPreview = () => (
     <>
       {selectedPlan && (

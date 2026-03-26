@@ -58,14 +58,21 @@ class QueryBuilder {
   private _data: any = null;
   private _count: 'exact' | null = null;
   private _onConflict: string | null = null;
+  private _returning: boolean = false;
 
   constructor(table: string) {
     this._table = table;
   }
 
   select(columns?: string, options?: { count?: 'exact'; head?: boolean }): this {
-    this._operation = 'select';
-    if (columns) this._select = columns;
+    // If called after insert/update/upsert, it means "RETURNING" — don't override operation
+    if (this._operation === 'insert' || this._operation === 'update' || this._operation === 'upsert') {
+      this._returning = true;
+      if (columns) this._select = columns;
+    } else {
+      this._operation = 'select';
+      if (columns) this._select = columns;
+    }
     if (options?.count) this._count = options.count;
     if (options?.head) this._head = true;
     return this;
@@ -178,6 +185,7 @@ class QueryBuilder {
       if (this._head) body.head = true;
     } else if (this._operation === 'insert') {
       body.data = this._data;
+      if (this._returning) { body.returning = true; body.single = this._single; }
     } else if (this._operation === 'update') {
       body.data = this._data;
       body.filters = this._filters;

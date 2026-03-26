@@ -16,6 +16,7 @@ import { Plus, KeyRound, Users, Handshake, Trash2, Shield, Lock, Cake, CalendarD
 import UserAvatar from '@/components/UserAvatar';
 import { useUserPermissions, AVAILABLE_MODULES } from '@/hooks/useUserPermissions';
 import BirthdayCountdown from '@/components/BirthdayCountdown';
+import TeamMemberStats from '@/components/TeamMemberStats';
 
 const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'fotografo', 'designer'];
 
@@ -72,6 +73,8 @@ export default function Team() {
   const [permTarget, setPermTarget] = useState<TeamMember | null>(null);
   const [permModules, setPermModules] = useState<string[]>([]);
   const { permissionsQuery, setPermissions } = useUserPermissions(permTarget?.id);
+
+  const [statsTarget, setStatsTarget] = useState<TeamMember | null>(null);
 
   const fetchMembers = async () => {
     const { data } = await supabase.from('profiles').select('*');

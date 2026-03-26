@@ -17,8 +17,65 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { clientId } = await req.json();
+    const body = await req.json();
+    const { clientId, type, description } = body;
 
+    // ===== System Modules Generation =====
+    if (type === "system_modules" && description) {
+      const modulePrompt = `Você é um arquiteto de sistemas. Com base na descrição abaixo, gere os módulos e entregas de um sistema/software.
+
+Descrição das funções:
+${description}
+
+Responda APENAS com JSON válido:
+{
+  "modules": [
+    { "name": "Nome do Módulo", "description": "O que ele faz em uma frase" }
+  ],
+  "deliverables": [
+    { "name": "Nome da entrega", "description": "Detalhes" }
+  ]
+}
+
+Gere entre 4 e 10 módulos relevantes e 3-6 entregas. Seja específico e profissional.`;
+
+      const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-3-flash-preview",
+          messages: [
+            { role: "system", content: "Você é um arquiteto de software. Responda APENAS com JSON válido." },
+            { role: "user", content: modulePrompt },
+          ],
+        }),
+      });
+
+      if (!aiRes.ok) {
+        return new Response(JSON.stringify({ error: "Erro ao gerar módulos" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const aiData = await aiRes.json();
+      const aiContent = aiData.choices?.[0]?.message?.content || "";
+      try {
+        const cleaned = aiContent.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+        const parsed = JSON.parse(cleaned);
+        return new Response(JSON.stringify(parsed), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch {
+        return new Response(JSON.stringify({ modules: [], error: "Falha ao interpretar resposta da IA" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== Content Suggestions (original) =====
     if (!clientId) {
       return new Response(JSON.stringify({ error: "clientId é obrigatório" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -146,6 +146,7 @@ interface ContentTask {
   script_id: string | null;
   assigned_to: string | null;
   created_by: string | null;
+  edited_by: string | null;
   scheduled_recording_date: string | null;
   scheduled_recording_time: string | null;
   drive_link: string | null;
@@ -863,7 +864,11 @@ export default function ContentKanban() {
                           <TaskCard
                             task={task}
                             client={getClient(task.client_id)}
-                            assignedUser={getUser(task.assigned_to)}
+                            assignedUser={getUser(
+                              ['revisao', 'envio', 'agendamentos', 'acompanhamento', 'arquivado'].includes(task.kanban_column)
+                                ? (task.edited_by || task.assigned_to)
+                                : task.assigned_to
+                            )}
                             linkedScript={task.script_id ? scripts.find(s => s.id === task.script_id) : undefined}
                             isDragging={draggedTask?.id === task.id}
                             onDragStart={e => handleDragStart(e, task)}

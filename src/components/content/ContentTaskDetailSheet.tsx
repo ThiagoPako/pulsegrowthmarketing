@@ -154,6 +154,7 @@ interface ContentTask {
   script_id: string | null;
   assigned_to: string | null;
   created_by: string | null;
+  edited_by: string | null;
   scheduled_recording_date: string | null;
   scheduled_recording_time: string | null;
   drive_link: string | null;
@@ -226,6 +227,7 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
   const createdBy = task.created_by ? users.find(u => u.id === task.created_by) : null;
   const linkedScript = task.script_id ? scripts.find(s => s.id === task.script_id) : null;
   const scriptCreator = (!createdBy && linkedScript?.createdBy) ? users.find(u => u.id === linkedScript.createdBy) : null;
+  const editedByUser = task.edited_by ? users.find(u => u.id === task.edited_by) : null;
   const assignedEditor = task.assigned_to ? users.find(u => u.id === task.assigned_to) : null;
 
   const findHistoryEntry = (keywords: string[]) => {
@@ -263,7 +265,11 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
     },
     {
       ...JOURNEY_STAGES[2],
-      person: assignedEditor ? { name: assignedEditor.name, avatarUrl: assignedEditor.avatarUrl } : (edicaoEntry ? getUserFromHistory(edicaoEntry) : null),
+      person: editedByUser
+        ? { name: editedByUser.name, avatarUrl: editedByUser.avatarUrl }
+        : assignedEditor
+          ? { name: assignedEditor.name, avatarUrl: assignedEditor.avatarUrl }
+          : (edicaoEntry ? getUserFromHistory(edicaoEntry) : null),
       detail: task.editing_priority ? '⚡ Prioridade de edição' : null,
       date: task.editing_started_at || edicaoEntry?.created_at || null,
     },

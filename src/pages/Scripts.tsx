@@ -440,26 +440,28 @@ export default function Scripts() {
 
       page.style.overflow = prevOverflow;
 
-      // Crop trailing whitespace from the canvas bottom
+      // Crop trailing whitespace/black from the canvas bottom
       const ctx = canvas.getContext('2d');
       let cropHeight = canvas.height;
       if (ctx) {
         const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const { data, width } = imgData;
-        // Scan from bottom up to find the last non-white row
+        // Scan from bottom up to find the last row with real content
+        // A pixel is "empty" if it's near-white (>245 all channels) OR near-black (<10 all channels, from transparent areas)
         for (let row = canvas.height - 1; row > 0; row--) {
           let hasContent = false;
-          // Sample every 4th pixel for speed
           for (let col = 0; col < width; col += 4) {
             const idx = (row * width + col) * 4;
             const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-            if (r < 250 || g < 250 || b < 250) {
+            const isWhite = r > 245 && g > 245 && b > 245;
+            const isBlack = r < 10 && g < 10 && b < 10;
+            if (!isWhite && !isBlack) {
               hasContent = true;
               break;
             }
           }
           if (hasContent) {
-            cropHeight = Math.min(canvas.height, row + 20); // 20px padding
+            cropHeight = Math.min(canvas.height, row + 40); // 40px safety padding
             break;
           }
         }

@@ -317,6 +317,34 @@ export default function CommercialProposal() {
     setGeneratingModules(false);
   };
 
+  const generateTimelineWithAI = async () => {
+    if (!cronogramaDesc.trim()) { toast.error('Descreva o projeto para a IA gerar o cronograma'); return; }
+    setGeneratingTimeline(true);
+    try {
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const res = await fetch(`https://${projectId}.supabase.co/functions/v1/ai-content-suggestions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+        body: JSON.stringify({ type: 'proposal_timeline', description: cronogramaDesc }),
+      });
+      const data = await res.json();
+      if (data.deliverables && Array.isArray(data.deliverables)) {
+        setCronogramaDeliverables(data.deliverables.map((d: any) => ({ ...d, id: crypto.randomUUID() })));
+        if (data.phases) setCronogramaPhases(data.phases);
+        if (data.methodology) setCronogramaMethodology(data.methodology);
+        if (data.projectName) setCronogramaProjectName(data.projectName);
+        if (data.totalEstimatedDays) setCronogramaTotalDays(String(data.totalEstimatedDays));
+        if (data.suggestedDiscount) setCustomDiscount(data.suggestedDiscount);
+        toast.success(`Cronograma gerado com ${data.deliverables.length} entregas!`);
+      } else {
+        toast.error('Não foi possível gerar o cronograma. Tente novamente.');
+      }
+    } catch {
+      toast.error('Erro ao conectar com a IA');
+    }
+    setGeneratingTimeline(false);
+  };
+
   const downloadPDF = useCallback(async () => {
     if (!proposalRef.current) return;
     toast.loading('Gerando PDF...');
@@ -344,6 +372,7 @@ export default function CommercialProposal() {
     if (proposalType === 'sistema' && !systemValue) { toast.error('Preencha o valor do sistema'); return; }
     if (proposalType === 'endomarketing' && !endoMonthlyValue) { toast.error('Preencha o valor mensal'); return; }
     if (proposalType === 'personalizada' && !customMonthlyValue) { toast.error('Preencha o valor da proposta'); return; }
+    if (proposalType === 'cronograma' && cronogramaDeliverables.length === 0) { toast.error('Gere ou adicione entregas ao cronograma'); return; }
     setSavingProposal(true);
     try {
       const systemData = proposalType === 'sistema' ? {
@@ -511,6 +540,7 @@ export default function CommercialProposal() {
     sistema: Code,
     endomarketing: Megaphone,
     personalizada: Target,
+    cronograma: CalendarDays,
   };
 
   // ===== RENDER FORM SECTIONS =====

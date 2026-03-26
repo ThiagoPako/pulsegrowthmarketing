@@ -759,12 +759,14 @@ export default function Schedule() {
       if (!script) continue;
       const { data: existing } = await supabase.from('content_tasks')
         .select('id').eq('script_id', scriptId).limit(1);
-      
+
       const scriptDriveLink = finishDriveLinks[scriptId]?.trim() || '';
       const isAltered = finishAlteredScripts.has(scriptId);
       const isVerbal = finishVerbalScripts.has(scriptId);
       const altType = isAltered ? 'altered' : isVerbal ? 'verbal' : null;
       const altNotes = finishAlterationNotes[scriptId]?.trim() || null;
+      const isAvulsoTask = !finishRecording.clientId && !script.clientId && finishRecording.type === 'avulso';
+      const taskClientId = finishRecording.clientId || script.clientId || (isAvulsoTask ? finishRecording.id : '');
 
       let description = `Roteiro gravado pelo videomaker. Link dos materiais: ${scriptDriveLink}`;
       if (isAltered) {
@@ -773,8 +775,13 @@ export default function Schedule() {
         description = `🗣️ ALTERAÇÃO VERBAL — A alteração do roteiro foi passada presencialmente/verbalmente ao editor. ${altNotes ? `\n\n📝 Notas adicionais: ${altNotes}` : ''}\n\nLink dos materiais: ${scriptDriveLink}`;
       }
 
+      if (isAvulsoTask) {
+        description = `📹 VÍDEO AVULSO${finishRecording.prospectName ? ` — Prospect: ${finishRecording.prospectName}` : ''}\n\n${description}`;
+      }
+
       if (existing && existing.length > 0) {
         const { error: updateErr } = await supabase.from('content_tasks').update({
+          client_id: taskClientId,
           title: script.title,
           kanban_column: 'edicao',
           drive_link: scriptDriveLink,
@@ -786,11 +793,9 @@ export default function Schedule() {
         } as any).eq('id', existing[0].id);
         if (updateErr) console.error('content_task update error:', updateErr);
       } else {
-        // For avulso recordings (empty clientId), use script.clientId or find client from recording
-        const taskClientId = finishRecording.clientId || script.clientId || '';
         if (!taskClientId) {
-          console.error(`Skipping content_task creation for script "${script.title}" — no client_id available (avulso recording)`);
-          toast.error(`⚠️ Conteúdo "${script.title}" não pôde ser enviado para edição: sem cliente vinculado.`);
+          console.error(`Skipping content_task creation for script "${script.title}" — no client_id available`);
+          toast.error(`⚠️ Conteúdo "${script.title}" não pôde ser enviado para edição: sem vínculo suficiente para criar a tarefa.`);
           continue;
         }
         const { error: insertErr } = await supabase.from('content_tasks').insert({

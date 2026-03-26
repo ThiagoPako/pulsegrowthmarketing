@@ -186,7 +186,7 @@ function ScoreCelebration({ points, show, onDone }: { points: number; show: bool
 }
 
 export default function EditorDashboard() {
-  const { clients, scripts, users } = useApp();
+  const { clients, scripts, users, recordings } = useApp();
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<EditorTask[]>([]);
@@ -209,6 +209,14 @@ export default function EditorDashboard() {
    const [oldVideoLink, setOldVideoLink] = useState<string | null>(null);
    const fileInputRef = useRef<HTMLInputElement>(null);
    const isEditorRole = profile?.role === 'editor';
+
+  const getTaskDisplayMeta = useCallback((task: EditorTask) => {
+    const client = clients.find((c: any) => c.id === task.client_id);
+    const recording = task.recording_id ? recordings.find((r: any) => r.id === task.recording_id) : null;
+    const displayName = client?.companyName || (recording?.prospectName ? `📹 ${recording.prospectName}` : 'Cliente');
+    const displayColor = client?.color || (recording?.prospectName ? '200 80% 55%' : '217 91% 60%');
+    return { client, recording, displayName, displayColor };
+  }, [clients, recordings]);
 
   const fetchTasks = useCallback(async () => {
     const { data } = await supabase.from('content_tasks').select('*')
@@ -290,8 +298,8 @@ export default function EditorDashboard() {
       if (filterType !== 'all' && t.content_type !== filterType) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        const client = clients.find((c: any) => c.id === t.client_id);
-        if (!t.title.toLowerCase().includes(q) && !(client?.companyName || '').toLowerCase().includes(q)) return false;
+        const { displayName } = getTaskDisplayMeta(t);
+        if (!t.title.toLowerCase().includes(q) && !displayName.toLowerCase().includes(q)) return false;
       }
       return true;
     }).sort((a, b) => {
@@ -308,7 +316,7 @@ export default function EditorDashboard() {
       if (!b.editing_deadline) return -1;
       return new Date(a.editing_deadline).getTime() - new Date(b.editing_deadline).getTime();
     });
-  }, [queueTasks, filterClient, filterType, searchQuery, clients]);
+  }, [queueTasks, filterClient, filterType, searchQuery, getTaskDisplayMeta]);
 
   /* ─── Actions ──────────────────────────────────────────── */
    const handleClaimTask = async (task: EditorTask) => {
@@ -928,7 +936,7 @@ export default function EditorDashboard() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {filteredQueue.map((task, i) => (
-              <QueueCard key={task.id} task={task} clients={clients} index={i}
+              <QueueCard key={task.id} task={task} clients={clients} recordings={recordings} index={i}
                 onStartEditing={() => handleStartEditing(task)}
                 onClaimTask={() => handleClaimTask(task)}
                 onUnclaimTask={() => handleUnclaimTask(task)}
@@ -951,16 +959,17 @@ export default function EditorDashboard() {
 }
 
 /* ─── Queue Card ──────────────────────────────────────────── */
-function QueueCard({ task, clients, index, onStartEditing, onClaimTask, onUnclaimTask, currentUserId, users }: {
-  task: EditorTask; clients: any[]; index: number;
+function QueueCard({ task, clients, recordings, index, onStartEditing, onClaimTask, onUnclaimTask, currentUserId, users }: {
+  task: EditorTask; clients: any[]; recordings: any[]; index: number;
   onStartEditing: () => void; onClaimTask: () => void; onUnclaimTask: () => void; currentUserId?: string; users?: any[];
 }) {
   const client = clients.find(c => c.id === task.client_id);
+  const recording = task.recording_id ? recordings.find((r: any) => r.id === task.recording_id) : null;
+  const displayName = client?.companyName || (recording?.prospectName ? `📹 ${recording.prospectName}` : 'Cliente');
   const cfg = getTypeConfig(task.content_type);
   const deadline = getDeadlineStatus(task.editing_deadline);
-  const clientColor = client?.color || '217 91% 60%';
+  const clientColor = client?.color || (recording?.prospectName ? '200 80% 55%' : '217 91% 60%');
   const isMine = task.assigned_to === currentUserId;
-  const isClaimedByOther = !!task.assigned_to && !isMine;
   const claimedUser = task.assigned_to && users ? users.find((u: any) => u.id === task.assigned_to) : null;
 
   return (
@@ -973,7 +982,6 @@ function QueueCard({ task, clients, index, onStartEditing, onClaimTask, onUnclai
         deadline.variant === 'destructive' ? 'ring-1 ring-destructive/40' : ''
       } ${task.immediate_alteration ? 'ring-1 ring-red-500/60' : ''} ${task.editing_priority && !task.immediate_alteration ? 'ring-1 ring-amber-500/40' : ''}`}
     >
-      {/* Priority banner */}
       {(task.immediate_alteration || task.editing_priority) && (
         <div className={`px-3 py-1 flex items-center gap-1.5 text-[10px] font-bold ${
           task.immediate_alteration ? 'bg-red-500/15 text-red-600' : 'bg-amber-500/15 text-amber-600'
@@ -988,7 +996,7 @@ function QueueCard({ task, clients, index, onStartEditing, onClaimTask, onUnclai
           <div className="flex items-center gap-2 min-w-0">
             {client && <ClientLogo client={client as any} size="sm" />}
             <div className="min-w-0">
-              <p className="text-xs font-bold text-foreground truncate">{client?.companyName || 'Cliente'}</p>
+              <p className="text-xs font-bold text-foreground truncate">{displayName}</p>
               <Badge className={`text-[9px] px-1 py-0 ${cfg.color} border-0`}>
                 <cfg.icon size={9} className="mr-0.5" />{cfg.label}
               </Badge>
@@ -1011,8 +1019,8 @@ function QueueCard({ task, clients, index, onStartEditing, onClaimTask, onUnclai
               initial={{ scale: 0, rotate: -20 }}
               animate={{ scale: 1, rotate: 0 }}
               className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 border transition-colors ${
-                isMine 
-                  ? 'bg-primary/5 border-primary/20 hover:bg-destructive/10 hover:border-destructive/30 cursor-pointer group/flag' 
+                isMine
+                  ? 'bg-primary/5 border-primary/20 hover:bg-destructive/10 hover:border-destructive/30 cursor-pointer group/flag'
                   : 'bg-muted/50 border-border'
               }`}
               onClick={isMine ? (e) => { e.stopPropagation(); onUnclaimTask(); } : undefined}
@@ -1023,9 +1031,9 @@ function QueueCard({ task, clients, index, onStartEditing, onClaimTask, onUnclai
                 animate={{ y: [0, -2, 0] }}
                 transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
               >
-                <UserAvatar 
-                  user={{ name: claimedUser.name || 'Editor', avatarUrl: claimedUser.avatarUrl }} 
-                  size="sm" 
+                <UserAvatar
+                  user={{ name: claimedUser.name || 'Editor', avatarUrl: claimedUser.avatarUrl }}
+                  size="sm"
                   className="ring-2 ring-primary/40 group-hover/flag:ring-destructive/40"
                 />
                 <motion.div
@@ -1051,9 +1059,9 @@ function QueueCard({ task, clients, index, onStartEditing, onClaimTask, onUnclai
         <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
           {task.script_id && <span className="flex items-center gap-0.5"><Eye size={10} /> Roteiro</span>}
           {task.drive_link && <span className="flex items-center gap-0.5"><ExternalLink size={10} /> Drive</span>}
+          {recording?.prospectName && <span className="flex items-center gap-0.5"><Video size={10} /> Avulso</span>}
         </div>
 
-        {/* Action buttons */}
         {task.kanban_column === 'alteracao' ? (
           <motion.div whileTap={{ scale: 0.95 }}>
             <Button size="sm" className="w-full gap-1.5 h-8 text-xs bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md"
@@ -1062,7 +1070,6 @@ function QueueCard({ task, clients, index, onStartEditing, onClaimTask, onUnclai
             </Button>
           </motion.div>
         ) : isMine ? (
-          /* Claimed by me — show "Iniciar Edição" */
           <motion.div whileTap={{ scale: 0.95 }}>
             <Button size="sm" className="w-full gap-1.5 h-8 text-xs bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-md"
               onClick={(e) => { e.stopPropagation(); onStartEditing(); }}>
@@ -1070,7 +1077,6 @@ function QueueCard({ task, clients, index, onStartEditing, onClaimTask, onUnclai
             </Button>
           </motion.div>
         ) : !task.assigned_to ? (
-          /* Unclaimed — show claim flag button */
           <motion.div whileTap={{ scale: 0.97 }} whileHover={{ scale: 1.02 }}>
             <Button size="sm" className="w-full gap-2 h-8 text-xs bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-sm"
               onClick={(e) => { e.stopPropagation(); onClaimTask(); }}>

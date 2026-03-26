@@ -287,6 +287,12 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
     return `${m}min`;
   };
 
+  const contentTypeLabels: Record<string, string> = {
+    reels: 'Reels', criativo: 'Criativo', story: 'Story', stories: 'Stories',
+    arte: 'Arte', carrossel: 'Carrossel', foto: 'Foto', outro: 'Outro',
+    feed: 'Feed', video: 'Vídeo',
+  };
+
   const statusLabels: Record<string, string> = {
     ideias: 'Ideias', captacao: 'Captação', edicao: 'Edição', revisao: 'Revisão',
     alteracao: 'Alteração', envio: 'Enviado', agendamentos: 'Agendamentos',

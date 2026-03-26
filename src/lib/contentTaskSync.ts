@@ -364,7 +364,7 @@ export async function syncContentTaskColumnChange(
   };
 
   const portalNotif = portalNotifMap[newColumn];
-  if (portalNotif && newColumn !== 'envio') {
+  if (portalNotif && newColumn !== 'envio' && ctx.clientId) {
     try {
       await supabase.from('client_portal_notifications').insert({
         client_id: ctx.clientId,

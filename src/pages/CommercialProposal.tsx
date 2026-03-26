@@ -314,6 +314,7 @@ export default function CommercialProposal() {
     if (proposalType === 'marketing' && !selectedPlan) { toast.error('Selecione um plano'); return; }
     if (proposalType === 'sistema' && !systemValue) { toast.error('Preencha o valor do sistema'); return; }
     if (proposalType === 'endomarketing' && !endoMonthlyValue) { toast.error('Preencha o valor mensal'); return; }
+    if (proposalType === 'personalizada' && !customMonthlyValue) { toast.error('Preencha o valor da proposta'); return; }
     setSavingProposal(true);
     try {
       const systemData = proposalType === 'sistema' ? {
@@ -333,6 +334,20 @@ export default function CommercialProposal() {
         storiesPerDay: parseInt(endoStoriesPerDay) || 5,
         monthlyValue: parseFloat(endoMonthlyValue) || 0,
         description: endoDescription,
+      } : {};
+
+      const customData = proposalType === 'personalizada' ? {
+        videos: parseInt(customVideos) || 0,
+        stories: parseInt(customStories) || 0,
+        eventCoverage: parseInt(customEventCoverage) || 0,
+        socialMedia: customSocialMedia,
+        arts: parseInt(customArts) || 0,
+        trafficManagement: customTrafficMgmt,
+        monthlyValue: parseFloat(customMonthlyValue) || 0,
+        description: customDescription,
+        paymentMethod: customPaymentMethod,
+        installments: parseInt(customInstallments) || 1,
+        recordings: parseInt(customRecordings) || 0,
       } : {};
 
       const { data, error } = await supabase.from('commercial_proposals').insert({

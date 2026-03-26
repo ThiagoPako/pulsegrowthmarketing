@@ -464,10 +464,11 @@ export default function VideomakerDashboard() {
           script_alteration_notes: altNotes,
           assigned_to: assignedEditor,
         } as any).eq('id', existing[0].id);
-      } else if (rec.clientId) {
-        // Only create content_task if there's a clientId (avulso recordings may not have one)
+      } else {
+        // Create content_task for both regular and avulso recordings
+        // Avulso recordings have client_id = null
         await supabase.from('content_tasks').insert({
-          client_id: rec.clientId,
+          client_id: rec.clientId || null,
           title: script.title,
           content_type: script.contentFormat || 'reels',
           kanban_column: targetColumn,

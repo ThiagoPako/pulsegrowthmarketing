@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Check, RotateCcw, Rocket, Video, Palette, Users, BarChart3, Shield, Calendar, Star, Sparkles, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 import { toast } from 'sonner';
 
 const WHATSAPP_CTA = 'https://wa.me/5562985382981?text=Olá!%20Vi%20meu%20vídeo%20avulso%20e%20quero%20saber%20mais%20sobre%20os%20planos%20da%20Pulse!';

@@ -212,8 +212,8 @@ export async function syncContentTaskColumnChange(
     });
 
     // Auto-upsert to client_portal_contents with 'revisao_interna' status
-    // This makes the video visible to team in the portal but NOT to the client
-    if (ctx.editedVideoLink) {
+    // Skip for avulso (no client_id)
+    if (ctx.editedVideoLink && ctx.clientId) {
       const now = new Date();
       const { data: existing } = await supabase
         .from('client_portal_contents')

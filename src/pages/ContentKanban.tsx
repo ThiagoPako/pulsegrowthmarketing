@@ -492,16 +492,17 @@ export default function ContentKanban() {
   const userRole = profile?.role || '';
   const isRestricted = userRole === 'editor' || userRole === 'videomaker';
 
-  // Filter visible columns based on role
-  const visibleColumns = useMemo(() => {
-    if (userRole === 'editor') {
-      return KANBAN_COLUMNS.filter(c => ['edicao', 'revisao', 'alteracao'].includes(c.id));
-    }
-    if (userRole === 'videomaker') {
-      return KANBAN_COLUMNS.filter(c => ['ideias', 'captacao'].includes(c.id));
-    }
-    return [...KANBAN_COLUMNS];
+  // All columns visible to everyone (view-only for non-permitted columns)
+  const visibleColumns = useMemo(() => [...KANBAN_COLUMNS], []);
+
+  // Columns where user can interact (drag, add, execute actions)
+  const interactiveColumns = useMemo(() => {
+    if (userRole === 'editor') return ['edicao', 'revisao', 'alteracao'];
+    if (userRole === 'videomaker') return ['ideias', 'captacao'];
+    return KANBAN_COLUMNS.map(c => c.id) as string[];
   }, [userRole]);
+
+  const isColumnInteractive = (colId: string) => interactiveColumns.includes(colId);
 
   // ─── VALIDATION FOR TRANSITIONS ───────────────────────────
   const validateKanbanTransition = (task: ContentTask, targetColumn: string): string | null => {
@@ -831,11 +832,13 @@ export default function ContentKanban() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: colIdx * 0.06, duration: 0.4, ease: 'easeOut' }}
                 className={`flex flex-col w-[270px] shrink-0 rounded-2xl transition-all duration-200 ${
-                  isDragOver ? 'ring-2 ring-primary/40 bg-accent/20 scale-[1.01]' : 'bg-muted/10'
+                  !isColumnInteractive(col.id) ? 'opacity-75' : ''
+                } ${
+                  isDragOver && isColumnInteractive(col.id) ? 'ring-2 ring-primary/40 bg-accent/20 scale-[1.01]' : 'bg-muted/10'
                 }`}
-                onDragOver={e => handleDragOver(e, col.id)}
+                onDragOver={e => isColumnInteractive(col.id) ? handleDragOver(e, col.id) : e.preventDefault()}
                 onDragLeave={handleDragLeave}
-                onDrop={e => handleDrop(e, col.id)}
+                onDrop={e => isColumnInteractive(col.id) ? handleDrop(e, col.id) : e.preventDefault()}
               >
                 {/* Column header - gradient bar */}
                 <motion.div
@@ -878,6 +881,7 @@ export default function ContentKanban() {
                           whileHover={{ y: -3, transition: { duration: 0.15 } }}
                         >
                           <TaskCard
+                            viewOnly={!isColumnInteractive(col.id)}
                             task={task}
                             client={getClient(task.client_id)}
                             assignedUser={getUser(
@@ -966,14 +970,21 @@ export default function ContentKanban() {
                 </div>
 
                 {/* Add button at bottom */}
-                <motion.button
-                  onClick={() => openNew(col.id)}
-                  className="mx-2 mb-2 py-2 rounded-xl border border-dashed border-border/60 text-xs text-muted-foreground/70 hover:text-foreground hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 flex items-center justify-center gap-1.5 font-medium"
-                  whileHover={{ scale: 1.02, borderColor: 'hsl(var(--primary))' }}
-                  whileTap={{ scale: 0.97 }}
-                >
-                  <Plus size={12} /> Adicionar
-                </motion.button>
+                {isColumnInteractive(col.id) && (
+                  <motion.button
+                    onClick={() => openNew(col.id)}
+                    className="mx-2 mb-2 py-2 rounded-xl border border-dashed border-border/60 text-xs text-muted-foreground/70 hover:text-foreground hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 flex items-center justify-center gap-1.5 font-medium"
+                    whileHover={{ scale: 1.02, borderColor: 'hsl(var(--primary))' }}
+                    whileTap={{ scale: 0.97 }}
+                  >
+                    <Plus size={12} /> Adicionar
+                  </motion.button>
+                )}
+                {!isColumnInteractive(col.id) && (
+                  <div className="mx-2 mb-2 py-1.5 text-center text-[10px] text-muted-foreground/50 italic flex items-center justify-center gap-1">
+                    <Eye size={10} /> Visualização
+                  </div>
+                )}
               </motion.div>
             );
           })}
@@ -1265,6 +1276,7 @@ interface TaskCardProps {
   assignedUser?: { id?: string; name: string; avatarUrl?: string } | null;
   linkedScript?: Script;
   isDragging: boolean;
+  viewOnly?: boolean;
   onDragStart: (e: React.DragEvent) => void;
   onEdit: () => void;
   onDelete?: () => void;
@@ -1284,7 +1296,7 @@ interface TaskCardProps {
   backwardLabel?: string;
 }
 
-function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit, onMoveForward, onMoveBackward, forwardLabel, backwardLabel }: TaskCardProps) {
+function TaskCard({ task, client, assignedUser, linkedScript, isDragging, viewOnly, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit, onMoveForward, onMoveBackward, forwardLabel, backwardLabel }: TaskCardProps) {
   const [scriptPreviewOpen, setScriptPreviewOpen] = useState(false);
   const typeConfig = CONTENT_TYPES.find(t => t.value === task.content_type) || CONTENT_TYPES[0];
   const TypeIcon = typeConfig.icon;
@@ -1312,10 +1324,12 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
   return (
     <>
       <div
-        draggable
-        onDragStart={onDragStart}
+        draggable={!viewOnly}
+        onDragStart={viewOnly ? undefined : onDragStart}
         onClick={onCardClick}
-        className={`group relative bg-card rounded-xl cursor-grab active:cursor-grabbing transition-all duration-300 overflow-hidden ${
+        className={`group relative bg-card rounded-xl transition-all duration-300 overflow-hidden ${
+          viewOnly ? 'cursor-default opacity-80' : 'cursor-grab active:cursor-grabbing'
+        } ${
           isDragging ? 'opacity-40 scale-95 shadow-none' : 'shadow-sm hover:shadow-xl hover:shadow-primary/10'
         } ${isOverdue ? 'ring-1 ring-destructive/40' : ''} ${
           isCaptacao ? 'ring-1 ring-orange-400/30' : ''
@@ -1362,17 +1376,19 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, onDrag
           </div>
         </div>
 
-        {/* Actions on hover */}
-        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
-          <button onClick={e => { e.stopPropagation(); onEdit(); }} className="w-6 h-6 rounded-lg flex items-center justify-center bg-card/90 backdrop-blur text-muted-foreground hover:text-foreground hover:bg-accent border border-border/60 shadow-sm transition-colors">
-            <Edit size={11} />
-          </button>
-          {onDelete && (
-            <button onClick={e => { e.stopPropagation(); onDelete(); }} className="w-6 h-6 rounded-lg flex items-center justify-center bg-card/90 backdrop-blur text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border/60 shadow-sm transition-colors">
-              <Trash2 size={11} />
+        {/* Actions on hover - hidden in viewOnly */}
+        {!viewOnly && (
+          <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
+            <button onClick={e => { e.stopPropagation(); onEdit(); }} className="w-6 h-6 rounded-lg flex items-center justify-center bg-card/90 backdrop-blur text-muted-foreground hover:text-foreground hover:bg-accent border border-border/60 shadow-sm transition-colors">
+              <Edit size={11} />
             </button>
-          )}
-        </div>
+            {onDelete && (
+              <button onClick={e => { e.stopPropagation(); onDelete(); }} className="w-6 h-6 rounded-lg flex items-center justify-center bg-card/90 backdrop-blur text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border/60 shadow-sm transition-colors">
+                <Trash2 size={11} />
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="p-3 space-y-2.5">
           {/* Tags row */}

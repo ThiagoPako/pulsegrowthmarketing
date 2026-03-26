@@ -3,7 +3,7 @@ import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/vpsDb';
 import { VM_SCORE, calcVmDeliveryScore, calcWaitPoints } from '@/lib/scoringSystem';
 import { DAY_LABELS } from '@/types';
-import { getSeasonalAlerts, NICHE_OPTIONS } from '@/lib/seasonalDates';
+import { fetchAISeasonalAlerts, NICHE_OPTIONS, type AISeasonalAlert, clearSeasonalCache } from '@/lib/seasonalDates';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Video, Plus, XCircle, RefreshCw, TrendingUp, Calendar, Check,

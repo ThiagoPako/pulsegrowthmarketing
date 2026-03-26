@@ -667,10 +667,11 @@ export default function ContentKanban() {
 
   // Get adjacent columns
   const getAdjacentColumns = (currentCol: string) => {
-    const idx = KANBAN_COLUMNS.findIndex(c => c.id === currentCol);
+    const cols = visibleColumns;
+    const idx = cols.findIndex(c => c.id === currentCol);
     return {
-      prev: idx > 0 ? KANBAN_COLUMNS[idx - 1] : null,
-      next: idx < KANBAN_COLUMNS.length - 1 ? KANBAN_COLUMNS[idx + 1] : null,
+      prev: idx > 0 ? cols[idx - 1] : null,
+      next: idx < cols.length - 1 ? cols[idx + 1] : null,
     };
   };
 

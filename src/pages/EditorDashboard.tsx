@@ -12,10 +12,11 @@ import { useNavigate } from 'react-router-dom';
 import {
   Film, Megaphone, Image, Palette, ExternalLink, Clock, AlertTriangle,
   Eye, Star, TrendingUp, BarChart3, Timer, Scissors, ArrowRight, Check,
-  Search, Users, Upload, Send, History, Zap, Flame,
+  Search, Users, Upload, Send, History, Zap, Flame, Flag,
   Play, Rocket, Trophy, FileText, FolderOpen, X, Link2, Video, Pause
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
+import UserAvatar from '@/components/UserAvatar';
 import DeadlineBadge from '@/components/DeadlineBadge';
 import { highlightQuotes } from '@/lib/highlightQuotes';
 import { format, differenceInHours, isPast, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, startOfDay, endOfDay } from 'date-fns';
@@ -310,6 +311,19 @@ export default function EditorDashboard() {
   }, [queueTasks, filterClient, filterType, searchQuery, clients]);
 
   /* ─── Actions ──────────────────────────────────────────── */
+   const handleClaimTask = async (task: EditorTask) => {
+     if (!user) return;
+     const { error } = await supabase.from('content_tasks').update({
+       assigned_to: user.id,
+       updated_at: new Date().toISOString(),
+     } as any).eq('id', task.id);
+     if (error) { toast.error('Erro ao marcar tarefa'); return; }
+     const editorName = users.find(u => u.id === user.id)?.name || 'Você';
+     await supabase.from('task_history').insert({ task_id: task.id, user_id: user.id, action: `Tarefa reivindicada por ${editorName}` });
+     toast.success('🚩 Tarefa marcada como sua!');
+     fetchTasks();
+   };
+
    const handleStartEditing = async (task: EditorTask) => {
      if (!user) return;
      const isAlteration = task.kanban_column === 'alteracao';
@@ -904,6 +918,7 @@ export default function EditorDashboard() {
             {filteredQueue.map((task, i) => (
               <QueueCard key={task.id} task={task} clients={clients} index={i}
                 onStartEditing={() => handleStartEditing(task)}
+                onClaimTask={() => handleClaimTask(task)}
                 currentUserId={user?.id}
                 users={users} />
             ))}
@@ -923,14 +938,17 @@ export default function EditorDashboard() {
 }
 
 /* ─── Queue Card ──────────────────────────────────────────── */
-function QueueCard({ task, clients, index, onStartEditing, currentUserId, users }: {
+function QueueCard({ task, clients, index, onStartEditing, onClaimTask, currentUserId, users }: {
   task: EditorTask; clients: any[]; index: number;
-  onStartEditing: () => void; currentUserId?: string; users?: any[];
+  onStartEditing: () => void; onClaimTask: () => void; currentUserId?: string; users?: any[];
 }) {
   const client = clients.find(c => c.id === task.client_id);
   const cfg = getTypeConfig(task.content_type);
   const deadline = getDeadlineStatus(task.editing_deadline);
   const clientColor = client?.color || '217 91% 60%';
+  const isMine = task.assigned_to === currentUserId;
+  const isClaimedByOther = !!task.assigned_to && !isMine;
+  const claimedUser = task.assigned_to && users ? users.find((u: any) => u.id === task.assigned_to) : null;
 
   return (
     <motion.div
@@ -974,12 +992,40 @@ function QueueCard({ task, clients, index, onStartEditing, currentUserId, users 
 
         {task.editing_deadline && <DeadlineBadge deadline={task.editing_deadline} label="Edição" startedAt={task.editing_started_at} />}
 
-        {/* Assigned editor */}
-        {task.assigned_to && users && (
-          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground bg-muted/50 rounded-md px-2 py-1">
-            <Scissors size={10} />
-            <span>Editor: <strong className="text-foreground">{users.find((u: any) => u.id === task.assigned_to)?.name || 'Editor'}</strong></span>
-          </div>
+        {/* Animated claim flag badge */}
+        {task.assigned_to && claimedUser && (
+          <AnimatePresence>
+            <motion.div
+              initial={{ scale: 0, rotate: -20 }}
+              animate={{ scale: 1, rotate: 0 }}
+              className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 border ${
+                isMine ? 'bg-primary/5 border-primary/20' : 'bg-muted/50 border-border'
+              }`}
+            >
+              <motion.div
+                className="relative"
+                animate={{ y: [0, -2, 0] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <UserAvatar 
+                  user={{ name: claimedUser.name || 'Editor', avatarUrl: claimedUser.avatarUrl }} 
+                  size="sm" 
+                  className="ring-2 ring-primary/40"
+                />
+                <motion.div
+                  className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-primary flex items-center justify-center"
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                >
+                  <Flag size={7} className="text-primary-foreground" />
+                </motion.div>
+              </motion.div>
+              <div className="min-w-0">
+                <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-medium">🚩 Marcado por</p>
+                <p className="text-xs font-bold text-foreground truncate">{claimedUser.name || 'Editor'}</p>
+              </div>
+            </motion.div>
+          </AnimatePresence>
         )}
 
         <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
@@ -987,7 +1033,7 @@ function QueueCard({ task, clients, index, onStartEditing, currentUserId, users 
           {task.drive_link && <span className="flex items-center gap-0.5"><ExternalLink size={10} /> Drive</span>}
         </div>
 
-        {/* Start Editing / Alteration CTA */}
+        {/* Action buttons */}
         {task.kanban_column === 'alteracao' ? (
           <motion.div whileTap={{ scale: 0.95 }}>
             <Button size="sm" className="w-full gap-1.5 h-8 text-xs bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md"
@@ -995,14 +1041,26 @@ function QueueCard({ task, clients, index, onStartEditing, currentUserId, users 
               <Zap size={13} /> Iniciar Alteração
             </Button>
           </motion.div>
-        ) : !task.assigned_to && (
+        ) : isMine ? (
+          /* Claimed by me — show "Iniciar Edição" */
           <motion.div whileTap={{ scale: 0.95 }}>
             <Button size="sm" className="w-full gap-1.5 h-8 text-xs bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-md"
               onClick={(e) => { e.stopPropagation(); onStartEditing(); }}>
-              <Rocket size={13} /> Iniciar Edição
+              <Scissors size={13} /> Iniciar Edição
             </Button>
           </motion.div>
-        )}
+        ) : !task.assigned_to ? (
+          /* Unclaimed — show claim flag button */
+          <motion.div whileTap={{ scale: 0.97 }} whileHover={{ scale: 1.02 }}>
+            <Button size="sm" className="w-full gap-2 h-8 text-xs bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-sm"
+              onClick={(e) => { e.stopPropagation(); onClaimTask(); }}>
+              <motion.div animate={{ rotate: [0, -15, 15, 0] }} transition={{ duration: 1.5, repeat: Infinity, repeatDelay: 2 }}>
+                <Flag size={12} />
+              </motion.div>
+              🚩 Marcar como Meu
+            </Button>
+          </motion.div>
+        ) : null}
       </div>
     </motion.div>
   );

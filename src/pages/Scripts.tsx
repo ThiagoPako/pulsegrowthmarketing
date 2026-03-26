@@ -434,7 +434,9 @@ export default function Scripts() {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
+        width: page.offsetWidth,
         height: actualHeight,
+        windowWidth: page.offsetWidth,
         windowHeight: actualHeight,
       });
 

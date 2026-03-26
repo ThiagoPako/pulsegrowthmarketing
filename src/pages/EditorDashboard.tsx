@@ -951,9 +951,9 @@ export default function EditorDashboard() {
 }
 
 /* ─── Queue Card ──────────────────────────────────────────── */
-function QueueCard({ task, clients, index, onStartEditing, onClaimTask, currentUserId, users }: {
+function QueueCard({ task, clients, index, onStartEditing, onClaimTask, onUnclaimTask, currentUserId, users }: {
   task: EditorTask; clients: any[]; index: number;
-  onStartEditing: () => void; onClaimTask: () => void; currentUserId?: string; users?: any[];
+  onStartEditing: () => void; onClaimTask: () => void; onUnclaimTask: () => void; currentUserId?: string; users?: any[];
 }) {
   const client = clients.find(c => c.id === task.client_id);
   const cfg = getTypeConfig(task.content_type);

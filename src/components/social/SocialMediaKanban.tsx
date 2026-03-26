@@ -159,7 +159,7 @@ function RocketBurst({ onComplete }: { onComplete: () => void }) {
 }
 
 // Video link inline component
-function ReviewVideoLink({ contentTaskId, clientId }: { contentTaskId: string | null; clientId: string }) {
+function ReviewVideoLink({ contentTaskId, clientId }: { contentTaskId: string | null; clientId: string | null }) {
   const [isAltered, setIsAltered] = useState(false);
   const [hasVideo, setHasVideo] = useState(false);
 
@@ -180,7 +180,7 @@ function ReviewVideoLink({ contentTaskId, clientId }: { contentTaskId: string | 
         <Badge className="text-[9px] font-bold px-1.5 py-0 border-0 bg-amber-500 text-white">🔄 Alterado</Badge>
       )}
       {hasVideo && (
-        <a href={`/portal/${clientId}`}
+        <a href={clientId ? `/portal/${clientId}` : `/video-avulso/${contentTaskId}`}
           className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline bg-primary/5 border border-primary/15 rounded-md px-2 py-1.5 transition-colors hover:bg-primary/10">
           <Eye size={12} className="shrink-0" />
           <span className="truncate">Assistir no Portal</span>

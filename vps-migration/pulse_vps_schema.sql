@@ -260,7 +260,7 @@ CREATE INDEX IF NOT EXISTS idx_proposal_comments_proposal_id ON proposal_comment
 -- Table: content_tasks
 CREATE TABLE IF NOT EXISTS content_tasks (
   id UUID NOT NULL DEFAULT gen_random_uuid(),
-  client_id UUID NOT NULL,
+  client_id UUID,
   title TEXT NOT NULL DEFAULT ''::text,
   content_type TEXT NOT NULL DEFAULT 'reels'::text,
   kanban_column TEXT NOT NULL DEFAULT 'ideias'::text,

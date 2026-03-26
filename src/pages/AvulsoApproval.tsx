@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Check, RotateCcw, Rocket, Video, Palette, Users, BarChart3, Shield, Calendar, Star, Sparkles, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { supabase } from '@/lib/vpsDb';
+import { avulsoAction } from '@/lib/portalApi';
 import { toast } from 'sonner';
 
 const WHATSAPP_CTA = 'https://wa.me/5562985382981?text=Olá!%20Vi%20meu%20vídeo%20avulso%20e%20quero%20saber%20mais%20sobre%20os%20planos%20da%20Pulse!';
@@ -38,22 +38,11 @@ export default function AvulsoApproval() {
   useEffect(() => {
     if (!taskId) return;
     const loadTask = async () => {
-      const { data: taskData } = await supabase.from('content_tasks')
-        .select('*')
-        .eq('id', taskId)
-        .single();
-      if (taskData) {
-        // Load prospect name from recording if available
-        if (taskData.recording_id) {
-          const { data: rec } = await supabase.from('recordings')
-            .select('prospect_name')
-            .eq('id', taskData.recording_id)
-            .single();
-          if (rec) {
-            (taskData as any)._prospect_name = rec.prospect_name;
-          }
-        }
-        setTask(taskData);
+      const result = await avulsoAction({ action: 'get_task', task_id: taskId });
+      if (result.error) {
+        toast.error(result.error);
+      } else if (result.task) {
+        setTask(result.task);
       }
       setLoading(false);
     };
@@ -63,15 +52,12 @@ export default function AvulsoApproval() {
   const handleApprove = async () => {
     if (!taskId) return;
     setSubmitting(true);
-    await supabase.from('content_tasks').update({
-      kanban_column: 'arquivado',
-      approved_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    } as any).eq('id', taskId);
-    await supabase.from('task_history').insert({
-      task_id: taskId,
-      action: 'Cliente avulso aprovou o vídeo',
-    });
+    const result = await avulsoAction({ action: 'approve', task_id: taskId });
+    if (result.error) {
+      setSubmitting(false);
+      toast.error(result.error);
+      return;
+    }
     setApproved(true);
     setSubmitting(false);
     toast.success('Vídeo aprovado com sucesso!');
@@ -80,16 +66,16 @@ export default function AvulsoApproval() {
   const handleRequestRevision = async () => {
     if (!taskId || !revisionNotes.trim()) return;
     setSubmitting(true);
-    await supabase.from('content_tasks').update({
-      kanban_column: 'alteracao',
-      adjustment_notes: revisionNotes,
-      updated_at: new Date().toISOString(),
-    } as any).eq('id', taskId);
-    await supabase.from('task_history').insert({
+    const result = await avulsoAction({
+      action: 'request_revision',
       task_id: taskId,
-      action: 'Cliente avulso solicitou revisão',
-      details: revisionNotes,
+      message: revisionNotes,
     });
+    if (result.error) {
+      setSubmitting(false);
+      toast.error(result.error);
+      return;
+    }
     setSubmitting(false);
     setShowRevisionForm(false);
     toast.success('Solicitação de revisão enviada! Nosso editor vai ajustar seu vídeo.');
@@ -112,7 +98,7 @@ export default function AvulsoApproval() {
   }
 
   const videoUrl = task.edited_video_link;
-  const prospectName = task._prospect_name || task.title;
+  const prospectName = task.prospect_name || task.title;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white">

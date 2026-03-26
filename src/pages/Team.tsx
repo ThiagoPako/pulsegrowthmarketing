@@ -476,7 +476,7 @@ export default function Team() {
         ) : (
           <div className="grid gap-3">
             {teamMembers.map(u => (
-              <div key={u.id} className="glass-card p-4 flex items-center justify-between">
+              <div key={u.id} className="glass-card p-4 flex items-center justify-between cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all" onClick={() => setStatsTarget(u)}>
                 <div className="flex items-center gap-4">
                   <UserAvatar user={u} size="lg" />
                    <div>

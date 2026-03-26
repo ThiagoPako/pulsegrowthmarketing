@@ -756,7 +756,7 @@ export default function ContentKanban() {
           <MiniRocket size={28} />
           <div>
             <h1 className="text-xl font-bold text-foreground tracking-tight">Criação de Conteúdo</h1>
-            <p className="text-xs text-muted-foreground">{tasks.length} cartões no pipeline</p>
+            <p className="text-xs text-muted-foreground">{visibleColumns.reduce((sum, col) => sum + (tasksByColumn[col.id]?.length || 0), 0)} cartões no pipeline</p>
           </div>
         </div>
 

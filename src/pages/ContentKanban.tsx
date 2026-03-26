@@ -239,6 +239,22 @@ export default function ContentKanban() {
     return () => clearInterval(interval);
   }, [fetchTasks]);
 
+  // Deep-link highlight: scroll to card and open detail
+  useEffect(() => {
+    if (highlightId && tasks.length > 0) {
+      const task = tasks.find(t => t.id === highlightId);
+      if (task) {
+        setEditingTask(task);
+        setDialogOpen(true);
+        setSearchParams({}, { replace: true });
+        setTimeout(() => {
+          const el = document.getElementById(`task-card-${highlightId}`);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 300);
+      }
+    }
+  }, [highlightId, tasks]);
+
   // ─── HELPERS ───────────────────────────────────────────────
   const getClient = (id: string) => clients.find(c => c.id === id);
   const getTypeConfig = (type: string) => CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];

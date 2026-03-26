@@ -140,6 +140,23 @@ export async function syncContentTaskColumnChange(
     updates.assigned_to = null; // Remove editor responsibility on client approval
   }
   if (newColumn === 'agendamentos') {
+    // Avulso videos skip scheduling – move directly to arquivado
+    if (!ctx.clientId) {
+      updates.approved_at = updates.approved_at || new Date().toISOString();
+      await supabase.from('content_tasks').update({
+        ...updates,
+        kanban_column: 'arquivado',
+        updated_at: new Date().toISOString(),
+      } as any).eq('id', ctx.taskId);
+      // Log and return early
+      await supabase.from('task_history').insert({
+        task_id: ctx.taskId,
+        user_id: ctx.userId || null,
+        action: 'Vídeo avulso aprovado e arquivado (sem agendamento)',
+        details: null,
+      });
+      return;
+    }
     if (!ctx.approvedAt) {
       updates.approved_at = new Date().toISOString();
     }

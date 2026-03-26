@@ -492,8 +492,10 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
   }, [task?.id, open]);
 
   // ─── LIVE REVIEWING PRESENCE ──────────────────────────────
+  // Only admin and social_media should mark as "reviewing" — editors don't review
+  const canReview = profile?.role === 'admin' || profile?.role === 'social_media';
   useEffect(() => {
-    if (!open || !task?.id || task.kanban_column !== 'revisao' || !user?.id || !profile?.name) return;
+    if (!open || !task?.id || task.kanban_column !== 'revisao' || !user?.id || !profile?.name || !canReview) return;
 
     // Mark as reviewing
     supabase.from('content_tasks').update({
@@ -518,7 +520,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
         reviewing_at: null,
       } as any).eq('id', task.id);
     };
-  }, [open, task?.id, task?.kanban_column, user?.id, profile?.name]);
+  }, [open, task?.id, task?.kanban_column, user?.id, profile?.name, canReview]);
 
   // Reset forms when task changes
   useEffect(() => {

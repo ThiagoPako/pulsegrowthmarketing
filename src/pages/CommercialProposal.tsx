@@ -30,7 +30,7 @@ import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
-type ProposalType = 'marketing' | 'sistema' | 'endomarketing';
+type ProposalType = 'marketing' | 'sistema' | 'endomarketing' | 'personalizada';
 
 interface BonusService {
   id: string;
@@ -77,6 +77,7 @@ const PROPOSAL_TYPE_LABELS: Record<ProposalType, string> = {
   marketing: 'Marketing Digital',
   sistema: 'Sistema / Software',
   endomarketing: 'Endomarketing',
+  personalizada: 'Proposta Única',
 };
 
 const PAYMENT_METHODS = [
@@ -154,6 +155,19 @@ export default function CommercialProposal() {
   const [endoStoriesPerDay, setEndoStoriesPerDay] = useState('5');
   const [endoMonthlyValue, setEndoMonthlyValue] = useState('');
   const [endoDescription, setEndoDescription] = useState('');
+
+  // Personalizada fields
+  const [customVideos, setCustomVideos] = useState('');
+  const [customStories, setCustomStories] = useState('');
+  const [customEventCoverage, setCustomEventCoverage] = useState('');
+  const [customSocialMedia, setCustomSocialMedia] = useState(false);
+  const [customArts, setCustomArts] = useState('');
+  const [customTrafficMgmt, setCustomTrafficMgmt] = useState(false);
+  const [customMonthlyValue, setCustomMonthlyValue] = useState('');
+  const [customDescription, setCustomDescription] = useState('');
+  const [customPaymentMethod, setCustomPaymentMethod] = useState('pix');
+  const [customInstallments, setCustomInstallments] = useState('1');
+  const [customRecordings, setCustomRecordings] = useState('');
 
   const { data: plans = [] } = useQuery({
     queryKey: ['plans-proposal'],
@@ -445,6 +459,7 @@ export default function CommercialProposal() {
     marketing: Rocket,
     sistema: Code,
     endomarketing: Megaphone,
+    personalizada: Target,
   };
 
   // ===== RENDER FORM SECTIONS =====

@@ -931,6 +931,7 @@ export default function EditorDashboard() {
               <QueueCard key={task.id} task={task} clients={clients} index={i}
                 onStartEditing={() => handleStartEditing(task)}
                 onClaimTask={() => handleClaimTask(task)}
+                onUnclaimTask={() => handleUnclaimTask(task)}
                 currentUserId={user?.id}
                 users={users} />
             ))}

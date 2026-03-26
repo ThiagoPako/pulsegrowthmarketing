@@ -142,6 +142,8 @@ export default function CommercialProposal() {
   const [newScopeItem, setNewScopeItem] = useState('');
   const [newDeliverableName, setNewDeliverableName] = useState('');
   const [newDeliverableDesc, setNewDeliverableDesc] = useState('');
+  const [systemFunctionsDesc, setSystemFunctionsDesc] = useState('');
+  const [generatingModules, setGeneratingModules] = useState(false);
 
   // Endomarketing fields
   const [endoPlan, setEndoPlan] = useState('');

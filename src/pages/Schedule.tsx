@@ -1258,12 +1258,33 @@ export default function Schedule() {
                           </div>
                           {evt.type === 'event' && evt.eventRecording ? eventTag(evt.eventRecording) : evt.type === 'endomarketing' ? endoTag() : evt.recording && statusTag(evt.recording)}
                         </div>
-                        {evt.type === 'endomarketing' ? (
+                        {evt.type === 'event' && evt.eventRecording ? (
+                          <div className="space-y-0.5">
+                            <p className="text-[10px] text-muted-foreground">{evt.eventRecording.startTime} - {evt.eventRecording.endTime}</p>
+                            {evt.eventRecording.address && <p className="text-[10px] text-muted-foreground truncate flex items-center gap-0.5"><MapPin size={8} /> {evt.eventRecording.address}</p>}
+                          </div>
+                        ) : evt.type === 'endomarketing' ? (
                           <p className="text-[10px] text-muted-foreground">{evt.startTime} · {evt.endoDuration}min</p>
                         ) : (
                           <div className="flex items-center gap-1.5">
                             {(() => { const vm = getVideomaker(evt.recording!.videomakerId); return vm ? <UserAvatar user={vm} size="sm" className="w-5 h-5 text-[8px]" /> : null; })()}
                             <p className="text-[10px] text-muted-foreground">{evt.startTime} — {getVideomakerName(evt.recording!.videomakerId)}</p>
+                          </div>
+                        )}
+
+                        {evt.type === 'event' && evt.eventRecording && (
+                          <div className="grid grid-cols-2 gap-1 pt-1.5 border-t border-border/50 hidden group-hover:grid transition-all">
+                            <button onClick={() => openEditEvent(evt.eventRecording!)} className="text-[10px] py-1.5 rounded-md bg-muted/60 text-muted-foreground hover:bg-muted transition-colors flex items-center justify-center gap-1">
+                              <Pencil size={10} /> Editar
+                            </button>
+                            {evt.eventRecording.status === 'agendado' && (
+                              <button onClick={() => handleCompleteEvent(evt.eventRecording!.id)} className="text-[10px] py-1.5 rounded-md bg-success/10 text-success hover:bg-success/20 transition-colors flex items-center justify-center gap-1">
+                                <Check size={10} /> Concluir
+                              </button>
+                            )}
+                            <button onClick={() => handleDeleteEvent(evt.eventRecording!.id)} className="text-[10px] py-1.5 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/15 transition-colors flex items-center justify-center gap-1">
+                              <Trash2 size={10} /> Apagar
+                            </button>
                           </div>
                         )}
 

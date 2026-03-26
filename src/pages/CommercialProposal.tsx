@@ -1275,6 +1275,120 @@ export default function CommercialProposal() {
     );
   };
 
+  const renderCronogramaPreview = () => {
+    const totalValue = cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0);
+    const discountedVal = totalValue * (1 - customDiscount / 100);
+    const installs = parseInt(cronogramaInstallments) || 1;
+    const installmentVal = discountedVal / installs;
+    return (
+      <>
+        {cronogramaMethodology && (
+          <div data-pdf-section className="p-8 md:p-12">
+            <h2 className="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2">
+              <CalendarDays className="h-5 w-5" style={{ color: 'hsl(16 82% 51%)' }} /> {cronogramaProjectName || 'Cronograma do Projeto'}
+            </h2>
+            <div className="bg-gray-50 rounded-lg p-4 mb-4">
+              <p className="text-xs font-semibold text-gray-600 mb-1">Metodologia</p>
+              <p className="text-sm text-gray-700">{cronogramaMethodology}</p>
+            </div>
+            {cronogramaTotalDays && <p className="text-sm text-gray-500">⏱️ Prazo estimado: <strong>{cronogramaTotalDays} dias</strong></p>}
+          </div>
+        )}
+        {cronogramaPhases.length > 0 && (
+          <div data-pdf-section className="px-8 md:px-12 pb-6">
+            <h2 className="text-lg font-bold text-gray-800 mb-3">Fases do Projeto</h2>
+            <div className="space-y-2">
+              {cronogramaPhases.map((phase, i) => (
+                <div key={i} className="flex items-start gap-3 p-3 rounded-lg border" style={{ borderColor: 'hsl(16 82% 80%)' }}>
+                  <div className="rounded-full w-7 h-7 flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: 'hsl(16 82% 51%)' }}>{phase.number}</div>
+                  <div>
+                    <p className="font-semibold text-sm text-gray-800">{phase.name} <span className="text-xs font-normal text-gray-500">({phase.durationDays} dias)</span></p>
+                    <p className="text-xs text-gray-500">{phase.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {cronogramaDeliverables.length > 0 && (
+          <div data-pdf-section className="px-8 md:px-12 pb-6">
+            <h2 className="text-lg font-bold text-gray-800 mb-3">Entregas e Investimento</h2>
+            <div className="border rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-gray-500" style={{ background: 'hsl(16 82% 96%)' }}>
+                    <th className="p-3">Entrega</th>
+                    <th className="p-3 text-center">Qtd</th>
+                    <th className="p-3 text-right">Valor Unit.</th>
+                    <th className="p-3 text-right">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cronogramaDeliverables.map((d, i) => (
+                    <tr key={d.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="p-3">
+                        <p className="font-medium text-gray-800">{d.name}</p>
+                        <p className="text-[10px] text-gray-500">{d.description}</p>
+                      </td>
+                      <td className="p-3 text-center font-medium">{d.quantity}</td>
+                      <td className="p-3 text-right text-gray-600">{fmt(d.unitPrice)}</td>
+                      <td className="p-3 text-right font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(d.unitPrice * d.quantity)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 font-bold">
+                    <td colSpan={3} className="p-3 text-right text-gray-800">Total</td>
+                    <td className="p-3 text-right text-lg" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(totalValue)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
+        <div data-pdf-section className="px-8 md:px-12 pb-8">
+          <div className="border-2 rounded-xl p-6" style={{ borderColor: 'hsl(16 82% 51%)' }}>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Valor total</span>
+                <span className="text-xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(totalValue)}</span>
+              </div>
+              {customDiscount > 0 && (
+                <>
+                  <div className="flex justify-between items-center text-green-600">
+                    <span>Desconto ({customDiscount}%)</span>
+                    <span className="font-bold">-{fmt(totalValue - discountedVal)}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-t pt-2">
+                    <span className="font-bold text-gray-800">Valor final</span>
+                    <span className="text-2xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(discountedVal)}</span>
+                  </div>
+                </>
+              )}
+              <Separator />
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Forma de pagamento</span>
+                <span className="font-medium">{PAYMENT_METHODS.find(m => m.value === cronogramaPaymentMethod)?.label}</span>
+              </div>
+              {installs > 1 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">{cronogramaInstallments}x de</span>
+                  <span className="font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(installmentVal)}</span>
+                </div>
+              )}
+              {cronogramaTotalDays && (
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Prazo de entrega</span>
+                  <span className="font-medium">{cronogramaTotalDays} dias</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  };
+
   const renderMarketingPreview = () => (
     <>
       {selectedPlan && (

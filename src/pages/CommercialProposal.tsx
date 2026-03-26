@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { supabase } from '@/integrations/supabase/client';
 import { supabase as vpsDb } from '@/lib/vpsDb';
 import { useAuth } from '@/hooks/useAuth';
+import { useQuery } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
 import { format, addDays, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -201,7 +201,7 @@ export default function CommercialProposal() {
   const { data: plans = [] } = useQuery({
     queryKey: ['plans-proposal'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('plans').select('*').eq('status', 'ativo').order('price', { ascending: true });
+      const { data, error } = await vpsDb.from('plans').select('*').eq('status', 'ativo').order('price', { ascending: true });
       if (error) console.error('Plans query error:', error);
       return (data as any[]) || [];
     },
@@ -210,7 +210,7 @@ export default function CommercialProposal() {
   const { data: endoPackages = [] } = useQuery({
     queryKey: ['endo-packages-proposal'],
     queryFn: async () => {
-      const { data } = await supabase.from('endomarketing_packages').select('*').order('package_name');
+      const { data } = await vpsDb.from('endomarketing_packages').select('*').order('package_name');
       return (data as any[]) || [];
     },
   });
@@ -423,7 +423,7 @@ export default function CommercialProposal() {
       if (proposalType === 'personalizada') saveSystemData = customData;
       if (proposalType === 'cronograma') saveSystemData = cronogramaData;
 
-      const { data, error } = await vpsDb.from('commercial_proposals').insert({
+      const payload = {
         client_name: clientName,
         client_company: clientCompany,
         plan_id: proposalType === 'marketing' ? selectedPlanId : null,
@@ -439,18 +439,25 @@ export default function CommercialProposal() {
         proposal_type: proposalType,
         system_data: saveSystemData,
         endomarketing_data: endoData,
-      } as any).select().single();
+      } as any;
+
+      const { data, error } = await vpsDb.from('commercial_proposals').insert(payload);
       if (error) throw error;
-      const link = `${window.location.origin}/proposta/${(data as any).token}`;
+
+      const savedProposal = Array.isArray(data) ? data[0] : data;
+      if (!savedProposal?.token) throw new Error('Proposta salva sem token de compartilhamento.');
+
+      const link = `${window.location.origin}/proposta/${savedProposal.token}`;
       setShareLink(link);
       await copyToClipboard(link);
       toast.success('Proposta salva! Link copiado para a área de transferência.');
       refetchProposals();
     } catch (e: any) {
-      toast.error('Erro ao salvar proposta: ' + e.message);
+      const message = e?.message || e?.error?.message || e?.details || 'Falha desconhecida ao salvar proposta';
+      toast.error('Erro ao salvar proposta: ' + message);
     }
     setSavingProposal(false);
-  }, [clientName, clientCompany, selectedPlanId, selectedPlan, bonusServices, teamMembers, hasContract, customDiscount, observations, validityDate, whatsappNumber, user, proposalType, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription]);
+  }, [clientName, clientCompany, selectedPlanId, selectedPlan, bonusServices, teamMembers, hasContract, customDiscount, observations, validityDate, whatsappNumber, user, proposalType, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription, customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings, cronogramaProjectName, cronogramaMethodology, cronogramaDeliverables, cronogramaPhases, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, copyToClipboard, refetchProposals]);
 
   const handleCopyLink = (link: string) => {
     copyToClipboard(link).then(() => toast.success('Link copiado!'));

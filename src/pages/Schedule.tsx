@@ -238,8 +238,25 @@ export default function Schedule() {
       });
     }
 
+    // Event recordings
+    if (showEvents) {
+      eventRecordings.filter(e => e.date === dateStr && e.status !== 'cancelado').forEach(evt => {
+        const client = clients.find(c => c.id === evt.clientId);
+        events.push({
+          id: `event-${evt.id}`,
+          type: 'event',
+          clientName: evt.title || client?.companyName || 'Evento',
+          color: '25 95% 53%', // orange for events
+          startTime: evt.startTime,
+          date: evt.date,
+          status: evt.status,
+          eventRecording: evt,
+        });
+      });
+    }
+
     return events.sort((a, b) => a.startTime.localeCompare(b.startTime));
-  }, [filteredRecordings, clients, showEndo, endoAgendamentos, endoClientes]);
+  }, [filteredRecordings, clients, showEndo, endoAgendamentos, endoClientes, showEvents, eventRecordings]);
 
   // Keep legacy helper for internal use
   const getRecsForDay = (date: Date) => {

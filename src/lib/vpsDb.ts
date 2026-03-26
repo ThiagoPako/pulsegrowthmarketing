@@ -58,6 +58,7 @@ class QueryBuilder {
   private _data: any = null;
   private _count: 'exact' | null = null;
   private _onConflict: string | null = null;
+  private _returning: boolean = false;
 
   constructor(table: string) {
     this._table = table;

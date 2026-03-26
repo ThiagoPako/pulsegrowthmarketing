@@ -217,6 +217,46 @@ CREATE TABLE IF NOT EXISTS company_settings (
   approval_deadline_hours INTEGER NOT NULL DEFAULT 6
 );
 
+-- Table: commercial_proposals
+CREATE TABLE IF NOT EXISTS commercial_proposals (
+  id UUID NOT NULL DEFAULT gen_random_uuid(),
+  client_name TEXT NOT NULL DEFAULT ''::text,
+  client_company TEXT NOT NULL DEFAULT ''::text,
+  plan_id UUID,
+  plan_snapshot JSONB DEFAULT '{}'::jsonb,
+  bonus_services JSONB DEFAULT '[]'::jsonb,
+  team_members JSONB DEFAULT '[]'::jsonb,
+  has_contract BOOLEAN NOT NULL DEFAULT true,
+  custom_discount NUMERIC NOT NULL DEFAULT 0,
+  observations TEXT DEFAULT ''::text,
+  validity_date DATE NOT NULL DEFAULT (CURRENT_DATE + '7 days'::interval),
+  whatsapp_number TEXT DEFAULT ''::text,
+  created_by UUID,
+  token TEXT NOT NULL DEFAULT encode(gen_random_bytes(16), 'hex'),
+  proposal_type TEXT NOT NULL DEFAULT 'marketing'::text,
+  status TEXT NOT NULL DEFAULT 'pendente'::text,
+  endomarketing_data JSONB DEFAULT '{}'::jsonb,
+  system_data JSONB DEFAULT '{}'::jsonb,
+  client_response_at TIMESTAMPTZ,
+  client_response_note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_commercial_proposals_token ON commercial_proposals (token);
+CREATE INDEX IF NOT EXISTS idx_commercial_proposals_created_at ON commercial_proposals (created_at DESC);
+
+-- Table: proposal_comments
+CREATE TABLE IF NOT EXISTS proposal_comments (
+  id UUID NOT NULL DEFAULT gen_random_uuid(),
+  proposal_id UUID NOT NULL REFERENCES commercial_proposals(id) ON DELETE CASCADE,
+  author_name TEXT NOT NULL DEFAULT ''::text,
+  message TEXT NOT NULL DEFAULT ''::text,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_proposal_comments_proposal_id ON proposal_comments (proposal_id, created_at);
+
 -- Table: content_tasks
 CREATE TABLE IF NOT EXISTS content_tasks (
   id UUID NOT NULL DEFAULT gen_random_uuid(),

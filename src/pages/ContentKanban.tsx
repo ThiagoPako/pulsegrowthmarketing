@@ -832,11 +832,13 @@ export default function ContentKanban() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: colIdx * 0.06, duration: 0.4, ease: 'easeOut' }}
                 className={`flex flex-col w-[270px] shrink-0 rounded-2xl transition-all duration-200 ${
-                  isDragOver ? 'ring-2 ring-primary/40 bg-accent/20 scale-[1.01]' : 'bg-muted/10'
+                  !isColumnInteractive(col.id) ? 'opacity-75' : ''
+                } ${
+                  isDragOver && isColumnInteractive(col.id) ? 'ring-2 ring-primary/40 bg-accent/20 scale-[1.01]' : 'bg-muted/10'
                 }`}
-                onDragOver={e => handleDragOver(e, col.id)}
+                onDragOver={e => isColumnInteractive(col.id) ? handleDragOver(e, col.id) : e.preventDefault()}
                 onDragLeave={handleDragLeave}
-                onDrop={e => handleDrop(e, col.id)}
+                onDrop={e => isColumnInteractive(col.id) ? handleDrop(e, col.id) : e.preventDefault()}
               >
                 {/* Column header - gradient bar */}
                 <motion.div
@@ -879,6 +881,7 @@ export default function ContentKanban() {
                           whileHover={{ y: -3, transition: { duration: 0.15 } }}
                         >
                           <TaskCard
+                            viewOnly={!isColumnInteractive(col.id)}
                             task={task}
                             client={getClient(task.client_id)}
                             assignedUser={getUser(
@@ -967,14 +970,21 @@ export default function ContentKanban() {
                 </div>
 
                 {/* Add button at bottom */}
-                <motion.button
-                  onClick={() => openNew(col.id)}
-                  className="mx-2 mb-2 py-2 rounded-xl border border-dashed border-border/60 text-xs text-muted-foreground/70 hover:text-foreground hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 flex items-center justify-center gap-1.5 font-medium"
-                  whileHover={{ scale: 1.02, borderColor: 'hsl(var(--primary))' }}
-                  whileTap={{ scale: 0.97 }}
-                >
-                  <Plus size={12} /> Adicionar
-                </motion.button>
+                {isColumnInteractive(col.id) && (
+                  <motion.button
+                    onClick={() => openNew(col.id)}
+                    className="mx-2 mb-2 py-2 rounded-xl border border-dashed border-border/60 text-xs text-muted-foreground/70 hover:text-foreground hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 flex items-center justify-center gap-1.5 font-medium"
+                    whileHover={{ scale: 1.02, borderColor: 'hsl(var(--primary))' }}
+                    whileTap={{ scale: 0.97 }}
+                  >
+                    <Plus size={12} /> Adicionar
+                  </motion.button>
+                )}
+                {!isColumnInteractive(col.id) && (
+                  <div className="mx-2 mb-2 py-1.5 text-center text-[10px] text-muted-foreground/50 italic flex items-center justify-center gap-1">
+                    <Eye size={10} /> Visualização
+                  </div>
+                )}
               </motion.div>
             );
           })}

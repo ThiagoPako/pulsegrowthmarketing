@@ -424,10 +424,14 @@ export default function Scripts() {
 
     for (const page of pages) {
       await waitForPdfAssets(page);
+      // Ensure html2canvas captures the FULL scrollHeight (not clipped by overflow:hidden)
+      const actualHeight = page.scrollHeight;
       const canvas = await html2canvas(page, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
+        height: actualHeight,
+        windowHeight: actualHeight,
       });
 
       renderedPages.push({

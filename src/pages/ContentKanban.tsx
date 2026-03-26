@@ -477,6 +477,17 @@ export default function ContentKanban() {
   const userRole = profile?.role || '';
   const isRestricted = userRole === 'editor' || userRole === 'videomaker';
 
+  // Filter visible columns based on role
+  const visibleColumns = useMemo(() => {
+    if (userRole === 'editor') {
+      return KANBAN_COLUMNS.filter(c => ['edicao', 'revisao', 'alteracao'].includes(c.id));
+    }
+    if (userRole === 'videomaker') {
+      return KANBAN_COLUMNS.filter(c => ['ideias', 'captacao'].includes(c.id));
+    }
+    return [...KANBAN_COLUMNS];
+  }, [userRole]);
+
   // ─── VALIDATION FOR TRANSITIONS ───────────────────────────
   const validateKanbanTransition = (task: ContentTask, targetColumn: string): string | null => {
     // Role-based restrictions

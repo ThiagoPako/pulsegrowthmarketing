@@ -597,6 +597,13 @@ export default function Team() {
           </div>
         )
       )}
+
+      {/* Member Stats Dialog */}
+      <TeamMemberStats
+        member={statsTarget}
+        open={!!statsTarget}
+        onOpenChange={(v) => { if (!v) setStatsTarget(null); }}
+      />
     </div>
   );
 }

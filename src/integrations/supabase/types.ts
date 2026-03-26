@@ -945,7 +945,7 @@ export type Database = {
           approval_sent_at: string | null
           approved_at: string | null
           assigned_to: string | null
-          client_id: string
+          client_id: string | null
           content_type: string
           created_at: string
           created_by: string | null
@@ -983,7 +983,7 @@ export type Database = {
           approval_sent_at?: string | null
           approved_at?: string | null
           assigned_to?: string | null
-          client_id: string
+          client_id?: string | null
           content_type?: string
           created_at?: string
           created_by?: string | null
@@ -1021,7 +1021,7 @@ export type Database = {
           approval_sent_at?: string | null
           approved_at?: string | null
           assigned_to?: string | null
-          client_id?: string
+          client_id?: string | null
           content_type?: string
           created_at?: string
           created_by?: string | null

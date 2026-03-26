@@ -766,7 +766,7 @@ export default function Schedule() {
       const altType = isAltered ? 'altered' : isVerbal ? 'verbal' : null;
       const altNotes = finishAlterationNotes[scriptId]?.trim() || null;
       const isAvulsoTask = !finishRecording.clientId && !script.clientId && finishRecording.type === 'avulso';
-      const taskClientId = finishRecording.clientId || script.clientId || (isAvulsoTask ? finishRecording.id : '');
+      const taskClientId = finishRecording.clientId || script.clientId || null;
 
       let description = `Roteiro gravado pelo videomaker. Link dos materiais: ${scriptDriveLink}`;
       if (isAltered) {
@@ -793,7 +793,7 @@ export default function Schedule() {
         } as any).eq('id', existing[0].id);
         if (updateErr) console.error('content_task update error:', updateErr);
       } else {
-        if (!taskClientId) {
+        if (!taskClientId && !isAvulsoTask) {
           console.error(`Skipping content_task creation for script "${script.title}" — no client_id available`);
           toast.error(`⚠️ Conteúdo "${script.title}" não pôde ser enviado para edição: sem vínculo suficiente para criar a tarefa.`);
           continue;

@@ -377,7 +377,7 @@ export default function EditorDashboard() {
      setUploading(true);
      setUploadProgress(`Enviando ${file.name}...`);
      try {
-       const folder = `content/${activeEditTask.client_id}/${activeEditTask.id}`;
+       const folder = `content/${activeEditTask.client_id || 'avulso'}/${activeEditTask.id}`;
        const url = await uploadFileToVps(file, folder);
        // Delete previous video if replacing
        const previousVideo = oldVideoLink || activeEditTask.edited_video_link;

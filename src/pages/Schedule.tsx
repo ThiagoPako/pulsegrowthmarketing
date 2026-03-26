@@ -793,7 +793,7 @@ export default function Schedule() {
         } as any).eq('id', existing[0].id);
         if (updateErr) console.error('content_task update error:', updateErr);
       } else {
-        if (!taskClientId) {
+        if (!taskClientId && !isAvulsoTask) {
           console.error(`Skipping content_task creation for script "${script.title}" — no client_id available`);
           toast.error(`⚠️ Conteúdo "${script.title}" não pôde ser enviado para edição: sem vínculo suficiente para criar a tarefa.`);
           continue;

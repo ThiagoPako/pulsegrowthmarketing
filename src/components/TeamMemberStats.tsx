@@ -44,6 +44,77 @@ interface TaskStats {
   byContentTypeMetrics?: Record<string, ContentTypeMetric>;
 }
 
+interface AgencyHoursSettings {
+  shiftAStart: string;
+  shiftAEnd: string;
+  shiftBStart: string;
+  shiftBEnd: string;
+  workDays: string[];
+}
+
+const DEFAULT_AGENCY_HOURS: AgencyHoursSettings = {
+  shiftAStart: '08:30',
+  shiftAEnd: '12:00',
+  shiftBStart: '14:30',
+  shiftBEnd: '18:00',
+  workDays: ['segunda', 'terca', 'quarta', 'quinta', 'sexta'],
+};
+
+const EDITING_START_ACTIONS = new Set(['Edição iniciada', 'Alteração iniciada', 'Edição retomada']);
+const EDITING_STOP_ACTIONS = new Set(['Edição pausada', 'Enviado para revisão']);
+const FINISHED_EDITING_COLUMNS = new Set(['revisao', 'envio', 'agendamentos', 'acompanhamento', 'arquivado']);
+const WEEK_DAY_KEYS = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+
+function timeToMinutes(value: string) {
+  const [hours, minutes] = value.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+function buildDateAtMinutes(baseDate: Date, totalMinutes: number) {
+  const next = new Date(baseDate);
+  next.setHours(Math.floor(totalMinutes / 60), totalMinutes % 60, 0, 0);
+  return next;
+}
+
+function getOverlapSeconds(startA: Date, endA: Date, startB: Date, endB: Date) {
+  const start = Math.max(startA.getTime(), startB.getTime());
+  const end = Math.min(endA.getTime(), endB.getTime());
+  return end > start ? Math.floor((end - start) / 1000) : 0;
+}
+
+function getBusinessActiveSeconds(start: Date, end: Date, settings: AgencyHoursSettings) {
+  if (end <= start) return 0;
+
+  let totalSeconds = 0;
+  const cursor = new Date(start);
+  cursor.setHours(0, 0, 0, 0);
+  const lastDay = new Date(end);
+  lastDay.setHours(0, 0, 0, 0);
+
+  while (cursor <= lastDay) {
+    const dayKey = WEEK_DAY_KEYS[cursor.getDay()];
+
+    if (settings.workDays.includes(dayKey)) {
+      const shifts = [
+        [settings.shiftAStart, settings.shiftAEnd],
+        [settings.shiftBStart, settings.shiftBEnd],
+      ];
+
+      for (const [shiftStart, shiftEnd] of shifts) {
+        if (!shiftStart || !shiftEnd) continue;
+
+        const shiftStartDate = buildDateAtMinutes(cursor, timeToMinutes(shiftStart));
+        const shiftEndDate = buildDateAtMinutes(cursor, timeToMinutes(shiftEnd));
+        totalSeconds += getOverlapSeconds(start, end, shiftStartDate, shiftEndDate);
+      }
+    }
+
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return totalSeconds;
+}
+
 export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
   const [period, setPeriod] = useState('current');
   const [stats, setStats] = useState<TaskStats | null>(null);

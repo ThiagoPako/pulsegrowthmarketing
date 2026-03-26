@@ -861,6 +861,12 @@ export default function Schedule() {
     </Badge>
   );
 
+  const eventTag = (evt: EventRecording) => (
+    <Badge className="text-[10px] border-0 bg-orange-500/20 text-orange-600">
+      <MapPin size={8} className="mr-0.5" /> {evt.status === 'concluido' ? 'Concluído' : 'Evento'}
+    </Badge>
+  );
+
   // Delete all backup recordings (future, non-concluded)
   const handleDeleteAllBackup = async () => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');

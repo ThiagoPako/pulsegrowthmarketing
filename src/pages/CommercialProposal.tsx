@@ -1127,7 +1127,8 @@ export default function CommercialProposal() {
               </div>
             )}
           </CardContent>
-        </Card>
+          </Card>
+        </div>
       )}
 
       {!showPreview ? (

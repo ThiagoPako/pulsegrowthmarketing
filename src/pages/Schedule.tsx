@@ -995,6 +995,12 @@ export default function Schedule() {
           <Button onClick={() => { setForm({ clientId: '', videomakerId: '', date: format(new Date(), 'yyyy-MM-dd'), startTime: '09:00', type: 'fixa', prospectName: '' }); setNewOpen(true); }}>
             <Plus size={16} className="mr-2" /> Nova Gravação
           </Button>
+          <Button variant="outline" className="border-orange-500/50 text-orange-600 hover:bg-orange-500/10" onClick={() => {
+            setEventForm({ clientId: '', videomakerId: '', title: '', date: format(new Date(), 'yyyy-MM-dd'), startTime: '08:00', endTime: '18:00', address: '', description: '' });
+            setEventOpen(true);
+          }}>
+            <MapPin size={16} className="mr-2" /> Novo Evento
+          </Button>
         </div>
       </div>
 

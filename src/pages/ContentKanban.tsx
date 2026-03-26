@@ -1376,17 +1376,19 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, viewOn
           </div>
         </div>
 
-        {/* Actions on hover */}
-        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
-          <button onClick={e => { e.stopPropagation(); onEdit(); }} className="w-6 h-6 rounded-lg flex items-center justify-center bg-card/90 backdrop-blur text-muted-foreground hover:text-foreground hover:bg-accent border border-border/60 shadow-sm transition-colors">
-            <Edit size={11} />
-          </button>
-          {onDelete && (
-            <button onClick={e => { e.stopPropagation(); onDelete(); }} className="w-6 h-6 rounded-lg flex items-center justify-center bg-card/90 backdrop-blur text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border/60 shadow-sm transition-colors">
-              <Trash2 size={11} />
+        {/* Actions on hover - hidden in viewOnly */}
+        {!viewOnly && (
+          <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
+            <button onClick={e => { e.stopPropagation(); onEdit(); }} className="w-6 h-6 rounded-lg flex items-center justify-center bg-card/90 backdrop-blur text-muted-foreground hover:text-foreground hover:bg-accent border border-border/60 shadow-sm transition-colors">
+              <Edit size={11} />
             </button>
-          )}
-        </div>
+            {onDelete && (
+              <button onClick={e => { e.stopPropagation(); onDelete(); }} className="w-6 h-6 rounded-lg flex items-center justify-center bg-card/90 backdrop-blur text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border/60 shadow-sm transition-colors">
+                <Trash2 size={11} />
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="p-3 space-y-2.5">
           {/* Tags row */}

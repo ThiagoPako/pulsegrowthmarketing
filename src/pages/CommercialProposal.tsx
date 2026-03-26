@@ -198,8 +198,42 @@ export default function CommercialProposal() {
   const [cronogramaInstallments, setCronogramaInstallments] = useState('1');
   const [generatingTimeline, setGeneratingTimeline] = useState(false);
 
-  // ── Auto-save draft to localStorage ──
+  // ── Clear proposal ──
   const DRAFT_KEY = 'pulse_proposal_draft';
+  const clearProposal = useCallback(() => {
+    setClientName('');
+    setClientCompany('');
+    setValidityDate(addDays(new Date(), 7));
+    setBonusServices([]);
+    setTeamMembers([]);
+    setCustomDiscount(0);
+    setObservations('');
+    setWhatsappNumber('');
+    setShareLink('');
+    setShowPreview(false);
+    setSelectedPlanId('');
+    setHasContract(true);
+    setNewBonusName(''); setNewBonusValue(''); setNewBonusDesc('');
+    setNewMemberName(''); setNewMemberRole('');
+    setSystemScope([]); setSystemDeliverables([]); setSystemValue('');
+    setSystemPaymentMethod('pix'); setSystemInstallments('1');
+    setSystemAdditionalCosts(''); setSystemTimeline('');
+    setNewScopeItem(''); setNewDeliverableName(''); setNewDeliverableDesc('');
+    setSystemFunctionsDesc('');
+    setEndoPlan(''); setEndoDaysPerWeek('3'); setEndoSessionDuration('2');
+    setEndoStoriesPerDay('5'); setEndoMonthlyValue(''); setEndoDescription('');
+    setCustomVideos(''); setCustomStories(''); setCustomEventCoverage('');
+    setCustomSocialMedia(false); setCustomArts(''); setCustomTrafficMgmt(false);
+    setCustomMonthlyValue(''); setCustomDescription('');
+    setCustomPaymentMethod('pix'); setCustomInstallments('1'); setCustomRecordings('');
+    setCronogramaDesc(''); setCronogramaDeliverables([]); setCronogramaPhases([]);
+    setCronogramaMethodology(''); setCronogramaProjectName('');
+    setCronogramaTotalDays(''); setCronogramaPaymentMethod('pix'); setCronogramaInstallments('1');
+    localStorage.removeItem(DRAFT_KEY);
+    toast.success('Proposta limpa com sucesso!');
+  }, []);
+
+  // ── Auto-save draft to localStorage ──
 
   // Restore draft on mount
   useEffect(() => {
@@ -1731,6 +1765,9 @@ export default function CommercialProposal() {
           </Button>
           <Button variant="outline" size="sm" onClick={() => setShowPreview(!showPreview)}>
             <Eye className="h-4 w-4 mr-1" /> {showPreview ? 'Editar' : 'Preview'}
+          </Button>
+          <Button variant="destructive" size="sm" onClick={clearProposal}>
+            <Trash2 className="h-4 w-4 mr-1" /> Limpar Proposta
           </Button>
           {showPreview && (
             <>

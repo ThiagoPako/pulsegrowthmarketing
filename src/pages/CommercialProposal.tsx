@@ -30,7 +30,7 @@ import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
-type ProposalType = 'marketing' | 'sistema' | 'endomarketing';
+type ProposalType = 'marketing' | 'sistema' | 'endomarketing' | 'personalizada';
 
 interface BonusService {
   id: string;
@@ -77,6 +77,7 @@ const PROPOSAL_TYPE_LABELS: Record<ProposalType, string> = {
   marketing: 'Marketing Digital',
   sistema: 'Sistema / Software',
   endomarketing: 'Endomarketing',
+  personalizada: 'Proposta Única',
 };
 
 const PAYMENT_METHODS = [
@@ -154,6 +155,19 @@ export default function CommercialProposal() {
   const [endoStoriesPerDay, setEndoStoriesPerDay] = useState('5');
   const [endoMonthlyValue, setEndoMonthlyValue] = useState('');
   const [endoDescription, setEndoDescription] = useState('');
+
+  // Personalizada fields
+  const [customVideos, setCustomVideos] = useState('');
+  const [customStories, setCustomStories] = useState('');
+  const [customEventCoverage, setCustomEventCoverage] = useState('');
+  const [customSocialMedia, setCustomSocialMedia] = useState(false);
+  const [customArts, setCustomArts] = useState('');
+  const [customTrafficMgmt, setCustomTrafficMgmt] = useState(false);
+  const [customMonthlyValue, setCustomMonthlyValue] = useState('');
+  const [customDescription, setCustomDescription] = useState('');
+  const [customPaymentMethod, setCustomPaymentMethod] = useState('pix');
+  const [customInstallments, setCustomInstallments] = useState('1');
+  const [customRecordings, setCustomRecordings] = useState('');
 
   const { data: plans = [] } = useQuery({
     queryKey: ['plans-proposal'],
@@ -300,6 +314,7 @@ export default function CommercialProposal() {
     if (proposalType === 'marketing' && !selectedPlan) { toast.error('Selecione um plano'); return; }
     if (proposalType === 'sistema' && !systemValue) { toast.error('Preencha o valor do sistema'); return; }
     if (proposalType === 'endomarketing' && !endoMonthlyValue) { toast.error('Preencha o valor mensal'); return; }
+    if (proposalType === 'personalizada' && !customMonthlyValue) { toast.error('Preencha o valor da proposta'); return; }
     setSavingProposal(true);
     try {
       const systemData = proposalType === 'sistema' ? {
@@ -321,6 +336,20 @@ export default function CommercialProposal() {
         description: endoDescription,
       } : {};
 
+      const customData = proposalType === 'personalizada' ? {
+        videos: parseInt(customVideos) || 0,
+        stories: parseInt(customStories) || 0,
+        eventCoverage: parseInt(customEventCoverage) || 0,
+        socialMedia: customSocialMedia,
+        arts: parseInt(customArts) || 0,
+        trafficManagement: customTrafficMgmt,
+        monthlyValue: parseFloat(customMonthlyValue) || 0,
+        description: customDescription,
+        paymentMethod: customPaymentMethod,
+        installments: parseInt(customInstallments) || 1,
+        recordings: parseInt(customRecordings) || 0,
+      } : {};
+
       const { data, error } = await supabase.from('commercial_proposals').insert({
         client_name: clientName,
         client_company: clientCompany,
@@ -335,7 +364,7 @@ export default function CommercialProposal() {
         whatsapp_number: whatsappNumber,
         created_by: user?.id || null,
         proposal_type: proposalType,
-        system_data: systemData,
+        system_data: proposalType === 'personalizada' ? customData : systemData,
         endomarketing_data: endoData,
       } as any).select().single();
       if (error) throw error;
@@ -384,6 +413,13 @@ export default function CommercialProposal() {
         if (discount > 0) totalValue = totalValue * (1 - discount / 100);
         installments = 12;
         description = `Endomarketing - ${proposal.client_company}`;
+      } else if (pType === 'personalizada') {
+        const custom = proposal.system_data || {};
+        totalValue = custom.monthlyValue || 0;
+        const discount = proposal.custom_discount || 0;
+        if (discount > 0) totalValue = totalValue * (1 - discount / 100);
+        installments = custom.installments || 12;
+        description = `Proposta Única - ${proposal.client_company}`;
       }
 
       if (totalValue <= 0) return;
@@ -445,6 +481,7 @@ export default function CommercialProposal() {
     marketing: Rocket,
     sistema: Code,
     endomarketing: Megaphone,
+    personalizada: Target,
   };
 
   // ===== RENDER FORM SECTIONS =====
@@ -667,6 +704,87 @@ export default function CommercialProposal() {
     </>
   );
 
+  const renderCustomForm = () => (
+    <>
+      <Card>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Target className="h-4 w-4 text-primary" /> Serviços da Proposta</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Vídeos/mês</Label>
+              <Input type="number" value={customVideos} onChange={e => setCustomVideos(e.target.value)} min={0} placeholder="0" />
+            </div>
+            <div>
+              <Label>Stories/mês</Label>
+              <Input type="number" value={customStories} onChange={e => setCustomStories(e.target.value)} min={0} placeholder="0" />
+            </div>
+            <div>
+              <Label>Artes/mês</Label>
+              <Input type="number" value={customArts} onChange={e => setCustomArts(e.target.value)} min={0} placeholder="0" />
+            </div>
+            <div>
+              <Label>Captações/mês</Label>
+              <Input type="number" value={customRecordings} onChange={e => setCustomRecordings(e.target.value)} min={0} placeholder="0" />
+            </div>
+            <div>
+              <Label>Cobertura de eventos/mês</Label>
+              <Input type="number" value={customEventCoverage} onChange={e => setCustomEventCoverage(e.target.value)} min={0} placeholder="0" />
+            </div>
+          </div>
+          <Separator />
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Social Media (Gestão de Redes)</Label>
+                <p className="text-xs text-muted-foreground">Publicação, programação e gerenciamento</p>
+              </div>
+              <Switch checked={customSocialMedia} onCheckedChange={setCustomSocialMedia} />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Gestão de Tráfego</Label>
+                <p className="text-xs text-muted-foreground">Campanhas patrocinadas e anúncios</p>
+              </div>
+              <Switch checked={customTrafficMgmt} onCheckedChange={setCustomTrafficMgmt} />
+            </div>
+          </div>
+          <Separator />
+          <div>
+            <Label>Descrição do serviço</Label>
+            <Textarea value={customDescription} onChange={e => setCustomDescription(e.target.value)} placeholder="Descreva os detalhes do serviço personalizado..." rows={3} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Valores e Pagamento</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <Label>Valor total (R$)</Label>
+            <Input type="number" value={customMonthlyValue} onChange={e => setCustomMonthlyValue(e.target.value)} placeholder="0.00" />
+          </div>
+          <div>
+            <Label>Forma de pagamento</Label>
+            <Select value={customPaymentMethod} onValueChange={setCustomPaymentMethod}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {PAYMENT_METHODS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Parcelas</Label>
+            <Input type="number" value={customInstallments} onChange={e => setCustomInstallments(e.target.value)} min={1} max={24} />
+          </div>
+          <div>
+            <Label>Desconto (%)</Label>
+            <Input type="number" value={customDiscount} onChange={e => setCustomDiscount(Number(e.target.value))} min={0} max={50} />
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
+
   // ===== PREVIEW SECTIONS =====
 
   const renderSystemPreview = () => {
@@ -806,6 +924,85 @@ export default function CommercialProposal() {
                     <span className="text-2xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(discountedVal)}<span className="text-sm font-normal text-gray-500">/mês</span></span>
                   </div>
                 </>
+              )}
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  const renderCustomPreview = () => {
+    const val = parseFloat(customMonthlyValue) || 0;
+    const discountedVal = val * (1 - customDiscount / 100);
+    const installs = parseInt(customInstallments) || 1;
+    const installmentVal = discountedVal / installs;
+    const services: { icon: any; value: string | number; label: string }[] = [];
+    if (parseInt(customVideos) > 0) services.push({ icon: Film, value: customVideos, label: 'Vídeos/mês' });
+    if (parseInt(customStories) > 0) services.push({ icon: Camera, value: customStories, label: 'Stories/mês' });
+    if (parseInt(customArts) > 0) services.push({ icon: Palette, value: customArts, label: 'Artes/mês' });
+    if (parseInt(customRecordings) > 0) services.push({ icon: Film, value: customRecordings, label: 'Captações/mês' });
+    if (parseInt(customEventCoverage) > 0) services.push({ icon: Camera, value: customEventCoverage, label: 'Coberturas/mês' });
+    if (customSocialMedia) services.push({ icon: Share2, value: '✓', label: 'Social Media' });
+    if (customTrafficMgmt) services.push({ icon: BarChart3, value: '✓', label: 'Gestão de Tráfego' });
+
+    return (
+      <>
+        {services.length > 0 && (
+          <div data-pdf-section className="p-8 md:p-12">
+            <h2 className="text-xl font-bold text-gray-800 mb-1 flex items-center gap-2">
+              <Target className="h-5 w-5" style={{ color: 'hsl(16 82% 51%)' }} /> Serviços Inclusos
+            </h2>
+            <p className="text-sm text-gray-500 mb-6">Proposta personalizada para sua empresa</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {services.map((s, i) => {
+                const Icon = s.icon;
+                return (
+                  <div key={i} className="border rounded-lg p-3 text-center">
+                    <Icon className="h-5 w-5 mx-auto mb-1" style={{ color: 'hsl(16 82% 51%)' }} />
+                    <p className="text-2xl font-bold text-gray-800">{s.value}</p>
+                    <p className="text-xs text-gray-500">{s.label}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {customDescription && (
+          <div data-pdf-section className="px-8 md:px-12 pb-4">
+            <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-4">{customDescription}</p>
+          </div>
+        )}
+        <div data-pdf-section className="px-8 md:px-12 pb-8">
+          <h2 className="text-xl font-bold text-gray-800 mb-6">Investimento</h2>
+          <div className="border-2 rounded-xl p-6" style={{ borderColor: 'hsl(16 82% 51%)' }}>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Valor total</span>
+                <span className="text-xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val)}</span>
+              </div>
+              {customDiscount > 0 && (
+                <>
+                  <div className="flex justify-between items-center text-green-600">
+                    <span>Desconto ({customDiscount}%)</span>
+                    <span className="font-bold">-{fmt(val - discountedVal)}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-t pt-2">
+                    <span className="font-bold text-gray-800">Total</span>
+                    <span className="text-2xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(discountedVal)}</span>
+                  </div>
+                </>
+              )}
+              <Separator />
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Forma de pagamento</span>
+                <span className="font-medium">{PAYMENT_METHODS.find(m => m.value === customPaymentMethod)?.label}</span>
+              </div>
+              {installs > 1 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">{customInstallments}x de</span>
+                  <span className="font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(installmentVal)}</span>
+                </div>
               )}
             </div>
           </div>
@@ -1036,6 +1233,8 @@ export default function CommercialProposal() {
                       totalValue = sys.value || 0;
                     } else if (pType === 'endomarketing') {
                       totalValue = (p.endomarketing_data || {}).monthlyValue || 0;
+                    } else if (pType === 'personalizada') {
+                      totalValue = sys.monthlyValue || 0;
                     }
                     const discount = p.custom_discount || 0;
                     if (discount > 0) totalValue = totalValue * (1 - discount / 100);
@@ -1137,8 +1336,8 @@ export default function CommercialProposal() {
           <Card className="lg:col-span-2">
             <CardHeader><CardTitle className="text-base">Tipo de Proposta</CardTitle></CardHeader>
             <CardContent>
-              <div className="grid grid-cols-3 gap-3">
-                {(['marketing', 'sistema', 'endomarketing'] as ProposalType[]).map(type => {
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {(['marketing', 'sistema', 'endomarketing', 'personalizada'] as ProposalType[]).map(type => {
                   const Icon = typeIcons[type];
                   return (
                     <button
@@ -1181,6 +1380,7 @@ export default function CommercialProposal() {
           {proposalType === 'marketing' && renderMarketingForm()}
           {proposalType === 'sistema' && renderSystemForm()}
           {proposalType === 'endomarketing' && renderEndoForm()}
+          {proposalType === 'personalizada' && renderCustomForm()}
 
           {/* Bonus - available for all types */}
           <Card>
@@ -1327,6 +1527,7 @@ export default function CommercialProposal() {
             {proposalType === 'marketing' && renderMarketingPreview()}
             {proposalType === 'sistema' && renderSystemPreview()}
             {proposalType === 'endomarketing' && renderEndoPreview()}
+            {proposalType === 'personalizada' && renderCustomPreview()}
 
             {/* Bonus Section */}
             {bonusServices.length > 0 && (

@@ -477,6 +477,17 @@ export default function ContentKanban() {
   const userRole = profile?.role || '';
   const isRestricted = userRole === 'editor' || userRole === 'videomaker';
 
+  // Filter visible columns based on role
+  const visibleColumns = useMemo(() => {
+    if (userRole === 'editor') {
+      return KANBAN_COLUMNS.filter(c => ['edicao', 'revisao', 'alteracao'].includes(c.id));
+    }
+    if (userRole === 'videomaker') {
+      return KANBAN_COLUMNS.filter(c => ['ideias', 'captacao'].includes(c.id));
+    }
+    return [...KANBAN_COLUMNS];
+  }, [userRole]);
+
   // ─── VALIDATION FOR TRANSITIONS ───────────────────────────
   const validateKanbanTransition = (task: ContentTask, targetColumn: string): string | null => {
     // Role-based restrictions
@@ -656,10 +667,11 @@ export default function ContentKanban() {
 
   // Get adjacent columns
   const getAdjacentColumns = (currentCol: string) => {
-    const idx = KANBAN_COLUMNS.findIndex(c => c.id === currentCol);
+    const cols = visibleColumns;
+    const idx = cols.findIndex(c => c.id === currentCol);
     return {
-      prev: idx > 0 ? KANBAN_COLUMNS[idx - 1] : null,
-      next: idx < KANBAN_COLUMNS.length - 1 ? KANBAN_COLUMNS[idx + 1] : null,
+      prev: idx > 0 ? cols[idx - 1] : null,
+      next: idx < cols.length - 1 ? cols[idx + 1] : null,
     };
   };
 
@@ -744,7 +756,7 @@ export default function ContentKanban() {
           <MiniRocket size={28} />
           <div>
             <h1 className="text-xl font-bold text-foreground tracking-tight">Criação de Conteúdo</h1>
-            <p className="text-xs text-muted-foreground">{tasks.length} cartões no pipeline</p>
+            <p className="text-xs text-muted-foreground">{visibleColumns.reduce((sum, col) => sum + (tasksByColumn[col.id]?.length || 0), 0)} cartões no pipeline</p>
           </div>
         </div>
 
@@ -792,7 +804,7 @@ export default function ContentKanban() {
       {/* Kanban Board */}
       <DragScrollContainer className="flex-1">
         <div className="flex gap-3 h-full min-w-max pb-2">
-          {KANBAN_COLUMNS.map((col, colIdx) => {
+          {visibleColumns.map((col, colIdx) => {
             const colTasks = tasksByColumn[col.id] || [];
             const isDragOver = dragOverColumn === col.id;
 
@@ -995,7 +1007,7 @@ export default function ContentKanban() {
                 <Select value={formColumn} onValueChange={v => setFormColumn(v as KanbanColumnId)}>
                   <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {KANBAN_COLUMNS.map(c => (
+                    {visibleColumns.map(c => (
                       <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
                     ))}
                   </SelectContent>

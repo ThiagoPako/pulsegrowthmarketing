@@ -75,6 +75,78 @@ Gere entre 4 e 10 módulos relevantes e 3-6 entregas. Seja específico e profiss
       }
     }
 
+    // ===== Proposal Timeline Generation =====
+    if (type === "proposal_timeline" && description) {
+      const timelinePrompt = `Você é um gestor de projetos de uma agência de marketing digital chamada Pulse Growth Marketing. Com base na descrição abaixo, gere um cronograma completo de entregas para uma proposta comercial.
+
+Descrição do projeto:
+${description}
+
+Responda APENAS com JSON válido:
+{
+  "projectName": "Nome sugerido para o projeto",
+  "methodology": "Breve descrição da metodologia de trabalho (2-3 frases)",
+  "deliverables": [
+    {
+      "name": "Nome do serviço/entrega",
+      "description": "Descrição detalhada do que será feito",
+      "category": "video|design|social_media|traffic|event|consulting|photography|other",
+      "quantity": 1,
+      "unitPrice": 500.00,
+      "estimatedDays": 7,
+      "phase": 1
+    }
+  ],
+  "phases": [
+    {
+      "number": 1,
+      "name": "Nome da Fase",
+      "description": "O que acontece nesta fase",
+      "durationDays": 15
+    }
+  ],
+  "totalEstimatedDays": 60,
+  "suggestedDiscount": 10
+}
+
+Gere entre 5 e 15 entregas relevantes organizadas em 2-4 fases. Os preços devem ser realistas para o mercado brasileiro de marketing digital. Cada entrega deve ter um valor unitário baseado na complexidade. Seja específico e profissional.`;
+
+      const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-3-flash-preview",
+          messages: [
+            { role: "system", content: "Você é um gestor de projetos de marketing digital. Responda APENAS com JSON válido." },
+            { role: "user", content: timelinePrompt },
+          ],
+        }),
+      });
+
+      if (!aiRes.ok) {
+        return new Response(JSON.stringify({ error: "Erro ao gerar cronograma" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const aiData = await aiRes.json();
+      const aiContent = aiData.choices?.[0]?.message?.content || "";
+      try {
+        const cleaned = aiContent.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+        const parsed = JSON.parse(cleaned);
+        return new Response(JSON.stringify(parsed), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch {
+        return new Response(JSON.stringify({ deliverables: [], error: "Falha ao interpretar resposta da IA" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // ===== Content Suggestions (original) =====
     if (!clientId) {
       return new Response(JSON.stringify({ error: "clientId é obrigatório" }), {

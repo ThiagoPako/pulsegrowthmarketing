@@ -24,13 +24,13 @@ import {
   FileText, Plus, Trash2, CalendarIcon, Download, Eye, Users, Rocket,
   CheckCircle2, Film, Palette, Scissors, Camera, Monitor, Share2, BarChart3,
   Clock, Gift, AlertTriangle, X, Link2, Copy, ExternalLink, List, Code, Megaphone,
-  Sparkles, Loader2, UserPlus, DollarSign, Target
+  Sparkles, Loader2, UserPlus, DollarSign, Target, CalendarDays, ListChecks, Layers
 } from 'lucide-react';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
-type ProposalType = 'marketing' | 'sistema' | 'endomarketing' | 'personalizada';
+type ProposalType = 'marketing' | 'sistema' | 'endomarketing' | 'personalizada' | 'cronograma';
 
 interface BonusService {
   id: string;
@@ -57,6 +57,24 @@ interface SystemDeliverable {
   description: string;
 }
 
+interface TimelineDeliverable {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  quantity: number;
+  unitPrice: number;
+  estimatedDays: number;
+  phase: number;
+}
+
+interface TimelinePhase {
+  number: number;
+  name: string;
+  description: string;
+  durationDays: number;
+}
+
 const IMPLEMENTATION_FEES = {
   adAccounts: { label: 'Implementação de contas de anúncios', value: 800 },
   profileRedesign: { label: 'Reformulação de perfil', value: 750 },
@@ -78,6 +96,7 @@ const PROPOSAL_TYPE_LABELS: Record<ProposalType, string> = {
   sistema: 'Sistema / Software',
   endomarketing: 'Endomarketing',
   personalizada: 'Proposta Única',
+  cronograma: 'Cronograma Completo',
 };
 
 const PAYMENT_METHODS = [
@@ -169,6 +188,16 @@ export default function CommercialProposal() {
   const [customInstallments, setCustomInstallments] = useState('1');
   const [customRecordings, setCustomRecordings] = useState('');
 
+  // Cronograma fields
+  const [cronogramaDesc, setCronogramaDesc] = useState('');
+  const [cronogramaDeliverables, setCronogramaDeliverables] = useState<TimelineDeliverable[]>([]);
+  const [cronogramaPhases, setCronogramaPhases] = useState<TimelinePhase[]>([]);
+  const [cronogramaMethodology, setCronogramaMethodology] = useState('');
+  const [cronogramaProjectName, setCronogramaProjectName] = useState('');
+  const [cronogramaTotalDays, setCronogramaTotalDays] = useState('');
+  const [cronogramaPaymentMethod, setCronogramaPaymentMethod] = useState('pix');
+  const [cronogramaInstallments, setCronogramaInstallments] = useState('1');
+  const [generatingTimeline, setGeneratingTimeline] = useState(false);
   const { data: plans = [] } = useQuery({
     queryKey: ['plans-proposal'],
     queryFn: async () => {
@@ -288,6 +317,34 @@ export default function CommercialProposal() {
     setGeneratingModules(false);
   };
 
+  const generateTimelineWithAI = async () => {
+    if (!cronogramaDesc.trim()) { toast.error('Descreva o projeto para a IA gerar o cronograma'); return; }
+    setGeneratingTimeline(true);
+    try {
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const res = await fetch(`https://${projectId}.supabase.co/functions/v1/ai-content-suggestions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+        body: JSON.stringify({ type: 'proposal_timeline', description: cronogramaDesc }),
+      });
+      const data = await res.json();
+      if (data.deliverables && Array.isArray(data.deliverables)) {
+        setCronogramaDeliverables(data.deliverables.map((d: any) => ({ ...d, id: crypto.randomUUID() })));
+        if (data.phases) setCronogramaPhases(data.phases);
+        if (data.methodology) setCronogramaMethodology(data.methodology);
+        if (data.projectName) setCronogramaProjectName(data.projectName);
+        if (data.totalEstimatedDays) setCronogramaTotalDays(String(data.totalEstimatedDays));
+        if (data.suggestedDiscount) setCustomDiscount(data.suggestedDiscount);
+        toast.success(`Cronograma gerado com ${data.deliverables.length} entregas!`);
+      } else {
+        toast.error('Não foi possível gerar o cronograma. Tente novamente.');
+      }
+    } catch {
+      toast.error('Erro ao conectar com a IA');
+    }
+    setGeneratingTimeline(false);
+  };
+
   const downloadPDF = useCallback(async () => {
     if (!proposalRef.current) return;
     toast.loading('Gerando PDF...');
@@ -315,6 +372,7 @@ export default function CommercialProposal() {
     if (proposalType === 'sistema' && !systemValue) { toast.error('Preencha o valor do sistema'); return; }
     if (proposalType === 'endomarketing' && !endoMonthlyValue) { toast.error('Preencha o valor mensal'); return; }
     if (proposalType === 'personalizada' && !customMonthlyValue) { toast.error('Preencha o valor da proposta'); return; }
+    if (proposalType === 'cronograma' && cronogramaDeliverables.length === 0) { toast.error('Gere ou adicione entregas ao cronograma'); return; }
     setSavingProposal(true);
     try {
       const systemData = proposalType === 'sistema' ? {
@@ -350,6 +408,21 @@ export default function CommercialProposal() {
         recordings: parseInt(customRecordings) || 0,
       } : {};
 
+      const cronogramaData = proposalType === 'cronograma' ? {
+        projectName: cronogramaProjectName,
+        methodology: cronogramaMethodology,
+        deliverables: cronogramaDeliverables,
+        phases: cronogramaPhases,
+        totalDays: parseInt(cronogramaTotalDays) || 60,
+        paymentMethod: cronogramaPaymentMethod,
+        installments: parseInt(cronogramaInstallments) || 1,
+        totalValue: cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0),
+      } : {};
+
+      let saveSystemData: any = systemData;
+      if (proposalType === 'personalizada') saveSystemData = customData;
+      if (proposalType === 'cronograma') saveSystemData = cronogramaData;
+
       const { data, error } = await supabase.from('commercial_proposals').insert({
         client_name: clientName,
         client_company: clientCompany,
@@ -364,7 +437,7 @@ export default function CommercialProposal() {
         whatsapp_number: whatsappNumber,
         created_by: user?.id || null,
         proposal_type: proposalType,
-        system_data: proposalType === 'personalizada' ? customData : systemData,
+        system_data: saveSystemData,
         endomarketing_data: endoData,
       } as any).select().single();
       if (error) throw error;
@@ -420,6 +493,13 @@ export default function CommercialProposal() {
         if (discount > 0) totalValue = totalValue * (1 - discount / 100);
         installments = custom.installments || 12;
         description = `Proposta Única - ${proposal.client_company}`;
+      } else if (pType === 'cronograma') {
+        const crono = proposal.system_data || {};
+        totalValue = crono.totalValue || 0;
+        const discount = proposal.custom_discount || 0;
+        if (discount > 0) totalValue = totalValue * (1 - discount / 100);
+        installments = crono.installments || 1;
+        description = `Cronograma - ${proposal.client_company}`;
       }
 
       if (totalValue <= 0) return;
@@ -482,6 +562,7 @@ export default function CommercialProposal() {
     sistema: Code,
     endomarketing: Megaphone,
     personalizada: Target,
+    cronograma: CalendarDays,
   };
 
   // ===== RENDER FORM SECTIONS =====
@@ -785,6 +866,189 @@ export default function CommercialProposal() {
     </>
   );
 
+  const CATEGORY_ICONS: Record<string, any> = {
+    video: Film, design: Palette, social_media: Share2, traffic: BarChart3,
+    event: Camera, consulting: FileText, photography: Camera, other: Layers,
+  };
+
+  const CATEGORY_LABELS: Record<string, string> = {
+    video: 'Vídeo', design: 'Design', social_media: 'Social Media', traffic: 'Tráfego',
+    event: 'Evento', consulting: 'Consultoria', photography: 'Fotografia', other: 'Outros',
+  };
+
+  const renderCronogramaForm = () => {
+    const totalValue = cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0);
+    const discountedVal = totalValue * (1 - customDiscount / 100);
+    return (
+      <>
+        <Card>
+          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> Descrição do Projeto (IA)</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">Descreva o projeto e a IA vai gerar o cronograma completo com entregas, datas, valores e metodologia</p>
+            <Textarea
+              value={cronogramaDesc}
+              onChange={e => setCronogramaDesc(e.target.value)}
+              placeholder="Ex: Precisamos de uma campanha completa de marketing digital com 8 reels, 20 stories, cobertura de evento de inauguração, criação de identidade visual, gestão de redes sociais por 3 meses, gestão de tráfego pago..."
+              rows={4}
+            />
+            <Button onClick={generateTimelineWithAI} disabled={generatingTimeline || !cronogramaDesc.trim()} className="w-full">
+              {generatingTimeline ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Gerando cronograma...</> : <><Sparkles className="h-4 w-4 mr-2" /> Gerar Cronograma com IA</>}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {cronogramaProjectName && (
+          <Card>
+            <CardHeader><CardTitle className="text-base flex items-center gap-2"><CalendarDays className="h-4 w-4 text-primary" /> {cronogramaProjectName}</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              {cronogramaMethodology && (
+                <div className="bg-accent/30 rounded-lg p-3">
+                  <Label className="text-xs font-semibold">Metodologia</Label>
+                  <p className="text-sm text-muted-foreground mt-1">{cronogramaMethodology}</p>
+                </div>
+              )}
+              <div>
+                <Label>Nome do projeto</Label>
+                <Input value={cronogramaProjectName} onChange={e => setCronogramaProjectName(e.target.value)} />
+              </div>
+              <div>
+                <Label>Metodologia de trabalho</Label>
+                <Textarea value={cronogramaMethodology} onChange={e => setCronogramaMethodology(e.target.value)} rows={2} />
+              </div>
+              <div>
+                <Label>Prazo total estimado (dias)</Label>
+                <Input type="number" value={cronogramaTotalDays} onChange={e => setCronogramaTotalDays(e.target.value)} />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {cronogramaPhases.length > 0 && (
+          <Card>
+            <CardHeader><CardTitle className="text-base flex items-center gap-2"><ListChecks className="h-4 w-4 text-primary" /> Fases do Projeto</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              {cronogramaPhases.map((phase, i) => (
+                <div key={i} className="border rounded-lg p-3 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold bg-primary text-primary-foreground">{phase.number}</div>
+                    <Input value={phase.name} onChange={e => {
+                      const updated = [...cronogramaPhases];
+                      updated[i] = { ...updated[i], name: e.target.value };
+                      setCronogramaPhases(updated);
+                    }} className="flex-1 h-8 text-sm font-semibold" />
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">{phase.durationDays} dias</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground pl-8">{phase.description}</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {cronogramaDeliverables.length > 0 && (
+          <Card className="lg:col-span-2">
+            <CardHeader><CardTitle className="text-base flex items-center gap-2"><Layers className="h-4 w-4 text-primary" /> Entregas e Valores Unitários</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              {cronogramaDeliverables.map((d, i) => {
+                const CatIcon = CATEGORY_ICONS[d.category] || Layers;
+                return (
+                  <div key={d.id} className="border rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <CatIcon className="h-4 w-4 text-primary shrink-0" />
+                      <Input value={d.name} onChange={e => {
+                        const updated = [...cronogramaDeliverables];
+                        updated[i] = { ...updated[i], name: e.target.value };
+                        setCronogramaDeliverables(updated);
+                      }} className="flex-1 h-7 text-sm font-semibold" />
+                      <Badge variant="secondary" className="text-[10px]">{CATEGORY_LABELS[d.category] || d.category}</Badge>
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setCronogramaDeliverables(prev => prev.filter(x => x.id !== d.id))}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-2 pl-6">{d.description}</p>
+                    <div className="grid grid-cols-4 gap-2 pl-6">
+                      <div>
+                        <Label className="text-[10px]">Qtd</Label>
+                        <Input type="number" value={d.quantity} onChange={e => {
+                          const updated = [...cronogramaDeliverables];
+                          updated[i] = { ...updated[i], quantity: parseInt(e.target.value) || 1 };
+                          setCronogramaDeliverables(updated);
+                        }} className="h-7 text-xs" min={1} />
+                      </div>
+                      <div>
+                        <Label className="text-[10px]">Valor Unit. (R$)</Label>
+                        <Input type="number" value={d.unitPrice} onChange={e => {
+                          const updated = [...cronogramaDeliverables];
+                          updated[i] = { ...updated[i], unitPrice: parseFloat(e.target.value) || 0 };
+                          setCronogramaDeliverables(updated);
+                        }} className="h-7 text-xs" />
+                      </div>
+                      <div>
+                        <Label className="text-[10px]">Subtotal</Label>
+                        <p className="text-sm font-bold text-primary mt-1">{fmt(d.unitPrice * d.quantity)}</p>
+                      </div>
+                      <div>
+                        <Label className="text-[10px]">Prazo (dias)</Label>
+                        <Input type="number" value={d.estimatedDays} onChange={e => {
+                          const updated = [...cronogramaDeliverables];
+                          updated[i] = { ...updated[i], estimatedDays: parseInt(e.target.value) || 7 };
+                          setCronogramaDeliverables(updated);
+                        }} className="h-7 text-xs" />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="border-t pt-3 flex items-center justify-between">
+                <span className="font-bold text-sm">Total das Entregas</span>
+                <span className="text-xl font-bold text-primary">{fmt(totalValue)}</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader><CardTitle className="text-base">Valores e Pagamento</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="bg-accent/30 rounded-lg p-3 space-y-1">
+              <div className="flex justify-between text-sm">
+                <span>Total das entregas</span>
+                <span className="font-bold">{fmt(totalValue)}</span>
+              </div>
+              {customDiscount > 0 && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span>Desconto ({customDiscount}%)</span>
+                  <span className="font-bold">-{fmt(totalValue - discountedVal)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-base border-t pt-1">
+                <span className="font-bold">Valor final</span>
+                <span className="font-bold text-primary">{fmt(discountedVal)}</span>
+              </div>
+            </div>
+            <div>
+              <Label>Forma de pagamento</Label>
+              <Select value={cronogramaPaymentMethod} onValueChange={setCronogramaPaymentMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Parcelas</Label>
+              <Input type="number" value={cronogramaInstallments} onChange={e => setCronogramaInstallments(e.target.value)} min={1} max={24} />
+            </div>
+            <div>
+              <Label>Desconto (%)</Label>
+              <Input type="number" value={customDiscount} onChange={e => setCustomDiscount(Number(e.target.value))} min={0} max={50} />
+            </div>
+          </CardContent>
+        </Card>
+      </>
+    );
+  };
+
   // ===== PREVIEW SECTIONS =====
 
   const renderSystemPreview = () => {
@@ -1002,6 +1266,120 @@ export default function CommercialProposal() {
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">{customInstallments}x de</span>
                   <span className="font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(installmentVal)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  const renderCronogramaPreview = () => {
+    const totalValue = cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0);
+    const discountedVal = totalValue * (1 - customDiscount / 100);
+    const installs = parseInt(cronogramaInstallments) || 1;
+    const installmentVal = discountedVal / installs;
+    return (
+      <>
+        {cronogramaMethodology && (
+          <div data-pdf-section className="p-8 md:p-12">
+            <h2 className="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2">
+              <CalendarDays className="h-5 w-5" style={{ color: 'hsl(16 82% 51%)' }} /> {cronogramaProjectName || 'Cronograma do Projeto'}
+            </h2>
+            <div className="bg-gray-50 rounded-lg p-4 mb-4">
+              <p className="text-xs font-semibold text-gray-600 mb-1">Metodologia</p>
+              <p className="text-sm text-gray-700">{cronogramaMethodology}</p>
+            </div>
+            {cronogramaTotalDays && <p className="text-sm text-gray-500">⏱️ Prazo estimado: <strong>{cronogramaTotalDays} dias</strong></p>}
+          </div>
+        )}
+        {cronogramaPhases.length > 0 && (
+          <div data-pdf-section className="px-8 md:px-12 pb-6">
+            <h2 className="text-lg font-bold text-gray-800 mb-3">Fases do Projeto</h2>
+            <div className="space-y-2">
+              {cronogramaPhases.map((phase, i) => (
+                <div key={i} className="flex items-start gap-3 p-3 rounded-lg border" style={{ borderColor: 'hsl(16 82% 80%)' }}>
+                  <div className="rounded-full w-7 h-7 flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: 'hsl(16 82% 51%)' }}>{phase.number}</div>
+                  <div>
+                    <p className="font-semibold text-sm text-gray-800">{phase.name} <span className="text-xs font-normal text-gray-500">({phase.durationDays} dias)</span></p>
+                    <p className="text-xs text-gray-500">{phase.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {cronogramaDeliverables.length > 0 && (
+          <div data-pdf-section className="px-8 md:px-12 pb-6">
+            <h2 className="text-lg font-bold text-gray-800 mb-3">Entregas e Investimento</h2>
+            <div className="border rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-gray-500" style={{ background: 'hsl(16 82% 96%)' }}>
+                    <th className="p-3">Entrega</th>
+                    <th className="p-3 text-center">Qtd</th>
+                    <th className="p-3 text-right">Valor Unit.</th>
+                    <th className="p-3 text-right">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cronogramaDeliverables.map((d, i) => (
+                    <tr key={d.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="p-3">
+                        <p className="font-medium text-gray-800">{d.name}</p>
+                        <p className="text-[10px] text-gray-500">{d.description}</p>
+                      </td>
+                      <td className="p-3 text-center font-medium">{d.quantity}</td>
+                      <td className="p-3 text-right text-gray-600">{fmt(d.unitPrice)}</td>
+                      <td className="p-3 text-right font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(d.unitPrice * d.quantity)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 font-bold">
+                    <td colSpan={3} className="p-3 text-right text-gray-800">Total</td>
+                    <td className="p-3 text-right text-lg" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(totalValue)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
+        <div data-pdf-section className="px-8 md:px-12 pb-8">
+          <div className="border-2 rounded-xl p-6" style={{ borderColor: 'hsl(16 82% 51%)' }}>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Valor total</span>
+                <span className="text-xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(totalValue)}</span>
+              </div>
+              {customDiscount > 0 && (
+                <>
+                  <div className="flex justify-between items-center text-green-600">
+                    <span>Desconto ({customDiscount}%)</span>
+                    <span className="font-bold">-{fmt(totalValue - discountedVal)}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-t pt-2">
+                    <span className="font-bold text-gray-800">Valor final</span>
+                    <span className="text-2xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(discountedVal)}</span>
+                  </div>
+                </>
+              )}
+              <Separator />
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Forma de pagamento</span>
+                <span className="font-medium">{PAYMENT_METHODS.find(m => m.value === cronogramaPaymentMethod)?.label}</span>
+              </div>
+              {installs > 1 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">{cronogramaInstallments}x de</span>
+                  <span className="font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(installmentVal)}</span>
+                </div>
+              )}
+              {cronogramaTotalDays && (
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Prazo de entrega</span>
+                  <span className="font-medium">{cronogramaTotalDays} dias</span>
                 </div>
               )}
             </div>
@@ -1235,6 +1613,8 @@ export default function CommercialProposal() {
                       totalValue = (p.endomarketing_data || {}).monthlyValue || 0;
                     } else if (pType === 'personalizada') {
                       totalValue = sys.monthlyValue || 0;
+                    } else if (pType === 'cronograma') {
+                      totalValue = sys.totalValue || (sys.deliverables || []).reduce((s: number, d: any) => s + ((d.unitPrice || 0) * (d.quantity || 1)), 0);
                     }
                     const discount = p.custom_discount || 0;
                     if (discount > 0) totalValue = totalValue * (1 - discount / 100);
@@ -1336,8 +1716,8 @@ export default function CommercialProposal() {
           <Card className="lg:col-span-2">
             <CardHeader><CardTitle className="text-base">Tipo de Proposta</CardTitle></CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {(['marketing', 'sistema', 'endomarketing', 'personalizada'] as ProposalType[]).map(type => {
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                {(['marketing', 'sistema', 'endomarketing', 'personalizada', 'cronograma'] as ProposalType[]).map(type => {
                   const Icon = typeIcons[type];
                   return (
                     <button
@@ -1381,6 +1761,7 @@ export default function CommercialProposal() {
           {proposalType === 'sistema' && renderSystemForm()}
           {proposalType === 'endomarketing' && renderEndoForm()}
           {proposalType === 'personalizada' && renderCustomForm()}
+          {proposalType === 'cronograma' && renderCronogramaForm()}
 
           {/* Bonus - available for all types */}
           <Card>
@@ -1511,7 +1892,7 @@ export default function CommercialProposal() {
               <div className="relative p-6 md:p-10 text-white">
                 <img src={pulseLogo} alt="Pulse Growth Marketing" className="h-12 md:h-14 mb-4 drop-shadow-2xl" />
                 <h1 className="text-2xl md:text-3xl font-bold mb-1">
-                  {proposalType === 'sistema' ? 'Proposta de Sistema' : proposalType === 'endomarketing' ? 'Proposta de Endomarketing' : 'Proposta Comercial'}
+                  {proposalType === 'sistema' ? 'Proposta de Sistema' : proposalType === 'endomarketing' ? 'Proposta de Endomarketing' : proposalType === 'cronograma' ? 'Cronograma Completo' : 'Proposta Comercial'}
                 </h1>
                 <p className="text-white/80 text-sm">Preparada exclusivamente para</p>
                 <p className="text-xl font-bold mt-0.5">{clientCompany || 'Nome da Empresa'}</p>
@@ -1527,7 +1908,8 @@ export default function CommercialProposal() {
             {proposalType === 'marketing' && renderMarketingPreview()}
             {proposalType === 'sistema' && renderSystemPreview()}
             {proposalType === 'endomarketing' && renderEndoPreview()}
-            {proposalType === 'personalizada' && renderCustomPreview()}
+          {proposalType === 'personalizada' && renderCustomPreview()}
+            {proposalType === 'cronograma' && renderCronogramaPreview()}
 
             {/* Bonus Section */}
             {bonusServices.length > 0 && (

@@ -606,7 +606,7 @@ export default function EditorDashboard() {
 
               {/* Deadline warning */}
               {activeEditTask.editing_deadline && (
-                <DeadlineBadge deadline={activeEditTask.editing_deadline} label="Prazo de edição" />
+                <DeadlineBadge deadline={activeEditTask.editing_deadline} label="Prazo de edição" startedAt={activeEditTask.editing_started_at} />
               )}
 
               {/* Adjustment notes */}
@@ -847,7 +847,7 @@ export default function EditorDashboard() {
                           <span>Editado por você</span>
                         </div>
                       )}
-                      {task.review_deadline && <DeadlineBadge deadline={task.review_deadline} label="Revisão" />}
+                      {task.review_deadline && <DeadlineBadge deadline={task.review_deadline} label="Revisão" startedAt={task.approval_sent_at} />}
                     </div>
                   </motion.div>
                 );
@@ -972,7 +972,7 @@ function QueueCard({ task, clients, index, onStartEditing, currentUserId, users 
 
         <p className="text-sm font-semibold text-foreground leading-tight">{task.title}</p>
 
-        {task.editing_deadline && <DeadlineBadge deadline={task.editing_deadline} label="Edição" />}
+        {task.editing_deadline && <DeadlineBadge deadline={task.editing_deadline} label="Edição" startedAt={task.editing_started_at} />}
 
         {/* Assigned editor */}
         {task.assigned_to && users && (

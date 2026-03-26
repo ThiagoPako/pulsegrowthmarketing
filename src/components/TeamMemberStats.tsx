@@ -87,12 +87,13 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
   };
 
   const loadEditorStats = async (userId: string, startStr: string, endStr: string) => {
+    // Query tasks this editor actually worked on (edited_by) — filter by editing_started_at, not created_at
     const { data: tasks } = await supabase
       .from('content_tasks')
       .select('id, kanban_column, content_type, editing_started_at, editing_paused_seconds, editing_paused_at, approved_at, updated_at, edited_by, assigned_to')
-      .or(`edited_by.eq.${userId},assigned_to.eq.${userId}`)
-      .gte('created_at', startStr)
-      .lte('created_at', endStr);
+      .eq('edited_by', userId)
+      .gte('editing_started_at', startStr)
+      .lte('editing_started_at', endStr);
 
     const editorTasks = tasks || [];
     const byStatus: Record<string, number> = {};

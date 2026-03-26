@@ -1,9 +1,10 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/integrations/supabase/client';
+import { supabase as vpsDb } from '@/lib/vpsDb';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
-import { format, addDays } from 'date-fns';
+import { format, addDays, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import pulseLogo from '@/assets/pulse_logo.png';
 import { Button } from '@/components/ui/button';
@@ -23,7 +24,7 @@ import {
   FileText, Plus, Trash2, CalendarIcon, Download, Eye, Users, Rocket,
   CheckCircle2, Film, Palette, Scissors, Camera, Monitor, Share2, BarChart3,
   Clock, Gift, AlertTriangle, X, Link2, Copy, ExternalLink, List, Code, Megaphone,
-  Sparkles, Loader2, UserPlus
+  Sparkles, Loader2, UserPlus, DollarSign, Target
 } from 'lucide-react';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
@@ -352,6 +353,85 @@ export default function CommercialProposal() {
   const handleCopyLink = (link: string) => {
     copyToClipboard(link).then(() => toast.success('Link copiado!'));
   };
+
+  // Generate revenues for an approved proposal
+  const generateRevenuesForProposal = useCallback(async (proposal: any) => {
+    try {
+      const pType = proposal.proposal_type || 'marketing';
+      let totalValue = 0;
+      let installments = 1;
+      let description = '';
+
+      if (pType === 'marketing') {
+        const plan = proposal.plan_snapshot || {};
+        const bonus = (proposal.bonus_services || []).reduce((s: number, b: any) => s + (b.value || 0), 0);
+        totalValue = (plan.price || 0) + bonus;
+        const discount = proposal.custom_discount || 0;
+        if (discount > 0) totalValue = totalValue * (1 - discount / 100);
+        installments = 12; // Monthly recurring
+        description = `Contrato Marketing - ${proposal.client_company}`;
+      } else if (pType === 'sistema') {
+        const sys = proposal.system_data || {};
+        totalValue = sys.value || 0;
+        const discount = proposal.custom_discount || 0;
+        if (discount > 0) totalValue = totalValue * (1 - discount / 100);
+        installments = sys.installments || 1;
+        description = `Sistema/Software - ${proposal.client_company}`;
+      } else if (pType === 'endomarketing') {
+        const endo = proposal.endomarketing_data || {};
+        totalValue = endo.monthlyValue || 0;
+        const discount = proposal.custom_discount || 0;
+        if (discount > 0) totalValue = totalValue * (1 - discount / 100);
+        installments = 12;
+        description = `Endomarketing - ${proposal.client_company}`;
+      }
+
+      if (totalValue <= 0) return;
+
+      const installmentValue = totalValue / installments;
+      const startDate = new Date(proposal.client_response_at || new Date());
+      const revenues = [];
+
+      for (let i = 0; i < installments; i++) {
+        const dueDate = addMonths(startDate, i);
+        revenues.push({
+          client_id: null,
+          contract_id: null,
+          reference_month: format(dueDate, 'yyyy-MM-01'),
+          amount: Math.round(installmentValue * 100) / 100,
+          due_date: format(dueDate, 'yyyy-MM-dd'),
+          status: 'prevista',
+          description: `${description} (${i + 1}/${installments})`,
+        });
+      }
+
+      let inserted = 0;
+      for (const rev of revenues) {
+        const { error } = await vpsDb.from('revenues').insert(rev as any);
+        if (!error) inserted++;
+      }
+
+      if (inserted > 0) {
+        toast.success(`${inserted} receita(s) criada(s) para ${proposal.client_company}`);
+        // Mark proposal as having revenues generated
+        await supabase.from('commercial_proposals').update({
+          observations: `${proposal.observations || ''}\n[RECEITAS GERADAS: ${inserted} parcelas de R$ ${installmentValue.toFixed(2)}]`.trim(),
+        } as any).eq('id', proposal.id);
+      }
+    } catch (err) {
+      console.error('[CommercialProposal] generateRevenues error:', err);
+      toast.error('Erro ao gerar receitas');
+    }
+  }, []);
+
+  // Check for newly approved proposals and generate revenues
+  useEffect(() => {
+    const approved = savedProposals.filter((p: any) =>
+      p.status === 'aceita' &&
+      !(p.observations || '').includes('[RECEITAS GERADAS')
+    );
+    approved.forEach((p: any) => generateRevenuesForProposal(p));
+  }, [savedProposals, generateRevenuesForProposal]);
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -927,9 +1007,91 @@ export default function CommercialProposal() {
 
       {/* Saved proposals list */}
       {showSavedProposals && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Propostas Enviadas</CardTitle></CardHeader>
-          <CardContent>
+        <div className="space-y-4">
+          {/* Approved proposals as tasks */}
+          {savedProposals.filter((p: any) => p.status === 'aceita').length > 0 && (
+            <Card className="border-emerald-200/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2 text-emerald-700">
+                  <Target className="h-4 w-4" /> Propostas Aprovadas — Tarefas
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {savedProposals.filter((p: any) => p.status === 'aceita').map((p: any) => {
+                    const pType = p.proposal_type || 'marketing';
+                    const TypeIcon = typeIcons[pType] || Rocket;
+                    const sys = p.system_data || {};
+                    const timeline = sys.timeline || '';
+                    const approvedAt = p.client_response_at ? format(new Date(p.client_response_at), 'dd/MM/yyyy') : '—';
+                    const hasRevenues = (p.observations || '').includes('[RECEITAS GERADAS');
+
+                    // Calculate value
+                    let totalValue = 0;
+                    if (pType === 'marketing') {
+                      const plan = p.plan_snapshot || {};
+                      const bonus = (p.bonus_services || []).reduce((s: number, b: any) => s + (b.value || 0), 0);
+                      totalValue = (plan.price || 0) + bonus;
+                    } else if (pType === 'sistema') {
+                      totalValue = sys.value || 0;
+                    } else if (pType === 'endomarketing') {
+                      totalValue = (p.endomarketing_data || {}).monthlyValue || 0;
+                    }
+                    const discount = p.custom_discount || 0;
+                    if (discount > 0) totalValue = totalValue * (1 - discount / 100);
+
+                    return (
+                      <div key={p.id} className="bg-emerald-50/50 border border-emerald-200/50 rounded-xl p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <TypeIcon className="h-4 w-4 text-emerald-600" />
+                            <span className="font-bold text-sm">{p.client_company}</span>
+                            <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">
+                              {PROPOSAL_TYPE_LABELS[pType as ProposalType]}
+                            </Badge>
+                          </div>
+                          <Badge className="bg-emerald-500 text-white text-[10px]">✅ Aprovada</Badge>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                          <div className="flex items-center gap-1 text-muted-foreground">
+                            <CalendarIcon className="h-3 w-3" />
+                            Aprovada em: {approvedAt}
+                          </div>
+                          {timeline && (
+                            <div className="flex items-center gap-1 text-muted-foreground">
+                              <Clock className="h-3 w-3" />
+                              Prazo: {timeline}
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1 text-muted-foreground">
+                            <DollarSign className="h-3 w-3" />
+                            Valor: {fmt(totalValue)}{pType !== 'sistema' ? '/mês' : ''}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {hasRevenues ? (
+                              <span className="text-emerald-600 font-medium">💰 Receitas geradas</span>
+                            ) : (
+                              <Button size="sm" variant="outline" className="h-6 text-[10px] border-emerald-300 text-emerald-700" onClick={() => generateRevenuesForProposal(p)}>
+                                <DollarSign className="h-3 w-3 mr-0.5" /> Gerar Receitas
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        {p.client_response_note && (
+                          <p className="text-xs text-muted-foreground italic">💬 "{p.client_response_note}"</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* All proposals list */}
+          <Card>
+            <CardHeader><CardTitle className="text-base">Todas as Propostas</CardTitle></CardHeader>
+            <CardContent>
             {savedProposals.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhuma proposta salva ainda.</p>
             ) : (
@@ -965,7 +1127,8 @@ export default function CommercialProposal() {
               </div>
             )}
           </CardContent>
-        </Card>
+          </Card>
+        </div>
       )}
 
       {!showPreview ? (

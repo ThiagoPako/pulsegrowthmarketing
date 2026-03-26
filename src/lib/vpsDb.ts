@@ -25,7 +25,10 @@ async function executeQuery(body: any): Promise<{ data: any; error: any; count?:
     });
     const result = await response.json();
     if (!response.ok) {
-      return { data: null, error: result.error || { message: `HTTP ${response.status}` } };
+      const normalizedError = typeof result.error === 'string'
+        ? { message: result.error }
+        : (result.error || { message: `HTTP ${response.status}` });
+      return { data: null, error: normalizedError };
     }
     return { data: result.data, error: result.error || null, count: result.count ?? null };
   } catch (error: any) {

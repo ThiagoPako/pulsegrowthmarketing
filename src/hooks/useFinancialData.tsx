@@ -344,6 +344,19 @@ export function useFinancialData() {
     return 0;
   };
 
+  const deleteRevenue = async (id: string) => {
+    try {
+      const revenue = revenues.find(r => r.id === id);
+      const { error } = await supabase.from('revenues').delete().eq('id', id);
+      if (error) { console.error('[useFinancialData] deleteRevenue error:', error); return false; }
+      await Promise.allSettled([
+        logActivity('exclusão', 'receita', `Excluiu receita - R$ ${Number(revenue?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id),
+        fetchAll(),
+      ]);
+      return true;
+    } catch (err) { console.error('[useFinancialData] deleteRevenue unexpected:', err); return false; }
+  };
+
   // Expense CRUD
   const addExpense = async (e: Partial<Expense>) => {
     try {
@@ -451,7 +464,7 @@ export function useFinancialData() {
   return {
     contracts, revenues, expenses, categories, paymentConfig, billingMessages, cashMovements, activityLog, loading,
     upsertContract, deleteContract,
-    addRevenue, updateRevenue, generateMonthlyRevenues,
+    addRevenue, updateRevenue, deleteRevenue, generateMonthlyRevenues,
     addExpense, updateExpense, deleteExpense,
     addCategory, updatePaymentConfig, addCashMovement, updateCashMovement, deleteCashMovement,
     refetch: fetchAll,

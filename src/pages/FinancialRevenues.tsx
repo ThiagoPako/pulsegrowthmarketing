@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, RefreshCw, CheckCircle, MessageCircle, Loader2, TrendingUp, AlertTriangle, Undo2, Plus } from 'lucide-react';
+import { ArrowLeft, RefreshCw, CheckCircle, MessageCircle, Loader2, TrendingUp, AlertTriangle, Undo2, Plus, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { format, subMonths, addMonths } from 'date-fns';
@@ -115,7 +115,7 @@ const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'destruct
 
 export default function FinancialRevenues() {
   const navigate = useNavigate();
-  const { revenues, contracts, updateRevenue, addRevenue, generateMonthlyRevenues, paymentConfig, loading } = useFinancialData();
+  const { revenues, contracts, updateRevenue, deleteRevenue, addRevenue, generateMonthlyRevenues, paymentConfig, loading } = useFinancialData();
   const { clients } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
   const [sendingBilling, setSendingBilling] = useState<string | null>(null);
@@ -682,6 +682,22 @@ export default function FinancialRevenues() {
                             </motion.div>
                           )}
                         </AnimatePresence>
+                        {/* Delete button - always visible */}
+                        <motion.button
+                          onClick={async () => {
+                            if (confirm('Excluir esta receita?')) {
+                              const ok = await deleteRevenue(r.id);
+                              if (ok) toast.success('Receita excluída');
+                              else toast.error('Erro ao excluir');
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          title="Excluir receita"
+                        >
+                          <Trash2 size={12} />
+                        </motion.button>
                       </div>
                     </TableCell>
                   </motion.tr>

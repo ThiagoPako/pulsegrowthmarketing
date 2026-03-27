@@ -557,29 +557,55 @@ export default function Scripts() {
         const body = section.querySelector('[data-pdf-role="script-body"]') as HTMLElement | null;
         if (body) {
           const bodyNodes = Array.from(body.childNodes).filter(
-            (node) => node.nodeType !== Node.TEXT_NODE || node.textContent?.trim()
+            (node) => !isEmptyNode(node)
           );
 
           if (!bodyNodes.length) {
             appendBlock(body);
           } else {
-            for (const node of bodyNodes) {
+            // Group consecutive small nodes into combined blocks to reduce gaps
+            let accum: Node[] = [];
+            const flushAccum = () => {
+              if (!accum.length) return;
               const block = document.createElement('div');
-              block.style.cssText = `padding:0 ${pagePadding}px; font-size:12.5px; line-height:1.55; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:justify; word-break:keep-all; overflow-wrap:break-word; hyphens:none; break-inside:avoid; page-break-inside:avoid;`;
-
-              if (node.nodeType === Node.TEXT_NODE) {
-                const paragraph = document.createElement('p');
-                paragraph.style.cssText = 'margin:0 0 4px; text-align:justify;';
-                paragraph.textContent = node.textContent ?? '';
-                block.appendChild(paragraph);
-              } else {
-                const clonedNode = (node as HTMLElement).cloneNode(true) as HTMLElement;
-                clonedNode.style.textAlign = 'justify';
-                block.appendChild(clonedNode);
+              block.style.cssText = `padding:0 ${pagePadding}px; font-size:12.5px; line-height:1.55; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:justify; word-break:keep-all; overflow-wrap:break-word; hyphens:none;`;
+              for (const n of accum) {
+                if (n.nodeType === Node.TEXT_NODE) {
+                  const p = document.createElement('p');
+                  p.style.cssText = 'margin:0 0 2px; text-align:justify;';
+                  p.textContent = n.textContent ?? '';
+                  block.appendChild(p);
+                } else {
+                  const cl = (n as HTMLElement).cloneNode(true) as HTMLElement;
+                  cl.style.textAlign = 'justify';
+                  // Reduce margins on paragraphs inside
+                  if (cl.tagName === 'P') cl.style.margin = '0 0 2px';
+                  block.appendChild(cl);
+                }
               }
-
               appendBlock(block);
+              accum = [];
+            };
+
+            for (const node of bodyNodes) {
+              // Mark elements are quote highlights - keep as separate blocks with break-inside avoid
+              const el = node as HTMLElement;
+              const isQuote = el.nodeType === Node.ELEMENT_NODE && (el.tagName === 'MARK' || el.tagName === 'DIV' && el.style?.backgroundColor);
+              
+              if (isQuote) {
+                flushAccum();
+                const block = document.createElement('div');
+                block.style.cssText = `padding:0 ${pagePadding}px; font-size:12.5px; line-height:1.55; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:justify; break-inside:avoid; page-break-inside:avoid;`;
+                const cl = el.cloneNode(true) as HTMLElement;
+                block.appendChild(cl);
+                appendBlock(block);
+              } else {
+                accum.push(node);
+                // Flush every 6 nodes to keep blocks manageable
+                if (accum.length >= 6) flushAccum();
+              }
             }
+            flushAccum();
           }
         }
       }

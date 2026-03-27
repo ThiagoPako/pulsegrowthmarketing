@@ -76,9 +76,9 @@ export default function DeadlineBadge({ deadline, label, startedAt, totalHours }
         <Clock size={9} />
         {label && <span>{label}:</span>}
         {info.timeStr}
-        {progress !== null && <span className="ml-0.5">({progress}%)</span>}
+        {progress > 0 && <span className="ml-0.5">({progress}%)</span>}
       </span>
-      {progress !== null && (
+      {progress > 0 && (
         <Progress value={progress} className={`h-1.5 w-full bg-muted/50 ${barColor}`} />
       )}
     </div>

@@ -237,7 +237,6 @@ const defaultSettings: CompanySettings = {
   reviewDeadlineEnabled: true,
   alterationDeadlineEnabled: true,
   approvalDeadlineEnabled: true,
-  approvalDeadlineHours: 6,
 };
 
 export function useSupabaseData() {

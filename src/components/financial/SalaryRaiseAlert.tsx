@@ -105,7 +105,7 @@ function calculateScoreForMonth(
       highPriority * DESIGNER_SCORE.PRIORIDADE;
   } else if (role === 'social_media') {
     const smCreated = contentTasks.filter(t => t.created_by === userId);
-    const published = smCreated.filter(t => t.kanban_column === 'publicado').length;
+    const published = smCreated.filter(t => t.kanban_column === 'publicado' || t.kanban_column === 'arquivado').length;
     const managed = smCreated.length;
     const userDel = smDeliveries.filter(d => d.created_by === userId);
     const posted = userDel.filter(d => d.status === 'postado' || d.posted_at).length;

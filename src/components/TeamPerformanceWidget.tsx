@@ -167,7 +167,7 @@ export default function TeamPerformanceWidget() {
 
       } else if (user.role === 'social_media') {
         const smCreated = contentTasks.filter(t => t.created_by === user.id);
-        const published = smCreated.filter(t => t.kanban_column === 'publicado').length;
+        const published = smCreated.filter(t => t.kanban_column === 'publicado' || t.kanban_column === 'arquivado').length;
         const managed = smCreated.length;
         const userDeliveries = smDeliveries.filter(d => d.created_by === user.id);
         const posted = userDeliveries.filter(d => d.status === 'postado' || d.posted_at).length;

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/vpsDb';
-import { VM_SCORE, EDITOR_SCORE, DESIGNER_SCORE, SM_SCORE, PARCEIRO_SCORE } from '@/lib/scoringSystem';
+import { VM_SCORE, EDITOR_SCORE, DESIGNER_SCORE, SM_SCORE, PARCEIRO_SCORE, EDITOR_APPROVED_COLUMNS } from '@/lib/scoringSystem';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -87,12 +87,13 @@ function calculateScoreForMonth(
       extras * VM_SCORE.EXTRA + arts * VM_SCORE.ARTE + recDone * VM_SCORE.GRAVACAO + endoDone * VM_SCORE.ENDO;
   } else if (role === 'editor') {
     const editorTasks = contentTasks.filter(t => t.assigned_to === userId || t.edited_by === userId);
-    const approved = editorTasks.filter(t => t.approved_at || ['aprovado', 'publicado', 'finalizado', 'envio'].includes(t.kanban_column)).length;
-    const inEditing = editorTasks.filter(t => t.kanban_column === 'em_edicao' || t.kanban_column === 'editando').length;
+    const approved = editorTasks.filter(t => !!t.approved_at || EDITOR_APPROVED_COLUMNS.includes(t.kanban_column as any)).length;
+    const inEditing = editorTasks.filter(t => t.kanban_column === 'edicao').length;
+    const inRevision = editorTasks.filter(t => t.kanban_column === 'revisao').length;
     const alterations = editorTasks.filter(t => t.kanban_column === 'alteracao').length;
     const priority = editorTasks.filter(t => t.editing_priority === true).length;
     score = approved * EDITOR_SCORE.APROVADO + inEditing * EDITOR_SCORE.EM_EDICAO +
-      alterations * EDITOR_SCORE.ALTERACAO + priority * EDITOR_SCORE.PRIORIDADE;
+      inRevision * EDITOR_SCORE.REVISAO + alterations * EDITOR_SCORE.ALTERACAO + priority * EDITOR_SCORE.PRIORIDADE;
   } else if (role === 'designer' || role === 'fotografo') {
     const dTasks = designTasks.filter(t => t.assigned_to === userId);
     const completed = dTasks.filter(t => ['concluida', 'aprovada_cliente'].includes(t.kanban_column)).length;
@@ -105,7 +106,7 @@ function calculateScoreForMonth(
       highPriority * DESIGNER_SCORE.PRIORIDADE;
   } else if (role === 'social_media') {
     const smCreated = contentTasks.filter(t => t.created_by === userId);
-    const published = smCreated.filter(t => t.kanban_column === 'publicado' || t.kanban_column === 'arquivado').length;
+    const published = smCreated.filter(t => t.kanban_column === 'arquivado').length;
     const managed = smCreated.length;
     const userDel = smDeliveries.filter(d => d.created_by === userId);
     const posted = userDel.filter(d => d.status === 'postado' || d.posted_at).length;

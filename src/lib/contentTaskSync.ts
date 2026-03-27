@@ -71,6 +71,11 @@ export async function syncContentTaskColumnChange(
     reviewing_by: null,
     reviewing_by_name: null,
     reviewing_at: null,
+    // Clear stale deadlines from previous columns to avoid phantom badges
+    editing_deadline: null,
+    review_deadline: null,
+    alteration_deadline: null,
+    approval_deadline: null,
   };
 
   // Fetch deadline settings + work_days + enabled flags

@@ -3,6 +3,7 @@ import { supabase } from '@/lib/vpsDb';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { useApp } from '@/contexts/AppContext';
 import { highlightQuotes, highlightQuotesForPdf } from '@/lib/highlightQuotes';
+import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 import type { Recording, Script, RecordingStatus } from '@/types';
 import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS } from '@/types';
 import { Badge } from '@/components/ui/badge';
@@ -466,9 +467,7 @@ export default function VideomakerDashboard() {
     }
     updateRecording({ ...rec, status: 'concluida' });
 
-    // Create/update content_tasks for recorded scripts
-    const editingDeadline = new Date();
-    editingDeadline.setHours(editingDeadline.getHours() + (settings.editingDeadlineHours || 48));
+    // Content tasks - sync handles deadlines via syncContentTaskColumnChange
 
     for (const scriptId of allRecordedArray) {
       const script = scripts.find(s => s.id === scriptId);
@@ -499,19 +498,27 @@ export default function VideomakerDashboard() {
       const assignedEditor = (selectedEditorId && selectedEditorId !== '__auto__') ? selectedEditorId : null;
 
       if (existing && existing.length > 0) {
+        const taskId = existing[0].id;
         const { error: updateError } = await supabase.from('content_tasks').update({
           kanban_column: targetColumn,
           drive_link: scriptDriveLink,
           recording_id: rec.id,
-          editing_deadline: editingDeadline.toISOString(),
           description,
           script_alteration_type: altType,
           script_alteration_notes: altNotes,
           assigned_to: assignedEditor,
-        } as any).eq('id', existing[0].id);
+        } as any).eq('id', taskId);
         if (updateError) {
           console.error('content_task update error:', updateError);
           toast.error(`Erro ao atualizar a fila de edição para "${script.title}".`);
+        } else if (targetColumn === 'edicao' && rec.clientId) {
+          // Trigger full sync (deadlines, WhatsApp, social_media_deliveries, task_history)
+          const client = clients.find(c => c.id === rec.clientId);
+          const ctx = buildSyncContext(
+            { id: taskId, client_id: rec.clientId, title: script.title, content_type: script.contentFormat || 'reels', description, script_id: scriptId, recording_id: rec.id, assigned_to: assignedEditor, edited_video_link: null },
+            { userId: vmId, clientName: client?.companyName, clientWhatsapp: client?.whatsapp }
+          );
+          await syncContentTaskColumnChange('edicao', ctx);
         }
       } else {
         // For avulso (no client), use dedicated endpoint to avoid NOT NULL constraint
@@ -534,7 +541,6 @@ export default function VideomakerDashboard() {
                 assigned_to: assignedEditor,
                 created_by: vmId,
                 drive_link: scriptDriveLink,
-                editing_deadline: editingDeadline.toISOString(),
                 script_alteration_type: altType,
                 script_alteration_notes: altNotes,
               }),
@@ -551,7 +557,7 @@ export default function VideomakerDashboard() {
             toast.error(`Erro de rede ao criar tarefa avulso: ${err.message}`);
           }
         } else {
-          const { error: insertError } = await supabase.from('content_tasks').insert({
+          const { data: insertedData, error: insertError } = await supabase.from('content_tasks').insert({
             client_id: rec.clientId,
             title: script.title,
             content_type: script.contentFormat || 'reels',
@@ -562,13 +568,20 @@ export default function VideomakerDashboard() {
             assigned_to: assignedEditor,
             created_by: vmId,
             drive_link: scriptDriveLink,
-            editing_deadline: editingDeadline.toISOString(),
             script_alteration_type: altType,
             script_alteration_notes: altNotes,
-          } as any);
+          } as any).select('id').single();
           if (insertError) {
             console.error('content_task insert error:', insertError);
             toast.error(`Erro ao enviar "${script.title}" para a fila de edição: ${insertError.message}`);
+          } else if (targetColumn === 'edicao' && insertedData?.id) {
+            // Trigger full sync for the new task
+            const client = clients.find(c => c.id === rec.clientId);
+            const ctx = buildSyncContext(
+              { id: insertedData.id, client_id: rec.clientId, title: script.title, content_type: script.contentFormat || 'reels', description, script_id: scriptId, recording_id: rec.id, assigned_to: assignedEditor, edited_video_link: null },
+              { userId: vmId, clientName: client?.companyName, clientWhatsapp: client?.whatsapp }
+            );
+            await syncContentTaskColumnChange('edicao', ctx);
           }
         }
       }

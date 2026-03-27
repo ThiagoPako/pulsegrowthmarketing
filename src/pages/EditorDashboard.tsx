@@ -574,6 +574,24 @@ export default function EditorDashboard() {
                 </motion.div>
               ))}
             </div>
+            {/* Breakdown por tipo de conteúdo */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pb-2">
+              {[
+                { label: 'Reels (Semana)', value: weekCompleted.filter(t => t.content_type === 'reels').length, icon: Film, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+                { label: 'Criativos (Semana)', value: weekCompleted.filter(t => t.content_type === 'criativo').length, icon: Megaphone, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+                { label: 'Reels (Mês)', value: monthCompleted.filter(t => t.content_type === 'reels').length, icon: Film, color: 'text-blue-600', bg: 'bg-blue-600/10' },
+                { label: 'Criativos (Mês)', value: monthCompleted.filter(t => t.content_type === 'criativo').length, icon: Megaphone, color: 'text-purple-600', bg: 'bg-purple-600/10' },
+              ].map((s, i) => (
+                <motion.div key={s.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + i * 0.05 }}
+                  className={`${s.bg} rounded-xl p-3 border border-border/50`}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <s.icon size={14} className={s.color} />
+                    <span className="text-[11px] text-muted-foreground">{s.label}</span>
+                  </div>
+                  <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
+                </motion.div>
+              ))}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

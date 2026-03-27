@@ -170,8 +170,8 @@ export default function TeamPerformanceWidget() {
         const published = smCreated.filter(t => t.kanban_column === 'publicado').length;
         const managed = smCreated.length;
         const userDeliveries = smDeliveries.filter(d => d.created_by === user.id);
-        const posted = userDeliveries.filter(d => d.status === 'posted' || d.posted_at).length;
-        const scheduled = userDeliveries.filter(d => d.status === 'scheduled').length;
+        const posted = userDeliveries.filter(d => d.status === 'postado' || d.posted_at).length;
+        const scheduled = userDeliveries.filter(d => d.status === 'agendado').length;
         const scriptsCreated = scripts.filter(s => s.createdBy === user.id).length;
         score = published * SM_SCORE.PUBLICADO + posted * SM_SCORE.POSTADO + scheduled * SM_SCORE.AGENDADO +
           managed * SM_SCORE.GERENCIADO + scriptsCreated * SM_SCORE.ROTEIRO;

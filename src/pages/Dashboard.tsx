@@ -18,6 +18,7 @@ import UserAvatar from '@/components/UserAvatar';
 import AgencyCapacityWidget from '@/components/AgencyCapacityWidget';
 import TeamPerformanceWidget from '@/components/TeamPerformanceWidget';
 import BirthdayCountdown from '@/components/BirthdayCountdown';
+import BonusCongratsBanner from '@/components/BonusCongratsBanner';
 import ClientLogo from '@/components/ClientLogo';
 import { getMessageStats } from '@/services/whatsappService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
@@ -403,6 +404,7 @@ export default function Dashboard() {
         )}
       </motion.div>
 
+      <BonusCongratsBanner />
       <BirthdayCountdown />
 
       {/* Stats grid — 4 cols mobile, 7 cols desktop */}

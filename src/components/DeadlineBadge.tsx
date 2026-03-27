@@ -5,6 +5,7 @@ interface DeadlineBadgeProps {
   deadline: string;
   label?: string;
   startedAt?: string | null;
+  totalHours?: number;
 }
 
 export function getDeadlineInfo(deadline: string | null) {
@@ -29,22 +30,33 @@ export function getDeadlineInfo(deadline: string | null) {
   return { timeStr, variant, isExpired, hours, mins, diffMs };
 }
 
-export function getDeadlineProgress(startedAt: string | null | undefined, deadline: string | null): number {
-  if (!startedAt || !deadline) return 0;
-  const start = new Date(startedAt).getTime();
+export function getDeadlineProgress(startedAt: string | null | undefined, deadline: string | null, totalHours?: number): number {
+  if (!deadline) return 0;
   const end = new Date(deadline).getTime();
   const now = Date.now();
+  
+  // If we have totalHours, calculate start from deadline - totalHours
+  if (totalHours && totalHours > 0) {
+    const totalMs = totalHours * 60 * 60 * 1000;
+    const start = end - totalMs;
+    const elapsed = now - start;
+    return Math.min(100, Math.max(0, Math.round((elapsed / totalMs) * 100)));
+  }
+  
+  // Fallback: use startedAt
+  if (!startedAt) return 0;
+  const start = new Date(startedAt).getTime();
   const total = end - start;
   if (total <= 0) return 100;
   const elapsed = now - start;
   return Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)));
 }
 
-export default function DeadlineBadge({ deadline, label, startedAt }: DeadlineBadgeProps) {
+export default function DeadlineBadge({ deadline, label, startedAt, totalHours }: DeadlineBadgeProps) {
   const info = getDeadlineInfo(deadline);
   if (!info) return null;
 
-  const progress = startedAt ? getDeadlineProgress(startedAt, deadline) : null;
+  const progress = getDeadlineProgress(startedAt, deadline, totalHours);
 
   const barColor = info.variant === 'expired'
     ? '[&>div]:bg-red-500'

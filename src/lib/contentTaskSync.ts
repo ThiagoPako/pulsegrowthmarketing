@@ -73,13 +73,19 @@ export async function syncContentTaskColumnChange(
     reviewing_at: null,
   };
 
-  // Fetch deadline settings + work_days
-  const { data: settingsRow } = await supabase.from('company_settings').select('editing_deadline_hours, review_deadline_hours, alteration_deadline_hours, approval_deadline_hours, work_days').limit(1).single();
+  // Fetch deadline settings + work_days + enabled flags
+  const { data: settingsRow } = await supabase.from('company_settings').select('editing_deadline_hours, review_deadline_hours, alteration_deadline_hours, approval_deadline_hours, work_days, editing_deadline_enabled, review_deadline_enabled, alteration_deadline_enabled, approval_deadline_enabled').limit(1).single();
   const deadlineHours = {
     editing: settingsRow?.editing_deadline_hours ?? 48,
     review: settingsRow?.review_deadline_hours ?? 24,
     alteration: settingsRow?.alteration_deadline_hours ?? 24,
     approval: settingsRow?.approval_deadline_hours ?? 6,
+  };
+  const deadlineEnabled = {
+    editing: settingsRow?.editing_deadline_enabled ?? true,
+    review: settingsRow?.review_deadline_enabled ?? true,
+    alteration: settingsRow?.alteration_deadline_enabled ?? true,
+    approval: settingsRow?.approval_deadline_enabled ?? true,
   };
   const workDays: string[] = (settingsRow?.work_days as string[]) ?? ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
 

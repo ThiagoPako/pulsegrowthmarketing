@@ -275,80 +275,140 @@ export default function CompanySettings() {
           <h2 className="text-base font-semibold">Prazos de Tarefas</h2>
         </div>
         <p className="text-xs text-muted-foreground -mt-2">
-          Defina os prazos automáticos para cada etapa do fluxo de produção de conteúdo.
+          Ative ou desative os prazos automáticos de cada etapa. Quando desativado, a etapa não terá controle de prazo.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Editing Deadline */}
-          <div className="space-y-1.5 p-3 rounded-lg border border-border bg-muted/30">
+          <div className={`space-y-3 p-4 rounded-xl border transition-all ${form.editingDeadlineEnabled ? 'border-primary/30 bg-primary/5' : 'border-border bg-muted/20 opacity-70'}`}>
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">🎬 Prazo de Edição</Label>
-              <span className="text-xs font-mono text-primary font-semibold">{formatDeadlineLabel(form.editingDeadlineHours)}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🎬</span>
+                <Label className="text-sm font-semibold">Edição</Label>
+              </div>
+              <Switch
+                checked={form.editingDeadlineEnabled}
+                onCheckedChange={v => setForm({ ...form, editingDeadlineEnabled: v })}
+              />
             </div>
-            <Input
-              type="number"
-              min={1}
-              max={720}
-              value={form.editingDeadlineHours}
-              onChange={e => setForm({ ...form, editingDeadlineHours: Number(e.target.value) })}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Tempo para o editor concluir a edição após receber o material
-            </p>
+            {form.editingDeadlineEnabled && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Prazo</span>
+                  <span className="text-xs font-mono text-primary font-bold">{formatDeadlineLabel(form.editingDeadlineHours)}</span>
+                </div>
+                <Input
+                  type="number"
+                  min={1}
+                  max={720}
+                  value={form.editingDeadlineHours}
+                  onChange={e => setForm({ ...form, editingDeadlineHours: Number(e.target.value) })}
+                  className="h-8 text-sm"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Tempo para o editor concluir a edição
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Review Deadline */}
-          <div className="space-y-1.5 p-3 rounded-lg border border-border bg-muted/30">
+          <div className={`space-y-3 p-4 rounded-xl border transition-all ${form.reviewDeadlineEnabled ? 'border-primary/30 bg-primary/5' : 'border-border bg-muted/20 opacity-70'}`}>
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">👁 Prazo de Revisão</Label>
-              <span className="text-xs font-mono text-primary font-semibold">{formatDeadlineLabel(form.reviewDeadlineHours)}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">👁</span>
+                <Label className="text-sm font-semibold">Revisão</Label>
+              </div>
+              <Switch
+                checked={form.reviewDeadlineEnabled}
+                onCheckedChange={v => setForm({ ...form, reviewDeadlineEnabled: v })}
+              />
             </div>
-            <Input
-              type="number"
-              min={1}
-              max={720}
-              value={form.reviewDeadlineHours}
-              onChange={e => setForm({ ...form, reviewDeadlineHours: Number(e.target.value) })}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Tempo para a social media revisar o conteúdo editado
-            </p>
+            {form.reviewDeadlineEnabled && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Prazo</span>
+                  <span className="text-xs font-mono text-primary font-bold">{formatDeadlineLabel(form.reviewDeadlineHours)}</span>
+                </div>
+                <Input
+                  type="number"
+                  min={1}
+                  max={720}
+                  value={form.reviewDeadlineHours}
+                  onChange={e => setForm({ ...form, reviewDeadlineHours: Number(e.target.value) })}
+                  className="h-8 text-sm"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Tempo para a social media revisar o conteúdo
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Alteration Deadline */}
-          <div className="space-y-1.5 p-3 rounded-lg border border-border bg-muted/30">
+          <div className={`space-y-3 p-4 rounded-xl border transition-all ${form.alterationDeadlineEnabled ? 'border-primary/30 bg-primary/5' : 'border-border bg-muted/20 opacity-70'}`}>
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">✏️ Prazo de Alteração</Label>
-              <span className="text-xs font-mono text-primary font-semibold">{formatDeadlineLabel(form.alterationDeadlineHours)}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">✏️</span>
+                <Label className="text-sm font-semibold">Alteração</Label>
+              </div>
+              <Switch
+                checked={form.alterationDeadlineEnabled}
+                onCheckedChange={v => setForm({ ...form, alterationDeadlineEnabled: v })}
+              />
             </div>
-            <Input
-              type="number"
-              min={1}
-              max={720}
-              value={form.alterationDeadlineHours}
-              onChange={e => setForm({ ...form, alterationDeadlineHours: Number(e.target.value) })}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Tempo para o editor aplicar os ajustes solicitados
-            </p>
+            {form.alterationDeadlineEnabled && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Prazo</span>
+                  <span className="text-xs font-mono text-primary font-bold">{formatDeadlineLabel(form.alterationDeadlineHours)}</span>
+                </div>
+                <Input
+                  type="number"
+                  min={1}
+                  max={720}
+                  value={form.alterationDeadlineHours}
+                  onChange={e => setForm({ ...form, alterationDeadlineHours: Number(e.target.value) })}
+                  className="h-8 text-sm"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Tempo para o editor aplicar ajustes solicitados
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Approval Deadline */}
-          <div className="space-y-1.5 p-3 rounded-lg border border-border bg-muted/30">
+          <div className={`space-y-3 p-4 rounded-xl border transition-all ${form.approvalDeadlineEnabled ? 'border-primary/30 bg-primary/5' : 'border-border bg-muted/20 opacity-70'}`}>
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">✅ Prazo de Aprovação</Label>
-              <span className="text-xs font-mono text-primary font-semibold">{formatDeadlineLabel(form.approvalDeadlineHours)}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">✅</span>
+                <Label className="text-sm font-semibold">Aprovação</Label>
+              </div>
+              <Switch
+                checked={form.approvalDeadlineEnabled}
+                onCheckedChange={v => setForm({ ...form, approvalDeadlineEnabled: v })}
+              />
             </div>
-            <Input
-              type="number"
-              min={1}
-              max={720}
-              value={form.approvalDeadlineHours}
-              onChange={e => setForm({ ...form, approvalDeadlineHours: Number(e.target.value) })}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Tempo para o cliente aprovar o conteúdo enviado
-            </p>
+            {form.approvalDeadlineEnabled && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Prazo</span>
+                  <span className="text-xs font-mono text-primary font-bold">{formatDeadlineLabel(form.approvalDeadlineHours)}</span>
+                </div>
+                <Input
+                  type="number"
+                  min={1}
+                  max={720}
+                  value={form.approvalDeadlineHours}
+                  onChange={e => setForm({ ...form, approvalDeadlineHours: Number(e.target.value) })}
+                  className="h-8 text-sm"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Tempo para o cliente aprovar o conteúdo enviado
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Clock } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 
@@ -35,7 +36,6 @@ export function getDeadlineProgress(startedAt: string | null | undefined, deadli
   const end = new Date(deadline).getTime();
   const now = Date.now();
   
-  // If we have totalHours, calculate start from deadline - totalHours
   if (totalHours && totalHours > 0) {
     const totalMs = totalHours * 60 * 60 * 1000;
     const start = end - totalMs;
@@ -43,7 +43,6 @@ export function getDeadlineProgress(startedAt: string | null | undefined, deadli
     return Math.min(100, Math.max(0, Math.round((elapsed / totalMs) * 100)));
   }
   
-  // Fallback: use startedAt
   if (!startedAt) return 0;
   const start = new Date(startedAt).getTime();
   const total = end - start;
@@ -53,6 +52,16 @@ export function getDeadlineProgress(startedAt: string | null | undefined, deadli
 }
 
 export default function DeadlineBadge({ deadline, label, startedAt, totalHours }: DeadlineBadgeProps) {
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Force recalculation every tick
+  void tick;
+
   const info = getDeadlineInfo(deadline);
   if (!info) return null;
 

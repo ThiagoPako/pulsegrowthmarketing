@@ -73,6 +73,7 @@ export default function VideomakerDashboard() {
   const [waitingLogId, setWaitingLogId] = useState<string | null>(null);
   const [waitingStartedAt, setWaitingStartedAt] = useState<Date | null>(null);
   const [waitingElapsed, setWaitingElapsed] = useState(0);
+  const [deliveredRecordingIds, setDeliveredRecordingIds] = useState<Set<string>>(new Set());
 
   // Timer for waiting elapsed
   useEffect(() => {
@@ -140,6 +141,45 @@ export default function VideomakerDashboard() {
     recordings.filter(r => r.videomakerId === vmId),
     [recordings, vmId]
   );
+
+  useEffect(() => {
+    const recordingIds = myRecordings.map(recording => recording.id).filter(Boolean);
+
+    if (recordingIds.length === 0) {
+      setDeliveredRecordingIds(new Set());
+      return;
+    }
+
+    let isMounted = true;
+
+    supabase
+      .from('delivery_records')
+      .select('recording_id')
+      .in('recording_id', recordingIds)
+      .then(({ data, error }) => {
+        if (!isMounted || error) {
+          if (error) console.error('delivery_records sync error:', error);
+          return;
+        }
+
+        setDeliveredRecordingIds(new Set((data || []).map((row: any) => row.recording_id).filter(Boolean)));
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [myRecordings]);
+
+  const isRecordingDone = useCallback((recording: Recording) => {
+    if (recording.status === 'concluida') return true;
+    if (recording.status === 'organizando_material' || recording.status === 'cancelada') return false;
+    return deliveredRecordingIds.has(recording.id);
+  }, [deliveredRecordingIds]);
+
+  const isRecordingStartable = useCallback((recording: Recording) => {
+    if (recording.status !== 'agendada') return false;
+    return !isRecordingDone(recording);
+  }, [isRecordingDone]);
 
   const todayRecs = useMemo(() =>
     myRecordings.filter(r => normalizeDateKey(r.date) === todayStr && r.status !== 'cancelada')
@@ -810,8 +850,8 @@ export default function VideomakerDashboard() {
       return isWithinInterval(d, { start: weekStart, end: weekEnd });
     });
 
-    const doneMonth = monthRecs.filter(r => r.status === 'concluida');
-    const doneWeek = weekRecs.filter(r => r.status === 'concluida');
+    const doneMonth = monthRecs.filter(isRecordingDone);
+    const doneWeek = weekRecs.filter(isRecordingDone);
     const uniqueClients = new Set(doneMonth.map(r => r.clientId)).size;
     const totalRecordings = doneMonth.length;
     const reelsProduced = doneMonth.reduce((acc, rec) => {
@@ -821,7 +861,7 @@ export default function VideomakerDashboard() {
     const avgReelsPerRec = totalRecordings > 0 ? (reelsProduced / totalRecordings).toFixed(1) : '0';
 
     return {
-      todayDone: todayRecs.filter(r => r.status === 'concluida').length,
+      todayDone: todayRecs.filter(isRecordingDone).length,
       todayTotal: todayRecs.length,
       weekDone: doneWeek.length,
       weekTotal: weekRecs.filter(r => r.status !== 'cancelada').length,
@@ -830,7 +870,7 @@ export default function VideomakerDashboard() {
       reelsProduced,
       avgReelsPerRec,
     };
-  }, [myRecordings, todayRecs, clients, today, weekStart, weekEnd]);
+  }, [myRecordings, todayRecs, clients, today, weekStart, weekEnd, isRecordingDone]);
 
   return (
     <div className="space-y-4 sm:space-y-5 max-w-[1400px] px-1 sm:px-0">
@@ -944,8 +984,9 @@ export default function VideomakerDashboard() {
               {todayRecs.map((rec, i) => {
                 const color = getClientColor(rec.clientId, rec);
                 const isActive = activeRecordingId === rec.id;
-                const isDone = rec.status === 'concluida';
+                const isDone = isRecordingDone(rec);
                 const isOrganizing = rec.status === 'organizando_material';
+                const isStartable = isRecordingStartable(rec);
 
                 return (
                   <motion.div key={rec.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
@@ -996,7 +1037,7 @@ export default function VideomakerDashboard() {
                       </div>
                       {/* Desktop buttons */}
                       <div className="hidden sm:flex gap-1.5 shrink-0">
-                        {rec.status === 'agendada' && !isActive && waitingRecordingId !== rec.id && !waitingRecordingId && (
+                        {isStartable && !isActive && waitingRecordingId !== rec.id && !waitingRecordingId && (
                           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                             <Button size="sm" variant="outline" onClick={() => handleStartWaiting(rec)}
                               className="gap-1 border-warning/50 text-warning hover:bg-warning/10 hover:text-warning">
@@ -1012,7 +1053,7 @@ export default function VideomakerDashboard() {
                             </Button>
                           </motion.div>
                         )}
-                        {rec.status === 'agendada' && !isActive && (
+                        {isStartable && !isActive && (
                           <Button size="sm" onClick={async () => { if (waitingRecordingId === rec.id) await handleStopWaiting(); handleStartRecording(rec); }} className="gap-1">
                             <Play size={14} /> Iniciar
                           </Button>
@@ -1047,7 +1088,7 @@ export default function VideomakerDashboard() {
                     </div>
                     {/* Mobile action buttons - full width row */}
                     <div className="flex sm:hidden gap-1.5 px-2.5 pb-2.5 pt-0">
-                      {rec.status === 'agendada' && !isActive && waitingRecordingId !== rec.id && !waitingRecordingId && (
+                      {isStartable && !isActive && waitingRecordingId !== rec.id && !waitingRecordingId && (
                         <Button size="sm" variant="outline" onClick={() => handleStartWaiting(rec)}
                           className="flex-1 gap-1 text-xs border-warning/50 text-warning hover:bg-warning/10 h-8">
                           <Hourglass size={12} /> Aguardar
@@ -1059,7 +1100,7 @@ export default function VideomakerDashboard() {
                           <Square size={12} /> Parar
                         </Button>
                       )}
-                      {rec.status === 'agendada' && !isActive && (
+                      {isStartable && !isActive && (
                         <Button size="sm" onClick={async () => { if (waitingRecordingId === rec.id) await handleStopWaiting(); handleStartRecording(rec); }} className="flex-1 gap-1 text-xs h-8">
                           <Rocket size={12} className="-rotate-45" /> Iniciar
                         </Button>
@@ -1192,8 +1233,9 @@ export default function VideomakerDashboard() {
                   {dayRecs.map(rec => {
                     const color = getClientColor(rec.clientId, rec);
                     const isActive = activeRecordingId === rec.id;
-                    const isDone = rec.status === 'concluida';
+                    const isDone = isRecordingDone(rec);
                     const isOrganizingWeek = rec.status === 'organizando_material';
+                    const isStartable = isRecordingStartable(rec);
                     return (
                       <motion.div key={rec.id}
                         whileTap={{ scale: 0.97 }}
@@ -1214,7 +1256,7 @@ export default function VideomakerDashboard() {
                           }
                           if (isActive) {
                             handleFinishRecording(rec);
-                          } else if (rec.status === 'agendada') {
+                          } else if (isStartable) {
                             handleStartRecording(rec);
                           }
                         }}
@@ -1244,7 +1286,7 @@ export default function VideomakerDashboard() {
                             </Badge>
                           </motion.div>
                         )}
-                        {!isActive && !isDone && !isOrganizingWeek && rec.status === 'agendada' && (
+                        {!isActive && !isDone && !isOrganizingWeek && isStartable && (
                           <div className="flex items-center gap-1 text-primary text-[9px]">
                             <Play size={8} /> Toque para iniciar
                           </div>

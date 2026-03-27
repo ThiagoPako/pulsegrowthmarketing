@@ -16,7 +16,7 @@ import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, Cell } from 'recharts';
 import jsPDF from 'jspdf';
 import pulseHeaderImg from '@/assets/pulse_header.png';
-import { VM_SCORE, EDITOR_SCORE, calcVmDeliveryScore, calcWaitPoints } from '@/lib/scoringSystem';
+import { VM_SCORE, EDITOR_SCORE, calcVmDeliveryScore, calcWaitPoints, EDITOR_APPROVED_COLUMNS } from '@/lib/scoringSystem';
 
 interface DeliveryRecord {
   id: string;
@@ -202,8 +202,8 @@ export default function InternalReports() {
   const editorRanking = useMemo(() => {
     return editors.map(ed => {
       const edTasks = editorFiltered.filter(t => t.assigned_to === ed.id || t.edited_by === ed.id);
-      const approved = edTasks.filter(t => t.approved_at || ['aprovado', 'publicado', 'finalizado', 'envio'].includes(t.kanban_column)).length;
-      const inEditing = edTasks.filter(t => t.kanban_column === 'em_edicao' || t.kanban_column === 'editando').length;
+      const approved = edTasks.filter(t => !!t.approved_at || EDITOR_APPROVED_COLUMNS.includes(t.kanban_column as any)).length;
+      const inEditing = edTasks.filter(t => t.kanban_column === 'edicao').length;
       const inRevision = edTasks.filter(t => t.kanban_column === 'revisao').length;
       const alterations = edTasks.filter(t => t.kanban_column === 'alteracao').length;
       const priorityTasks = edTasks.filter(t => t.editing_priority === true).length;
@@ -252,12 +252,13 @@ export default function InternalReports() {
           const d = format(new Date(t.updated_at), 'yyyy-MM-dd');
           return d >= w.start && d <= w.end;
         })());
-        const approved = edTasks.filter(t => t.approved_at || ['aprovado', 'publicado', 'finalizado', 'envio'].includes(t.kanban_column)).length;
-        const inEditing = edTasks.filter(t => t.kanban_column === 'em_edicao' || t.kanban_column === 'editando').length;
+        const approved = edTasks.filter(t => !!t.approved_at || EDITOR_APPROVED_COLUMNS.includes(t.kanban_column as any)).length;
+        const inEditing = edTasks.filter(t => t.kanban_column === 'edicao').length;
+        const inRevision = edTasks.filter(t => t.kanban_column === 'revisao').length;
         const alterations = edTasks.filter(t => t.kanban_column === 'alteracao').length;
         const priorityTasks = edTasks.filter(t => t.editing_priority === true).length;
         entry[ed.name.split(' ')[0]] = approved * EDITOR_SCORE.APROVADO + inEditing * EDITOR_SCORE.EM_EDICAO +
-          alterations * EDITOR_SCORE.ALTERACAO + priorityTasks * EDITOR_SCORE.PRIORIDADE;
+          inRevision * EDITOR_SCORE.REVISAO + alterations * EDITOR_SCORE.ALTERACAO + priorityTasks * EDITOR_SCORE.PRIORIDADE;
       });
       return entry;
     });

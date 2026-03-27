@@ -8,7 +8,7 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isWithinInter
 import { Badge } from '@/components/ui/badge';
 import UserAvatar from '@/components/UserAvatar';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { VM_SCORE, EDITOR_SCORE, DESIGNER_SCORE, SM_SCORE, PARCEIRO_SCORE, calcVmDeliveryScore, calcWaitPoints } from '@/lib/scoringSystem';
+import { VM_SCORE, EDITOR_SCORE, DESIGNER_SCORE, SM_SCORE, PARCEIRO_SCORE, calcVmDeliveryScore, calcWaitPoints, EDITOR_APPROVED_COLUMNS } from '@/lib/scoringSystem';
 
 interface MemberPerformance {
   id: string;
@@ -129,9 +129,9 @@ export default function TeamPerformanceWidget() {
       } else if (user.role === 'editor') {
         // Editor: match by assigned_to OR edited_by (editor may edit without being assigned)
         const editorTasks = contentTasks.filter(t => t.assigned_to === user.id || t.edited_by === user.id);
-        const approved = editorTasks.filter(t => t.approved_at || ['aprovado', 'publicado', 'finalizado', 'envio'].includes(t.kanban_column)).length;
+        const approved = editorTasks.filter(t => !!t.approved_at || EDITOR_APPROVED_COLUMNS.includes(t.kanban_column as any)).length;
         const inRevision = editorTasks.filter(t => t.kanban_column === 'revisao').length;
-        const inEditing = editorTasks.filter(t => t.kanban_column === 'em_edicao' || t.kanban_column === 'editando').length;
+        const inEditing = editorTasks.filter(t => t.kanban_column === 'edicao').length;
         const alterations = editorTasks.filter(t => t.kanban_column === 'alteracao').length;
         const priorityTasks = editorTasks.filter(t => t.editing_priority === true).length;
         score = approved * EDITOR_SCORE.APROVADO + inEditing * EDITOR_SCORE.EM_EDICAO +
@@ -167,7 +167,7 @@ export default function TeamPerformanceWidget() {
 
       } else if (user.role === 'social_media') {
         const smCreated = contentTasks.filter(t => t.created_by === user.id);
-        const published = smCreated.filter(t => t.kanban_column === 'publicado' || t.kanban_column === 'arquivado').length;
+        const published = smCreated.filter(t => t.kanban_column === 'arquivado').length;
         const managed = smCreated.length;
         const userDeliveries = smDeliveries.filter(d => d.created_by === user.id);
         const posted = userDeliveries.filter(d => d.status === 'postado' || d.posted_at).length;

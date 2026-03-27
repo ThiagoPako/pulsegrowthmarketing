@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import UserAvatar from '@/components/UserAvatar';
 import { ROLE_LABELS } from '@/types';
 import type { UserRole } from '@/types';
-import { EDITOR_SCORE, VM_SCORE, DESIGNER_SCORE } from '@/lib/scoringSystem';
+import { EDITOR_SCORE, VM_SCORE, DESIGNER_SCORE, EDITOR_APPROVED_COLUMNS } from '@/lib/scoringSystem';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Clock, Trophy, CheckCircle2, TrendingUp, Film, Palette, BarChart3 } from 'lucide-react';
@@ -245,7 +245,7 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
       totalEditingTime += activeSeconds;
       if (activeSeconds > 0) tasksWithTime++;
 
-      if (['agendamentos', 'acompanhamento', 'arquivado', 'envio'].includes(col)) {
+      if (!!task.approved_at || EDITOR_APPROVED_COLUMNS.includes(col as any)) {
         score += EDITOR_SCORE.APROVADO;
       } else if (col === 'edicao') {
         score += EDITOR_SCORE.EM_EDICAO;

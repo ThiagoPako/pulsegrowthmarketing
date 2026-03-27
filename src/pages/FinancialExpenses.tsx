@@ -317,6 +317,46 @@ export default function FinancialExpenses() {
     if (!ok) toast.error('Erro ao marcar como pago');
   }, [updateExpense]);
 
+  const handlePayWithBonus = useCallback((expense: Expense) => {
+    setBonusExpense(expense);
+    setBonusAmount('');
+    setBonusDialogOpen(true);
+  }, []);
+
+  const handleConfirmBonus = useCallback(async () => {
+    if (!bonusExpense || !bonusAmount) { toast.error('Informe o valor do bônus'); return; }
+    const match = bonusExpense.description?.match(/^Salário - (.+?) \((.+?)\)/);
+    const memberName = match ? match[1] : bonusExpense.responsible || bonusExpense.description;
+    const memberRole = match ? match[2] : '';
+
+    // Mark as paid
+    setRocketName(memberName);
+    setShowRocket(true);
+    const desc = `${bonusExpense.description} - PAGO`;
+    const ok = await updateExpense(bonusExpense.id, { description: desc });
+    if (!ok) { toast.error('Erro ao marcar como pago'); return; }
+
+    // Save bonus record
+    const { error } = await supabase.from('salary_bonuses').insert({
+      expense_id: bonusExpense.id,
+      user_name: memberName,
+      user_role: memberRole,
+      bonus_amount: Number(bonusAmount),
+      reference_month: selectedMonth,
+    } as any);
+
+    if (error) {
+      console.error('[FinancialExpenses] bonus insert error:', error);
+      toast.error('Pago, mas erro ao registrar bônus');
+    } else {
+      toast.success(`Pago com bônus de ${fmt(Number(bonusAmount))} para ${memberName}! 🎉`);
+    }
+
+    setBonusDialogOpen(false);
+    setBonusExpense(null);
+    setBonusAmount('');
+  }, [bonusExpense, bonusAmount, updateExpense, selectedMonth]);
+
   const handleRevertSalary = useCallback(async (expense: Expense) => {
     const desc = expense.description.replace(/ - PAGO$/, '');
     const ok = await updateExpense(expense.id, { description: desc });

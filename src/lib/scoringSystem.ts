@@ -215,7 +215,7 @@ export function getEditorScoreBreakdown(tasks: EditorScoreTask[]) {
 export function getSocialMediaScoreBreakdown(
   contentTasks: SocialScoreContentTask[],
   deliveries: SocialScoreDelivery[],
-  scripts: SocialScoreScript[],
+  _scripts: SocialScoreScript[],
   userId: string,
 ) {
   const authoredTasks = contentTasks.filter(task => getCreatorId(task) === userId);
@@ -227,19 +227,17 @@ export function getSocialMediaScoreBreakdown(
   const managed = authoredTasks.length;
   const posted = authoredDeliveries.filter(delivery => delivery.status === 'postado' || !!delivery.posted_at).length;
   const scheduled = authoredDeliveries.filter(delivery => delivery.status === 'agendado').length;
-  const scriptsCreated = scripts.filter(script => getCreatorId(script) === userId).length;
 
   return {
     published,
     managed,
     posted,
     scheduled,
-    scriptsCreated,
+    scriptsCreated: 0,
     score:
       published * SM_SCORE.PUBLICADO +
       posted * SM_SCORE.POSTADO +
       scheduled * SM_SCORE.AGENDADO +
-      managed * SM_SCORE.GERENCIADO +
-      scriptsCreated * SM_SCORE.ROTEIRO,
+      managed * SM_SCORE.GERENCIADO,
   };
 }

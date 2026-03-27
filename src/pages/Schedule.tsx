@@ -61,6 +61,34 @@ function timeToMinutes(t: string) {
 function minutesToTime(m: number) {
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 }
+function normalizeDateKey(value: string | Date | null | undefined) {
+  if (!value) return '';
+  if (typeof value === 'string') return value.slice(0, 10);
+  return value.toISOString().slice(0, 10);
+}
+function sortEventRecordings(events: EventRecording[]) {
+  return [...events].sort((a, b) => {
+    if (a.date === b.date) return a.startTime.localeCompare(b.startTime);
+    return a.date.localeCompare(b.date);
+  });
+}
+function mapEventRecordingRow(e: any): EventRecording {
+  return {
+    id: e.id,
+    clientId: e.client_id || '',
+    videomakerId: e.videomaker_id || '',
+    title: e.title || '',
+    date: normalizeDateKey(e.date),
+    startTime: e.start_time,
+    endTime: e.end_time,
+    address: e.address || '',
+    description: e.description || '',
+    status: e.status,
+    createdBy: e.created_by,
+    createdAt: e.created_at,
+    updatedAt: e.updated_at,
+  };
+}
 
 export default function Schedule() {
   const {
@@ -125,24 +153,19 @@ export default function Schedule() {
 
   // Fetch event recordings
   const fetchEvents = useCallback(async () => {
-    const { data } = await supabase.from('event_recordings').select('*').order('date', { ascending: true });
-    if (data) {
-      setEventRecordings(data.map((e: any) => ({
-        id: e.id,
-        clientId: e.client_id || '',
-        videomakerId: e.videomaker_id || '',
-        title: e.title || '',
-        date: e.date,
-        startTime: e.start_time,
-        endTime: e.end_time,
-        address: e.address || '',
-        description: e.description || '',
-        status: e.status,
-        createdBy: e.created_by,
-        createdAt: e.created_at,
-        updatedAt: e.updated_at,
-      })));
+    const { data, error } = await supabase
+      .from('event_recordings')
+      .select('*')
+      .order('date', { ascending: true })
+      .order('start_time', { ascending: true });
+
+    if (error) {
+      console.error('[fetchEvents] error:', error);
+      toast.error('Erro ao carregar eventos da agenda');
+      return;
     }
+
+    setEventRecordings(sortEventRecordings((data || []).map(mapEventRecordingRow)));
   }, []);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
@@ -241,13 +264,13 @@ export default function Schedule() {
 
     // Event recordings
     if (showEvents) {
-      eventRecordings.filter(e => e.date === dateStr && e.status !== 'cancelado').forEach(evt => {
+      eventRecordings.filter(e => normalizeDateKey(e.date) === dateStr && e.status !== 'cancelado').forEach(evt => {
         const client = clients.find(c => c.id === evt.clientId);
         events.push({
           id: `event-${evt.id}`,
           type: 'event',
           clientName: evt.title || client?.companyName || 'Evento',
-          color: '25 95% 53%', // orange for events
+          color: '25 95% 53%',
           startTime: evt.startTime,
           date: evt.date,
           status: evt.status,
@@ -283,53 +306,80 @@ export default function Schedule() {
     if (!eventForm.clientId || !eventForm.videomakerId || !eventForm.date || !eventForm.title) {
       toast.error('Preencha todos os campos obrigatórios'); return;
     }
-    const { error } = await supabase.from('event_recordings').insert({
-      client_id: eventForm.clientId,
-      videomaker_id: eventForm.videomakerId,
-      title: eventForm.title,
-      date: eventForm.date,
-      start_time: eventForm.startTime,
-      end_time: eventForm.endTime,
-      address: eventForm.address,
-      description: eventForm.description,
-      created_by: currentUser?.id || null,
-    } as any);
-    if (error) { console.error('[handleAddEvent] Supabase error:', error); toast.error(`Erro ao criar evento: ${error.message}`); return; }
+
+    const { data, error } = await supabase
+      .from('event_recordings')
+      .insert({
+        client_id: eventForm.clientId,
+        videomaker_id: eventForm.videomakerId,
+        title: eventForm.title,
+        date: eventForm.date,
+        start_time: eventForm.startTime,
+        end_time: eventForm.endTime,
+        address: eventForm.address,
+        description: eventForm.description,
+        created_by: currentUser?.id || null,
+      } as any)
+      .select('*')
+      .single();
+
+    if (error) { console.error('[handleAddEvent] error:', error); toast.error(`Erro ao criar evento: ${error.message}`); return; }
+
+    const savedEvent = mapEventRecordingRow(data);
+    setEventRecordings(prev => sortEventRecordings([...prev.filter(event => event.id !== savedEvent.id), savedEvent]));
     toast.success('Evento agendado com sucesso');
     setEventOpen(false);
-    fetchEvents();
   };
 
   const handleEditEvent = async () => {
     if (!editingEvent) return;
-    const { error } = await supabase.from('event_recordings').update({
-      client_id: eventForm.clientId,
-      videomaker_id: eventForm.videomakerId,
-      title: eventForm.title,
-      date: eventForm.date,
-      start_time: eventForm.startTime,
-      end_time: eventForm.endTime,
-      address: eventForm.address,
-      description: eventForm.description,
-    } as any).eq('id', editingEvent.id);
+
+    const { data, error } = await supabase
+      .from('event_recordings')
+      .update({
+        client_id: eventForm.clientId,
+        videomaker_id: eventForm.videomakerId,
+        title: eventForm.title,
+        date: eventForm.date,
+        start_time: eventForm.startTime,
+        end_time: eventForm.endTime,
+        address: eventForm.address,
+        description: eventForm.description,
+      } as any)
+      .eq('id', editingEvent.id)
+      .select('*')
+      .single();
+
     if (error) { toast.error('Erro ao atualizar evento'); return; }
+
+    const updatedEvent = mapEventRecordingRow(data);
+    setEventRecordings(prev => sortEventRecordings(prev.map(event => event.id === updatedEvent.id ? updatedEvent : event)));
     toast.success('Evento atualizado');
     setEditEventOpen(false);
     setEditingEvent(null);
-    fetchEvents();
   };
 
   const handleDeleteEvent = async (id: string) => {
     if (!window.confirm('Apagar este evento permanentemente?')) return;
-    await supabase.from('event_recordings').delete().eq('id', id);
+    const { error } = await supabase.from('event_recordings').delete().eq('id', id);
+    if (error) { toast.error('Erro ao apagar evento'); return; }
+    setEventRecordings(prev => prev.filter(event => event.id !== id));
     toast.success('Evento apagado');
-    fetchEvents();
   };
 
   const handleCompleteEvent = async (id: string) => {
-    await supabase.from('event_recordings').update({ status: 'concluido' } as any).eq('id', id);
+    const { data, error } = await supabase
+      .from('event_recordings')
+      .update({ status: 'concluido' } as any)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) { toast.error('Erro ao concluir evento'); return; }
+
+    const updatedEvent = mapEventRecordingRow(data);
+    setEventRecordings(prev => sortEventRecordings(prev.map(event => event.id === updatedEvent.id ? updatedEvent : event)));
     toast.success('Evento concluído');
-    fetchEvents();
   };
 
   const openEditEvent = (evt: EventRecording) => {

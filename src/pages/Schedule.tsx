@@ -294,7 +294,7 @@ export default function Schedule() {
       description: eventForm.description,
       created_by: currentUser?.id || null,
     } as any);
-    if (error) { toast.error('Erro ao criar evento'); return; }
+    if (error) { console.error('[handleAddEvent] Supabase error:', error); toast.error(`Erro ao criar evento: ${error.message}`); return; }
     toast.success('Evento agendado com sucesso');
     setEventOpen(false);
     fetchEvents();

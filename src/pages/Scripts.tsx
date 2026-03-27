@@ -418,87 +418,34 @@ export default function Scripts() {
   const exportPdfPages = useCallback(async (pages: HTMLDivElement[], fileName: string) => {
     const { default: html2canvas } = await import('html2canvas');
     const { default: jsPDF } = await import('jspdf');
-    const pdfWidth = 210;
+    const pdfWidthMm = 210;
+    const pdfHeightMm = 297;
 
-    const renderedPages: Array<{ imgData: string; imgHeight: number }> = [];
+    const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
 
-    for (const page of pages) {
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
       await waitForPdfAssets(page);
 
-      // Temporarily remove overflow:hidden so html2canvas captures everything
       const prevOverflow = page.style.overflow;
       page.style.overflow = 'visible';
 
-      const actualHeight = page.scrollHeight;
       const canvas = await html2canvas(page, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
         width: page.offsetWidth,
-        height: actualHeight,
+        height: page.offsetHeight,
         windowWidth: page.offsetWidth,
-        windowHeight: actualHeight,
+        windowHeight: page.offsetHeight,
       });
 
       page.style.overflow = prevOverflow;
 
-      // Crop trailing whitespace/black from the canvas bottom
-      const ctx = canvas.getContext('2d');
-      let cropHeight = canvas.height;
-      if (ctx) {
-        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const { data, width } = imgData;
-        // Scan from bottom up to find the last row with real content
-        // A pixel is "empty" if it's near-white (>245 all channels) OR near-black (<10 all channels, from transparent areas)
-        for (let row = canvas.height - 1; row > 0; row--) {
-          let hasContent = false;
-          for (let col = 0; col < width; col += 4) {
-            const idx = (row * width + col) * 4;
-            const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-            const isWhite = r > 245 && g > 245 && b > 245;
-            const isBlack = r < 10 && g < 10 && b < 10;
-            if (!isWhite && !isBlack) {
-              hasContent = true;
-              break;
-            }
-          }
-          if (hasContent) {
-            cropHeight = Math.min(canvas.height, row + 40); // 40px safety padding
-            break;
-          }
-        }
-      }
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
-      // Create cropped canvas
-      const croppedCanvas = document.createElement('canvas');
-      croppedCanvas.width = canvas.width;
-      croppedCanvas.height = cropHeight;
-      const croppedCtx = croppedCanvas.getContext('2d');
-      if (croppedCtx) {
-        croppedCtx.fillStyle = '#ffffff';
-        croppedCtx.fillRect(0, 0, croppedCanvas.width, croppedCanvas.height);
-        croppedCtx.drawImage(canvas, 0, 0, canvas.width, cropHeight, 0, 0, canvas.width, cropHeight);
-      }
-
-      renderedPages.push({
-        imgData: croppedCanvas.toDataURL('image/jpeg', 0.95),
-        imgHeight: (croppedCanvas.height * pdfWidth) / croppedCanvas.width,
-      });
-    }
-
-    if (!renderedPages.length) return;
-
-    const pdf = new jsPDF({
-      orientation: 'p',
-      unit: 'mm',
-      format: [pdfWidth, renderedPages[0].imgHeight],
-    });
-
-    pdf.addImage(renderedPages[0].imgData, 'JPEG', 0, 0, pdfWidth, renderedPages[0].imgHeight);
-
-    for (let i = 1; i < renderedPages.length; i++) {
-      pdf.addPage([pdfWidth, renderedPages[i].imgHeight]);
-      pdf.addImage(renderedPages[i].imgData, 'JPEG', 0, 0, pdfWidth, renderedPages[i].imgHeight);
+      if (i > 0) pdf.addPage('a4', 'p');
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm);
     }
 
     pdf.save(fileName);

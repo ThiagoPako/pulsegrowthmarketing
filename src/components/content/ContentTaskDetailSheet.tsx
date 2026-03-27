@@ -1090,7 +1090,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                     <Calendar size={16} className="text-muted-foreground shrink-0" />
                     <div>
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
-                        {task.kanban_column === 'acompanhamento' ? 'Agendado para' : 'Data de gravação'}
+                        {task.kanban_column === 'acompanhamento' || task.kanban_column === 'agendamentos' ? 'Postagem programada' : 'Data de gravação'}
                       </span>
                       <span className="text-sm font-bold text-foreground">
                         {format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}

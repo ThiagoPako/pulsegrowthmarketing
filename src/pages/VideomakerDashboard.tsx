@@ -467,9 +467,7 @@ export default function VideomakerDashboard() {
     }
     updateRecording({ ...rec, status: 'concluida' });
 
-    // Create/update content_tasks for recorded scripts
-    const editingDeadline = new Date();
-    editingDeadline.setHours(editingDeadline.getHours() + (settings.editingDeadlineHours || 48));
+    // Content tasks - sync handles deadlines via syncContentTaskColumnChange
 
     for (const scriptId of allRecordedArray) {
       const script = scripts.find(s => s.id === scriptId);

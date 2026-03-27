@@ -32,6 +32,7 @@ const COLUMN_TO_SOCIAL_STATUS: Record<string, string> = {
   envio: 'aprovacao_cliente',
   agendamentos: 'entregue',
   acompanhamento: 'agendado',
+  arquivado: 'postado',
 };
 
 // Map JS getDay() (0=Sun) to our DayOfWeek keys
@@ -195,11 +196,16 @@ export async function syncContentTaskColumnChange(
           status: socialStatus,
         } as any).eq('content_task_id', ctx.taskId);
       }
+    } else {
+      // Moving to a non-social-tracked column (ideias, captacao, edicao):
+      // Delete the social_media_deliveries record to avoid ghost cards in the social kanban
+      const { data: orphanRecords } = await supabase.from('social_media_deliveries')
+        .select('id').eq('content_task_id', ctx.taskId).limit(1);
+      if (orphanRecords?.length) {
+        await supabase.from('social_media_deliveries').delete().eq('content_task_id', ctx.taskId);
+      }
     }
   }
-
-  // If moving out of social-tracked columns (e.g. back to ideias/captacao/edicao), remove the social delivery link status
-  // but keep the record for history
 
   // 4. Column-specific notifications & actions
   if (newColumn === 'revisao') {

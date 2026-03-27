@@ -530,7 +530,7 @@ export default function Schedule() {
 
   const handleResetRecording = async (rec: Recording) => {
     const active = activeRecordings.find(a => a.recordingId === rec.id);
-    await supabase.from('active_recordings').delete().eq('recording_id', rec.id);
+    await invokeVpsFunction(`active-recordings/${rec.id}`, { method: 'DELETE' });
     if (active?.plannedScriptIds?.length) {
       for (const scriptId of active.plannedScriptIds) {
         await supabase.from('content_tasks').update({ kanban_column: 'ideias', recording_id: null } as any)

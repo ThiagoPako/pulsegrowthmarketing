@@ -66,8 +66,10 @@ const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
 
 type VideoQuality = '480p' | 'original';
 
+const VIDEO_CONTENT_TYPES = new Set(['reel', 'institucional', 'anuncio']);
+
 function isPortalVideo(content: Pick<PortalContent, 'content_type' | 'file_url'>) {
-  return content.content_type !== 'arte' && !!content.file_url;
+  return VIDEO_CONTENT_TYPES.has(content.content_type) && !!content.file_url;
 }
 
 function shouldProxyPortalVideo(url: string) {
@@ -867,7 +869,7 @@ export default function ClientPortal() {
 
               {/* Player / Image */}
               <div className="relative bg-black rounded-2xl overflow-hidden mx-4 sm:mx-0">
-                {selectedContent.content_type === 'arte' && selectedContent.file_url ? (
+                {!isPortalVideo(selectedContent) && selectedContent.file_url ? (
                   <div className="aspect-video flex items-center justify-center bg-[#0c0c14]">
                     <img src={selectedContent.file_url} alt={selectedContent.title} className="max-w-full max-h-full object-contain" />
                   </div>

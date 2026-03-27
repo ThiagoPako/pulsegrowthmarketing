@@ -519,7 +519,7 @@ export default function Scripts() {
         return last.offsetTop + last.offsetHeight;
       };
 
-      const safeMaxHeight = pdfHeightPx - 12; // tighter bottom margin
+      const safeMaxHeight = pdfHeightPx - 24; // safe bottom margin to avoid clipping
 
       const appendBlock = (block: HTMLElement, forceBreakInside = false) => {
         const clone = block.cloneNode(true) as HTMLElement;
@@ -531,10 +531,16 @@ export default function Scripts() {
 
         const usedHeight = getUsedHeight(currentPage);
 
-        if (usedHeight > safeMaxHeight && currentPage.childElementCount > 1) {
-          currentPage.removeChild(clone);
-          currentPage = createPage();
-          currentPage.appendChild(clone);
+        if (usedHeight > safeMaxHeight) {
+          if (currentPage.childElementCount > 1) {
+            // Move block to new page
+            currentPage.removeChild(clone);
+            currentPage = createPage();
+            currentPage.appendChild(clone);
+            // Check again - if single block still overflows, it's too tall (accept it)
+          }
+          // If it's the only child and still overflows, we accept it
+          // (block is taller than a full page - rare but possible)
         }
       };
 
@@ -601,8 +607,8 @@ export default function Scripts() {
                 appendBlock(block);
               } else {
                 accum.push(node);
-                // Flush every 6 nodes to keep blocks manageable
-                if (accum.length >= 6) flushAccum();
+                // Flush every 3 nodes to keep blocks small and avoid clipping
+                if (accum.length >= 3) flushAccum();
               }
             }
             flushAccum();

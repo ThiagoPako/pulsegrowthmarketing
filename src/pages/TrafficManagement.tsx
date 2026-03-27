@@ -336,16 +336,28 @@ export default function TrafficManagement() {
                       </div>
                     </div>
 
-                    {/* Video link */}
+                    {/* Video link + Download */}
                     {creative.edited_video_link && (
-                      <a
-                        href={creative.edited_video_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-xs text-primary hover:underline"
-                      >
-                        <Eye size={12} /> Ver criativo
-                      </a>
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={creative.edited_video_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-xs text-primary hover:underline"
+                        >
+                          <Eye size={12} /> Ver criativo
+                        </a>
+                        <a
+                          href={creative.edited_video_link}
+                          download
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 text-xs text-emerald-500 hover:text-emerald-400 transition-colors"
+                          title="Baixar criativo"
+                        >
+                          <Download size={12} /> Baixar
+                        </a>
+                      </div>
                     )}
 
                     {/* Status badge */}

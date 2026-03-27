@@ -73,8 +73,6 @@ export const SM_SCORE = {
   AGENDADO: 5,
   /** Gerenciado */
   GERENCIADO: 2,
-  /** Roteiro criado */
-  ROTEIRO: 6,
 } as const;
 
 // ── Parceiro Scoring ──

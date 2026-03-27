@@ -1036,8 +1036,8 @@ export default function Schedule() {
           <Button variant="outline" onClick={() => { setRegenClientId(''); setRegenOpen(true); }}>
             <RefreshCw size={16} className="mr-2" /> Regenerar Agenda
           </Button>
-          <Button variant="outline" className="border-primary/50 text-primary hover:bg-primary/10" onClick={handleGenerateAllFixed}>
-            <CalendarDays size={16} className="mr-2" /> Gerar Todas Fixas
+          <Button variant="outline" className="border-primary/50 text-primary hover:bg-primary/10" onClick={handleGenerateAllFixed} disabled={generatingAll}>
+            <CalendarDays size={16} className="mr-2" /> {generatingAll ? 'Gerando...' : 'Gerar Todas Fixas'}
           </Button>
           <Button onClick={() => { setForm({ clientId: '', videomakerId: '', date: format(new Date(), 'yyyy-MM-dd'), startTime: '09:00', type: 'fixa', prospectName: '' }); setNewOpen(true); }}>
             <Plus size={16} className="mr-2" /> Nova Gravação

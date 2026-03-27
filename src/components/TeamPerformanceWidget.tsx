@@ -8,7 +8,7 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isWithinInter
 import { Badge } from '@/components/ui/badge';
 import UserAvatar from '@/components/UserAvatar';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { VM_SCORE, EDITOR_SCORE, DESIGNER_SCORE, SM_SCORE, PARCEIRO_SCORE, calcVmDeliveryScore, calcWaitPoints, EDITOR_APPROVED_COLUMNS } from '@/lib/scoringSystem';
+import { VM_SCORE, DESIGNER_SCORE, PARCEIRO_SCORE, calcWaitPoints, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate, getScriptReferenceDate, getSocialDeliveryReferenceDate, getSocialMediaScoreBreakdown, getSocialTaskReferenceDate } from '@/lib/scoringSystem';
 
 interface MemberPerformance {
   id: string;
@@ -86,6 +86,12 @@ export default function TeamPerformanceWidget() {
   const teamMembers = useMemo(() => {
     const members: MemberPerformance[] = [];
     const teamUsers = users.filter(u => u.role !== 'admin');
+    const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+    const monthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
+    const isInCurrentMonth = (value?: string | null) => {
+      const key = value?.slice(0, 10);
+      return !!key && key >= monthStart && key <= monthEnd;
+    };
 
     for (const user of teamUsers) {
       let score = 0;
@@ -127,22 +133,17 @@ export default function TeamPerformanceWidget() {
         maxScore = Math.max(score, 200);
 
       } else if (user.role === 'editor') {
-        // Editor: match by assigned_to OR edited_by (editor may edit without being assigned)
-        const editorTasks = contentTasks.filter(t => t.assigned_to === user.id || t.edited_by === user.id);
-        const approved = editorTasks.filter(t => !!t.approved_at || EDITOR_APPROVED_COLUMNS.includes(t.kanban_column as any)).length;
-        const inRevision = editorTasks.filter(t => t.kanban_column === 'revisao').length;
-        const inEditing = editorTasks.filter(t => t.kanban_column === 'edicao').length;
-        const alterations = editorTasks.filter(t => t.kanban_column === 'alteracao').length;
-        const priorityTasks = editorTasks.filter(t => t.editing_priority === true).length;
-        score = approved * EDITOR_SCORE.APROVADO + inEditing * EDITOR_SCORE.EM_EDICAO +
-          inRevision * EDITOR_SCORE.REVISAO + alterations * EDITOR_SCORE.ALTERACAO +
-          priorityTasks * EDITOR_SCORE.PRIORIDADE;
+        const editorTasks = contentTasks.filter(
+          t => getEditorTaskOwnerId(t) === user.id && isInCurrentMonth(getEditorTaskReferenceDate(t)),
+        );
+        const breakdown = getEditorScoreBreakdown(editorTasks);
+        score = breakdown.score;
         metrics.push(
-          { label: 'Aprovados', value: approved },
-          { label: 'Editando', value: inEditing },
-          { label: 'Revisão', value: inRevision },
-          { label: 'Alterações', value: alterations },
-          { label: 'Prioritários', value: priorityTasks },
+          { label: 'Aprovados', value: breakdown.approved },
+          { label: 'Editando', value: breakdown.inEditing },
+          { label: 'Revisão', value: breakdown.inRevision },
+          { label: 'Alterações', value: breakdown.alterations },
+          { label: 'Prioritários', value: breakdown.priorityTasks },
         );
         maxScore = Math.max(score, 150);
 
@@ -166,20 +167,17 @@ export default function TeamPerformanceWidget() {
         maxScore = Math.max(score, 120);
 
       } else if (user.role === 'social_media') {
-        const smCreated = contentTasks.filter(t => t.created_by === user.id);
-        const published = smCreated.filter(t => t.kanban_column === 'arquivado').length;
-        const managed = smCreated.length;
-        const userDeliveries = smDeliveries.filter(d => d.created_by === user.id);
-        const posted = userDeliveries.filter(d => d.status === 'postado' || d.posted_at).length;
-        const scheduled = userDeliveries.filter(d => d.status === 'agendado').length;
-        const scriptsCreated = scripts.filter(s => s.createdBy === user.id).length;
-        score = published * SM_SCORE.PUBLICADO + posted * SM_SCORE.POSTADO + scheduled * SM_SCORE.AGENDADO +
-          managed * SM_SCORE.GERENCIADO + scriptsCreated * SM_SCORE.ROTEIRO;
+        const scopedTasks = contentTasks.filter(t => isInCurrentMonth(getSocialTaskReferenceDate(t)));
+        const scopedDeliveries = smDeliveries.filter(d => isInCurrentMonth(getSocialDeliveryReferenceDate(d)));
+        const scopedScripts = scripts.filter(s => isInCurrentMonth(getScriptReferenceDate(s)));
+        const breakdown = getSocialMediaScoreBreakdown(scopedTasks, scopedDeliveries, scopedScripts, user.id);
+        score = breakdown.score;
         metrics.push(
-          { label: 'Publicados', value: published },
-          { label: 'Postados', value: posted },
-          { label: 'Roteiros', value: scriptsCreated },
-          { label: 'Gerenciados', value: managed },
+          { label: 'Publicados', value: breakdown.published },
+          { label: 'Postados', value: breakdown.posted },
+          { label: 'Agendados', value: breakdown.scheduled },
+          { label: 'Roteiros', value: breakdown.scriptsCreated },
+          { label: 'Gerenciados', value: breakdown.managed },
         );
         maxScore = Math.max(score, 120);
 

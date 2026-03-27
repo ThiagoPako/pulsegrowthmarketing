@@ -149,6 +149,18 @@ function serializeValueForColumn(columnName, value, jsonColumns) {
   return value;
 }
 
+function parseFilterArray(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== 'string') return [value];
+
+  return value
+    .replace(/^\(/, '')
+    .replace(/\)$/, '')
+    .split(',')
+    .map((item) => item.trim().replace(/^['"]|['"]$/g, ''))
+    .filter(Boolean);
+}
+
 async function ensureProposalTables() {
   if (!proposalTablesEnsuredPromise) {
     proposalTablesEnsuredPromise = pool.query(`
@@ -3134,6 +3146,22 @@ app.post('/api/db/query', async (req, res) => {
               case 'is': whereClauses.push(`${safeTable}.${col} IS ${f.value === null ? 'NULL' : 'NOT NULL'}`); break;
               case 'in': whereClauses.push(`${safeTable}.${col} = ANY($${paramIdx})`); params.push(f.value); paramIdx++; break;
               case 'contains': whereClauses.push(`${safeTable}.${col} @> $${paramIdx}`); params.push(f.value); paramIdx++; break;
+              case 'not': {
+                const nestedOp = f.value?.op;
+                const nestedValue = f.value?.value;
+                if (nestedOp === 'is') {
+                  whereClauses.push(`${safeTable}.${col} IS ${nestedValue === null ? 'NOT NULL' : 'NULL'}`);
+                } else if (nestedOp === 'in') {
+                  whereClauses.push(`NOT (${safeTable}.${col} = ANY($${paramIdx}))`);
+                  params.push(parseFilterArray(nestedValue));
+                  paramIdx++;
+                } else {
+                  whereClauses.push(`${safeTable}.${col} != $${paramIdx}`);
+                  params.push(nestedValue);
+                  paramIdx++;
+                }
+                break;
+              }
             }
           }
           if (whereClauses.length > 0) query += ` WHERE ${whereClauses.join(' AND ')}`;

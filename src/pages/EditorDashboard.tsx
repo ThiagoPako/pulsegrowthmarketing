@@ -23,7 +23,7 @@ import { format, differenceInHours, isPast, startOfWeek, endOfWeek, startOfMonth
 import { ptBR } from 'date-fns/locale';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 import { uploadFileToVps, deleteFileFromVps } from '@/services/vpsApi';
-import { EDITOR_SCORE, EDITOR_APPROVED_COLUMNS } from '@/lib/scoringSystem';
+import { EDITOR_APPROVED_COLUMNS, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate } from '@/lib/scoringSystem';
 
 const CONTENT_TYPES = [
   { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400', points: 10 },
@@ -274,31 +274,29 @@ export default function EditorDashboard() {
 
   const pendingTasks = visibleTasks.filter(t => t.kanban_column === 'edicao' && !t.editing_started_at);
   const inEditTasks = visibleTasks.filter(t => t.kanban_column === 'edicao' && t.editing_started_at);
-  const completedTasks = visibleTasks.filter(t => 
+  const myOwnedTasks = useMemo(() => {
+    if (!user) return [] as EditorTask[];
+    return tasks.filter(task => getEditorTaskOwnerId(task) === user.id);
+  }, [tasks, user]);
+
+  const completedTasks = myOwnedTasks.filter(t =>
     !!t.approved_at || EDITOR_APPROVED_COLUMNS.includes(t.kanban_column as any)
   );
   const overdueCount = visibleTasks.filter(t => t.kanban_column === 'edicao' && getDeadlineStatus(t.editing_deadline).variant === 'destructive').length;
 
-  const todayCompleted = completedTasks.filter(t => isWithinInterval(parseISO(t.updated_at), { start: todayStart, end: todayEnd }));
-  const weekCompleted = completedTasks.filter(t => isWithinInterval(parseISO(t.updated_at), { start: weekStart, end: weekEnd }));
-  const monthCompleted = completedTasks.filter(t => isWithinInterval(parseISO(t.updated_at), { start: monthStart, end: monthEnd }));
+  const isTaskWithinInterval = useCallback((task: EditorTask, start: Date, end: Date) => {
+    const referenceDate = getEditorTaskReferenceDate(task);
+    return referenceDate ? isWithinInterval(parseISO(referenceDate), { start, end }) : false;
+  }, []);
 
-  // Use centralized EDITOR_SCORE for points calculation
-  const calcEditorPoints = (list: EditorTask[]) => {
-    const approved = list.filter(t => !!t.approved_at || EDITOR_APPROVED_COLUMNS.includes(t.kanban_column as any)).length;
-    const inEditing = list.filter(t => t.kanban_column === 'edicao').length;
-    const inRevision = list.filter(t => t.kanban_column === 'revisao').length;
-    const alterations = list.filter(t => t.kanban_column === 'alteracao').length;
-    const priority = list.filter(t => t.editing_priority === true).length;
-    return approved * EDITOR_SCORE.APROVADO + inEditing * EDITOR_SCORE.EM_EDICAO +
-      inRevision * EDITOR_SCORE.REVISAO + alterations * EDITOR_SCORE.ALTERACAO +
-      priority * EDITOR_SCORE.PRIORIDADE;
-  };
+  const todayCompleted = completedTasks.filter(t => isTaskWithinInterval(t, todayStart, todayEnd));
+  const weekCompleted = completedTasks.filter(t => isTaskWithinInterval(t, weekStart, weekEnd));
+  const monthCompleted = completedTasks.filter(t => isTaskWithinInterval(t, monthStart, monthEnd));
   
-  // For the header badge, show month points based on all tasks this editor has
-  const myMonthTasks = visibleTasks.filter(t => isWithinInterval(parseISO(t.updated_at), { start: monthStart, end: monthEnd }));
-  const weekPoints = calcEditorPoints(visibleTasks.filter(t => isWithinInterval(parseISO(t.updated_at), { start: weekStart, end: weekEnd })));
-  const monthPoints = calcEditorPoints(myMonthTasks);
+  const myWeekTasks = myOwnedTasks.filter(t => isTaskWithinInterval(t, weekStart, weekEnd));
+  const myMonthTasks = myOwnedTasks.filter(t => isTaskWithinInterval(t, monthStart, monthEnd));
+  const weekPoints = getEditorScoreBreakdown(myWeekTasks).score;
+  const monthPoints = getEditorScoreBreakdown(myMonthTasks).score;
 
   // Queue tasks (edição + alteração, excluding actively editing ones shown in hero)
   const queueTasks = useMemo(() => {

@@ -454,7 +454,7 @@ export default function Scripts() {
   const buildPdfPages = useCallback(async (selectedScripts: Script[]) => {
     const pdfWidthPx = 794;
     const pdfHeightPx = Math.floor((pdfWidthPx * 297) / 210); // A4 exact height
-    const pagePadding = 40;
+    const pagePadding = 28;
     const sourceRoot = document.createElement('div');
     sourceRoot.style.cssText = `position:fixed;left:-20000px;top:0;width:${pdfWidthPx}px;background:white;pointer-events:none;z-index:-1;`;
 
@@ -466,14 +466,14 @@ export default function Scripts() {
       const client = clients.find(c => c.id === script.clientId);
       html += `
         <section data-pdf-role="script">
-          <div data-pdf-role="script-header" style="padding:${i === 0 ? '30' : '24'}px ${pagePadding}px 10px;">
-            ${i > 0 ? '<div style="border-top:2px solid #e5e5e5; margin:0 0 24px;"></div>' : ''}
-            <h1 style="font-size:22px; margin:0 0 6px;">${script.title}</h1>
-            <p style="font-size:13px; color:#666; margin:0 0 16px;">
+          <div data-pdf-role="script-header" style="padding:${i === 0 ? '16' : '14'}px ${pagePadding}px 4px;">
+            ${i > 0 ? '<div style="border-top:2px solid #e5e5e5; margin:0 0 14px;"></div>' : ''}
+            <h1 style="font-size:17px; margin:0 0 3px; line-height:1.3;">${script.title}</h1>
+            <p style="font-size:11px; color:#666; margin:0 0 8px;">
               ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
             </p>
           </div>
-          <div data-pdf-role="script-body" style="font-size:14px; line-height:1.8; text-align:justify; word-break:keep-all; overflow-wrap:break-word; hyphens:none; max-width:100%; box-sizing:border-box; overflow:hidden;">
+          <div data-pdf-role="script-body" style="font-size:12.5px; line-height:1.55; text-align:justify; word-break:keep-all; overflow-wrap:break-word; hyphens:none; max-width:100%; box-sizing:border-box; overflow:hidden;">
             ${highlightQuotesForPdf(script.content)}
           </div>
         </section>
@@ -481,8 +481,8 @@ export default function Scripts() {
     }
 
     html += `
-      <div data-pdf-role="footer" style="padding:10px ${pagePadding}px 20px; text-align:center;">
-        <p style="font-size:11px; color:#999; border-top:1px solid #e5e5e5; padding-top:12px; margin:0;">
+      <div data-pdf-role="footer" style="padding:6px ${pagePadding}px 12px; text-align:center;">
+        <p style="font-size:10px; color:#999; border-top:1px solid #e5e5e5; padding-top:8px; margin:0;">
           ${selectedScripts.length > 1
             ? `${selectedScripts.length} roteiro(s) · Pulse · ${new Date().toLocaleDateString('pt-BR')}`
             : `Roteiro gerado por Pulse · ${new Date().toLocaleDateString('pt-BR')}`}
@@ -519,11 +519,10 @@ export default function Scripts() {
         return last.offsetTop + last.offsetHeight;
       };
 
-      const safeMaxHeight = pdfHeightPx - 30; // 30px bottom margin
+      const safeMaxHeight = pdfHeightPx - 20; // 20px bottom margin
 
       const appendBlock = (block: HTMLElement) => {
         const clone = block.cloneNode(true) as HTMLElement;
-        // Ensure text justification and no word breaks on every block
         clone.style.textAlign = 'justify';
         clone.style.wordBreak = 'keep-all';
         clone.style.overflowWrap = 'break-word';
@@ -558,16 +557,15 @@ export default function Scripts() {
           } else {
             for (const node of bodyNodes) {
               const block = document.createElement('div');
-              block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.8; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:justify; word-break:keep-all; overflow-wrap:break-word; hyphens:none; break-inside:avoid; page-break-inside:avoid;`;
+              block.style.cssText = `padding:0 ${pagePadding}px; font-size:12.5px; line-height:1.55; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:justify; word-break:keep-all; overflow-wrap:break-word; hyphens:none; break-inside:avoid; page-break-inside:avoid;`;
 
               if (node.nodeType === Node.TEXT_NODE) {
                 const paragraph = document.createElement('p');
-                paragraph.style.cssText = 'margin:0 0 8px; text-align:justify;';
+                paragraph.style.cssText = 'margin:0 0 4px; text-align:justify;';
                 paragraph.textContent = node.textContent ?? '';
                 block.appendChild(paragraph);
               } else {
                 const clonedNode = (node as HTMLElement).cloneNode(true) as HTMLElement;
-                // Apply justify to nested elements
                 clonedNode.style.textAlign = 'justify';
                 block.appendChild(clonedNode);
               }

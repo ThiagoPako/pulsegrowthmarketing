@@ -1411,16 +1411,16 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, viewOn
             )}
             {/* Deadline badges */}
             {task.kanban_column === 'edicao' && task.editing_deadline && (
-              <DeadlineBadge deadline={task.editing_deadline} label="Edição" startedAt={task.editing_started_at} />
+              <DeadlineBadge deadline={task.editing_deadline} label="Edição" startedAt={task.editing_started_at} totalHours={48} />
             )}
             {task.kanban_column === 'revisao' && task.review_deadline && (
-              <DeadlineBadge deadline={task.review_deadline} label="Revisão" startedAt={task.approval_sent_at} />
+              <DeadlineBadge deadline={task.review_deadline} label="Revisão" totalHours={24} />
             )}
             {task.kanban_column === 'alteracao' && task.alteration_deadline && !task.immediate_alteration && (
-              <DeadlineBadge deadline={task.alteration_deadline} label="Alteração" startedAt={task.editing_started_at} />
+              <DeadlineBadge deadline={task.alteration_deadline} label="Alteração" totalHours={24} />
             )}
             {task.kanban_column === 'envio' && task.approval_deadline && (
-              <DeadlineBadge deadline={task.approval_deadline} label="Aprovação" startedAt={task.approval_sent_at} />
+              <DeadlineBadge deadline={task.approval_deadline} label="Aprovação" startedAt={task.approval_sent_at} totalHours={24} />
             )}
           </div>
 
@@ -1456,10 +1456,12 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, viewOn
               <div className="flex items-start gap-2">
                 <Calendar size={10} className="text-muted-foreground mt-0.5 shrink-0" />
                 <div className="min-w-0">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-primary/60 block leading-none">Gravação Programada</span>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-primary/60 block leading-none">
+                    {task.kanban_column === 'acompanhamento' || task.kanban_column === 'agendamentos' ? 'Postagem Programada' : 'Gravação Programada'}
+                  </span>
                   <span className={`text-[11px] leading-snug block font-medium ${isOverdue ? 'text-destructive' : 'text-foreground/80'}`}>
                     {safeFormatDate(task.scheduled_recording_date)}
-                    {task.scheduled_recording_time ? ` ${task.scheduled_recording_time}` : ''}
+                    {task.scheduled_recording_time ? ` às ${task.scheduled_recording_time}` : ''}
                   </span>
                 </div>
               </div>

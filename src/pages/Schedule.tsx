@@ -1560,7 +1560,7 @@ export default function Schedule() {
                 {/* Calendar date picker */}
                 <div className="space-y-2">
                   <Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })}
-                    className="w-full" min={format(new Date(), 'yyyy-MM-dd')}
+                    className="w-full"
                   />
 
                   {/* Available slots for selected date */}

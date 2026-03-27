@@ -508,7 +508,7 @@ export default function Schedule() {
     if (editForm.status === 'agendada' && editingRec.status !== 'agendada') {
       const active = activeRecordings.find(a => a.recordingId === editingRec.id);
       if (active) {
-        supabase.from('active_recordings').delete().eq('recording_id', editingRec.id).then(() => {});
+        invokeVpsFunction(`active-recordings/${editingRec.id}`, { method: 'DELETE' }).then(() => {});
       }
     }
     

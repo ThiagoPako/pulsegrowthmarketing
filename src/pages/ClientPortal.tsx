@@ -66,8 +66,10 @@ const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
 
 type VideoQuality = '480p' | 'original';
 
+const VIDEO_CONTENT_TYPES = new Set(['reel', 'institucional', 'anuncio']);
+
 function isPortalVideo(content: Pick<PortalContent, 'content_type' | 'file_url'>) {
-  return content.content_type !== 'arte' && !!content.file_url;
+  return VIDEO_CONTENT_TYPES.has(content.content_type) && !!content.file_url;
 }
 
 function shouldProxyPortalVideo(url: string) {

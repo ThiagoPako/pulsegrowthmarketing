@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/vpsDb';
+import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import type { Recording, RecordingType, Script, DayOfWeek, Client, EventRecording } from '@/types';
 import { SCRIPT_VIDEO_TYPE_LABELS, DAY_LABELS } from '@/types';
 import { useEndoClientes, useEndoAgendamentos, useEndoContracts } from '@/hooks/useEndomarketing';
@@ -507,7 +508,7 @@ export default function Schedule() {
     if (editForm.status === 'agendada' && editingRec.status !== 'agendada') {
       const active = activeRecordings.find(a => a.recordingId === editingRec.id);
       if (active) {
-        supabase.from('active_recordings').delete().eq('recording_id', editingRec.id).then(() => {});
+        invokeVpsFunction(`active-recordings/${editingRec.id}`, { method: 'DELETE' }).then(() => {});
       }
     }
     
@@ -529,7 +530,7 @@ export default function Schedule() {
 
   const handleResetRecording = async (rec: Recording) => {
     const active = activeRecordings.find(a => a.recordingId === rec.id);
-    await supabase.from('active_recordings').delete().eq('recording_id', rec.id);
+    await invokeVpsFunction(`active-recordings/${rec.id}`, { method: 'DELETE' });
     if (active?.plannedScriptIds?.length) {
       for (const scriptId of active.plannedScriptIds) {
         await supabase.from('content_tasks').update({ kanban_column: 'ideias', recording_id: null } as any)

@@ -66,7 +66,7 @@ export default function TeamPerformanceWidget() {
     Promise.all([
       supabase.from('delivery_records').select('*').gte('date', monthStart).lte('date', monthEnd),
       supabase.from('content_tasks').select('*').gte('updated_at', monthStart),
-      supabase.from('design_tasks').select('*'),
+      supabase.from('design_tasks').select('*').gte('updated_at', monthStart),
       supabase.from('social_media_deliveries').select('*').gte('delivered_at', monthStart).lte('delivered_at', monthEnd),
       supabase.from('endomarketing_partner_tasks').select('*').gte('date', monthStart).lte('date', monthEnd),
       supabase.from('recording_wait_logs').select('*').gte('created_at', monthStart),

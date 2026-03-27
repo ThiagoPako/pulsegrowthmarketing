@@ -235,6 +235,9 @@ export default function FinancialExpenses() {
   const [activeTab, setActiveTab] = useState('despesas');
   const [rocketName, setRocketName] = useState('');
   const [showRocket, setShowRocket] = useState(false);
+  const [bonusDialogOpen, setBonusDialogOpen] = useState(false);
+  const [bonusExpense, setBonusExpense] = useState<Expense | null>(null);
+  const [bonusAmount, setBonusAmount] = useState('');
 
   // Find salary category
   const salaryCategory = useMemo(() => categories.find(c => c.name.toLowerCase() === 'salários'), [categories]);

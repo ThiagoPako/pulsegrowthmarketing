@@ -105,12 +105,12 @@ function calculateScoreForMonth(
       highPriority * DESIGNER_SCORE.PRIORIDADE;
   } else if (role === 'social_media') {
     const smCreated = contentTasks.filter(t => t.created_by === userId);
-    const published = smCreated.filter(t => t.kanban_column === 'publicado').length;
+    const published = smCreated.filter(t => t.kanban_column === 'publicado' || t.kanban_column === 'arquivado').length;
     const managed = smCreated.length;
     const userDel = smDeliveries.filter(d => d.created_by === userId);
-    const posted = userDel.filter(d => d.status === 'posted' || d.posted_at).length;
-    const scheduled = userDel.filter(d => d.status === 'scheduled').length;
-    const scriptsCreated = scripts.filter(s => s.created_by === userId).length;
+    const posted = userDel.filter(d => d.status === 'postado' || d.posted_at).length;
+    const scheduled = userDel.filter(d => d.status === 'agendado').length;
+    const scriptsCreated = scripts.filter((s: any) => (s.createdBy || s.created_by) === userId).length;
     score = published * SM_SCORE.PUBLICADO + posted * SM_SCORE.POSTADO + scheduled * SM_SCORE.AGENDADO +
       managed * SM_SCORE.GERENCIADO + scriptsCreated * SM_SCORE.ROTEIRO;
   } else if (role === 'parceiro') {

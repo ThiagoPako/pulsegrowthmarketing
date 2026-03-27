@@ -64,8 +64,8 @@ export default function DesignerDashboard() {
     const pending = myTasks.filter(t => t.kanban_column === 'nova_tarefa');
     const inProgress = myTasks.filter(t => t.kanban_column === 'executando');
     const adjustments = myTasks.filter(t => t.kanban_column === 'ajustes');
-    const completed = myAssigned.filter(t => t.kanban_column === 'aprovado');
-    const urgent = myTasks.filter(t => (t.priority === 'urgente' || t.priority === 'alta') && !['aprovado'].includes(t.kanban_column));
+    const completed = myAssigned.filter(t => ['concluida', 'aprovada_cliente', 'aprovado'].includes(t.kanban_column));
+    const urgent = myTasks.filter(t => (t.priority === 'urgente' || t.priority === 'alta') && !['aprovado', 'concluida', 'aprovada_cliente'].includes(t.kanban_column));
 
     const completedWithTime = completed.filter(t => t.time_spent_seconds > 0);
     const avgTime = completedWithTime.length > 0
@@ -92,7 +92,7 @@ export default function DesignerDashboard() {
 
     // By client (active)
     const byClient: Record<string, { name: string; count: number; color: string; logoUrl: string | null }> = {};
-    myTasks.filter(t => !['aprovado'].includes(t.kanban_column)).forEach(t => {
+    myTasks.filter(t => !['aprovado', 'concluida', 'aprovada_cliente'].includes(t.kanban_column)).forEach(t => {
       const cid = t.client_id;
       if (!byClient[cid]) {
         byClient[cid] = {
@@ -103,6 +103,19 @@ export default function DesignerDashboard() {
       byClient[cid].count++;
     });
 
+    // ── Scoring (DESIGNER_SCORE) ──
+    const monthTasks = myAssigned;
+    const scoringCompleted = monthTasks.filter(t => ['concluida', 'aprovada_cliente', 'aprovado'].includes(t.kanban_column)).length;
+    const scoringInProgress = monthTasks.filter(t => ['executando', 'em_analise', 'ajustes', 'enviar_cliente'].includes(t.kanban_column)).length;
+    const scoringHours = Math.round(monthTasks.reduce((a, t) => a + (t.time_spent_seconds || 0), 0) / 3600);
+    const scoringVersions = monthTasks.reduce((a, t) => a + (t.version || 1), 0);
+    const scoringPriority = monthTasks.filter(t => t.priority === 'alta' || t.priority === 'urgente').length;
+    const designerScore = scoringCompleted * DESIGNER_SCORE.CONCLUIDO +
+      scoringInProgress * DESIGNER_SCORE.EM_PROGRESSO +
+      scoringHours * DESIGNER_SCORE.POR_HORA +
+      scoringVersions * DESIGNER_SCORE.POR_VERSAO +
+      scoringPriority * DESIGNER_SCORE.PRIORIDADE;
+
     return {
       pending: pending.length, inProgress: inProgress.length,
       adjustments: adjustments.length, completed: completed.length,
@@ -112,6 +125,7 @@ export default function DesignerDashboard() {
       totalActive: pending.length + inProgress.length + adjustments.length,
       byFormat: Object.entries(byFormat).map(([name, value]) => ({ name, value })),
       byClient: Object.values(byClient).sort((a, b) => b.count - a.count),
+      designerScore, scoringCompleted, scoringInProgress, scoringHours, scoringVersions, scoringPriority,
     };
   }, [myTasks, tasks, user?.id, todayStr]);
 

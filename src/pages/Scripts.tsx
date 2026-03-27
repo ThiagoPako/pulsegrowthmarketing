@@ -607,8 +607,8 @@ export default function Scripts() {
                 appendBlock(block);
               } else {
                 accum.push(node);
-                // Flush every 6 nodes to keep blocks manageable
-                if (accum.length >= 6) flushAccum();
+                // Flush every 3 nodes to keep blocks small and avoid clipping
+                if (accum.length >= 3) flushAccum();
               }
             }
             flushAccum();

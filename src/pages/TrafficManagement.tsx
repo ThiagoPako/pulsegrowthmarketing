@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import ClientLogo from '@/components/ClientLogo';
-import { Megaphone, Search, Play, Pause, Palette, Flame, Zap, Eye, RefreshCw, Send, MessageSquare } from 'lucide-react';
+import { Megaphone, Search, Play, Pause, Palette, Flame, Zap, Eye, RefreshCw, Send, MessageSquare, Download } from 'lucide-react';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 
 interface Creative {

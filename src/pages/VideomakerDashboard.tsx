@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/vpsDb';
+import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { useApp } from '@/contexts/AppContext';
 import { highlightQuotes, highlightQuotesForPdf } from '@/lib/highlightQuotes';
 import type { Recording, Script, RecordingStatus } from '@/types';

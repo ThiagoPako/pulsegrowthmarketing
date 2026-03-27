@@ -111,9 +111,8 @@ function calculateScoreForMonth(
     const userDel = smDeliveries.filter(d => d.created_by === userId);
     const posted = userDel.filter(d => d.status === 'postado' || d.posted_at).length;
     const scheduled = userDel.filter(d => d.status === 'agendado').length;
-    const scriptsCreated = scripts.filter((s: any) => (s.createdBy || s.created_by) === userId).length;
     score = published * SM_SCORE.PUBLICADO + posted * SM_SCORE.POSTADO + scheduled * SM_SCORE.AGENDADO +
-      managed * SM_SCORE.GERENCIADO + scriptsCreated * SM_SCORE.ROTEIRO;
+      managed * SM_SCORE.GERENCIADO;
   } else if (role === 'parceiro') {
     const pTasks = partnerTasks.filter(t => t.partner_id === userId);
     const completed = pTasks.filter(t => t.status === 'completed' || t.completed_at).length;

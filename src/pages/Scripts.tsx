@@ -583,46 +583,6 @@ export default function Scripts() {
 
       await waitForPdfAssets(renderRoot);
 
-      const logo = sourceRoot.querySelector('[data-pdf-role="logo"]') as HTMLElement | null;
-      if (logo) appendBlock(logo);
-
-      const sections = Array.from(sourceRoot.querySelectorAll('[data-pdf-role="script"]')) as HTMLElement[];
-      for (const section of sections) {
-        const header = section.querySelector('[data-pdf-role="script-header"]') as HTMLElement | null;
-        if (header) appendBlock(header);
-
-        const body = section.querySelector('[data-pdf-role="script-body"]') as HTMLElement | null;
-        if (body) {
-          const bodyNodes = Array.from(body.childNodes).filter(
-            (node) => node.nodeType !== Node.TEXT_NODE || node.textContent?.trim()
-          );
-
-          if (!bodyNodes.length) {
-            appendBlock(body);
-          } else {
-            for (const node of bodyNodes) {
-              const block = document.createElement('div');
-              block.style.cssText = 'padding:0 40px; font-size:14px; line-height:1.7; box-sizing:border-box; max-width:100%; overflow:hidden; word-wrap:break-word;';
-
-              if (node.nodeType === Node.TEXT_NODE) {
-                const paragraph = document.createElement('p');
-                paragraph.textContent = node.textContent ?? '';
-                block.appendChild(paragraph);
-              } else {
-                block.appendChild((node as HTMLElement).cloneNode(true));
-              }
-
-              appendBlock(block);
-            }
-          }
-        }
-      }
-
-      const footer = sourceRoot.querySelector('[data-pdf-role="footer"]') as HTMLElement | null;
-      if (footer) appendBlock(footer);
-
-      await waitForPdfAssets(renderRoot);
-
       return {
         pages,
         cleanup: () => {

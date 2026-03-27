@@ -453,9 +453,8 @@ export default function Scripts() {
 
   const buildPdfPages = useCallback(async (selectedScripts: Script[]) => {
     const pdfWidthPx = 794;
-    const maxPageHeightPx = Math.floor((pdfWidthPx * 297) / 210);
-    const bottomPadding = 40; // Safety margin to prevent text clipping
-    const effectiveMaxHeight = maxPageHeightPx - bottomPadding;
+    const pdfHeightPx = Math.floor((pdfWidthPx * 297) / 210); // A4 exact height
+    const pagePadding = 40;
     const sourceRoot = document.createElement('div');
     sourceRoot.style.cssText = `position:fixed;left:-20000px;top:0;width:${pdfWidthPx}px;background:white;pointer-events:none;z-index:-1;`;
 
@@ -467,14 +466,14 @@ export default function Scripts() {
       const client = clients.find(c => c.id === script.clientId);
       html += `
         <section data-pdf-role="script">
-          <div data-pdf-role="script-header" style="padding:${i === 0 ? '30' : '24'}px 40px 10px;">
+          <div data-pdf-role="script-header" style="padding:${i === 0 ? '30' : '24'}px ${pagePadding}px 10px;">
             ${i > 0 ? '<div style="border-top:2px solid #e5e5e5; margin:0 0 24px;"></div>' : ''}
             <h1 style="font-size:22px; margin:0 0 6px;">${script.title}</h1>
             <p style="font-size:13px; color:#666; margin:0 0 16px;">
               ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
             </p>
           </div>
-          <div data-pdf-role="script-body" style="font-size:14px; line-height:1.7; max-width:100%; box-sizing:border-box; overflow:hidden;">
+          <div data-pdf-role="script-body" style="font-size:14px; line-height:1.8; text-align:justify; word-break:keep-all; overflow-wrap:break-word; hyphens:none; max-width:100%; box-sizing:border-box; overflow:hidden;">
             ${highlightQuotesForPdf(script.content)}
           </div>
         </section>
@@ -482,7 +481,7 @@ export default function Scripts() {
     }
 
     html += `
-      <div data-pdf-role="footer" style="padding:10px 40px 20px; text-align:center;">
+      <div data-pdf-role="footer" style="padding:10px ${pagePadding}px 20px; text-align:center;">
         <p style="font-size:11px; color:#999; border-top:1px solid #e5e5e5; padding-top:12px; margin:0;">
           ${selectedScripts.length > 1
             ? `${selectedScripts.length} roteiro(s) · Pulse · ${new Date().toLocaleDateString('pt-BR')}`
@@ -505,27 +504,84 @@ export default function Scripts() {
       const pages: HTMLDivElement[] = [];
       const createPage = () => {
         const page = document.createElement('div');
-        page.style.cssText = `width:${pdfWidthPx}px;background:white;box-sizing:border-box;overflow:hidden;padding-bottom:${bottomPadding}px;`;
+        page.style.cssText = `width:${pdfWidthPx}px;height:${pdfHeightPx}px;background:white;box-sizing:border-box;overflow:hidden;position:relative;`;
         renderRoot.appendChild(page);
         pages.push(page);
         return page;
       };
 
       let currentPage = createPage();
+
+      const getUsedHeight = (page: HTMLElement): number => {
+        const children = Array.from(page.children) as HTMLElement[];
+        if (!children.length) return 0;
+        const last = children[children.length - 1];
+        return last.offsetTop + last.offsetHeight;
+      };
+
+      const safeMaxHeight = pdfHeightPx - 30; // 30px bottom margin
+
       const appendBlock = (block: HTMLElement) => {
         const clone = block.cloneNode(true) as HTMLElement;
+        // Ensure text justification and no word breaks on every block
+        clone.style.textAlign = 'justify';
+        clone.style.wordBreak = 'keep-all';
+        clone.style.overflowWrap = 'break-word';
+        clone.style.hyphens = 'none';
         currentPage.appendChild(clone);
 
-        // Use effective max to leave breathing room at the bottom
-        if (currentPage.scrollHeight > effectiveMaxHeight && currentPage.childElementCount > 1) {
+        const usedHeight = getUsedHeight(currentPage);
+
+        if (usedHeight > safeMaxHeight && currentPage.childElementCount > 1) {
           currentPage.removeChild(clone);
           currentPage = createPage();
           currentPage.appendChild(clone);
-
-          // If a single block still exceeds the page, allow it (avoid infinite loop)
-          // but it will be captured fully via scrollHeight-based page size
         }
       };
+
+      const logo = sourceRoot.querySelector('[data-pdf-role="logo"]') as HTMLElement | null;
+      if (logo) appendBlock(logo);
+
+      const sections = Array.from(sourceRoot.querySelectorAll('[data-pdf-role="script"]')) as HTMLElement[];
+      for (const section of sections) {
+        const header = section.querySelector('[data-pdf-role="script-header"]') as HTMLElement | null;
+        if (header) appendBlock(header);
+
+        const body = section.querySelector('[data-pdf-role="script-body"]') as HTMLElement | null;
+        if (body) {
+          const bodyNodes = Array.from(body.childNodes).filter(
+            (node) => node.nodeType !== Node.TEXT_NODE || node.textContent?.trim()
+          );
+
+          if (!bodyNodes.length) {
+            appendBlock(body);
+          } else {
+            for (const node of bodyNodes) {
+              const block = document.createElement('div');
+              block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.8; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:justify; word-break:keep-all; overflow-wrap:break-word; hyphens:none; break-inside:avoid; page-break-inside:avoid;`;
+
+              if (node.nodeType === Node.TEXT_NODE) {
+                const paragraph = document.createElement('p');
+                paragraph.style.cssText = 'margin:0 0 8px; text-align:justify;';
+                paragraph.textContent = node.textContent ?? '';
+                block.appendChild(paragraph);
+              } else {
+                const clonedNode = (node as HTMLElement).cloneNode(true) as HTMLElement;
+                // Apply justify to nested elements
+                clonedNode.style.textAlign = 'justify';
+                block.appendChild(clonedNode);
+              }
+
+              appendBlock(block);
+            }
+          }
+        }
+      }
+
+      const footer = sourceRoot.querySelector('[data-pdf-role="footer"]') as HTMLElement | null;
+      if (footer) appendBlock(footer);
+
+      await waitForPdfAssets(renderRoot);
 
       const logo = sourceRoot.querySelector('[data-pdf-role="logo"]') as HTMLElement | null;
       if (logo) appendBlock(logo);

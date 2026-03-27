@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
+import BonusCongratsBanner from '@/components/BonusCongratsBanner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -523,6 +524,8 @@ export default function EditorDashboard() {
       <AnimatePresence>
         <ScoreCelebration points={celebrationPoints} show={showCelebration} onDone={() => setShowCelebration(false)} />
       </AnimatePresence>
+
+      <BonusCongratsBanner />
 
       {/* ═══════ HEADER ═══════ */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}

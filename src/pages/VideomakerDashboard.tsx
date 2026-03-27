@@ -25,6 +25,7 @@ import { Textarea } from '@/components/ui/textarea';
 import pulseHeader from '@/assets/pulse_header.png';
 import { uploadFileToVps } from '@/services/vpsApi';
 import { VM_SCORE } from '@/lib/scoringSystem';
+import BonusCongratsBanner from '@/components/BonusCongratsBanner';
 import { format, addDays, startOfWeek, startOfMonth, endOfMonth, endOfWeek, isWithinInterval, parseISO, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -874,6 +875,7 @@ export default function VideomakerDashboard() {
 
   return (
     <div className="space-y-4 sm:space-y-5 max-w-[1400px] px-1 sm:px-0">
+      <BonusCongratsBanner />
       {/* Header with animated rocket */}
       <div className="flex items-center gap-3">
         <motion.div

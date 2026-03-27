@@ -190,7 +190,7 @@ export default function SocialMediaDeliveries() {
       supabase.from('clients').select('id, plan_id'),
       supabase.from('content_tasks').select('id, review_deadline, alteration_deadline, approval_deadline, immediate_alteration'),
       supabase.from('onboarding_tasks').select('client_id, status'),
-      supabase.from('content_tasks').select('id, client_id, review_deadline, alteration_deadline, approval_deadline, kanban_column').not('kanban_column', 'in', '(concluido,acompanhamento)'),
+      supabase.from('content_tasks').select('id, client_id, review_deadline, alteration_deadline, approval_deadline, kanban_column').in('kanban_column', ['edicao', 'revisao', 'alteracao', 'envio']),
     ]);
     if (dRes.data) setDeliveries(dRes.data as SocialDelivery[]);
     if (pRes.data) setPlans(pRes.data as Plan[]);
@@ -219,17 +219,19 @@ export default function SocialMediaDeliveries() {
       const almostThreshold = 4 * 60 * 60 * 1000; // 4 hours
       const odMap: Record<string, { overdue: number; almostOverdue: number }> = {};
       (ctRes.data as any[]).forEach(t => {
+        if (!t.client_id) return;
         if (!odMap[t.client_id]) odMap[t.client_id] = { overdue: 0, almostOverdue: 0 };
-        const deadlines = [t.review_deadline, t.alteration_deadline, t.approval_deadline].filter(Boolean);
-        for (const dl of deadlines) {
-          const dlDate = new Date(dl);
-          if (dlDate < now) {
-            odMap[t.client_id].overdue++;
-            break;
-          } else if (dlDate.getTime() - now.getTime() < almostThreshold) {
-            odMap[t.client_id].almostOverdue++;
-            break;
-          }
+        // Only check the deadline relevant to the current column
+        let deadline: string | null = null;
+        if (t.kanban_column === 'revisao') deadline = t.review_deadline;
+        else if (t.kanban_column === 'alteracao') deadline = t.alteration_deadline;
+        else if (t.kanban_column === 'envio') deadline = t.approval_deadline;
+        if (!deadline) return;
+        const dlDate = new Date(deadline);
+        if (dlDate < now) {
+          odMap[t.client_id].overdue++;
+        } else if (dlDate.getTime() - now.getTime() < almostThreshold) {
+          odMap[t.client_id].almostOverdue++;
         }
       });
       setOverdueByClient(odMap);

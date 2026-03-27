@@ -3075,6 +3075,7 @@ const ALLOWED_TABLES = [
   'endomarketing_partner_tasks','client_endomarketing_contracts','partners',
   'traffic_campaigns','whatsapp_config','whatsapp_messages','whatsapp_confirmations',
   'recording_wait_logs','portal_videos','portal_video_views','commercial_proposals','proposal_comments',
+  'event_recordings','client_testimonials',
 ];
 
 function sanitizeIdentifier(name) {

@@ -470,7 +470,7 @@ export default function EditorDashboard() {
     await syncContentTaskColumnChange('revisao', ctx);
     await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Enviado para revisão' });
 
-    const pts = getTypeConfig(activeEditTask.content_type).points || 5;
+    const pts = EDITOR_SCORE.REVISAO;
     setCelebrationPoints(pts);
     setShowCelebration(true);
     setActiveEditTask(null);

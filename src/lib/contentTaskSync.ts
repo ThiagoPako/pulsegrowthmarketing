@@ -32,6 +32,7 @@ const COLUMN_TO_SOCIAL_STATUS: Record<string, string> = {
   envio: 'aprovacao_cliente',
   agendamentos: 'entregue',
   acompanhamento: 'agendado',
+  arquivado: 'postado',
 };
 
 // Map JS getDay() (0=Sun) to our DayOfWeek keys

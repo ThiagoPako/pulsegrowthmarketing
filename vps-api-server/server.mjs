@@ -3425,8 +3425,32 @@ app.delete('/api/clients/:id', async (req, res) => {
 app.get('/api/recordings', async (req, res) => {
   try {
     await verifyUser(req);
-    const { rows } = await pool.query('SELECT * FROM recordings ORDER BY date DESC');
-    res.json(rows);
+    const { rows } = await pool.query(`
+      SELECT
+        r.*,
+        CASE
+          WHEN r.status IN ('concluida', 'cancelada', 'organizando_material') THEN r.status
+          WHEN EXISTS (
+            SELECT 1
+            FROM delivery_records dr
+            WHERE dr.recording_id = r.id
+          ) THEN 'concluida'
+          WHEN EXISTS (
+            SELECT 1
+            FROM content_tasks ct
+            WHERE ct.recording_id = r.id
+              AND ct.kanban_column IN ('captacao_concluida', 'edicao', 'revisao', 'alteracao', 'aprovado', 'finalizado')
+          ) THEN 'concluida'
+          ELSE r.status
+        END AS effective_status
+      FROM recordings r
+      ORDER BY r.date DESC, r.start_time ASC
+    `);
+
+    res.json(rows.map(({ effective_status, ...recording }) => ({
+      ...recording,
+      status: effective_status || recording.status,
+    })));
   } catch (e) { res.status(401).json({ error: e.message }); }
 });
 

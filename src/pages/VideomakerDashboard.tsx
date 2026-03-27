@@ -346,8 +346,8 @@ export default function VideomakerDashboard() {
         .eq('script_id', scriptId).in('kanban_column', ['captacao']);
     }
 
-    // Delete active recording record
-    await supabase.from('active_recordings').delete().eq('recording_id', activeRecordingId);
+    // Delete active recording record via dedicated VPS route
+    await invokeVpsFunction(`active-recordings/${activeRecordingId}`, { method: 'DELETE' });
 
     // Clean up local state
     setPlannedScripts(prev => { const next = { ...prev }; delete next[activeRecordingId]; return next; });

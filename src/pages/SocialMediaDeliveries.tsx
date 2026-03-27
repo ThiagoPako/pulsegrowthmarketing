@@ -427,6 +427,24 @@ export default function SocialMediaDeliveries() {
       status: 'postado', posted_at: format(new Date(), 'yyyy-MM-dd'),
     } as any).eq('id', id);
     if (error) { toast.error('Erro'); return; }
+    // Sync linked content_task to 'arquivado'
+    const delivery = deliveries.find(d => d.id === id);
+    if (delivery?.content_task_id) {
+      await supabase.from('content_tasks').update({
+        kanban_column: 'arquivado',
+        updated_at: new Date().toISOString(),
+      } as any).eq('id', delivery.content_task_id);
+      const { data: taskData } = await supabase.from('content_tasks').select('*').eq('id', delivery.content_task_id).single();
+      if (taskData) {
+        const client = clients.find(c => c.id === delivery.client_id);
+        const ctx = buildSyncContext(taskData as any, {
+          userId: user?.id,
+          clientName: client?.companyName,
+          clientWhatsapp: client?.whatsapp,
+        });
+        await syncContentTaskColumnChange('arquivado', ctx);
+      }
+    }
     toast.success('Marcado como postado'); fetchData();
   };
 
@@ -664,6 +682,23 @@ export default function SocialMediaDeliveries() {
 
       if (result.success) {
         await supabase.from('social_media_deliveries').update({ status: 'aprovacao_cliente' } as any).eq('id', d.id);
+        // Sync linked content_task to 'envio'
+        if (d.content_task_id) {
+          await supabase.from('content_tasks').update({
+            kanban_column: 'envio',
+            updated_at: new Date().toISOString(),
+          } as any).eq('id', d.content_task_id);
+          const { data: taskData } = await supabase.from('content_tasks').select('*').eq('id', d.content_task_id).single();
+          if (taskData) {
+            const client = clients.find(c => c.id === d.client_id);
+            const ctx = buildSyncContext(taskData as any, {
+              userId: user?.id,
+              clientName: client?.companyName,
+              clientWhatsapp: client?.whatsapp,
+            });
+            await syncContentTaskColumnChange('envio', ctx);
+          }
+        }
         toast.success('Mensagem enviada ao cliente!');
         fetchData();
       } else {

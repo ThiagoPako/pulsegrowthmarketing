@@ -1,0 +1,1 @@
+ALTER TABLE public.financial_contracts ADD COLUMN billing_enabled boolean NOT NULL DEFAULT true;

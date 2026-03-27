@@ -519,9 +519,9 @@ export default function Scripts() {
         return last.offsetTop + last.offsetHeight;
       };
 
-      const safeMaxHeight = pdfHeightPx - 20; // 20px bottom margin
+      const safeMaxHeight = pdfHeightPx - 12; // tighter bottom margin
 
-      const appendBlock = (block: HTMLElement) => {
+      const appendBlock = (block: HTMLElement, forceBreakInside = false) => {
         const clone = block.cloneNode(true) as HTMLElement;
         clone.style.textAlign = 'justify';
         clone.style.wordBreak = 'keep-all';
@@ -536,6 +536,14 @@ export default function Scripts() {
           currentPage = createPage();
           currentPage.appendChild(clone);
         }
+      };
+
+      const isEmptyNode = (node: Node): boolean => {
+        if (node.nodeType === Node.TEXT_NODE) return !node.textContent?.trim();
+        const el = node as HTMLElement;
+        const text = el.textContent?.trim() || '';
+        const hasImg = el.querySelector('img');
+        return !text && !hasImg;
       };
 
       const logo = sourceRoot.querySelector('[data-pdf-role="logo"]') as HTMLElement | null;

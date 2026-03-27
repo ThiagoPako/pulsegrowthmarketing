@@ -982,6 +982,33 @@ export default function Schedule() {
     }
   };
 
+  const [generatingAll, setGeneratingAll] = useState(false);
+  const handleGenerateAllFixed = async () => {
+    const fixedClients = clients.filter(c => c.fixedDay && c.fixedTime && c.videomaker);
+    if (fixedClients.length === 0) {
+      toast.info('Nenhum cliente com agenda fixa configurada');
+      return;
+    }
+    setGeneratingAll(true);
+    let totalCreated = 0;
+    try {
+      for (const client of fixedClients) {
+        const created = await generateScheduleForClient(client);
+        totalCreated += created;
+      }
+      if (totalCreated > 0) {
+        toast.success(`${totalCreated} gravação(ões) fixa(s) gerada(s) para ${fixedClients.length} cliente(s)`);
+      } else {
+        toast.info('Todas as agendas fixas já estão em dia');
+      }
+    } catch (err) {
+      console.error('Erro ao gerar agendas fixas:', err);
+      toast.error('Erro ao gerar agendas fixas');
+    } finally {
+      setGeneratingAll(false);
+    }
+  };
+
   const today = new Date();
 
   return (

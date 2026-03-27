@@ -418,87 +418,34 @@ export default function Scripts() {
   const exportPdfPages = useCallback(async (pages: HTMLDivElement[], fileName: string) => {
     const { default: html2canvas } = await import('html2canvas');
     const { default: jsPDF } = await import('jspdf');
-    const pdfWidth = 210;
+    const pdfWidthMm = 210;
+    const pdfHeightMm = 297;
 
-    const renderedPages: Array<{ imgData: string; imgHeight: number }> = [];
+    const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
 
-    for (const page of pages) {
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
       await waitForPdfAssets(page);
 
-      // Temporarily remove overflow:hidden so html2canvas captures everything
       const prevOverflow = page.style.overflow;
       page.style.overflow = 'visible';
 
-      const actualHeight = page.scrollHeight;
       const canvas = await html2canvas(page, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
         width: page.offsetWidth,
-        height: actualHeight,
+        height: page.offsetHeight,
         windowWidth: page.offsetWidth,
-        windowHeight: actualHeight,
+        windowHeight: page.offsetHeight,
       });
 
       page.style.overflow = prevOverflow;
 
-      // Crop trailing whitespace/black from the canvas bottom
-      const ctx = canvas.getContext('2d');
-      let cropHeight = canvas.height;
-      if (ctx) {
-        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const { data, width } = imgData;
-        // Scan from bottom up to find the last row with real content
-        // A pixel is "empty" if it's near-white (>245 all channels) OR near-black (<10 all channels, from transparent areas)
-        for (let row = canvas.height - 1; row > 0; row--) {
-          let hasContent = false;
-          for (let col = 0; col < width; col += 4) {
-            const idx = (row * width + col) * 4;
-            const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-            const isWhite = r > 245 && g > 245 && b > 245;
-            const isBlack = r < 10 && g < 10 && b < 10;
-            if (!isWhite && !isBlack) {
-              hasContent = true;
-              break;
-            }
-          }
-          if (hasContent) {
-            cropHeight = Math.min(canvas.height, row + 40); // 40px safety padding
-            break;
-          }
-        }
-      }
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
-      // Create cropped canvas
-      const croppedCanvas = document.createElement('canvas');
-      croppedCanvas.width = canvas.width;
-      croppedCanvas.height = cropHeight;
-      const croppedCtx = croppedCanvas.getContext('2d');
-      if (croppedCtx) {
-        croppedCtx.fillStyle = '#ffffff';
-        croppedCtx.fillRect(0, 0, croppedCanvas.width, croppedCanvas.height);
-        croppedCtx.drawImage(canvas, 0, 0, canvas.width, cropHeight, 0, 0, canvas.width, cropHeight);
-      }
-
-      renderedPages.push({
-        imgData: croppedCanvas.toDataURL('image/jpeg', 0.95),
-        imgHeight: (croppedCanvas.height * pdfWidth) / croppedCanvas.width,
-      });
-    }
-
-    if (!renderedPages.length) return;
-
-    const pdf = new jsPDF({
-      orientation: 'p',
-      unit: 'mm',
-      format: [pdfWidth, renderedPages[0].imgHeight],
-    });
-
-    pdf.addImage(renderedPages[0].imgData, 'JPEG', 0, 0, pdfWidth, renderedPages[0].imgHeight);
-
-    for (let i = 1; i < renderedPages.length; i++) {
-      pdf.addPage([pdfWidth, renderedPages[i].imgHeight]);
-      pdf.addImage(renderedPages[i].imgData, 'JPEG', 0, 0, pdfWidth, renderedPages[i].imgHeight);
+      if (i > 0) pdf.addPage('a4', 'p');
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm);
     }
 
     pdf.save(fileName);
@@ -506,9 +453,8 @@ export default function Scripts() {
 
   const buildPdfPages = useCallback(async (selectedScripts: Script[]) => {
     const pdfWidthPx = 794;
-    const maxPageHeightPx = Math.floor((pdfWidthPx * 297) / 210);
-    const bottomPadding = 40; // Safety margin to prevent text clipping
-    const effectiveMaxHeight = maxPageHeightPx - bottomPadding;
+    const pdfHeightPx = Math.floor((pdfWidthPx * 297) / 210); // A4 exact height
+    const pagePadding = 40;
     const sourceRoot = document.createElement('div');
     sourceRoot.style.cssText = `position:fixed;left:-20000px;top:0;width:${pdfWidthPx}px;background:white;pointer-events:none;z-index:-1;`;
 
@@ -520,14 +466,14 @@ export default function Scripts() {
       const client = clients.find(c => c.id === script.clientId);
       html += `
         <section data-pdf-role="script">
-          <div data-pdf-role="script-header" style="padding:${i === 0 ? '30' : '24'}px 40px 10px;">
+          <div data-pdf-role="script-header" style="padding:${i === 0 ? '30' : '24'}px ${pagePadding}px 10px;">
             ${i > 0 ? '<div style="border-top:2px solid #e5e5e5; margin:0 0 24px;"></div>' : ''}
             <h1 style="font-size:22px; margin:0 0 6px;">${script.title}</h1>
             <p style="font-size:13px; color:#666; margin:0 0 16px;">
               ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
             </p>
           </div>
-          <div data-pdf-role="script-body" style="font-size:14px; line-height:1.7; max-width:100%; box-sizing:border-box; overflow:hidden;">
+          <div data-pdf-role="script-body" style="font-size:14px; line-height:1.8; text-align:justify; word-break:keep-all; overflow-wrap:break-word; hyphens:none; max-width:100%; box-sizing:border-box; overflow:hidden;">
             ${highlightQuotesForPdf(script.content)}
           </div>
         </section>
@@ -535,7 +481,7 @@ export default function Scripts() {
     }
 
     html += `
-      <div data-pdf-role="footer" style="padding:10px 40px 20px; text-align:center;">
+      <div data-pdf-role="footer" style="padding:10px ${pagePadding}px 20px; text-align:center;">
         <p style="font-size:11px; color:#999; border-top:1px solid #e5e5e5; padding-top:12px; margin:0;">
           ${selectedScripts.length > 1
             ? `${selectedScripts.length} roteiro(s) · Pulse · ${new Date().toLocaleDateString('pt-BR')}`
@@ -558,25 +504,38 @@ export default function Scripts() {
       const pages: HTMLDivElement[] = [];
       const createPage = () => {
         const page = document.createElement('div');
-        page.style.cssText = `width:${pdfWidthPx}px;background:white;box-sizing:border-box;overflow:hidden;padding-bottom:${bottomPadding}px;`;
+        page.style.cssText = `width:${pdfWidthPx}px;height:${pdfHeightPx}px;background:white;box-sizing:border-box;overflow:hidden;position:relative;`;
         renderRoot.appendChild(page);
         pages.push(page);
         return page;
       };
 
       let currentPage = createPage();
+
+      const getUsedHeight = (page: HTMLElement): number => {
+        const children = Array.from(page.children) as HTMLElement[];
+        if (!children.length) return 0;
+        const last = children[children.length - 1];
+        return last.offsetTop + last.offsetHeight;
+      };
+
+      const safeMaxHeight = pdfHeightPx - 30; // 30px bottom margin
+
       const appendBlock = (block: HTMLElement) => {
         const clone = block.cloneNode(true) as HTMLElement;
+        // Ensure text justification and no word breaks on every block
+        clone.style.textAlign = 'justify';
+        clone.style.wordBreak = 'keep-all';
+        clone.style.overflowWrap = 'break-word';
+        clone.style.hyphens = 'none';
         currentPage.appendChild(clone);
 
-        // Use effective max to leave breathing room at the bottom
-        if (currentPage.scrollHeight > effectiveMaxHeight && currentPage.childElementCount > 1) {
+        const usedHeight = getUsedHeight(currentPage);
+
+        if (usedHeight > safeMaxHeight && currentPage.childElementCount > 1) {
           currentPage.removeChild(clone);
           currentPage = createPage();
           currentPage.appendChild(clone);
-
-          // If a single block still exceeds the page, allow it (avoid infinite loop)
-          // but it will be captured fully via scrollHeight-based page size
         }
       };
 
@@ -599,14 +558,18 @@ export default function Scripts() {
           } else {
             for (const node of bodyNodes) {
               const block = document.createElement('div');
-              block.style.cssText = 'padding:0 40px; font-size:14px; line-height:1.7; box-sizing:border-box; max-width:100%; overflow:hidden; word-wrap:break-word;';
+              block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.8; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:justify; word-break:keep-all; overflow-wrap:break-word; hyphens:none; break-inside:avoid; page-break-inside:avoid;`;
 
               if (node.nodeType === Node.TEXT_NODE) {
                 const paragraph = document.createElement('p');
+                paragraph.style.cssText = 'margin:0 0 8px; text-align:justify;';
                 paragraph.textContent = node.textContent ?? '';
                 block.appendChild(paragraph);
               } else {
-                block.appendChild((node as HTMLElement).cloneNode(true));
+                const clonedNode = (node as HTMLElement).cloneNode(true) as HTMLElement;
+                // Apply justify to nested elements
+                clonedNode.style.textAlign = 'justify';
+                block.appendChild(clonedNode);
               }
 
               appendBlock(block);

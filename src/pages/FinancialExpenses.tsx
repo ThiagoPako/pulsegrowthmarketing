@@ -565,9 +565,10 @@ export default function FinancialExpenses() {
                           <TableCell>{(() => { const d = normalizeDate(e.date); const [y,m,day] = d.split('-'); return `${day}/${m}/${y}`; })()}</TableCell>
                           <TableCell className={`font-semibold ${paid ? 'text-emerald-600' : 'text-foreground'}`}>{fmt(Number(e.amount))}</TableCell>
                           <TableCell>
-                            <FirePayButton
+                            <SalaryPayButtons
                               paid={paid}
-                              onClick={() => handleMarkSalaryPaid(e)}
+                              onPay={() => handleMarkSalaryPaid(e)}
+                              onPayWithBonus={() => handlePayWithBonus(e)}
                               onRevert={() => handleRevertSalary(e)}
                             />
                           </TableCell>

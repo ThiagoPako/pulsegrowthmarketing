@@ -682,6 +682,22 @@ export default function FinancialRevenues() {
                             </motion.div>
                           )}
                         </AnimatePresence>
+                        {/* Delete button - always visible */}
+                        <motion.button
+                          onClick={async () => {
+                            if (confirm('Excluir esta receita?')) {
+                              const ok = await deleteRevenue(r.id);
+                              if (ok) toast.success('Receita excluída');
+                              else toast.error('Erro ao excluir');
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          title="Excluir receita"
+                        >
+                          <Trash2 size={12} />
+                        </motion.button>
                       </div>
                     </TableCell>
                   </motion.tr>

@@ -595,6 +595,48 @@ export default function FinancialExpenses() {
           </motion.div>
         </TabsContent>
       </Tabs>
+
+      {/* ── Bonus Dialog ── */}
+      <Dialog open={bonusDialogOpen} onOpenChange={(o) => { setBonusDialogOpen(o); if (!o) { setBonusExpense(null); setBonusAmount(''); } }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">🎁 Pagar com Bônus</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {bonusExpense && (() => {
+              const match = bonusExpense.description?.match(/^Salário - (.+?) \((.+?)\)/);
+              const name = match ? match[1] : bonusExpense.responsible || bonusExpense.description;
+              return (
+                <div className="text-center p-3 rounded-xl bg-gradient-to-br from-violet-500/10 to-pink-500/10 border border-violet-200/30">
+                  <p className="text-sm font-semibold">{name}</p>
+                  <p className="text-xs text-muted-foreground">Salário: {fmt(Number(bonusExpense.amount))}</p>
+                </div>
+              );
+            })()}
+            <div className="space-y-2">
+              <Label>Valor do Bônus (R$)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Ex: 500,00"
+                value={bonusAmount}
+                onChange={e => setBonusAmount(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setBonusDialogOpen(false)}>Cancelar</Button>
+              <Button
+                onClick={handleConfirmBonus}
+                className="bg-gradient-to-r from-violet-500 to-pink-500 hover:from-violet-600 hover:to-pink-600 text-white"
+              >
+                <Gift size={14} className="mr-1" /> Pagar + Bônus
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

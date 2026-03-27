@@ -113,3 +113,86 @@ export function calcVmDeliveryScore(record: {
 export function calcWaitPoints(totalWaitSeconds: number): number {
   return Math.floor(totalWaitSeconds / 600) * VM_SCORE.WAIT_PER_10MIN;
 }
+
+export type EditorScoreTask = {
+  kanban_column: string;
+  approved_at?: string | null;
+  editing_priority?: boolean | null;
+};
+
+export type SocialScoreContentTask = {
+  kanban_column: string;
+  created_by?: string | null;
+  createdBy?: string | null;
+};
+
+export type SocialScoreDelivery = {
+  status: string;
+  posted_at?: string | null;
+  created_by?: string | null;
+  createdBy?: string | null;
+};
+
+export type SocialScoreScript = {
+  created_by?: string | null;
+  createdBy?: string | null;
+};
+
+export const EDITOR_APPROVED_COLUMNS = ['envio', 'agendamentos', 'acompanhamento', 'arquivado'] as const;
+
+function getCreatorId(record: { created_by?: string | null; createdBy?: string | null }) {
+  return record.createdBy ?? record.created_by ?? null;
+}
+
+export function getEditorScoreBreakdown(tasks: EditorScoreTask[]) {
+  const approved = tasks.filter(
+    task => !!task.approved_at || EDITOR_APPROVED_COLUMNS.includes(task.kanban_column as (typeof EDITOR_APPROVED_COLUMNS)[number])
+  ).length;
+  const inEditing = tasks.filter(task => task.kanban_column === 'edicao').length;
+  const inRevision = tasks.filter(task => task.kanban_column === 'revisao').length;
+  const alterations = tasks.filter(task => task.kanban_column === 'alteracao').length;
+  const priorityTasks = tasks.filter(task => task.editing_priority === true).length;
+
+  return {
+    approved,
+    inEditing,
+    inRevision,
+    alterations,
+    priorityTasks,
+    score:
+      approved * EDITOR_SCORE.APROVADO +
+      inEditing * EDITOR_SCORE.EM_EDICAO +
+      inRevision * EDITOR_SCORE.REVISAO +
+      alterations * EDITOR_SCORE.ALTERACAO +
+      priorityTasks * EDITOR_SCORE.PRIORIDADE,
+  };
+}
+
+export function getSocialMediaScoreBreakdown(
+  contentTasks: SocialScoreContentTask[],
+  deliveries: SocialScoreDelivery[],
+  scripts: SocialScoreScript[],
+  userId: string,
+) {
+  const authoredTasks = contentTasks.filter(task => getCreatorId(task) === userId);
+  const authoredDeliveries = deliveries.filter(delivery => getCreatorId(delivery) === userId);
+  const published = authoredTasks.filter(task => task.kanban_column === 'arquivado').length;
+  const managed = authoredTasks.length;
+  const posted = authoredDeliveries.filter(delivery => delivery.status === 'postado' || !!delivery.posted_at).length;
+  const scheduled = authoredDeliveries.filter(delivery => delivery.status === 'agendado').length;
+  const scriptsCreated = scripts.filter(script => getCreatorId(script) === userId).length;
+
+  return {
+    published,
+    managed,
+    posted,
+    scheduled,
+    scriptsCreated,
+    score:
+      published * SM_SCORE.PUBLICADO +
+      posted * SM_SCORE.POSTADO +
+      scheduled * SM_SCORE.AGENDADO +
+      managed * SM_SCORE.GERENCIADO +
+      scriptsCreated * SM_SCORE.ROTEIRO,
+  };
+}

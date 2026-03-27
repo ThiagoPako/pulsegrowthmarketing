@@ -107,6 +107,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { label: 'Grande', value: 'font-scale-lg', size: '16px' },
     { label: 'Extra Grande', value: 'font-scale-xl', size: '18px' },
     { label: 'Padrão Victor', value: 'font-scale-victor', size: '22px' },
+    { label: 'Victor 1.0', value: 'font-scale-victor1', size: '26px' },
   ];
   const [fontScale, setFontScale] = useState(() => {
     return currentUser?.fontScale || localStorage.getItem('pulse_font_scale') || 'font-scale-base';

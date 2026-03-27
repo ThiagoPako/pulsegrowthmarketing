@@ -219,17 +219,19 @@ export default function SocialMediaDeliveries() {
       const almostThreshold = 4 * 60 * 60 * 1000; // 4 hours
       const odMap: Record<string, { overdue: number; almostOverdue: number }> = {};
       (ctRes.data as any[]).forEach(t => {
+        if (!t.client_id) return;
         if (!odMap[t.client_id]) odMap[t.client_id] = { overdue: 0, almostOverdue: 0 };
-        const deadlines = [t.review_deadline, t.alteration_deadline, t.approval_deadline].filter(Boolean);
-        for (const dl of deadlines) {
-          const dlDate = new Date(dl);
-          if (dlDate < now) {
-            odMap[t.client_id].overdue++;
-            break;
-          } else if (dlDate.getTime() - now.getTime() < almostThreshold) {
-            odMap[t.client_id].almostOverdue++;
-            break;
-          }
+        // Only check the deadline relevant to the current column
+        let deadline: string | null = null;
+        if (t.kanban_column === 'revisao') deadline = t.review_deadline;
+        else if (t.kanban_column === 'alteracao') deadline = t.alteration_deadline;
+        else if (t.kanban_column === 'envio') deadline = t.approval_deadline;
+        if (!deadline) return;
+        const dlDate = new Date(deadline);
+        if (dlDate < now) {
+          odMap[t.client_id].overdue++;
+        } else if (dlDate.getTime() - now.getTime() < almostThreshold) {
+          odMap[t.client_id].almostOverdue++;
         }
       });
       setOverdueByClient(odMap);

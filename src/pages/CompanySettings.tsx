@@ -378,38 +378,7 @@ export default function CompanySettings() {
             )}
           </div>
 
-          {/* Approval Deadline */}
-          <div className={`space-y-3 p-4 rounded-xl border transition-all ${form.approvalDeadlineEnabled ? 'border-primary/30 bg-primary/5' : 'border-border bg-muted/20 opacity-70'}`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">✅</span>
-                <Label className="text-sm font-semibold">Aprovação</Label>
-              </div>
-              <Switch
-                checked={form.approvalDeadlineEnabled}
-                onCheckedChange={v => setForm({ ...form, approvalDeadlineEnabled: v })}
-              />
-            </div>
-            {form.approvalDeadlineEnabled && (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Prazo</span>
-                  <span className="text-xs font-mono text-primary font-bold">{formatDeadlineLabel(form.approvalDeadlineHours)}</span>
-                </div>
-                <Input
-                  type="number"
-                  min={1}
-                  max={720}
-                  value={form.approvalDeadlineHours}
-                  onChange={e => setForm({ ...form, approvalDeadlineHours: Number(e.target.value) })}
-                  className="h-8 text-sm"
-                />
-                <p className="text-[10px] text-muted-foreground">
-                  Tempo para o cliente aprovar o conteúdo enviado
-                </p>
-              </div>
-            )}
-          </div>
+          {/* Aprovação/Agendamento removido — prazo definido pela Social Media */}
         </div>
       </div>
 

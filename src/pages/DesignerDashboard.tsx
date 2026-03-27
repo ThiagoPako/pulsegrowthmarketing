@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { DESIGNER_SCORE } from '@/lib/scoringSystem';
 import { useNavigate } from 'react-router-dom';
 import { useDesignTasks, DESIGN_COLUMNS, DesignTask } from '@/hooks/useDesignTasks';
 import { useAuth } from '@/hooks/useAuth';
@@ -63,8 +64,8 @@ export default function DesignerDashboard() {
     const pending = myTasks.filter(t => t.kanban_column === 'nova_tarefa');
     const inProgress = myTasks.filter(t => t.kanban_column === 'executando');
     const adjustments = myTasks.filter(t => t.kanban_column === 'ajustes');
-    const completed = myAssigned.filter(t => t.kanban_column === 'aprovado');
-    const urgent = myTasks.filter(t => (t.priority === 'urgente' || t.priority === 'alta') && !['aprovado'].includes(t.kanban_column));
+    const completed = myAssigned.filter(t => ['concluida', 'aprovada_cliente', 'aprovado'].includes(t.kanban_column));
+    const urgent = myTasks.filter(t => (t.priority === 'urgente' || t.priority === 'alta') && !['aprovado', 'concluida', 'aprovada_cliente'].includes(t.kanban_column));
 
     const completedWithTime = completed.filter(t => t.time_spent_seconds > 0);
     const avgTime = completedWithTime.length > 0
@@ -91,7 +92,7 @@ export default function DesignerDashboard() {
 
     // By client (active)
     const byClient: Record<string, { name: string; count: number; color: string; logoUrl: string | null }> = {};
-    myTasks.filter(t => !['aprovado'].includes(t.kanban_column)).forEach(t => {
+    myTasks.filter(t => !['aprovado', 'concluida', 'aprovada_cliente'].includes(t.kanban_column)).forEach(t => {
       const cid = t.client_id;
       if (!byClient[cid]) {
         byClient[cid] = {
@@ -102,6 +103,19 @@ export default function DesignerDashboard() {
       byClient[cid].count++;
     });
 
+    // ── Scoring (DESIGNER_SCORE) ──
+    const monthTasks = myAssigned;
+    const scoringCompleted = monthTasks.filter(t => ['concluida', 'aprovada_cliente', 'aprovado'].includes(t.kanban_column)).length;
+    const scoringInProgress = monthTasks.filter(t => ['executando', 'em_analise', 'ajustes', 'enviar_cliente'].includes(t.kanban_column)).length;
+    const scoringHours = Math.round(monthTasks.reduce((a, t) => a + (t.time_spent_seconds || 0), 0) / 3600);
+    const scoringVersions = monthTasks.reduce((a, t) => a + (t.version || 1), 0);
+    const scoringPriority = monthTasks.filter(t => t.priority === 'alta' || t.priority === 'urgente').length;
+    const designerScore = scoringCompleted * DESIGNER_SCORE.CONCLUIDO +
+      scoringInProgress * DESIGNER_SCORE.EM_PROGRESSO +
+      scoringHours * DESIGNER_SCORE.POR_HORA +
+      scoringVersions * DESIGNER_SCORE.POR_VERSAO +
+      scoringPriority * DESIGNER_SCORE.PRIORIDADE;
+
     return {
       pending: pending.length, inProgress: inProgress.length,
       adjustments: adjustments.length, completed: completed.length,
@@ -111,6 +125,7 @@ export default function DesignerDashboard() {
       totalActive: pending.length + inProgress.length + adjustments.length,
       byFormat: Object.entries(byFormat).map(([name, value]) => ({ name, value })),
       byClient: Object.values(byClient).sort((a, b) => b.count - a.count),
+      designerScore, scoringCompleted, scoringInProgress, scoringHours, scoringVersions, scoringPriority,
     };
   }, [myTasks, tasks, user?.id, todayStr]);
 
@@ -270,6 +285,23 @@ export default function DesignerDashboard() {
             <BarChart3 size={16} /> Meu Desempenho
           </h3>
           <div className="space-y-4">
+            {/* Scoring card */}
+            <div className="rounded-xl bg-gradient-to-br from-amber-500/15 to-yellow-500/5 border border-amber-500/20 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold flex items-center gap-1.5">
+                  <Award size={14} className="text-amber-500" /> Pontuação Mensal
+                </span>
+                <span className="text-xl font-display font-bold text-amber-500">{stats.designerScore} <span className="text-xs font-normal text-muted-foreground">pts</span></span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                <span className="text-muted-foreground">Concluídos: <strong className="text-foreground">{stats.scoringCompleted}</strong> <span className="opacity-60">×{DESIGNER_SCORE.CONCLUIDO}</span></span>
+                <span className="text-muted-foreground">Em progresso: <strong className="text-foreground">{stats.scoringInProgress}</strong> <span className="opacity-60">×{DESIGNER_SCORE.EM_PROGRESSO}</span></span>
+                <span className="text-muted-foreground">Horas: <strong className="text-foreground">{stats.scoringHours}</strong> <span className="opacity-60">×{DESIGNER_SCORE.POR_HORA}</span></span>
+                <span className="text-muted-foreground">Versões: <strong className="text-foreground">{stats.scoringVersions}</strong> <span className="opacity-60">×{DESIGNER_SCORE.POR_VERSAO}</span></span>
+                <span className="text-muted-foreground">Prioridade: <strong className="text-foreground">{stats.scoringPriority}</strong> <span className="opacity-60">×{DESIGNER_SCORE.PRIORIDADE}</span></span>
+              </div>
+            </div>
+
             {/* Week progress */}
             <div>
               <div className="flex justify-between text-xs mb-1">

@@ -16,7 +16,7 @@ import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, Cell } from 'recharts';
 import jsPDF from 'jspdf';
 import pulseHeaderImg from '@/assets/pulse_header.png';
-import { VM_SCORE, EDITOR_SCORE, calcVmDeliveryScore, calcWaitPoints, EDITOR_APPROVED_COLUMNS } from '@/lib/scoringSystem';
+import { VM_SCORE, calcVmDeliveryScore, calcWaitPoints, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate } from '@/lib/scoringSystem';
 
 interface DeliveryRecord {
   id: string;
@@ -193,23 +193,16 @@ export default function InternalReports() {
   // ── Editor data ──
   const editorFiltered = useMemo(() => {
     return editorTasks.filter(t => {
-      if (!t.updated_at) return false;
-      const d = format(new Date(t.updated_at), 'yyyy-MM-dd');
-      return d >= dateRange.start && d <= dateRange.end;
+      const referenceDate = getEditorTaskReferenceDate(t);
+      const d = referenceDate?.slice(0, 10);
+      return !!d && d >= dateRange.start && d <= dateRange.end;
     });
   }, [editorTasks, dateRange]);
 
   const editorRanking = useMemo(() => {
     return editors.map(ed => {
-      const edTasks = editorFiltered.filter(t => t.assigned_to === ed.id || t.edited_by === ed.id);
-      const approved = edTasks.filter(t => !!t.approved_at || EDITOR_APPROVED_COLUMNS.includes(t.kanban_column as any)).length;
-      const inEditing = edTasks.filter(t => t.kanban_column === 'edicao').length;
-      const inRevision = edTasks.filter(t => t.kanban_column === 'revisao').length;
-      const alterations = edTasks.filter(t => t.kanban_column === 'alteracao').length;
-      const priorityTasks = edTasks.filter(t => t.editing_priority === true).length;
-      const score = approved * EDITOR_SCORE.APROVADO + inEditing * EDITOR_SCORE.EM_EDICAO +
-        inRevision * EDITOR_SCORE.REVISAO + alterations * EDITOR_SCORE.ALTERACAO +
-        priorityTasks * EDITOR_SCORE.PRIORIDADE;
+      const edTasks = editorFiltered.filter(t => getEditorTaskOwnerId(t) === ed.id);
+      const breakdown = getEditorScoreBreakdown(edTasks);
       const reels = edTasks.filter(t => t.content_type === 'reels').length;
       const criativos = edTasks.filter(t => t.content_type === 'criativo').length;
       const stories = edTasks.filter(t => t.content_type === 'story').length;
@@ -223,7 +216,20 @@ export default function InternalReports() {
       }).filter(Boolean) as number[];
       const avgTime = times.length > 0 ? times.reduce((a, b) => a + b, 0) / times.length : 0;
 
-      return { editor: ed, score, reels, criativos, stories, artes, total, avgTime, approved, inEditing, alterations, priorityTasks };
+      return {
+        editor: ed,
+        score: breakdown.score,
+        reels,
+        criativos,
+        stories,
+        artes,
+        total,
+        avgTime,
+        approved: breakdown.approved,
+        inEditing: breakdown.inEditing,
+        alterations: breakdown.alterations,
+        priorityTasks: breakdown.priorityTasks,
+      };
     }).sort((a, b) => b.score - a.score);
   }, [editors, editorFiltered]);
 
@@ -248,17 +254,11 @@ export default function InternalReports() {
     return weeks.map(w => {
       const entry: any = { semana: w.label };
       editors.forEach(ed => {
-        const edTasks = editorTasks.filter(t => (t.assigned_to === ed.id || t.edited_by === ed.id) && (() => {
-          const d = format(new Date(t.updated_at), 'yyyy-MM-dd');
-          return d >= w.start && d <= w.end;
-        })());
-        const approved = edTasks.filter(t => !!t.approved_at || EDITOR_APPROVED_COLUMNS.includes(t.kanban_column as any)).length;
-        const inEditing = edTasks.filter(t => t.kanban_column === 'edicao').length;
-        const inRevision = edTasks.filter(t => t.kanban_column === 'revisao').length;
-        const alterations = edTasks.filter(t => t.kanban_column === 'alteracao').length;
-        const priorityTasks = edTasks.filter(t => t.editing_priority === true).length;
-        entry[ed.name.split(' ')[0]] = approved * EDITOR_SCORE.APROVADO + inEditing * EDITOR_SCORE.EM_EDICAO +
-          inRevision * EDITOR_SCORE.REVISAO + alterations * EDITOR_SCORE.ALTERACAO + priorityTasks * EDITOR_SCORE.PRIORIDADE;
+        const edTasks = editorTasks.filter(t => {
+          const referenceDate = getEditorTaskReferenceDate(t)?.slice(0, 10);
+          return getEditorTaskOwnerId(t) === ed.id && !!referenceDate && referenceDate >= w.start && referenceDate <= w.end;
+        });
+        entry[ed.name.split(' ')[0]] = getEditorScoreBreakdown(edTasks).score;
       });
       return entry;
     });

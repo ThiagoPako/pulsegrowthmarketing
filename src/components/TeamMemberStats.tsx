@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import UserAvatar from '@/components/UserAvatar';
 import { ROLE_LABELS } from '@/types';
 import type { UserRole } from '@/types';
-import { EDITOR_SCORE, VM_SCORE, DESIGNER_SCORE, EDITOR_APPROVED_COLUMNS } from '@/lib/scoringSystem';
+import { EDITOR_SCORE, VM_SCORE, DESIGNER_SCORE, EDITOR_APPROVED_COLUMNS, getSocialDeliveryReferenceDate, getSocialMediaScoreBreakdown, getSocialTaskReferenceDate, getScriptReferenceDate } from '@/lib/scoringSystem';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Clock, Trophy, CheckCircle2, TrendingUp, Film, Palette, BarChart3 } from 'lucide-react';
@@ -161,6 +161,8 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
         await loadVideomakerStats(member.id, startStr, endStr);
       } else if (role === 'designer') {
         await loadDesignerStats(member.id, startStr, endStr);
+      } else if (role === 'social_media') {
+        await loadSocialMediaStats(member.id, startStr, endStr);
       } else {
         await loadGenericStats(member.id, startStr, endStr);
       }
@@ -365,6 +367,54 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
       totalTimeSeconds: totalTime,
       score,
       byStatus,
+      byContentType,
+    });
+  };
+
+  const loadSocialMediaStats = async (userId: string, startStr: string, endStr: string) => {
+    const startKey = startStr.slice(0, 10);
+    const endKey = endStr.slice(0, 10);
+    const inRange = (value?: string | null) => {
+      const key = value?.slice(0, 10);
+      return !!key && key >= startKey && key <= endKey;
+    };
+
+    const [{ data: tasks }, { data: deliveries }, { data: scripts }] = await Promise.all([
+      supabase
+        .from('content_tasks')
+        .select('id, kanban_column, content_type, created_by, created_at, updated_at, approved_at'),
+      supabase
+        .from('social_media_deliveries')
+        .select('id, status, posted_at, created_by, content_task_id, delivered_at, created_at, updated_at'),
+      supabase
+        .from('scripts')
+        .select('id, created_by, created_at'),
+    ]);
+
+    const scopedTasks = (tasks || []).filter((task: any) => inRange(getSocialTaskReferenceDate(task)));
+    const scopedDeliveries = (deliveries || []).filter((delivery: any) => inRange(getSocialDeliveryReferenceDate(delivery)));
+    const scopedScripts = (scripts || []).filter((script: any) => inRange(getScriptReferenceDate(script)));
+    const breakdown = getSocialMediaScoreBreakdown(scopedTasks as any[], scopedDeliveries as any[], scopedScripts as any[], userId);
+
+    const byContentType: Record<string, number> = {};
+    scopedTasks
+      .filter((task: any) => (task.created_by || task.createdBy) === userId)
+      .forEach((task: any) => {
+        byContentType[task.content_type || 'outro'] = (byContentType[task.content_type || 'outro'] || 0) + 1;
+      });
+
+    setStats({
+      totalTasks: breakdown.managed,
+      avgTimeSeconds: 0,
+      totalTimeSeconds: 0,
+      score: breakdown.score,
+      byStatus: {
+        Publicados: breakdown.published,
+        Postados: breakdown.posted,
+        Agendados: breakdown.scheduled,
+        Gerenciados: breakdown.managed,
+        Roteiros: breakdown.scriptsCreated,
+      },
       byContentType,
     });
   };

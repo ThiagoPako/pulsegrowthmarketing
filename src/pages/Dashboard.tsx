@@ -120,6 +120,7 @@ export default function Dashboard() {
   const [contractAlerts, setContractAlerts] = useState<{ clientName: string; daysLeft: number; endDate: string }[]>([]);
   const [expandedWeekDay, setExpandedWeekDay] = useState<string | null>(null);
   const [waitLogs, setWaitLogs] = useState<any[]>([]);
+  const [contentTasks, setContentTasks] = useState<any[]>([]);
   const [aiSeasonalAlerts, setAiSeasonalAlerts] = useState<AISeasonalAlert[]>([]);
   const [seasonalLoading, setSeasonalLoading] = useState(false);
 
@@ -138,6 +139,9 @@ export default function Dashboard() {
   }, []);
   useEffect(() => {
     supabase.from('recording_wait_logs').select('*').then(({ data }) => { if (data) setWaitLogs(data); });
+  }, []);
+  useEffect(() => {
+    supabase.from('content_tasks').select('id, client_id, kanban_column, created_at').then(({ data }) => { if (data) setContentTasks(data); });
   }, []);
 
   // Load AI seasonal alerts when clients are available
@@ -291,16 +295,23 @@ export default function Dashboard() {
   }, [videomakers, deliveryRecords, recordings, waitLogs]);
 
   const clientProgress = useMemo(() => {
+    const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+    const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
     return clients.map(client => {
-      const weekTasks = tasks.filter(t => t.clientId === client.id && t.weekStart === currentWeekStr);
-      const done = weekTasks.filter(t => t.column === 'finalizado').length;
+      // Use content_tasks for progress (real social media tasks)
+      const clientContentTasks = contentTasks.filter(t => {
+        if (t.client_id !== client.id) return false;
+        const created = t.created_at?.slice(0, 10) || '';
+        return created >= weekStartStr && created <= weekEndStr;
+      });
+      const done = clientContentTasks.filter(t => t.kanban_column === 'finalizado').length;
       const goal = client.weeklyGoal || 10;
       const weekRecs = recordings.filter(r => r.clientId === client.id && isWithinInterval(parseISO(r.date), { start: weekStart, end: weekEnd }));
       const recsDone = weekRecs.filter(r => r.status === 'concluida').length;
       const recsTotal = weekRecs.filter(r => r.status !== 'cancelada').length;
-      return { client, tasksDone: done, tasksTotal: weekTasks.length, goal, recsDone, recsTotal, progress: Math.min(100, Math.round((done / goal) * 100)) };
+      return { client, tasksDone: done, tasksTotal: clientContentTasks.length, goal, recsDone, recsTotal, progress: Math.min(100, Math.round((done / goal) * 100)) };
     });
-  }, [clients, tasks, recordings, currentWeekStr, weekStart, weekEnd]);
+  }, [clients, contentTasks, recordings, weekStart, weekEnd]);
 
   const waitTimeStats = useMemo(() => {
     const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');

@@ -2804,6 +2804,7 @@ app.post('/api/billing-automation', async (req, res) => {
     const results = [];
 
     for (const contract of contracts) {
+      if (contract.billing_enabled === false) continue;
       const isDueDay = currentDay === contract.due_day;
       const dueDate = new Date(currentYear, currentMonth, contract.due_day);
       const daysSinceDue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));

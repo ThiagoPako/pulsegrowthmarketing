@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Pencil, Trash2, ArrowLeft } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -151,6 +153,7 @@ export default function FinancialContracts() {
                 <TableHead>Pagamento</TableHead>
                 <TableHead>Início</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Cobrança</TableHead>
                 <TableHead className="w-20"></TableHead>
               </TableRow>
             </TableHeader>
@@ -167,6 +170,16 @@ export default function FinancialContracts() {
                     <TableCell>{c.contract_start_date}</TableCell>
                     <TableCell><Badge variant={st.variant}>{st.label}</Badge></TableCell>
                     <TableCell>
+                      <Switch
+                        checked={(c as any).billing_enabled !== false}
+                        onCheckedChange={async (checked) => {
+                          await supabase.from('financial_contracts').update({ billing_enabled: checked } as any).eq('id', c.id);
+                          toast.success(checked ? 'Cobrança ativada' : 'Cobrança desativada');
+                          window.location.reload();
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" onClick={() => handleEdit(c)}><Pencil size={14} /></Button>
                         <Button variant="ghost" size="icon" onClick={() => handleDelete(c.id)}><Trash2 size={14} /></Button>
@@ -176,7 +189,7 @@ export default function FinancialContracts() {
                 );
               })}
               {filtered.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhum contrato encontrado</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhum contrato encontrado</TableCell></TableRow>
               )}
             </TableBody>
           </Table>

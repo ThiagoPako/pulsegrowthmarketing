@@ -1870,6 +1870,7 @@ export type Database = {
       }
       financial_contracts: {
         Row: {
+          billing_enabled: boolean
           client_id: string
           contract_start_date: string
           contract_value: number
@@ -1882,6 +1883,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          billing_enabled?: boolean
           client_id: string
           contract_start_date?: string
           contract_value?: number
@@ -1894,6 +1896,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          billing_enabled?: boolean
           client_id?: string
           contract_start_date?: string
           contract_value?: number

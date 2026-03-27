@@ -118,12 +118,22 @@ export type EditorScoreTask = {
   kanban_column: string;
   approved_at?: string | null;
   editing_priority?: boolean | null;
+  assigned_to?: string | null;
+  edited_by?: string | null;
+  approval_sent_at?: string | null;
+  updated_at?: string | null;
+  created_at?: string | null;
+  content_type?: string | null;
 };
 
 export type SocialScoreContentTask = {
+  id?: string | null;
   kanban_column: string;
   created_by?: string | null;
   createdBy?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  approved_at?: string | null;
 };
 
 export type SocialScoreDelivery = {
@@ -131,17 +141,53 @@ export type SocialScoreDelivery = {
   posted_at?: string | null;
   created_by?: string | null;
   createdBy?: string | null;
+  content_task_id?: string | null;
+  delivered_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 export type SocialScoreScript = {
   created_by?: string | null;
   createdBy?: string | null;
+  created_at?: string | null;
+  createdAt?: string | null;
 };
 
 export const EDITOR_APPROVED_COLUMNS = ['envio', 'agendamentos', 'acompanhamento', 'arquivado'] as const;
 
 function getCreatorId(record: { created_by?: string | null; createdBy?: string | null }) {
   return record.createdBy ?? record.created_by ?? null;
+}
+
+export function getEditorTaskOwnerId(task: Pick<EditorScoreTask, 'edited_by' | 'assigned_to'>) {
+  return task.edited_by ?? task.assigned_to ?? null;
+}
+
+export function getEditorTaskReferenceDate(
+  task: Pick<EditorScoreTask, 'approved_at' | 'approval_sent_at' | 'updated_at' | 'created_at'>,
+) {
+  return task.approved_at ?? task.approval_sent_at ?? task.updated_at ?? task.created_at ?? null;
+}
+
+export function getSocialTaskReferenceDate(
+  task: Pick<SocialScoreContentTask, 'kanban_column' | 'approved_at' | 'updated_at' | 'created_at'>,
+) {
+  if (task.kanban_column === 'arquivado') {
+    return task.approved_at ?? task.updated_at ?? task.created_at ?? null;
+  }
+
+  return task.created_at ?? task.updated_at ?? null;
+}
+
+export function getSocialDeliveryReferenceDate(
+  delivery: Pick<SocialScoreDelivery, 'posted_at' | 'updated_at' | 'delivered_at' | 'created_at'>,
+) {
+  return delivery.posted_at ?? delivery.updated_at ?? delivery.delivered_at ?? delivery.created_at ?? null;
+}
+
+export function getScriptReferenceDate(script: Pick<SocialScoreScript, 'created_at' | 'createdAt'>) {
+  return script.createdAt ?? script.created_at ?? null;
 }
 
 export function getEditorScoreBreakdown(tasks: EditorScoreTask[]) {
@@ -175,7 +221,10 @@ export function getSocialMediaScoreBreakdown(
   userId: string,
 ) {
   const authoredTasks = contentTasks.filter(task => getCreatorId(task) === userId);
-  const authoredDeliveries = deliveries.filter(delivery => getCreatorId(delivery) === userId);
+  const authoredTaskIds = new Set(authoredTasks.map(task => task.id).filter(Boolean));
+  const authoredDeliveries = deliveries.filter(
+    delivery => getCreatorId(delivery) === userId || (!!delivery.content_task_id && authoredTaskIds.has(delivery.content_task_id)),
+  );
   const published = authoredTasks.filter(task => task.kanban_column === 'arquivado').length;
   const managed = authoredTasks.length;
   const posted = authoredDeliveries.filter(delivery => delivery.status === 'postado' || !!delivery.posted_at).length;

@@ -2839,6 +2839,36 @@ export type Database = {
           },
         ]
       }
+      salary_bonuses: {
+        Row: {
+          bonus_amount: number
+          created_at: string
+          expense_id: string
+          id: string
+          reference_month: string
+          user_name: string
+          user_role: string
+        }
+        Insert: {
+          bonus_amount?: number
+          created_at?: string
+          expense_id: string
+          id?: string
+          reference_month?: string
+          user_name?: string
+          user_role?: string
+        }
+        Update: {
+          bonus_amount?: number
+          created_at?: string
+          expense_id?: string
+          id?: string
+          reference_month?: string
+          user_name?: string
+          user_role?: string
+        }
+        Relationships: []
+      }
       scripts: {
         Row: {
           caption: string | null

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import BonusCongratsBanner from '@/components/BonusCongratsBanner';
 import { DESIGNER_SCORE } from '@/lib/scoringSystem';
 import { useNavigate } from 'react-router-dom';
 import { useDesignTasks, DESIGN_COLUMNS, DesignTask } from '@/hooks/useDesignTasks';
@@ -176,6 +177,7 @@ export default function DesignerDashboard() {
 
   return (
     <div className="space-y-5 max-w-[1400px]">
+      <BonusCongratsBanner />
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>

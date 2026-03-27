@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Pencil, Trash2, ArrowLeft, TrendingDown, Users, Wallet, CheckCircle, Undo2 } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Plus, Pencil, Trash2, ArrowLeft, TrendingDown, Users, Wallet, CheckCircle, Undo2, Gift } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { format, subMonths, addMonths } from 'date-fns';
@@ -16,6 +17,7 @@ import { ptBR } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import ExpenseFormDialog from '@/components/financial/ExpenseFormDialog';
+import { supabase } from '@/lib/vpsDb';
 
 /* ── Rocket Pay Animation ── */
 function SalaryRocketOverlay({ name, onComplete }: { name: string; onComplete: () => void }) {
@@ -101,8 +103,13 @@ function SalaryRocketOverlay({ name, onComplete }: { name: string; onComplete: (
   );
 }
 
-/* ── Fire Glow Button ── */
-function FirePayButton({ onClick, paid, onRevert }: { onClick: () => void; paid: boolean; onRevert: () => void }) {
+/* ── Fire Glow Button — now with "Pagar" and "Pagar com Bônus" ── */
+function SalaryPayButtons({ paid, onPay, onPayWithBonus, onRevert }: {
+  paid: boolean;
+  onPay: () => void;
+  onPayWithBonus: () => void;
+  onRevert: () => void;
+}) {
   return (
     <AnimatePresence mode="wait">
       {paid ? (
@@ -127,47 +134,85 @@ function FirePayButton({ onClick, paid, onRevert }: { onClick: () => void; paid:
           </motion.button>
         </motion.div>
       ) : (
-        <motion.button
+        <motion.div
           key="unpaid"
-          onClick={onClick}
-          className="relative px-3 py-1.5 rounded-lg font-semibold text-xs text-white overflow-hidden"
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ scale: 0, opacity: 0 }}
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.92 }}
+          className="flex items-center gap-1.5"
         >
-          {/* Animated fire gradient background */}
-          <motion.div
-            className="absolute inset-0 rounded-lg"
-            style={{ background: 'linear-gradient(135deg, #f59e0b, #ef4444, #f59e0b, #ef4444)' , backgroundSize: '300% 300%' }}
-            animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
-            transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-          />
-          {/* Glow effect */}
-          <motion.div
-            className="absolute inset-0 rounded-lg"
-            animate={{
-              boxShadow: [
-                '0 0 8px rgba(245,158,11,0.4), 0 0 16px rgba(239,68,68,0.2)',
-                '0 0 16px rgba(245,158,11,0.6), 0 0 32px rgba(239,68,68,0.4)',
-                '0 0 8px rgba(245,158,11,0.4), 0 0 16px rgba(239,68,68,0.2)',
-              ],
-            }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-          />
-          {/* Fire emoji floating */}
-          <motion.span
-            className="absolute -top-1 -right-1 text-sm"
-            animate={{ y: [-2, -6, -2], opacity: [0.7, 1, 0.7], scale: [0.8, 1, 0.8] }}
-            transition={{ duration: 1, repeat: Infinity }}
+          {/* Pagar button */}
+          <motion.button
+            onClick={onPay}
+            className="relative px-3 py-1.5 rounded-lg font-semibold text-xs text-white overflow-hidden"
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
           >
-            🔥
-          </motion.span>
-          <span className="relative z-10 flex items-center gap-1">
-            <Wallet size={13} /> Pagar
-          </span>
-        </motion.button>
+            <motion.div
+              className="absolute inset-0 rounded-lg"
+              style={{ background: 'linear-gradient(135deg, #f59e0b, #ef4444, #f59e0b, #ef4444)', backgroundSize: '300% 300%' }}
+              animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+            />
+            <motion.div
+              className="absolute inset-0 rounded-lg"
+              animate={{
+                boxShadow: [
+                  '0 0 8px rgba(245,158,11,0.4), 0 0 16px rgba(239,68,68,0.2)',
+                  '0 0 16px rgba(245,158,11,0.6), 0 0 32px rgba(239,68,68,0.4)',
+                  '0 0 8px rgba(245,158,11,0.4), 0 0 16px rgba(239,68,68,0.2)',
+                ],
+              }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <motion.span
+              className="absolute -top-1 -right-1 text-sm"
+              animate={{ y: [-2, -6, -2], opacity: [0.7, 1, 0.7], scale: [0.8, 1, 0.8] }}
+              transition={{ duration: 1, repeat: Infinity }}
+            >
+              🔥
+            </motion.span>
+            <span className="relative z-10 flex items-center gap-1">
+              <Wallet size={13} /> Pagar
+            </span>
+          </motion.button>
+
+          {/* Pagar com Bônus button */}
+          <motion.button
+            onClick={onPayWithBonus}
+            className="relative px-3 py-1.5 rounded-lg font-semibold text-xs text-white overflow-hidden"
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
+          >
+            <motion.div
+              className="absolute inset-0 rounded-lg"
+              style={{ background: 'linear-gradient(135deg, #8b5cf6, #ec4899, #8b5cf6, #ec4899)', backgroundSize: '300% 300%' }}
+              animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+              transition={{ duration: 2.5, repeat: Infinity, ease: 'linear' }}
+            />
+            <motion.div
+              className="absolute inset-0 rounded-lg"
+              animate={{
+                boxShadow: [
+                  '0 0 8px rgba(139,92,246,0.4), 0 0 16px rgba(236,72,153,0.2)',
+                  '0 0 16px rgba(139,92,246,0.6), 0 0 32px rgba(236,72,153,0.4)',
+                  '0 0 8px rgba(139,92,246,0.4), 0 0 16px rgba(236,72,153,0.2)',
+                ],
+              }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <motion.span
+              className="absolute -top-1 -right-1 text-sm"
+              animate={{ y: [-2, -6, -2], rotate: [0, 15, -15, 0], scale: [0.8, 1.1, 0.8] }}
+              transition={{ duration: 1.2, repeat: Infinity }}
+            >
+              🎁
+            </motion.span>
+            <span className="relative z-10 flex items-center gap-1">
+              <Gift size={13} /> + Bônus
+            </span>
+          </motion.button>
+        </motion.div>
       )}
     </AnimatePresence>
   );
@@ -190,6 +235,9 @@ export default function FinancialExpenses() {
   const [activeTab, setActiveTab] = useState('despesas');
   const [rocketName, setRocketName] = useState('');
   const [showRocket, setShowRocket] = useState(false);
+  const [bonusDialogOpen, setBonusDialogOpen] = useState(false);
+  const [bonusExpense, setBonusExpense] = useState<Expense | null>(null);
+  const [bonusAmount, setBonusAmount] = useState('');
 
   // Find salary category
   const salaryCategory = useMemo(() => categories.find(c => c.name.toLowerCase() === 'salários'), [categories]);
@@ -268,6 +316,46 @@ export default function FinancialExpenses() {
     const ok = await updateExpense(expense.id, { description: desc });
     if (!ok) toast.error('Erro ao marcar como pago');
   }, [updateExpense]);
+
+  const handlePayWithBonus = useCallback((expense: Expense) => {
+    setBonusExpense(expense);
+    setBonusAmount('');
+    setBonusDialogOpen(true);
+  }, []);
+
+  const handleConfirmBonus = useCallback(async () => {
+    if (!bonusExpense || !bonusAmount) { toast.error('Informe o valor do bônus'); return; }
+    const match = bonusExpense.description?.match(/^Salário - (.+?) \((.+?)\)/);
+    const memberName = match ? match[1] : bonusExpense.responsible || bonusExpense.description;
+    const memberRole = match ? match[2] : '';
+
+    // Mark as paid
+    setRocketName(memberName);
+    setShowRocket(true);
+    const desc = `${bonusExpense.description} - PAGO`;
+    const ok = await updateExpense(bonusExpense.id, { description: desc });
+    if (!ok) { toast.error('Erro ao marcar como pago'); return; }
+
+    // Save bonus record
+    const { error } = await supabase.from('salary_bonuses').insert({
+      expense_id: bonusExpense.id,
+      user_name: memberName,
+      user_role: memberRole,
+      bonus_amount: Number(bonusAmount),
+      reference_month: selectedMonth,
+    } as any);
+
+    if (error) {
+      console.error('[FinancialExpenses] bonus insert error:', error);
+      toast.error('Pago, mas erro ao registrar bônus');
+    } else {
+      toast.success(`Pago com bônus de ${fmt(Number(bonusAmount))} para ${memberName}! 🎉`);
+    }
+
+    setBonusDialogOpen(false);
+    setBonusExpense(null);
+    setBonusAmount('');
+  }, [bonusExpense, bonusAmount, updateExpense, selectedMonth]);
 
   const handleRevertSalary = useCallback(async (expense: Expense) => {
     const desc = expense.description.replace(/ - PAGO$/, '');
@@ -477,9 +565,10 @@ export default function FinancialExpenses() {
                           <TableCell>{(() => { const d = normalizeDate(e.date); const [y,m,day] = d.split('-'); return `${day}/${m}/${y}`; })()}</TableCell>
                           <TableCell className={`font-semibold ${paid ? 'text-emerald-600' : 'text-foreground'}`}>{fmt(Number(e.amount))}</TableCell>
                           <TableCell>
-                            <FirePayButton
+                            <SalaryPayButtons
                               paid={paid}
-                              onClick={() => handleMarkSalaryPaid(e)}
+                              onPay={() => handleMarkSalaryPaid(e)}
+                              onPayWithBonus={() => handlePayWithBonus(e)}
                               onRevert={() => handleRevertSalary(e)}
                             />
                           </TableCell>
@@ -506,6 +595,48 @@ export default function FinancialExpenses() {
           </motion.div>
         </TabsContent>
       </Tabs>
+
+      {/* ── Bonus Dialog ── */}
+      <Dialog open={bonusDialogOpen} onOpenChange={(o) => { setBonusDialogOpen(o); if (!o) { setBonusExpense(null); setBonusAmount(''); } }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">🎁 Pagar com Bônus</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {bonusExpense && (() => {
+              const match = bonusExpense.description?.match(/^Salário - (.+?) \((.+?)\)/);
+              const name = match ? match[1] : bonusExpense.responsible || bonusExpense.description;
+              return (
+                <div className="text-center p-3 rounded-xl bg-gradient-to-br from-violet-500/10 to-pink-500/10 border border-violet-200/30">
+                  <p className="text-sm font-semibold">{name}</p>
+                  <p className="text-xs text-muted-foreground">Salário: {fmt(Number(bonusExpense.amount))}</p>
+                </div>
+              );
+            })()}
+            <div className="space-y-2">
+              <Label>Valor do Bônus (R$)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Ex: 500,00"
+                value={bonusAmount}
+                onChange={e => setBonusAmount(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setBonusDialogOpen(false)}>Cancelar</Button>
+              <Button
+                onClick={handleConfirmBonus}
+                className="bg-gradient-to-r from-violet-500 to-pink-500 hover:from-violet-600 hover:to-pink-600 text-white"
+              >
+                <Gift size={14} className="mr-1" /> Pagar + Bônus
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -831,7 +831,7 @@ export default function ContentKanban() {
                 initial={{ opacity: 0, y: 24 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: colIdx * 0.06, duration: 0.4, ease: 'easeOut' }}
-                className={`flex flex-col w-[270px] shrink-0 rounded-2xl transition-all duration-200 ${
+                className={`flex flex-col w-[280px] shrink-0 rounded-2xl transition-all duration-200 ${
                   !isColumnInteractive(col.id) ? 'opacity-75' : ''
                 } ${
                   isDragOver && isColumnInteractive(col.id) ? 'ring-2 ring-primary/40 bg-accent/20 scale-[1.01]' : 'bg-muted/10'

@@ -92,8 +92,10 @@ export async function syncContentTaskColumnChange(
   // 1. Set editing_started_at and editing_deadline when entering edicao
   if (newColumn === 'edicao') {
     updates.editing_started_at = new Date().toISOString();
-    const editingDeadline = addBusinessHours(new Date(), deadlineHours.editing, workDays);
-    updates.editing_deadline = editingDeadline.toISOString();
+    if (deadlineEnabled.editing) {
+      const editingDeadline = addBusinessHours(new Date(), deadlineHours.editing, workDays);
+      updates.editing_deadline = editingDeadline.toISOString();
+    }
     // Mark script as recorded
     if (ctx.scriptId) {
       await supabase.from('scripts').update({ recorded: true } as any).eq('id', ctx.scriptId);
@@ -123,13 +125,15 @@ export async function syncContentTaskColumnChange(
 
   // 2. Set deadlines based on column transitions (business hours only)
   if (newColumn === 'revisao') {
-    const deadline = addBusinessHours(new Date(), deadlineHours.review, workDays);
-    updates.review_deadline = deadline.toISOString();
+    if (deadlineEnabled.review) {
+      const deadline = addBusinessHours(new Date(), deadlineHours.review, workDays);
+      updates.review_deadline = deadline.toISOString();
+    }
     updates.approval_sent_at = new Date().toISOString();
     updates.assigned_to = null; // Remove editor responsibility on review
   }
   if (newColumn === 'alteracao') {
-    if (!ctx.immediateAlteration) {
+    if (!ctx.immediateAlteration && deadlineEnabled.alteration) {
       const deadline = addBusinessHours(new Date(), deadlineHours.alteration, workDays);
       updates.alteration_deadline = deadline.toISOString();
     }
@@ -141,8 +145,10 @@ export async function syncContentTaskColumnChange(
     updates.assigned_to = null;
   }
   if (newColumn === 'envio') {
-    const deadline = addBusinessHours(new Date(), deadlineHours.approval, workDays);
-    updates.approval_deadline = deadline.toISOString();
+    if (deadlineEnabled.approval) {
+      const deadline = addBusinessHours(new Date(), deadlineHours.approval, workDays);
+      updates.approval_deadline = deadline.toISOString();
+    }
     updates.approval_sent_at = new Date().toISOString();
     updates.assigned_to = null; // Remove editor responsibility on client approval
   }

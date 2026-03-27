@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/vpsDb';
+import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import type { Recording, RecordingType, Script, DayOfWeek, Client, EventRecording } from '@/types';
 import { SCRIPT_VIDEO_TYPE_LABELS, DAY_LABELS } from '@/types';
 import { useEndoClientes, useEndoAgendamentos, useEndoContracts } from '@/hooks/useEndomarketing';

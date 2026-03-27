@@ -65,7 +65,7 @@ export default function Schedule() {
   const {
     clients, users, recordings, scripts, settings, activeRecordings,
     currentUser, updateScript, addRecording, updateRecording, cancelRecording, deleteRecording, cancelAndReschedule,
-    regenerateScheduleForClient, startActiveRecording, stopActiveRecording,
+    regenerateScheduleForClient, generateScheduleForClient, startActiveRecording, stopActiveRecording,
     hasConflict, isWithinWorkHours,
   } = useApp();
 
@@ -982,6 +982,33 @@ export default function Schedule() {
     }
   };
 
+  const [generatingAll, setGeneratingAll] = useState(false);
+  const handleGenerateAllFixed = async () => {
+    const fixedClients = clients.filter(c => c.fixedDay && c.fixedTime && c.videomaker);
+    if (fixedClients.length === 0) {
+      toast.info('Nenhum cliente com agenda fixa configurada');
+      return;
+    }
+    setGeneratingAll(true);
+    let totalCreated = 0;
+    try {
+      for (const client of fixedClients) {
+        const created = await generateScheduleForClient(client);
+        totalCreated += created;
+      }
+      if (totalCreated > 0) {
+        toast.success(`${totalCreated} gravação(ões) fixa(s) gerada(s) para ${fixedClients.length} cliente(s)`);
+      } else {
+        toast.info('Todas as agendas fixas já estão em dia');
+      }
+    } catch (err) {
+      console.error('Erro ao gerar agendas fixas:', err);
+      toast.error('Erro ao gerar agendas fixas');
+    } finally {
+      setGeneratingAll(false);
+    }
+  };
+
   const today = new Date();
 
   return (
@@ -1008,6 +1035,9 @@ export default function Schedule() {
           )}
           <Button variant="outline" onClick={() => { setRegenClientId(''); setRegenOpen(true); }}>
             <RefreshCw size={16} className="mr-2" /> Regenerar Agenda
+          </Button>
+          <Button variant="outline" className="border-primary/50 text-primary hover:bg-primary/10" onClick={handleGenerateAllFixed} disabled={generatingAll}>
+            <CalendarDays size={16} className="mr-2" /> {generatingAll ? 'Gerando...' : 'Gerar Todas Fixas'}
           </Button>
           <Button onClick={() => { setForm({ clientId: '', videomakerId: '', date: format(new Date(), 'yyyy-MM-dd'), startTime: '09:00', type: 'fixa', prospectName: '' }); setNewOpen(true); }}>
             <Plus size={16} className="mr-2" /> Nova Gravação

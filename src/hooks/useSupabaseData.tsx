@@ -205,6 +205,10 @@ function rowToSettings(r: any): CompanySettings {
     reviewDeadlineHours: r.review_deadline_hours ?? 24,
     alterationDeadlineHours: r.alteration_deadline_hours ?? 24,
     approvalDeadlineHours: r.approval_deadline_hours ?? 6,
+    editingDeadlineEnabled: r.editing_deadline_enabled ?? true,
+    reviewDeadlineEnabled: r.review_deadline_enabled ?? true,
+    alterationDeadlineEnabled: r.alteration_deadline_enabled ?? true,
+    approvalDeadlineEnabled: r.approval_deadline_enabled ?? true,
   };
 }
 
@@ -229,6 +233,10 @@ const defaultSettings: CompanySettings = {
   reviewDeadlineHours: 24,
   alterationDeadlineHours: 24,
   approvalDeadlineHours: 6,
+  editingDeadlineEnabled: true,
+  reviewDeadlineEnabled: true,
+  alterationDeadlineEnabled: true,
+  approvalDeadlineEnabled: true,
 };
 
 export function useSupabaseData() {
@@ -459,6 +467,10 @@ export function useSupabaseData() {
           review_deadline_hours: s.reviewDeadlineHours,
           alteration_deadline_hours: s.alterationDeadlineHours,
           approval_deadline_hours: s.approvalDeadlineHours,
+          editing_deadline_enabled: s.editingDeadlineEnabled,
+          review_deadline_enabled: s.reviewDeadlineEnabled,
+          alteration_deadline_enabled: s.alterationDeadlineEnabled,
+          approval_deadline_enabled: s.approvalDeadlineEnabled,
         },
         method: 'PUT',
       });

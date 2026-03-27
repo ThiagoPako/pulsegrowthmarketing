@@ -73,21 +73,29 @@ export async function syncContentTaskColumnChange(
     reviewing_at: null,
   };
 
-  // Fetch deadline settings + work_days
-  const { data: settingsRow } = await supabase.from('company_settings').select('editing_deadline_hours, review_deadline_hours, alteration_deadline_hours, approval_deadline_hours, work_days').limit(1).single();
+  // Fetch deadline settings + work_days + enabled flags
+  const { data: settingsRow } = await supabase.from('company_settings').select('editing_deadline_hours, review_deadline_hours, alteration_deadline_hours, approval_deadline_hours, work_days, editing_deadline_enabled, review_deadline_enabled, alteration_deadline_enabled, approval_deadline_enabled').limit(1).single();
   const deadlineHours = {
     editing: settingsRow?.editing_deadline_hours ?? 48,
     review: settingsRow?.review_deadline_hours ?? 24,
     alteration: settingsRow?.alteration_deadline_hours ?? 24,
     approval: settingsRow?.approval_deadline_hours ?? 6,
   };
+  const deadlineEnabled = {
+    editing: settingsRow?.editing_deadline_enabled ?? true,
+    review: settingsRow?.review_deadline_enabled ?? true,
+    alteration: settingsRow?.alteration_deadline_enabled ?? true,
+    approval: settingsRow?.approval_deadline_enabled ?? true,
+  };
   const workDays: string[] = (settingsRow?.work_days as string[]) ?? ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
 
   // 1. Set editing_started_at and editing_deadline when entering edicao
   if (newColumn === 'edicao') {
     updates.editing_started_at = new Date().toISOString();
-    const editingDeadline = addBusinessHours(new Date(), deadlineHours.editing, workDays);
-    updates.editing_deadline = editingDeadline.toISOString();
+    if (deadlineEnabled.editing) {
+      const editingDeadline = addBusinessHours(new Date(), deadlineHours.editing, workDays);
+      updates.editing_deadline = editingDeadline.toISOString();
+    }
     // Mark script as recorded
     if (ctx.scriptId) {
       await supabase.from('scripts').update({ recorded: true } as any).eq('id', ctx.scriptId);
@@ -117,13 +125,15 @@ export async function syncContentTaskColumnChange(
 
   // 2. Set deadlines based on column transitions (business hours only)
   if (newColumn === 'revisao') {
-    const deadline = addBusinessHours(new Date(), deadlineHours.review, workDays);
-    updates.review_deadline = deadline.toISOString();
+    if (deadlineEnabled.review) {
+      const deadline = addBusinessHours(new Date(), deadlineHours.review, workDays);
+      updates.review_deadline = deadline.toISOString();
+    }
     updates.approval_sent_at = new Date().toISOString();
     updates.assigned_to = null; // Remove editor responsibility on review
   }
   if (newColumn === 'alteracao') {
-    if (!ctx.immediateAlteration) {
+    if (!ctx.immediateAlteration && deadlineEnabled.alteration) {
       const deadline = addBusinessHours(new Date(), deadlineHours.alteration, workDays);
       updates.alteration_deadline = deadline.toISOString();
     }
@@ -135,8 +145,10 @@ export async function syncContentTaskColumnChange(
     updates.assigned_to = null;
   }
   if (newColumn === 'envio') {
-    const deadline = addBusinessHours(new Date(), deadlineHours.approval, workDays);
-    updates.approval_deadline = deadline.toISOString();
+    if (deadlineEnabled.approval) {
+      const deadline = addBusinessHours(new Date(), deadlineHours.approval, workDays);
+      updates.approval_deadline = deadline.toISOString();
+    }
     updates.approval_sent_at = new Date().toISOString();
     updates.assigned_to = null; // Remove editor responsibility on client approval
   }

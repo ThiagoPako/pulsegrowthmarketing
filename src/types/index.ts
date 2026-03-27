@@ -25,6 +25,10 @@ export interface CompanySettings {
   reviewDeadlineHours: number;
   alterationDeadlineHours: number;
   approvalDeadlineHours: number;
+  editingDeadlineEnabled: boolean;
+  reviewDeadlineEnabled: boolean;
+  alterationDeadlineEnabled: boolean;
+  approvalDeadlineEnabled: boolean;
 }
 
 export type ContentType = 'reels' | 'story' | 'produto';

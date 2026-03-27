@@ -285,6 +285,23 @@ export default function DesignerDashboard() {
             <BarChart3 size={16} /> Meu Desempenho
           </h3>
           <div className="space-y-4">
+            {/* Scoring card */}
+            <div className="rounded-xl bg-gradient-to-br from-amber-500/15 to-yellow-500/5 border border-amber-500/20 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold flex items-center gap-1.5">
+                  <Award size={14} className="text-amber-500" /> Pontuação Mensal
+                </span>
+                <span className="text-xl font-display font-bold text-amber-500">{stats.designerScore} <span className="text-xs font-normal text-muted-foreground">pts</span></span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                <span className="text-muted-foreground">Concluídos: <strong className="text-foreground">{stats.scoringCompleted}</strong> <span className="opacity-60">×{DESIGNER_SCORE.CONCLUIDO}</span></span>
+                <span className="text-muted-foreground">Em progresso: <strong className="text-foreground">{stats.scoringInProgress}</strong> <span className="opacity-60">×{DESIGNER_SCORE.EM_PROGRESSO}</span></span>
+                <span className="text-muted-foreground">Horas: <strong className="text-foreground">{stats.scoringHours}</strong> <span className="opacity-60">×{DESIGNER_SCORE.POR_HORA}</span></span>
+                <span className="text-muted-foreground">Versões: <strong className="text-foreground">{stats.scoringVersions}</strong> <span className="opacity-60">×{DESIGNER_SCORE.POR_VERSAO}</span></span>
+                <span className="text-muted-foreground">Prioridade: <strong className="text-foreground">{stats.scoringPriority}</strong> <span className="opacity-60">×{DESIGNER_SCORE.PRIORIDADE}</span></span>
+              </div>
+            </div>
+
             {/* Week progress */}
             <div>
               <div className="flex justify-between text-xs mb-1">

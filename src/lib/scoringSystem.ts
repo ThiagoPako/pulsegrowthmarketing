@@ -135,11 +135,16 @@ export type SocialScoreContentTask = {
 };
 
 export type SocialScoreDelivery = {
+  id?: string | null;
   status: string;
   posted_at?: string | null;
   created_by?: string | null;
   createdBy?: string | null;
+  client_id?: string | null;
+  content_type?: string | null;
   content_task_id?: string | null;
+  script_id?: string | null;
+  title?: string | null;
   delivered_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -156,6 +161,81 @@ export const EDITOR_APPROVED_COLUMNS = ['envio', 'agendamentos', 'acompanhamento
 
 function getCreatorId(record: { created_by?: string | null; createdBy?: string | null }) {
   return record.createdBy ?? record.created_by ?? null;
+}
+
+function getDateKey(value?: string | null) {
+  return value?.slice(0, 10) ?? null;
+}
+
+function toTimestamp(value?: string | null) {
+  if (!value) return 0;
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+export function normalizeSocialDeliveryStatus(status?: string | null) {
+  switch (status) {
+    case 'posted':
+    case 'publicado':
+    case 'postado':
+      return 'postado';
+    case 'scheduled':
+    case 'agendado':
+      return 'agendado';
+    case 'delivered':
+    case 'entregue':
+      return 'entregue';
+    case 'review':
+    case 'revisao':
+      return 'revisao';
+    case 'adjustment':
+    case 'alteracao':
+    case 'ajuste':
+      return 'ajuste';
+    case 'approval':
+    case 'aprovacao_cliente':
+      return 'aprovacao_cliente';
+    default:
+      return status ?? '';
+  }
+}
+
+function getSocialDeliveryIdentity(delivery: SocialScoreDelivery) {
+  if (delivery.content_task_id) return `task:${delivery.content_task_id}`;
+  if (delivery.script_id) return `script:${delivery.script_id}`;
+
+  return [
+    'manual',
+    getCreatorId(delivery) ?? 'anon',
+    delivery.client_id ?? 'sem-cliente',
+    delivery.content_type ?? 'outro',
+    (delivery.title ?? '').trim().toLowerCase(),
+    getDateKey(delivery.delivered_at) ?? '',
+  ].join('|');
+}
+
+function getSocialDeliverySortTimestamp(delivery: SocialScoreDelivery) {
+  return Math.max(
+    toTimestamp(delivery.updated_at),
+    toTimestamp(delivery.posted_at),
+    toTimestamp(delivery.delivered_at),
+    toTimestamp(delivery.created_at),
+  );
+}
+
+export function dedupeSocialDeliveries(deliveries: SocialScoreDelivery[]) {
+  const uniqueDeliveries = new Map<string, SocialScoreDelivery>();
+
+  for (const delivery of deliveries) {
+    const key = getSocialDeliveryIdentity(delivery);
+    const current = uniqueDeliveries.get(key);
+
+    if (!current || getSocialDeliverySortTimestamp(delivery) >= getSocialDeliverySortTimestamp(current)) {
+      uniqueDeliveries.set(key, delivery);
+    }
+  }
+
+  return Array.from(uniqueDeliveries.values());
 }
 
 export function getEditorTaskOwnerId(task: Pick<EditorScoreTask, 'edited_by' | 'assigned_to'>) {
@@ -175,13 +255,19 @@ export function getSocialTaskReferenceDate(
     return task.approved_at ?? task.updated_at ?? task.created_at ?? null;
   }
 
-  return task.created_at ?? task.updated_at ?? null;
+  return task.updated_at ?? task.created_at ?? null;
 }
 
 export function getSocialDeliveryReferenceDate(
-  delivery: Pick<SocialScoreDelivery, 'posted_at' | 'updated_at' | 'delivered_at' | 'created_at'>,
+  delivery: Pick<SocialScoreDelivery, 'status' | 'posted_at' | 'updated_at' | 'delivered_at' | 'created_at'>,
 ) {
-  return delivery.posted_at ?? delivery.updated_at ?? delivery.delivered_at ?? delivery.created_at ?? null;
+  const normalizedStatus = normalizeSocialDeliveryStatus(delivery.status);
+
+  if (normalizedStatus === 'postado' || normalizedStatus === 'agendado') {
+    return delivery.posted_at ?? delivery.delivered_at ?? delivery.created_at ?? delivery.updated_at ?? null;
+  }
+
+  return delivery.delivered_at ?? delivery.created_at ?? delivery.updated_at ?? null;
 }
 
 export function getScriptReferenceDate(script: Pick<SocialScoreScript, 'created_at' | 'createdAt'>) {
@@ -227,15 +313,16 @@ export function getSocialMediaScoreBreakdown(
   // Gerenciados: tasks actively managed (exclude 'ideias' backlog to avoid inflating)
   const managed = authoredTasks.filter(task => task.kanban_column !== 'ideias').length;
 
-  // For deliveries: only count ones directly created_by this user (not by task association)
-  // This avoids inflating counts when tasks from previous months get linked
-  const userDeliveries = deliveries.filter(d => getCreatorId(d) === userId);
+  // Deduplicate sync artifacts before counting statuses.
+  const userDeliveries = dedupeSocialDeliveries(
+    deliveries.filter(d => getCreatorId(d) === userId),
+  );
 
   // Postados: deliveries with explicit 'postado' status only
-  const posted = userDeliveries.filter(d => d.status === 'postado').length;
+  const posted = userDeliveries.filter(d => normalizeSocialDeliveryStatus(d.status) === 'postado').length;
 
   // Agendados: deliveries with 'agendado' status
-  const scheduled = userDeliveries.filter(d => d.status === 'agendado').length;
+  const scheduled = userDeliveries.filter(d => normalizeSocialDeliveryStatus(d.status) === 'agendado').length;
 
   return {
     published,

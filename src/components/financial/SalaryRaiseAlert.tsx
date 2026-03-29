@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/vpsDb';
-import { VM_SCORE, EDITOR_SCORE, DESIGNER_SCORE, SM_SCORE, PARCEIRO_SCORE, EDITOR_APPROVED_COLUMNS } from '@/lib/scoringSystem';
+import { VM_SCORE, EDITOR_SCORE, DESIGNER_SCORE, PARCEIRO_SCORE, EDITOR_APPROVED_COLUMNS, getScriptReferenceDate, getSocialDeliveryReferenceDate, getSocialMediaScoreBreakdown, getSocialTaskReferenceDate } from '@/lib/scoringSystem';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -72,8 +72,14 @@ function calculateScoreForMonth(
   partnerTasks: any[],
   recordings: any[],
   scripts: any[],
+  period: { start: string; end: string },
 ): number {
   let score = 0;
+  const inRange = (value?: string | null) => {
+    const key = value?.slice(0, 10);
+    return !!key && key >= period.start && key <= period.end;
+  };
+
   if (role === 'videomaker') {
     const vmDeliveries = deliveryRecords.filter(r => r.videomaker_id === userId);
     const reels = vmDeliveries.reduce((a, r) => a + (r.reels_produced || 0), 0);
@@ -105,14 +111,10 @@ function calculateScoreForMonth(
       Math.round(totalTime / 3600) * DESIGNER_SCORE.POR_HORA + totalVersions * DESIGNER_SCORE.POR_VERSAO +
       highPriority * DESIGNER_SCORE.PRIORIDADE;
   } else if (role === 'social_media') {
-    const smCreated = contentTasks.filter(t => t.created_by === userId);
-    const published = smCreated.filter(t => t.kanban_column === 'arquivado').length;
-    const managed = smCreated.length;
-    const userDel = smDeliveries.filter(d => d.created_by === userId);
-    const posted = userDel.filter(d => d.status === 'postado' || d.posted_at).length;
-    const scheduled = userDel.filter(d => d.status === 'agendado').length;
-    score = published * SM_SCORE.PUBLICADO + posted * SM_SCORE.POSTADO + scheduled * SM_SCORE.AGENDADO +
-      managed * SM_SCORE.GERENCIADO;
+    const scopedTasks = contentTasks.filter(t => inRange(getSocialTaskReferenceDate(t)));
+    const scopedDeliveries = smDeliveries.filter(d => inRange(getSocialDeliveryReferenceDate(d)));
+    const scopedScripts = scripts.filter(s => inRange(getScriptReferenceDate(s)));
+    score = getSocialMediaScoreBreakdown(scopedTasks, scopedDeliveries, scopedScripts, userId).score;
   } else if (role === 'parceiro') {
     const pTasks = partnerTasks.filter(t => t.partner_id === userId);
     const completed = pTasks.filter(t => t.status === 'completed' || t.completed_at).length;
@@ -140,9 +142,9 @@ export default function SalaryRaiseAlert() {
       const key = format(m, 'yyyy-MM');
       const [dr, ct, dt, smd, pt, rec] = await Promise.all([
         supabase.from('delivery_records').select('*').gte('date', mStart).lte('date', mEnd),
-        supabase.from('content_tasks').select('*').gte('created_at', mStart + 'T00:00:00').lte('created_at', mEnd + 'T23:59:59'),
+        supabase.from('content_tasks').select('*').gte('updated_at', mStart + 'T00:00:00').lte('updated_at', mEnd + 'T23:59:59'),
         supabase.from('design_tasks').select('*').gte('created_at', mStart + 'T00:00:00').lte('created_at', mEnd + 'T23:59:59'),
-        supabase.from('social_media_deliveries').select('*').gte('delivered_at', mStart).lte('delivered_at', mEnd),
+        supabase.from('social_media_deliveries').select('*'),
         supabase.from('endomarketing_partner_tasks').select('*').gte('date', mStart).lte('date', mEnd),
         supabase.from('recordings').select('*').gte('date', mStart).lte('date', mEnd),
       ]);
@@ -171,6 +173,10 @@ export default function SalaryRaiseAlert() {
         const m = new Date(key + '-15');
         const workDays = 22; // average work days
         const maxExpected = calculateRoleMaxExpected(user.role, workDays);
+        const period = {
+          start: `${key}-01`,
+          end: format(endOfMonth(m), 'yyyy-MM-dd'),
+        };
         
         // Map recordings to the format expected by scoring
         const recsForScoring = data.rec;
@@ -178,7 +184,7 @@ export default function SalaryRaiseAlert() {
         const score = calculateScoreForMonth(
           user.role, user.id,
           data.dr, data.ct, data.dt, data.smd, data.pt,
-          recsForScoring, scripts as any[]
+          recsForScoring, scripts as any[], period,
         );
 
         const percentage = maxExpected > 0 ? Math.min(Math.round((score / maxExpected) * 100), 100) : 0;

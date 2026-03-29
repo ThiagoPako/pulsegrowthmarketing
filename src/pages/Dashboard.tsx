@@ -355,7 +355,7 @@ export default function Dashboard() {
 
       return { client, totalDone, totalGoal, progress, recsDone, recsTotal, recsGoal, breakdown, planName: plan?.name || '' };
     }).sort((a, b) => b.progress - a.progress);
-  }, [clients, contentTasks, socialDeliveries, plansData, recordings]);
+  }, [clients, contentTasks, socialDeliveries, plansData, clientPlans, recordings]);
 
   const waitTimeStats = useMemo(() => {
     const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');

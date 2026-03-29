@@ -748,6 +748,10 @@ export default function ClientPortal() {
           <motion.div key="panfletagem" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
             <PortalPanfletagem clientId={client.id} clientColor={clientColor} clientName={client.company_name} clientLogoUrl={client.logo_url} clientWhatsapp={client.whatsapp} clientCity={client.city} />
           </motion.div>
+        ) : activeTab === 'descontos' ? (
+          <motion.div key="descontos" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+            <PortalDiscountClub clientId={client.id} clientColor={clientColor} />
+          </motion.div>
         ) : (
           /* ── METRICS TAB ── */
           <motion.div key="metrics" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8 pb-20 space-y-8">

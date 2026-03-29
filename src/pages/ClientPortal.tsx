@@ -622,6 +622,9 @@ export default function ClientPortal() {
             🚗 Panfleto
           </button>
         )}
+        <button onClick={() => setActiveTab('descontos')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'descontos' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'descontos' ? { borderColor: `hsl(${clientColor})` } : {}}>
+          🎟️ Descontos
+        </button>
       </div>
 
       <AnimatePresence mode="wait">

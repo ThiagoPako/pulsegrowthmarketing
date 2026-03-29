@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,7 +32,7 @@ interface Campaign {
 }
 
 export default function DiscountAdmin() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,30 +49,50 @@ export default function DiscountAdmin() {
   const [totalCoupons, setTotalCoupons] = useState('10');
 
   useEffect(() => {
-    if (user) loadData();
-  }, [user]);
+    if (authLoading) return;
+    if (user) {
+      loadData();
+      return;
+    }
+    setLoading(false);
+  }, [user, authLoading]);
 
   const loadData = async () => {
-    const { data: clientsData } = await supabase
-      .from('clients')
-      .select('id, company_name, color')
-      .order('company_name');
+    setLoading(true);
 
-    setClients(clientsData || []);
+    try {
+      const { data: clientsData, error } = await supabase
+        .from('clients')
+        .select('id, company_name, color')
+        .order('company_name');
 
-    // Load all campaigns from all clients
-    const allCampaigns: Campaign[] = [];
-    for (const client of (clientsData || [])) {
-      try {
-        const res = await fetch(`${VPS_API}/discount-stats/${client.id}`);
-        const data = await res.json();
-        if (data.campaigns) {
-          allCampaigns.push(...data.campaigns);
-        }
-      } catch (e) { /* skip */ }
+      if (error) {
+        throw new Error(error.message || 'Erro ao carregar clientes');
+      }
+
+      const safeClients = clientsData || [];
+      setClients(safeClients);
+
+      const campaignResults = await Promise.all(
+        safeClients.map(async (client) => {
+          try {
+            const res = await fetch(`${VPS_API}/discount-stats/${client.id}`);
+            const data = await res.json();
+            return data.campaigns || [];
+          } catch {
+            return [];
+          }
+        })
+      );
+
+      setCampaigns(campaignResults.flat());
+    } catch (e: any) {
+      setClients([]);
+      setCampaigns([]);
+      toast.error(e.message || 'Erro ao carregar clientes');
+    } finally {
+      setLoading(false);
     }
-    setCampaigns(allCampaigns);
-    setLoading(false);
   };
 
   const handleCreate = async () => {

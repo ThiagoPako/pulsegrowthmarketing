@@ -142,7 +142,22 @@ export default function Dashboard() {
     supabase.from('recording_wait_logs').select('*').then(({ data }) => { if (data) setWaitLogs(data); });
   }, []);
   useEffect(() => {
-    supabase.from('content_tasks').select('id, client_id, kanban_column, created_at').then(({ data }) => { if (data) setContentTasks(data); });
+    supabase.from('content_tasks').select('id, client_id, kanban_column, created_at, content_type').then(({ data }) => { if (data) setContentTasks(data); });
+  }, []);
+
+  const [socialDeliveries, setSocialDeliveries] = useState<any[]>([]);
+  const [plansData, setPlansData] = useState<any[]>([]);
+  const [clientPlans, setClientPlans] = useState<Record<string, string>>({});
+  useEffect(() => {
+    supabase.from('social_media_deliveries').select('id, client_id, content_type, delivered_at, status').then(({ data }) => { if (data) setSocialDeliveries(data); });
+    supabase.from('plans').select('id, name, reels_qty, creatives_qty, stories_qty, arts_qty, recording_sessions').then(({ data }) => { if (data) setPlansData(data); });
+    supabase.from('clients').select('id, plan_id').then(({ data }) => {
+      if (data) {
+        const map: Record<string, string> = {};
+        data.forEach((c: any) => { if (c.plan_id) map[c.id] = c.plan_id; });
+        setClientPlans(map);
+      }
+    });
   }, []);
 
   // Load AI seasonal alerts when clients are available
@@ -296,23 +311,51 @@ export default function Dashboard() {
   }, [videomakers, deliveryRecords, recordings, waitLogs]);
 
   const clientProgress = useMemo(() => {
-    const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-    const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
+    const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+    const monthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
     return clients.map(client => {
-      // Use content_tasks for progress (real social media tasks)
-      const clientContentTasks = contentTasks.filter(t => {
-        if (t.client_id !== client.id) return false;
-        const created = t.created_at?.slice(0, 10) || '';
-        return created >= weekStartStr && created <= weekEndStr;
-      });
-      const done = clientContentTasks.filter(t => t.kanban_column === 'finalizado').length;
-      const goal = client.weeklyGoal || 10;
-      const weekRecs = recordings.filter(r => r.clientId === client.id && isWithinInterval(parseISO(r.date), { start: weekStart, end: weekEnd }));
-      const recsDone = weekRecs.filter(r => r.status === 'concluida').length;
-      const recsTotal = weekRecs.filter(r => r.status !== 'cancelada').length;
-      return { client, tasksDone: done, tasksTotal: clientContentTasks.length, goal, recsDone, recsTotal, progress: Math.min(100, Math.round((done / goal) * 100)) };
-    });
-  }, [clients, contentTasks, recordings, weekStart, weekEnd]);
+      const plan = plansData.find(p => p.id === clientPlans[client.id]);
+      // Monthly deliveries from social_media_deliveries
+      const monthDeliveries = socialDeliveries.filter(d => d.client_id === client.id && d.delivered_at >= monthStart && d.delivered_at <= monthEnd);
+      // Also count finalized content_tasks this month
+      const monthTasks = contentTasks.filter(t => t.client_id === client.id && t.kanban_column === 'finalizado' && (t.created_at?.slice(0, 10) || '') >= monthStart && (t.created_at?.slice(0, 10) || '') <= monthEnd);
+
+      const countDelivered = (type: string) => {
+        const fromDeliveries = monthDeliveries.filter(d => d.content_type === type).length;
+        const fromTasks = monthTasks.filter(t => t.content_type === type).length;
+        // Use max to avoid double-counting (deliveries are created from tasks)
+        return Math.max(fromDeliveries, fromTasks);
+      };
+
+      const reelsDone = countDelivered('reels');
+      const criativosDone = countDelivered('criativo') + countDelivered('criativos');
+      const storiesDone = countDelivered('stories') + countDelivered('story');
+      const artesDone = countDelivered('arte') + countDelivered('artes');
+
+      const reelsGoal = plan?.reels_qty || client.weeklyReels * 4 || 0;
+      const criativosGoal = plan?.creatives_qty || client.weeklyCreatives * 4 || 0;
+      const storiesGoal = plan?.stories_qty || client.weeklyStories * 4 || 0;
+      const artesGoal = plan?.arts_qty || 0;
+      const recsGoal = plan?.recording_sessions || client.monthlyRecordings || 4;
+
+      const totalGoal = reelsGoal + criativosGoal + storiesGoal + artesGoal;
+      const totalDone = reelsDone + criativosDone + storiesDone + artesDone;
+      const progress = totalGoal > 0 ? Math.min(100, Math.round((totalDone / totalGoal) * 100)) : 0;
+
+      const monthRecs = recordings.filter(r => r.clientId === client.id && r.date >= monthStart && r.date <= monthEnd);
+      const recsDone = monthRecs.filter(r => r.status === 'concluida').length;
+      const recsTotal = monthRecs.filter(r => r.status !== 'cancelada').length;
+
+      const breakdown = [
+        { label: 'Reels', done: reelsDone, goal: reelsGoal, color: 'hsl(var(--primary))' },
+        { label: 'Criativos', done: criativosDone, goal: criativosGoal, color: 'hsl(142 71% 45%)' },
+        { label: 'Stories', done: storiesDone, goal: storiesGoal, color: 'hsl(38 92% 50%)' },
+        { label: 'Artes', done: artesDone, goal: artesGoal, color: 'hsl(280 67% 55%)' },
+      ].filter(b => b.goal > 0);
+
+      return { client, totalDone, totalGoal, progress, recsDone, recsTotal, recsGoal, breakdown, planName: plan?.name || '' };
+    }).sort((a, b) => b.progress - a.progress);
+  }, [clients, contentTasks, socialDeliveries, plansData, clientPlans, recordings]);
 
   const waitTimeStats = useMemo(() => {
     const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
@@ -1193,7 +1236,7 @@ export default function Dashboard() {
         <div className="flex items-center justify-between mb-3 sm:mb-4">
           <div className="flex items-center gap-2">
             <FloatingRocket size={16} />
-            <h3 className="font-display font-semibold text-xs sm:text-sm">Progresso por Cliente</h3>
+            <h3 className="font-display font-semibold text-xs sm:text-sm">Progresso Mensal por Cliente</h3>
           </div>
           <button onClick={() => navigate('/metas')} className="text-[10px] sm:text-[11px] text-primary font-semibold hover:underline">METAS</button>
         </div>
@@ -1205,24 +1248,44 @@ export default function Dashboard() {
             Nenhum cliente cadastrado
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-            {clientProgress.map(({ client, tasksDone, goal, recsDone, recsTotal, progress }) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+            {clientProgress.map(({ client, totalDone, totalGoal, progress, recsDone, recsTotal, recsGoal, breakdown, planName }) => (
               <motion.div key={client.id} whileTap={{ scale: 0.97 }} className="rounded-xl p-3 sm:p-4 border border-border bg-secondary/30" style={{ borderLeftWidth: 3, borderLeftColor: `hsl(${client.color || '220 10% 50%'})` }}>
-                <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+                <div className="flex items-center gap-2 sm:gap-3 mb-2">
                   <ClientLogo client={client} size="sm" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs sm:text-sm font-semibold truncate">{client.companyName}</p>
-                    <p className="text-[9px] sm:text-[11px] text-muted-foreground">{DAY_LABELS[client.fixedDay]} · {client.fixedTime}</p>
+                    <p className="text-[9px] sm:text-[11px] text-muted-foreground">
+                      {planName && <span className="font-medium text-primary">{planName} · </span>}
+                      {DAY_LABELS[client.fixedDay]} · {client.fixedTime}
+                    </p>
                   </div>
                   <span className="text-sm sm:text-lg font-display font-bold" style={{ color: progress >= 80 ? 'hsl(var(--success))' : progress >= 40 ? 'hsl(var(--warning))' : 'hsl(var(--destructive))' }}>
                     {progress}%
                   </span>
                 </div>
-                <Progress value={progress} className="h-1.5 mb-1.5 sm:mb-2" />
-                <div className="flex gap-2 sm:gap-3 text-[9px] sm:text-[11px] text-muted-foreground">
-                  <span>Meta: {goal}</span>
-                  <span>Feitas: {tasksDone}</span>
-                  <span>Grav: {recsDone}/{recsTotal}</span>
+                {/* Overall progress */}
+                <Progress value={progress} className="h-1.5 mb-2" />
+                {/* Per-type breakdown */}
+                <div className="space-y-1.5 mb-2">
+                  {breakdown.map(b => (
+                    <div key={b.label} className="flex items-center gap-2">
+                      <span className="text-[9px] sm:text-[10px] w-14 text-muted-foreground truncate">{b.label}</span>
+                      <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min(100, b.goal > 0 ? (b.done / b.goal) * 100 : 0)}%`, backgroundColor: b.color }}
+                        />
+                      </div>
+                      <span className="text-[9px] sm:text-[10px] font-mono font-semibold tabular-nums min-w-[28px] text-right" style={{ color: b.done >= b.goal ? 'hsl(var(--success))' : 'hsl(var(--muted-foreground))' }}>
+                        {b.done}/{b.goal}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2 sm:gap-3 text-[9px] sm:text-[11px] text-muted-foreground border-t border-border/50 pt-1.5">
+                  <span>Total: {totalDone}/{totalGoal}</span>
+                  <span>Grav: {recsDone}/{recsGoal}</span>
                 </div>
               </motion.div>
             ))}

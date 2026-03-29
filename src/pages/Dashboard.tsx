@@ -147,9 +147,17 @@ export default function Dashboard() {
 
   const [socialDeliveries, setSocialDeliveries] = useState<any[]>([]);
   const [plansData, setPlansData] = useState<any[]>([]);
+  const [clientPlans, setClientPlans] = useState<Record<string, string>>({});
   useEffect(() => {
     supabase.from('social_media_deliveries').select('id, client_id, content_type, delivered_at, status').then(({ data }) => { if (data) setSocialDeliveries(data); });
     supabase.from('plans').select('id, name, reels_qty, creatives_qty, stories_qty, arts_qty, recording_sessions').then(({ data }) => { if (data) setPlansData(data); });
+    supabase.from('clients').select('id, plan_id').then(({ data }) => {
+      if (data) {
+        const map: Record<string, string> = {};
+        data.forEach((c: any) => { if (c.plan_id) map[c.id] = c.plan_id; });
+        setClientPlans(map);
+      }
+    });
   }, []);
 
   // Load AI seasonal alerts when clients are available

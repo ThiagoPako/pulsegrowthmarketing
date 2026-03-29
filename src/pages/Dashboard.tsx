@@ -314,7 +314,7 @@ export default function Dashboard() {
     const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
     const monthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
     return clients.map(client => {
-      const plan = plansData.find(p => p.id === client.planId);
+      const plan = plansData.find(p => p.id === clientPlans[client.id]);
       // Monthly deliveries from social_media_deliveries
       const monthDeliveries = socialDeliveries.filter(d => d.client_id === client.id && d.delivered_at >= monthStart && d.delivered_at <= monthEnd);
       // Also count finalized content_tasks this month
@@ -1248,24 +1248,44 @@ export default function Dashboard() {
             Nenhum cliente cadastrado
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-            {clientProgress.map(({ client, tasksDone, goal, recsDone, recsTotal, progress }) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+            {clientProgress.map(({ client, totalDone, totalGoal, progress, recsDone, recsTotal, recsGoal, breakdown, planName }) => (
               <motion.div key={client.id} whileTap={{ scale: 0.97 }} className="rounded-xl p-3 sm:p-4 border border-border bg-secondary/30" style={{ borderLeftWidth: 3, borderLeftColor: `hsl(${client.color || '220 10% 50%'})` }}>
-                <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+                <div className="flex items-center gap-2 sm:gap-3 mb-2">
                   <ClientLogo client={client} size="sm" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs sm:text-sm font-semibold truncate">{client.companyName}</p>
-                    <p className="text-[9px] sm:text-[11px] text-muted-foreground">{DAY_LABELS[client.fixedDay]} · {client.fixedTime}</p>
+                    <p className="text-[9px] sm:text-[11px] text-muted-foreground">
+                      {planName && <span className="font-medium text-primary">{planName} · </span>}
+                      {DAY_LABELS[client.fixedDay]} · {client.fixedTime}
+                    </p>
                   </div>
                   <span className="text-sm sm:text-lg font-display font-bold" style={{ color: progress >= 80 ? 'hsl(var(--success))' : progress >= 40 ? 'hsl(var(--warning))' : 'hsl(var(--destructive))' }}>
                     {progress}%
                   </span>
                 </div>
-                <Progress value={progress} className="h-1.5 mb-1.5 sm:mb-2" />
-                <div className="flex gap-2 sm:gap-3 text-[9px] sm:text-[11px] text-muted-foreground">
-                  <span>Meta: {goal}</span>
-                  <span>Feitas: {tasksDone}</span>
-                  <span>Grav: {recsDone}/{recsTotal}</span>
+                {/* Overall progress */}
+                <Progress value={progress} className="h-1.5 mb-2" />
+                {/* Per-type breakdown */}
+                <div className="space-y-1.5 mb-2">
+                  {breakdown.map(b => (
+                    <div key={b.label} className="flex items-center gap-2">
+                      <span className="text-[9px] sm:text-[10px] w-14 text-muted-foreground truncate">{b.label}</span>
+                      <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min(100, b.goal > 0 ? (b.done / b.goal) * 100 : 0)}%`, backgroundColor: b.color }}
+                        />
+                      </div>
+                      <span className="text-[9px] sm:text-[10px] font-mono font-semibold tabular-nums min-w-[28px] text-right" style={{ color: b.done >= b.goal ? 'hsl(var(--success))' : 'hsl(var(--muted-foreground))' }}>
+                        {b.done}/{b.goal}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2 sm:gap-3 text-[9px] sm:text-[11px] text-muted-foreground border-t border-border/50 pt-1.5">
+                  <span>Total: {totalDone}/{totalGoal}</span>
+                  <span>Grav: {recsDone}/{recsGoal}</span>
                 </div>
               </motion.div>
             ))}

@@ -157,7 +157,7 @@ export default function DiscountAdmin() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Gerencie campanhas de cupons para clientes parceiros</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen} modal={false}>
           <DialogTrigger asChild>
             <Button className="gap-2">
               <Plus size={16} />

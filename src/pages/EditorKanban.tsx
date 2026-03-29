@@ -66,6 +66,10 @@ function getDeadlineStatus(deadline: string | null) {
   if (!deadline) return { label: 'Sem prazo', variant: 'default' as const };
   const deadlineDate = new Date(deadline);
   const now = new Date();
+  const day = now.getDay();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const inWeekendPause = day === 6 || (day === 0 && mins < 23 * 60 + 59) || (day === 5 && mins >= 23 * 60 + 59);
+  if (inWeekendPause) return { label: '⏸ Fim de semana', variant: 'default' as const };
   const hoursLeft = differenceInHours(deadlineDate, now);
   if (isPast(deadlineDate)) return { label: 'Atrasado', variant: 'destructive' as const };
   if (hoursLeft <= 12) return { label: 'Vence hoje', variant: 'warning' as const };

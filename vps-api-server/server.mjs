@@ -4064,6 +4064,31 @@ function generateCouponCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+// List all clients with active discount campaigns (public)
+app.get('/api/discount-clubs', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT c.id as client_id, c.company_name, c.logo_url, c.color,
+              COUNT(dc.id)::int as campaign_count,
+              COALESCE(SUM(
+                (SELECT COUNT(*) FROM discount_coupons dcoup WHERE dcoup.campaign_id = dc.id AND dcoup.status = 'available')
+              ), 0)::int as total_available
+       FROM discount_campaigns dc
+       JOIN clients c ON c.id = dc.client_id
+       WHERE dc.is_active = true
+       GROUP BY c.id, c.company_name, c.logo_url, c.color
+       HAVING COALESCE(SUM(
+         (SELECT COUNT(*) FROM discount_coupons dcoup WHERE dcoup.campaign_id = dc.id AND dcoup.status = 'available')
+       ), 0) > 0
+       ORDER BY c.company_name`
+    );
+    res.json({ clients: rows });
+  } catch (e) {
+    console.error('GET /api/discount-clubs error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Get campaigns for a client (public - no auth)
 app.get('/api/discount-campaigns/:clientId', async (req, res) => {
   try {

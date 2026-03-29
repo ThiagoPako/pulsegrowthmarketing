@@ -142,7 +142,14 @@ export default function Dashboard() {
     supabase.from('recording_wait_logs').select('*').then(({ data }) => { if (data) setWaitLogs(data); });
   }, []);
   useEffect(() => {
-    supabase.from('content_tasks').select('id, client_id, kanban_column, created_at').then(({ data }) => { if (data) setContentTasks(data); });
+    supabase.from('content_tasks').select('id, client_id, kanban_column, created_at, content_type').then(({ data }) => { if (data) setContentTasks(data); });
+  }, []);
+
+  const [socialDeliveries, setSocialDeliveries] = useState<any[]>([]);
+  const [plansData, setPlansData] = useState<any[]>([]);
+  useEffect(() => {
+    supabase.from('social_media_deliveries').select('id, client_id, content_type, delivered_at, status').then(({ data }) => { if (data) setSocialDeliveries(data); });
+    supabase.from('plans').select('id, name, reels_qty, creatives_qty, stories_qty, arts_qty, recording_sessions').then(({ data }) => { if (data) setPlansData(data); });
   }, []);
 
   // Load AI seasonal alerts when clients are available

@@ -65,11 +65,11 @@ export default function TeamPerformanceWidget() {
     const monthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
     Promise.all([
       supabase.from('delivery_records').select('*').gte('date', monthStart).lte('date', monthEnd),
-      supabase.from('content_tasks').select('*').gte('updated_at', monthStart),
-      supabase.from('design_tasks').select('*').gte('updated_at', monthStart),
+      supabase.from('content_tasks').select('*').gte('updated_at', monthStart).lte('updated_at', monthEnd + 'T23:59:59'),
+      supabase.from('design_tasks').select('*').gte('updated_at', monthStart).lte('updated_at', monthEnd + 'T23:59:59'),
       supabase.from('social_media_deliveries').select('*').gte('delivered_at', monthStart).lte('delivered_at', monthEnd),
       supabase.from('endomarketing_partner_tasks').select('*').gte('date', monthStart).lte('date', monthEnd),
-      supabase.from('recording_wait_logs').select('*').gte('created_at', monthStart),
+      supabase.from('recording_wait_logs').select('*').gte('created_at', monthStart).lte('created_at', monthEnd + 'T23:59:59'),
     ]).then(([dr, ct, dt, smd, pt, wl]) => {
       if (dr.data) setDeliveryRecords(dr.data);
       if (ct.data) setContentTasks(ct.data);

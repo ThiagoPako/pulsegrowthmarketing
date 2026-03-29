@@ -71,6 +71,7 @@ const RecordingControl = lazy(() => import("@/pages/RecordingControl"));
 const EditingControl = lazy(() => import("@/pages/EditingControl"));
 const AvulsoApproval = lazy(() => import("@/pages/AvulsoApproval"));
 const DiscountClub = lazy(() => import("@/pages/DiscountClub"));
+const DiscountClubHome = lazy(() => import("@/pages/DiscountClubHome"));
 const DiscountAdmin = lazy(() => import("@/pages/DiscountAdmin"));
 
 const queryClient = new QueryClient({
@@ -181,6 +182,7 @@ function AppRoutes() {
         <Route path="/avulso/:taskId" element={<AvulsoApproval />} />
         <Route path="/video-avulso/:taskId" element={<AvulsoApproval />} />
         <Route path="/feedback" element={<ClientFeedback />} />
+        <Route path="/clube" element={<DiscountClubHome />} />
         <Route path="/clube/:clientId" element={<DiscountClub />} />
         <Route path="/clube-descontos" element={<ProtectedRoute><DiscountAdmin /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />

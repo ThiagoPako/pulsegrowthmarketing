@@ -1236,7 +1236,7 @@ export default function Dashboard() {
         <div className="flex items-center justify-between mb-3 sm:mb-4">
           <div className="flex items-center gap-2">
             <FloatingRocket size={16} />
-            <h3 className="font-display font-semibold text-xs sm:text-sm">Progresso por Cliente</h3>
+            <h3 className="font-display font-semibold text-xs sm:text-sm">Progresso Mensal por Cliente</h3>
           </div>
           <button onClick={() => navigate('/metas')} className="text-[10px] sm:text-[11px] text-primary font-semibold hover:underline">METAS</button>
         </div>

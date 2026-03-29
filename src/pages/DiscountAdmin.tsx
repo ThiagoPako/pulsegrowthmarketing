@@ -49,8 +49,8 @@ export default function DiscountAdmin() {
   const [totalCoupons, setTotalCoupons] = useState('10');
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (user) loadData();
+  }, [user]);
 
   const loadData = async () => {
     const { data: clientsData } = await supabase

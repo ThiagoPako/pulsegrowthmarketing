@@ -5,7 +5,7 @@ import {
   Rocket, Video, BarChart3, Palette, Users, Calendar, CheckCircle2,
   ArrowRight, Play, Star, ChevronDown, MessageCircle, Instagram,
   TrendingUp, Zap, Shield, Clock, Award, Phone, Mail, MapPin,
-  Menu, X, Sparkles, Target, Megaphone, Camera, Film, PenTool,
+  Menu, X, Sparkles, Target, Megaphone, Camera, Film, PenTool, Gift,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
@@ -221,6 +221,9 @@ function Navbar() {
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
+              <Button variant="ghost" size="sm" onClick={() => navigate('/clube')} className="hidden sm:inline-flex text-xs sm:text-sm h-8 sm:h-9 gap-1.5">
+                <Gift size={14} /> Clube de Descontos
+              </Button>
               <Button variant="ghost" size="sm" onClick={() => navigate('/login')} className="hidden sm:inline-flex text-xs sm:text-sm h-8 sm:h-9">
                 Área da Equipe
               </Button>
@@ -303,6 +306,9 @@ function Navbar() {
                   className="w-full gap-2 bg-primary hover:bg-primary/90 text-primary-foreground py-6"
                 >
                   <MessageCircle size={18} /> Falar pelo WhatsApp
+                </Button>
+                <Button variant="outline" size="lg" onClick={() => { setOpen(false); navigate('/clube'); }} className="w-full py-6 gap-2">
+                  <Gift size={18} /> Clube de Descontos
                 </Button>
                 <Button variant="outline" size="lg" onClick={() => { setOpen(false); navigate('/login'); }} className="w-full py-6">
                   Área da Equipe

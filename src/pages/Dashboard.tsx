@@ -303,23 +303,51 @@ export default function Dashboard() {
   }, [videomakers, deliveryRecords, recordings, waitLogs]);
 
   const clientProgress = useMemo(() => {
-    const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-    const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
+    const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+    const monthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
     return clients.map(client => {
-      // Use content_tasks for progress (real social media tasks)
-      const clientContentTasks = contentTasks.filter(t => {
-        if (t.client_id !== client.id) return false;
-        const created = t.created_at?.slice(0, 10) || '';
-        return created >= weekStartStr && created <= weekEndStr;
-      });
-      const done = clientContentTasks.filter(t => t.kanban_column === 'finalizado').length;
-      const goal = client.weeklyGoal || 10;
-      const weekRecs = recordings.filter(r => r.clientId === client.id && isWithinInterval(parseISO(r.date), { start: weekStart, end: weekEnd }));
-      const recsDone = weekRecs.filter(r => r.status === 'concluida').length;
-      const recsTotal = weekRecs.filter(r => r.status !== 'cancelada').length;
-      return { client, tasksDone: done, tasksTotal: clientContentTasks.length, goal, recsDone, recsTotal, progress: Math.min(100, Math.round((done / goal) * 100)) };
-    });
-  }, [clients, contentTasks, recordings, weekStart, weekEnd]);
+      const plan = plansData.find(p => p.id === client.planId);
+      // Monthly deliveries from social_media_deliveries
+      const monthDeliveries = socialDeliveries.filter(d => d.client_id === client.id && d.delivered_at >= monthStart && d.delivered_at <= monthEnd);
+      // Also count finalized content_tasks this month
+      const monthTasks = contentTasks.filter(t => t.client_id === client.id && t.kanban_column === 'finalizado' && (t.created_at?.slice(0, 10) || '') >= monthStart && (t.created_at?.slice(0, 10) || '') <= monthEnd);
+
+      const countDelivered = (type: string) => {
+        const fromDeliveries = monthDeliveries.filter(d => d.content_type === type).length;
+        const fromTasks = monthTasks.filter(t => t.content_type === type).length;
+        // Use max to avoid double-counting (deliveries are created from tasks)
+        return Math.max(fromDeliveries, fromTasks);
+      };
+
+      const reelsDone = countDelivered('reels');
+      const criativosDone = countDelivered('criativo') + countDelivered('criativos');
+      const storiesDone = countDelivered('stories') + countDelivered('story');
+      const artesDone = countDelivered('arte') + countDelivered('artes');
+
+      const reelsGoal = plan?.reels_qty || client.weeklyReels * 4 || 0;
+      const criativosGoal = plan?.creatives_qty || client.weeklyCreatives * 4 || 0;
+      const storiesGoal = plan?.stories_qty || client.weeklyStories * 4 || 0;
+      const artesGoal = plan?.arts_qty || 0;
+      const recsGoal = plan?.recording_sessions || client.monthlyRecordings || 4;
+
+      const totalGoal = reelsGoal + criativosGoal + storiesGoal + artesGoal;
+      const totalDone = reelsDone + criativosDone + storiesDone + artesDone;
+      const progress = totalGoal > 0 ? Math.min(100, Math.round((totalDone / totalGoal) * 100)) : 0;
+
+      const monthRecs = recordings.filter(r => r.clientId === client.id && r.date >= monthStart && r.date <= monthEnd);
+      const recsDone = monthRecs.filter(r => r.status === 'concluida').length;
+      const recsTotal = monthRecs.filter(r => r.status !== 'cancelada').length;
+
+      const breakdown = [
+        { label: 'Reels', done: reelsDone, goal: reelsGoal, color: 'hsl(var(--primary))' },
+        { label: 'Criativos', done: criativosDone, goal: criativosGoal, color: 'hsl(142 71% 45%)' },
+        { label: 'Stories', done: storiesDone, goal: storiesGoal, color: 'hsl(38 92% 50%)' },
+        { label: 'Artes', done: artesDone, goal: artesGoal, color: 'hsl(280 67% 55%)' },
+      ].filter(b => b.goal > 0);
+
+      return { client, totalDone, totalGoal, progress, recsDone, recsTotal, recsGoal, breakdown, planName: plan?.name || '' };
+    }).sort((a, b) => b.progress - a.progress);
+  }, [clients, contentTasks, socialDeliveries, plansData, recordings]);
 
   const waitTimeStats = useMemo(() => {
     const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');

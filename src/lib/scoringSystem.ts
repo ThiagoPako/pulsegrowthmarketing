@@ -218,15 +218,24 @@ export function getSocialMediaScoreBreakdown(
   _scripts: SocialScoreScript[],
   userId: string,
 ) {
+  // Only count tasks actually created by this user
   const authoredTasks = contentTasks.filter(task => getCreatorId(task) === userId);
-  const authoredTaskIds = new Set(authoredTasks.map(task => task.id).filter(Boolean));
-  const authoredDeliveries = deliveries.filter(
-    delivery => getCreatorId(delivery) === userId || (!!delivery.content_task_id && authoredTaskIds.has(delivery.content_task_id)),
-  );
+
+  // Publicados: tasks moved to 'arquivado' (fully completed cycle) created by this user
   const published = authoredTasks.filter(task => task.kanban_column === 'arquivado').length;
-  const managed = authoredTasks.length;
-  const posted = authoredDeliveries.filter(delivery => delivery.status === 'postado' || !!delivery.posted_at).length;
-  const scheduled = authoredDeliveries.filter(delivery => delivery.status === 'agendado').length;
+
+  // Gerenciados: tasks actively managed (exclude 'ideias' backlog to avoid inflating)
+  const managed = authoredTasks.filter(task => task.kanban_column !== 'ideias').length;
+
+  // For deliveries: only count ones directly created_by this user (not by task association)
+  // This avoids inflating counts when tasks from previous months get linked
+  const userDeliveries = deliveries.filter(d => getCreatorId(d) === userId);
+
+  // Postados: deliveries with explicit 'postado' status only
+  const posted = userDeliveries.filter(d => d.status === 'postado').length;
+
+  // Agendados: deliveries with 'agendado' status
+  const scheduled = userDeliveries.filter(d => d.status === 'agendado').length;
 
   return {
     published,

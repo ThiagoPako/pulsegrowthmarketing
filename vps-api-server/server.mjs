@@ -582,7 +582,7 @@ app.post('/api/financial-chat', async (req, res) => {
       pool.query(`SELECT dt.*, c.company_name AS client_name, pf.name AS assigned_name FROM design_tasks dt LEFT JOIN clients c ON c.id = dt.client_id LEFT JOIN profiles pf ON pf.id = dt.assigned_to ORDER BY dt.updated_at DESC LIMIT 200`),
       pool.query(`SELECT s.*, c.company_name AS client_name FROM scripts s LEFT JOIN clients c ON c.id = s.client_id ORDER BY s.created_at DESC LIMIT 200`),
       pool.query(`SELECT dr.*, c.company_name AS client_name, pf.name AS videomaker_name FROM delivery_records dr LEFT JOIN clients c ON c.id = dr.client_id LEFT JOIN profiles pf ON pf.id = dr.videomaker_id WHERE dr.date >= $1 ORDER BY dr.date DESC LIMIT 200`, [startOfMonth]),
-      pool.query(`SELECT sd.*, c.company_name AS client_name FROM social_media_deliveries sd LEFT JOIN clients c ON c.id = sd.client_id WHERE sd.delivery_date >= $1 ORDER BY sd.delivery_date DESC LIMIT 300`, [startOfMonth]).catch(() => ({ rows: [] })),
+      pool.query(`SELECT sd.*, c.company_name AS client_name FROM social_media_deliveries sd LEFT JOIN clients c ON c.id = sd.client_id WHERE sd.delivered_at >= $1 ORDER BY sd.delivered_at DESC LIMIT 300`, [startOfMonth]).catch(() => ({ rows: [] })),
       pool.query(`SELECT id, name, email, role, job_title FROM profiles`),
       pool.query(`SELECT * FROM plans`),
       pool.query(`SELECT * FROM goals WHERE status != 'cancelada' ORDER BY end_date DESC LIMIT 20`).catch(() => ({ rows: [] })),
@@ -627,6 +627,70 @@ app.post('/api/financial-chat', async (req, res) => {
     const wkStartStr = _wkStart.toISOString().slice(0,10);
     const wkEndStr = _wkEnd.toISOString().slice(0,10);
 
+    const normalizeSocialStatus = status => {
+      switch (status) {
+        case 'posted':
+        case 'publicado':
+        case 'postado':
+          return 'postado';
+        case 'scheduled':
+        case 'agendado':
+          return 'agendado';
+        case 'delivered':
+        case 'entregue':
+          return 'entregue';
+        case 'review':
+        case 'revisao':
+          return 'revisao';
+        case 'adjustment':
+        case 'alteracao':
+        case 'ajuste':
+          return 'ajuste';
+        case 'approval':
+        case 'aprovacao_cliente':
+          return 'aprovacao_cliente';
+        default:
+          return status || '';
+      }
+    };
+
+    const socialDeliveryKey = delivery => {
+      if (delivery.content_task_id) return `task:${delivery.content_task_id}`;
+      if (delivery.script_id) return `script:${delivery.script_id}`;
+
+      return [
+        'manual',
+        delivery.created_by || 'anon',
+        delivery.client_id || 'sem-cliente',
+        delivery.content_type || 'outro',
+        String(delivery.title || '').trim().toLowerCase(),
+        String(delivery.delivered_at || '').slice(0, 10),
+      ].join('|');
+    };
+
+    const socialDeliverySortValue = delivery => {
+      const candidates = [delivery.updated_at, delivery.posted_at, delivery.delivered_at, delivery.created_at]
+        .filter(Boolean)
+        .map(value => new Date(value).getTime())
+        .filter(value => !Number.isNaN(value));
+
+      return candidates.length ? Math.max(...candidates) : 0;
+    };
+
+    const dedupeSocialDeliveries = deliveries => {
+      const unique = new Map();
+
+      for (const delivery of deliveries) {
+        const key = socialDeliveryKey(delivery);
+        const current = unique.get(key);
+        if (!current || socialDeliverySortValue(delivery) >= socialDeliverySortValue(current)) {
+          unique.set(key, delivery);
+        }
+      }
+
+      return Array.from(unique.values());
+    };
+
     for (const p of teamProfs) {
       let score = 0;
       const bd = [];
@@ -664,14 +728,14 @@ app.post('/api/financial-chat', async (req, res) => {
         bd.push(`Concluídos:${comp}(x12) EmProgresso:${prog}(x4) Horas:${Math.round(tSec/3600)}(x2) Versões:${tVer}(x3) Urgentes:${hP}(x6)`);
       } else if (p.role === 'social_media') {
         const smC = contentTasks.filter(t => t.created_by === p.id);
-        const pub = smC.filter(t => t.kanban_column === 'publicado').length;
-        const mgd = smC.length;
-        const uDel = socialDeliveries.filter(d => d.created_by === p.id);
-        const post = uDel.filter(d => d.status === 'posted' || d.posted_at).length;
-        const sched = uDel.filter(d => d.status === 'scheduled').length;
+        const pub = smC.filter(t => t.kanban_column === 'arquivado').length;
+        const mgd = smC.filter(t => t.kanban_column !== 'ideias').length;
+        const uDel = dedupeSocialDeliveries(socialDeliveries.filter(d => d.created_by === p.id));
+        const post = uDel.filter(d => normalizeSocialStatus(d.status) === 'postado').length;
+        const sched = uDel.filter(d => normalizeSocialStatus(d.status) === 'agendado').length;
         const scrC = scripts.filter(s => s.created_by === p.id).length;
-        score = pub * 10 + post * 8 + sched * 5 + mgd * 2 + scrC * 6;
-        bd.push(`Publicados:${pub}(x10) Postados:${post}(x8) Agendados:${sched}(x5) Gerenciados:${mgd}(x2) Roteiros:${scrC}(x6)`);
+        score = pub * 10 + post * 8 + sched * 5 + mgd * 2;
+        bd.push(`Publicados:${pub}(x10) Postados:${post}(x8) Agendados:${sched}(x5) Gerenciados:${mgd}(x2) Roteiros:${scrC}(x0)`);
       } else if (p.role === 'parceiro') {
         const pT = endoPartnerTasks.filter(t => t.partner_id === p.id);
         const comp = pT.filter(t => t.status === 'completed' || t.completed_at).length;
@@ -798,7 +862,7 @@ ${designTasks.slice(0, 30).map(t => `- ${t.client_name}: "${t.title}" | Coluna: 
 ${deliveries.slice(0, 30).map(d => `- ${fmtDate(d.date)} | ${d.client_name} | Vídeos: ${d.videos_recorded} | Reels: ${d.reels_produced} | Criativos: ${d.creatives_produced} | Stories: ${d.stories_produced} | Artes: ${d.arts_produced} | Extras: ${d.extras_produced} | Status: ${d.delivery_status}`).join('\n')}
 
 ### 📱 POSTAGENS SOCIAL MEDIA (${socialDeliveries.length} neste mês)
-${socialDeliveries.slice(0, 40).map(sd => `- ${fmtDate(sd.delivery_date)} | ${sd.client_name} | Tipo: ${sd.delivery_type || 'N/A'} | Plataforma: ${sd.platform || 'N/A'}`).join('\n')}
+${socialDeliveries.slice(0, 40).map(sd => `- ${fmtDate(sd.delivered_at)} | ${sd.client_name} | Tipo: ${sd.content_type || 'N/A'} | Plataforma: ${sd.platform || 'N/A'}`).join('\n')}
 
 ### 🌐 CONTEÚDOS DO PORTAL (${portalContents.length})
 ${portalContents.slice(0, 20).map(pc => `- ${pc.client_name}: "${pc.title}" | Tipo: ${pc.content_type} | Status: ${pc.status} | Temporada: ${pc.season_month}/${pc.season_year}`).join('\n')}

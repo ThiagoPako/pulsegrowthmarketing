@@ -1359,6 +1359,126 @@ export type Database = {
           },
         ]
       }
+      discount_campaigns: {
+        Row: {
+          client_id: string
+          coupons_claimed: number
+          created_at: string
+          created_by: string | null
+          description: string | null
+          discount_type: string
+          discount_value: number
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          min_purchase_value: number | null
+          title: string
+          total_coupons: number
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          coupons_claimed?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          discount_type?: string
+          discount_value?: number
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          min_purchase_value?: number | null
+          title?: string
+          total_coupons?: number
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          coupons_claimed?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          discount_type?: string
+          discount_value?: number
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          min_purchase_value?: number | null
+          title?: string
+          total_coupons?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discount_campaigns_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discount_campaigns_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_public_logos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discount_campaigns_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      discount_coupons: {
+        Row: {
+          campaign_id: string
+          claimed_at: string | null
+          claimed_by_name: string | null
+          claimed_by_phone: string | null
+          code: string
+          created_at: string
+          id: string
+          sale_value: number | null
+          status: string
+          used_at: string | null
+        }
+        Insert: {
+          campaign_id: string
+          claimed_at?: string | null
+          claimed_by_name?: string | null
+          claimed_by_phone?: string | null
+          code: string
+          created_at?: string
+          id?: string
+          sale_value?: number | null
+          status?: string
+          used_at?: string | null
+        }
+        Update: {
+          campaign_id?: string
+          claimed_at?: string | null
+          claimed_by_name?: string | null
+          claimed_by_phone?: string | null
+          code?: string
+          created_at?: string
+          id?: string
+          sale_value?: number | null
+          status?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discount_coupons_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "discount_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       endomarketing_agendamentos: {
         Row: {
           cancellation_reason: string | null

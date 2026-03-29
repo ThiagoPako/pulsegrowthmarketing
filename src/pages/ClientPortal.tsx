@@ -545,6 +545,12 @@ export default function ClientPortal() {
                   🚗 Panfletagem
                 </button>
               )}
+              <button
+                onClick={() => setActiveTab('descontos')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'descontos' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+              >
+                🎟️ Descontos
+              </button>
             </div>
             <PortalVideoButtons hasNews={portalVideoState.hasNews} hasWelcome={portalVideoState.hasWelcome} isNewClient={portalVideoState.isNewClient} />
             <PortalNotifications

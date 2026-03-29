@@ -22,6 +22,7 @@ import PortalDesigner from '@/components/portal/PortalDesigner';
 import { syncPortalApproval, syncPortalAdjustment, syncPortalComment } from '@/lib/portalSync';
 import PortalWelcomeOverlay from '@/components/portal/PortalWelcomeOverlay';
 import { PortalVideoButtons } from '@/components/portal/PortalWelcomeOverlay';
+import PortalDiscountClub from '@/components/portal/PortalDiscountClub';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
   reel: 'Reel', criativo: 'Criativo', institucional: 'Institucional', anuncio: 'Anúncio', arte: 'Arte',
@@ -59,7 +60,7 @@ interface ClientData {
   whatsapp?: string; city?: string;
 }
 
-type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem' | 'designer';
+type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem' | 'designer' | 'descontos';
 
 const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
@@ -544,6 +545,12 @@ export default function ClientPortal() {
                   🚗 Panfletagem
                 </button>
               )}
+              <button
+                onClick={() => setActiveTab('descontos')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'descontos' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+              >
+                🎟️ Descontos
+              </button>
             </div>
             <PortalVideoButtons hasNews={portalVideoState.hasNews} hasWelcome={portalVideoState.hasWelcome} isNewClient={portalVideoState.isNewClient} />
             <PortalNotifications
@@ -615,6 +622,9 @@ export default function ClientPortal() {
             🚗 Panfleto
           </button>
         )}
+        <button onClick={() => setActiveTab('descontos')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'descontos' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'descontos' ? { borderColor: `hsl(${clientColor})` } : {}}>
+          🎟️ Descontos
+        </button>
       </div>
 
       <AnimatePresence mode="wait">
@@ -737,6 +747,10 @@ export default function ClientPortal() {
         ) : activeTab === 'panfletagem' && client.has_vehicle_flyer ? (
           <motion.div key="panfletagem" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
             <PortalPanfletagem clientId={client.id} clientColor={clientColor} clientName={client.company_name} clientLogoUrl={client.logo_url} clientWhatsapp={client.whatsapp} clientCity={client.city} />
+          </motion.div>
+        ) : activeTab === 'descontos' ? (
+          <motion.div key="descontos" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+            <PortalDiscountClub clientId={client.id} clientColor={clientColor} />
           </motion.div>
         ) : (
           /* ── METRICS TAB ── */

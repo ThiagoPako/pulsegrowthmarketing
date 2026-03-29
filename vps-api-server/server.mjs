@@ -4057,6 +4057,300 @@ app.post('/api/fix-content-task', async (req, res) => {
   }
 });
 
+// ─── CLUBE DE DESCONTOS ─────────────────────────────────────
+
+// Helper: generate random 6-digit code
+function generateCouponCode() {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+// Get campaigns for a client (public - no auth)
+app.get('/api/discount-campaigns/:clientId', async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const { rows: campaigns } = await pool.query(
+      `SELECT dc.*, c.company_name, c.logo_url, c.color
+       FROM discount_campaigns dc
+       JOIN clients c ON c.id = dc.client_id
+       WHERE dc.client_id = $1 AND dc.is_active = true
+       AND (dc.expires_at IS NULL OR dc.expires_at > NOW())
+       ORDER BY dc.created_at DESC`,
+      [clientId]
+    );
+    // For each campaign, get available coupon count
+    for (const camp of campaigns) {
+      const { rows: [countRow] } = await pool.query(
+        `SELECT COUNT(*) as available FROM discount_coupons WHERE campaign_id = $1 AND status = 'available'`,
+        [camp.id]
+      );
+      camp.available_coupons = parseInt(countRow.available);
+    }
+    res.json({ campaigns });
+  } catch (e) {
+    console.error('GET /api/discount-campaigns error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Claim a coupon (public - mini registration)
+app.post('/api/discount-claim', async (req, res) => {
+  try {
+    const { campaign_id, name, phone } = req.body;
+    if (!campaign_id || !name || !phone) {
+      return res.status(400).json({ error: 'campaign_id, name e phone são obrigatórios' });
+    }
+
+    // Check if this phone already claimed from this campaign
+    const { rows: existing } = await pool.query(
+      `SELECT id FROM discount_coupons WHERE campaign_id = $1 AND claimed_by_phone = $2 AND status != 'available'`,
+      [campaign_id, phone]
+    );
+    if (existing.length > 0) {
+      return res.status(409).json({ error: 'Você já resgatou um cupom desta campanha' });
+    }
+
+    // Find first available coupon and claim it atomically
+    const { rows: claimed } = await pool.query(
+      `UPDATE discount_coupons
+       SET status = 'claimed', claimed_by_name = $2, claimed_by_phone = $3, claimed_at = NOW()
+       WHERE id = (
+         SELECT id FROM discount_coupons
+         WHERE campaign_id = $1 AND status = 'available'
+         ORDER BY created_at ASC
+         LIMIT 1
+         FOR UPDATE SKIP LOCKED
+       )
+       RETURNING *`,
+      [campaign_id, name, phone]
+    );
+
+    if (claimed.length === 0) {
+      return res.status(410).json({ error: 'Todos os cupons desta campanha já foram resgatados' });
+    }
+
+    // Update campaign claimed count
+    await pool.query(
+      `UPDATE discount_campaigns SET coupons_claimed = coupons_claimed + 1, updated_at = NOW() WHERE id = $1`,
+      [campaign_id]
+    );
+
+    // Get campaign + client info for WhatsApp message
+    const { rows: [campInfo] } = await pool.query(
+      `SELECT dc.title, dc.discount_type, dc.discount_value, c.company_name
+       FROM discount_campaigns dc JOIN clients c ON c.id = dc.client_id
+       WHERE dc.id = $1`,
+      [campaign_id]
+    );
+
+    // Send WhatsApp notification to claimant
+    const discountText = campInfo.discount_type === 'percentage'
+      ? `${campInfo.discount_value}% de desconto`
+      : `R$ ${Number(campInfo.discount_value).toFixed(2)} de desconto`;
+
+    const whatsappToken = process.env.WHATSAPP_API_TOKEN;
+    if (whatsappToken) {
+      const cleanPhone = phone.replace(/\D/g, '');
+      const whatsPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+      const message = `🎉 Parabéns ${name}!\n\nVocê resgatou um cupom de *${discountText}* na *${campInfo.company_name}*!\n\n🎟️ Seu código: *${claimed[0].code}*\n\nApresente este código no caixa para validar seu desconto.\n\n_Clube de Descontos Pulse_`;
+
+      try {
+        const formData = new FormData();
+        formData.append('number', whatsPhone);
+        formData.append('message', message);
+        await fetch('https://api.atendeclique.com.br/api/send-message', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${whatsappToken}` },
+          body: formData,
+        });
+      } catch (whatsErr) {
+        console.error('WhatsApp notification error:', whatsErr);
+      }
+    }
+
+    res.json({ coupon: claimed[0], store_name: campInfo.company_name });
+  } catch (e) {
+    console.error('POST /api/discount-claim error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Verify/redeem coupon (portal - client validates at checkout)
+app.post('/api/discount-verify', async (req, res) => {
+  try {
+    const { code, client_id, sale_value } = req.body;
+    if (!code || !client_id) {
+      return res.status(400).json({ error: 'code e client_id são obrigatórios' });
+    }
+
+    const { rows: coupons } = await pool.query(
+      `SELECT dc2.*, dcamp.title as campaign_title, dcamp.discount_type, dcamp.discount_value, dcamp.client_id
+       FROM discount_coupons dc2
+       JOIN discount_campaigns dcamp ON dcamp.id = dc2.campaign_id
+       WHERE dc2.code = $1`,
+      [code.toUpperCase()]
+    );
+
+    if (coupons.length === 0) {
+      return res.status(404).json({ error: 'Cupom não encontrado', valid: false });
+    }
+
+    const coupon = coupons[0];
+
+    if (coupon.client_id !== client_id) {
+      return res.status(403).json({ error: 'Este cupom não pertence a esta loja', valid: false });
+    }
+
+    if (coupon.status === 'used') {
+      return res.status(409).json({ error: 'Este cupom já foi utilizado', valid: false, coupon });
+    }
+
+    if (coupon.status === 'available') {
+      return res.status(400).json({ error: 'Este cupom ainda não foi resgatado', valid: false });
+    }
+
+    // Mark as used
+    await pool.query(
+      `UPDATE discount_coupons SET status = 'used', used_at = NOW(), sale_value = $2 WHERE id = $1`,
+      [coupon.id, sale_value || 0]
+    );
+
+    res.json({ valid: true, coupon: { ...coupon, status: 'used', used_at: new Date().toISOString() } });
+  } catch (e) {
+    console.error('POST /api/discount-verify error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Get discount stats for portal
+app.get('/api/discount-stats/:clientId', async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const { rows: campaigns } = await pool.query(
+      `SELECT * FROM discount_campaigns WHERE client_id = $1 ORDER BY created_at DESC`,
+      [clientId]
+    );
+
+    const { rows: coupons } = await pool.query(
+      `SELECT dc2.* FROM discount_coupons dc2
+       JOIN discount_campaigns dcamp ON dcamp.id = dc2.campaign_id
+       WHERE dcamp.client_id = $1
+       ORDER BY dc2.created_at DESC`,
+      [clientId]
+    );
+
+    const totalDiscountGiven = coupons
+      .filter(c => c.status === 'used')
+      .reduce((sum, c) => {
+        const camp = campaigns.find(ca => ca.id === c.campaign_id);
+        if (!camp) return sum;
+        return sum + (camp.discount_type === 'percentage' ? (Number(c.sale_value) * Number(camp.discount_value) / 100) : Number(camp.discount_value));
+      }, 0);
+
+    const totalSalesFromCoupons = coupons
+      .filter(c => c.status === 'used')
+      .reduce((sum, c) => sum + Number(c.sale_value || 0), 0);
+
+    res.json({
+      campaigns,
+      coupons,
+      stats: {
+        total_coupons_issued: coupons.length,
+        total_claimed: coupons.filter(c => c.status === 'claimed').length,
+        total_used: coupons.filter(c => c.status === 'used').length,
+        total_available: coupons.filter(c => c.status === 'available').length,
+        total_discount_given: totalDiscountGiven,
+        total_sales_from_coupons: totalSalesFromCoupons,
+      },
+    });
+  } catch (e) {
+    console.error('GET /api/discount-stats error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Admin: create campaign with coupons
+app.post('/api/discount-campaigns', async (req, res) => {
+  try {
+    const { client_id, title, description, discount_type, discount_value, min_purchase_value, total_coupons, expires_at, created_by } = req.body;
+    if (!client_id || !title || !total_coupons) {
+      return res.status(400).json({ error: 'client_id, title e total_coupons são obrigatórios' });
+    }
+
+    const { rows: [campaign] } = await pool.query(
+      `INSERT INTO discount_campaigns (client_id, title, description, discount_type, discount_value, min_purchase_value, total_coupons, expires_at, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [client_id, title, description || '', discount_type || 'percentage', discount_value || 0, min_purchase_value || 0, total_coupons, expires_at || null, created_by || null]
+    );
+
+    // Generate coupons
+    const codes = new Set();
+    while (codes.size < total_coupons) {
+      codes.add(generateCouponCode());
+    }
+
+    for (const code of codes) {
+      await pool.query(
+        `INSERT INTO discount_coupons (campaign_id, code) VALUES ($1, $2)`,
+        [campaign.id, code]
+      );
+    }
+
+    // Notify existing coupon holders from this client that new coupons are available
+    const { rows: existingClaimants } = await pool.query(
+      `SELECT DISTINCT dc2.claimed_by_phone, dc2.claimed_by_name
+       FROM discount_coupons dc2
+       JOIN discount_campaigns dcamp ON dcamp.id = dc2.campaign_id
+       WHERE dcamp.client_id = $1 AND dc2.claimed_by_phone IS NOT NULL AND dc2.status != 'available'`,
+      [client_id]
+    );
+
+    const whatsappToken = process.env.WHATSAPP_API_TOKEN;
+    if (whatsappToken && existingClaimants.length > 0) {
+      const { rows: [clientInfo] } = await pool.query(`SELECT company_name FROM clients WHERE id = $1`, [client_id]);
+      const storeName = clientInfo?.company_name || 'Loja parceira';
+
+      for (const claimant of existingClaimants) {
+        const cleanPhone = claimant.claimed_by_phone.replace(/\D/g, '');
+        const whatsPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+        const message = `🎁 Novidade no Clube de Descontos!\n\n${claimant.claimed_by_name}, a *${storeName}* acabou de lançar novos cupons de desconto!\n\n📌 *${title}*\n\nCorra e garanta o seu antes que acabe! 🏃‍♂️\n\n_Clube de Descontos Pulse_`;
+
+        try {
+          const formData = new FormData();
+          formData.append('number', whatsPhone);
+          formData.append('message', message);
+          await fetch('https://api.atendeclique.com.br/api/send-message', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${whatsappToken}` },
+            body: formData,
+          });
+        } catch (whatsErr) {
+          console.error('WhatsApp new campaign notification error:', whatsErr);
+        }
+      }
+    }
+
+    res.json({ campaign, coupons_generated: total_coupons });
+  } catch (e) {
+    console.error('POST /api/discount-campaigns error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Admin: toggle campaign active status
+app.patch('/api/discount-campaigns/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_active } = req.body;
+    const { rows: [updated] } = await pool.query(
+      `UPDATE discount_campaigns SET is_active = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
+      [id, is_active]
+    );
+    res.json({ campaign: updated });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Health check ───────────────────────────────────────────
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 

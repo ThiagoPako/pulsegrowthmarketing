@@ -382,15 +382,15 @@ export function useFinancialData() {
 
   const updateExpense = async (id: string, updates: Partial<Expense>) => {
     try {
-      const { error } = await supabase.from('expenses').update(updates as any).eq('id', id);
+      const payload = { ...updates };
+      if (payload.date) payload.date = normalizeDate(payload.date);
+      const { error } = await supabase.from('expenses').update(payload as any).eq('id', id);
       if (error) {
         console.error('[useFinancialData] updateExpense error:', error);
         return false;
       }
-      await Promise.allSettled([
-        logActivity('edição', 'despesa', `Editou despesa - R$ ${Number(updates.amount || expenses.find(ex => ex.id === id)?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, updates),
-        fetchAll(),
-      ]);
+      await fetchAll();
+      await logActivity('edição', 'despesa', `Editou despesa - R$ ${Number(updates.amount || expenses.find(ex => ex.id === id)?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, payload);
       return true;
     } catch (err) {
       console.error('[useFinancialData] updateExpense unexpected error:', err);

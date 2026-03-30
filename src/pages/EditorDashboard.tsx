@@ -920,6 +920,11 @@ export default function EditorDashboard() {
                       )}
                     </div>
                   )}
+                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-destructive/60 hover:text-destructive hover:bg-destructive/10"
+                    onClick={(e) => { e.stopPropagation(); handleReturnToQueue(task); }}
+                    title="Devolver à fila">
+                    <ArrowRight size={12} className="rotate-180" />
+                  </Button>
                 </motion.div>
               );
             })}

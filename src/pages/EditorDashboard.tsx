@@ -462,6 +462,10 @@ export default function EditorDashboard() {
       editing_paused_at: null,
       updated_at: new Date().toISOString(),
     };
+    // Ensure edited_by is always set for sync with EditingControl
+    if (!activeEditTask.edited_by && user) {
+      updateData.edited_by = user.id;
+    }
     if (activeEditTask.editing_paused_at) {
       const pausedDuration = Math.floor((Date.now() - new Date(activeEditTask.editing_paused_at).getTime()) / 1000);
       updateData.editing_paused_seconds = (activeEditTask.editing_paused_seconds || 0) + pausedDuration;

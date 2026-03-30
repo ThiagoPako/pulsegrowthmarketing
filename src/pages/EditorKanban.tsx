@@ -47,6 +47,7 @@ interface EditorTask {
   script_id: string | null;
   recording_id: string | null;
   assigned_to: string | null;
+  edited_by: string | null;
   created_by: string | null;
   drive_link: string | null;
   edited_video_link: string | null;

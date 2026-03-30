@@ -389,10 +389,13 @@ export default function EditorKanban() {
 
   const handleUnclaimTask = async (task: EditorTask) => {
     if (!user) return;
-    const { error } = await supabase.from('content_tasks').update({
+    const updateData: any = {
       assigned_to: null,
+      edited_by: null,
+      editing_started_at: null,
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
+    };
+    const { error } = await supabase.from('content_tasks').update(updateData).eq('id', task.id);
     if (error) { toast.error('Erro ao liberar tarefa'); return; }
     toast.success('🏳️ Tarefa liberada para a fila!');
     fetchTasks();

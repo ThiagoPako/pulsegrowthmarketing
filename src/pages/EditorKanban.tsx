@@ -47,6 +47,7 @@ interface EditorTask {
   script_id: string | null;
   recording_id: string | null;
   assigned_to: string | null;
+  edited_by: string | null;
   created_by: string | null;
   drive_link: string | null;
   edited_video_link: string | null;
@@ -377,6 +378,7 @@ export default function EditorKanban() {
     if (!user) return;
     const { error } = await supabase.from('content_tasks').update({
       assigned_to: user.id,
+      edited_by: user.id,
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
     if (error) { toast.error('Erro ao marcar tarefa'); return; }
@@ -387,10 +389,13 @@ export default function EditorKanban() {
 
   const handleUnclaimTask = async (task: EditorTask) => {
     if (!user) return;
-    const { error } = await supabase.from('content_tasks').update({
+    const updateData: any = {
       assigned_to: null,
+      edited_by: null,
+      editing_started_at: null,
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
+    };
+    const { error } = await supabase.from('content_tasks').update(updateData).eq('id', task.id);
     if (error) { toast.error('Erro ao liberar tarefa'); return; }
     toast.success('🏳️ Tarefa liberada para a fila!');
     fetchTasks();
@@ -455,6 +460,10 @@ export default function EditorKanban() {
       updateData.editing_started_at = new Date().toISOString();
       if (user) updateData.edited_by = user.id;
     }
+    // Always ensure edited_by is set when an editor interacts with a task
+    if (!draggedTask.edited_by && user) {
+      updateData.edited_by = user.id;
+    }
     // Auto-assign to current editor if not yet assigned
     if (!draggedTask.assigned_to && user) {
       updateData.assigned_to = user.id;
@@ -503,9 +512,14 @@ export default function EditorKanban() {
       setVideoLinkDialogOpen(true);
       return;
     }
-    const { error } = await supabase.from('content_tasks').update({
+    const updateData: any = {
       kanban_column: 'revisao', updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
+    };
+    // Ensure edited_by is set so EditingControl can track the editor
+    if (!task.edited_by && user) {
+      updateData.edited_by = user.id;
+    }
+    const { error } = await supabase.from('content_tasks').update(updateData).eq('id', task.id);
     if (error) { toast.error('Erro ao enviar para revisão'); return; }
     
     // Use shared sync
@@ -541,6 +555,10 @@ export default function EditorKanban() {
     if (!videoLinkTask.assigned_to && user) {
       updatePayload.assigned_to = user.id;
     }
+    // Ensure edited_by is always set
+    if (!videoLinkTask.edited_by && user) {
+      updatePayload.edited_by = user.id;
+    }
     const { error } = await supabase.from('content_tasks').update(updatePayload).eq('id', videoLinkTask.id);
     if (error) { toast.error('Erro ao salvar link'); return; }
 
@@ -551,9 +569,13 @@ export default function EditorKanban() {
     if (sendToReviewAfterLink) {
       const updatedTask = { ...videoLinkTask, edited_video_link: videoLinkValue.trim() };
       // Use shared sync for ALL transitions (edicao→revisao or alteracao→revisao)
-      await supabase.from('content_tasks').update({
+      const reviewUpdate: any = {
         kanban_column: 'revisao', updated_at: new Date().toISOString(),
-      } as any).eq('id', videoLinkTask.id);
+      };
+      if (!videoLinkTask.edited_by && user) {
+        reviewUpdate.edited_by = user.id;
+      }
+      await supabase.from('content_tasks').update(reviewUpdate).eq('id', videoLinkTask.id);
       const client = clients.find(c => c.id === videoLinkTask.client_id);
       const ctx = buildSyncContext(updatedTask as any, {
         userId: user?.id,

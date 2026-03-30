@@ -92,12 +92,19 @@ export default function EditingControl() {
     editors.forEach(e => { map[e.id] = []; });
 
     tasks.forEach(t => {
-      // Skip queue tasks
+      // Skip queue tasks (edicao/alteracao without editing started)
       if ((t.kanban_column === 'edicao' || t.kanban_column === 'alteracao') && !t.editing_started_at) return;
 
       const editorId = t.edited_by || t.assigned_to;
       if (editorId && map[editorId]) {
         map[editorId].push(t);
+      } else if (editorId && !map[editorId]) {
+        // Editor exists but not in the editors list — still track
+        map[editorId] = [t];
+      } else if (!editorId && t.editing_started_at) {
+        // Orphaned task with editing started but no editor assigned — show in unassigned
+        if (!map['__unassigned__']) map['__unassigned__'] = [];
+        map['__unassigned__'].push(t);
       }
     });
 

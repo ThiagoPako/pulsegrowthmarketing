@@ -116,11 +116,12 @@ export default function FinancialMovements() {
 
     // Cash movements
     cashMovements.forEach(m => {
-      const d = new Date(m.date + 'T12:00:00');
+      const cashDate = normalizeDate(m.date);
+      const d = new Date(cashDate + 'T12:00:00');
       if (d >= monthStart && d <= monthEnd) {
         movements.push({
           id: m.id,
-          date: m.date,
+          date: cashDate,
           type: m.type === 'entrada' ? 'caixa_entrada' : 'caixa_saida',
           description: m.description,
           amount: Number(m.amount),

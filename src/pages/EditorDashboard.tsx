@@ -769,6 +769,15 @@ export default function EditorDashboard() {
                   </div>
                 )}
 
+                {/* Devolver para fila */}
+                <motion.div whileTap={{ scale: 0.93 }}>
+                  <Button variant="outline" size="sm" className="gap-1.5 text-xs border-destructive/30 text-destructive hover:bg-destructive/10"
+                    disabled={saving}
+                    onClick={() => handleReturnToQueue()}>
+                    <ArrowRight size={14} className="rotate-180" /> Devolver à Fila
+                  </Button>
+                </motion.div>
+
                 {/* Spacer */}
                 <div className="flex-1" />
 

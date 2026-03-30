@@ -242,11 +242,10 @@ export default function EditorDashboard() {
 
   useEffect(() => { fetchTasks(); }, []);
 
+  // Polling every 15s for sync (realtime channel is a no-op with VPS client)
   useEffect(() => {
-    const channel = supabase.channel('editor_dash_rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'content_tasks' }, () => fetchTasks())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const interval = setInterval(fetchTasks, 15000);
+    return () => clearInterval(interval);
   }, [fetchTasks]);
 
   // Fetch script when active task changes

@@ -377,6 +377,7 @@ export default function EditorKanban() {
     if (!user) return;
     const { error } = await supabase.from('content_tasks').update({
       assigned_to: user.id,
+      edited_by: user.id,
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
     if (error) { toast.error('Erro ao marcar tarefa'); return; }

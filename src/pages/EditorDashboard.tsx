@@ -518,6 +518,41 @@ export default function EditorDashboard() {
     fetchTasks();
   };
 
+  const handleReturnToQueue = async (task?: EditorTask) => {
+    const targetTask = task || activeEditTask;
+    if (!targetTask || !user) return;
+    setSaving(true);
+    // Delete VPS file if editor uploaded one
+    if (targetTask.edited_video_link?.includes('agenciapulse.tech')) {
+      try {
+        await deleteFileFromVps(targetTask.edited_video_link);
+      } catch (err) { console.warn('Erro ao remover vídeo:', err); }
+    }
+    await supabase.from('content_tasks').update({
+      assigned_to: null,
+      edited_by: null,
+      editing_started_at: null,
+      editing_paused_at: null,
+      editing_paused_seconds: 0,
+      edited_video_link: null,
+      edited_video_type: 'link',
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', targetTask.id);
+    await supabase.from('task_history').insert({
+      task_id: targetTask.id, user_id: user.id,
+      action: 'Devolvida para fila de edição',
+    });
+    toast.success('📥 Tarefa devolvida para a fila!');
+    if (activeEditTask?.id === targetTask.id) {
+      setActiveEditTask(null);
+      setShowUpload(false);
+      setShowScript(false);
+      setVideoLink('');
+    }
+    fetchTasks();
+    setSaving(false);
+  };
+
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-64 gap-4">
       <RocketMascot size={64} />
@@ -734,6 +769,15 @@ export default function EditorDashboard() {
                   </div>
                 )}
 
+                {/* Devolver para fila */}
+                <motion.div whileTap={{ scale: 0.93 }}>
+                  <Button variant="outline" size="sm" className="gap-1.5 text-xs border-destructive/30 text-destructive hover:bg-destructive/10"
+                    disabled={saving}
+                    onClick={() => handleReturnToQueue()}>
+                    <ArrowRight size={14} className="rotate-180" /> Devolver à Fila
+                  </Button>
+                </motion.div>
+
                 {/* Spacer */}
                 <div className="flex-1" />
 
@@ -876,6 +920,11 @@ export default function EditorDashboard() {
                       )}
                     </div>
                   )}
+                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-destructive/60 hover:text-destructive hover:bg-destructive/10"
+                    onClick={(e) => { e.stopPropagation(); handleReturnToQueue(task); }}
+                    title="Devolver à fila">
+                    <ArrowRight size={12} className="rotate-180" />
+                  </Button>
                 </motion.div>
               );
             })}

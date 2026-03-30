@@ -242,11 +242,10 @@ export default function EditorDashboard() {
 
   useEffect(() => { fetchTasks(); }, []);
 
+  // Polling every 15s for sync (realtime channel is a no-op with VPS client)
   useEffect(() => {
-    const channel = supabase.channel('editor_dash_rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'content_tasks' }, () => fetchTasks())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const interval = setInterval(fetchTasks, 15000);
+    return () => clearInterval(interval);
   }, [fetchTasks]);
 
   // Fetch script when active task changes
@@ -343,6 +342,7 @@ export default function EditorDashboard() {
      if (!user) return;
      const { error } = await supabase.from('content_tasks').update({
        assigned_to: user.id,
+       edited_by: user.id,
        updated_at: new Date().toISOString(),
      } as any).eq('id', task.id);
      if (error) { toast.error('Erro ao marcar tarefa'); return; }
@@ -356,6 +356,7 @@ export default function EditorDashboard() {
      if (!user) return;
      const { error } = await supabase.from('content_tasks').update({
        assigned_to: null,
+       edited_by: null,
        updated_at: new Date().toISOString(),
      } as any).eq('id', task.id);
      if (error) { toast.error('Erro ao liberar tarefa'); return; }
@@ -410,9 +411,9 @@ export default function EditorDashboard() {
          }
        }
        setOldVideoLink(null);
-       await supabase.from('content_tasks').update({
-         edited_video_link: url, edited_video_type: 'upload', updated_at: new Date().toISOString()
-       }).eq('id', activeEditTask.id);
+        await supabase.from('content_tasks').update({
+          edited_video_link: url, edited_video_type: 'upload', edited_by: user?.id || activeEditTask.edited_by, updated_at: new Date().toISOString()
+        }).eq('id', activeEditTask.id);
        setVideoLink(url);
        await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo enviado via upload', details: url });
        toast.success('Vídeo enviado!');
@@ -441,9 +442,9 @@ export default function EditorDashboard() {
       }
     }
     setOldVideoLink(null);
-    await supabase.from('content_tasks').update({
-      edited_video_link: videoLink.trim(), edited_video_type: 'link', updated_at: new Date().toISOString()
-    }).eq('id', activeEditTask.id);
+     await supabase.from('content_tasks').update({
+       edited_video_link: videoLink.trim(), edited_video_type: 'link', edited_by: user?.id || activeEditTask.edited_by, updated_at: new Date().toISOString()
+     }).eq('id', activeEditTask.id);
     toast.success('Link salvo!');
     setShowUpload(false);
     fetchTasks();

@@ -552,6 +552,10 @@ export default function EditorKanban() {
     if (!videoLinkTask.assigned_to && user) {
       updatePayload.assigned_to = user.id;
     }
+    // Ensure edited_by is always set
+    if (!videoLinkTask.edited_by && user) {
+      updatePayload.edited_by = user.id;
+    }
     const { error } = await supabase.from('content_tasks').update(updatePayload).eq('id', videoLinkTask.id);
     if (error) { toast.error('Erro ao salvar link'); return; }
 
@@ -562,9 +566,13 @@ export default function EditorKanban() {
     if (sendToReviewAfterLink) {
       const updatedTask = { ...videoLinkTask, edited_video_link: videoLinkValue.trim() };
       // Use shared sync for ALL transitions (edicao→revisao or alteracao→revisao)
-      await supabase.from('content_tasks').update({
+      const reviewUpdate: any = {
         kanban_column: 'revisao', updated_at: new Date().toISOString(),
-      } as any).eq('id', videoLinkTask.id);
+      };
+      if (!videoLinkTask.edited_by && user) {
+        reviewUpdate.edited_by = user.id;
+      }
+      await supabase.from('content_tasks').update(reviewUpdate).eq('id', videoLinkTask.id);
       const client = clients.find(c => c.id === videoLinkTask.client_id);
       const ctx = buildSyncContext(updatedTask as any, {
         userId: user?.id,

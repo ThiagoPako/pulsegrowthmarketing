@@ -6,9 +6,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Users, Calendar, Star } from 'lucide-react';
+import { Users, Calendar, Star, CheckCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
 import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { Expense, ExpenseCategory } from '@/hooks/useFinancialData';
 
 interface TeamMember {
@@ -108,19 +109,29 @@ export default function ExpenseFormDialog({ open, onOpenChange, categories, edit
     setForm(f => ({ ...f, date: d.toISOString().split('T')[0] }));
   };
 
+  const [saving, setSaving] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+
   const handleSave = async () => {
     if (!form.category_id || !form.amount) {
       toast.error('Preencha os campos obrigatórios');
       return;
     }
+    setSaving(true);
     try {
       await onSave(form, editingExpense?.id || null);
-      onOpenChange(false);
-      setForm(emptyForm);
-      setIsSalaryMode(false);
-      setSelectedMember('');
+      setShowSuccess(true);
+      setTimeout(() => {
+        setShowSuccess(false);
+        onOpenChange(false);
+        setForm(emptyForm);
+        setIsSalaryMode(false);
+        setSelectedMember('');
+        setSaving(false);
+      }, 1500);
     } catch (err) {
       console.error('[ExpenseFormDialog] save error:', err);
+      setSaving(false);
     }
   };
 
@@ -252,7 +263,85 @@ export default function ExpenseFormDialog({ open, onOpenChange, categories, edit
             </div>
           )}
 
-          <Button className="w-full" onClick={handleSave}>Salvar</Button>
+          <AnimatePresence mode="wait">
+            {showSuccess ? (
+              <motion.div
+                key="success"
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-emerald-500 text-white font-bold text-sm"
+              >
+                <motion.div
+                  animate={{ rotate: [0, 360] }}
+                  transition={{ duration: 0.5 }}
+                >
+                  <CheckCircle size={20} />
+                </motion.div>
+                <span>Despesa Confirmada! ✅</span>
+                <motion.span
+                  className="text-lg"
+                  animate={{ scale: [1, 1.4, 1], y: [0, -8, 0] }}
+                  transition={{ duration: 0.6, delay: 0.2 }}
+                >
+                  💰
+                </motion.span>
+              </motion.div>
+            ) : (
+              <motion.button
+                key="save"
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="relative w-full py-3 rounded-lg font-bold text-sm text-white overflow-hidden disabled:opacity-70"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+              >
+                {/* Animated gradient background */}
+                <motion.div
+                  className="absolute inset-0 rounded-lg"
+                  style={{
+                    background: 'linear-gradient(135deg, hsl(var(--primary)), #10b981, hsl(var(--primary)), #10b981)',
+                    backgroundSize: '300% 300%',
+                  }}
+                  animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+                />
+                {/* Glow effect */}
+                <motion.div
+                  className="absolute inset-0 rounded-lg"
+                  animate={{
+                    boxShadow: [
+                      '0 0 10px hsla(var(--primary), 0.3), 0 0 20px rgba(16,185,129,0.2)',
+                      '0 0 20px hsla(var(--primary), 0.5), 0 0 40px rgba(16,185,129,0.4)',
+                      '0 0 10px hsla(var(--primary), 0.3), 0 0 20px rgba(16,185,129,0.2)',
+                    ],
+                  }}
+                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                />
+                {/* Sparkle */}
+                <motion.span
+                  className="absolute -top-0.5 -right-0.5 text-base"
+                  animate={{ scale: [0.7, 1.2, 0.7], opacity: [0.5, 1, 0.5], rotate: [0, 20, 0] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                >
+                  ✨
+                </motion.span>
+                <span className="relative z-10 flex items-center justify-center gap-2">
+                  {saving ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <CheckCircle size={16} />
+                  )}
+                  {saving ? 'Salvando...' : editingExpense ? 'Confirmar Alteração' : 'Confirmar Despesa'}
+                </span>
+              </motion.button>
+            )}
+          </AnimatePresence>
         </div>
       </DialogContent>
     </Dialog>

@@ -456,6 +456,10 @@ export default function EditorKanban() {
       updateData.editing_started_at = new Date().toISOString();
       if (user) updateData.edited_by = user.id;
     }
+    // Always ensure edited_by is set when an editor interacts with a task
+    if (!draggedTask.edited_by && user) {
+      updateData.edited_by = user.id;
+    }
     // Auto-assign to current editor if not yet assigned
     if (!draggedTask.assigned_to && user) {
       updateData.assigned_to = user.id;
@@ -504,9 +508,14 @@ export default function EditorKanban() {
       setVideoLinkDialogOpen(true);
       return;
     }
-    const { error } = await supabase.from('content_tasks').update({
+    const updateData: any = {
       kanban_column: 'revisao', updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
+    };
+    // Ensure edited_by is set so EditingControl can track the editor
+    if (!task.edited_by && user) {
+      updateData.edited_by = user.id;
+    }
+    const { error } = await supabase.from('content_tasks').update(updateData).eq('id', task.id);
     if (error) { toast.error('Erro ao enviar para revisão'); return; }
     
     // Use shared sync

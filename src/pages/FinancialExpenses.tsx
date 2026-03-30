@@ -280,18 +280,17 @@ export default function FinancialExpenses() {
   , [allExpenses, salaryCategory]);
 
   const handleSave = async (form: any, editingId: string | null) => {
-    try {
-      let success: boolean;
-      if (editingId) {
-        success = await updateExpense(editingId, form);
-      } else {
-        success = await addExpense(form);
-      }
-      if (success) toast.success('Despesa salva!');
-      else toast.error('Erro ao salvar despesa.');
-    } catch (err) {
-      console.error('[FinancialExpenses] handleSave error:', err);
-      toast.error('Erro inesperado ao salvar despesa.');
+    let success: boolean;
+    if (editingId) {
+      success = await updateExpense(editingId, form);
+    } else {
+      success = await addExpense(form);
+    }
+    if (success) {
+      toast.success('Despesa salva e sincronizada!');
+    } else {
+      toast.error('Erro ao salvar despesa.');
+      throw new Error('Falha ao salvar despesa');
     }
   };
 

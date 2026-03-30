@@ -360,17 +360,19 @@ export function useFinancialData() {
   // Expense CRUD
   const addExpense = async (e: Partial<Expense>) => {
     try {
-      console.log('[useFinancialData] addExpense payload:', JSON.stringify(e));
-      const { data, error } = await supabase.from('expenses').insert(e as any);
+      // Normalize date to YYYY-MM-DD to prevent timezone issues
+      const payload = { ...e };
+      if (payload.date) payload.date = normalizeDate(payload.date);
+      console.log('[useFinancialData] addExpense payload:', JSON.stringify(payload));
+      const { data, error } = await supabase.from('expenses').insert(payload as any);
       console.log('[useFinancialData] addExpense result:', { data, error });
       if (error) {
         console.error('[useFinancialData] addExpense error:', error);
         return false;
       }
-      await Promise.allSettled([
-        logActivity('criação', 'despesa', `Registrou despesa - R$ ${Number(e.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${e.description}`, undefined, e),
-        fetchAll(),
-      ]);
+      // Re-fetch ALL financial data to ensure full sync across modules
+      await fetchAll();
+      await logActivity('criação', 'despesa', `Registrou despesa - R$ ${Number(e.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${e.description}`, undefined, payload);
       return true;
     } catch (err) {
       console.error('[useFinancialData] addExpense unexpected error:', err);
@@ -380,15 +382,15 @@ export function useFinancialData() {
 
   const updateExpense = async (id: string, updates: Partial<Expense>) => {
     try {
-      const { error } = await supabase.from('expenses').update(updates as any).eq('id', id);
+      const payload = { ...updates };
+      if (payload.date) payload.date = normalizeDate(payload.date);
+      const { error } = await supabase.from('expenses').update(payload as any).eq('id', id);
       if (error) {
         console.error('[useFinancialData] updateExpense error:', error);
         return false;
       }
-      await Promise.allSettled([
-        logActivity('edição', 'despesa', `Editou despesa - R$ ${Number(updates.amount || expenses.find(ex => ex.id === id)?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, updates),
-        fetchAll(),
-      ]);
+      await fetchAll();
+      await logActivity('edição', 'despesa', `Editou despesa - R$ ${Number(updates.amount || expenses.find(ex => ex.id === id)?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, payload);
       return true;
     } catch (err) {
       console.error('[useFinancialData] updateExpense unexpected error:', err);

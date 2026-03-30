@@ -97,12 +97,13 @@ export default function FinancialMovements() {
 
     // Expenses
     expenses.forEach(e => {
-      const d = new Date(e.date + 'T12:00:00');
+      const expDate = normalizeDate(e.date);
+      const d = new Date(expDate + 'T12:00:00');
       if (d >= monthStart && d <= monthEnd) {
         const cat = categories.find(c => c.id === e.category_id);
         movements.push({
           id: e.id,
-          date: e.date,
+          date: expDate,
           type: 'despesa',
           description: e.description || 'Despesa',
           amount: Number(e.amount),
@@ -115,11 +116,12 @@ export default function FinancialMovements() {
 
     // Cash movements
     cashMovements.forEach(m => {
-      const d = new Date(m.date + 'T12:00:00');
+      const cashDate = normalizeDate(m.date);
+      const d = new Date(cashDate + 'T12:00:00');
       if (d >= monthStart && d <= monthEnd) {
         movements.push({
           id: m.id,
-          date: m.date,
+          date: cashDate,
           type: m.type === 'entrada' ? 'caixa_entrada' : 'caixa_saida',
           description: m.description,
           amount: Number(m.amount),

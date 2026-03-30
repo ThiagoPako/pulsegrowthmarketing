@@ -103,7 +103,7 @@ export default function FinancialMovements() {
         const cat = categories.find(c => c.id === e.category_id);
         movements.push({
           id: e.id,
-          date: e.date,
+          date: expDate,
           type: 'despesa',
           description: e.description || 'Despesa',
           amount: Number(e.amount),

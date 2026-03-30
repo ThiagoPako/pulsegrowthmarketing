@@ -97,7 +97,8 @@ export default function FinancialMovements() {
 
     // Expenses
     expenses.forEach(e => {
-      const d = new Date(e.date + 'T12:00:00');
+      const expDate = normalizeDate(e.date);
+      const d = new Date(expDate + 'T12:00:00');
       if (d >= monthStart && d <= monthEnd) {
         const cat = categories.find(c => c.id === e.category_id);
         movements.push({

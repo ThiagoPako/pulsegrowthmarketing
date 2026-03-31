@@ -11,13 +11,13 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, ArrowUpCircle, ArrowDownCircle, Pencil, Trash2, Search, Filter, DollarSign, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
+import { ArrowLeft, ArrowUpCircle, ArrowDownCircle, Pencil, Trash2, Search, Filter, DollarSign, TrendingUp, TrendingDown, Wallet, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 
-type MovementType = 'all' | 'receita' | 'despesa' | 'caixa';
+type MovementType = 'all' | 'receita' | 'despesa' | 'caixa' | 'salario';
 
 interface UnifiedMovement {
   id: string;
@@ -29,6 +29,7 @@ interface UnifiedMovement {
   clientName?: string;
   category?: string;
   sourceType: 'receita' | 'despesa' | 'caixa';
+  isSalary?: boolean;
   original: Revenue | Expense | CashMovement;
 }
 
@@ -101,6 +102,7 @@ export default function FinancialMovements() {
       const d = new Date(expDate + 'T12:00:00');
       if (d >= monthStart && d <= monthEnd) {
         const cat = categories.find(c => c.id === e.category_id);
+        const isSalary = cat?.name?.toLowerCase() === 'salários' || e.description?.startsWith('Salário -') || e.description?.startsWith('Bônus -');
         movements.push({
           id: e.id,
           date: expDate,
@@ -109,6 +111,7 @@ export default function FinancialMovements() {
           amount: Number(e.amount),
           category: cat?.name,
           sourceType: 'despesa',
+          isSalary,
           original: e,
         });
       }
@@ -138,8 +141,10 @@ export default function FinancialMovements() {
 
   const filtered = useMemo(() => {
     let result = unified;
-    if (filterType !== 'all') {
-      result = result.filter(m => m.sourceType === filterType);
+    if (filterType === 'salario') {
+      result = result.filter(m => m.isSalary);
+    } else if (filterType !== 'all') {
+      result = result.filter(m => m.sourceType === filterType && !m.isSalary);
     }
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
@@ -155,10 +160,11 @@ export default function FinancialMovements() {
   // Totals
   const totals = useMemo(() => {
     const r = unified.filter(m => m.type === 'receita').reduce((s, m) => s + m.amount, 0);
-    const e = unified.filter(m => m.type === 'despesa').reduce((s, m) => s + m.amount, 0);
+    const e = unified.filter(m => m.type === 'despesa' && !m.isSalary).reduce((s, m) => s + m.amount, 0);
     const ci = unified.filter(m => m.type === 'caixa_entrada').reduce((s, m) => s + m.amount, 0);
     const co = unified.filter(m => m.type === 'caixa_saida').reduce((s, m) => s + m.amount, 0);
-    return { receitas: r, despesas: e, caixaIn: ci, caixaOut: co };
+    const sal = unified.filter(m => m.isSalary).reduce((s, m) => s + m.amount, 0);
+    return { receitas: r, despesas: e, caixaIn: ci, caixaOut: co, salarios: sal };
   }, [unified]);
 
   const getTypeInfo = (type: UnifiedMovement['type']) => {
@@ -277,29 +283,37 @@ export default function FinancialMovements() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <Card className={`cursor-pointer transition-all border-2 ${filterType === 'receita' ? 'border-green-500 shadow-green-500/20 shadow-md' : 'border-transparent hover:border-green-500/30'}`} onClick={() => setFilterType(filterType === 'receita' ? 'all' : 'receita')}>
           <CardContent className="pt-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground"><TrendingUp size={14} /> Receitas</div>
             <p className="text-xl font-bold text-green-600 mt-1">{fmt(totals.receitas)}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={`cursor-pointer transition-all border-2 ${filterType === 'despesa' ? 'border-red-500 shadow-red-500/20 shadow-md' : 'border-transparent hover:border-red-500/30'}`} onClick={() => setFilterType(filterType === 'despesa' ? 'all' : 'despesa')}>
           <CardContent className="pt-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground"><TrendingDown size={14} /> Despesas</div>
             <p className="text-xl font-bold text-red-600 mt-1">{fmt(totals.despesas)}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={`cursor-pointer transition-all border-2 ${filterType === 'salario' ? 'border-purple-500 shadow-purple-500/20 shadow-md' : 'border-transparent hover:border-purple-500/30'}`} onClick={() => setFilterType(filterType === 'salario' ? 'all' : 'salario')}>
           <CardContent className="pt-4">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground"><ArrowUpCircle size={14} /> Caixa Entrada</div>
-            <p className="text-xl font-bold text-blue-600 mt-1">{fmt(totals.caixaIn)}</p>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Users size={14} /> Salários</div>
+            <p className="text-xl font-bold text-purple-600 mt-1">{fmt(totals.salarios)}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={`cursor-pointer transition-all border-2 ${filterType === 'caixa' ? 'border-blue-500 shadow-blue-500/20 shadow-md' : 'border-transparent hover:border-blue-500/30'}`} onClick={() => setFilterType(filterType === 'caixa' ? 'all' : 'caixa')}>
           <CardContent className="pt-4">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground"><ArrowDownCircle size={14} /> Caixa Saída</div>
-            <p className="text-xl font-bold text-orange-600 mt-1">{fmt(totals.caixaOut)}</p>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Wallet size={14} /> Caixa</div>
+            <p className="text-xl font-bold text-blue-600 mt-1">{fmt(totals.caixaIn - totals.caixaOut)}</p>
+          </CardContent>
+        </Card>
+        <Card className={`cursor-pointer transition-all border-2 ${filterType === 'all' ? 'border-primary shadow-md' : 'border-transparent hover:border-primary/30'}`} onClick={() => setFilterType('all')}>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><DollarSign size={14} /> Saldo</div>
+            <p className={`text-xl font-bold mt-1 ${(totals.receitas + totals.caixaIn - totals.despesas - totals.salarios - totals.caixaOut) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {fmt(totals.receitas + totals.caixaIn - totals.despesas - totals.salarios - totals.caixaOut)}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -317,15 +331,6 @@ export default function FinancialMovements() {
                 </SelectContent>
               </Select>
             </div>
-            <Select value={filterType} onValueChange={(v) => setFilterType(v as MovementType)}>
-              <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os tipos</SelectItem>
-                <SelectItem value="receita">Receitas</SelectItem>
-                <SelectItem value="despesa">Despesas</SelectItem>
-                <SelectItem value="caixa">Caixa</SelectItem>
-              </SelectContent>
-            </Select>
             <div className="relative flex-1 min-w-[200px]">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input

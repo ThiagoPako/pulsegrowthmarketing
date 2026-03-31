@@ -363,11 +363,11 @@ export default function BankStatementReconciliation({ open, onOpenChange, system
 
               {/* File Upload */}
               <div>
-                <Label className="text-sm font-medium mb-2 block">Arquivo do Extrato (.csv)</Label>
+                <Label className="text-sm font-medium mb-2 block">Arquivo do Extrato (.csv, .txt ou .pdf)</Label>
                 <input
                   ref={fileRef}
                   type="file"
-                  accept=".csv,.txt"
+                  accept=".csv,.txt,.pdf"
                   onChange={handleFileUpload}
                   className="hidden"
                 />
@@ -375,17 +375,22 @@ export default function BankStatementReconciliation({ open, onOpenChange, system
                   whileHover={{ scale: 1.01 }}
                   whileTap={{ scale: 0.99 }}
                   onClick={() => fileRef.current?.click()}
-                  className="w-full p-8 border-2 border-dashed rounded-xl flex flex-col items-center gap-3 text-muted-foreground hover:border-primary/50 hover:bg-primary/5 transition-all"
+                  disabled={loading}
+                  className="w-full p-8 border-2 border-dashed rounded-xl flex flex-col items-center gap-3 text-muted-foreground hover:border-primary/50 hover:bg-primary/5 transition-all disabled:opacity-50"
                 >
-                  <Upload className="h-10 w-10 text-primary/60" />
+                  {loading ? (
+                    <Loader2 className="h-10 w-10 text-primary/60 animate-spin" />
+                  ) : (
+                    <Upload className="h-10 w-10 text-primary/60" />
+                  )}
                   <div className="text-center">
-                    <p className="font-medium">Clique para enviar o extrato</p>
-                    <p className="text-xs">Formatos aceitos: .csv, .txt</p>
+                    <p className="font-medium">{loading ? 'Processando PDF...' : 'Clique para enviar o extrato'}</p>
+                    <p className="text-xs">Formatos aceitos: .csv, .txt, .pdf</p>
                   </div>
                 </motion.button>
-                {fileName && (
+                {fileName && !loading && (
                   <p className="text-sm text-primary mt-2 flex items-center gap-1">
-                    <FileSpreadsheet className="h-4 w-4" /> {fileName}
+                    {fileName.endsWith('.pdf') ? <FileText className="h-4 w-4" /> : <FileSpreadsheet className="h-4 w-4" />} {fileName}
                   </p>
                 )}
               </div>
@@ -393,8 +398,9 @@ export default function BankStatementReconciliation({ open, onOpenChange, system
               <Alert className="border-blue-500/30 bg-blue-50/50 dark:bg-blue-950/10">
                 <Info className="h-4 w-4 text-blue-500" />
                 <AlertDescription className="text-xs text-muted-foreground">
-                  O CSV deve ter colunas de <strong>Data</strong>, <strong>Descrição</strong> e <strong>Valor</strong>. 
-                  Formatos de data aceitos: dd/mm/aaaa ou aaaa-mm-dd. Valores podem usar vírgula (1.234,56) ou ponto (1234.56).
+                  <strong>CSV/TXT:</strong> Deve ter colunas de Data, Descrição e Valor. 
+                  <strong> PDF:</strong> Extratos bancários com dados tabulares (data e valor legíveis).
+                  Formatos de data aceitos: dd/mm/aaaa ou aaaa-mm-dd.
                 </AlertDescription>
               </Alert>
             </motion.div>

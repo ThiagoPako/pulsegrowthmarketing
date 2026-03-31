@@ -207,7 +207,7 @@ export default function Reports() {
     return { totalSalaries, costPerVideo, totalVideos, videosPerSalary };
   }, [salaryExpenses, dateRange, stats.totalContent]);
 
-
+  const comparison = useMemo(() => {
     if (selectedClient === 'all') return null;
     const planId = clientPlans[selectedClient];
     if (!planId) return null;

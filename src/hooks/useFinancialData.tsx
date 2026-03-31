@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/vpsDb';
+import { syncFinancialContract } from '@/lib/financialContracts';
 
 /** Normalize date strings like "2026-03-01T00:00:00.000Z" to "2026-03-01" */
 export const normalizeDate = (d: string | null | undefined): string => {
@@ -238,14 +239,22 @@ export function useFinancialData() {
   const upsertContract = async (c: Partial<FinancialContract> & { client_id: string }) => {
     const isNew = !c.id;
     let error: any = null;
-    if (isNew) {
-      const res = await supabase.from('financial_contracts').insert(c as any);
-      error = res.error;
-    } else {
-      const { id, ...updates } = c;
-      const res = await supabase.from('financial_contracts').update(updates as any).eq('id', id);
-      error = res.error;
+    try {
+      await syncFinancialContract({
+        id: c.id,
+        client_id: c.client_id,
+        plan_id: c.plan_id,
+        contract_value: Number(c.contract_value || 0),
+        contract_start_date: c.contract_start_date,
+        due_day: c.due_day,
+        payment_method: c.payment_method,
+        status: c.status,
+      });
+    } catch (err: any) {
+      error = err;
+      console.error('[useFinancialData] upsertContract error:', err);
     }
+
     if (!error) {
       await logActivity(isNew ? 'criação' : 'edição', 'contrato', `${isNew ? 'Criou' : 'Editou'} contrato - R$ ${Number(c.contract_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, c.id, c);
       await fetchAll();

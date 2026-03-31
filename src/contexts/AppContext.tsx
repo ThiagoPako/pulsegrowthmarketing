@@ -19,8 +19,8 @@ interface AppContextType {
   addUser: (user: User) => boolean;
   updateUser: (user: User) => void;
   deleteUser: (id: string) => void;
-  addClient: (client: Client) => boolean;
-  updateClient: (client: Client) => void;
+  addClient: (client: Client) => Promise<boolean>;
+  updateClient: (client: Client) => Promise<void>;
   deleteClient: (id: string) => Promise<boolean>;
   addRecording: (recording: Recording) => Promise<boolean>;
   updateRecording: (recording: Recording) => void;
@@ -86,13 +86,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateUser = useCallback((_user: User) => {}, []);
   const deleteUser = useCallback((_id: string) => {}, []);
 
-  const addClient = useCallback((client: Client): boolean => {
+  const addClient = useCallback(async (client: Client): Promise<boolean> => {
     if (data.clients.some(c => c.companyName.toLowerCase() === client.companyName.toLowerCase())) return false;
-    data.addClient(client);
-    return true;
+    return await data.addClient(client);
   }, [data]);
 
-  const updateClient = useCallback((client: Client) => { data.updateClient(client); }, [data]);
+  const updateClient = useCallback(async (client: Client) => { await data.updateClient(client); }, [data]);
 
   const deleteClient = useCallback(async (id: string): Promise<boolean> => {
     return await data.deleteClient(id);

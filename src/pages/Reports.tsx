@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
-import { FileText, Download, Eye, Film, XCircle, CalendarCheck, TrendingUp, Percent, Heart, CheckCircle2, BarChart3, Users, Clock, Zap, Image, Palette, Megaphone, Share2 } from 'lucide-react';
+import { FileText, Download, Eye, Film, XCircle, CalendarCheck, TrendingUp, Percent, Heart, CheckCircle2, BarChart3, Users, Clock, Zap, Image, Palette, Megaphone, Share2, DollarSign, Calculator } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -83,6 +83,7 @@ export default function Reports() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [clientPlans, setClientPlans] = useState<Record<string, string | null>>({});
   const [waitLogs, setWaitLogs] = useState<WaitLog[]>([]);
+  const [salaryExpenses, setSalaryExpenses] = useState<{ amount: number; date: string; description: string }[]>([]);
   const [selectedClient, setSelectedClient] = useState('all');
   const [periodType, setPeriodType] = useState<'current' | 'previous' | 'custom'>('current');
   const [customStart, setCustomStart] = useState('');
@@ -90,12 +91,13 @@ export default function Reports() {
   const [showPreview, setShowPreview] = useState(true);
 
   const fetchData = useCallback(async () => {
-    const [rRes, pRes, cRes, sRes, wRes] = await Promise.all([
+    const [rRes, pRes, cRes, sRes, wRes, salCatRes] = await Promise.all([
       supabase.from('delivery_records').select('*').order('date', { ascending: false }),
       supabase.from('plans').select('*'),
       supabase.from('clients').select('id, plan_id'),
       supabase.from('social_media_deliveries').select('*').order('delivered_at', { ascending: false }),
       supabase.from('recording_wait_logs').select('*'),
+      supabase.from('expense_categories').select('id, name').ilike('name', '%salário%'),
     ]);
     if (rRes.data) setRecords(rRes.data as DeliveryRecord[]);
     if (pRes.data) setPlans(pRes.data as Plan[]);
@@ -106,6 +108,13 @@ export default function Reports() {
     }
     if (sRes.data) setSocialDeliveries(sRes.data as SocialDelivery[]);
     if (wRes.data) setWaitLogs(wRes.data as WaitLog[]);
+
+    // Fetch salary expenses
+    const salaryCatIds = (salCatRes.data || []).map((c: any) => c.id);
+    if (salaryCatIds.length > 0) {
+      const expRes = await supabase.from('expenses').select('amount, date, description').in('category_id', salaryCatIds);
+      if (expRes.data) setSalaryExpenses(expRes.data as any[]);
+    }
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -187,6 +196,16 @@ export default function Reports() {
       socialReelsPosted, socialCriativosPosted, socialStoriesPosted, socialArtesDelivered, totalPosted, totalSocialDelivered,
     };
   }, [filteredRecords, filteredSocial, filteredWaitLogs, recDuration]);
+
+  // Cost per video KPIs
+  const costKpis = useMemo(() => {
+    const filteredSalaries = salaryExpenses.filter(e => e.date >= dateRange.start && e.date <= dateRange.end);
+    const totalSalaries = filteredSalaries.reduce((a, e) => a + Number(e.amount), 0);
+    const totalVideos = stats.totalContent;
+    const costPerVideo = totalVideos > 0 ? totalSalaries / totalVideos : 0;
+    const videosPerSalary = totalSalaries > 0 ? totalVideos / (totalSalaries / 1000) : 0;
+    return { totalSalaries, costPerVideo, totalVideos, videosPerSalary };
+  }, [salaryExpenses, dateRange, stats.totalContent]);
 
   const comparison = useMemo(() => {
     if (selectedClient === 'all') return null;
@@ -416,7 +435,18 @@ export default function Reports() {
     ], y);
     drawLine(y); y += 8;
 
-    // ── Conteudos Postados (Social Media) ──
+    // ── Custo por Video ──
+    checkPageBreak(40);
+    y = drawSectionTitle('Custo por Conteudo', y); y += 8;
+    y = drawKpiGrid([
+      { label: 'Total Salarios (Periodo)', value: `R$ ${costKpis.totalSalaries.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` },
+      { label: 'Total Videos Produzidos', value: String(costKpis.totalVideos) },
+      { label: 'Custo por Video', value: costKpis.costPerVideo > 0 ? `R$ ${costKpis.costPerVideo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '--' },
+      { label: 'Videos por R$ 1.000', value: costKpis.videosPerSalary > 0 ? costKpis.videosPerSalary.toFixed(1) : '--' },
+    ], y, 4);
+    drawLine(y); y += 8;
+
+
     if (stats.totalSocialDelivered > 0) {
       checkPageBreak(50);
       y = drawSectionTitle('Conteudos Entregues & Postados (Social Media)', y); y += 8;
@@ -712,7 +742,30 @@ export default function Reports() {
         </div>
       </div>
 
-      {/* KPI Cards - Social Media Postagens */}
+      {/* KPI Cards - Custo por Vídeo */}
+      <div>
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">💰 Custo por Conteúdo</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { icon: DollarSign, label: 'Total Salários (Período)', value: `R$ ${costKpis.totalSalaries.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'text-destructive' },
+            { icon: Film, label: 'Total Vídeos Produzidos', value: String(costKpis.totalVideos), color: 'text-primary' },
+            { icon: Calculator, label: 'Custo por Vídeo', value: costKpis.costPerVideo > 0 ? `R$ ${costKpis.costPerVideo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—', color: 'text-amber-600' },
+            { icon: TrendingUp, label: 'Vídeos por R$ 1.000', value: costKpis.videosPerSalary > 0 ? costKpis.videosPerSalary.toFixed(1) : '—', color: 'text-green-600' },
+          ].map((kpi, i) => (
+            <Card key={i} className="overflow-hidden border-l-4" style={{ borderLeftColor: i === 2 ? 'hsl(var(--warning))' : i === 3 ? 'hsl(var(--success))' : undefined }}>
+              <CardContent className="p-4">
+                <kpi.icon size={18} className={`${kpi.color} mb-2`} />
+                <p className="text-xl font-bold">{kpi.value}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{kpi.label}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-1.5 italic">
+          Custo por vídeo = Total de salários (videomakers + editores) ÷ Total de conteúdos produzidos no período
+        </p>
+      </div>
+
       {stats.totalSocialDelivered > 0 && (
         <div>
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">📱 Postagens & Entregas Social Media</h3>

@@ -621,7 +621,7 @@ export default function FinancialDashboard() {
           <CardHeader><CardTitle className="text-sm">Despesas por Categoria</CardTitle></CardHeader>
           <CardContent>
             {expenseByCat.length > 0 ? (
-              <div className="h-64">
+              <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie

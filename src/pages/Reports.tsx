@@ -435,7 +435,18 @@ export default function Reports() {
     ], y);
     drawLine(y); y += 8;
 
-    // ── Conteudos Postados (Social Media) ──
+    // ── Custo por Video ──
+    checkPageBreak(40);
+    y = drawSectionTitle('Custo por Conteudo', y); y += 8;
+    y = drawKpiGrid([
+      { label: 'Total Salarios (Periodo)', value: `R$ ${costKpis.totalSalaries.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` },
+      { label: 'Total Videos Produzidos', value: String(costKpis.totalVideos) },
+      { label: 'Custo por Video', value: costKpis.costPerVideo > 0 ? `R$ ${costKpis.costPerVideo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '--' },
+      { label: 'Videos por R$ 1.000', value: costKpis.videosPerSalary > 0 ? costKpis.videosPerSalary.toFixed(1) : '--' },
+    ], y, 4);
+    drawLine(y); y += 8;
+
+
     if (stats.totalSocialDelivered > 0) {
       checkPageBreak(50);
       y = drawSectionTitle('Conteudos Entregues & Postados (Social Media)', y); y += 8;

@@ -1509,7 +1509,7 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, viewOn
               </a>
             </div>
           )}
-          {!isRevisao && ['envio'].includes(task.kanban_column) && task.edited_video_link && (
+          {!isRevisao && ['envio', 'agendamentos', 'acompanhamento'].includes(task.kanban_column) && task.edited_video_link && (
             <a href={task.edited_video_link} download target="_blank" rel="noopener noreferrer"
               onClick={e => e.stopPropagation()}
               className="flex items-center justify-center gap-1 w-full px-2 py-1.5 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 text-violet-600 transition-all text-[9px] font-bold">

@@ -450,6 +450,7 @@ export default function VideomakerDashboard() {
     });
 
     // Count recorded scripts by content type
+    const allRecordedArray = Array.from(allRecordedIds);
     let reelsCount = 0, creativesCount = 0, storiesCount = 0, extrasCount = 0;
     for (const scriptId of allRecordedArray) {
       const script = scripts.find(s => s.id === scriptId);

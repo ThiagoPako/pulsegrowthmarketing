@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
-import { FileText, Download, Eye, Film, XCircle, CalendarCheck, TrendingUp, Percent, Heart, CheckCircle2, BarChart3, Users, Clock, Zap, Image, Palette, Megaphone, Share2 } from 'lucide-react';
+import { FileText, Download, Eye, Film, XCircle, CalendarCheck, TrendingUp, Percent, Heart, CheckCircle2, BarChart3, Users, Clock, Zap, Image, Palette, Megaphone, Share2, DollarSign, Calculator } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';

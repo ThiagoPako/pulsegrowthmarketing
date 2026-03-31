@@ -731,7 +731,30 @@ export default function Reports() {
         </div>
       </div>
 
-      {/* KPI Cards - Social Media Postagens */}
+      {/* KPI Cards - Custo por Vídeo */}
+      <div>
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">💰 Custo por Conteúdo</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { icon: DollarSign, label: 'Total Salários (Período)', value: `R$ ${costKpis.totalSalaries.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'text-destructive' },
+            { icon: Film, label: 'Total Vídeos Produzidos', value: String(costKpis.totalVideos), color: 'text-primary' },
+            { icon: Calculator, label: 'Custo por Vídeo', value: costKpis.costPerVideo > 0 ? `R$ ${costKpis.costPerVideo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—', color: 'text-amber-600' },
+            { icon: TrendingUp, label: 'Vídeos por R$ 1.000', value: costKpis.videosPerSalary > 0 ? costKpis.videosPerSalary.toFixed(1) : '—', color: 'text-green-600' },
+          ].map((kpi, i) => (
+            <Card key={i} className="overflow-hidden border-l-4" style={{ borderLeftColor: i === 2 ? 'hsl(var(--warning))' : i === 3 ? 'hsl(var(--success))' : undefined }}>
+              <CardContent className="p-4">
+                <kpi.icon size={18} className={`${kpi.color} mb-2`} />
+                <p className="text-xl font-bold">{kpi.value}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{kpi.label}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-1.5 italic">
+          Custo por vídeo = Total de salários (videomakers + editores) ÷ Total de conteúdos produzidos no período
+        </p>
+      </div>
+
       {stats.totalSocialDelivered > 0 && (
         <div>
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">📱 Postagens & Entregas Social Media</h3>

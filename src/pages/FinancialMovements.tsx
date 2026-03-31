@@ -141,8 +141,10 @@ export default function FinancialMovements() {
 
   const filtered = useMemo(() => {
     let result = unified;
-    if (filterType !== 'all') {
-      result = result.filter(m => m.sourceType === filterType);
+    if (filterType === 'salario') {
+      result = result.filter(m => m.isSalary);
+    } else if (filterType !== 'all') {
+      result = result.filter(m => m.sourceType === filterType && !m.isSalary);
     }
     if (searchTerm) {
       const term = searchTerm.toLowerCase();

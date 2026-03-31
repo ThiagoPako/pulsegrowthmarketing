@@ -49,6 +49,7 @@ export default function FinancialMovements() {
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<UnifiedMovement | null>(null);
   const [editTarget, setEditTarget] = useState<UnifiedMovement | null>(null);
+  const [showReconciliation, setShowReconciliation] = useState(false);
 
   // Edit form states
   const [editAmount, setEditAmount] = useState('');

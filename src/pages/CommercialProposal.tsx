@@ -555,7 +555,7 @@ export default function CommercialProposal() {
 
       if (!data?.token) throw new Error('Proposta salva sem token de compartilhamento.');
 
-      const link = `${window.location.origin}/proposta/${savedProposal.token}`;
+      const link = `${window.location.origin}/proposta/${data.token}`;
       setShareLink(link);
       await copyToClipboard(link);
       toast.success('Proposta salva! Link copiado para a área de transferência.');

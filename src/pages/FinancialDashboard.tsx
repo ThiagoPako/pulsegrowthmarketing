@@ -624,10 +624,41 @@ export default function FinancialDashboard() {
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={expenseByCat} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} isAnimationActive animationDuration={800} animationEasing="ease-out">
-                      {expenseByCat.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                    <Pie
+                      data={expenseByCat}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={90}
+                      paddingAngle={3}
+                      cornerRadius={4}
+                      isAnimationActive
+                      animationDuration={800}
+                      animationEasing="ease-out"
+                      label={false}
+                    >
+                      {expenseByCat.map((_, i) => (
+                        <Cell key={i} fill={COLORS[i % COLORS.length]} stroke="hsl(var(--card))" strokeWidth={2} />
+                      ))}
                     </Pie>
-                    <Tooltip formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} />
+                    <Tooltip
+                      formatter={(value: number) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                      contentStyle={{ borderRadius: '0.75rem', border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: '12px' }}
+                    />
+                    <Legend
+                      layout="vertical"
+                      align="right"
+                      verticalAlign="middle"
+                      iconType="circle"
+                      iconSize={8}
+                      formatter={(value: string, entry: any) => {
+                        const item = expenseByCat.find(e => e.name === value);
+                        const pct = item ? ((item.value / expenseByCat.reduce((s, e) => s + e.value, 0)) * 100).toFixed(0) : '0';
+                        return <span style={{ color: 'hsl(var(--foreground))', fontSize: '11px' }}>{value} <strong>{pct}%</strong></span>;
+                      }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </div>

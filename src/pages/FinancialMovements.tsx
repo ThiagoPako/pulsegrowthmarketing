@@ -16,6 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import BankStatementReconciliation from '@/components/financial/BankStatementReconciliation';
 
 type MovementType = 'all' | 'receita' | 'despesa' | 'caixa' | 'salario';
 

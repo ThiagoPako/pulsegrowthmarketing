@@ -169,6 +169,24 @@ export default function FinancialMovements() {
     return { receitas: r, despesas: e, caixaIn: ci, caixaOut: co, salarios: sal };
   }, [unified]);
 
+  // System movements for reconciliation
+  const reconciliationMovements = useMemo(() => {
+    const movs: { id: string; date: string; description: string; amount: number; type: 'entrada' | 'saida' }[] = [];
+    revenues.forEach(r => {
+      if (r.status === 'recebida') {
+        const client = clients.find(c => c.id === r.client_id);
+        movs.push({ id: r.id, date: normalizeDate(r.due_date), description: `Mensalidade - ${client?.companyName || 'Cliente'}`, amount: Number(r.amount), type: 'entrada' });
+      }
+    });
+    expenses.forEach(e => {
+      movs.push({ id: e.id, date: normalizeDate(e.date), description: e.description || 'Despesa', amount: Number(e.amount), type: 'saida' });
+    });
+    cashMovements.forEach(m => {
+      movs.push({ id: m.id, date: normalizeDate(m.date), description: m.description, amount: Number(m.amount), type: m.type === 'entrada' ? 'entrada' : 'saida' });
+    });
+    return movs;
+  }, [revenues, expenses, cashMovements, clients]);
+
   const getTypeInfo = (type: UnifiedMovement['type']) => {
     switch (type) {
       case 'receita': return { label: 'Receita', color: 'text-green-600', bg: 'bg-green-100 dark:bg-green-900/20', icon: <TrendingUp className="w-3.5 h-3.5" /> };

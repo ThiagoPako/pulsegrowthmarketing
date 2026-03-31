@@ -205,6 +205,7 @@ export default function BankStatementReconciliation({ open, onOpenChange, system
   const [result, setResult] = useState<ReconciliationResult | null>(null);
   const [fileName, setFileName] = useState('');
   const [step, setStep] = useState<'config' | 'review' | 'result'>('config');
+  const [loading, setLoading] = useState(false);
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 

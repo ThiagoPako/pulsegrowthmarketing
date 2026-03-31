@@ -17,7 +17,7 @@ import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 
-type MovementType = 'all' | 'receita' | 'despesa' | 'caixa';
+type MovementType = 'all' | 'receita' | 'despesa' | 'caixa' | 'salario';
 
 interface UnifiedMovement {
   id: string;

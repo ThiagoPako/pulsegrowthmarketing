@@ -661,6 +661,11 @@ export default function ClientPortal() {
 
                 <div className="relative max-w-[1400px] mx-auto px-4 sm:px-8 py-8 sm:py-20">
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                    {portalUserName && !isTeamMember && (
+                      <p className="text-sm text-white/50 mb-2">
+                        Olá, <span className="text-white/70 font-medium">{portalUserName}</span> 👋
+                      </p>
+                    )}
                     <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.08] border border-white/[0.08] text-xs font-medium text-white/70 mb-4">
                       <Sparkles size={12} style={{ color: `hsl(${clientColor})` }} />
                       <span className="capitalize">Temporada {seasonLabel}</span>

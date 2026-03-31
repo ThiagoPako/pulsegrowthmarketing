@@ -188,7 +188,7 @@ export function useFinancialData() {
 
       const overdueIds: string[] = [];
       for (const r of uniqueRevenues) {
-        if (r.status === 'prevista' && r.due_date && normalizeDate(r.due_date) < today && Number(r.amount) > 0) {
+        if (r.status === 'prevista' && r.due_date && normalizeDate(r.due_date) < today) {
           overdueIds.push(r.id);
         }
       }

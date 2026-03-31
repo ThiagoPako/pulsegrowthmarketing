@@ -328,33 +328,48 @@ export default function FinancialExpenses() {
     const memberName = match ? match[1] : bonusExpense.responsible || bonusExpense.description;
     const memberRole = match ? match[2] : '';
 
-    // Mark as paid
+    // 1. Mark salary as paid (normal salary value stays as-is)
     setRocketName(memberName);
     setShowRocket(true);
     const desc = `${bonusExpense.description} - PAGO`;
     const ok = await updateExpense(bonusExpense.id, { description: desc });
     if (!ok) { toast.error('Erro ao marcar como pago'); return; }
 
-    // Save bonus record
+    // 2. Create a SEPARATE expense entry for the bonus amount
+    const bonusVal = Number(bonusAmount);
+    const bonusExpenseData = {
+      date: normalizeDate(bonusExpense.date),
+      amount: bonusVal,
+      category_id: bonusExpense.category_id,
+      expense_type: bonusExpense.expense_type,
+      description: `Bônus - ${memberName}${memberRole ? ` (${memberRole})` : ''} - PAGO`,
+      responsible: memberName,
+    };
+    const bonusOk = await addExpense(bonusExpenseData);
+
+    // 3. Save bonus record for tracking
     const { error } = await supabase.from('salary_bonuses').insert({
       expense_id: bonusExpense.id,
       user_name: memberName,
       user_role: memberRole,
-      bonus_amount: Number(bonusAmount),
+      bonus_amount: bonusVal,
       reference_month: selectedMonth,
     } as any);
 
     if (error) {
       console.error('[FinancialExpenses] bonus insert error:', error);
-      toast.error('Pago, mas erro ao registrar bônus');
+    }
+
+    if (bonusOk) {
+      toast.success(`Salário pago + Bônus de ${fmt(bonusVal)} registrado para ${memberName}! 🎉`);
     } else {
-      toast.success(`Pago com bônus de ${fmt(Number(bonusAmount))} para ${memberName}! 🎉`);
+      toast.success(`Salário pago, mas erro ao registrar despesa do bônus`);
     }
 
     setBonusDialogOpen(false);
     setBonusExpense(null);
     setBonusAmount('');
-  }, [bonusExpense, bonusAmount, updateExpense, selectedMonth]);
+  }, [bonusExpense, bonusAmount, updateExpense, addExpense, selectedMonth]);
 
   const handleRevertSalary = useCallback(async (expense: Expense) => {
     const desc = expense.description.replace(/ - PAGO$/, '');

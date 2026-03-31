@@ -101,6 +101,7 @@ export default function FinancialMovements() {
       const d = new Date(expDate + 'T12:00:00');
       if (d >= monthStart && d <= monthEnd) {
         const cat = categories.find(c => c.id === e.category_id);
+        const isSalary = cat?.name?.toLowerCase() === 'salários' || e.description?.startsWith('Salário -') || e.description?.startsWith('Bônus -');
         movements.push({
           id: e.id,
           date: expDate,
@@ -109,6 +110,7 @@ export default function FinancialMovements() {
           amount: Number(e.amount),
           category: cat?.name,
           sourceType: 'despesa',
+          isSalary,
           original: e,
         });
       }

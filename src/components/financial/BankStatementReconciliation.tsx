@@ -105,39 +105,102 @@ function parseAmount(s: string): number {
 // ── PDF text extraction ──────────────────────────────────────────────
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs`;
 
-async function extractTextFromPdf(buffer: ArrayBuffer): Promise<string> {
+async function extractTextFromPdf(buffer: ArrayBuffer): Promise<string[]> {
   const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-  const pages: string[] = [];
+  const pageTexts: string[] = [];
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    pages.push(content.items.map((item: any) => item.str).join(' '));
+    // Preserve positional info: join items but keep line breaks via Y-position
+    const items = content.items as any[];
+    if (items.length === 0) continue;
+
+    let lines: string[] = [];
+    let currentLine = items[0].str;
+    let lastY = items[0].transform[5];
+
+    for (let j = 1; j < items.length; j++) {
+      const y = items[j].transform[5];
+      if (Math.abs(y - lastY) > 3) {
+        lines.push(currentLine);
+        currentLine = items[j].str;
+        lastY = y;
+      } else {
+        currentLine += ' ' + items[j].str;
+      }
+    }
+    lines.push(currentLine);
+    pageTexts.push(...lines);
   }
-  return pages.join('\n');
+  return pageTexts;
 }
 
-function parsePdfText(raw: string): StatementLine[] {
-  const lines = raw.split('\n').flatMap(l => l.split(/\s{2,}/));
-  const results: StatementLine[] = [];
+// Portuguese month map for InfinitePay/CloudWalk format: "03 Mar, 2026"
+const MONTH_MAP: Record<string, string> = {
+  'jan': '01', 'fev': '02', 'mar': '03', 'abr': '04',
+  'mai': '05', 'jun': '06', 'jul': '07', 'ago': '08',
+  'set': '09', 'out': '10', 'nov': '11', 'dez': '12',
+};
 
-  // Regex for date patterns
-  const dateRe = /(\d{2}\/\d{2}\/\d{4}|\d{4}-\d{2}-\d{2})/;
-  // Regex for Brazilian currency amounts: 1.234,56 or -1.234,56 or 1234,56
-  const amountRe = /(-?\d{1,3}(?:\.\d{3})*,\d{2})/;
+function parseBrazilianTextDate(text: string): string | null {
+  // "03 Mar, 2026" or "03 Mar 2026"
+  const m = text.match(/(\d{1,2})\s+(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-z]*[,.]?\s*(\d{4})/i);
+  if (m) {
+    const day = m[1].padStart(2, '0');
+    const month = MONTH_MAP[m[2].toLowerCase().substring(0, 3)];
+    return month ? `${m[3]}-${month}-${day}` : null;
+  }
+  return null;
+}
+
+function parsePdfText(lines: string[]): StatementLine[] {
+  const results: StatementLine[] = [];
+  // Amount regex: matches +500,00  -1.234,56  + 500,00  - 24,00
+  const amountRe = /([+-])\s*(\d{1,3}(?:\.\d{3})*,\d{2})/;
+  // Standard date formats
+  const stdDateRe = /(\d{2}\/\d{2}\/\d{4}|\d{4}-\d{2}-\d{2})/;
+
+  let currentDate = '';
 
   for (const line of lines) {
-    const dateMatch = line.match(dateRe);
+    // Skip summary/balance lines
+    if (/saldo\s+(do\s+dia|inicial|final)/i.test(line)) continue;
+    if (/total\s+de\s+(entradas|saídas|saidas)/i.test(line)) continue;
+    if (/página|central\s+de\s+ajuda|relatório\s+de\s+movimentações|cloudwalk|cnpj/i.test(line)) continue;
+
+    // Try to extract a date from this line
+    const brDate = parseBrazilianTextDate(line);
+    const stdDate = line.match(stdDateRe);
+    if (brDate) currentDate = brDate;
+    else if (stdDate) currentDate = normalizeCSVDate(stdDate[1]);
+
+    if (!currentDate) continue;
+
+    // Find amount
     const amountMatch = line.match(amountRe);
-    if (dateMatch && amountMatch) {
-      const date = normalizeCSVDate(dateMatch[1]);
-      const amount = parseAmount(amountMatch[1]);
-      if (amount === 0) continue;
-      // Extract description: text between date and amount
-      const afterDate = line.substring((dateMatch.index || 0) + dateMatch[0].length);
-      const beforeAmount = afterDate.substring(0, afterDate.indexOf(amountMatch[1]));
-      const desc = beforeAmount.replace(/[|;,]+/g, ' ').trim() || 'Sem descrição';
-      results.push({ date, description: desc, amount });
+    if (!amountMatch) continue;
+
+    const sign = amountMatch[1];
+    const rawVal = amountMatch[2];
+    const amount = parseAmount(rawVal);
+    if (amount === 0) continue;
+
+    // Extract description: look for "Pix ..." or text after transaction type
+    let description = 'Sem descrição';
+    const pixMatch = line.match(/Pix\s+(.+?)(?:\s+(?:Recebido|Enviado|Devolvido))/i);
+    if (pixMatch) {
+      description = pixMatch[1].trim();
+    } else {
+      // Try to get text between time and amount
+      const descMatch = line.match(/\d{2}:\d{2}\s+\w+\s+(.+?)(?:\s+(?:Recebido|Enviado|Devolvido))/i);
+      if (descMatch) description = descMatch[1].trim();
     }
+
+    results.push({
+      date: currentDate,
+      description,
+      amount,
+    });
   }
   return results;
 }

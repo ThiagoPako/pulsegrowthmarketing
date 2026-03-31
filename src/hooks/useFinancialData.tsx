@@ -237,7 +237,15 @@ export function useFinancialData() {
   // Contract CRUD
   const upsertContract = async (c: Partial<FinancialContract> & { client_id: string }) => {
     const isNew = !c.id;
-    const { error } = await supabase.from('financial_contracts').upsert(c as any, { onConflict: 'client_id' });
+    let error: any = null;
+    if (isNew) {
+      const res = await supabase.from('financial_contracts').insert(c as any);
+      error = res.error;
+    } else {
+      const { id, ...updates } = c;
+      const res = await supabase.from('financial_contracts').update(updates as any).eq('id', id);
+      error = res.error;
+    }
     if (!error) {
       await logActivity(isNew ? 'criação' : 'edição', 'contrato', `${isNew ? 'Criou' : 'Editou'} contrato - R$ ${Number(c.contract_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, c.id, c);
       await fetchAll();

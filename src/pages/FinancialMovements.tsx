@@ -526,6 +526,12 @@ export default function FinancialMovements() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {/* Bank Statement Reconciliation */}
+      <BankStatementReconciliation
+        open={showReconciliation}
+        onOpenChange={setShowReconciliation}
+        systemMovements={reconciliationMovements}
+      />
     </div>
   );
 }

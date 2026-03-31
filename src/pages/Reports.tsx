@@ -197,7 +197,17 @@ export default function Reports() {
     };
   }, [filteredRecords, filteredSocial, filteredWaitLogs, recDuration]);
 
-  const comparison = useMemo(() => {
+  // Cost per video KPIs
+  const costKpis = useMemo(() => {
+    const filteredSalaries = salaryExpenses.filter(e => e.date >= dateRange.start && e.date <= dateRange.end);
+    const totalSalaries = filteredSalaries.reduce((a, e) => a + Number(e.amount), 0);
+    const totalVideos = stats.totalContent;
+    const costPerVideo = totalVideos > 0 ? totalSalaries / totalVideos : 0;
+    const videosPerSalary = totalSalaries > 0 ? totalVideos / (totalSalaries / 1000) : 0;
+    return { totalSalaries, costPerVideo, totalVideos, videosPerSalary };
+  }, [salaryExpenses, dateRange, stats.totalContent]);
+
+
     if (selectedClient === 'all') return null;
     const planId = clientPlans[selectedClient];
     if (!planId) return null;

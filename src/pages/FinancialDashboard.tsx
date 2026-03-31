@@ -884,6 +884,12 @@ export default function FinancialDashboard() {
           </CardContent>
         </Card>
       )}
+      {/* Bank Statement Import Dialog */}
+      <BankStatementImport
+        open={showImport}
+        onOpenChange={setShowImport}
+        onImport={handleBankImport}
+      />
     </div>
   );
 }

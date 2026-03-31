@@ -29,6 +29,7 @@ interface UnifiedMovement {
   clientName?: string;
   category?: string;
   sourceType: 'receita' | 'despesa' | 'caixa';
+  isSalary?: boolean;
   original: Revenue | Expense | CashMovement;
 }
 

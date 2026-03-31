@@ -801,7 +801,7 @@ export default function Schedule() {
       const script = scripts.find(s => s.id === scriptId);
       const fmt = script?.contentFormat || 'reels';
       if (fmt === 'reels') reelsCount++;
-      else if (fmt === 'criativo' || fmt === 'produto') creativesCount++;
+      else if (fmt === 'criativo') creativesCount++;
       else if (fmt === 'story') storiesCount++;
       else extrasCount++;
     }

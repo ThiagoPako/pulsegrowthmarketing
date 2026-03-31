@@ -11,11 +11,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, ArrowUpCircle, ArrowDownCircle, Pencil, Trash2, Search, Filter, DollarSign, TrendingUp, TrendingDown, Wallet, Users } from 'lucide-react';
+import { ArrowLeft, ArrowUpCircle, ArrowDownCircle, Pencil, Trash2, Search, Filter, DollarSign, TrendingUp, TrendingDown, Wallet, Users, FileSpreadsheet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import BankStatementReconciliation from '@/components/financial/BankStatementReconciliation';
 
 type MovementType = 'all' | 'receita' | 'despesa' | 'caixa' | 'salario';
 
@@ -48,6 +49,7 @@ export default function FinancialMovements() {
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<UnifiedMovement | null>(null);
   const [editTarget, setEditTarget] = useState<UnifiedMovement | null>(null);
+  const [showReconciliation, setShowReconciliation] = useState(false);
 
   // Edit form states
   const [editAmount, setEditAmount] = useState('');
@@ -167,6 +169,24 @@ export default function FinancialMovements() {
     return { receitas: r, despesas: e, caixaIn: ci, caixaOut: co, salarios: sal };
   }, [unified]);
 
+  // System movements for reconciliation
+  const reconciliationMovements = useMemo(() => {
+    const movs: { id: string; date: string; description: string; amount: number; type: 'entrada' | 'saida' }[] = [];
+    revenues.forEach(r => {
+      if (r.status === 'recebida') {
+        const client = clients.find(c => c.id === r.client_id);
+        movs.push({ id: r.id, date: normalizeDate(r.due_date), description: `Mensalidade - ${client?.companyName || 'Cliente'}`, amount: Number(r.amount), type: 'entrada' });
+      }
+    });
+    expenses.forEach(e => {
+      movs.push({ id: e.id, date: normalizeDate(e.date), description: e.description || 'Despesa', amount: Number(e.amount), type: 'saida' });
+    });
+    cashMovements.forEach(m => {
+      movs.push({ id: m.id, date: normalizeDate(m.date), description: m.description, amount: Number(m.amount), type: m.type === 'entrada' ? 'entrada' : 'saida' });
+    });
+    return movs;
+  }, [revenues, expenses, cashMovements, clients]);
+
   const getTypeInfo = (type: UnifiedMovement['type']) => {
     switch (type) {
       case 'receita': return { label: 'Receita', color: 'text-green-600', bg: 'bg-green-100 dark:bg-green-900/20', icon: <TrendingUp className="w-3.5 h-3.5" /> };
@@ -280,6 +300,10 @@ export default function FinancialMovements() {
             <p className="text-sm text-muted-foreground">Visualize, edite e exclua todas as movimentações</p>
           </div>
         </div>
+        <Button variant="outline" onClick={() => setShowReconciliation(true)} className="gap-2">
+          <FileSpreadsheet className="h-4 w-4" />
+          Conciliar Extrato
+        </Button>
       </div>
 
       {/* Summary Cards */}
@@ -502,6 +526,12 @@ export default function FinancialMovements() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {/* Bank Statement Reconciliation */}
+      <BankStatementReconciliation
+        open={showReconciliation}
+        onOpenChange={setShowReconciliation}
+        systemMovements={reconciliationMovements}
+      />
     </div>
   );
 }

@@ -83,6 +83,7 @@ export default function Reports() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [clientPlans, setClientPlans] = useState<Record<string, string | null>>({});
   const [waitLogs, setWaitLogs] = useState<WaitLog[]>([]);
+  const [salaryExpenses, setSalaryExpenses] = useState<{ amount: number; date: string; description: string }[]>([]);
   const [selectedClient, setSelectedClient] = useState('all');
   const [periodType, setPeriodType] = useState<'current' | 'previous' | 'custom'>('current');
   const [customStart, setCustomStart] = useState('');

@@ -31,6 +31,8 @@ import { generateDeliveryReport, resolvePaymentInfo } from '@/lib/billingReport'
 import ClientLogo from '@/components/ClientLogo';
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
 import SalaryRaiseAlert from '@/components/financial/SalaryRaiseAlert';
+import BankStatementImport from '@/components/financial/BankStatementImport';
+import { supabase } from '@/lib/vpsDb';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },

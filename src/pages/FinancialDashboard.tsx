@@ -434,12 +434,18 @@ export default function FinancialDashboard() {
           </h1>
           <p className="text-sm text-muted-foreground">Visão geral da saúde financeira</p>
         </div>
-        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-          <SelectTrigger className="w-48 shadow-sm"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {monthOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" onClick={() => setShowImport(true)} className="gap-2 shadow-sm">
+            <Upload className="h-4 w-4" />
+            Importar Extrato
+          </Button>
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="w-48 shadow-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {monthOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
       </motion.div>
 
       {/* KPI Cards Row 1 */}

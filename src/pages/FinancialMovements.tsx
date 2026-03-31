@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, ArrowUpCircle, ArrowDownCircle, Pencil, Trash2, Search, Filter, DollarSign, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
+import { ArrowLeft, ArrowUpCircle, ArrowDownCircle, Pencil, Trash2, Search, Filter, DollarSign, TrendingUp, TrendingDown, Wallet, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';

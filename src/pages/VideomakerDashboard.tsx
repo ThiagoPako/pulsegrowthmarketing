@@ -449,9 +449,18 @@ export default function VideomakerDashboard() {
       }
     });
 
-    const reelsCount = allRecordedIds.size;
+    // Count recorded scripts by content type
     const allRecordedArray = Array.from(allRecordedIds);
-    // Active recording already stopped in handleFinishRecording, just update delivery data
+    let reelsCount = 0, creativesCount = 0, storiesCount = 0, extrasCount = 0;
+    for (const scriptId of allRecordedArray) {
+      const script = scripts.find(s => s.id === scriptId);
+      const fmt = script?.contentFormat || 'reels';
+      if (fmt === 'reels') reelsCount++;
+      else if (fmt === 'criativo') creativesCount++;
+      else if (fmt === 'story') storiesCount++;
+      else extrasCount++;
+    }
+    const totalVideos = allRecordedArray.length;
     // For avulso recordings without clientId, skip delivery_records (requires client_id NOT NULL)
     if (rec.clientId) {
       try {
@@ -461,7 +470,10 @@ export default function VideomakerDashboard() {
           date: rec.date,
           recording_id: rec.id,
           reels_produced: reelsCount,
-          videos_recorded: Math.max(reelsCount, 1),
+          creatives_produced: creativesCount,
+          stories_produced: storiesCount,
+          extras_produced: extrasCount,
+          videos_recorded: Math.max(totalVideos, 1),
         });
       } catch {}
     }

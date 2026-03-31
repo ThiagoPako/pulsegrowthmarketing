@@ -160,10 +160,11 @@ export default function FinancialMovements() {
   // Totals
   const totals = useMemo(() => {
     const r = unified.filter(m => m.type === 'receita').reduce((s, m) => s + m.amount, 0);
-    const e = unified.filter(m => m.type === 'despesa').reduce((s, m) => s + m.amount, 0);
+    const e = unified.filter(m => m.type === 'despesa' && !m.isSalary).reduce((s, m) => s + m.amount, 0);
     const ci = unified.filter(m => m.type === 'caixa_entrada').reduce((s, m) => s + m.amount, 0);
     const co = unified.filter(m => m.type === 'caixa_saida').reduce((s, m) => s + m.amount, 0);
-    return { receitas: r, despesas: e, caixaIn: ci, caixaOut: co };
+    const sal = unified.filter(m => m.isSalary).reduce((s, m) => s + m.amount, 0);
+    return { receitas: r, despesas: e, caixaIn: ci, caixaOut: co, salarios: sal };
   }, [unified]);
 
   const getTypeInfo = (type: UnifiedMovement['type']) => {

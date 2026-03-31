@@ -7,10 +7,11 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Upload, FileSpreadsheet, AlertTriangle, CheckCircle, XCircle, Info } from 'lucide-react';
+import { Upload, FileSpreadsheet, FileText, AlertTriangle, CheckCircle, XCircle, Info, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { normalizeDate } from '@/hooks/useFinancialData';
+import * as pdfjsLib from 'pdfjs-dist';
 
 interface StatementLine {
   date: string;

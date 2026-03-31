@@ -550,13 +550,12 @@ export default function CommercialProposal() {
         endomarketing_data: endoData,
       } as any;
 
-      const { data, error } = await vpsDb.from('commercial_proposals').insert(payload);
+      const { data, error } = await vpsDb.from('commercial_proposals').insert(payload).select('*').single();
       if (error) throw error;
 
-      const savedProposal = Array.isArray(data) ? data[0] : data;
-      if (!savedProposal?.token) throw new Error('Proposta salva sem token de compartilhamento.');
+      if (!data?.token) throw new Error('Proposta salva sem token de compartilhamento.');
 
-      const link = `${window.location.origin}/proposta/${savedProposal.token}`;
+      const link = `${window.location.origin}/proposta/${data.token}`;
       setShareLink(link);
       await copyToClipboard(link);
       toast.success('Proposta salva! Link copiado para a área de transferência.');

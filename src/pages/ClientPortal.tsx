@@ -123,7 +123,7 @@ export default function ClientPortal() {
     if (isTeamMember && profile) {
       return { name: profile.display_name || profile.name, type: 'team', id: profile.id };
     }
-    return { name: client?.company_name || 'Cliente', type: 'client', id: null };
+    return { name: sessionStorage.getItem('portal_user_name') || client?.company_name || 'Cliente', type: 'client', id: null };
   };
 
   const handleLogout = () => {

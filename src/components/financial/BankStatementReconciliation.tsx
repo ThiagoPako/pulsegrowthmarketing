@@ -102,6 +102,46 @@ function parseAmount(s: string): number {
   return isNaN(val) ? 0 : Math.abs(val);
 }
 
+// ── PDF text extraction ──────────────────────────────────────────────
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs`;
+
+async function extractTextFromPdf(buffer: ArrayBuffer): Promise<string> {
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  const pages: string[] = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    pages.push(content.items.map((item: any) => item.str).join(' '));
+  }
+  return pages.join('\n');
+}
+
+function parsePdfText(raw: string): StatementLine[] {
+  const lines = raw.split('\n').flatMap(l => l.split(/\s{2,}/));
+  const results: StatementLine[] = [];
+
+  // Regex for date patterns
+  const dateRe = /(\d{2}\/\d{2}\/\d{4}|\d{4}-\d{2}-\d{2})/;
+  // Regex for Brazilian currency amounts: 1.234,56 or -1.234,56 or 1234,56
+  const amountRe = /(-?\d{1,3}(?:\.\d{3})*,\d{2})/;
+
+  for (const line of lines) {
+    const dateMatch = line.match(dateRe);
+    const amountMatch = line.match(amountRe);
+    if (dateMatch && amountMatch) {
+      const date = normalizeCSVDate(dateMatch[1]);
+      const amount = parseAmount(amountMatch[1]);
+      if (amount === 0) continue;
+      // Extract description: text between date and amount
+      const afterDate = line.substring((dateMatch.index || 0) + dateMatch[0].length);
+      const beforeAmount = afterDate.substring(0, afterDate.indexOf(amountMatch[1]));
+      const desc = beforeAmount.replace(/[|;,]+/g, ' ').trim() || 'Sem descrição';
+      results.push({ date, description: desc, amount });
+    }
+  }
+  return results;
+}
+
 function reconcile(
   statementLines: StatementLine[],
   systemMovs: SystemMovement[],

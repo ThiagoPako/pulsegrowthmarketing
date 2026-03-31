@@ -592,15 +592,22 @@ export default function ClientPortal() {
               </div>
             )}
             {isClientLoggedIn && !isTeamMember && (
-              <button onClick={handleLogout} className="p-2 rounded-full hover:bg-white/10 transition-colors" title="Sair">
-                <LogOut size={14} className="text-white/50" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={handleLogout} className="p-2 rounded-full hover:bg-white/10 transition-colors" title="Sair">
+                  <LogOut size={14} className="text-white/50" />
+                </button>
+              </div>
             )}
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: `hsl(${clientColor})` }}>
-              {isTeamMember && profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
-              ) : (
-                client.company_name.charAt(0)
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ background: `hsl(${clientColor})` }}>
+                {isTeamMember && profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                ) : (
+                  (portalUserName || client.company_name).charAt(0).toUpperCase()
+                )}
+              </div>
+              {portalUserName && !isTeamMember && (
+                <span className="hidden sm:block text-xs text-white/50 max-w-[80px] truncate">{portalUserName}</span>
               )}
             </div>
           </div>

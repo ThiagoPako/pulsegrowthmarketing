@@ -7,10 +7,11 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Upload, FileSpreadsheet, AlertTriangle, CheckCircle, XCircle, Info } from 'lucide-react';
+import { Upload, FileSpreadsheet, FileText, AlertTriangle, CheckCircle, XCircle, Info, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { normalizeDate } from '@/hooks/useFinancialData';
+import * as pdfjsLib from 'pdfjs-dist';
 
 interface StatementLine {
   date: string;
@@ -101,6 +102,46 @@ function parseAmount(s: string): number {
   return isNaN(val) ? 0 : Math.abs(val);
 }
 
+// ── PDF text extraction ──────────────────────────────────────────────
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs`;
+
+async function extractTextFromPdf(buffer: ArrayBuffer): Promise<string> {
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  const pages: string[] = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    pages.push(content.items.map((item: any) => item.str).join(' '));
+  }
+  return pages.join('\n');
+}
+
+function parsePdfText(raw: string): StatementLine[] {
+  const lines = raw.split('\n').flatMap(l => l.split(/\s{2,}/));
+  const results: StatementLine[] = [];
+
+  // Regex for date patterns
+  const dateRe = /(\d{2}\/\d{2}\/\d{4}|\d{4}-\d{2}-\d{2})/;
+  // Regex for Brazilian currency amounts: 1.234,56 or -1.234,56 or 1234,56
+  const amountRe = /(-?\d{1,3}(?:\.\d{3})*,\d{2})/;
+
+  for (const line of lines) {
+    const dateMatch = line.match(dateRe);
+    const amountMatch = line.match(amountRe);
+    if (dateMatch && amountMatch) {
+      const date = normalizeCSVDate(dateMatch[1]);
+      const amount = parseAmount(amountMatch[1]);
+      if (amount === 0) continue;
+      // Extract description: text between date and amount
+      const afterDate = line.substring((dateMatch.index || 0) + dateMatch[0].length);
+      const beforeAmount = afterDate.substring(0, afterDate.indexOf(amountMatch[1]));
+      const desc = beforeAmount.replace(/[|;,]+/g, ' ').trim() || 'Sem descrição';
+      results.push({ date, description: desc, amount });
+    }
+  }
+  return results;
+}
+
 function reconcile(
   statementLines: StatementLine[],
   systemMovs: SystemMovement[],
@@ -164,32 +205,54 @@ export default function BankStatementReconciliation({ open, onOpenChange, system
   const [result, setResult] = useState<ReconciliationResult | null>(null);
   const [fileName, setFileName] = useState('');
   const [step, setStep] = useState<'config' | 'review' | 'result'>('config');
+  const [loading, setLoading] = useState(false);
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.name.endsWith('.csv') && !file.name.endsWith('.txt')) {
-      toast.error('Formato não suportado. Use arquivos .csv ou .txt');
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!['csv', 'txt', 'pdf'].includes(ext || '')) {
+      toast.error('Formato não suportado. Use arquivos .csv, .txt ou .pdf');
       return;
     }
 
     setFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const lines = parseCSV(text);
-      if (lines.length === 0) {
-        toast.error('Não foi possível ler o extrato. Verifique o formato do arquivo.');
-        return;
+    setLoading(true);
+
+    try {
+      if (ext === 'pdf') {
+        const buffer = await file.arrayBuffer();
+        const rawText = await extractTextFromPdf(buffer);
+        const lines = parsePdfText(rawText);
+        if (lines.length === 0) {
+          toast.error('Não foi possível extrair lançamentos do PDF. Verifique se o extrato contém dados tabulares.');
+          setLoading(false);
+          return;
+        }
+        setParsedLines(lines);
+        setStep('review');
+        toast.success(`${lines.length} lançamentos extraídos do PDF`);
+      } else {
+        const text = await file.text();
+        const lines = parseCSV(text);
+        if (lines.length === 0) {
+          toast.error('Não foi possível ler o extrato. Verifique o formato do arquivo.');
+          setLoading(false);
+          return;
+        }
+        setParsedLines(lines);
+        setStep('review');
+        toast.success(`${lines.length} lançamentos encontrados no extrato`);
       }
-      setParsedLines(lines);
-      setStep('review');
-      toast.success(`${lines.length} lançamentos encontrados no extrato`);
-    };
-    reader.readAsText(file, 'UTF-8');
+    } catch (err) {
+      console.error('[Reconciliation] Parse error:', err);
+      toast.error('Erro ao processar o arquivo. Tente outro formato.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleReconcile = () => {
@@ -300,11 +363,11 @@ export default function BankStatementReconciliation({ open, onOpenChange, system
 
               {/* File Upload */}
               <div>
-                <Label className="text-sm font-medium mb-2 block">Arquivo do Extrato (.csv)</Label>
+                <Label className="text-sm font-medium mb-2 block">Arquivo do Extrato (.csv, .txt ou .pdf)</Label>
                 <input
                   ref={fileRef}
                   type="file"
-                  accept=".csv,.txt"
+                  accept=".csv,.txt,.pdf"
                   onChange={handleFileUpload}
                   className="hidden"
                 />
@@ -312,17 +375,22 @@ export default function BankStatementReconciliation({ open, onOpenChange, system
                   whileHover={{ scale: 1.01 }}
                   whileTap={{ scale: 0.99 }}
                   onClick={() => fileRef.current?.click()}
-                  className="w-full p-8 border-2 border-dashed rounded-xl flex flex-col items-center gap-3 text-muted-foreground hover:border-primary/50 hover:bg-primary/5 transition-all"
+                  disabled={loading}
+                  className="w-full p-8 border-2 border-dashed rounded-xl flex flex-col items-center gap-3 text-muted-foreground hover:border-primary/50 hover:bg-primary/5 transition-all disabled:opacity-50"
                 >
-                  <Upload className="h-10 w-10 text-primary/60" />
+                  {loading ? (
+                    <Loader2 className="h-10 w-10 text-primary/60 animate-spin" />
+                  ) : (
+                    <Upload className="h-10 w-10 text-primary/60" />
+                  )}
                   <div className="text-center">
-                    <p className="font-medium">Clique para enviar o extrato</p>
-                    <p className="text-xs">Formatos aceitos: .csv, .txt</p>
+                    <p className="font-medium">{loading ? 'Processando PDF...' : 'Clique para enviar o extrato'}</p>
+                    <p className="text-xs">Formatos aceitos: .csv, .txt, .pdf</p>
                   </div>
                 </motion.button>
-                {fileName && (
+                {fileName && !loading && (
                   <p className="text-sm text-primary mt-2 flex items-center gap-1">
-                    <FileSpreadsheet className="h-4 w-4" /> {fileName}
+                    {fileName.endsWith('.pdf') ? <FileText className="h-4 w-4" /> : <FileSpreadsheet className="h-4 w-4" />} {fileName}
                   </p>
                 )}
               </div>
@@ -330,8 +398,9 @@ export default function BankStatementReconciliation({ open, onOpenChange, system
               <Alert className="border-blue-500/30 bg-blue-50/50 dark:bg-blue-950/10">
                 <Info className="h-4 w-4 text-blue-500" />
                 <AlertDescription className="text-xs text-muted-foreground">
-                  O CSV deve ter colunas de <strong>Data</strong>, <strong>Descrição</strong> e <strong>Valor</strong>. 
-                  Formatos de data aceitos: dd/mm/aaaa ou aaaa-mm-dd. Valores podem usar vírgula (1.234,56) ou ponto (1234.56).
+                  <strong>CSV/TXT:</strong> Deve ter colunas de Data, Descrição e Valor. 
+                  <strong> PDF:</strong> Extratos bancários com dados tabulares (data e valor legíveis).
+                  Formatos de data aceitos: dd/mm/aaaa ou aaaa-mm-dd.
                 </AlertDescription>
               </Alert>
             </motion.div>

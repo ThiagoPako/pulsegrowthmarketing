@@ -300,6 +300,10 @@ export default function FinancialMovements() {
             <p className="text-sm text-muted-foreground">Visualize, edite e exclua todas as movimentações</p>
           </div>
         </div>
+        <Button variant="outline" onClick={() => setShowReconciliation(true)} className="gap-2">
+          <FileSpreadsheet className="h-4 w-4" />
+          Conciliar Extrato
+        </Button>
       </div>
 
       {/* Summary Cards */}

@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Users, FileText, CreditCard, ArrowRight, BarChart3, CalendarClock, CheckCircle, Wallet, ArrowUpCircle, ArrowDownCircle, History, ClipboardList, Loader2 } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Users, FileText, CreditCard, ArrowRight, BarChart3, CalendarClock, CheckCircle, Wallet, ArrowUpCircle, ArrowDownCircle, History, ClipboardList, Loader2, Upload } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -31,6 +31,8 @@ import { generateDeliveryReport, resolvePaymentInfo } from '@/lib/billingReport'
 import ClientLogo from '@/components/ClientLogo';
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
 import SalaryRaiseAlert from '@/components/financial/SalaryRaiseAlert';
+import BankStatementImport from '@/components/financial/BankStatementImport';
+import { supabase } from '@/lib/vpsDb';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -45,12 +47,51 @@ const COLORS = ['hsl(0,72%,51%)', 'hsl(25,95%,53%)', 'hsl(45,93%,47%)', 'hsl(142
 
 export default function FinancialDashboard() {
   const navigate = useNavigate();
-  const { contracts, revenues, expenses, categories, cashMovements, activityLog, paymentConfig, loading, updateRevenue } = useFinancialData();
+  const { contracts, revenues, expenses, categories, cashMovements, activityLog, paymentConfig, loading, updateRevenue, addRevenue, addExpense, refetch } = useFinancialData();
   const { clients, recordings, users } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
   const [sendingAllOverdue, setSendingAllOverdue] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMsg, setCelebrationMsg] = useState('');
+  const [showImport, setShowImport] = useState(false);
+
+  const handleBankImport = async (items: { date: string; description: string; amount: number }[], type: 'entrada' | 'saida') => {
+    try {
+      if (type === 'entrada') {
+        // Import as revenues - create as manual entries
+        for (const item of items) {
+          await supabase.from('revenues').insert({
+            client_id: contracts[0]?.client_id || '00000000-0000-0000-0000-000000000000',
+            contract_id: contracts[0]?.id || '00000000-0000-0000-0000-000000000000',
+            reference_month: item.date.slice(0, 8) + '01',
+            amount: item.amount,
+            due_date: item.date,
+            status: 'recebida',
+            paid_at: item.date,
+          } as any);
+        }
+      } else {
+        // Import as expenses
+        const outrosCat = categories.find(c => c.name === 'Outros');
+        const catId = outrosCat?.id || categories[0]?.id || '';
+        for (const item of items) {
+          await supabase.from('expenses').insert({
+            date: item.date,
+            amount: item.amount,
+            description: item.description,
+            category_id: catId,
+            expense_type: 'variavel',
+            responsible: 'Extrato Bancário',
+          } as any);
+        }
+      }
+      await refetch();
+      return true;
+    } catch (err) {
+      console.error('[FinancialDashboard] import error:', err);
+      return false;
+    }
+  };
 
   const monthStart = useMemo(() => startOfMonth(new Date(selectedMonth + '-01T12:00:00')), [selectedMonth]);
   const monthEnd = useMemo(() => endOfMonth(monthStart), [monthStart]);
@@ -393,12 +434,18 @@ export default function FinancialDashboard() {
           </h1>
           <p className="text-sm text-muted-foreground">Visão geral da saúde financeira</p>
         </div>
-        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-          <SelectTrigger className="w-48 shadow-sm"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {monthOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" onClick={() => setShowImport(true)} className="gap-2 shadow-sm">
+            <Upload className="h-4 w-4" />
+            Importar Extrato
+          </Button>
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="w-48 shadow-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {monthOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
       </motion.div>
 
       {/* KPI Cards Row 1 */}
@@ -837,6 +884,12 @@ export default function FinancialDashboard() {
           </CardContent>
         </Card>
       )}
+      {/* Bank Statement Import Dialog */}
+      <BankStatementImport
+        open={showImport}
+        onOpenChange={setShowImport}
+        onImport={handleBankImport}
+      />
     </div>
   );
 }

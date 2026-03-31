@@ -118,21 +118,30 @@ export default function ClientPortal() {
   const isTeamMember = !!user && !!profile;
   const isClientLoggedIn = !!sessionStorage.getItem('portal_client_id');
   const isAuthenticated = isTeamMember || isClientLoggedIn;
+  const portalUserName = sessionStorage.getItem('portal_user_name') || '';
   
   const getCommentAuthor = () => {
     if (isTeamMember && profile) {
       return { name: profile.display_name || profile.name, type: 'team', id: profile.id };
     }
-    return { name: sessionStorage.getItem('portal_user_name') || client?.company_name || 'Cliente', type: 'client', id: null };
+    return { name: portalUserName || client?.company_name || 'Cliente', type: 'client', id: null };
   };
 
   const handleLogout = () => {
     sessionStorage.removeItem('portal_client_id');
     sessionStorage.removeItem('portal_client_name');
+    sessionStorage.removeItem('portal_user_name');
     sessionStorage.removeItem('portal_auth_type');
+    toast.success('Até logo! 👋');
     navigate(`/portal-login/${paramSlug}`);
   };
 
+  // Auth guard: redirect to login if not authenticated
+  useEffect(() => {
+    if (!isTeamMember && !isClientLoggedIn) {
+      navigate(`/portal-login/${paramSlug}`, { replace: true });
+    }
+  }, [isTeamMember, isClientLoggedIn, paramSlug]);
 
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);

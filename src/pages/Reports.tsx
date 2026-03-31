@@ -91,12 +91,13 @@ export default function Reports() {
   const [showPreview, setShowPreview] = useState(true);
 
   const fetchData = useCallback(async () => {
-    const [rRes, pRes, cRes, sRes, wRes] = await Promise.all([
+    const [rRes, pRes, cRes, sRes, wRes, salCatRes] = await Promise.all([
       supabase.from('delivery_records').select('*').order('date', { ascending: false }),
       supabase.from('plans').select('*'),
       supabase.from('clients').select('id, plan_id'),
       supabase.from('social_media_deliveries').select('*').order('delivered_at', { ascending: false }),
       supabase.from('recording_wait_logs').select('*'),
+      supabase.from('expense_categories').select('id, name').ilike('name', '%salário%'),
     ]);
     if (rRes.data) setRecords(rRes.data as DeliveryRecord[]);
     if (pRes.data) setPlans(pRes.data as Plan[]);
@@ -107,6 +108,13 @@ export default function Reports() {
     }
     if (sRes.data) setSocialDeliveries(sRes.data as SocialDelivery[]);
     if (wRes.data) setWaitLogs(wRes.data as WaitLog[]);
+
+    // Fetch salary expenses
+    const salaryCatIds = (salCatRes.data || []).map((c: any) => c.id);
+    if (salaryCatIds.length > 0) {
+      const expRes = await supabase.from('expenses').select('amount, date, description').in('category_id', salaryCatIds);
+      if (expRes.data) setSalaryExpenses(expRes.data as any[]);
+    }
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);

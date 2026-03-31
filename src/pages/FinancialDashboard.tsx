@@ -47,12 +47,51 @@ const COLORS = ['hsl(0,72%,51%)', 'hsl(25,95%,53%)', 'hsl(45,93%,47%)', 'hsl(142
 
 export default function FinancialDashboard() {
   const navigate = useNavigate();
-  const { contracts, revenues, expenses, categories, cashMovements, activityLog, paymentConfig, loading, updateRevenue } = useFinancialData();
+  const { contracts, revenues, expenses, categories, cashMovements, activityLog, paymentConfig, loading, updateRevenue, addRevenue, addExpense, refetch } = useFinancialData();
   const { clients, recordings, users } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
   const [sendingAllOverdue, setSendingAllOverdue] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMsg, setCelebrationMsg] = useState('');
+  const [showImport, setShowImport] = useState(false);
+
+  const handleBankImport = async (items: { date: string; description: string; amount: number }[], type: 'entrada' | 'saida') => {
+    try {
+      if (type === 'entrada') {
+        // Import as revenues - create as manual entries
+        for (const item of items) {
+          await supabase.from('revenues').insert({
+            client_id: contracts[0]?.client_id || '00000000-0000-0000-0000-000000000000',
+            contract_id: contracts[0]?.id || '00000000-0000-0000-0000-000000000000',
+            reference_month: item.date.slice(0, 8) + '01',
+            amount: item.amount,
+            due_date: item.date,
+            status: 'recebida',
+            paid_at: item.date,
+          } as any);
+        }
+      } else {
+        // Import as expenses
+        const outrosCat = categories.find(c => c.name === 'Outros');
+        const catId = outrosCat?.id || categories[0]?.id || '';
+        for (const item of items) {
+          await supabase.from('expenses').insert({
+            date: item.date,
+            amount: item.amount,
+            description: item.description,
+            category_id: catId,
+            expense_type: 'variavel',
+            responsible: 'Extrato Bancário',
+          } as any);
+        }
+      }
+      await refetch();
+      return true;
+    } catch (err) {
+      console.error('[FinancialDashboard] import error:', err);
+      return false;
+    }
+  };
 
   const monthStart = useMemo(() => startOfMonth(new Date(selectedMonth + '-01T12:00:00')), [selectedMonth]);
   const monthEnd = useMemo(() => endOfMonth(monthStart), [monthStart]);

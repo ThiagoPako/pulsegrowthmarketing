@@ -550,7 +550,7 @@ export default function CommercialProposal() {
         endomarketing_data: endoData,
       } as any;
 
-      const { data, error } = await vpsDb.from('commercial_proposals').insert(payload);
+      const { data, error } = await vpsDb.from('commercial_proposals').insert(payload).select('*').single();
       if (error) throw error;
 
       const savedProposal = Array.isArray(data) ? data[0] : data;

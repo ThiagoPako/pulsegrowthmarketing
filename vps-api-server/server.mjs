@@ -1159,10 +1159,10 @@ app.post('/api/generate-caption', async (req, res) => {
 
 // ─── 5. Client Portal Auth ──────────────────────────────────
 async function hashPassword(password) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password + 'pulse_portal_salt_2026');
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  // Use Node.js crypto module (crypto.subtle may not be available in all Node versions)
+  const { createHash } = await import('crypto');
+  const hash = createHash('sha256').update(password + 'pulse_portal_salt_2026').digest('hex');
+  return hash;
 }
 
 // Ensure client_portal_users table exists (multi-user per company)

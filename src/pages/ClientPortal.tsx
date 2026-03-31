@@ -118,21 +118,30 @@ export default function ClientPortal() {
   const isTeamMember = !!user && !!profile;
   const isClientLoggedIn = !!sessionStorage.getItem('portal_client_id');
   const isAuthenticated = isTeamMember || isClientLoggedIn;
+  const portalUserName = sessionStorage.getItem('portal_user_name') || '';
   
   const getCommentAuthor = () => {
     if (isTeamMember && profile) {
       return { name: profile.display_name || profile.name, type: 'team', id: profile.id };
     }
-    return { name: sessionStorage.getItem('portal_user_name') || client?.company_name || 'Cliente', type: 'client', id: null };
+    return { name: portalUserName || client?.company_name || 'Cliente', type: 'client', id: null };
   };
 
   const handleLogout = () => {
     sessionStorage.removeItem('portal_client_id');
     sessionStorage.removeItem('portal_client_name');
+    sessionStorage.removeItem('portal_user_name');
     sessionStorage.removeItem('portal_auth_type');
+    toast.success('Até logo! 👋');
     navigate(`/portal-login/${paramSlug}`);
   };
 
+  // Auth guard: redirect to login if not authenticated
+  useEffect(() => {
+    if (!isTeamMember && !isClientLoggedIn) {
+      navigate(`/portal-login/${paramSlug}`, { replace: true });
+    }
+  }, [isTeamMember, isClientLoggedIn, paramSlug]);
 
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
@@ -583,15 +592,22 @@ export default function ClientPortal() {
               </div>
             )}
             {isClientLoggedIn && !isTeamMember && (
-              <button onClick={handleLogout} className="p-2 rounded-full hover:bg-white/10 transition-colors" title="Sair">
-                <LogOut size={14} className="text-white/50" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={handleLogout} className="p-2 rounded-full hover:bg-white/10 transition-colors" title="Sair">
+                  <LogOut size={14} className="text-white/50" />
+                </button>
+              </div>
             )}
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: `hsl(${clientColor})` }}>
-              {isTeamMember && profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
-              ) : (
-                client.company_name.charAt(0)
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ background: `hsl(${clientColor})` }}>
+                {isTeamMember && profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                ) : (
+                  (portalUserName || client.company_name).charAt(0).toUpperCase()
+                )}
+              </div>
+              {portalUserName && !isTeamMember && (
+                <span className="hidden sm:block text-xs text-white/50 max-w-[80px] truncate">{portalUserName}</span>
               )}
             </div>
           </div>
@@ -645,6 +661,11 @@ export default function ClientPortal() {
 
                 <div className="relative max-w-[1400px] mx-auto px-4 sm:px-8 py-8 sm:py-20">
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                    {portalUserName && !isTeamMember && (
+                      <p className="text-sm text-white/50 mb-2">
+                        Olá, <span className="text-white/70 font-medium">{portalUserName}</span> 👋
+                      </p>
+                    )}
                     <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.08] border border-white/[0.08] text-xs font-medium text-white/70 mb-4">
                       <Sparkles size={12} style={{ color: `hsl(${clientColor})` }} />
                       <span className="capitalize">Temporada {seasonLabel}</span>

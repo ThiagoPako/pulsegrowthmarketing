@@ -209,29 +209,50 @@ export default function BankStatementReconciliation({ open, onOpenChange, system
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.name.endsWith('.csv') && !file.name.endsWith('.txt')) {
-      toast.error('Formato não suportado. Use arquivos .csv ou .txt');
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!['csv', 'txt', 'pdf'].includes(ext || '')) {
+      toast.error('Formato não suportado. Use arquivos .csv, .txt ou .pdf');
       return;
     }
 
     setFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const lines = parseCSV(text);
-      if (lines.length === 0) {
-        toast.error('Não foi possível ler o extrato. Verifique o formato do arquivo.');
-        return;
+    setLoading(true);
+
+    try {
+      if (ext === 'pdf') {
+        const buffer = await file.arrayBuffer();
+        const rawText = await extractTextFromPdf(buffer);
+        const lines = parsePdfText(rawText);
+        if (lines.length === 0) {
+          toast.error('Não foi possível extrair lançamentos do PDF. Verifique se o extrato contém dados tabulares.');
+          setLoading(false);
+          return;
+        }
+        setParsedLines(lines);
+        setStep('review');
+        toast.success(`${lines.length} lançamentos extraídos do PDF`);
+      } else {
+        const text = await file.text();
+        const lines = parseCSV(text);
+        if (lines.length === 0) {
+          toast.error('Não foi possível ler o extrato. Verifique o formato do arquivo.');
+          setLoading(false);
+          return;
+        }
+        setParsedLines(lines);
+        setStep('review');
+        toast.success(`${lines.length} lançamentos encontrados no extrato`);
       }
-      setParsedLines(lines);
-      setStep('review');
-      toast.success(`${lines.length} lançamentos encontrados no extrato`);
-    };
-    reader.readAsText(file, 'UTF-8');
+    } catch (err) {
+      console.error('[Reconciliation] Parse error:', err);
+      toast.error('Erro ao processar o arquivo. Tente outro formato.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleReconcile = () => {

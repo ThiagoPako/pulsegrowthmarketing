@@ -21,6 +21,7 @@ import { useOnboarding } from '@/hooks/useOnboarding';
 import ClientArtDatabaseDialog from '@/components/ClientArtDatabaseDialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ClientGoalRocket from '@/components/ClientGoalRocket';
+import { syncFinancialContract } from '@/lib/financialContracts';
 
 const DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 const CONTENT_TYPES: ContentType[] = ['reels', 'story', 'produto'];
@@ -372,11 +373,14 @@ export default function Clients() {
     if (editing) {
       const logoUrl = await uploadLogo(editing.id);
       const updatedClient = { ...editing, ...form, logoUrl: logoUrl || undefined } as Client;
-      updateClient(updatedClient);
+      await updateClient(updatedClient);
       // Update plan fields
-      await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, contract_duration_months: contractDurationMonths, show_metrics: showMetrics } as any).eq('id', editing.id);
-      // Upsert financial contract
-      await supabase.from('financial_contracts').upsert({
+      const clientMetaUpdate = await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, contract_duration_months: contractDurationMonths, show_metrics: showMetrics } as any).eq('id', editing.id);
+      if (clientMetaUpdate.error) {
+        throw new Error(clientMetaUpdate.error.message || 'Erro ao atualizar dados contratuais do cliente');
+      }
+      // Sync financial contract + open revenues
+      await syncFinancialContract({
         client_id: editing.id,
         plan_id: planId || null,
         contract_value: contractValue,
@@ -384,7 +388,7 @@ export default function Clients() {
         due_day: dueDay,
         payment_method: paymentMethod,
         status: 'ativo',
-      } as any, { onConflict: 'client_id' });
+      });
       // Save social accounts
       await saveSocialAccounts(editing.id);
       // Auto-regenerate schedule if scheduling fields changed
@@ -413,12 +417,15 @@ export default function Clients() {
       if (!newClient.clientLogin) {
         newClient.clientLogin = form.companyName!.toLowerCase().replace(/\s+/g, '.').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       }
-      const ok = addClient(newClient);
+      const ok = await addClient(newClient);
       if (!ok) { toast.error('Empresa já cadastrada'); return; }
       // Update plan fields after insert
-      await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, contract_duration_months: contractDurationMonths, client_type: clientType, client_login: newClient.clientLogin, show_metrics: showMetrics } as any).eq('id', clientId);
+      const clientMetaUpdate = await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, contract_duration_months: contractDurationMonths, client_type: clientType, client_login: newClient.clientLogin, show_metrics: showMetrics } as any).eq('id', clientId);
+      if (clientMetaUpdate.error) {
+        throw new Error(clientMetaUpdate.error.message || 'Erro ao complementar dados do cliente');
+      }
       // Create financial contract
-      await supabase.from('financial_contracts').insert({
+      await syncFinancialContract({
         client_id: clientId,
         plan_id: planId || null,
         contract_value: contractValue,
@@ -426,7 +433,7 @@ export default function Clients() {
         due_day: dueDay,
         payment_method: paymentMethod,
         status: 'ativo',
-      } as any);
+      });
       // Save social accounts
       await saveSocialAccounts(clientId);
       // Generate onboarding tasks for new clients

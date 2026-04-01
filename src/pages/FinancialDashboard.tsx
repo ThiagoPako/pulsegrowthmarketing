@@ -732,21 +732,23 @@ export default function FinancialDashboard() {
       </motion.div>
 
       {/* Cash Forecast */}
-      <Card>
-        <CardHeader><CardTitle className="text-sm">Previsão de Caixa (Próximo Mês)</CardTitle></CardHeader>
-        <CardContent>
+      <Card className="overflow-hidden">
+        <CardHeader className="bg-gradient-to-r from-amber-500/5 to-orange-500/5 border-b border-border/60">
+          <CardTitle className="text-sm flex items-center gap-2"><Wallet size={16} className="text-amber-500" /> Previsão de Caixa (Próximo Mês)</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-5">
           <div className="grid grid-cols-3 gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Entradas Previstas</p>
-              <p className="text-lg font-bold text-green-600">{fmt(previsaoCaixa.entradasPrevistas)}</p>
+            <div className="kpi-card bg-success/5 border-success/20">
+              <p className="kpi-label">Entradas Previstas</p>
+              <p className="kpi-value text-success">{fmt(previsaoCaixa.entradasPrevistas)}</p>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Saídas Estimadas</p>
-              <p className="text-lg font-bold text-red-600">{fmt(previsaoCaixa.saidasPrevistas)}</p>
+            <div className="kpi-card bg-destructive/5 border-destructive/20">
+              <p className="kpi-label">Saídas Estimadas</p>
+              <p className="kpi-value text-destructive">{fmt(previsaoCaixa.saidasPrevistas)}</p>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Saldo Projetado</p>
-              <p className={`text-lg font-bold ${previsaoCaixa.saldoProjetado >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <div className={`kpi-card ${previsaoCaixa.saldoProjetado >= 0 ? 'bg-success/5 border-success/20' : 'bg-destructive/5 border-destructive/20'}`}>
+              <p className="kpi-label">Saldo Projetado</p>
+              <p className={`kpi-value ${previsaoCaixa.saldoProjetado >= 0 ? 'text-success' : 'text-destructive'}`}>
                 {fmt(previsaoCaixa.saldoProjetado)}
               </p>
             </div>

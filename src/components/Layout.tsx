@@ -307,7 +307,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Dialog>
               <DialogTrigger asChild>
                 <button className="p-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors" title="Escritório Virtual">
-                  <Building size={18} />
+                  <Building2 size={18} />
                 </button>
               </DialogTrigger>
               <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto p-0 gap-0">

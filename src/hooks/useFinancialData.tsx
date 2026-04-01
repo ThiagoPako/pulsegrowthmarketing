@@ -169,7 +169,7 @@ export function useFinancialData() {
       supabase.from('cash_reserve_movements').select('*').order('date', { ascending: false }),
       supabase.from('financial_activity_log').select('*').order('created_at', { ascending: false }).limit(50),
     ]);
-    console.log('[useFinancialData] expenses result:', { data: eRes.data, error: eRes.error, count: eRes.data?.length });
+    // Debug logging removed for production
     if (cRes.data) setContracts(cRes.data as any);
     if (eRes.data) setExpenses(eRes.data as any);
     else if (eRes.error) console.error('[useFinancialData] expenses fetch error:', eRes.error);

@@ -169,7 +169,7 @@ export function useFinancialData() {
       supabase.from('cash_reserve_movements').select('*').order('date', { ascending: false }),
       supabase.from('financial_activity_log').select('*').order('created_at', { ascending: false }).limit(50),
     ]);
-    console.log('[useFinancialData] expenses result:', { data: eRes.data, error: eRes.error, count: eRes.data?.length });
+    // Debug logging removed for production
     if (cRes.data) setContracts(cRes.data as any);
     if (eRes.data) setExpenses(eRes.data as any);
     else if (eRes.error) console.error('[useFinancialData] expenses fetch error:', eRes.error);
@@ -380,9 +380,7 @@ export function useFinancialData() {
       // Normalize date to YYYY-MM-DD to prevent timezone issues
       const payload = { ...e };
       if (payload.date) payload.date = normalizeDate(payload.date);
-      console.log('[useFinancialData] addExpense payload:', JSON.stringify(payload));
-      const { data, error } = await supabase.from('expenses').insert(payload as any);
-      console.log('[useFinancialData] addExpense result:', { data, error });
+      const { error } = await supabase.from('expenses').insert(payload as any);
       if (error) {
         console.error('[useFinancialData] addExpense error:', error);
         return false;
@@ -444,7 +442,6 @@ export function useFinancialData() {
   // Cash reserve
   const addCashMovement = async (m: Partial<CashMovement>) => {
     try {
-      console.log('[useFinancialData] addCashMovement payload:', JSON.stringify(m));
       const { error } = await supabase.from('cash_reserve_movements').insert(m as any);
       if (error) { console.error('[useFinancialData] addCashMovement error:', error); return false; }
       await Promise.allSettled([

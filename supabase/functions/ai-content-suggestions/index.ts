@@ -55,6 +55,18 @@ Gere entre 4 e 10 módulos relevantes e 3-6 entregas. Seja específico e profiss
       });
 
       if (!aiRes.ok) {
+        const errText = await aiRes.text();
+        console.error("AI modules error:", aiRes.status, errText);
+        if (aiRes.status === 429) {
+          return new Response(JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos." }), {
+            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (aiRes.status === 402) {
+          return new Response(JSON.stringify({ error: "Créditos de IA insuficientes. Adicione créditos no painel." }), {
+            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
         return new Response(JSON.stringify({ error: "Erro ao gerar módulos" }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -127,6 +139,18 @@ Gere entre 5 e 15 entregas relevantes organizadas em 2-4 fases. Os preços devem
       });
 
       if (!aiRes.ok) {
+        const errText = await aiRes.text();
+        console.error("AI timeline error:", aiRes.status, errText);
+        if (aiRes.status === 429) {
+          return new Response(JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos." }), {
+            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (aiRes.status === 402) {
+          return new Response(JSON.stringify({ error: "Créditos de IA insuficientes. Adicione créditos no painel." }), {
+            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
         return new Response(JSON.stringify({ error: "Erro ao gerar cronograma" }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });

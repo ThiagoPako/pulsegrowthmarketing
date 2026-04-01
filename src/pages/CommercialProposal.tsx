@@ -401,6 +401,12 @@ export default function CommercialProposal() {
           description: systemFunctionsDesc,
         }),
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        toast.error(errData.error || `Erro ${res.status} ao gerar módulos`);
+        setGeneratingModules(false);
+        return;
+      }
       const data = await res.json();
       if (data.modules && Array.isArray(data.modules)) {
         const newScope = data.modules.map((m: any) => ({
@@ -436,6 +442,12 @@ export default function CommercialProposal() {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
         body: JSON.stringify({ type: 'proposal_timeline', description: cronogramaDesc }),
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        toast.error(errData.error || `Erro ${res.status} ao gerar cronograma`);
+        setGeneratingTimeline(false);
+        return;
+      }
       const data = await res.json();
       if (data.deliverables && Array.isArray(data.deliverables)) {
         setCronogramaDeliverables(data.deliverables.map((d: any) => ({ ...d, id: crypto.randomUUID() })));

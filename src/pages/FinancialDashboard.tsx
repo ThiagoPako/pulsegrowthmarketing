@@ -757,8 +757,9 @@ export default function FinancialDashboard() {
       </Card>
 
       {/* Client Profitability Ranking */}
-      <Card>
-        <CardHeader><CardTitle className="text-sm">Ranking de Lucratividade por Cliente</CardTitle></CardHeader>
+      <Card className="overflow-hidden">
+        <CardHeader className="bg-gradient-to-r from-emerald-500/5 to-teal-500/5 border-b border-border/60">
+          <CardTitle className="text-sm flex items-center gap-2"><TrendingUp size={16} className="text-emerald-500" /> Ranking de Lucratividade por Cliente</CardTitle></CardHeader>
         <CardContent>
           {clientProfitability.length > 0 ? (
             <div className="space-y-2">

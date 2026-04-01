@@ -292,14 +292,20 @@ export default function Clients() {
       setForm(client);
       setLogoPreview(client.logoUrl || null);
       setPreferredShift(client.fullShiftRecording ? (client.preferredShift === 'tarde' ? 'turnoB' : 'turnoA') : 'ambos');
+      // Restore clientType and proposalId from client data
+      setClientType(((client as any).clientType as any) || 'novo');
+      setProposalId((client as any).proposalId || null);
       // Load plan data for editing
-      supabase.from('clients').select('plan_id, contract_start_date, auto_renewal, contract_duration_months').eq('id', client.id).single().then(({ data }) => {
+      supabase.from('clients').select('plan_id, contract_start_date, auto_renewal, contract_duration_months, client_type, proposal_id').eq('id', client.id).single().then(({ data }) => {
         if (data) {
           setPlanId((data as any).plan_id || null);
           setContractStartDate((data as any).contract_start_date || '');
           setAutoRenewal((data as any).auto_renewal || false);
           setContractDurationMonths((data as any).contract_duration_months || 12);
           setShowMetrics((data as any).show_metrics !== false);
+          // Ensure clientType is correctly loaded from DB
+          if ((data as any).client_type) setClientType((data as any).client_type as any);
+          if ((data as any).proposal_id) setProposalId((data as any).proposal_id);
         }
       });
       // Load financial contract for editing

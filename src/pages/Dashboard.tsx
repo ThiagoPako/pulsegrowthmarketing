@@ -1224,13 +1224,14 @@ export default function Dashboard() {
       </div>
 
       {/* CLIENT PROGRESS */}
-      <div className="glass-card p-3 sm:p-5">
-        <div className="flex items-center justify-between mb-3 sm:mb-4">
-          <div className="flex items-center gap-2">
-            <FloatingRocket size={16} />
-            <h3 className="font-display font-semibold text-xs sm:text-sm">Progresso Mensal por Cliente</h3>
+      <div className="glass-card p-4 sm:p-5">
+        <div className="section-header">
+          <Target size={16} className="text-primary" />
+          <div className="flex-1">
+            <h3 className="section-title">Progresso Mensal por Cliente</h3>
+            <p className="section-subtitle">Entregas vs metas do plano</p>
           </div>
-          <button onClick={() => navigate('/metas')} className="text-[10px] sm:text-[11px] text-primary font-semibold hover:underline">METAS</button>
+          <button onClick={() => navigate('/metas')} className="action-link">METAS →</button>
         </div>
         {clientProgress.length === 0 ? (
           <div className="py-6 text-center text-muted-foreground text-xs flex flex-col items-center gap-2">

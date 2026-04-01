@@ -489,6 +489,10 @@ export default function FinancialDashboard() {
           <p className="text-sm text-muted-foreground">Visão geral da saúde financeira</p>
         </div>
         <div className="flex items-center gap-3">
+          <Button size="sm" onClick={() => setShowFinancialStart(true)} className="gap-2 shadow-sm bg-gradient-to-r from-primary to-primary/80">
+            <Rocket className="h-4 w-4" />
+            Start Financeiro
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setShowImport(true)} className="gap-2 shadow-sm">
             <Upload className="h-4 w-4" />
             Importar Extrato

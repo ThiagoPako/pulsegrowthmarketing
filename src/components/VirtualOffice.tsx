@@ -59,11 +59,17 @@ export default function VirtualOffice() {
 
   const fetchActivities = useCallback(async () => {
     const act: Record<string, string> = {};
-    const [{ data: recs }, { data: ct }, { data: dt }] = await Promise.all([
+    const [{ data: recs }, { data: ct }, { data: dt }, { data: profiles }] = await Promise.all([
       supabase.from('active_recordings').select('videomaker_id'),
       supabase.from('content_tasks').select('assigned_to, edited_by, reviewing_by, kanban_column').in('kanban_column', ['edicao', 'revisao', 'alteracao', 'aprovacao']),
       supabase.from('design_tasks').select('assigned_to, kanban_column').in('kanban_column', ['em_andamento', 'revisao']),
+      supabase.from('profiles').select('id, role'),
     ]) as any;
+    // Social Media e Admin: considerar "gestão" sempre que estiverem com heartbeat ativo
+    profiles?.forEach((p: any) => {
+      if (p.role === 'social_media') act[p.id] = 'gestao';
+      if (p.role === 'admin') act[p.id] = 'gestao';
+    });
     recs?.forEach((r: any) => { if (r.videomaker_id) act[r.videomaker_id] = 'gravando'; });
     ct?.forEach((t: any) => {
       if (t.kanban_column === 'edicao' && (t.edited_by || t.assigned_to)) act[t.edited_by || t.assigned_to] = 'edicao';

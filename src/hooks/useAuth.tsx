@@ -169,6 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(u);
         setSession({ access_token: sbData.session?.access_token || '' });
         await fetchProfile(u.id);
+        logLoginEntry(u.id);
         return { error: null };
       } catch {
         return { error: 'Não foi possível conectar ao servidor de autenticação' };

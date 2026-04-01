@@ -442,7 +442,7 @@ export function useFinancialData() {
   // Cash reserve
   const addCashMovement = async (m: Partial<CashMovement>) => {
     try {
-      console.log('[useFinancialData] addCashMovement payload:', JSON.stringify(m));
+      const { error } = await supabase.from('cash_reserve_movements').insert(m as any);
       const { error } = await supabase.from('cash_reserve_movements').insert(m as any);
       if (error) { console.error('[useFinancialData] addCashMovement error:', error); return false; }
       await Promise.allSettled([

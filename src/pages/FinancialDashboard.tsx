@@ -58,11 +58,11 @@ export default function FinancialDashboard() {
   const handleBankImport = async (items: { date: string; description: string; amount: number }[], type: 'entrada' | 'saida') => {
     try {
       if (type === 'entrada') {
-        // Import as revenues - create as manual entries
+        // Import as standalone revenues (not linked to any specific client/contract)
         for (const item of items) {
           await supabase.from('revenues').insert({
-            client_id: contracts[0]?.client_id || '00000000-0000-0000-0000-000000000000',
-            contract_id: contracts[0]?.id || '00000000-0000-0000-0000-000000000000',
+            client_id: '00000000-0000-0000-0000-000000000000',
+            contract_id: '00000000-0000-0000-0000-000000000000',
             reference_month: item.date.slice(0, 8) + '01',
             amount: item.amount,
             due_date: item.date,
@@ -71,9 +71,17 @@ export default function FinancialDashboard() {
           } as any);
         }
       } else {
-        // Import as expenses
-        const outrosCat = categories.find(c => c.name === 'Outros');
-        const catId = outrosCat?.id || categories[0]?.id || '';
+        // Import as expenses — ensure category exists
+        let catId = categories.find(c => c.name === 'Outros')?.id;
+        if (!catId) {
+          // Create 'Outros' category if missing
+          const { data: newCat } = await supabase.from('expense_categories').insert({ name: 'Outros' } as any).select('id').single();
+          catId = newCat?.id || categories[0]?.id;
+        }
+        if (!catId) {
+          toast.error('Nenhuma categoria de despesa disponível. Crie uma primeiro.');
+          return false;
+        }
         for (const item of items) {
           await supabase.from('expenses').insert({
             date: item.date,

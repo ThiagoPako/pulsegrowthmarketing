@@ -301,6 +301,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 ml-auto shrink-0">
+            {/* Virtual Office button */}
+            <Dialog>
+              <DialogTrigger asChild>
+                <button className="p-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors" title="Escritório Virtual">
+                  <Building size={18} />
+                </button>
+              </DialogTrigger>
+              <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto p-0 gap-0">
+                <VirtualOffice />
+              </DialogContent>
+            </Dialog>
             {/* Font size control */}
             <Popover>
               <PopoverTrigger asChild>

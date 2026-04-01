@@ -187,8 +187,9 @@ export function useFinancialData() {
       const uniqueRevenues = deduplicateRevenues(revenueData);
 
       const overdueIds: string[] = [];
+      const APRIL_2026 = '2026-04-01';
       for (const r of uniqueRevenues) {
-        if (r.status === 'prevista' && r.due_date && normalizeDate(r.due_date) < today) {
+        if (r.status === 'prevista' && r.due_date && normalizeDate(r.due_date) < today && normalizeDate(r.reference_month) >= APRIL_2026) {
           overdueIds.push(r.id);
         }
       }

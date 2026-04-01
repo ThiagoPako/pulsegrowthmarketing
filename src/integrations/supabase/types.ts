@@ -2332,6 +2332,30 @@ export type Database = {
         }
         Relationships: []
       }
+      login_logs: {
+        Row: {
+          id: string
+          logged_in_at: string
+          user_id: string
+          user_name: string
+          user_role: string
+        }
+        Insert: {
+          id?: string
+          logged_in_at?: string
+          user_id: string
+          user_name?: string
+          user_role?: string
+        }
+        Update: {
+          id?: string
+          logged_in_at?: string
+          user_id?: string
+          user_name?: string
+          user_role?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string

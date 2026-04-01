@@ -2,6 +2,17 @@ import { useState, useEffect, createContext, useContext, useCallback } from 'rea
 import { supabase } from '@/lib/vpsDb';
 import { supabase as supabaseReal } from '@/integrations/supabase/client';
 
+async function logLoginEntry(userId: string) {
+  try {
+    const { data: prof } = await supabase.from('profiles').select('name, role').eq('id', userId).single() as any;
+    await supabaseReal.from('login_logs').insert({
+      user_id: userId,
+      user_name: prof?.name || '',
+      user_role: prof?.role || '',
+    });
+  } catch { /* silent */ }
+}
+
 export type AppRole = 'admin' | 'videomaker' | 'social_media' | 'editor' | 'endomarketing' | 'parceiro' | 'fotografo' | 'designer';
 
 export interface Profile {
@@ -115,6 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(u);
         setSession({ access_token: data.token });
         await fetchProfile(u.id);
+        logLoginEntry(u.id);
         return { error: null };}
 
       if (res.status === 401 || res.status === 400) {
@@ -135,6 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(u);
           setSession({ access_token: sbData.session?.access_token || '' });
           await fetchProfile(u.id);
+          logLoginEntry(u.id);
           return { error: null };
         } catch {
           return { error: 'Servidor de autenticação indisponível no momento. Tente novamente em instantes.' };
@@ -156,6 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(u);
         setSession({ access_token: sbData.session?.access_token || '' });
         await fetchProfile(u.id);
+        logLoginEntry(u.id);
         return { error: null };
       } catch {
         return { error: 'Não foi possível conectar ao servidor de autenticação' };

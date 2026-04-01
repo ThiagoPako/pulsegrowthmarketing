@@ -18,6 +18,7 @@ import UserAvatar from '@/components/UserAvatar';
 import AgencyCapacityWidget from '@/components/AgencyCapacityWidget';
 import TeamPerformanceWidget from '@/components/TeamPerformanceWidget';
 import VirtualOffice from '@/components/VirtualOffice';
+import LoginLogWidget from '@/components/LoginLogWidget';
 import BirthdayCountdown from '@/components/BirthdayCountdown';
 import BonusCongratsBanner from '@/components/BonusCongratsBanner';
 import ClientLogo from '@/components/ClientLogo';
@@ -485,6 +486,9 @@ export default function Dashboard() {
 
       {/* VIRTUAL OFFICE */}
       <VirtualOffice />
+
+      {/* LOGIN LOG — Admin only */}
+      {currentUser?.role === 'admin' && <LoginLogWidget />}
 
       {/* LIVE ACTIVITY — Redesigned with proper status separation */}
       {(() => {

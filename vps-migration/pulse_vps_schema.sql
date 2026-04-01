@@ -90,7 +90,8 @@ CREATE TABLE IF NOT EXISTS cash_reserve_movements (
   type TEXT NOT NULL DEFAULT 'entrada'::text,
   description TEXT NOT NULL DEFAULT ''::text,
   date DATE NOT NULL DEFAULT CURRENT_DATE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  is_reserve BOOLEAN NOT NULL DEFAULT false
 );
 
 -- Table: client_endomarketing_contracts

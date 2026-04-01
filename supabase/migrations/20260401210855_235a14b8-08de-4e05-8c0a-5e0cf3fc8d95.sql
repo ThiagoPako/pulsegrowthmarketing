@@ -1,0 +1,1 @@
+ALTER TABLE public.cash_reserve_movements ADD COLUMN is_reserve boolean NOT NULL DEFAULT false;

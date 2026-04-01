@@ -218,9 +218,15 @@ export default function FinancialDashboard() {
   const cancelados = contracts.filter(c => c.status === 'cancelado').length;
   const taxaCancelamento = contracts.length > 0 ? (cancelados / contracts.length * 100) : 0;
 
-  // Cash reserve balance (saldo do caixa = saldo real da conta)
+  // Cash reserve balance (saldo do caixa = saldo real da conta, exclui reserva do porquinho)
   const saldoCaixa = useMemo(() =>
-    cashMovements.reduce((acc, m) => acc + (m.type === 'entrada' ? Number(m.amount) : -Number(m.amount)), 0),
+    cashMovements.filter((m: any) => !m.is_reserve).reduce((acc, m) => acc + (m.type === 'entrada' ? Number(m.amount) : -Number(m.amount)), 0),
+    [cashMovements]
+  );
+
+  // Piggy bank reserve balance (only is_reserve entries)
+  const piggyBalance = useMemo(() =>
+    cashMovements.filter((m: any) => m.is_reserve).reduce((acc, m) => acc + (m.type === 'entrada' ? Number(m.amount) : -Number(m.amount)), 0),
     [cashMovements]
   );
 
@@ -527,7 +533,7 @@ export default function FinancialDashboard() {
             <p className="text-sm text-muted-foreground">Visão geral da saúde financeira</p>
           </div>
           <PiggyBankWidget
-            balance={saldoCaixa}
+            balance={piggyBalance}
             onAddReserve={async (amount, description, date) => {
               try {
                 await supabase.from('cash_reserve_movements').insert({
@@ -535,6 +541,7 @@ export default function FinancialDashboard() {
                   description,
                   date,
                   type: 'entrada',
+                  is_reserve: true,
                 } as any);
                 await refetch();
                 return true;

@@ -134,11 +134,15 @@ export default function VirtualOffice() {
   }, [appendChat, chatTarget, currentUser]);
 
   const enriched = useMemo(() => {
-    const list = members.map(m => ({
-      ...m,
-      isOnline: Boolean(presence[m.id]) && now - new Date(presence[m.id]).getTime() < ONLINE_MS,
-      activity: activities[m.id] || undefined,
-    }));
+    const list = members.map(m => {
+      const hasHeartbeat = Boolean(presence[m.id]) && now - new Date(presence[m.id]).getTime() < ONLINE_MS;
+      const hasActivity = Boolean(activities[m.id]);
+      return {
+        ...m,
+        isOnline: hasHeartbeat || hasActivity,
+        activity: activities[m.id] || undefined,
+      };
+    });
     list.sort((a, b) => (a.isOnline !== b.isOnline ? (a.isOnline ? -1 : 1) : a.name.localeCompare(b.name)));
     membersRef.current = list;
 

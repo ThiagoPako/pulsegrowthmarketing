@@ -700,7 +700,8 @@ export default function EditorKanban() {
                     {colTasks.map(task => (
                       <TaskCard key={task.id} task={task} clients={clients} onOpenScript={openScript}
                         onSendToReview={handleSendToReview} onAddVideoLink={openVideoLinkDialog}
-                        onClaimTask={handleClaimTask} onUnclaimTask={handleUnclaimTask} currentUserId={user?.id} users={users}
+                        onClaimTask={handleClaimTask} onUnclaimTask={handleUnclaimTask} onReturnFromReview={handleReturnFromReview}
+                        currentUserId={user?.id} users={users}
                         draggedId={draggedTask?.id || null} onDragStart={handleDragStart} />
                     ))}
                     {colTasks.length === 0 && (

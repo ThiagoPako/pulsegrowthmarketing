@@ -1,14 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useApp } from '@/contexts/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Monitor, Video, Palette, Share2, Camera, Users, Briefcase, Send, X, MessageSquare } from 'lucide-react';
+import { Send, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { formatDistanceToNow } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import type { UserRole } from '@/types';
 
 interface TeamMember {
@@ -18,112 +16,169 @@ interface TeamMember {
   avatarUrl?: string;
   lastSeenAt: string | null;
   isOnline: boolean;
-  currentTask?: string;
 }
 
-const ROLE_CONFIG: Record<string, { label: string; icon: React.ReactNode; deskColor: string; emoji: string }> = {
-  admin: { label: 'Admin', icon: <Briefcase size={16} />, deskColor: 'from-blue-500/20 to-blue-600/20', emoji: '👔' },
-  videomaker: { label: 'Videomaker', icon: <Video size={16} />, deskColor: 'from-green-500/20 to-green-600/20', emoji: '🎬' },
-  editor: { label: 'Editor', icon: <Monitor size={16} />, deskColor: 'from-purple-500/20 to-purple-600/20', emoji: '🎞️' },
-  designer: { label: 'Designer', icon: <Palette size={16} />, deskColor: 'from-orange-500/20 to-orange-600/20', emoji: '🎨' },
-  social_media: { label: 'Social Media', icon: <Share2 size={16} />, deskColor: 'from-pink-500/20 to-pink-600/20', emoji: '📱' },
-  fotografo: { label: 'Fotógrafo', icon: <Camera size={16} />, deskColor: 'from-yellow-500/20 to-yellow-600/20', emoji: '📷' },
-  parceiro: { label: 'Parceiro', icon: <Users size={16} />, deskColor: 'from-teal-500/20 to-teal-600/20', emoji: '🤝' },
-  endomarketing: { label: 'Endomarketing', icon: <Users size={16} />, deskColor: 'from-cyan-500/20 to-cyan-600/20', emoji: '📣' },
+/* ─── Pixel character colors by role ─── */
+const ROLE_STYLE: Record<string, { hair: string; shirt: string; action: string; deskItems: string }> = {
+  admin:        { hair: '#2c1810', shirt: '#3b82f6', action: '💼', deskItems: '📊' },
+  videomaker:   { hair: '#1a1a2e', shirt: '#22c55e', action: '🎬', deskItems: '📹' },
+  editor:       { hair: '#4a2c17', shirt: '#8b5cf6', action: '🎞️', deskItems: '🖥️' },
+  designer:     { hair: '#c0392b', shirt: '#f97316', action: '🎨', deskItems: '✏️' },
+  social_media: { hair: '#2d1b69', shirt: '#ec4899', action: '📱', deskItems: '📲' },
+  fotografo:    { hair: '#d4a574', shirt: '#eab308', action: '📷', deskItems: '🔦' },
+  parceiro:     { hair: '#1e3a5f', shirt: '#14b8a6', action: '🤝', deskItems: '📋' },
+  endomarketing:{ hair: '#5b2c6f', shirt: '#06b6d4', action: '📣', deskItems: '📢' },
 };
 
-function getInitials(name: string) {
-  return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
-}
+const ROLE_LABEL: Record<string, string> = {
+  admin: 'Administração',
+  videomaker: 'Estúdio',
+  editor: 'Sala de Edição',
+  designer: 'Ateliê',
+  social_media: 'Mídia Social',
+  fotografo: 'Estúdio Foto',
+  parceiro: 'Parceiros',
+  endomarketing: 'Endomarketing',
+};
 
-function DeskCard({ member, onChat }: { member: TeamMember; onChat: (m: TeamMember) => void }) {
-  const config = ROLE_CONFIG[member.role] || ROLE_CONFIG.admin;
+/* ─── Pixel Art Character (pure CSS) ─── */
+function PixelCharacter({ member, style, onClick }: { member: TeamMember; style: typeof ROLE_STYLE.admin; onClick: () => void }) {
+  const isOnline = member.isOnline;
   
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ scale: 1.03, y: -4 }}
-      className="relative group cursor-pointer"
-      onClick={() => onChat(member)}
+      className="relative cursor-pointer group"
+      onClick={onClick}
+      whileHover={{ scale: 1.1 }}
+      style={{ imageRendering: 'pixelated' }}
     >
-      {/* Desk surface */}
-      <div className={`relative rounded-xl border border-border/60 bg-gradient-to-br ${config.deskColor} backdrop-blur-sm p-3 sm:p-4 transition-all duration-300 group-hover:border-primary/40 group-hover:shadow-lg group-hover:shadow-primary/10`}>
-        {/* Online indicator */}
-        <div className="absolute -top-1.5 -right-1.5 z-10">
-          {member.isOnline ? (
-            <motion.div
-              animate={{ scale: [1, 1.2, 1] }}
-              transition={{ duration: 2, repeat: Infinity }}
-              className="w-3.5 h-3.5 rounded-full bg-green-500 border-2 border-background shadow-lg shadow-green-500/50"
-            />
-          ) : (
-            <div className="w-3.5 h-3.5 rounded-full bg-muted-foreground/30 border-2 border-background" />
-          )}
-        </div>
-
-        {/* Avatar area */}
-        <div className="flex flex-col items-center gap-2">
-          {/* Character */}
-          <div className="relative">
-            {member.avatarUrl ? (
-              <img src={member.avatarUrl} alt={member.name} className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover border-2 border-primary/30" />
-            ) : (
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary/20 border-2 border-primary/30 flex items-center justify-center">
-                <span className="text-sm sm:text-base font-bold text-primary">{getInitials(member.name)}</span>
-              </div>
-            )}
-            {/* Role emoji floating */}
-            <motion.span
-              animate={member.isOnline ? { y: [0, -3, 0], rotate: [0, 5, -5, 0] } : {}}
-              transition={{ duration: 3, repeat: Infinity }}
-              className="absolute -bottom-1 -right-1 text-lg"
-            >
-              {config.emoji}
-            </motion.span>
-          </div>
-
-          {/* Info */}
-          <div className="text-center w-full">
-            <p className="text-[11px] sm:text-xs font-semibold truncate max-w-[100px]">{member.name.split(' ')[0]}</p>
-            <div className="flex items-center justify-center gap-1 mt-0.5">
-              {config.icon}
-              <span className="text-[9px] sm:text-[10px] text-muted-foreground">{config.label}</span>
-            </div>
-          </div>
-
-          {/* Status */}
-          {member.isOnline ? (
-            <Badge variant="default" className="text-[8px] sm:text-[9px] px-1.5 py-0 bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30">
-              🟢 Online
-            </Badge>
-          ) : member.lastSeenAt ? (
-            <span className="text-[8px] sm:text-[9px] text-muted-foreground/60">
-              {formatDistanceToNow(new Date(member.lastSeenAt), { addSuffix: true, locale: ptBR })}
-            </span>
-          ) : (
-            <span className="text-[8px] sm:text-[9px] text-muted-foreground/40">Offline</span>
-          )}
-        </div>
-
-        {/* Chat hint on hover */}
-        <div className="absolute inset-0 rounded-xl bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-1">
-          <span className="text-[9px] text-primary/70 flex items-center gap-1">
-            <MessageSquare size={10} /> Chat rápido
-          </span>
-        </div>
+      {/* Name tag */}
+      <div className="absolute -top-5 left-1/2 -translate-x-1/2 flex items-center gap-1 whitespace-nowrap z-10">
+        <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.8)]' : 'bg-red-400/60'}`} />
+        <span className="text-[10px] font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] tracking-wide">
+          {member.name.split(' ')[0]}
+        </span>
       </div>
+
+      {/* Character body - pixel art style */}
+      <motion.div
+        animate={isOnline ? { y: [0, -2, 0, -1, 0] } : {}}
+        transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+        className="relative w-10 h-14"
+      >
+        {/* Head */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-8 rounded-sm overflow-hidden" style={{ imageRendering: 'pixelated' }}>
+          {/* Skin */}
+          <div className="w-full h-full bg-[#f4c99a] rounded-sm relative">
+            {/* Hair */}
+            <div className="absolute top-0 left-0 right-0 h-3 rounded-t-sm" style={{ backgroundColor: style.hair }} />
+            {/* Eyes */}
+            <motion.div
+              className="absolute top-3.5 flex gap-1.5 justify-center w-full"
+              animate={isOnline ? { scaleY: [1, 1, 0.1, 1, 1] } : {}}
+              transition={{ duration: 4, repeat: Infinity, times: [0, 0.45, 0.5, 0.55, 1] }}
+            >
+              <div className="w-1 h-1 bg-[#1a1a1a] rounded-full" />
+              <div className="w-1 h-1 bg-[#1a1a1a] rounded-full" />
+            </motion.div>
+            {/* Mouth */}
+            {isOnline && <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-2 h-0.5 bg-[#c0392b] rounded-full" />}
+          </div>
+        </div>
+
+        {/* Body/shirt */}
+        <div
+          className="absolute top-7 left-1/2 -translate-x-1/2 w-9 h-7 rounded-b-sm"
+          style={{ backgroundColor: style.shirt }}
+        >
+          {/* Arms - typing animation for online users */}
+          {isOnline && (
+            <>
+              <motion.div
+                className="absolute -left-1 top-1 w-2 h-4 rounded-sm"
+                style={{ backgroundColor: style.shirt, filter: 'brightness(0.85)' }}
+                animate={{ rotate: [-5, 5, -5] }}
+                transition={{ duration: 0.6, repeat: Infinity }}
+              />
+              <motion.div
+                className="absolute -right-1 top-1 w-2 h-4 rounded-sm"
+                style={{ backgroundColor: style.shirt, filter: 'brightness(0.85)' }}
+                animate={{ rotate: [5, -5, 5] }}
+                transition={{ duration: 0.6, repeat: Infinity, delay: 0.3 }}
+              />
+            </>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Action bubble for online users */}
+      {isOnline && (
+        <motion.div
+          className="absolute -top-9 -right-3 text-sm"
+          animate={{ y: [0, -3, 0], opacity: [0.7, 1, 0.7] }}
+          transition={{ duration: 2, repeat: Infinity }}
+        >
+          <div className="bg-white/90 rounded-lg px-1 py-0.5 shadow-md text-xs">
+            {style.action}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Offline overlay */}
+      {!isOnline && (
+        <div className="absolute inset-0 opacity-40" style={{ filter: 'grayscale(1)' }} />
+      )}
     </motion.div>
   );
 }
 
+/* ─── Desk with monitor ─── */
+function Desk({ hasMonitor = true }: { hasMonitor?: boolean }) {
+  return (
+    <div className="relative w-14 h-8">
+      {/* Desk surface */}
+      <div className="absolute bottom-0 w-full h-3 bg-[#8B6914] rounded-sm shadow-inner" style={{ imageRendering: 'pixelated' }}>
+        <div className="absolute inset-x-0.5 top-0 h-0.5 bg-[#a67c1e]" />
+      </div>
+      {/* Monitor */}
+      {hasMonitor && (
+        <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2">
+          <div className="w-7 h-5 bg-[#2a2a2a] rounded-sm border border-[#444] relative">
+            <motion.div
+              className="absolute inset-0.5 rounded-sm"
+              animate={{ backgroundColor: ['#1e3a5f', '#1e5f3a', '#3a1e5f', '#1e3a5f'] }}
+              transition={{ duration: 4, repeat: Infinity }}
+              style={{ opacity: 0.6 }}
+            />
+          </div>
+          <div className="w-2 h-1 bg-[#333] mx-auto" />
+          <div className="w-4 h-0.5 bg-[#333] mx-auto rounded-sm" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Workstation: character + desk ─── */
+function Workstation({ member, onChat }: { member: TeamMember; onChat: (m: TeamMember) => void }) {
+  const style = ROLE_STYLE[member.role] || ROLE_STYLE.admin;
+  
+  return (
+    <div className="flex flex-col items-center gap-0 relative">
+      <PixelCharacter member={member} style={style} onClick={() => onChat(member)} />
+      <Desk hasMonitor={member.role !== 'videomaker' && member.role !== 'fotografo'} />
+    </div>
+  );
+}
+
+/* ─── Quick Chat Dialog ─── */
 function QuickChatDialog({ member, currentUserId, onClose }: { member: TeamMember; currentUserId: string; onClose: () => void }) {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
   const [sending, setSending] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Load recent messages
     const loadMessages = async () => {
       const { data } = await supabase
         .from('team_messages')
@@ -135,7 +190,6 @@ function QuickChatDialog({ member, currentUserId, onClose }: { member: TeamMembe
     };
     loadMessages();
 
-    // Subscribe to new messages
     const channel = supabase
       .channel(`chat-${member.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'team_messages' }, (payload) => {
@@ -150,6 +204,10 @@ function QuickChatDialog({ member, currentUserId, onClose }: { member: TeamMembe
     return () => { supabase.removeChannel(channel); };
   }, [member.id, currentUserId]);
 
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages]);
+
   const sendMessage = async () => {
     if (!message.trim() || sending) return;
     setSending(true);
@@ -158,15 +216,12 @@ function QuickChatDialog({ member, currentUserId, onClose }: { member: TeamMembe
       to_user_id: member.id,
       message: message.trim(),
     } as any) as any;
-    if (error) {
-      toast.error('Erro ao enviar mensagem');
-    } else {
-      setMessage('');
-    }
+    if (error) toast.error('Erro ao enviar');
+    else setMessage('');
     setSending(false);
   };
 
-  const config = ROLE_CONFIG[member.role] || ROLE_CONFIG.admin;
+  const style = ROLE_STYLE[member.role] || ROLE_STYLE.admin;
 
   return (
     <motion.div
@@ -176,47 +231,36 @@ function QuickChatDialog({ member, currentUserId, onClose }: { member: TeamMembe
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={onClose}
     >
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-      <div
-        className="relative w-full max-w-sm rounded-2xl border border-border bg-card shadow-2xl overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div className="relative w-full max-w-sm rounded-2xl border border-border bg-card shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         {/* Header */}
-        <div className={`p-4 bg-gradient-to-r ${config.deskColor} border-b border-border/50 flex items-center gap-3`}>
+        <div className="p-3 border-b border-border/50 flex items-center gap-3" style={{ background: `linear-gradient(135deg, ${style.shirt}22, ${style.shirt}11)` }}>
           <div className="relative">
-            {member.avatarUrl ? (
-              <img src={member.avatarUrl} alt={member.name} className="w-10 h-10 rounded-full object-cover border-2 border-primary/30" />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                <span className="text-sm font-bold text-primary">{getInitials(member.name)}</span>
-              </div>
-            )}
-            {member.isOnline && (
-              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-green-500 border-2 border-card" />
-            )}
+            <div className="w-9 h-9 rounded-full flex items-center justify-center text-lg" style={{ backgroundColor: `${style.shirt}33` }}>
+              {style.action}
+            </div>
+            {member.isOnline && <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-card" />}
           </div>
           <div className="flex-1">
             <p className="font-semibold text-sm">{member.name}</p>
-            <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-              {config.icon} {config.label}
+            <p className="text-[10px] text-muted-foreground">
+              {ROLE_LABEL[member.role] || member.role}
               {member.isOnline && <span className="text-green-400 ml-1">• Online</span>}
             </p>
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
-            <X size={16} />
-          </Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}><X size={16} /></Button>
         </div>
 
         {/* Messages */}
-        <div className="h-64 overflow-y-auto p-3 space-y-2 bg-background/50">
+        <div ref={scrollRef} className="h-56 overflow-y-auto p-3 space-y-2 bg-background/50">
           {messages.length === 0 && (
             <div className="flex items-center justify-center h-full text-muted-foreground/50 text-xs">
-              Envie a primeira mensagem para {member.name.split(' ')[0]} 💬
+              Envie a primeira mensagem 💬
             </div>
           )}
           {messages.map((msg: any) => (
             <div key={msg.id} className={`flex ${msg.from_user_id === currentUserId ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-xs ${
+              <div className={`max-w-[80%] rounded-2xl px-3 py-1.5 text-xs ${
                 msg.from_user_id === currentUserId
                   ? 'bg-primary text-primary-foreground rounded-br-sm'
                   : 'bg-secondary text-secondary-foreground rounded-bl-sm'
@@ -232,13 +276,7 @@ function QuickChatDialog({ member, currentUserId, onClose }: { member: TeamMembe
 
         {/* Input */}
         <div className="p-3 border-t border-border/50 flex gap-2">
-          <Input
-            value={message}
-            onChange={e => setMessage(e.target.value)}
-            placeholder="Mensagem rápida..."
-            className="text-xs h-9"
-            onKeyDown={e => e.key === 'Enter' && sendMessage()}
-          />
+          <Input value={message} onChange={e => setMessage(e.target.value)} placeholder="Mensagem rápida..." className="text-xs h-9" onKeyDown={e => e.key === 'Enter' && sendMessage()} />
           <Button size="icon" className="h-9 w-9 shrink-0" onClick={sendMessage} disabled={sending || !message.trim()}>
             <Send size={14} />
           </Button>
@@ -248,8 +286,66 @@ function QuickChatDialog({ member, currentUserId, onClose }: { member: TeamMembe
   );
 }
 
+/* ─── Decorations ─── */
+function OfficeDecor() {
+  return (
+    <>
+      {/* Bookshelf top-right */}
+      <div className="absolute top-2 right-4 flex gap-0.5">
+        {['#8B4513', '#2E86C1', '#C0392B', '#27AE60', '#8E44AD', '#D35400'].map((c, i) => (
+          <div key={i} className="w-2 h-5 rounded-sm" style={{ backgroundColor: c, opacity: 0.7 }} />
+        ))}
+      </div>
+      {/* Plant bottom-left */}
+      <motion.div
+        className="absolute bottom-4 left-4 text-xl"
+        animate={{ rotate: [-2, 2, -2] }}
+        transition={{ duration: 3, repeat: Infinity }}
+      >
+        🪴
+      </motion.div>
+      {/* Coffee machine */}
+      <div className="absolute top-4 left-4 text-lg">☕</div>
+      {/* Clock */}
+      <motion.div
+        className="absolute top-3 left-1/2 -translate-x-1/2 text-lg"
+        animate={{ scale: [1, 1.05, 1] }}
+        transition={{ duration: 2, repeat: Infinity }}
+      >
+        🕐
+      </motion.div>
+    </>
+  );
+}
+
+/* ─── Floor pattern ─── */
+function FloorPattern() {
+  return (
+    <div className="absolute inset-0 overflow-hidden rounded-xl" style={{ imageRendering: 'pixelated' }}>
+      {/* Wood floor */}
+      <div className="absolute inset-0" style={{
+        background: `
+          repeating-linear-gradient(
+            90deg,
+            #5C3D2E 0px, #5C3D2E 60px,
+            #4E3425 60px, #4E3425 61px
+          ),
+          repeating-linear-gradient(
+            0deg,
+            transparent 0px, transparent 15px,
+            rgba(0,0,0,0.08) 15px, rgba(0,0,0,0.08) 16px
+          )
+        `,
+      }} />
+      {/* Subtle overlay */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/30" />
+    </div>
+  );
+}
+
+/* ─── Main Component ─── */
 export default function VirtualOffice() {
-  const { currentUser, users } = useApp();
+  const { currentUser } = useApp();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [chatTarget, setChatTarget] = useState<TeamMember | null>(null);
 
@@ -257,7 +353,6 @@ export default function VirtualOffice() {
     const fetchPresence = async () => {
       const { data: profiles } = await supabase.from('profiles').select('id, name, role, avatar_url, last_seen_at') as any;
       if (!profiles) return;
-
       const now = Date.now();
       const mapped: TeamMember[] = profiles.map((p: any) => ({
         id: p.id,
@@ -267,16 +362,12 @@ export default function VirtualOffice() {
         lastSeenAt: p.last_seen_at,
         isOnline: p.last_seen_at ? (now - new Date(p.last_seen_at).getTime()) < 5 * 60 * 1000 : false,
       }));
-
-      // Sort: online first, then by role
       mapped.sort((a, b) => {
         if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
         return a.role.localeCompare(b.role);
       });
-
       setMembers(mapped);
     };
-
     fetchPresence();
     const interval = setInterval(fetchPresence, 30_000);
     return () => clearInterval(interval);
@@ -294,51 +385,78 @@ export default function VirtualOffice() {
     return groups;
   }, [members]);
 
+  // Layout positions for each "room"
+  const roleOrder = ['admin', 'videomaker', 'editor', 'designer', 'social_media', 'fotografo', 'parceiro', 'endomarketing'];
+  const activeRoles = roleOrder.filter(r => grouped[r]?.length);
+
   return (
-    <div className="rounded-2xl border border-border bg-card/80 backdrop-blur-sm overflow-hidden">
+    <div className="rounded-2xl border border-border overflow-hidden bg-card/80 backdrop-blur-sm">
       {/* Header */}
-      <div className="p-4 border-b border-border/50 flex items-center gap-3">
-        <motion.div
-          animate={{ rotate: [0, 10, -10, 0] }}
+      <div className="px-4 py-3 border-b border-border/50 flex items-center gap-3 bg-card">
+        <motion.span
+          className="text-xl"
+          animate={{ rotate: [0, 5, -5, 0] }}
           transition={{ duration: 4, repeat: Infinity }}
-          className="text-2xl"
         >
           🏢
-        </motion.div>
+        </motion.span>
         <div className="flex-1">
           <h3 className="font-semibold text-sm flex items-center gap-2">
-            Escritório Virtual
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-              {onlineCount} online
+            Escritório Virtual Pulse
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-mono">
+              🟢 {onlineCount} online
             </Badge>
           </h3>
-          <p className="text-[10px] text-muted-foreground">Veja quem está trabalhando agora</p>
+          <p className="text-[10px] text-muted-foreground">Clique em um colega para enviar mensagem rápida</p>
         </div>
       </div>
 
       {/* Office floor */}
-      <div className="p-4 space-y-4">
-        {Object.entries(grouped).map(([role, roleMembers]) => {
-          const config = ROLE_CONFIG[role] || ROLE_CONFIG.admin;
-          const hasOnline = roleMembers.some(m => m.isOnline);
-          return (
-            <div key={role}>
-              {/* Section label */}
-              <div className="flex items-center gap-2 mb-2">
-                <div className={`w-1.5 h-1.5 rounded-full ${hasOnline ? 'bg-green-500' : 'bg-muted-foreground/30'}`} />
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                  {config.icon} {config.label}
-                </span>
+      <div className="relative min-h-[350px] sm:min-h-[400px]" style={{ imageRendering: 'auto' }}>
+        <FloorPattern />
+        <OfficeDecor />
+
+        {/* Room areas */}
+        <div className="relative z-10 p-4 sm:p-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6 sm:gap-8">
+          {activeRoles.map((role) => {
+            const roleMembers = grouped[role] || [];
+            const hasOnline = roleMembers.some(m => m.isOnline);
+            const style = ROLE_STYLE[role] || ROLE_STYLE.admin;
+
+            return (
+              <div key={role} className="relative">
+                {/* Room label */}
+                <div className="flex items-center gap-1.5 mb-3">
+                  <div className={`w-1.5 h-1.5 rounded-full ${hasOnline ? 'bg-green-400 shadow-[0_0_4px_rgba(74,222,128,0.6)]' : 'bg-muted-foreground/30'}`} />
+                  <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-white/70 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+                    {ROLE_LABEL[role] || role}
+                  </span>
+                  <span className="text-sm">{style.deskItems}</span>
+                </div>
+
+                {/* Room border */}
+                <div className="rounded-lg border border-white/10 bg-black/10 backdrop-blur-[2px] p-3 sm:p-4">
+                  <div className="flex flex-wrap gap-4 sm:gap-5 justify-center">
+                    {roleMembers.map(member => (
+                      <Workstation key={member.id} member={member} onChat={setChatTarget} />
+                    ))}
+                  </div>
+                </div>
               </div>
-              {/* Desks grid */}
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3">
-                {roleMembers.map(member => (
-                  <DeskCard key={member.id} member={member} onChat={setChatTarget} />
-                ))}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+
+        {/* Ambient particles */}
+        {[...Array(5)].map((_, i) => (
+          <motion.div
+            key={i}
+            className="absolute w-1 h-1 rounded-full bg-yellow-400/20"
+            style={{ left: `${15 + i * 18}%`, top: `${20 + (i % 3) * 25}%` }}
+            animate={{ y: [0, -10, 0], opacity: [0.2, 0.5, 0.2] }}
+            transition={{ duration: 3 + i, repeat: Infinity, delay: i * 0.5 }}
+          />
+        ))}
       </div>
 
       {/* Quick chat overlay */}

@@ -46,7 +46,7 @@ Gere entre 4 e 10 módulos relevantes e 3-6 entregas. Seja específico e profiss
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
+          model: "google/gemini-2.5-flash",
           messages: [
             { role: "system", content: "Você é um arquiteto de software. Responda APENAS com JSON válido." },
             { role: "user", content: modulePrompt },

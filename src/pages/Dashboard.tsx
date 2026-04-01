@@ -1017,13 +1017,15 @@ export default function Dashboard() {
 
       {/* SCORING */}
       {vmScoring.length > 0 && (
-        <div className="glass-card p-3 sm:p-5">
-          <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <h3 className="font-display font-semibold text-xs sm:text-sm flex items-center gap-2">
-              <Trophy size={14} className="text-primary" /> Pontuação do Mês
-            </h3>
-            <button onClick={() => navigate('/desempenho')} className="text-[10px] sm:text-[11px] text-primary font-semibold hover:underline">
-              DETALHES
+        <div className="glass-card p-4 sm:p-5">
+          <div className="section-header">
+            <Trophy size={16} className="text-primary" />
+            <div className="flex-1">
+              <h3 className="section-title">Pontuação do Mês</h3>
+              <p className="section-subtitle">Ranking de produtividade</p>
+            </div>
+            <button onClick={() => navigate('/desempenho')} className="action-link">
+              VER DETALHES →
             </button>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">

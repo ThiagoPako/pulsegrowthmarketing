@@ -401,6 +401,12 @@ export default function CommercialProposal() {
           description: systemFunctionsDesc,
         }),
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        toast.error(errData.error || `Erro ${res.status} ao gerar módulos`);
+        setGeneratingModules(false);
+        return;
+      }
       const data = await res.json();
       if (data.modules && Array.isArray(data.modules)) {
         const newScope = data.modules.map((m: any) => ({

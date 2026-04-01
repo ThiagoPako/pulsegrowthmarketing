@@ -112,6 +112,7 @@ export default function Clients() {
   const [sendWaLoading, setSendWaLoading] = useState(false);
   const [artDbClient, setArtDbClient] = useState<Client | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [generatingChecklistFor, setGeneratingChecklistFor] = useState<string | null>(null);
   
   // Plan-related state
   const [plans, setPlans] = useState<{ id: string; name: string; status: string; reels_qty: number; creatives_qty: number; stories_qty: number; recording_sessions: number; accepts_extra_content: boolean }[]>([]);

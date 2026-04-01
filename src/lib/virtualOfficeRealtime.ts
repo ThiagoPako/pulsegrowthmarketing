@@ -88,11 +88,37 @@ function connectWs() {
   };
 }
 
+// ── REST polling fallback ──
+let _pollTimer: ReturnType<typeof setInterval> | null = null;
+
+async function pollPresenceRest() {
+  try {
+    const res = await fetch(`${REST_BASE}/presence`);
+    if (!res.ok) return;
+    const data = await res.json();
+    _presenceUsers = data.users || [];
+    fireSyncCallbacks();
+  } catch { /* ignore */ }
+}
+
+function startPolling() {
+  if (_pollTimer) return;
+  // Initial poll
+  void pollPresenceRest();
+  // Poll every 5 seconds as fallback
+  _pollTimer = setInterval(() => {
+    // If WS is connected, skip REST poll
+    if (_ws && _ws.readyState === WebSocket.OPEN) return;
+    void pollPresenceRest();
+  }, 5_000);
+}
+
 // ── Public API ──
 
 /** Ensure WebSocket connection is alive. Safe to call many times. */
 export function subscribeOfficeChannel() {
   connectWs();
+  startPolling(); // Always start polling as fallback
 }
 
 /** No-op — connection is kept alive for the app lifetime. */

@@ -23,6 +23,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import ClientGoalRocket from '@/components/ClientGoalRocket';
 import { syncFinancialContract } from '@/lib/financialContracts';
 import ProposalChecklist from '@/components/ProposalChecklist';
+import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 const CONTENT_TYPES: ContentType[] = ['reels', 'story', 'produto'];
@@ -113,6 +115,7 @@ export default function Clients() {
   const [artDbClient, setArtDbClient] = useState<Client | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [generatingChecklistFor, setGeneratingChecklistFor] = useState<string | null>(null);
+  const [checklistClient, setChecklistClient] = useState<Client | null>(null);
   
   // Plan-related state
   const [plans, setPlans] = useState<{ id: string; name: string; status: string; reels_qty: number; creatives_qty: number; stories_qty: number; recording_sessions: number; accepts_extra_content: boolean }[]>([]);
@@ -2007,7 +2010,7 @@ export default function Clients() {
               style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${c.color || '220 10% 50%'})` }}>
               {/* Header row - clickable for sem_contrato */}
               <div className={`p-4 pb-3 flex items-start gap-3 ${(c as any).clientType === 'sem_contrato' ? 'cursor-pointer hover:bg-accent/30 transition-colors' : ''}`}
-                onClick={() => { if ((c as any).clientType === 'sem_contrato') handleOpen(c); }}>
+                onClick={() => { if ((c as any).clientType === 'sem_contrato') setChecklistClient(c); }}>
                 {c.logoUrl ? (
                   <img src={c.logoUrl} alt={c.companyName} className="w-12 h-12 rounded-xl object-cover shrink-0 border border-border" />
                 ) : (
@@ -2046,36 +2049,6 @@ export default function Clients() {
                   </div>
                 </div>
               </div>
-              {/* Generate Checklist button for sem_contrato clients */}
-              {(c as any).clientType === 'sem_contrato' && (c as any).proposalId && (
-                <div className="px-4 pb-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full text-xs gap-1.5"
-                    disabled={generatingChecklistFor === c.id}
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      setGeneratingChecklistFor(c.id);
-                      try {
-                        await replaceProposalChecklist(c.id, (c as any).proposalId);
-                        toast.success('Checklist gerado com sucesso!');
-                        window.location.reload();
-                      } catch (err) {
-                        toast.error(err instanceof Error ? err.message : 'Erro ao gerar checklist');
-                      } finally {
-                        setGeneratingChecklistFor(null);
-                      }
-                    }}
-                  >
-                    {generatingChecklistFor === c.id ? (
-                      <><Loader2 size={12} className="animate-spin" /> Gerando...</>
-                    ) : (
-                      <><RefreshCw size={12} /> Gerar / Atualizar Checklist</>
-                    )}
-                  </Button>
-                </div>
-              )}
               {/* Action buttons row */}
               <div className="px-3 pb-3 flex items-center gap-0.5 flex-wrap border-t border-border/50 pt-2">
                 <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver Briefing" onClick={() => setBriefingClient(c)}>
@@ -2173,6 +2146,40 @@ export default function Clients() {
         <ClientArtDatabaseDialog client={artDbClient} open={!!artDbClient} onOpenChange={o => !o && setArtDbClient(null)} />
       )}
 
+      {/* Checklist Management Dialog for Pacotes de Serviços */}
+      <Dialog open={!!checklistClient} onOpenChange={o => !o && setChecklistClient(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package size={18} className="text-primary" />
+              Checklist — {checklistClient?.companyName}
+            </DialogTitle>
+          </DialogHeader>
+          {checklistClient && (
+            <ChecklistManager
+              clientId={checklistClient.id}
+              proposalId={(checklistClient as any).proposalId}
+              onGenerate={async () => {
+                if (!(checklistClient as any).proposalId) {
+                  toast.error('Este cliente não possui proposta vinculada');
+                  return;
+                }
+                setGeneratingChecklistFor(checklistClient.id);
+                try {
+                  await replaceProposalChecklist(checklistClient.id, (checklistClient as any).proposalId);
+                  toast.success('Checklist gerado com sucesso!');
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : 'Erro ao gerar checklist');
+                } finally {
+                  setGeneratingChecklistFor(null);
+                }
+              }}
+              generating={generatingChecklistFor === checklistClient?.id}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Briefing Dialog */}
       <Dialog open={!!briefingClient} onOpenChange={o => !o && setBriefingClient(null)}>
         <DialogContent className="max-w-2xl max-h-[85vh]">
@@ -2186,6 +2193,126 @@ export default function Clients() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/* ==================== Checklist Manager for Pacotes de Serviços ==================== */
+function ChecklistManager({ clientId, proposalId, onGenerate, generating }: { clientId: string; proposalId: string | null; onGenerate: () => Promise<void>; generating: boolean }) {
+  const [items, setItems] = useState<{ id: string; title: string; description: string | null; is_completed: boolean; completed_at: string | null; sort_order: number }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [key, setKey] = useState(0);
+
+  useEffect(() => {
+    setLoading(true);
+    supabase
+      .from('proposal_checklist_items')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('sort_order', { ascending: true })
+      .then(({ data }) => {
+        if (data) setItems(data as any[]);
+        setLoading(false);
+      });
+  }, [clientId, key]);
+
+  const toggleItem = async (item: typeof items[0]) => {
+    const newCompleted = !item.is_completed;
+    setItems(prev => prev.map(i =>
+      i.id === item.id ? { ...i, is_completed: newCompleted, completed_at: newCompleted ? new Date().toISOString() : null } : i
+    ));
+    await supabase.from('proposal_checklist_items').update({
+      is_completed: newCompleted,
+      completed_at: newCompleted ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', item.id);
+  };
+
+  const completed = items.filter(i => i.is_completed).length;
+  const total = items.length;
+  const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  return (
+    <ScrollArea className="max-h-[60vh]">
+      <div className="space-y-4 pr-2">
+        {/* Generate / Regenerate button */}
+        {proposalId && (
+          <Button
+            variant="outline"
+            className="w-full gap-2"
+            disabled={generating}
+            onClick={async () => {
+              await onGenerate();
+              setKey(k => k + 1);
+            }}
+          >
+            {generating ? (
+              <><Loader2 size={14} className="animate-spin" /> Gerando checklist...</>
+            ) : items.length > 0 ? (
+              <><RefreshCw size={14} /> Regenerar Checklist da Proposta</>
+            ) : (
+              <><Plus size={14} /> Gerar Checklist da Proposta</>
+            )}
+          </Button>
+        )}
+
+        {!proposalId && (
+          <div className="text-center py-6 text-muted-foreground">
+            <Package size={28} className="mx-auto mb-2 opacity-40" />
+            <p className="text-sm">Este cliente não possui proposta vinculada.</p>
+            <p className="text-xs mt-1">Edite o cliente para vincular uma proposta aceita.</p>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="text-center py-8">
+            <Loader2 size={20} className="animate-spin mx-auto text-muted-foreground" />
+          </div>
+        ) : items.length > 0 ? (
+          <>
+            {/* Progress */}
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium">{completed}/{total} itens concluídos</span>
+              <span className={`text-xs font-bold ${progress === 100 ? 'text-green-600' : 'text-primary'}`}>{progress}%</span>
+            </div>
+            <Progress value={progress} className="h-2" />
+
+            {/* Items */}
+            <div className="space-y-1.5">
+              {items.map(item => (
+                <div
+                  key={item.id}
+                  className={`flex items-start gap-2.5 p-3 rounded-lg border transition-colors cursor-pointer ${
+                    item.is_completed
+                      ? 'bg-green-50 border-green-200 dark:bg-green-900/10 dark:border-green-800'
+                      : 'bg-card border-border hover:border-primary/40'
+                  }`}
+                  onClick={() => toggleItem(item)}
+                >
+                  <Checkbox
+                    checked={item.is_completed}
+                    onCheckedChange={() => toggleItem(item)}
+                    className="mt-0.5"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-sm font-medium ${item.is_completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                      {item.title}
+                    </p>
+                    {item.description && (
+                      <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : proposalId ? (
+          <div className="text-center py-6 text-muted-foreground">
+            <p className="text-sm">Nenhum checklist gerado ainda.</p>
+            <p className="text-xs mt-1">Clique no botão acima para gerar.</p>
+          </div>
+        ) : null}
+      </div>
+    </ScrollArea>
   );
 }
 

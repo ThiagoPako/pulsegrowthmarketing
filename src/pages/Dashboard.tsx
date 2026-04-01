@@ -924,15 +924,15 @@ export default function Dashboard() {
         </motion.div>
       )}
 
-      {/* TODAY SCHEDULE + VM PROGRESS */}
+      {/* ─── GRAVAÇÕES DE HOJE + VM PROGRESS ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-        <div className="lg:col-span-2 glass-card p-3 sm:p-5">
-          <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <div className="flex items-center gap-2">
-              <FloatingRocket size={16} />
-              <h3 className="font-display font-semibold text-xs sm:text-sm">Gravações de Hoje</h3>
+        <div className="lg:col-span-2 glass-card p-4 sm:p-5">
+          <div className="section-header">
+            <Calendar size={16} className="text-primary" />
+            <div className="flex-1">
+              <h3 className="section-title">Gravações de Hoje</h3>
+              <p className="section-subtitle">{todayRecordings.length} gravações programadas</p>
             </div>
-            <span className="text-[10px] sm:text-xs text-muted-foreground">{todayRecordings.length} gravações</span>
           </div>
           {todayRecordings.length === 0 ? (
             <div className="py-6 text-center text-muted-foreground text-xs sm:text-sm flex flex-col items-center gap-2">

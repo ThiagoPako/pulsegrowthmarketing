@@ -153,7 +153,7 @@ export default function TeamPerformanceWidget() {
         const completed = dTasks.filter(t => ['concluida', 'aprovada_cliente'].includes(t.kanban_column)).length;
         const inProgress = dTasks.filter(t => ['em_andamento', 'revisao'].includes(t.kanban_column)).length;
         const totalTime = dTasks.reduce((a, t) => a + (t.time_spent_seconds || 0), 0);
-        const totalVersions = dTasks.reduce((a, t) => a + (t.version || 1), 0);
+        const totalVersions = dTasks.reduce((a, t) => a + Math.max((t.version || 1) - 1, 0), 0);
         const highPriority = dTasks.filter(t => t.priority === 'alta' || t.priority === 'urgente').length;
         score = completed * DESIGNER_SCORE.CONCLUIDO + inProgress * DESIGNER_SCORE.EM_PROGRESSO +
           Math.round(totalTime / 3600) * DESIGNER_SCORE.POR_HORA + totalVersions * DESIGNER_SCORE.POR_VERSAO +
@@ -183,15 +183,17 @@ export default function TeamPerformanceWidget() {
 
       } else if (user.role === 'parceiro') {
         const pTasks = partnerTasks.filter(t => t.partner_id === user.id);
-        const completed = pTasks.filter(t => t.status === 'completed' || t.completed_at).length;
-        const pending = pTasks.filter(t => t.status === 'pending' || t.status === 'scheduled').length;
-        const totalMinutes = pTasks.reduce((a, t) => a + (t.duration_minutes || 0), 0);
+        const completedTasks = pTasks.filter(t => t.status === 'concluido' || t.status === 'completed' || !!t.completed_at);
+        const completed = completedTasks.length;
+        const pending = pTasks.filter(t => t.status === 'pendente' || t.status === 'pending' || t.status === 'agendado' || t.status === 'scheduled').length;
+        // Only count hours from completed tasks
+        const completedMinutes = completedTasks.reduce((a, t) => a + (t.duration_minutes || 0), 0);
         score = completed * PARCEIRO_SCORE.CONCLUIDO + pending * PARCEIRO_SCORE.PENDENTE +
-          Math.round(totalMinutes / 60) * PARCEIRO_SCORE.POR_HORA;
+          Math.round(completedMinutes / 60) * PARCEIRO_SCORE.POR_HORA;
         metrics.push(
           { label: 'Concluídos', value: completed },
           { label: 'Pendentes', value: pending },
-          { label: 'Horas', value: Math.round(totalMinutes / 60) },
+          { label: 'Horas', value: Math.round(completedMinutes / 60) },
         );
         maxScore = Math.max(score, 100);
       } else {

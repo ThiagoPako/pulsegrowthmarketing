@@ -1880,7 +1880,7 @@ export default function Clients() {
                       {/* Proposal selector for sem_contrato editing */}
                       <div className="space-y-2 border-t border-border/50 pt-4">
                         <Label>Tipo de Cliente</Label>
-                        <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30">📄 Sem Contrato</Badge>
+                        <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30">📦 Pacotes de Serviços</Badge>
                         <div className="mt-2">
                           <Label>Vincular a Proposta Aceita</Label>
                           <Select value={proposalId || 'none'} onValueChange={v => setProposalId(v === 'none' ? null : v)}>

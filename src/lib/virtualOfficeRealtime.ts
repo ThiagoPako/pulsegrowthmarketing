@@ -79,16 +79,20 @@ function startSubscription() {
   return ch;
 }
 
+function isSubscribed() {
+  return _status === 'subscribed';
+}
+
 async function waitForSubscribed(timeoutMs = 4000) {
-  if (_status === 'subscribed') return true;
+  if (isSubscribed()) return true;
 
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
-    if (_status === 'subscribed') return true;
+    if (isSubscribed()) return true;
     await new Promise(resolve => window.setTimeout(resolve, 50));
   }
 
-  return _status === 'subscribed';
+  return isSubscribed();
 }
 
 export function subscribeOfficeChannel(): RealtimeChannel {

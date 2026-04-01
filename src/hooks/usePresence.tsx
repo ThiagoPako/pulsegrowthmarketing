@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { subscribeOfficeChannel, trackPresence, untrackPresence } from '@/lib/virtualOfficeRealtime';
+import { subscribeOfficeChannel, trackPresence, untrackPresence, sendLeaveBeacon } from '@/lib/virtualOfficeRealtime';
 
 export function usePresenceHeartbeat(userId: string | undefined) {
   useEffect(() => {
@@ -17,9 +17,15 @@ export function usePresenceHeartbeat(userId: string | undefined) {
     const onOn = () => beat();
     const onFocus = () => beat();
 
+    // Send leave signal on tab/browser close via sendBeacon (reliable)
+    const onBeforeUnload = () => {
+      sendLeaveBeacon(userId);
+    };
+
     document.addEventListener('visibilitychange', onVis);
     window.addEventListener('online', onOn);
     window.addEventListener('focus', onFocus);
+    window.addEventListener('beforeunload', onBeforeUnload);
 
     return () => {
       active = false;
@@ -27,6 +33,8 @@ export function usePresenceHeartbeat(userId: string | undefined) {
       document.removeEventListener('visibilitychange', onVis);
       window.removeEventListener('online', onOn);
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      sendLeaveBeacon(userId);
       void untrackPresence();
     };
   }, [userId]);

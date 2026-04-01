@@ -93,7 +93,7 @@ export default function PixelRoom({ config, members, onMemberClick, isCoffeeRoom
         ) : (
           <div className="flex flex-wrap justify-center gap-0.5">
             {members.map(m => (
-              <PixelCharacter key={m.id} member={m} onClick={() => onMemberClick(m)} inCoffeeRoom={isCoffeeRoom} />
+              <PixelCharacter key={m.id} member={m} onClick={() => onMemberClick(m)} inCoffeeRoom={isCoffeeRoom} justJoined={joinedIds?.has(m.id)} />
             ))}
           </div>
         )}

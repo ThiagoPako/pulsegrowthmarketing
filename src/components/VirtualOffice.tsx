@@ -215,7 +215,7 @@ export default function VirtualOffice() {
       }}>
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {activeRooms.map(room => (
-            <PixelRoom key={room.id} config={room} members={roomAssign[room.id]} onMemberClick={setChatTarget} isCoffeeRoom={room.id === 'coffee'} />
+            <PixelRoom key={room.id} config={room} members={roomAssign[room.id]} onMemberClick={setChatTarget} isCoffeeRoom={room.id === 'coffee'} joinedIds={joinedIds} />
           ))}
         </div>
         {activeRooms.length === 0 && (

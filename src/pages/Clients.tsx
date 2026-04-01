@@ -1669,7 +1669,7 @@ export default function Clients() {
 
               {/* Stepper indicator */}
               {!editing && (() => {
-                const stepLabels = hasMetaApi ? STEP_LABELS_WITH_META : STEP_LABELS_NO_META;
+                const stepLabels = clientType === 'sem_contrato' ? STEP_LABELS_SEM_CONTRATO : (hasMetaApi ? STEP_LABELS_WITH_META : STEP_LABELS_NO_META);
                 const maxStep = stepLabels.length - 1;
                 return (
                 <div className="flex items-center gap-1 mb-2">

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -14,7 +15,7 @@ import {
   Film, Megaphone, Image, Palette, ExternalLink, Clock, AlertTriangle,
   Eye, Star, TrendingUp, BarChart3, Timer, Scissors, ArrowRight, Check,
   Search, Users, Upload, Send, History, Zap, Flame, Flag,
-  Play, Rocket, Trophy, FileText, FolderOpen, X, Link2, Video, Pause
+  Play, Rocket, Trophy, FileText, FolderOpen, X, Link2, Video, Pause, Undo2
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import UserAvatar from '@/components/UserAvatar';
@@ -216,6 +217,14 @@ export default function EditorDashboard() {
    const [oldVideoLink, setOldVideoLink] = useState<string | null>(null);
    const fileInputRef = useRef<HTMLInputElement>(null);
    const isEditorRole = profile?.role === 'editor';
+
+   // Story upload state
+   const [storyClientId, setStoryClientId] = useState('');
+   const [storyTitle, setStoryTitle] = useState('');
+   const [storyUploading, setStoryUploading] = useState(false);
+   const [storyUploadProgress, setStoryUploadProgress] = useState('');
+   const [storiesUploaded, setStoriesUploaded] = useState(0);
+   const storyFileRef = useRef<HTMLInputElement>(null);
 
   const getTaskDisplayMeta = useCallback((task: EditorTask) => {
     const client = clients.find((c: any) => c.id === task.client_id);
@@ -553,6 +562,119 @@ export default function EditorDashboard() {
     setSaving(false);
   };
 
+  // Ops! Volta aqui — editor returns from review to editing
+  const handleReturnFromReview = async (task: EditorTask) => {
+    if (!user) return;
+    const { error } = await supabase.from('content_tasks').update({
+      kanban_column: 'edicao',
+      editing_started_at: new Date().toISOString(),
+      assigned_to: user.id,
+      edited_by: user.id,
+      reviewing_by: null,
+      reviewing_by_name: null,
+      reviewing_at: null,
+      review_deadline: null,
+      approval_sent_at: null,
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', task.id);
+    if (error) { toast.error('Erro ao devolver tarefa'); return; }
+    await supabase.from('social_media_deliveries').delete().eq('content_task_id', task.id);
+    await supabase.from('task_history').insert({
+      task_id: task.id, user_id: user.id,
+      action: 'Ops! Volta aqui — editor devolveu da revisão para corrigir',
+    });
+    toast.success('📥 Tarefa devolvida para edição!');
+    setActiveEditTask({ ...task, kanban_column: 'edicao', editing_started_at: new Date().toISOString(), assigned_to: user.id });
+    fetchTasks();
+  };
+
+  // Story upload handler (same flow as VideomakerDashboard)
+  const handleStoryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    if (!storyClientId) { toast.error('Selecione um cliente primeiro'); return; }
+    if (file.size > 500 * 1024 * 1024) { toast.error('Máximo: 500MB'); return; }
+
+    setStoryUploading(true);
+    setStoryUploadProgress(`Enviando ${file.name}...`);
+    try {
+      const folder = `stories/${storyClientId}`;
+      const url = await uploadFileToVps(file, folder);
+      const client = clients.find(c => c.id === storyClientId);
+      const title = storyTitle.trim() || `Story ${format(new Date(), 'dd/MM HH:mm')}`;
+
+      // 1. Create content_task for social media
+      const taskId = crypto.randomUUID();
+      await supabase.from('content_tasks').insert({
+        id: taskId,
+        client_id: storyClientId,
+        title: `📱 ${title}`,
+        content_type: 'story',
+        kanban_column: 'agendamentos',
+        description: `Story editado pelo editor.\n\n📥 Download: ${url}`,
+        edited_video_link: url,
+        edited_video_type: 'upload',
+        created_by: user.id,
+        edited_by: user.id,
+        approved_at: new Date().toISOString(),
+      } as any);
+
+      // 2. Create social_media_delivery
+      await supabase.from('social_media_deliveries').insert({
+        client_id: storyClientId,
+        content_type: 'story',
+        title: `📱 ${title}`,
+        description: `Story editado pelo editor. Download: ${url}`,
+        status: 'entregue',
+        delivered_at: format(new Date(), 'yyyy-MM-dd'),
+        created_by: user.id,
+        content_task_id: taskId,
+      } as any);
+
+      // 3. Notify social_media
+      await supabase.rpc('notify_role', {
+        _role: 'social_media',
+        _title: '📱 Novo Story para agendar',
+        _message: `${client?.companyName || 'Cliente'} — "${title}" foi editado pelo editor e está pronto para agendamento.`,
+        _type: 'story_upload',
+        _link: '/entregas-social',
+      });
+
+      // 4. Upload to client portal
+      const now = new Date();
+      await supabase.from('client_portal_contents').insert({
+        client_id: storyClientId,
+        title: `📱 ${title}`,
+        content_type: 'story',
+        file_url: url,
+        status: 'pendente',
+        season_month: now.getMonth() + 1,
+        season_year: now.getFullYear(),
+        uploaded_by: user.id,
+      } as any);
+
+      // 5. Portal notification
+      await supabase.from('client_portal_notifications').insert({
+        client_id: storyClientId,
+        title: '📱 Novo Story enviado',
+        message: `"${title}" foi editado e está pronto. Acesse para visualizar.`,
+        type: 'story_upload',
+      } as any);
+
+      setStoriesUploaded(prev => prev + 1);
+      setStoryTitle('');
+      toast.success(`Story enviado! +${EDITOR_SCORE.STORY_EDITADO} pts 🚀`);
+      setCelebrationPoints(EDITOR_SCORE.STORY_EDITADO);
+      setShowCelebration(true);
+    } catch (err: any) {
+      toast.error(`Erro: ${err.message}`);
+    } finally {
+      setStoryUploading(false);
+      setStoryUploadProgress('');
+      if (storyFileRef.current) storyFileRef.current.value = '';
+    }
+  };
+
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-64 gap-4">
       <RocketMascot size={64} />
@@ -588,6 +710,9 @@ export default function EditorDashboard() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => navigate('/roteiros')}>
+            <FileText size={14} /> Roteiros
+          </Button>
           <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
             onClick={() => setShowPerformance(!showPerformance)}
             className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 rounded-full px-3 py-1.5 cursor-pointer">
@@ -976,6 +1101,15 @@ export default function EditorDashboard() {
                         </div>
                       )}
                       {task.review_deadline && <DeadlineBadge deadline={task.review_deadline} label="Revisão" startedAt={task.approval_sent_at} />}
+                      {/* Ops! Volta aqui */}
+                      {task.edited_by === user?.id && (
+                        <motion.div whileTap={{ scale: 0.95 }}>
+                          <Button size="sm" variant="outline" className="w-full gap-1.5 h-7 text-xs border-amber-500/40 text-amber-600 hover:bg-amber-500/10 mt-1"
+                            onClick={(e) => { e.stopPropagation(); handleReturnFromReview(task); }}>
+                            <Undo2 size={11} /> Ops! Volta aqui
+                          </Button>
+                        </motion.div>
+                      )}
                     </div>
                   </motion.div>
                 );
@@ -1041,7 +1175,53 @@ export default function EditorDashboard() {
         )}
       </div>
 
-      {/* Shimmer animation keyframe */}
+      {/* ═══════ STORY UPLOAD ═══════ */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+          <Image size={15} className="text-pink-500" />
+          Enviar Story Editado
+          {storiesUploaded > 0 && (
+            <Badge className="bg-success/20 text-success border-success/30 text-[10px]">
+              +{storiesUploaded * EDITOR_SCORE.STORY_EDITADO} pts hoje
+            </Badge>
+          )}
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          Suba stories que você editou. Cada story gera <strong className="text-primary">+{EDITOR_SCORE.STORY_EDITADO} pontos</strong> e cria uma tarefa automática para a equipe de Social Media agendar.
+        </p>
+        <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Cliente *</Label>
+              <Select value={storyClientId} onValueChange={setStoryClientId}>
+                <SelectTrigger className="h-9 text-sm mt-1"><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
+                <SelectContent>
+                  {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Título (opcional)</Label>
+              <Input placeholder="Ex: Story Bastidores" value={storyTitle} onChange={e => setStoryTitle(e.target.value)} className="h-9 mt-1 text-sm" />
+            </div>
+          </div>
+          <div className="border-2 border-dashed border-border rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
+            <input ref={storyFileRef} type="file" accept="video/*" onChange={handleStoryUpload} className="hidden" id="editor-story-upload" />
+            <label htmlFor="editor-story-upload" className="cursor-pointer flex flex-col items-center gap-2">
+              <Upload size={24} className="text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">{storyUploading ? storyUploadProgress : 'Clique para enviar story'}</span>
+              <span className="text-[10px] text-muted-foreground/60">MP4, MOV — até 500MB</span>
+            </label>
+            {storyUploading && (
+              <div className="mt-2 flex items-center justify-center gap-2">
+                <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                <span className="text-xs text-primary font-medium">Enviando...</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       <style>{`
         @keyframes shimmer {
           0% { background-position: 0% 50%; }

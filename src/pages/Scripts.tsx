@@ -129,7 +129,8 @@ function RichEditor({ content, onChange }: { content: string; onChange: (html: s
 
 export default function Scripts() {
   const { clients, scripts, recordings, addScript, updateScript, deleteScript } = useApp();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const isEditorRole = profile?.role === 'editor';
   const { clientes: endoClientes } = useEndoClientes();
   const [open, setOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
@@ -235,7 +236,7 @@ export default function Scripts() {
       });
     } else {
       setEditing(null);
-      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: false, isAvulso: false, recordingId: '', prospectName: '' });
+      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: isEditorRole ? true : false, isAvulso: false, recordingId: '', prospectName: '' });
     }
     setOpen(true);
   };
@@ -1166,13 +1167,14 @@ export default function Scripts() {
 
             {/* Direct to editing toggle */}
             <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-accent/30">
-              <Switch checked={form.directToEditing} onCheckedChange={v => setForm({ ...form, directToEditing: v })} />
+              <Switch checked={form.directToEditing} onCheckedChange={v => setForm({ ...form, directToEditing: v })} disabled={isEditorRole} />
               <div>
                 <Label className="font-medium flex items-center gap-1.5">
                   🎬 Direto para Edição
+                  {isEditorRole && <Badge className="text-[9px] bg-blue-500/20 text-blue-600 border-blue-500/30 ml-1">Obrigatório</Badge>}
                 </Label>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Para materiais prontos do cliente. Fica em espera e sobe automaticamente para o editor com menos tarefas quando a fila esvaziar.
+                  {isEditorRole ? 'Editores criam roteiros que vão direto para a fila de edição.' : 'Para materiais prontos do cliente. Fica em espera e sobe automaticamente para o editor com menos tarefas quando a fila esvaziar.'}
                 </p>
               </div>
             </div>

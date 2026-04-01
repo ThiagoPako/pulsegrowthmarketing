@@ -1,16 +1,16 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/vpsDb';
-import { supabase as supabaseReal } from '@/integrations/supabase/client';
 import { useApp } from '@/contexts/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, X } from 'lucide-react';
+import { Send, X, MessageCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import type { UserRole } from '@/types';
+import { createVirtualOfficeChannel, getConversationKey, type QuickMessage } from '@/lib/virtualOfficeRealtime';
 
-const ONLINE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
+const ONLINE_THRESHOLD_MS = 25_000;
 
 interface TeamMember {
   id: string;
@@ -19,20 +19,8 @@ interface TeamMember {
   avatarUrl?: string;
   lastSeenAt: string | null;
   isOnline: boolean;
-  activity?: string; // current activity description
+  activity?: string;
 }
-
-/* ─── Pixel character colors by role ─── */
-const ROLE_STYLE: Record<string, { hair: string; shirt: string; action: string; deskItems: string }> = {
-  admin:        { hair: '#2c1810', shirt: '#3b82f6', action: '💼', deskItems: '📊' },
-  videomaker:   { hair: '#1a1a2e', shirt: '#22c55e', action: '🎬', deskItems: '📹' },
-  editor:       { hair: '#4a2c17', shirt: '#8b5cf6', action: '🎞️', deskItems: '🖥️' },
-  designer:     { hair: '#c0392b', shirt: '#f97316', action: '🎨', deskItems: '✏️' },
-  social_media: { hair: '#2d1b69', shirt: '#ec4899', action: '📱', deskItems: '📲' },
-  fotografo:    { hair: '#d4a574', shirt: '#eab308', action: '📷', deskItems: '🔦' },
-  parceiro:     { hair: '#1e3a5f', shirt: '#14b8a6', action: '🤝', deskItems: '📋' },
-  endomarketing:{ hair: '#5b2c6f', shirt: '#06b6d4', action: '📣', deskItems: '📢' },
-};
 
 const ROLE_LABEL: Record<string, string> = {
   admin: 'Administração',
@@ -45,6 +33,17 @@ const ROLE_LABEL: Record<string, string> = {
   endomarketing: 'Endomarketing',
 };
 
+const ROLE_EMOJI: Record<string, string> = {
+  admin: '💼',
+  videomaker: '🎬',
+  editor: '✂️',
+  designer: '🎨',
+  social_media: '📱',
+  fotografo: '📷',
+  parceiro: '🤝',
+  endomarketing: '📣',
+};
+
 const ACTIVITY_LABELS: Record<string, string> = {
   gravando: '🔴 Gravando',
   edicao: '✂️ Editando',
@@ -52,566 +51,426 @@ const ACTIVITY_LABELS: Record<string, string> = {
   alteracao: '🔧 Alteração',
   aprovacao: '✅ Aprovando',
   designing: '🎨 Criando arte',
-  idle: '',
 };
 
-/* ─── Pixel Art Character (pure CSS) ─── */
-function PixelCharacter({ member, style, onClick }: { member: TeamMember; style: typeof ROLE_STYLE.admin; onClick: () => void }) {
-  const isOnline = member.isOnline;
-  
+function normalizeQuickMessage(payload: unknown): QuickMessage | null {
+  if (!payload || typeof payload !== 'object') return null;
+
+  const source = payload as Record<string, unknown>;
+  const message: QuickMessage = {
+    id: typeof source.id === 'string' ? source.id : crypto.randomUUID(),
+    fromUserId: typeof source.fromUserId === 'string' ? source.fromUserId : '',
+    toUserId: typeof source.toUserId === 'string' ? source.toUserId : '',
+    message: typeof source.message === 'string' ? source.message : '',
+    createdAt: typeof source.createdAt === 'string' ? source.createdAt : new Date().toISOString(),
+  };
+
+  if (!message.fromUserId || !message.toUserId || !message.message.trim()) return null;
+  return message;
+}
+
+function PixelAvatar({ member, onClick }: { member: TeamMember; onClick: () => void }) {
   return (
-    <motion.div
-      className="relative cursor-pointer group"
+    <motion.button
+      type="button"
       onClick={onClick}
-      whileHover={{ scale: 1.1 }}
-      style={{ imageRendering: 'pixelated' }}
+      whileHover={{ scale: 1.06, y: -2 }}
+      className="group relative flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card/85 px-3 py-3 shadow-sm transition-colors hover:border-primary/40 hover:bg-card"
     >
-      {/* Name tag */}
-      <div className="absolute -top-5 left-1/2 -translate-x-1/2 flex items-center gap-1 whitespace-nowrap z-10">
-        <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.8)]' : 'bg-red-400/60'}`} />
-        <span className="text-[10px] font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] tracking-wide">
-          {member.name.split(' ')[0]}
-        </span>
+      <div className="absolute right-2 top-2 flex items-center gap-1">
+        <span className={`h-2.5 w-2.5 rounded-full ${member.isOnline ? 'bg-primary shadow-[0_0_10px_hsl(var(--primary)/0.65)]' : 'bg-muted-foreground/40'}`} />
       </div>
 
-      {/* Activity badge */}
-      {isOnline && member.activity && ACTIVITY_LABELS[member.activity] && (
-        <motion.div
-          className="absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap z-20"
-          initial={{ opacity: 0, y: 5 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <span className="text-[8px] bg-black/70 text-white px-1.5 py-0.5 rounded-full backdrop-blur-sm">
-            {ACTIVITY_LABELS[member.activity]}
-          </span>
-        </motion.div>
-      )}
-
-      {/* Character body - pixel art style */}
       <motion.div
-        animate={isOnline ? { y: [0, -2, 0, -1, 0] } : {}}
-        transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-        className="relative w-10 h-14"
+        animate={member.isOnline ? { y: [0, -3, 0] } : {}}
+        transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+        className="relative flex h-16 w-16 items-center justify-center rounded-2xl border border-border/70 bg-secondary/60 text-3xl"
       >
-        {/* Head */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-8 rounded-sm overflow-hidden" style={{ imageRendering: 'pixelated' }}>
-          <div className="w-full h-full bg-[#f4c99a] rounded-sm relative">
-            <div className="absolute top-0 left-0 right-0 h-3 rounded-t-sm" style={{ backgroundColor: style.hair }} />
-            <motion.div
-              className="absolute top-3.5 flex gap-1.5 justify-center w-full"
-              animate={isOnline ? { scaleY: [1, 1, 0.1, 1, 1] } : {}}
-              transition={{ duration: 4, repeat: Infinity, times: [0, 0.45, 0.5, 0.55, 1] }}
-            >
-              <div className="w-1 h-1 bg-[#1a1a1a] rounded-full" />
-              <div className="w-1 h-1 bg-[#1a1a1a] rounded-full" />
-            </motion.div>
-            {isOnline && <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-2 h-0.5 bg-[#c0392b] rounded-full" />}
-          </div>
-        </div>
-
-        {/* Body/shirt */}
-        <div
-          className="absolute top-7 left-1/2 -translate-x-1/2 w-9 h-7 rounded-b-sm"
-          style={{ backgroundColor: style.shirt }}
-        >
-          {isOnline && (
-            <>
-              <motion.div
-                className="absolute -left-1 top-1 w-2 h-4 rounded-sm"
-                style={{ backgroundColor: style.shirt, filter: 'brightness(0.85)' }}
-                animate={{ rotate: [-5, 5, -5] }}
-                transition={{ duration: 0.6, repeat: Infinity }}
-              />
-              <motion.div
-                className="absolute -right-1 top-1 w-2 h-4 rounded-sm"
-                style={{ backgroundColor: style.shirt, filter: 'brightness(0.85)' }}
-                animate={{ rotate: [5, -5, 5] }}
-                transition={{ duration: 0.6, repeat: Infinity, delay: 0.3 }}
-              />
-            </>
-          )}
-        </div>
+        <span className={member.isOnline ? '' : 'grayscale opacity-50'}>{ROLE_EMOJI[member.role] || '👤'}</span>
       </motion.div>
 
-      {/* Action bubble for online users */}
-      {isOnline && (
-        <motion.div
-          className="absolute -top-9 -right-3 text-sm"
-          animate={{ y: [0, -3, 0], opacity: [0.7, 1, 0.7] }}
-          transition={{ duration: 2, repeat: Infinity }}
-        >
-          <div className="bg-white/90 rounded-lg px-1 py-0.5 shadow-md text-xs">
-            {style.action}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Offline overlay */}
-      {!isOnline && (
-        <div className="absolute inset-0 opacity-40" style={{ filter: 'grayscale(1)' }} />
-      )}
-    </motion.div>
-  );
-}
-
-/* ─── Desk with monitor ─── */
-function Desk({ hasMonitor = true }: { hasMonitor?: boolean }) {
-  return (
-    <div className="relative w-14 h-8">
-      <div className="absolute bottom-0 w-full h-3 bg-[#8B6914] rounded-sm shadow-inner" style={{ imageRendering: 'pixelated' }}>
-        <div className="absolute inset-x-0.5 top-0 h-0.5 bg-[#a67c1e]" />
-      </div>
-      {hasMonitor && (
-        <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2">
-          <div className="w-7 h-5 bg-[#2a2a2a] rounded-sm border border-[#444] relative">
-            <motion.div
-              className="absolute inset-0.5 rounded-sm"
-              animate={{ backgroundColor: ['#1e3a5f', '#1e5f3a', '#3a1e5f', '#1e3a5f'] }}
-              transition={{ duration: 4, repeat: Infinity }}
-              style={{ opacity: 0.6 }}
-            />
-          </div>
-          <div className="w-2 h-1 bg-[#333] mx-auto" />
-          <div className="w-4 h-0.5 bg-[#333] mx-auto rounded-sm" />
+      <div className="space-y-1 text-center">
+        <p className="text-xs font-semibold leading-none text-foreground">{member.name.split(' ')[0]}</p>
+        <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{ROLE_LABEL[member.role] || member.role}</p>
+        <div className="min-h-4 text-[10px] text-primary">
+          {member.isOnline && member.activity ? ACTIVITY_LABELS[member.activity] : member.isOnline ? 'Online agora' : 'Offline'}
         </div>
-      )}
-    </div>
+      </div>
+    </motion.button>
   );
 }
 
-/* ─── Workstation: character + desk ─── */
-function Workstation({ member, onChat }: { member: TeamMember; onChat: (m: TeamMember) => void }) {
-  const style = ROLE_STYLE[member.role] || ROLE_STYLE.admin;
-  
-  return (
-    <div className="flex flex-col items-center gap-0 relative">
-      <PixelCharacter member={member} style={style} onClick={() => onChat(member)} />
-      <Desk hasMonitor={member.role !== 'videomaker' && member.role !== 'fotografo'} />
-    </div>
-  );
-}
-
-/* ─── Quick Chat Dialog ─── */
-function QuickChatDialog({ member, currentUserId, onClose }: { member: TeamMember; currentUserId: string; onClose: () => void }) {
+function QuickChatDialog({
+  member,
+  currentUserId,
+  messages,
+  onSend,
+  onClose,
+}: {
+  member: TeamMember;
+  currentUserId: string;
+  messages: QuickMessage[];
+  onSend: (text: string) => Promise<boolean>;
+  onClose: () => void;
+}) {
   const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<any[]>([]);
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const loadMessages = async () => {
-      const { data } = await supabase
-        .from('team_messages')
-        .select('*')
-        .or(`and(from_user_id.eq.${currentUserId},to_user_id.eq.${member.id}),and(from_user_id.eq.${member.id},to_user_id.eq.${currentUserId})`)
-        .order('created_at', { ascending: true })
-        .limit(50) as any;
-      if (data) setMessages(data);
-    };
-    loadMessages();
-
-    const channel = supabaseReal
-      .channel(`chat-${member.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'team_messages' }, (payload) => {
-        const msg = payload.new as any;
-        if ((msg.from_user_id === currentUserId && msg.to_user_id === member.id) ||
-            (msg.from_user_id === member.id && msg.to_user_id === currentUserId)) {
-          setMessages(prev => [...prev, msg]);
-        }
-      })
-      .subscribe();
-
-    return () => { supabaseReal.removeChannel(channel); };
-  }, [member.id, currentUserId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
 
-  const sendMessage = async () => {
+  const handleSend = async () => {
     if (!message.trim() || sending) return;
+
     setSending(true);
-    const { error } = await supabase.from('team_messages').insert({
-      from_user_id: currentUserId,
-      to_user_id: member.id,
-      message: message.trim(),
-    } as any) as any;
-    if (error) toast.error('Erro ao enviar');
-    else setMessage('');
+    const ok = await onSend(message.trim());
+    if (ok) setMessage('');
+    else toast.error('Erro ao enviar mensagem rápida.');
     setSending(false);
   };
 
-  const style = ROLE_STYLE[member.role] || ROLE_STYLE.admin;
-
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.9, y: 20 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.9, y: 20 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={onClose}
     >
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-      <div className="relative w-full max-w-sm rounded-2xl border border-border bg-card shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="p-3 border-b border-border/50 flex items-center gap-3" style={{ background: `linear-gradient(135deg, ${style.shirt}22, ${style.shirt}11)` }}>
-          <div className="relative">
-            <div className="w-9 h-9 rounded-full flex items-center justify-center text-lg" style={{ backgroundColor: `${style.shirt}33` }}>
-              {style.action}
-            </div>
-            {member.isOnline && <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-card" />}
+      <div className="absolute inset-0 bg-background/70 backdrop-blur-sm" />
+
+      <motion.div
+        initial={{ y: 16, scale: 0.96 }}
+        animate={{ y: 0, scale: 1 }}
+        exit={{ y: 16, scale: 0.96 }}
+        transition={{ duration: 0.18 }}
+        onClick={(event) => event.stopPropagation()}
+        className="relative w-full max-w-md overflow-hidden rounded-3xl border border-border bg-card shadow-2xl"
+      >
+        <div className="flex items-center gap-3 border-b border-border/60 bg-secondary/40 px-4 py-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-card text-lg">
+            {ROLE_EMOJI[member.role] || '👤'}
           </div>
-          <div className="flex-1">
-            <p className="font-semibold text-sm">{member.name}</p>
-            <p className="text-[10px] text-muted-foreground">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-foreground">{member.name}</p>
+            <p className="text-[11px] text-muted-foreground">
               {ROLE_LABEL[member.role] || member.role}
-              {member.isOnline && <span className="text-green-400 ml-1">• Online</span>}
-              {member.activity && ACTIVITY_LABELS[member.activity] && (
-                <span className="ml-1 text-yellow-400">— {ACTIVITY_LABELS[member.activity]}</span>
-              )}
+              {member.isOnline ? ' • online ao vivo' : ' • offline'}
             </p>
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}><X size={16} /></Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
+            <X size={16} />
+          </Button>
         </div>
 
-        <div ref={scrollRef} className="h-56 overflow-y-auto p-3 space-y-2 bg-background/50">
-          {messages.length === 0 && (
-            <div className="flex items-center justify-center h-full text-muted-foreground/50 text-xs">
-              Envie a primeira mensagem 💬
+        <div ref={scrollRef} className="h-72 space-y-2 overflow-y-auto bg-background/50 px-4 py-4">
+          {messages.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-muted-foreground">
+              <MessageCircle size={18} className="opacity-60" />
+              <p className="text-xs">Envie uma mensagem rápida ao vivo.</p>
             </div>
-          )}
-          {messages.map((msg: any) => (
-            <div key={msg.id} className={`flex ${msg.from_user_id === currentUserId ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] rounded-2xl px-3 py-1.5 text-xs ${
-                msg.from_user_id === currentUserId
-                  ? 'bg-primary text-primary-foreground rounded-br-sm'
-                  : 'bg-secondary text-secondary-foreground rounded-bl-sm'
-              }`}>
-                {msg.message}
-                <div className={`text-[8px] mt-0.5 ${msg.from_user_id === currentUserId ? 'text-primary-foreground/60' : 'text-muted-foreground/60'}`}>
-                  {new Date(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+          ) : (
+            messages.map((msg) => (
+              <div key={msg.id} className={`flex ${msg.fromUserId === currentUserId ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[82%] rounded-2xl px-3 py-2 text-xs ${msg.fromUserId === currentUserId ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>
+                  <p>{msg.message}</p>
+                  <p className={`mt-1 text-[10px] ${msg.fromUserId === currentUserId ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                    {new Date(msg.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
 
-        <div className="p-3 border-t border-border/50 flex gap-2">
-          <Input value={message} onChange={e => setMessage(e.target.value)} placeholder="Mensagem rápida..." className="text-xs h-9" onKeyDown={e => e.key === 'Enter' && sendMessage()} />
-          <Button size="icon" className="h-9 w-9 shrink-0" onClick={sendMessage} disabled={sending || !message.trim()}>
+        <div className="flex gap-2 border-t border-border/60 px-4 py-3">
+          <Input
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            onKeyDown={(event) => event.key === 'Enter' && void handleSend()}
+            placeholder={member.isOnline ? 'Mensagem rápida...' : 'Pessoa offline'}
+            className="h-10 text-sm"
+            disabled={!member.isOnline || sending}
+          />
+          <Button size="icon" className="h-10 w-10 shrink-0" onClick={() => void handleSend()} disabled={!member.isOnline || sending || !message.trim()}>
             <Send size={14} />
           </Button>
         </div>
-      </div>
+      </motion.div>
     </motion.div>
   );
 }
 
-/* ─── Decorations ─── */
-function OfficeDecor() {
-  return (
-    <>
-      <div className="absolute top-2 right-4 flex gap-0.5">
-        {['#8B4513', '#2E86C1', '#C0392B', '#27AE60', '#8E44AD', '#D35400'].map((c, i) => (
-          <div key={i} className="w-2 h-5 rounded-sm" style={{ backgroundColor: c, opacity: 0.7 }} />
-        ))}
-      </div>
-      <motion.div
-        className="absolute bottom-4 left-4 text-xl"
-        animate={{ rotate: [-2, 2, -2] }}
-        transition={{ duration: 3, repeat: Infinity }}
-      >
-        🪴
-      </motion.div>
-      <div className="absolute top-4 left-4 text-lg">☕</div>
-      <motion.div
-        className="absolute top-3 left-1/2 -translate-x-1/2 text-lg"
-        animate={{ scale: [1, 1.05, 1] }}
-        transition={{ duration: 2, repeat: Infinity }}
-      >
-        🕐
-      </motion.div>
-    </>
-  );
-}
-
-/* ─── Floor pattern ─── */
-function FloorPattern() {
-  return (
-    <div className="absolute inset-0 overflow-hidden rounded-xl" style={{ imageRendering: 'pixelated' }}>
-      <div className="absolute inset-0" style={{
-        background: `
-          repeating-linear-gradient(
-            90deg,
-            #5C3D2E 0px, #5C3D2E 60px,
-            #4E3425 60px, #4E3425 61px
-          ),
-          repeating-linear-gradient(
-            0deg,
-            transparent 0px, transparent 15px,
-            rgba(0,0,0,0.08) 15px, rgba(0,0,0,0.08) 16px
-          )
-        `,
-      }} />
-      <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/30" />
-    </div>
-  );
-}
-
-/* ─── Main Component ─── */
 export default function VirtualOffice() {
   const { currentUser } = useApp();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [activities, setActivities] = useState<Record<string, string>>({});
+  const [presenceByUserId, setPresenceByUserId] = useState<Record<string, string>>({});
+  const [chatMessages, setChatMessages] = useState<Record<string, QuickMessage[]>>({});
   const [chatTarget, setChatTarget] = useState<TeamMember | null>(null);
+  const [now, setNow] = useState(Date.now());
+  const channelRef = useRef<any>(null);
   const membersRef = useRef<TeamMember[]>([]);
 
-  // Build isOnline from a profile row
-  const profileToMember = useCallback((p: any, now: number): TeamMember => ({
-    id: p.id,
-    name: p.name || 'Usuário',
-    role: p.role as UserRole,
-    avatarUrl: p.avatar_url,
-    lastSeenAt: p.last_seen_at,
-    isOnline: p.last_seen_at ? (now - new Date(p.last_seen_at).getTime()) < ONLINE_THRESHOLD_MS : false,
+  const profileToMember = useCallback((profile: any): TeamMember => ({
+    id: profile.id,
+    name: profile.name || 'Usuário',
+    role: profile.role as UserRole,
+    avatarUrl: profile.avatar_url || undefined,
+    lastSeenAt: null,
+    isOnline: false,
   }), []);
 
   const sortMembers = useCallback((list: TeamMember[]) => {
     return [...list].sort((a, b) => {
       if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
-      return a.role.localeCompare(b.role);
+      return a.name.localeCompare(b.name);
     });
   }, []);
 
-  // Fetch activities (content_tasks being edited, active_recordings, design_tasks in progress)
-  const fetchActivities = useCallback(async () => {
-    const actMap: Record<string, string> = {};
-
-    // Active recordings → videomaker is "gravando"
-    const { data: activeRecs } = await supabase.from('active_recordings').select('videomaker_id');
-    activeRecs?.forEach((r: any) => { actMap[r.videomaker_id] = 'gravando'; });
-
-    // Content tasks being edited/reviewed
-    const { data: contentTasks } = await supabase
-      .from('content_tasks')
-      .select('assigned_to, edited_by, reviewing_by, kanban_column')
-      .in('kanban_column', ['edicao', 'revisao', 'alteracao', 'aprovacao']);
-    contentTasks?.forEach((t: any) => {
-      if (t.kanban_column === 'edicao' && t.edited_by) actMap[t.edited_by] = 'edicao';
-      if (t.kanban_column === 'edicao' && t.assigned_to && !t.edited_by) actMap[t.assigned_to] = 'edicao';
-      if (t.kanban_column === 'revisao' && t.reviewing_by) actMap[t.reviewing_by] = 'revisao';
-      if (t.kanban_column === 'alteracao' && (t.edited_by || t.assigned_to)) actMap[t.edited_by || t.assigned_to] = 'alteracao';
-      if (t.kanban_column === 'aprovacao' && t.assigned_to) actMap[t.assigned_to] = 'aprovacao';
-    });
-
-    // Design tasks in progress
-    const { data: designTasks } = await supabase
-      .from('design_tasks')
-      .select('assigned_to, kanban_column')
-      .in('kanban_column', ['em_andamento', 'revisao']);
-    designTasks?.forEach((t: any) => {
-      if (t.assigned_to && !actMap[t.assigned_to]) actMap[t.assigned_to] = 'designing';
-    });
-
-    setActivities(actMap);
-  }, []);
-
-  // Full fetch profiles — use VPS for name/role, Supabase Cloud for last_seen_at
   const fetchProfiles = useCallback(async () => {
-    const now = Date.now();
-    // Fetch basic profile data from VPS
-    const { data: profiles } = await supabase.from('profiles').select('id, name, role, avatar_url') as any;
-    if (!profiles) return;
+    const { data } = await supabase.from('profiles').select('id, name, role, avatar_url') as any;
+    if (!data) return;
 
-    // Fetch last_seen_at from Supabase Cloud (VPS doesn't have this column)
-    let presenceMap: Record<string, string> = {};
-    try {
-      const { data: presenceData } = await supabaseReal.from('profiles').select('id, last_seen_at') as any;
-      if (presenceData) {
-        presenceData.forEach((p: any) => { if (p.last_seen_at) presenceMap[p.id] = p.last_seen_at; });
-      }
-    } catch {
-      // Supabase Cloud may not be available
-    }
-
-    const merged = profiles.map((p: any) => ({
-      ...p,
-      last_seen_at: presenceMap[p.id] || null,
-    }));
-
-    const mapped = sortMembers(merged.map((p: any) => profileToMember(p, now)));
+    const mapped = data.map(profileToMember);
     membersRef.current = mapped;
     setMembers(mapped);
-  }, [profileToMember, sortMembers]);
+  }, [profileToMember]);
 
-  // Handle a single profile update from realtime
-  const handleProfileChange = useCallback((payload: any) => {
-    const now = Date.now();
-    if (payload.eventType === 'DELETE' && payload.old) {
-      setMembers(prev => {
-        const updated = prev.filter(m => m.id !== payload.old.id);
-        membersRef.current = updated;
-        return updated;
+  const fetchActivities = useCallback(async () => {
+    const nextActivities: Record<string, string> = {};
+
+    const [{ data: activeRecordings }, { data: contentTasks }, { data: designTasks }] = await Promise.all([
+      supabase.from('active_recordings').select('videomaker_id'),
+      supabase.from('content_tasks').select('assigned_to, edited_by, reviewing_by, kanban_column').in('kanban_column', ['edicao', 'revisao', 'alteracao', 'aprovacao']),
+      supabase.from('design_tasks').select('assigned_to, kanban_column').in('kanban_column', ['em_andamento', 'revisao']),
+    ]) as any;
+
+    activeRecordings?.forEach((item: any) => {
+      if (item.videomaker_id) nextActivities[item.videomaker_id] = 'gravando';
+    });
+
+    contentTasks?.forEach((task: any) => {
+      if (task.kanban_column === 'edicao' && (task.edited_by || task.assigned_to)) nextActivities[task.edited_by || task.assigned_to] = 'edicao';
+      if (task.kanban_column === 'revisao' && task.reviewing_by) nextActivities[task.reviewing_by] = 'revisao';
+      if (task.kanban_column === 'alteracao' && (task.edited_by || task.assigned_to)) nextActivities[task.edited_by || task.assigned_to] = 'alteracao';
+      if (task.kanban_column === 'aprovacao' && task.assigned_to) nextActivities[task.assigned_to] = 'aprovacao';
+    });
+
+    designTasks?.forEach((task: any) => {
+      if (task.assigned_to && !nextActivities[task.assigned_to]) nextActivities[task.assigned_to] = 'designing';
+    });
+
+    setActivities(nextActivities);
+  }, []);
+
+  const syncPresenceState = useCallback(() => {
+    const channel = channelRef.current;
+    if (!channel) return;
+
+    const state = channel.presenceState() as Record<string, any[]>;
+    const nextPresence: Record<string, string> = {};
+
+    Object.values(state).forEach((entries) => {
+      if (!Array.isArray(entries)) return;
+
+      entries.forEach((entry) => {
+        const userId = typeof entry?.userId === 'string' ? entry.userId : null;
+        const heartbeatAt = typeof entry?.heartbeatAt === 'string' ? entry.heartbeatAt : new Date().toISOString();
+        if (!userId) return;
+
+        if (!nextPresence[userId] || new Date(heartbeatAt).getTime() > new Date(nextPresence[userId]).getTime()) {
+          nextPresence[userId] = heartbeatAt;
+        }
       });
-      return;
+    });
+
+    setPresenceByUserId(nextPresence);
+    setNow(Date.now());
+  }, []);
+
+  const appendChatMessage = useCallback((message: QuickMessage) => {
+    setChatMessages((prev) => {
+      const key = getConversationKey(message.fromUserId, message.toUserId);
+      const current = prev[key] || [];
+      if (current.some((item) => item.id === message.id)) return prev;
+
+      return {
+        ...prev,
+        [key]: [...current, message].slice(-50),
+      };
+    });
+  }, []);
+
+  const handleIncomingMessage = useCallback((payload: unknown) => {
+    const message = normalizeQuickMessage(payload);
+    if (!message || !currentUser) return;
+    if (message.fromUserId !== currentUser.id && message.toUserId !== currentUser.id) return;
+
+    appendChatMessage(message);
+
+    if (message.toUserId === currentUser.id && chatTarget?.id !== message.fromUserId) {
+      const sender = membersRef.current.find((member) => member.id === message.fromUserId);
+      toast.message(`Mensagem rápida de ${sender?.name || 'alguém'}`, {
+        description: message.message,
+      });
+    }
+  }, [appendChatMessage, chatTarget?.id, currentUser]);
+
+  const sendQuickMessage = useCallback(async (text: string) => {
+    if (!currentUser || !chatTarget || !chatTarget.isOnline) {
+      toast.error('A pessoa precisa estar online para receber a mensagem rápida.');
+      return false;
     }
 
-    const p = payload.new;
-    if (!p) return;
+    const channel = channelRef.current;
+    if (!channel) return false;
 
-    setMembers(prev => {
-      const idx = prev.findIndex(m => m.id === p.id);
-      const member = profileToMember(p, now);
-      let updated: TeamMember[];
-      if (idx > -1) {
-        updated = [...prev];
-        updated[idx] = { ...member, activity: updated[idx].activity };
-      } else {
-        updated = [...prev, member];
-      }
-      const sorted = sortMembers(updated);
-      membersRef.current = sorted;
-      return sorted;
+    const message: QuickMessage = {
+      id: crypto.randomUUID(),
+      fromUserId: currentUser.id,
+      toUserId: chatTarget.id,
+      message: text,
+      createdAt: new Date().toISOString(),
+    };
+
+    const result = await channel.send({
+      type: 'broadcast',
+      event: 'quick_message',
+      payload: message,
     });
-  }, [profileToMember, sortMembers]);
+
+    if (result !== 'ok') return false;
+    appendChatMessage(message);
+    return true;
+  }, [appendChatMessage, chatTarget, currentUser]);
 
   useEffect(() => {
-    // Initial fetch
-    fetchProfiles();
-    fetchActivities();
+    void fetchProfiles();
+    void fetchActivities();
 
-    // Realtime for profiles — listen to ALL events
-    const profileChannel = supabaseReal
-      .channel('vo-presence-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
-        // Re-fetch via VPS on any realtime change
-        fetchProfiles();
-      })
-      .subscribe();
+    const channel = createVirtualOfficeChannel(
+      currentUser?.id
+        ? `office-view-${currentUser.id}-${Math.random().toString(36).slice(2, 8)}`
+        : `office-view-${Math.random().toString(36).slice(2, 8)}`,
+    );
+    channelRef.current = channel;
 
-    // Realtime for active_recordings changes → update activities
-    const activityChannel = supabaseReal
-      .channel('vo-activity-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'active_recordings' }, () => fetchActivities())
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'content_tasks' }, () => fetchActivities())
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'design_tasks' }, () => fetchActivities())
-      .subscribe();
+    channel
+      .on('presence', { event: 'sync' }, syncPresenceState)
+      .on('presence', { event: 'join' }, syncPresenceState)
+      .on('presence', { event: 'leave' }, syncPresenceState)
+      .on('broadcast', { event: 'quick_message' }, ({ payload }: any) => handleIncomingMessage(payload))
+      .subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') syncPresenceState();
+      });
 
-    // Refresh online threshold every 15s (to mark stale users offline quickly)
-    const thresholdInterval = setInterval(() => {
-      fetchProfiles(); // re-fetch to get fresh last_seen_at
-    }, 15_000);
+    const activitiesInterval = window.setInterval(() => {
+      void fetchActivities();
+    }, 5_000);
 
-    // Refresh activities every 30s as a fallback
-    const activityInterval = setInterval(fetchActivities, 30_000);
+    const profilesInterval = window.setInterval(() => {
+      void fetchProfiles();
+    }, 60_000);
+
+    const clockInterval = window.setInterval(() => {
+      setNow(Date.now());
+    }, 5_000);
 
     return () => {
-      supabaseReal.removeChannel(profileChannel);
-      supabaseReal.removeChannel(activityChannel);
-      clearInterval(thresholdInterval);
-      clearInterval(activityInterval);
+      if (channelRef.current === channel) channelRef.current = null;
+      window.clearInterval(activitiesInterval);
+      window.clearInterval(profilesInterval);
+      window.clearInterval(clockInterval);
+      void channel.unsubscribe();
     };
-  }, [fetchProfiles, fetchActivities, handleProfileChange, sortMembers]);
+  }, [currentUser?.id, fetchActivities, fetchProfiles, handleIncomingMessage, syncPresenceState]);
 
-  // Merge activities into members
   const membersWithActivity = useMemo(() => {
-    return members.map(m => ({
-      ...m,
-      activity: activities[m.id] || undefined,
-    }));
-  }, [members, activities]);
+    const enriched = members.map((member) => {
+      const lastSeenAt = presenceByUserId[member.id] || null;
+      const isOnline = Boolean(lastSeenAt) && now - new Date(lastSeenAt).getTime() < ONLINE_THRESHOLD_MS;
 
-  const onlineCount = membersWithActivity.filter(m => m.isOnline).length;
+      return {
+        ...member,
+        lastSeenAt,
+        isOnline,
+        activity: activities[member.id] || undefined,
+      };
+    });
 
-  // Group by role
-  const grouped = useMemo(() => {
+    const sorted = sortMembers(enriched);
+    membersRef.current = sorted;
+    return sorted;
+  }, [activities, members, now, presenceByUserId, sortMembers]);
+
+  const groupedMembers = useMemo(() => {
     const groups: Record<string, TeamMember[]> = {};
-    membersWithActivity.forEach(m => {
-      if (!groups[m.role]) groups[m.role] = [];
-      groups[m.role].push(m);
+    membersWithActivity.forEach((member) => {
+      if (!groups[member.role]) groups[member.role] = [];
+      groups[member.role].push(member);
     });
     return groups;
   }, [membersWithActivity]);
 
   const roleOrder = ['admin', 'videomaker', 'editor', 'designer', 'social_media', 'fotografo', 'parceiro', 'endomarketing'];
-  const activeRoles = roleOrder.filter(r => grouped[r]?.length);
+  const activeRoles = roleOrder.filter((role) => groupedMembers[role]?.length);
+  const onlineCount = membersWithActivity.filter((member) => member.isOnline).length;
+  const currentConversation = useMemo(() => {
+    if (!currentUser || !chatTarget) return [];
+    return chatMessages[getConversationKey(currentUser.id, chatTarget.id)] || [];
+  }, [chatMessages, chatTarget, currentUser]);
 
   return (
-    <div className="rounded-2xl border border-border overflow-hidden bg-card/80 backdrop-blur-sm">
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-border/50 flex items-center gap-3 bg-card">
-        <motion.span
-          className="text-xl"
-          animate={{ rotate: [0, 5, -5, 0] }}
-          transition={{ duration: 4, repeat: Infinity }}
-        >
-          🏢
-        </motion.span>
-        <div className="flex-1">
-          <h3 className="font-semibold text-sm flex items-center gap-2">
-            Escritório Virtual Pulse
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-mono">
-              🟢 {onlineCount} online
-            </Badge>
-            <span className="text-[9px] text-muted-foreground/50 font-mono">ao vivo</span>
-          </h3>
-          <p className="text-[10px] text-muted-foreground">Acompanhe em tempo real o que cada membro da equipe está fazendo</p>
+    <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+      <div className="border-b border-border/60 bg-secondary/30 px-4 py-4 sm:px-5">
+        <div className="flex items-center gap-3">
+          <motion.div animate={{ y: [0, -2, 0] }} transition={{ duration: 2, repeat: Infinity }} className="text-2xl">
+            🏢
+          </motion.div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-semibold text-foreground sm:text-base">Escritório Virtual Pulse</h3>
+              <Badge variant="secondary" className="text-[10px] font-mono">
+                🟢 {onlineCount} online
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">Agora o online e a mensagem rápida usam canal ao vivo compartilhado.</p>
+          </div>
         </div>
       </div>
 
-      {/* Office floor */}
-      <div className="relative min-h-[350px] sm:min-h-[400px]" style={{ imageRendering: 'auto' }}>
-        <FloorPattern />
-        <OfficeDecor />
-
-        {/* Room areas */}
-        <div className="relative z-10 p-4 sm:p-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6 sm:gap-8">
-          {activeRoles.map((role) => {
-            const roleMembers = grouped[role] || [];
-            const hasOnline = roleMembers.some(m => m.isOnline);
-            const style = ROLE_STYLE[role] || ROLE_STYLE.admin;
-
-            return (
-              <div key={role} className="relative">
-                {/* Room label */}
-                <div className="flex items-center gap-1.5 mb-3">
-                  <div className={`w-1.5 h-1.5 rounded-full ${hasOnline ? 'bg-green-400 shadow-[0_0_4px_rgba(74,222,128,0.6)]' : 'bg-muted-foreground/30'}`} />
-                  <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-white/70 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
-                    {ROLE_LABEL[role] || role}
-                  </span>
-                  <span className="text-sm">{style.deskItems}</span>
+      <div className="bg-[radial-gradient(circle_at_top,hsl(var(--secondary))_0%,transparent_55%)] px-4 py-5 sm:px-5">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {activeRoles.map((role) => (
+            <div key={role} className="rounded-2xl border border-border/70 bg-background/70 p-4 backdrop-blur-sm">
+              <div className="mb-4 flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">{ROLE_LABEL[role] || role}</p>
+                  <p className="text-[11px] text-muted-foreground">{groupedMembers[role].filter((member) => member.isOnline).length} ao vivo</p>
                 </div>
-
-                {/* Room border */}
-                <div className="rounded-lg border border-white/10 bg-black/10 backdrop-blur-[2px] p-3 sm:p-4">
-                  <div className="flex flex-wrap gap-4 sm:gap-5 justify-center">
-                    {roleMembers.map(member => (
-                      <Workstation key={member.id} member={member} onChat={setChatTarget} />
-                    ))}
-                  </div>
-                </div>
+                <div className="text-xl">{ROLE_EMOJI[role] || '👤'}</div>
               </div>
-            );
-          })}
-        </div>
 
-        {/* Ambient particles */}
-        {[...Array(5)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-1 h-1 rounded-full bg-yellow-400/20"
-            style={{ left: `${15 + i * 18}%`, top: `${20 + (i % 3) * 25}%` }}
-            animate={{ y: [0, -10, 0], opacity: [0.2, 0.5, 0.2] }}
-            transition={{ duration: 3 + i, repeat: Infinity, delay: i * 0.5 }}
-          />
-        ))}
+              <div className="grid grid-cols-2 gap-3">
+                {groupedMembers[role].map((member) => (
+                  <PixelAvatar key={member.id} member={member} onClick={() => setChatTarget(member)} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Quick chat overlay */}
       <AnimatePresence>
         {chatTarget && currentUser && (
           <QuickChatDialog
             member={chatTarget}
             currentUserId={currentUser.id}
+            messages={currentConversation}
+            onSend={sendQuickMessage}
             onClose={() => setChatTarget(null)}
           />
         )}

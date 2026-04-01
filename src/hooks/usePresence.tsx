@@ -8,27 +8,43 @@ import {
 
 /**
  * Mantém a presença do usuário no canal compartilhado do escritório virtual.
- * Envia heartbeat a cada 10s para refletir online/offline ao vivo.
+ * Faz track imediato ao entrar e heartbeat curto para refletir online/offline ao vivo.
  */
 export function usePresenceHeartbeat(userId: string | undefined) {
   useEffect(() => {
     if (!userId) return;
 
+    let active = true;
     subscribeOfficeChannel();
-    void trackPresence(userId);
 
-    const interval = window.setInterval(() => {
+    const sendHeartbeat = () => {
+      if (!active) return;
       void trackPresence(userId);
-    }, 10_000);
+    };
+
+    sendHeartbeat();
+
+    const interval = window.setInterval(sendHeartbeat, 5_000);
 
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void trackPresence(userId);
+      if (document.visibilityState === 'visible') sendHeartbeat();
     };
+
+    const onOnline = () => sendHeartbeat();
+    const onPageHide = () => {
+      void untrackPresence();
+    };
+
     document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('pagehide', onPageHide);
 
     return () => {
+      active = false;
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('pagehide', onPageHide);
       void untrackPresence();
       unsubscribeOfficeChannel();
     };

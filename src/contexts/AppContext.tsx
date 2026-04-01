@@ -68,7 +68,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const currentUser = profile ? profileToUser(profile) : null;
 
   // Heartbeat for virtual office presence
-  usePresenceHeartbeat(profile?.id);
+  usePresenceHeartbeat(user?.id ?? profile?.id);
 
   // Re-fetch data when auth finishes loading and user is available
   useEffect(() => {

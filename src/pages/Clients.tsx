@@ -1746,14 +1746,39 @@ export default function Clients() {
               {/* Step content */}
               <div className="min-h-[200px]">
                 {editing ? (
-                  // Editing: show all fields together
-                  <div className="space-y-5">
-                    {renderStep0()}
-                    {hasMetaApi && renderStep1()}
-                    {renderStep2()}
-                    {renderStep3()}
-                    {renderStep4()}
-                  </div>
+                  // Editing: show fields based on client type
+                  clientType === 'sem_contrato' ? (
+                    <div className="space-y-5">
+                      {renderStep0()}
+                      {/* Proposal selector for sem_contrato editing */}
+                      <div className="space-y-2 border-t border-border/50 pt-4">
+                        <Label>Tipo de Cliente</Label>
+                        <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30">📄 Sem Contrato</Badge>
+                        <div className="mt-2">
+                          <Label>Vincular a Proposta Aceita</Label>
+                          <Select value={proposalId || 'none'} onValueChange={v => setProposalId(v === 'none' ? null : v)}>
+                            <SelectTrigger><SelectValue placeholder="Selecione uma proposta" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Nenhuma proposta</SelectItem>
+                              {proposals.map(p => (
+                                <SelectItem key={p.id} value={p.id}>
+                                  {p.client_company || p.client_name} — {p.proposal_type === 'marketing' ? 'Marketing' : p.proposal_type === 'sistema' ? 'Sistema' : p.proposal_type === 'endomarketing' ? 'Endomarketing' : p.proposal_type === 'cronograma' ? 'Cronograma' : 'Personalizada'}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-5">
+                      {renderStep0()}
+                      {hasMetaApi && renderStep1()}
+                      {renderStep2()}
+                      {renderStep3()}
+                      {renderStep4()}
+                    </div>
+                  )
                 ) : clientType === 'sem_contrato' ? (
                   <>
                     {step === 0 && renderStep0()}

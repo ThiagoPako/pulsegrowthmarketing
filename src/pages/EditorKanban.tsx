@@ -365,9 +365,12 @@ export default function EditorKanban() {
         if (t.kanban_column === 'edicao') {
           // Show unassigned or assigned to me
           if (t.assigned_to && t.assigned_to !== user.id) return false;
+        } else if (t.kanban_column === 'alteracao') {
+          // RULE: Only the original editor (edited_by) can see/work on alterations
+          if (t.edited_by !== user.id) return false;
         } else {
-          // For revisao/alteracao/envio: only show tasks I worked on
-          if (t.assigned_to && t.assigned_to !== user.id) return false;
+          // For revisao/envio: only show tasks I worked on
+          if (t.edited_by && t.edited_by !== user.id) return false;
         }
       }
       return true;

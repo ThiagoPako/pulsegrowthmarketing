@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import UserAvatar from '@/components/UserAvatar';
 import AgencyCapacityWidget from '@/components/AgencyCapacityWidget';
 import TeamPerformanceWidget from '@/components/TeamPerformanceWidget';
+import VirtualOffice from '@/components/VirtualOffice';
 import BirthdayCountdown from '@/components/BirthdayCountdown';
 import BonusCongratsBanner from '@/components/BonusCongratsBanner';
 import ClientLogo from '@/components/ClientLogo';
@@ -481,6 +482,9 @@ export default function Dashboard() {
           </div>
         </motion.div>
       )}
+
+      {/* VIRTUAL OFFICE */}
+      <VirtualOffice />
 
       {/* LIVE ACTIVITY — Redesigned with proper status separation */}
       {(() => {

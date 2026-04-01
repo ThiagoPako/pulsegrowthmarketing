@@ -2,6 +2,7 @@ import React, { createContext, useContext, useCallback, useState, useEffect } fr
 import { useAuth, type Profile } from '@/hooks/useAuth';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { supabase } from '@/lib/vpsDb';
+import { usePresenceHeartbeat } from '@/hooks/usePresence';
 import { generateFixedRecordings } from '@/lib/schedulingUtils';
 import { sendRecordingScheduledNotification } from '@/services/whatsappService';
 import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek, Script, ActiveRecording, UserRole } from '@/types';
@@ -65,6 +66,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const data = useSupabaseData();
 
   const currentUser = profile ? profileToUser(profile) : null;
+
+  // Heartbeat for virtual office presence
+  usePresenceHeartbeat(profile?.id);
 
   // Re-fetch data when auth finishes loading and user is available
   useEffect(() => {

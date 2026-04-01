@@ -495,7 +495,7 @@ export default function Clients() {
       toast.error('Preencha todos os campos obrigatórios'); return;
     }
     if (clientType === 'sem_contrato' && !proposalId) {
-      toast.error('Selecione uma proposta para clientes sem contrato'); return;
+      toast.error('Selecione uma proposta para Pacotes de Serviços'); return;
     }
 
     setSaving(true);

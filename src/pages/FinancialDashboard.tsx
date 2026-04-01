@@ -34,6 +34,7 @@ import SalaryRaiseAlert from '@/components/financial/SalaryRaiseAlert';
 import BankStatementImport from '@/components/financial/BankStatementImport';
 import FinancialStartImport from '@/components/financial/FinancialStartImport';
 import { supabase } from '@/lib/vpsDb';
+import PiggyBankWidget from '@/components/financial/PiggyBankWidget';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },

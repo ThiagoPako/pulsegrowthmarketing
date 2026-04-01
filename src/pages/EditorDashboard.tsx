@@ -218,6 +218,14 @@ export default function EditorDashboard() {
    const fileInputRef = useRef<HTMLInputElement>(null);
    const isEditorRole = profile?.role === 'editor';
 
+   // Story upload state
+   const [storyClientId, setStoryClientId] = useState('');
+   const [storyTitle, setStoryTitle] = useState('');
+   const [storyUploading, setStoryUploading] = useState(false);
+   const [storyUploadProgress, setStoryUploadProgress] = useState('');
+   const [storiesUploaded, setStoriesUploaded] = useState(0);
+   const storyFileRef = useRef<HTMLInputElement>(null);
+
   const getTaskDisplayMeta = useCallback((task: EditorTask) => {
     const client = clients.find((c: any) => c.id === task.client_id);
     const recording = task.recording_id ? recordings.find((r: any) => r.id === task.recording_id) : null;

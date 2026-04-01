@@ -562,7 +562,119 @@ export default function EditorDashboard() {
     setSaving(false);
   };
 
-  if (loading) return (
+  // Ops! Volta aqui — editor returns from review to editing
+  const handleReturnFromReview = async (task: EditorTask) => {
+    if (!user) return;
+    const { error } = await supabase.from('content_tasks').update({
+      kanban_column: 'edicao',
+      editing_started_at: new Date().toISOString(),
+      assigned_to: user.id,
+      edited_by: user.id,
+      reviewing_by: null,
+      reviewing_by_name: null,
+      reviewing_at: null,
+      review_deadline: null,
+      approval_sent_at: null,
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', task.id);
+    if (error) { toast.error('Erro ao devolver tarefa'); return; }
+    await supabase.from('social_media_deliveries').delete().eq('content_task_id', task.id);
+    await supabase.from('task_history').insert({
+      task_id: task.id, user_id: user.id,
+      action: 'Ops! Volta aqui — editor devolveu da revisão para corrigir',
+    });
+    toast.success('📥 Tarefa devolvida para edição!');
+    setActiveEditTask({ ...task, kanban_column: 'edicao', editing_started_at: new Date().toISOString(), assigned_to: user.id });
+    fetchTasks();
+  };
+
+  // Story upload handler (same flow as VideomakerDashboard)
+  const handleStoryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    if (!storyClientId) { toast.error('Selecione um cliente primeiro'); return; }
+    if (file.size > 500 * 1024 * 1024) { toast.error('Máximo: 500MB'); return; }
+
+    setStoryUploading(true);
+    setStoryUploadProgress(`Enviando ${file.name}...`);
+    try {
+      const folder = `stories/${storyClientId}`;
+      const url = await uploadFileToVps(file, folder);
+      const client = clients.find(c => c.id === storyClientId);
+      const title = storyTitle.trim() || `Story ${format(new Date(), 'dd/MM HH:mm')}`;
+
+      // 1. Create content_task for social media
+      const taskId = crypto.randomUUID();
+      await supabase.from('content_tasks').insert({
+        id: taskId,
+        client_id: storyClientId,
+        title: `📱 ${title}`,
+        content_type: 'story',
+        kanban_column: 'agendamentos',
+        description: `Story editado pelo editor.\n\n📥 Download: ${url}`,
+        edited_video_link: url,
+        edited_video_type: 'upload',
+        created_by: user.id,
+        edited_by: user.id,
+        approved_at: new Date().toISOString(),
+      } as any);
+
+      // 2. Create social_media_delivery
+      await supabase.from('social_media_deliveries').insert({
+        client_id: storyClientId,
+        content_type: 'story',
+        title: `📱 ${title}`,
+        description: `Story editado pelo editor. Download: ${url}`,
+        status: 'entregue',
+        delivered_at: format(new Date(), 'yyyy-MM-dd'),
+        created_by: user.id,
+        content_task_id: taskId,
+      } as any);
+
+      // 3. Notify social_media
+      await supabase.rpc('notify_role', {
+        _role: 'social_media',
+        _title: '📱 Novo Story para agendar',
+        _message: `${client?.companyName || 'Cliente'} — "${title}" foi editado pelo editor e está pronto para agendamento.`,
+        _type: 'story_upload',
+        _link: '/entregas-social',
+      });
+
+      // 4. Upload to client portal
+      const now = new Date();
+      await supabase.from('client_portal_contents').insert({
+        client_id: storyClientId,
+        title: `📱 ${title}`,
+        content_type: 'story',
+        file_url: url,
+        status: 'pendente',
+        season_month: now.getMonth() + 1,
+        season_year: now.getFullYear(),
+        uploaded_by: user.id,
+      } as any);
+
+      // 5. Portal notification
+      await supabase.from('client_portal_notifications').insert({
+        client_id: storyClientId,
+        title: '📱 Novo Story enviado',
+        message: `"${title}" foi editado e está pronto. Acesse para visualizar.`,
+        type: 'story_upload',
+      } as any);
+
+      setStoriesUploaded(prev => prev + 1);
+      setStoryTitle('');
+      toast.success(`Story enviado! +${EDITOR_SCORE.STORY_EDITADO} pts 🚀`);
+      setCelebrationPoints(EDITOR_SCORE.STORY_EDITADO);
+      setShowCelebration(true);
+    } catch (err: any) {
+      toast.error(`Erro: ${err.message}`);
+    } finally {
+      setStoryUploading(false);
+      setStoryUploadProgress('');
+      if (storyFileRef.current) storyFileRef.current.value = '';
+    }
+  };
+
     <div className="flex flex-col items-center justify-center h-64 gap-4">
       <RocketMascot size={64} />
       <p className="text-muted-foreground animate-pulse">Carregando sua bancada...</p>

@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Upload, Rocket, Loader2, ArrowUpCircle, ArrowDownCircle, Trash2, AlertTriangle, CheckCircle, FileSpreadsheet } from 'lucide-react';
+import { Upload, Rocket, Loader2, ArrowUpCircle, ArrowDownCircle, Trash2, AlertTriangle, CheckCircle, FileSpreadsheet, DollarSign, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -27,7 +27,7 @@ interface ParsedMovement {
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onImport: (items: { date: string; description: string; amount: number; type: 'entrada' | 'saida' }[]) => Promise<boolean>;
+  onImport: (items: { date: string; description: string; amount: number; type: 'entrada' | 'saida' }[], currentBalance: number) => Promise<boolean>;
   currentBalance?: number;
 }
 
@@ -168,21 +168,20 @@ export default function FinancialStartImport({ open, onOpenChange, onImport, cur
   const [movements, setMovements] = useState<ParsedMovement[]>([]);
   const [fileName, setFileName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [initialBalance, setInitialBalance] = useState('');
+  const [realBalance, setRealBalance] = useState('');
 
   const selectedMvts = useMemo(() => movements.filter(m => m.selected), [movements]);
   const totalIn = useMemo(() => selectedMvts.filter(m => m.type === 'entrada').reduce((s, m) => s + m.amount, 0), [selectedMvts]);
   const totalOut = useMemo(() => selectedMvts.filter(m => m.type === 'saida').reduce((s, m) => s + m.amount, 0), [selectedMvts]);
-  const projectedBalance = useMemo(() => {
-    const base = parseFloat(initialBalance) || 0;
-    return base + totalIn - totalOut;
-  }, [initialBalance, totalIn, totalOut]);
+  const netResult = useMemo(() => totalIn - totalOut, [totalIn, totalOut]);
+  const realBalanceNum = parseFloat(realBalance) || 0;
+  const hasRealBalance = realBalance.trim() !== '';
 
   const reset = () => {
     setStep('info');
     setMovements([]);
     setFileName('');
-    setInitialBalance('');
+    setRealBalance('');
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -243,11 +242,15 @@ export default function FinancialStartImport({ open, onOpenChange, onImport, cur
       toast.error('Selecione ao menos uma movimentação');
       return;
     }
+    if (!hasRealBalance) {
+      toast.error('Informe o saldo atual da conta bancária');
+      return;
+    }
     setStep('importing');
     const items = selectedMvts.map(m => ({ date: m.date, description: m.description, amount: m.amount, type: m.type }));
-    const ok = await onImport(items);
+    const ok = await onImport(items, realBalanceNum);
     if (ok) {
-      toast.success(`${items.length} movimentação(ões) importadas! Financeiro sincronizado.`);
+      toast.success(`${items.length} movimentação(ões) importadas! Saldo sincronizado: ${fmt(realBalanceNum)}`);
       reset();
       onOpenChange(false);
     } else {
@@ -262,6 +265,15 @@ export default function FinancialStartImport({ open, onOpenChange, onImport, cur
   };
 
   const allSelected = movements.length > 0 && movements.every(m => m.selected);
+
+  // Sort movements by date
+  const sortedMovements = useMemo(() => [...movements].sort((a, b) => a.date.localeCompare(b.date)), [movements]);
+
+  // Date range
+  const dateRange = useMemo(() => {
+    if (sortedMovements.length === 0) return null;
+    return { from: sortedMovements[0].date, to: sortedMovements[sortedMovements.length - 1].date };
+  }, [sortedMovements]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
@@ -280,25 +292,46 @@ export default function FinancialStartImport({ open, onOpenChange, onImport, cur
               <Alert className="border-primary/30 bg-primary/5">
                 <Rocket className="h-4 w-4 text-primary" />
                 <AlertDescription className="text-sm">
-                  <strong>Bem-vindo ao Start Financeiro!</strong> Importe o extrato bancário com todas as movimentações (entradas e saídas) para sincronizar o sistema com o saldo real da sua conta. Após isso, mantenha tudo manualmente.
+                  <strong>Bem-vindo ao Start Financeiro!</strong> Importe o extrato bancário completo para que o sistema reflita exatamente o saldo atual da sua conta. Informe o saldo real e todas as movimentações serão registradas.
                 </AlertDescription>
               </Alert>
 
-              <div>
-                <Label className="text-sm font-medium mb-2 block">Saldo Inicial da Conta (opcional)</Label>
-                <p className="text-xs text-muted-foreground mb-2">Informe o saldo que havia na conta ANTES das movimentações do extrato. Isso ajuda a conferir o saldo final.</p>
+              <div className="p-4 rounded-xl border-2 border-primary/20 bg-primary/5 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Wallet className="h-5 w-5 text-primary" />
+                  <Label className="text-sm font-semibold">Saldo Atual da Conta Bancária *</Label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Informe o saldo que aparece <strong>agora</strong> na sua conta bancária. O sistema vai usar esse valor como referência para manter tudo sincronizado.
+                </p>
                 <Input
                   type="number"
                   step="0.01"
                   placeholder="Ex: 15000.00"
-                  value={initialBalance}
-                  onChange={e => setInitialBalance(e.target.value)}
+                  value={realBalance}
+                  onChange={e => setRealBalance(e.target.value)}
+                  className="text-lg font-semibold"
                 />
+                {hasRealBalance && (
+                  <p className="text-sm font-medium text-primary">
+                    Saldo informado: {fmt(realBalanceNum)}
+                  </p>
+                )}
               </div>
 
-              <Button className="w-full gap-2" size="lg" onClick={() => setStep('upload')}>
+              <Button
+                className="w-full gap-2"
+                size="lg"
+                onClick={() => {
+                  if (!hasRealBalance) {
+                    toast.error('Informe o saldo atual da conta');
+                    return;
+                  }
+                  setStep('upload');
+                }}
+              >
                 <Upload className="h-4 w-4" />
-                Continuar para Upload
+                Continuar para Upload do Extrato
               </Button>
             </motion.div>
           )}
@@ -306,6 +339,11 @@ export default function FinancialStartImport({ open, onOpenChange, onImport, cur
           {/* Step 2: Upload */}
           {step === 'upload' && (
             <motion.div key="upload" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-5">
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                <Wallet className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium">Saldo da conta: <strong className="text-primary">{fmt(realBalanceNum)}</strong></span>
+              </div>
+
               <Alert className="border-blue-500/30 bg-blue-50 dark:bg-blue-950/20">
                 <AlertTriangle className="h-4 w-4 text-blue-600" />
                 <AlertDescription className="text-blue-800 dark:text-blue-200 text-sm">
@@ -339,25 +377,56 @@ export default function FinancialStartImport({ open, onOpenChange, onImport, cur
           {/* Step 3: Preview */}
           {step === 'preview' && (
             <motion.div key="preview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex flex-col min-h-0 flex-1">
+              {/* Balance highlight */}
+              <div className="p-4 rounded-xl border-2 border-primary/30 bg-gradient-to-r from-primary/5 to-primary/10 mb-3 flex-shrink-0">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-primary/10">
+                      <Wallet className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground font-medium">Saldo Atual da Conta</p>
+                      <p className="text-2xl font-bold text-primary">{fmt(realBalanceNum)}</p>
+                    </div>
+                  </div>
+                  {dateRange && (
+                    <Badge variant="outline" className="text-xs gap-1">
+                      <FileSpreadsheet className="h-3 w-3" />
+                      {formatDate(dateRange.from)} → {formatDate(dateRange.to)}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
               {/* Summary Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3 flex-shrink-0">
                 <div className="p-3 rounded-lg border bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800">
-                  <p className="text-xs text-muted-foreground">Entradas</p>
+                  <div className="flex items-center gap-1 mb-1">
+                    <TrendingUp className="h-3 w-3 text-emerald-600" />
+                    <p className="text-xs text-muted-foreground">Entradas</p>
+                  </div>
                   <p className="text-lg font-bold text-emerald-600">{fmt(totalIn)}</p>
                   <p className="text-xs text-muted-foreground">{selectedMvts.filter(m => m.type === 'entrada').length} itens</p>
                 </div>
                 <div className="p-3 rounded-lg border bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800">
-                  <p className="text-xs text-muted-foreground">Saídas</p>
+                  <div className="flex items-center gap-1 mb-1">
+                    <TrendingDown className="h-3 w-3 text-rose-600" />
+                    <p className="text-xs text-muted-foreground">Saídas</p>
+                  </div>
                   <p className="text-lg font-bold text-rose-600">{fmt(totalOut)}</p>
                   <p className="text-xs text-muted-foreground">{selectedMvts.filter(m => m.type === 'saida').length} itens</p>
                 </div>
                 <div className="p-3 rounded-lg border bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
-                  <p className="text-xs text-muted-foreground">Resultado</p>
-                  <p className={`text-lg font-bold ${totalIn - totalOut >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(totalIn - totalOut)}</p>
+                  <div className="flex items-center gap-1 mb-1">
+                    <DollarSign className="h-3 w-3 text-blue-600" />
+                    <p className="text-xs text-muted-foreground">Resultado Líquido</p>
+                  </div>
+                  <p className={`text-lg font-bold ${netResult >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(netResult)}</p>
                 </div>
                 <div className="p-3 rounded-lg border bg-primary/5 border-primary/20">
-                  <p className="text-xs text-muted-foreground">Saldo Projetado</p>
-                  <p className={`text-lg font-bold ${projectedBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(projectedBalance)}</p>
+                  <p className="text-xs text-muted-foreground mb-1">Total Selecionados</p>
+                  <p className="text-lg font-bold text-foreground">{selectedMvts.length}</p>
+                  <p className="text-xs text-muted-foreground">de {movements.length}</p>
                 </div>
               </div>
 
@@ -377,7 +446,7 @@ export default function FinancialStartImport({ open, onOpenChange, onImport, cur
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {movements.map(m => (
+                    {sortedMovements.map(m => (
                       <TableRow key={m.id} className={`transition-colors ${!m.selected ? 'opacity-40' : ''}`}>
                         <TableCell>
                           <Checkbox checked={m.selected} onCheckedChange={() => toggleLine(m.id)} />
@@ -420,10 +489,15 @@ export default function FinancialStartImport({ open, onOpenChange, onImport, cur
               {/* Actions */}
               <div className="flex items-center justify-between pt-3 border-t mt-3 flex-shrink-0">
                 <Button variant="ghost" size="sm" onClick={() => { setMovements([]); setStep('upload'); }}>← Voltar</Button>
-                <Button onClick={handleImport} className="gap-2" disabled={selectedMvts.length === 0}>
-                  <CheckCircle className="h-4 w-4" />
-                  Importar {selectedMvts.length} movimentação(ões)
-                </Button>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-muted-foreground">
+                    Saldo final no sistema: <strong className="text-primary">{fmt(realBalanceNum)}</strong>
+                  </span>
+                  <Button onClick={handleImport} className="gap-2" disabled={selectedMvts.length === 0}>
+                    <CheckCircle className="h-4 w-4" />
+                    Importar e Sincronizar
+                  </Button>
+                </div>
               </div>
             </motion.div>
           )}
@@ -433,7 +507,7 @@ export default function FinancialStartImport({ open, onOpenChange, onImport, cur
             <motion.div key="importing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-16 gap-4">
               <Loader2 className="h-12 w-12 text-primary animate-spin" />
               <p className="text-muted-foreground font-medium">Importando movimentações...</p>
-              <p className="text-xs text-muted-foreground">Sincronizando com o financeiro</p>
+              <p className="text-xs text-muted-foreground">Sincronizando saldo: {fmt(realBalanceNum)}</p>
             </motion.div>
           )}
         </AnimatePresence>

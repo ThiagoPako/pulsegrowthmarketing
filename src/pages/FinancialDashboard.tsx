@@ -55,6 +55,7 @@ export default function FinancialDashboard() {
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMsg, setCelebrationMsg] = useState('');
   const [showImport, setShowImport] = useState(false);
+  const [showFinancialStart, setShowFinancialStart] = useState(false);
 
   const handleBankImport = async (items: { date: string; description: string; amount: number }[], type: 'entrada' | 'saida') => {
     try {

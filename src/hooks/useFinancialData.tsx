@@ -443,7 +443,6 @@ export function useFinancialData() {
   const addCashMovement = async (m: Partial<CashMovement>) => {
     try {
       const { error } = await supabase.from('cash_reserve_movements').insert(m as any);
-      const { error } = await supabase.from('cash_reserve_movements').insert(m as any);
       if (error) { console.error('[useFinancialData] addCashMovement error:', error); return false; }
       await Promise.allSettled([
         logActivity('criação', 'caixa', `${m.type === 'entrada' ? 'Depósito' : 'Retirada'} no caixa - R$ ${Number(m.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${m.description}`, undefined, m),

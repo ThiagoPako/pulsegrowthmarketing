@@ -935,11 +935,9 @@ export default function Dashboard() {
             </div>
           </div>
           {todayRecordings.length === 0 ? (
-            <div className="py-6 text-center text-muted-foreground text-xs sm:text-sm flex flex-col items-center gap-2">
-              <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 2, repeat: Infinity }}>
-                <Rocket size={28} className="text-muted-foreground/40" />
-              </motion.div>
-              Nenhuma gravação hoje
+            <div className="empty-state">
+              <Rocket size={32} className="empty-state-icon" />
+              <p className="text-sm">Nenhuma gravação programada para hoje</p>
             </div>
           ) : (
             <div className="space-y-1.5 sm:space-y-2 max-h-[280px] overflow-y-auto pr-1">

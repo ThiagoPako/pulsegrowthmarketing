@@ -160,12 +160,24 @@ export default function PixelCharacter({ member, onClick, inCoffeeRoom, justJoin
     <motion.button
       type="button"
       onClick={onClick}
-      animate={{ x: pos.x, y: pos.y }}
-      transition={{ duration: 2.5, ease: 'easeInOut', delay }}
+      initial={justJoined ? { scale: 0, y: 40, opacity: 0 } : false}
+      animate={{ x: pos.x, y: pos.y, scale: 1, opacity: 1 }}
+      transition={{ duration: justJoined ? 0.6 : 2.5, ease: justJoined ? 'backOut' : 'easeInOut', delay }}
       whileHover={{ scale: 1.15 }}
       className="group relative flex flex-col items-center gap-0.5 p-1.5 rounded-lg"
       style={{ imageRendering: 'pixelated' as any }}
     >
+      {/* Join sparkle effect */}
+      {justJoined && (
+        <motion.div
+          className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center"
+          initial={{ opacity: 1, scale: 0.5 }}
+          animate={{ opacity: 0, scale: 2.5 }}
+          transition={{ duration: 1.5 }}
+        >
+          <span className="text-2xl">✨</span>
+        </motion.div>
+      )}
       {/* Online pulse */}
       {member.isOnline && (
         <motion.div

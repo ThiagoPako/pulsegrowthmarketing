@@ -1,25 +1,52 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { supabase as supabaseReal } from '@/integrations/supabase/client';
+import { createVirtualOfficeChannel } from '@/lib/virtualOfficeRealtime';
 
 /**
- * Updates `last_seen_at` on the profiles table every 15s
- * so other users can see who's online in real-time.
- * Uses Supabase Cloud only (VPS profiles table lacks last_seen_at column).
+ * Presença em canal realtime compartilhado para refletir online/offline ao vivo.
  */
 export function usePresenceHeartbeat(userId: string | undefined) {
-  const ping = useCallback(async () => {
-    if (!userId) return;
-    try {
-      await supabaseReal.from('profiles').update({ last_seen_at: new Date().toISOString() } as any).eq('id', userId);
-    } catch {
-      // ignore
-    }
-  }, [userId]);
-
   useEffect(() => {
     if (!userId) return;
-    ping(); // immediate
-    const interval = setInterval(ping, 15_000); // every 15s
-    return () => clearInterval(interval);
-  }, [userId, ping]);
+
+    const channel = createVirtualOfficeChannel(userId);
+
+    const track = async () => {
+      try {
+        await channel.track({
+          userId,
+          heartbeatAt: new Date().toISOString(),
+        });
+      } catch {
+        // ignore
+      }
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void track();
+    };
+
+    const onFocus = () => {
+      void track();
+    };
+
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') void track();
+    });
+
+    const interval = window.setInterval(() => {
+      void track();
+    }, 10_000);
+
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onFocus);
+      void channel.untrack();
+      void supabaseReal.removeChannel(channel);
+    };
+  }, [userId]);
 }

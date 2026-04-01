@@ -1111,11 +1111,12 @@ export default function Dashboard() {
       )}
 
       {/* WEEK AGENDA — mobile: vertical list, desktop: 7-col grid */}
-      <div className="glass-card p-3 sm:p-5">
-        <div className="flex items-center justify-between mb-3 sm:mb-4">
-          <div className="flex items-center gap-2">
-            <FloatingRocket size={16} />
-            <h3 className="font-display font-semibold text-xs sm:text-sm">Agenda Semanal</h3>
+      <div className="glass-card p-4 sm:p-5">
+        <div className="section-header">
+          <Calendar size={16} className="text-primary" />
+          <div className="flex-1">
+            <h3 className="section-title">Agenda Semanal</h3>
+            <p className="section-subtitle">Planejamento de gravações</p>
           </div>
           <div className="flex items-center gap-1 sm:gap-2">
             <button onClick={() => setWeekOffset(w => w - 1)} className="w-6 h-6 sm:w-7 sm:h-7 rounded-md bg-secondary flex items-center justify-center hover:bg-secondary/80"><ChevronLeft size={12} /></button>

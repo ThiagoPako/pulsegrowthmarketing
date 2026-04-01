@@ -105,7 +105,7 @@ function calculateScoreForMonth(
     const completed = dTasks.filter(t => ['concluida', 'aprovada_cliente'].includes(t.kanban_column)).length;
     const inProgress = dTasks.filter(t => ['em_andamento', 'revisao'].includes(t.kanban_column)).length;
     const totalTime = dTasks.reduce((a, t) => a + (t.time_spent_seconds || 0), 0);
-    const totalVersions = dTasks.reduce((a, t) => a + (t.version || 1), 0);
+    const totalVersions = dTasks.reduce((a, t) => a + Math.max((t.version || 1) - 1, 0), 0);
     const highPriority = dTasks.filter(t => t.priority === 'alta' || t.priority === 'urgente').length;
     score = completed * DESIGNER_SCORE.CONCLUIDO + inProgress * DESIGNER_SCORE.EM_PROGRESSO +
       Math.round(totalTime / 3600) * DESIGNER_SCORE.POR_HORA + totalVersions * DESIGNER_SCORE.POR_VERSAO +

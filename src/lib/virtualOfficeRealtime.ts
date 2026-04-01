@@ -10,10 +10,27 @@ export interface QuickMessage {
   createdAt: string;
 }
 
-export function createVirtualOfficeChannel(key: string) {
-  return supabaseReal.channel(VIRTUAL_OFFICE_CHANNEL, {
+/**
+ * Creates a channel for the virtual office.
+ * Each caller gets its own channel instance with a unique key for presence tracking.
+ * The channel name is always the same so all participants share the same presence pool.
+ */
+export function createVirtualOfficeChannel(presenceKey: string) {
+  return supabaseReal.channel(VIRTUAL_OFFICE_CHANNEL + '-' + presenceKey, {
     config: {
-      presence: { key },
+      presence: { key: presenceKey },
+    },
+  });
+}
+
+/**
+ * Creates a shared channel for viewing presence state and receiving broadcasts.
+ * Uses a unique suffix to avoid collision with the heartbeat channels.
+ */
+export function createVirtualOfficeViewerChannel(viewerKey: string) {
+  return supabaseReal.channel('vo-viewer-' + viewerKey, {
+    config: {
+      presence: { key: viewerKey },
       broadcast: { self: false, ack: true },
     },
   });

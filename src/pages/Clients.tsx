@@ -2144,6 +2144,40 @@ export default function Clients() {
         <ClientArtDatabaseDialog client={artDbClient} open={!!artDbClient} onOpenChange={o => !o && setArtDbClient(null)} />
       )}
 
+      {/* Checklist Management Dialog for Pacotes de Serviços */}
+      <Dialog open={!!checklistClient} onOpenChange={o => !o && setChecklistClient(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package size={18} className="text-primary" />
+              Checklist — {checklistClient?.companyName}
+            </DialogTitle>
+          </DialogHeader>
+          {checklistClient && (
+            <ChecklistManager
+              clientId={checklistClient.id}
+              proposalId={(checklistClient as any).proposalId}
+              onGenerate={async () => {
+                if (!(checklistClient as any).proposalId) {
+                  toast.error('Este cliente não possui proposta vinculada');
+                  return;
+                }
+                setGeneratingChecklistFor(checklistClient.id);
+                try {
+                  await replaceProposalChecklist(checklistClient.id, (checklistClient as any).proposalId);
+                  toast.success('Checklist gerado com sucesso!');
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : 'Erro ao gerar checklist');
+                } finally {
+                  setGeneratingChecklistFor(null);
+                }
+              }}
+              generating={generatingChecklistFor === checklistClient?.id}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Briefing Dialog */}
       <Dialog open={!!briefingClient} onOpenChange={o => !o && setBriefingClient(null)}>
         <DialogContent className="max-w-2xl max-h-[85vh]">

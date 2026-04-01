@@ -220,18 +220,19 @@ export default function DesignerDashboard() {
       {/* Main row: Today's Tasks (left 2/3) + Performance (right 1/3) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 glass-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-              <CalendarDays size={16} className="text-primary" /> Tarefas do Dia
-            </h3>
-            <Badge variant="secondary" className="text-xs">{todayTasks.length} demandas</Badge>
+          <div className="section-header">
+            <CalendarDays size={16} className="text-primary" />
+            <div className="flex-1">
+              <h3 className="section-title">Tarefas do Dia</h3>
+              <p className="section-subtitle">{todayTasks.length} demandas ativas</p>
+            </div>
           </div>
 
           {todayTasks.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground text-sm">
-              <CheckCircle size={36} className="mx-auto mb-2 opacity-30" />
-              <p>Nenhuma tarefa pendente! 🎉</p>
-              <p className="text-xs mt-1">Verifique o Kanban para novas demandas</p>
+            <div className="empty-state">
+              <CheckCircle size={36} className="empty-state-icon" />
+              <p className="text-sm">Nenhuma tarefa pendente! 🎉</p>
+              <p className="text-xs text-muted-foreground">Verifique o Kanban para novas demandas</p>
             </div>
           ) : (
             <ScrollArea className="h-[340px]">
@@ -283,9 +284,10 @@ export default function DesignerDashboard() {
 
         {/* Performance card - side panel */}
         <div className="glass-card p-5">
-          <h3 className="font-display font-semibold text-sm mb-4 flex items-center gap-2">
-            <BarChart3 size={16} /> Meu Desempenho
-          </h3>
+          <div className="section-header">
+            <BarChart3 size={16} className="text-primary" />
+            <h3 className="section-title">Meu Desempenho</h3>
+          </div>
           <div className="space-y-4">
             {/* Scoring card */}
             <div className="rounded-xl bg-gradient-to-br from-amber-500/15 to-yellow-500/5 border border-amber-500/20 p-3">

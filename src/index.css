@@ -84,7 +84,43 @@
   }
 
   .stat-card {
-    @apply glass-card p-5 transition-all duration-200 hover:shadow-md;
+    @apply glass-card p-4 sm:p-5 transition-all duration-200 hover:shadow-md hover:border-primary/20;
+  }
+
+  .section-header {
+    @apply flex items-center gap-2.5 mb-4 pb-3 border-b border-border/60;
+  }
+
+  .section-title {
+    @apply font-display font-semibold text-sm sm:text-base text-foreground;
+  }
+
+  .section-subtitle {
+    @apply text-xs text-muted-foreground mt-0.5;
+  }
+
+  .empty-state {
+    @apply py-10 text-center text-muted-foreground flex flex-col items-center gap-3;
+  }
+
+  .empty-state-icon {
+    @apply text-muted-foreground/30;
+  }
+
+  .kpi-card {
+    @apply rounded-xl p-4 border transition-all duration-200 hover:shadow-md;
+  }
+
+  .kpi-value {
+    @apply text-xl sm:text-2xl font-display font-bold mt-1;
+  }
+
+  .kpi-label {
+    @apply text-xs text-muted-foreground font-medium uppercase tracking-wider;
+  }
+
+  .action-link {
+    @apply text-xs text-primary font-semibold hover:underline hover:text-primary/80 transition-colors cursor-pointer;
   }
 
   .nav-icon-btn {

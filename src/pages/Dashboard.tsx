@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Video, Plus, XCircle, RefreshCw, TrendingUp, Calendar, Check,
   ChevronLeft, ChevronRight, Clock, Users as UsersIcon, MessageSquare, Trophy, BarChart3,
-  Clapperboard, Film, Megaphone, AlertTriangle, Rocket, Bell, Send, Hourglass, Trash2, Package
+  Clapperboard, Film, Megaphone, AlertTriangle, Rocket, Bell, Send, Hourglass, Trash2, Package, Target
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, addDays, formatDistanceToNow, differenceInMinutes, differenceInHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -409,17 +409,16 @@ export default function Dashboard() {
   };
 
   const statItems = [
-    { label: 'Gravados', value: stats.todayDone, icon: Video, color: 'bg-success/15 text-success' },
-    { label: 'Agendados', value: stats.todayScheduled, icon: Clock, color: 'bg-info/15 text-info' },
-    { label: 'Extras', value: stats.todayExtras, icon: Plus, color: 'bg-warning/15 text-warning' },
-    { label: 'Cancelados', value: stats.todayCancelled, icon: XCircle, color: 'bg-destructive/15 text-destructive' },
-    { label: 'Semana', value: stats.weekDone, icon: TrendingUp, color: 'bg-primary/15 text-primary' },
-    { label: 'Clientes', value: stats.totalClients, icon: UsersIcon, color: 'bg-info/15 text-info' },
-    { label: 'WhatsApp', value: waStats.sent, icon: MessageSquare, color: 'bg-success/15 text-success' },
+    { label: 'Gravados Hoje', value: stats.todayDone, icon: Video, color: 'bg-success/15 text-success', border: 'border-success/20' },
+    { label: 'Agendados', value: stats.todayScheduled, icon: Clock, color: 'bg-info/15 text-info', border: 'border-info/20' },
+    { label: 'Extras', value: stats.todayExtras, icon: Plus, color: 'bg-warning/15 text-warning', border: 'border-warning/20' },
+    { label: 'Cancelados', value: stats.todayCancelled, icon: XCircle, color: 'bg-destructive/15 text-destructive', border: 'border-destructive/20' },
+    { label: 'Semana', value: stats.weekDone, icon: TrendingUp, color: 'bg-primary/15 text-primary', border: 'border-primary/20' },
+    { label: 'Total Clientes', value: stats.totalClients, icon: UsersIcon, color: 'bg-info/15 text-info', border: 'border-info/20' },
   ];
 
   return (
-    <div className="space-y-4 sm:space-y-5 max-w-[1400px]">
+    <div className="space-y-5 sm:space-y-6 max-w-[1400px]">
       {/* Header with rocket */}
       <motion.div
         className="flex items-center justify-between"
@@ -435,37 +434,26 @@ export default function Dashboard() {
             <p className="text-muted-foreground text-xs sm:text-sm">{format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
           </div>
         </div>
-        {/* Mini rocket exhaust on desktop */}
-        {!isMobile && (
-          <motion.div
-            animate={{ scale: [1, 1.1, 1], opacity: [0.5, 1, 0.5] }}
-            transition={{ duration: 2, repeat: Infinity }}
-            className="text-primary/30"
-          >
-            <Rocket size={40} />
-          </motion.div>
-        )}
       </motion.div>
 
       <BonusCongratsBanner />
       <BirthdayCountdown />
 
-      {/* Stats grid — 4 cols mobile, 7 cols desktop */}
-      <div className="grid grid-cols-4 sm:grid-cols-4 lg:grid-cols-7 gap-1.5 sm:gap-3">
+      {/* KPI Stats — clear grid with borders */}
+      <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
         {statItems.map((s, i) => (
           <motion.div
             key={s.label}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: i * 0.03 }}
-            whileTap={{ scale: 0.95 }}
-            className="stat-card p-2 sm:p-3"
+            transition={{ delay: i * 0.04 }}
+            className={`stat-card border ${s.border}`}
           >
-            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center mb-1 sm:mb-2 ${s.color}`}>
-              <s.icon size={isMobile ? 12 : 16} />
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${s.color}`}>
+              <s.icon size={16} />
             </div>
-            <p className="text-base sm:text-xl font-display font-bold">{s.value}</p>
-            <p className="text-[9px] sm:text-xs text-muted-foreground mt-0.5 truncate">{s.label}</p>
+            <p className="text-xl sm:text-2xl font-display font-bold">{s.value}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 leading-tight">{s.label}</p>
           </motion.div>
         ))}
       </div>
@@ -936,22 +924,20 @@ export default function Dashboard() {
         </motion.div>
       )}
 
-      {/* TODAY SCHEDULE + VM PROGRESS */}
+      {/* ─── GRAVAÇÕES DE HOJE + VM PROGRESS ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-        <div className="lg:col-span-2 glass-card p-3 sm:p-5">
-          <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <div className="flex items-center gap-2">
-              <FloatingRocket size={16} />
-              <h3 className="font-display font-semibold text-xs sm:text-sm">Gravações de Hoje</h3>
+        <div className="lg:col-span-2 glass-card p-4 sm:p-5">
+          <div className="section-header">
+            <Calendar size={16} className="text-primary" />
+            <div className="flex-1">
+              <h3 className="section-title">Gravações de Hoje</h3>
+              <p className="section-subtitle">{todayRecordings.length} gravações programadas</p>
             </div>
-            <span className="text-[10px] sm:text-xs text-muted-foreground">{todayRecordings.length} gravações</span>
           </div>
           {todayRecordings.length === 0 ? (
-            <div className="py-6 text-center text-muted-foreground text-xs sm:text-sm flex flex-col items-center gap-2">
-              <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 2, repeat: Infinity }}>
-                <Rocket size={28} className="text-muted-foreground/40" />
-              </motion.div>
-              Nenhuma gravação hoje
+            <div className="empty-state">
+              <Rocket size={32} className="empty-state-icon" />
+              <p className="text-sm">Nenhuma gravação programada para hoje</p>
             </div>
           ) : (
             <div className="space-y-1.5 sm:space-y-2 max-h-[280px] overflow-y-auto pr-1">
@@ -990,10 +976,13 @@ export default function Dashboard() {
         </div>
 
         {/* Videomaker progress */}
-        <div className="glass-card p-3 sm:p-5">
-          <div className="flex items-center gap-2 mb-3 sm:mb-4">
-            <FloatingRocket size={16} />
-            <h3 className="font-display font-semibold text-xs sm:text-sm">Progresso do Time</h3>
+        <div className="glass-card p-4 sm:p-5">
+          <div className="section-header">
+            <UsersIcon size={16} className="text-primary" />
+            <div className="flex-1">
+              <h3 className="section-title">Progresso do Time</h3>
+              <p className="section-subtitle">Desempenho semanal</p>
+            </div>
           </div>
           {videomakerStats.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-4">Cadastre videomakers</p>
@@ -1028,13 +1017,15 @@ export default function Dashboard() {
 
       {/* SCORING */}
       {vmScoring.length > 0 && (
-        <div className="glass-card p-3 sm:p-5">
-          <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <h3 className="font-display font-semibold text-xs sm:text-sm flex items-center gap-2">
-              <Trophy size={14} className="text-primary" /> Pontuação do Mês
-            </h3>
-            <button onClick={() => navigate('/desempenho')} className="text-[10px] sm:text-[11px] text-primary font-semibold hover:underline">
-              DETALHES
+        <div className="glass-card p-4 sm:p-5">
+          <div className="section-header">
+            <Trophy size={16} className="text-primary" />
+            <div className="flex-1">
+              <h3 className="section-title">Pontuação do Mês</h3>
+              <p className="section-subtitle">Ranking de produtividade</p>
+            </div>
+            <button onClick={() => navigate('/desempenho')} className="action-link">
+              VER DETALHES →
             </button>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
@@ -1077,13 +1068,15 @@ export default function Dashboard() {
 
       {/* ENDOMARKETING */}
       {endoMetrics.totalClients > 0 && currentUser?.role === 'admin' && (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-3 sm:p-5">
-          <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <h3 className="font-display font-semibold text-xs sm:text-sm flex items-center gap-2">
-              <Megaphone size={14} className="text-primary" /> Endomarketing
-            </h3>
-            <button onClick={() => navigate('/endomarketing')} className="text-[10px] sm:text-[11px] text-primary font-semibold hover:underline">
-              VER MÓDULO
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-4 sm:p-5">
+          <div className="section-header">
+            <Megaphone size={16} className="text-primary" />
+            <div className="flex-1">
+              <h3 className="section-title">Endomarketing</h3>
+              <p className="section-subtitle">{endoMetrics.totalClients} contrato{endoMetrics.totalClients !== 1 ? 's' : ''} ativo{endoMetrics.totalClients !== 1 ? 's' : ''}</p>
+            </div>
+            <button onClick={() => navigate('/endomarketing')} className="action-link">
+              VER MÓDULO →
             </button>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
@@ -1120,11 +1113,12 @@ export default function Dashboard() {
       )}
 
       {/* WEEK AGENDA — mobile: vertical list, desktop: 7-col grid */}
-      <div className="glass-card p-3 sm:p-5">
-        <div className="flex items-center justify-between mb-3 sm:mb-4">
-          <div className="flex items-center gap-2">
-            <FloatingRocket size={16} />
-            <h3 className="font-display font-semibold text-xs sm:text-sm">Agenda Semanal</h3>
+      <div className="glass-card p-4 sm:p-5">
+        <div className="section-header">
+          <Calendar size={16} className="text-primary" />
+          <div className="flex-1">
+            <h3 className="section-title">Agenda Semanal</h3>
+            <p className="section-subtitle">Planejamento de gravações</p>
           </div>
           <div className="flex items-center gap-1 sm:gap-2">
             <button onClick={() => setWeekOffset(w => w - 1)} className="w-6 h-6 sm:w-7 sm:h-7 rounded-md bg-secondary flex items-center justify-center hover:bg-secondary/80"><ChevronLeft size={12} /></button>
@@ -1232,13 +1226,14 @@ export default function Dashboard() {
       </div>
 
       {/* CLIENT PROGRESS */}
-      <div className="glass-card p-3 sm:p-5">
-        <div className="flex items-center justify-between mb-3 sm:mb-4">
-          <div className="flex items-center gap-2">
-            <FloatingRocket size={16} />
-            <h3 className="font-display font-semibold text-xs sm:text-sm">Progresso Mensal por Cliente</h3>
+      <div className="glass-card p-4 sm:p-5">
+        <div className="section-header">
+          <Target size={16} className="text-primary" />
+          <div className="flex-1">
+            <h3 className="section-title">Progresso Mensal por Cliente</h3>
+            <p className="section-subtitle">Entregas vs metas do plano</p>
           </div>
-          <button onClick={() => navigate('/metas')} className="text-[10px] sm:text-[11px] text-primary font-semibold hover:underline">METAS</button>
+          <button onClick={() => navigate('/metas')} className="action-link">METAS →</button>
         </div>
         {clientProgress.length === 0 ? (
           <div className="py-6 text-center text-muted-foreground text-xs flex flex-col items-center gap-2">

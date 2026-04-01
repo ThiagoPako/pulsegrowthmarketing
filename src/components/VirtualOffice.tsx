@@ -1,13 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { useApp } from '@/contexts/AppContext';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import type { UserRole } from '@/types';
 import {
   subscribeOfficeChannel,
-  unsubscribeOfficeChannel,
   onPresenceSync,
   onQuickMessage,
   getPresenceState,
@@ -16,14 +15,14 @@ import {
   type QuickMessage,
 } from '@/lib/virtualOfficeRealtime';
 import { ROOMS, shouldBeInCoffeeRoom, type OfficeMember } from './virtual-office/types';
-import RpgRoom from './virtual-office/RpgRoom';
+import PixelRoom from './virtual-office/PixelRoom';
 import QuickChatDialog from './virtual-office/QuickChatDialog';
 
-const ONLINE_THRESHOLD_MS = 25_000;
+const ONLINE_MS = 25_000;
 
-function normalizeQuickMessage(payload: unknown): QuickMessage | null {
-  if (!payload || typeof payload !== 'object') return null;
-  const s = payload as Record<string, unknown>;
+function normalizeMsg(p: unknown): QuickMessage | null {
+  if (!p || typeof p !== 'object') return null;
+  const s = p as Record<string, unknown>;
   const m: QuickMessage = {
     id: typeof s.id === 'string' ? s.id : crypto.randomUUID(),
     fromUserId: typeof s.fromUserId === 'string' ? s.fromUserId : '',
@@ -39,13 +38,13 @@ export default function VirtualOffice() {
   const { currentUser } = useApp();
   const [members, setMembers] = useState<OfficeMember[]>([]);
   const [activities, setActivities] = useState<Record<string, string>>({});
-  const [presenceByUserId, setPresenceByUserId] = useState<Record<string, string>>({});
-  const [chatMessages, setChatMessages] = useState<Record<string, QuickMessage[]>>({});
+  const [presence, setPresence] = useState<Record<string, string>>({});
+  const [chatMsgs, setChatMsgs] = useState<Record<string, QuickMessage[]>>({});
   const [chatTarget, setChatTarget] = useState<OfficeMember | null>(null);
   const [now, setNow] = useState(Date.now());
   const membersRef = useRef<OfficeMember[]>([]);
-  const chatTargetRef = useRef<OfficeMember | null>(null);
-  chatTargetRef.current = chatTarget;
+  const chatRef = useRef<OfficeMember | null>(null);
+  chatRef.current = chatTarget;
 
   const fetchProfiles = useCallback(async () => {
     const { data } = await supabase.from('profiles').select('id, name, role, avatar_url') as any;
@@ -79,23 +78,23 @@ export default function VirtualOffice() {
     const next: Record<string, string> = {};
     Object.values(state).forEach(entries => {
       if (!Array.isArray(entries)) return;
-      entries.forEach(entry => {
-        const uid = typeof entry?.userId === 'string' ? entry.userId : null;
-        const hb = typeof entry?.heartbeatAt === 'string' ? entry.heartbeatAt : new Date().toISOString();
+      entries.forEach(e => {
+        const uid = typeof e?.userId === 'string' ? e.userId : null;
+        const hb = typeof e?.heartbeatAt === 'string' ? e.heartbeatAt : new Date().toISOString();
         if (!uid) return;
         if (!next[uid] || new Date(hb).getTime() > new Date(next[uid]).getTime()) next[uid] = hb;
       });
     });
-    setPresenceByUserId(next);
+    setPresence(next);
     setNow(Date.now());
   }, []);
 
   const appendChat = useCallback((msg: QuickMessage) => {
-    setChatMessages(prev => {
+    setChatMsgs(prev => {
       const key = getConversationKey(msg.fromUserId, msg.toUserId);
-      const curr = prev[key] || [];
-      if (curr.some(m => m.id === msg.id)) return prev;
-      return { ...prev, [key]: [...curr, msg].slice(-50) };
+      const cur = prev[key] || [];
+      if (cur.some(m => m.id === msg.id)) return prev;
+      return { ...prev, [key]: [...cur, msg].slice(-50) };
     });
   }, []);
 
@@ -104,142 +103,94 @@ export default function VirtualOffice() {
     void fetchActivities();
     subscribeOfficeChannel();
 
-    const unsyncPresence = onPresenceSync(syncPresence);
-    const unsubMessage = onQuickMessage((payload: any) => {
-      const msg = normalizeQuickMessage(payload);
+    const unsync = onPresenceSync(syncPresence);
+    const unmsg = onQuickMessage((payload: any) => {
+      const msg = normalizeMsg(payload);
       if (!msg || !currentUser) return;
       if (msg.fromUserId !== currentUser.id && msg.toUserId !== currentUser.id) return;
       appendChat(msg);
-      if (msg.toUserId === currentUser.id && chatTargetRef.current?.id !== msg.fromUserId) {
+      if (msg.toUserId === currentUser.id && chatRef.current?.id !== msg.fromUserId) {
         const sender = membersRef.current.find(m => m.id === msg.fromUserId);
         toast.message(`Mensagem de ${sender?.name || 'alguém'}`, { description: msg.message });
       }
     });
 
-    const actInterval = window.setInterval(() => void fetchActivities(), 5_000);
-    const profInterval = window.setInterval(() => void fetchProfiles(), 60_000);
-    const clockInterval = window.setInterval(() => setNow(Date.now()), 5_000);
+    const iv1 = setInterval(() => void fetchActivities(), 5_000);
+    const iv2 = setInterval(() => void fetchProfiles(), 60_000);
+    const iv3 = setInterval(() => setNow(Date.now()), 5_000);
 
-    return () => {
-      unsyncPresence();
-      unsubMessage();
-      window.clearInterval(actInterval);
-      window.clearInterval(profInterval);
-      window.clearInterval(clockInterval);
-      unsubscribeOfficeChannel();
-    };
+    return () => { unsync(); unmsg(); clearInterval(iv1); clearInterval(iv2); clearInterval(iv3); };
   }, [currentUser, fetchActivities, fetchProfiles, syncPresence, appendChat]);
 
-  const sendQuickMessage = useCallback(async (text: string) => {
-    if (!currentUser || !chatTarget?.isOnline) {
-      toast.error('A pessoa precisa estar online.');
-      return false;
-    }
-    const msg: QuickMessage = {
-      id: crypto.randomUUID(),
-      fromUserId: currentUser.id,
-      toUserId: chatTarget.id,
-      message: text,
-      createdAt: new Date().toISOString(),
-    };
+  const sendMsg = useCallback(async (text: string) => {
+    if (!currentUser || !chatTarget?.isOnline) { toast.error('Pessoa precisa estar online.'); return false; }
+    const msg: QuickMessage = { id: crypto.randomUUID(), fromUserId: currentUser.id, toUserId: chatTarget.id, message: text, createdAt: new Date().toISOString() };
     const ok = await sendBroadcast(msg);
     if (!ok) return false;
     appendChat(msg);
     return true;
   }, [appendChat, chatTarget, currentUser]);
 
-  // Enrich members with presence + activity
-  const enrichedMembers = useMemo(() => {
-    return members.map(m => ({
+  const enriched = useMemo(() => {
+    const list = members.map(m => ({
       ...m,
-      isOnline: Boolean(presenceByUserId[m.id]) && now - new Date(presenceByUserId[m.id]).getTime() < ONLINE_THRESHOLD_MS,
+      isOnline: Boolean(presence[m.id]) && now - new Date(presence[m.id]).getTime() < ONLINE_MS,
       activity: activities[m.id] || undefined,
     }));
-  }, [activities, members, now, presenceByUserId]);
+    list.sort((a, b) => (a.isOnline !== b.isOnline ? (a.isOnline ? -1 : 1) : a.name.localeCompare(b.name)));
+    membersRef.current = list;
+    return list;
+  }, [activities, members, now, presence]);
 
-  // Sort: online first
-  const sortedMembers = useMemo(() => {
-    const sorted = [...enrichedMembers].sort((a, b) => {
-      if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
-      return a.name.localeCompare(b.name);
+  const roomAssign = useMemo(() => {
+    const a: Record<string, OfficeMember[]> = {};
+    ROOMS.forEach(r => { a[r.id] = []; });
+    enriched.forEach(m => {
+      if (m.isOnline && shouldBeInCoffeeRoom(m)) { a['coffee'].push(m); }
+      else { const room = ROOMS.find(r => r.roles.includes(m.role)); if (room) a[room.id].push(m); }
     });
-    membersRef.current = sorted;
-    return sorted;
-  }, [enrichedMembers]);
+    return a;
+  }, [enriched]);
 
-  // Assign members to rooms
-  const roomAssignments = useMemo(() => {
-    const assignments: Record<string, OfficeMember[]> = {};
-    ROOMS.forEach(r => { assignments[r.id] = []; });
-
-    sortedMembers.forEach(m => {
-      if (m.isOnline && shouldBeInCoffeeRoom(m)) {
-        assignments['coffee'].push(m);
-      } else {
-        const room = ROOMS.find(r => r.roles.includes(m.role));
-        if (room) assignments[room.id].push(m);
-      }
-    });
-
-    return assignments;
-  }, [sortedMembers]);
-
-  const onlineCount = sortedMembers.filter(m => m.isOnline).length;
-
-  const conversation = useMemo(() => {
+  const onlineCount = enriched.filter(m => m.isOnline).length;
+  const activeRooms = ROOMS.filter(r => (roomAssign[r.id]?.length ?? 0) > 0);
+  const convo = useMemo(() => {
     if (!currentUser || !chatTarget) return [];
-    return chatMessages[getConversationKey(currentUser.id, chatTarget.id)] || [];
-  }, [chatMessages, chatTarget, currentUser]);
-
-  // Which rooms have members?
-  const activeRooms = ROOMS.filter(r => (roomAssignments[r.id]?.length ?? 0) > 0);
+    return chatMsgs[getConversationKey(currentUser.id, chatTarget.id)] || [];
+  }, [chatMsgs, chatTarget, currentUser]);
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+    <div className="overflow-hidden rounded-2xl" style={{ border: '4px solid #6b4423', backgroundColor: '#c4a56e', boxShadow: '0 4px 0 #4a2d10' }}>
       {/* Header */}
-      <div className="border-b border-border/60 bg-secondary/30 px-4 py-4 sm:px-5">
-        <div className="flex items-center gap-3">
-          <motion.div
-            animate={{ y: [0, -3, 0] }}
-            transition={{ duration: 2, repeat: Infinity }}
-            className="text-2xl"
-          >
-            🏰
-          </motion.div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-bold text-foreground sm:text-base">
-                Escritório Virtual Pulse
-              </h3>
-              <Badge variant="secondary" className="text-[10px] font-mono">
-                🟢 {onlineCount} online
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              RPG 2D • Acompanhe a equipe ao vivo
-            </p>
+      <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: '#6b4423', borderBottom: '3px solid #4a2d10' }}>
+        <div className="flex items-center gap-2">
+          <span className="text-xl">🏰</span>
+          <div>
+            <h3 className="text-sm font-bold" style={{ color: '#e5d5b5' }}>Escritório Virtual Pulse</h3>
+            <p className="text-[10px]" style={{ color: '#b5a585' }}>Pixel World • Equipe ao vivo</p>
           </div>
         </div>
+        <Badge className="text-[10px] font-mono border-0" style={{ backgroundColor: '#22c55e22', color: '#86efac' }}>
+          🟢 {onlineCount} online
+        </Badge>
       </div>
 
-      {/* RPG World */}
-      <div className="bg-[radial-gradient(ellipse_at_top,hsl(var(--secondary)/0.5)_0%,transparent_70%)] px-3 py-4 sm:px-5">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      {/* World grid */}
+      <div className="p-3" style={{
+        backgroundImage: `
+          repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(0,0,0,0.06) 19px, rgba(0,0,0,0.06) 20px),
+          repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(0,0,0,0.06) 19px, rgba(0,0,0,0.06) 20px)
+        `,
+      }}>
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {activeRooms.map(room => (
-            <RpgRoom
-              key={room.id}
-              config={room}
-              members={roomAssignments[room.id]}
-              onMemberClick={m => setChatTarget(m)}
-              isCoffeeRoom={room.id === 'coffee'}
-            />
+            <PixelRoom key={room.id} config={room} members={roomAssign[room.id]} onMemberClick={setChatTarget} isCoffeeRoom={room.id === 'coffee'} />
           ))}
         </div>
-
         {activeRooms.length === 0 && (
-          <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
-            <span className="text-4xl">🏚️</span>
-            <p className="text-sm">Nenhum membro cadastrado no escritório</p>
+          <div className="flex flex-col items-center justify-center gap-2 py-12">
+            <span className="text-3xl">🏚️</span>
+            <p className="text-xs" style={{ color: '#8a7a5a' }}>Nenhum membro no escritório</p>
           </div>
         )}
       </div>
@@ -247,13 +198,7 @@ export default function VirtualOffice() {
       {/* Quick Chat */}
       <AnimatePresence>
         {chatTarget && currentUser && (
-          <QuickChatDialog
-            member={chatTarget}
-            currentUserId={currentUser.id}
-            messages={conversation}
-            onSend={sendQuickMessage}
-            onClose={() => setChatTarget(null)}
-          />
+          <QuickChatDialog member={chatTarget} currentUserId={currentUser.id} messages={convo} onSend={sendMsg} onClose={() => setChatTarget(null)} />
         )}
       </AnimatePresence>
     </div>

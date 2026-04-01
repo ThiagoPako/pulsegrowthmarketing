@@ -22,6 +22,7 @@ import ClientArtDatabaseDialog from '@/components/ClientArtDatabaseDialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ClientGoalRocket from '@/components/ClientGoalRocket';
 import { syncFinancialContract } from '@/lib/financialContracts';
+import ProposalChecklist from '@/components/ProposalChecklist';
 
 const DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 const CONTENT_TYPES: ContentType[] = ['reels', 'story', 'produto'];
@@ -458,6 +459,44 @@ export default function Clients() {
           toast.success('Cliente cadastrado');
         }
       } else {
+        // Auto-generate checklist from proposal services
+        if (proposalId) {
+          const proposal = proposals.find(p => p.id === proposalId);
+          if (proposal) {
+            const checklistItems: { client_id: string; title: string; description: string | null; sort_order: number }[] = [];
+            let order = 0;
+            // Extract services from plan_snapshot
+            const snap = proposal.plan_snapshot as any;
+            if (snap) {
+              if (snap.has_strategy !== false) checklistItems.push({ client_id: clientId, title: 'Estratégia de Marketing', description: 'Planejamento estratégico definido', sort_order: order++ });
+              if (snap.has_traffic !== false) checklistItems.push({ client_id: clientId, title: 'Gestão de Tráfego', description: 'Campanhas configuradas e ativas', sort_order: order++ });
+              if (snap.has_scripts !== false) checklistItems.push({ client_id: clientId, title: 'Roteiros', description: 'Roteiros entregues ao cliente', sort_order: order++ });
+              if ((snap.reels_qty || 0) > 0) checklistItems.push({ client_id: clientId, title: `Produção de ${snap.reels_qty} Reels`, description: 'Reels gravados e editados', sort_order: order++ });
+              if ((snap.creatives_qty || 0) > 0) checklistItems.push({ client_id: clientId, title: `Produção de ${snap.creatives_qty} Criativos`, description: 'Criativos produzidos', sort_order: order++ });
+              if ((snap.stories_qty || 0) > 0) checklistItems.push({ client_id: clientId, title: `Produção de ${snap.stories_qty} Stories`, description: 'Stories produzidos', sort_order: order++ });
+              if (snap.has_recording !== false) checklistItems.push({ client_id: clientId, title: 'Gravação', description: 'Sessão de gravação realizada', sort_order: order++ });
+              if (snap.has_photography) checklistItems.push({ client_id: clientId, title: 'Fotografia', description: 'Ensaio fotográfico realizado', sort_order: order++ });
+            }
+            // Bonus services
+            const bonuses = proposal.bonus_services as any[];
+            if (Array.isArray(bonuses)) {
+              bonuses.forEach((b: any) => {
+                if (b.name || b.title) {
+                  checklistItems.push({ client_id: clientId, title: b.name || b.title, description: b.description || null, sort_order: order++ });
+                }
+              });
+            }
+            // Fallback: at least add generic items
+            if (checklistItems.length === 0) {
+              checklistItems.push(
+                { client_id: clientId, title: 'Briefing Inicial', description: 'Reunião de alinhamento', sort_order: 0 },
+                { client_id: clientId, title: 'Entrega de Materiais', description: 'Materiais enviados ao cliente', sort_order: 1 },
+                { client_id: clientId, title: 'Aprovação Final', description: 'Cliente aprovou as entregas', sort_order: 2 },
+              );
+            }
+            await supabase.from('proposal_checklist_items').insert(checklistItems);
+          }
+        }
         toast.success('Cliente cadastrado (sem contrato, vinculado à proposta)');
       }
     }
@@ -1803,8 +1842,11 @@ export default function Clients() {
                     </p>
                   )}
                   <div className="flex gap-1.5 mt-2 flex-wrap">
-                    {(c as any).clientType === 'sem_contrato' && (
+                   {(c as any).clientType === 'sem_contrato' && (
                       <Badge className="text-[10px] px-1.5 py-0.5 bg-blue-500/20 text-blue-600 border-blue-500/30">📄 Sem Contrato</Badge>
+                    )}
+                    {(c as any).clientType === 'sem_contrato' && (
+                      <ProposalChecklist clientId={c.id} editable={false} compact={true} />
                     )}
                     {c.niche && c.niche !== 'outro' && (
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">
@@ -1822,6 +1864,12 @@ export default function Clients() {
                   </div>
                 </div>
               </div>
+              {/* Checklist for sem_contrato clients */}
+              {(c as any).clientType === 'sem_contrato' && (
+                <div className="px-4 pb-2">
+                  <ProposalChecklist clientId={c.id} editable={true} />
+                </div>
+              )}
               {/* Action buttons row */}
               <div className="px-3 pb-3 flex items-center gap-0.5 flex-wrap border-t border-border/50 pt-2">
                 <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver Briefing" onClick={() => setBriefingClient(c)}>

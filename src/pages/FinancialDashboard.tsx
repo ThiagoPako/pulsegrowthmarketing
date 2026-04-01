@@ -518,12 +518,32 @@ export default function FinancialDashboard() {
 
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <motion.span animate={{ rotate: [0, 10, -10, 0] }} transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}>💰</motion.span>
-            Financeiro
-          </h1>
-          <p className="text-sm text-muted-foreground">Visão geral da saúde financeira</p>
+        <div className="flex items-center gap-6">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+              <motion.span animate={{ rotate: [0, 10, -10, 0] }} transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}>💰</motion.span>
+              Financeiro
+            </h1>
+            <p className="text-sm text-muted-foreground">Visão geral da saúde financeira</p>
+          </div>
+          <PiggyBankWidget
+            balance={saldoCaixa}
+            onAddReserve={async (amount, description, date) => {
+              try {
+                await supabase.from('cash_reserve_movements').insert({
+                  amount,
+                  description,
+                  date,
+                  type: 'entrada',
+                } as any);
+                await refetch();
+                return true;
+              } catch {
+                toast.error('Erro ao salvar reserva');
+                return false;
+              }
+            }}
+          />
         </div>
         <div className="flex items-center gap-3">
           <Button size="sm" onClick={() => setShowFinancialStart(true)} className="gap-2 shadow-sm bg-gradient-to-r from-primary to-primary/80">

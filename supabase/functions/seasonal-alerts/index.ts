@@ -89,7 +89,7 @@ Inclua de 3 a 8 datas por cliente, priorizando as mais relevantes para o nicho.`
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
+          model: "google/gemini-2.5-flash",
           messages: [
             { role: "system", content: "Você é um assistente de marketing sazonal. Responda APENAS com JSON válido." },
             { role: "user", content: prompt },

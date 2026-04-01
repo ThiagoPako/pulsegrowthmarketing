@@ -250,7 +250,7 @@ Responda APENAS com JSON válido:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: "Você é um estrategista de conteúdo. Responda APENAS com JSON válido." },
           { role: "user", content: prompt },

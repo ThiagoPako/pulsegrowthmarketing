@@ -83,6 +83,10 @@ const STEP_LABELS_NO_META = [
   { icon: DollarSign, label: 'Financeiro' },
 ];
 
+const STEP_LABELS_SEM_CONTRATO = [
+  { icon: User, label: 'Dados da Empresa' },
+];
+
 export default function Clients() {
   const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient, regenerateScheduleForClient, currentUser } = useApp();
   const { createOnboardingForClient } = useOnboarding();

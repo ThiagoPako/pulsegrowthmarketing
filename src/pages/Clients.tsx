@@ -1730,7 +1730,8 @@ export default function Clients() {
                 {editing ? (
                   <Button onClick={handleSave} className="w-full">Salvar Alterações</Button>
                 ) : (() => {
-                  const maxStep = (hasMetaApi ? STEP_LABELS_WITH_META : STEP_LABELS_NO_META).length - 1;
+                  const stepLabelsUsed = clientType === 'sem_contrato' ? STEP_LABELS_SEM_CONTRATO : (hasMetaApi ? STEP_LABELS_WITH_META : STEP_LABELS_NO_META);
+                  const maxStep = stepLabelsUsed.length - 1;
                   return (
                   <>
                     {step > 0 && (

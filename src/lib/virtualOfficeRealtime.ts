@@ -136,7 +136,7 @@ export function getPresenceState(): Record<string, any[]> {
 }
 
 export async function trackPresence(userId: string) {
-  const ch = subscribeOfficeChannel();
+  const ch = startSubscription();
   const payload = {
     userId,
     heartbeatAt: new Date().toISOString(),
@@ -168,7 +168,7 @@ export async function untrackPresence() {
 }
 
 export async function sendBroadcast(payload: any): Promise<boolean> {
-  const ch = subscribeOfficeChannel();
+  const ch = startSubscription();
   const ready = await waitForSubscribed();
   if (!ready) return false;
 

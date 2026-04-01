@@ -236,7 +236,7 @@ export default function Scripts() {
       });
     } else {
       setEditing(null);
-      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: false, isAvulso: false, recordingId: '', prospectName: '' });
+      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: isEditorRole ? true : false, isAvulso: false, recordingId: '', prospectName: '' });
     }
     setOpen(true);
   };

@@ -217,6 +217,12 @@ export default function FinancialDashboard() {
   const cancelados = contracts.filter(c => c.status === 'cancelado').length;
   const taxaCancelamento = contracts.length > 0 ? (cancelados / contracts.length * 100) : 0;
 
+  // Cash reserve balance (saldo do caixa = saldo real da conta)
+  const saldoCaixa = useMemo(() =>
+    cashMovements.reduce((acc, m) => acc + (m.type === 'entrada' ? Number(m.amount) : -Number(m.amount)), 0),
+    [cashMovements]
+  );
+
   // Expense by category chart
   const expenseByCat = useMemo(() => {
     const map: Record<string, number> = {};

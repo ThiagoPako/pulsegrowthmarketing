@@ -664,8 +664,8 @@ export default function FinancialDashboard() {
       </Card>
       </motion.div>
       <motion.div className="grid md:grid-cols-2 gap-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.5 }}>
-        <Card>
-          <CardHeader><CardTitle className="text-sm">Despesas por Categoria</CardTitle></CardHeader>
+        <Card className="overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-rose-500/5 to-orange-500/5 border-b border-border/60"><CardTitle className="text-sm flex items-center gap-2"><TrendingDown size={16} className="text-rose-500" /> Despesas por Categoria</CardTitle></CardHeader>
           <CardContent>
             {expenseByCat.length > 0 ? (
               <div className="h-72">

@@ -1172,7 +1172,53 @@ export default function EditorDashboard() {
         )}
       </div>
 
-      {/* Shimmer animation keyframe */}
+      {/* ═══════ STORY UPLOAD ═══════ */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+          <Image size={15} className="text-pink-500" />
+          Enviar Story Editado
+          {storiesUploaded > 0 && (
+            <Badge className="bg-success/20 text-success border-success/30 text-[10px]">
+              +{storiesUploaded * EDITOR_SCORE.STORY_EDITADO} pts hoje
+            </Badge>
+          )}
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          Suba stories que você editou. Cada story gera <strong className="text-primary">+{EDITOR_SCORE.STORY_EDITADO} pontos</strong> e cria uma tarefa automática para a equipe de Social Media agendar.
+        </p>
+        <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Cliente *</Label>
+              <Select value={storyClientId} onValueChange={setStoryClientId}>
+                <SelectTrigger className="h-9 text-sm mt-1"><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
+                <SelectContent>
+                  {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Título (opcional)</Label>
+              <Input placeholder="Ex: Story Bastidores" value={storyTitle} onChange={e => setStoryTitle(e.target.value)} className="h-9 mt-1 text-sm" />
+            </div>
+          </div>
+          <div className="border-2 border-dashed border-border rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
+            <input ref={storyFileRef} type="file" accept="video/*" onChange={handleStoryUpload} className="hidden" id="editor-story-upload" />
+            <label htmlFor="editor-story-upload" className="cursor-pointer flex flex-col items-center gap-2">
+              <Upload size={24} className="text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">{storyUploading ? storyUploadProgress : 'Clique para enviar story'}</span>
+              <span className="text-[10px] text-muted-foreground/60">MP4, MOV — até 500MB</span>
+            </label>
+            {storyUploading && (
+              <div className="mt-2 flex items-center justify-center gap-2">
+                <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                <span className="text-xs text-primary font-medium">Enviando...</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       <style>{`
         @keyframes shimmer {
           0% { background-position: 0% 50%; }

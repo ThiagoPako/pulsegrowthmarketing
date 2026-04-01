@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Send, X, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,10 @@ interface Props {
   onClose: () => void;
 }
 
-export default function QuickChatDialog({ member, currentUserId, messages, onSend, onClose }: Props) {
+const QuickChatDialog = React.forwardRef<HTMLDivElement, Props>(function QuickChatDialog(
+  { member, currentUserId, messages, onSend, onClose },
+  ref,
+) {
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -34,12 +37,23 @@ export default function QuickChatDialog({ member, currentUserId, messages, onSen
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
       <div className="absolute inset-0 bg-background/70 backdrop-blur-sm" />
-      <motion.div initial={{ y: 16, scale: 0.96 }} animate={{ y: 0, scale: 1 }} exit={{ y: 16, scale: 0.96 }}
-        transition={{ duration: 0.18 }} onClick={e => e.stopPropagation()}
-        className="relative w-full max-w-md overflow-hidden rounded-3xl border border-border bg-card shadow-2xl">
+      <motion.div
+        initial={{ y: 16, scale: 0.96 }}
+        animate={{ y: 0, scale: 1 }}
+        exit={{ y: 16, scale: 0.96 }}
+        transition={{ duration: 0.18 }}
+        onClick={e => e.stopPropagation()}
+        className="relative w-full max-w-md overflow-hidden rounded-3xl border border-border bg-card shadow-2xl"
+      >
         <div className="flex items-center gap-3 border-b border-border/60 bg-secondary/40 px-4 py-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-card text-lg">
             {member.role === 'admin' ? '🧑‍💼' : member.role === 'videomaker' ? '🧑‍🎤' : member.role === 'editor' ? '🧑‍💻' : member.role === 'designer' ? '🧑‍🎨' : '🧑‍💻'}
@@ -50,7 +64,9 @@ export default function QuickChatDialog({ member, currentUserId, messages, onSen
               {member.isOnline ? '🟢 Online ao vivo' : '⚫ Offline'}
             </p>
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}><X size={16} /></Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
+            <X size={16} />
+          </Button>
         </div>
         <div ref={scrollRef} className="h-72 space-y-2 overflow-y-auto bg-background/50 px-4 py-4">
           {messages.length === 0 ? (
@@ -70,16 +86,28 @@ export default function QuickChatDialog({ member, currentUserId, messages, onSen
           ))}
         </div>
         <div className="flex gap-2 border-t border-border/60 px-4 py-3">
-          <Input value={message} onChange={e => setMessage(e.target.value)}
+          <Input
+            value={message}
+            onChange={e => setMessage(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && void handleSend()}
             placeholder={member.isOnline ? 'Mensagem rápida...' : 'Pessoa offline'}
-            className="h-10 text-sm" disabled={!member.isOnline || sending} />
-          <Button size="icon" className="h-10 w-10 shrink-0" onClick={() => void handleSend()}
-            disabled={!member.isOnline || sending || !message.trim()}>
+            className="h-10 text-sm"
+            disabled={!member.isOnline || sending}
+          />
+          <Button
+            size="icon"
+            className="h-10 w-10 shrink-0"
+            onClick={() => void handleSend()}
+            disabled={!member.isOnline || sending || !message.trim()}
+          >
             <Send size={14} />
           </Button>
         </div>
       </motion.div>
     </motion.div>
   );
-}
+});
+
+QuickChatDialog.displayName = 'QuickChatDialog';
+
+export default QuickChatDialog;

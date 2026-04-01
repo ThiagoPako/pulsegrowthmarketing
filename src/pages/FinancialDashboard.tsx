@@ -32,6 +32,7 @@ import ClientLogo from '@/components/ClientLogo';
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
 import SalaryRaiseAlert from '@/components/financial/SalaryRaiseAlert';
 import BankStatementImport from '@/components/financial/BankStatementImport';
+import FinancialStartImport from '@/components/financial/FinancialStartImport';
 import { supabase } from '@/lib/vpsDb';
 
 const fadeUp = {

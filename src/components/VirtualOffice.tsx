@@ -349,28 +349,47 @@ export default function VirtualOffice() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [chatTarget, setChatTarget] = useState<TeamMember | null>(null);
 
+  const mapProfiles = (profiles: any[]) => {
+    const now = Date.now();
+    const mapped: TeamMember[] = profiles.map((p: any) => ({
+      id: p.id,
+      name: p.name || 'Usuário',
+      role: p.role as UserRole,
+      avatarUrl: p.avatar_url,
+      lastSeenAt: p.last_seen_at,
+      isOnline: p.last_seen_at ? (now - new Date(p.last_seen_at).getTime()) < 5 * 60 * 1000 : false,
+    }));
+    mapped.sort((a, b) => {
+      if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
+      return a.role.localeCompare(b.role);
+    });
+    return mapped;
+  };
+
   useEffect(() => {
+    // Initial fetch
     const fetchPresence = async () => {
       const { data: profiles } = await supabase.from('profiles').select('id, name, role, avatar_url, last_seen_at') as any;
-      if (!profiles) return;
-      const now = Date.now();
-      const mapped: TeamMember[] = profiles.map((p: any) => ({
-        id: p.id,
-        name: p.name || 'Usuário',
-        role: p.role as UserRole,
-        avatarUrl: p.avatar_url,
-        lastSeenAt: p.last_seen_at,
-        isOnline: p.last_seen_at ? (now - new Date(p.last_seen_at).getTime()) < 5 * 60 * 1000 : false,
-      }));
-      mapped.sort((a, b) => {
-        if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
-        return a.role.localeCompare(b.role);
-      });
-      setMembers(mapped);
+      if (profiles) setMembers(mapProfiles(profiles));
     };
     fetchPresence();
-    const interval = setInterval(fetchPresence, 30_000);
-    return () => clearInterval(interval);
+
+    // Realtime subscription — instant updates
+    const channel = supabase
+      .channel('virtual-office-presence')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, () => {
+        // Re-fetch all on any profile update
+        fetchPresence();
+      })
+      .subscribe();
+
+    // Also refresh the "online" threshold every 60s (to mark people offline after 5min)
+    const interval = setInterval(fetchPresence, 60_000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
   }, []);
 
   const onlineCount = members.filter(m => m.isOnline).length;

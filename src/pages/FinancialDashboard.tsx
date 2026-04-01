@@ -103,6 +103,50 @@ export default function FinancialDashboard() {
     }
   };
 
+  const handleFinancialStart = async (items: { date: string; description: string; amount: number; type: 'entrada' | 'saida' }[]) => {
+    try {
+      const entradas = items.filter(i => i.type === 'entrada');
+      const saidas = items.filter(i => i.type === 'saida');
+
+      // Import entradas as revenues
+      for (const item of entradas) {
+        await supabase.from('revenues').insert({
+          client_id: '00000000-0000-0000-0000-000000000000',
+          contract_id: '00000000-0000-0000-0000-000000000000',
+          reference_month: item.date.slice(0, 8) + '01',
+          amount: item.amount,
+          due_date: item.date,
+          status: 'recebida',
+          paid_at: item.date,
+        } as any);
+      }
+
+      // Import saidas as expenses
+      let catId = categories.find(c => c.name === 'Outros')?.id;
+      if (!catId) {
+        const { data: newCat } = await supabase.from('expense_categories').insert({ name: 'Outros' } as any).select('id').single();
+        catId = newCat?.id || categories[0]?.id;
+      }
+      if (catId) {
+        for (const item of saidas) {
+          await supabase.from('expenses').insert({
+            date: item.date,
+            amount: item.amount,
+            description: item.description,
+            category_id: catId,
+            expense_type: 'variavel',
+            responsible: 'Start Financeiro',
+          } as any);
+        }
+      }
+
+      await refetch();
+      return true;
+    } catch (err) {
+      console.error('[FinancialStart] import error:', err);
+      return false;
+    }
+  };
   const monthStart = useMemo(() => startOfMonth(new Date(selectedMonth + '-01T12:00:00')), [selectedMonth]);
   const monthEnd = useMemo(() => endOfMonth(monthStart), [monthStart]);
 

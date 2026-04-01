@@ -105,6 +105,8 @@ export interface Client {
   preferredShift?: 'manha' | 'tarde'; // which shift the client prefers
   selectedWeeks: number[]; // which weeks of the month to schedule (e.g. [1,2,3,4])
   artRequestsLimit?: number | null; // monthly art request limit (null = unlimited)
+  clientType?: string; // 'novo' | 'existente' | 'sem_contrato'
+  proposalId?: string | null; // linked commercial proposal
 }
 
 export interface SocialAccount {

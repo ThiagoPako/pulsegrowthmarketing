@@ -83,6 +83,10 @@ const STEP_LABELS_NO_META = [
   { icon: DollarSign, label: 'Financeiro' },
 ];
 
+const STEP_LABELS_SEM_CONTRATO = [
+  { icon: User, label: 'Dados da Empresa' },
+];
+
 export default function Clients() {
   const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient, regenerateScheduleForClient, currentUser } = useApp();
   const { createOnboardingForClient } = useOnboarding();
@@ -91,7 +95,9 @@ export default function Clients() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
   const [form, setForm] = useState<Partial<Client> & { clientType?: string }>(emptyClient());
-  const [clientType, setClientType] = useState<'novo' | 'existente'>('novo');
+  const [clientType, setClientType] = useState<'novo' | 'existente' | 'sem_contrato'>('novo');
+  const [proposalId, setProposalId] = useState<string | null>(null);
+  const [proposals, setProposals] = useState<{ id: string; client_name: string; client_company: string; status: string; proposal_type: string; bonus_services: any; plan_snapshot: any }[]>([]);
   const [step, setStep] = useState(0);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -128,9 +134,11 @@ export default function Clients() {
     supabase.from('plans').select('id, name, status, reels_qty, creatives_qty, stories_qty, recording_sessions, accepts_extra_content').eq('status', 'ativo').then(({ data }) => {
       if (data) setPlans(data as any[]);
     });
-    // Check if Meta API integration is active
     supabase.from('api_integrations').select('id').eq('provider', 'meta').eq('status', 'ativo').limit(1).then(({ data }) => {
       setHasMetaApi(!!(data && data.length > 0));
+    });
+    supabase.from('commercial_proposals').select('id, client_name, client_company, status, proposal_type, bonus_services, plan_snapshot').eq('status', 'aceita').then(({ data }) => {
+      if (data) setProposals(data as any[]);
     });
   }, []);
 
@@ -420,31 +428,37 @@ export default function Clients() {
       const ok = await addClient(newClient);
       if (!ok) { toast.error('Empresa já cadastrada'); return; }
       // Update plan fields after insert
-      const clientMetaUpdate = await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, contract_duration_months: contractDurationMonths, client_type: clientType, client_login: newClient.clientLogin, show_metrics: showMetrics } as any).eq('id', clientId);
+      const clientMetaUpdate = await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, contract_duration_months: contractDurationMonths, client_type: clientType, client_login: newClient.clientLogin, show_metrics: showMetrics, proposal_id: clientType === 'sem_contrato' ? proposalId : null } as any).eq('id', clientId);
       if (clientMetaUpdate.error) {
         throw new Error(clientMetaUpdate.error.message || 'Erro ao complementar dados do cliente');
       }
-      // Create financial contract
-      await syncFinancialContract({
-        client_id: clientId,
-        plan_id: planId || null,
-        contract_value: contractValue,
-        contract_start_date: contractStartDate || new Date().toISOString().split('T')[0],
-        due_day: dueDay,
-        payment_method: paymentMethod,
-        status: 'ativo',
-      });
+      // Create financial contract only if not sem_contrato
+      if (clientType !== 'sem_contrato') {
+        await syncFinancialContract({
+          client_id: clientId,
+          plan_id: planId || null,
+          contract_value: contractValue,
+          contract_start_date: contractStartDate || new Date().toISOString().split('T')[0],
+          due_day: dueDay,
+          payment_method: paymentMethod,
+          status: 'ativo',
+        });
+      }
       // Save social accounts
       await saveSocialAccounts(clientId);
       // Generate onboarding tasks for new clients
       if (clientType === 'novo') {
         await createOnboardingForClient.mutateAsync(clientId);
       }
-      const count = await generateScheduleForClient(newClient);
-      if (count > 0) {
-        toast.success(`Cliente cadastrado — ${count} gravação(ões) criada(s) na agenda`);
+      if (clientType !== 'sem_contrato') {
+        const count = await generateScheduleForClient(newClient);
+        if (count > 0) {
+          toast.success(`Cliente cadastrado — ${count} gravação(ões) criada(s) na agenda`);
+        } else {
+          toast.success('Cliente cadastrado');
+        }
       } else {
-        toast.success('Cliente cadastrado');
+        toast.success('Cliente cadastrado (sem contrato, vinculado à proposta)');
       }
     }
     setOpen(false);
@@ -603,22 +617,48 @@ export default function Clients() {
       {!editing && (
         <div className="space-y-2">
           <Label>Tipo de Cliente *</Label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button type="button" onClick={() => setClientType('novo')}
               className={`p-3 rounded-xl border-2 text-center transition-all text-sm ${
                 clientType === 'novo' ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
               }`}>
-              <span className="font-semibold block">🆕 Cliente Novo</span>
-              <span className="text-[10px] text-muted-foreground">Gera onboarding automático</span>
+              <span className="font-semibold block">🆕 Novo</span>
+              <span className="text-[10px] text-muted-foreground">Com onboarding</span>
             </button>
             <button type="button" onClick={() => setClientType('existente')}
               className={`p-3 rounded-xl border-2 text-center transition-all text-sm ${
                 clientType === 'existente' ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
               }`}>
-              <span className="font-semibold block">📋 Cliente Existente</span>
+              <span className="font-semibold block">📋 Existente</span>
               <span className="text-[10px] text-muted-foreground">Sem onboarding</span>
             </button>
+            <button type="button" onClick={() => setClientType('sem_contrato')}
+              className={`p-3 rounded-xl border-2 text-center transition-all text-sm ${
+                clientType === 'sem_contrato' ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
+              }`}>
+              <span className="font-semibold block">📄 Proposta</span>
+              <span className="text-[10px] text-muted-foreground">Sem contrato</span>
+            </button>
           </div>
+          {clientType === 'sem_contrato' && (
+            <div className="mt-3 space-y-2">
+              <Label>Vincular a Proposta Aceita</Label>
+              <Select value={proposalId || 'none'} onValueChange={v => setProposalId(v === 'none' ? null : v)}>
+                <SelectTrigger><SelectValue placeholder="Selecione uma proposta" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhuma proposta</SelectItem>
+                  {proposals.map(p => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.client_company || p.client_name} — {p.proposal_type === 'marketing' ? 'Marketing' : p.proposal_type === 'sistema' ? 'Sistema' : p.proposal_type === 'endomarketing' ? 'Endomarketing' : p.proposal_type === 'cronograma' ? 'Cronograma' : 'Personalizada'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {proposals.length === 0 && (
+                <p className="text-[10px] text-muted-foreground">Nenhuma proposta aceita encontrada. Crie uma proposta primeiro.</p>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -1629,7 +1669,7 @@ export default function Clients() {
 
               {/* Stepper indicator */}
               {!editing && (() => {
-                const stepLabels = hasMetaApi ? STEP_LABELS_WITH_META : STEP_LABELS_NO_META;
+                const stepLabels = clientType === 'sem_contrato' ? STEP_LABELS_SEM_CONTRATO : (hasMetaApi ? STEP_LABELS_WITH_META : STEP_LABELS_NO_META);
                 const maxStep = stepLabels.length - 1;
                 return (
                 <div className="flex items-center gap-1 mb-2">
@@ -1665,6 +1705,10 @@ export default function Clients() {
                     {renderStep3()}
                     {renderStep4()}
                   </div>
+                ) : clientType === 'sem_contrato' ? (
+                  <>
+                    {step === 0 && renderStep0()}
+                  </>
                 ) : hasMetaApi ? (
                   <>
                     {step === 0 && renderStep0()}
@@ -1686,7 +1730,8 @@ export default function Clients() {
                 {editing ? (
                   <Button onClick={handleSave} className="w-full">Salvar Alterações</Button>
                 ) : (() => {
-                  const maxStep = (hasMetaApi ? STEP_LABELS_WITH_META : STEP_LABELS_NO_META).length - 1;
+                  const stepLabelsUsed = clientType === 'sem_contrato' ? STEP_LABELS_SEM_CONTRATO : (hasMetaApi ? STEP_LABELS_WITH_META : STEP_LABELS_NO_META);
+                  const maxStep = stepLabelsUsed.length - 1;
                   return (
                   <>
                     {step > 0 && (
@@ -1758,6 +1803,9 @@ export default function Clients() {
                     </p>
                   )}
                   <div className="flex gap-1.5 mt-2 flex-wrap">
+                    {(c as any).clientType === 'sem_contrato' && (
+                      <Badge className="text-[10px] px-1.5 py-0.5 bg-blue-500/20 text-blue-600 border-blue-500/30">📄 Sem Contrato</Badge>
+                    )}
                     {c.niche && c.niche !== 'outro' && (
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">
                         {NICHE_OPTIONS.find(n => n.value === c.niche)?.label || c.niche}

@@ -44,6 +44,8 @@ function rowToClient(r: any): Client {
     preferredShift: r.preferred_shift || 'manha',
     selectedWeeks: r.selected_weeks || [1, 2, 3, 4],
     artRequestsLimit: r.art_requests_limit ?? null,
+    clientType: r.client_type || 'novo',
+    proposalId: r.proposal_id || null,
   };
 }
 
@@ -86,6 +88,8 @@ function clientToRow(c: Client) {
     preferred_shift: c.preferredShift || 'manha',
     selected_weeks: c.selectedWeeks || [1, 2, 3, 4],
     art_requests_limit: c.artRequestsLimit ?? null,
+    client_type: c.clientType || 'novo',
+    proposal_id: c.proposalId || null,
   };
 }
 

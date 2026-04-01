@@ -1803,6 +1803,9 @@ export default function Clients() {
                     </p>
                   )}
                   <div className="flex gap-1.5 mt-2 flex-wrap">
+                    {(c as any).clientType === 'sem_contrato' && (
+                      <Badge className="text-[10px] px-1.5 py-0.5 bg-blue-500/20 text-blue-600 border-blue-500/30">📄 Sem Contrato</Badge>
+                    )}
                     {c.niche && c.niche !== 'outro' && (
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">
                         {NICHE_OPTIONS.find(n => n.value === c.niche)?.label || c.niche}

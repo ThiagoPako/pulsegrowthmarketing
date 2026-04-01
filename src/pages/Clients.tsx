@@ -380,151 +380,244 @@ export default function Clients() {
     }
   };
 
+  const fetchProposalForChecklist = async (selectedProposalId: string) => {
+    const cachedProposal = proposals.find(p => p.id === selectedProposalId);
+    if (cachedProposal) return cachedProposal;
+
+    const { data, error } = await supabase
+      .from('commercial_proposals')
+      .select('id, client_name, client_company, status, proposal_type, bonus_services, plan_snapshot')
+      .eq('id', selectedProposalId)
+      .single();
+
+    if (error) {
+      throw new Error(error.message || 'Erro ao carregar proposta vinculada');
+    }
+
+    return data as {
+      id: string;
+      client_name: string;
+      client_company: string;
+      status: string;
+      proposal_type: string;
+      bonus_services: any;
+      plan_snapshot: any;
+    };
+  };
+
+  const buildProposalChecklistItems = (clientId: string, proposal: { bonus_services: any; plan_snapshot: any }) => {
+    const checklistItems: { client_id: string; title: string; description: string | null; sort_order: number }[] = [];
+    let order = 0;
+    const snap = proposal.plan_snapshot as any;
+
+    if (snap) {
+      if (snap.has_strategy !== false) checklistItems.push({ client_id: clientId, title: 'Estratégia de Marketing', description: 'Planejamento estratégico definido', sort_order: order++ });
+      if (snap.has_traffic !== false) checklistItems.push({ client_id: clientId, title: 'Gestão de Tráfego', description: 'Campanhas configuradas e ativas', sort_order: order++ });
+      if (snap.has_scripts !== false) checklistItems.push({ client_id: clientId, title: 'Roteiros', description: 'Roteiros entregues ao cliente', sort_order: order++ });
+      if ((snap.reels_qty || 0) > 0) checklistItems.push({ client_id: clientId, title: `Produção de ${snap.reels_qty} Reels`, description: 'Reels gravados e editados', sort_order: order++ });
+      if ((snap.creatives_qty || 0) > 0) checklistItems.push({ client_id: clientId, title: `Produção de ${snap.creatives_qty} Criativos`, description: 'Criativos produzidos', sort_order: order++ });
+      if ((snap.stories_qty || 0) > 0) checklistItems.push({ client_id: clientId, title: `Produção de ${snap.stories_qty} Stories`, description: 'Stories produzidos', sort_order: order++ });
+      if (snap.has_recording !== false) checklistItems.push({ client_id: clientId, title: 'Gravação', description: 'Sessão de gravação realizada', sort_order: order++ });
+      if (snap.has_photography) checklistItems.push({ client_id: clientId, title: 'Fotografia', description: 'Ensaio fotográfico realizado', sort_order: order++ });
+    }
+
+    const bonuses = proposal.bonus_services as any[];
+    if (Array.isArray(bonuses)) {
+      bonuses.forEach((b: any) => {
+        if (b.name || b.title) {
+          checklistItems.push({ client_id: clientId, title: b.name || b.title, description: b.description || null, sort_order: order++ });
+        }
+      });
+    }
+
+    if (checklistItems.length === 0) {
+      checklistItems.push(
+        { client_id: clientId, title: 'Briefing Inicial', description: 'Reunião de alinhamento', sort_order: 0 },
+        { client_id: clientId, title: 'Entrega de Materiais', description: 'Materiais enviados ao cliente', sort_order: 1 },
+        { client_id: clientId, title: 'Aprovação Final', description: 'Cliente aprovou as entregas', sort_order: 2 },
+      );
+    }
+
+    return checklistItems;
+  };
+
+  const replaceProposalChecklist = async (clientId: string, selectedProposalId: string) => {
+    const proposal = await fetchProposalForChecklist(selectedProposalId);
+    const checklistItems = buildProposalChecklistItems(clientId, proposal);
+
+    const deleteResult = await supabase.from('proposal_checklist_items').delete().eq('client_id', clientId);
+    if (deleteResult.error) {
+      throw new Error(deleteResult.error.message || 'Erro ao limpar checklist atual');
+    }
+
+    const insertResult = await supabase.from('proposal_checklist_items').insert(checklistItems as any);
+    if (insertResult.error) {
+      throw new Error(insertResult.error.message || 'Erro ao gerar checklist da proposta');
+    }
+  };
+
   const handleSave = async () => {
     if (saving) return;
     if (!form.companyName || !form.responsiblePerson || !form.whatsapp) {
       toast.error('Preencha todos os campos obrigatórios'); return;
     }
+    if (clientType === 'sem_contrato' && !proposalId) {
+      toast.error('Selecione uma proposta para clientes sem contrato'); return;
+    }
+
     setSaving(true);
     try {
-    if (editing) {
-      const logoUrl = await uploadLogo(editing.id);
-      const updatedClient = { ...editing, ...form, logoUrl: logoUrl || undefined } as Client;
-      await updateClient(updatedClient);
-      // Update plan fields + client_type + proposal_id
-      const clientMetaUpdate = await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, contract_duration_months: contractDurationMonths, show_metrics: showMetrics, client_type: clientType, proposal_id: clientType === 'sem_contrato' ? proposalId : null } as any).eq('id', editing.id);
-      if (clientMetaUpdate.error) {
-        throw new Error(clientMetaUpdate.error.message || 'Erro ao atualizar dados contratuais do cliente');
-      }
-      // Save social accounts
-      await saveSocialAccounts(editing.id);
-      if (clientType !== 'sem_contrato') {
-        // Sync financial contract + open revenues
-        await syncFinancialContract({
-          client_id: editing.id,
+      if (editing) {
+        const logoUrl = await uploadLogo(editing.id);
+        const updatedClient = {
+          ...editing,
+          ...form,
+          clientType,
+          proposalId: clientType === 'sem_contrato' ? proposalId : null,
+          logoUrl: logoUrl || undefined,
+        } as Client;
+
+        await updateClient(updatedClient);
+
+        const clientMetaUpdate = await supabase.from('clients').update({
           plan_id: planId || null,
-          contract_value: contractValue,
-          contract_start_date: contractStartDate || new Date().toISOString().split('T')[0],
-          due_day: dueDay,
-          payment_method: paymentMethod,
-          status: 'ativo',
-        });
-        // Auto-regenerate schedule if scheduling fields changed
-        const scheduleFieldsChanged =
-          editing.fixedDay !== updatedClient.fixedDay ||
-          editing.fixedTime !== updatedClient.fixedTime ||
-          editing.videomaker !== updatedClient.videomaker ||
-          editing.backupDay !== updatedClient.backupDay ||
-          editing.backupTime !== updatedClient.backupTime ||
-          editing.extraDay !== updatedClient.extraDay ||
-          editing.acceptsExtra !== updatedClient.acceptsExtra ||
-          editing.fullShiftRecording !== updatedClient.fullShiftRecording ||
-          editing.preferredShift !== updatedClient.preferredShift ||
-          editing.monthlyRecordings !== updatedClient.monthlyRecordings;
-        if (scheduleFieldsChanged) {
-          const { deleted, created } = await regenerateScheduleForClient(updatedClient);
-          toast.success(`Cliente atualizado — agenda regenerada: ${deleted} removida(s), ${created} criada(s)`);
+          contract_start_date: contractStartDate || null,
+          auto_renewal: autoRenewal,
+          contract_duration_months: contractDurationMonths,
+          show_metrics: showMetrics,
+          client_type: clientType,
+          proposal_id: clientType === 'sem_contrato' ? proposalId : null,
+        } as any).eq('id', editing.id);
+
+        if (clientMetaUpdate.error) {
+          throw new Error(clientMetaUpdate.error.message || 'Erro ao atualizar dados contratuais do cliente');
+        }
+
+        if (clientType === 'sem_contrato' && proposalId) {
+          const previousProposalId = (editing as any).proposalId || null;
+          const existingChecklist = await supabase.from('proposal_checklist_items').select('id').eq('client_id', editing.id).limit(1);
+          if (existingChecklist.error) {
+            throw new Error(existingChecklist.error.message || 'Erro ao verificar checklist do cliente');
+          }
+
+          const hasChecklist = Array.isArray(existingChecklist.data) && existingChecklist.data.length > 0;
+          if (!hasChecklist || previousProposalId !== proposalId) {
+            await replaceProposalChecklist(editing.id, proposalId);
+          }
+        }
+
+        await saveSocialAccounts(editing.id);
+
+        if (clientType !== 'sem_contrato') {
+          await syncFinancialContract({
+            client_id: editing.id,
+            plan_id: planId || null,
+            contract_value: contractValue,
+            contract_start_date: contractStartDate || new Date().toISOString().split('T')[0],
+            due_day: dueDay,
+            payment_method: paymentMethod,
+            status: 'ativo',
+          });
+
+          const scheduleFieldsChanged =
+            editing.fixedDay !== updatedClient.fixedDay ||
+            editing.fixedTime !== updatedClient.fixedTime ||
+            editing.videomaker !== updatedClient.videomaker ||
+            editing.backupDay !== updatedClient.backupDay ||
+            editing.backupTime !== updatedClient.backupTime ||
+            editing.extraDay !== updatedClient.extraDay ||
+            editing.acceptsExtra !== updatedClient.acceptsExtra ||
+            editing.fullShiftRecording !== updatedClient.fullShiftRecording ||
+            editing.preferredShift !== updatedClient.preferredShift ||
+            editing.monthlyRecordings !== updatedClient.monthlyRecordings;
+
+          if (scheduleFieldsChanged) {
+            const { deleted, created } = await regenerateScheduleForClient(updatedClient);
+            toast.success(`Cliente atualizado — agenda regenerada: ${deleted} removida(s), ${created} criada(s)`);
+          } else {
+            toast.success('Cliente atualizado');
+          }
         } else {
           toast.success('Cliente atualizado');
         }
       } else {
-        toast.success('Cliente atualizado');
-      }
-    } else {
-      const clientId = crypto.randomUUID();
-      const logoUrl = await uploadLogo(clientId);
-      const newClient = { ...form, id: clientId, logoUrl: logoUrl || undefined } as Client;
-      // Auto-generate login credentials if empty
-      if (!newClient.clientLogin) {
-        newClient.clientLogin = form.companyName!.toLowerCase().replace(/\s+/g, '.').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      }
-      const ok = await addClient(newClient);
-      if (!ok) { toast.error('Empresa já cadastrada'); return; }
-      // Update plan fields after insert
-      const clientMetaUpdate = await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, contract_duration_months: contractDurationMonths, client_type: clientType, client_login: newClient.clientLogin, show_metrics: showMetrics, proposal_id: clientType === 'sem_contrato' ? proposalId : null } as any).eq('id', clientId);
-      if (clientMetaUpdate.error) {
-        throw new Error(clientMetaUpdate.error.message || 'Erro ao complementar dados do cliente');
-      }
-      // Create financial contract only if not sem_contrato
-      if (clientType !== 'sem_contrato') {
-        await syncFinancialContract({
-          client_id: clientId,
+        const clientId = crypto.randomUUID();
+        const logoUrl = await uploadLogo(clientId);
+        const newClient = {
+          ...form,
+          id: clientId,
+          clientType,
+          proposalId: clientType === 'sem_contrato' ? proposalId : null,
+          logoUrl: logoUrl || undefined,
+        } as Client;
+
+        if (!newClient.clientLogin) {
+          newClient.clientLogin = form.companyName!.toLowerCase().replace(/\s+/g, '.').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        }
+
+        const ok = await addClient(newClient);
+        if (!ok) { toast.error('Empresa já cadastrada'); return; }
+
+        const clientMetaUpdate = await supabase.from('clients').update({
           plan_id: planId || null,
-          contract_value: contractValue,
-          contract_start_date: contractStartDate || new Date().toISOString().split('T')[0],
-          due_day: dueDay,
-          payment_method: paymentMethod,
-          status: 'ativo',
-        });
-      }
-      // Save social accounts
-      await saveSocialAccounts(clientId);
-      // Generate onboarding tasks for new clients
-      if (clientType === 'novo') {
-        await createOnboardingForClient.mutateAsync(clientId);
-      }
-      if (clientType !== 'sem_contrato') {
-        const count = await generateScheduleForClient(newClient);
-        if (count > 0) {
-          toast.success(`Cliente cadastrado — ${count} gravação(ões) criada(s) na agenda`);
-        } else {
-          toast.success('Cliente cadastrado');
+          contract_start_date: contractStartDate || null,
+          auto_renewal: autoRenewal,
+          contract_duration_months: contractDurationMonths,
+          client_type: clientType,
+          client_login: newClient.clientLogin,
+          show_metrics: showMetrics,
+          proposal_id: clientType === 'sem_contrato' ? proposalId : null,
+        } as any).eq('id', clientId);
+
+        if (clientMetaUpdate.error) {
+          throw new Error(clientMetaUpdate.error.message || 'Erro ao complementar dados do cliente');
         }
-      } else {
-        // Auto-generate checklist from proposal services
-        if (proposalId) {
-          const proposal = proposals.find(p => p.id === proposalId);
-          if (proposal) {
-            const checklistItems: { client_id: string; title: string; description: string | null; sort_order: number }[] = [];
-            let order = 0;
-            // Extract services from plan_snapshot
-            const snap = proposal.plan_snapshot as any;
-            if (snap) {
-              if (snap.has_strategy !== false) checklistItems.push({ client_id: clientId, title: 'Estratégia de Marketing', description: 'Planejamento estratégico definido', sort_order: order++ });
-              if (snap.has_traffic !== false) checklistItems.push({ client_id: clientId, title: 'Gestão de Tráfego', description: 'Campanhas configuradas e ativas', sort_order: order++ });
-              if (snap.has_scripts !== false) checklistItems.push({ client_id: clientId, title: 'Roteiros', description: 'Roteiros entregues ao cliente', sort_order: order++ });
-              if ((snap.reels_qty || 0) > 0) checklistItems.push({ client_id: clientId, title: `Produção de ${snap.reels_qty} Reels`, description: 'Reels gravados e editados', sort_order: order++ });
-              if ((snap.creatives_qty || 0) > 0) checklistItems.push({ client_id: clientId, title: `Produção de ${snap.creatives_qty} Criativos`, description: 'Criativos produzidos', sort_order: order++ });
-              if ((snap.stories_qty || 0) > 0) checklistItems.push({ client_id: clientId, title: `Produção de ${snap.stories_qty} Stories`, description: 'Stories produzidos', sort_order: order++ });
-              if (snap.has_recording !== false) checklistItems.push({ client_id: clientId, title: 'Gravação', description: 'Sessão de gravação realizada', sort_order: order++ });
-              if (snap.has_photography) checklistItems.push({ client_id: clientId, title: 'Fotografia', description: 'Ensaio fotográfico realizado', sort_order: order++ });
-            }
-            // Bonus services
-            const bonuses = proposal.bonus_services as any[];
-            if (Array.isArray(bonuses)) {
-              bonuses.forEach((b: any) => {
-                if (b.name || b.title) {
-                  checklistItems.push({ client_id: clientId, title: b.name || b.title, description: b.description || null, sort_order: order++ });
-                }
-              });
-            }
-            // Fallback: at least add generic items
-            if (checklistItems.length === 0) {
-              checklistItems.push(
-                { client_id: clientId, title: 'Briefing Inicial', description: 'Reunião de alinhamento', sort_order: 0 },
-                { client_id: clientId, title: 'Entrega de Materiais', description: 'Materiais enviados ao cliente', sort_order: 1 },
-                { client_id: clientId, title: 'Aprovação Final', description: 'Cliente aprovou as entregas', sort_order: 2 },
-              );
-            }
-            await supabase.from('proposal_checklist_items').insert(checklistItems);
+
+        if (clientType !== 'sem_contrato') {
+          await syncFinancialContract({
+            client_id: clientId,
+            plan_id: planId || null,
+            contract_value: contractValue,
+            contract_start_date: contractStartDate || new Date().toISOString().split('T')[0],
+            due_day: dueDay,
+            payment_method: paymentMethod,
+            status: 'ativo',
+          });
+        }
+
+        await saveSocialAccounts(clientId);
+
+        if (clientType === 'novo') {
+          await createOnboardingForClient.mutateAsync(clientId);
+        }
+
+        if (clientType !== 'sem_contrato') {
+          const count = await generateScheduleForClient(newClient);
+          if (count > 0) {
+            toast.success(`Cliente cadastrado — ${count} gravação(ões) criada(s) na agenda`);
+          } else {
+            toast.success('Cliente cadastrado');
           }
+        } else {
+          if (proposalId) {
+            await replaceProposalChecklist(clientId, proposalId);
+          }
+          toast.success('Cliente cadastrado (sem contrato, vinculado à proposta)');
         }
-        toast.success('Cliente cadastrado (sem contrato, vinculado à proposta)');
       }
-    }
-    setOpen(false);
+
+      setOpen(false);
     } catch (err) {
       console.error('Erro ao salvar cliente:', err);
-      toast.error('Erro ao salvar cliente');
+      toast.error(err instanceof Error ? err.message : 'Erro ao salvar cliente');
     } finally {
       setSaving(false);
     }
   };
 
   const saveSocialAccounts = async (clientId: string) => {
-    // Delete existing social accounts for this client
     await supabase.from('social_accounts').delete().eq('client_id', clientId);
-    
+
     const accounts = [];
     if (socialAccounts.instagram.connected) {
       accounts.push({
@@ -547,7 +640,6 @@ export default function Clients() {
     }
     if (accounts.length > 0) {
       await supabase.from('social_accounts').insert(accounts as any);
-      // Log the connection
       for (const acc of accounts) {
         await supabase.from('integration_logs').insert({
           client_id: clientId,

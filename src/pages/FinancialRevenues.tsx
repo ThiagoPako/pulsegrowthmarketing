@@ -134,9 +134,12 @@ export default function FinancialRevenues() {
 
   const monthOptions = useMemo(() => {
     const options = [];
+    const APRIL_2026 = '2026-04';
     for (let i = -6; i <= 3; i++) {
       const m = i === 0 ? new Date() : (i < 0 ? subMonths(new Date(), -i) : addMonths(new Date(), i));
-      options.push({ value: format(m, 'yyyy-MM'), label: format(m, 'MMMM yyyy', { locale: ptBR }) });
+      const val = format(m, 'yyyy-MM');
+      if (val < APRIL_2026) continue;
+      options.push({ value: val, label: format(m, 'MMMM yyyy', { locale: ptBR }) });
     }
     return options;
   }, []);

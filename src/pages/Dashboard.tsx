@@ -1068,13 +1068,15 @@ export default function Dashboard() {
 
       {/* ENDOMARKETING */}
       {endoMetrics.totalClients > 0 && currentUser?.role === 'admin' && (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-3 sm:p-5">
-          <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <h3 className="font-display font-semibold text-xs sm:text-sm flex items-center gap-2">
-              <Megaphone size={14} className="text-primary" /> Endomarketing
-            </h3>
-            <button onClick={() => navigate('/endomarketing')} className="text-[10px] sm:text-[11px] text-primary font-semibold hover:underline">
-              VER MÓDULO
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-4 sm:p-5">
+          <div className="section-header">
+            <Megaphone size={16} className="text-primary" />
+            <div className="flex-1">
+              <h3 className="section-title">Endomarketing</h3>
+              <p className="section-subtitle">{endoMetrics.totalClients} contrato{endoMetrics.totalClients !== 1 ? 's' : ''} ativo{endoMetrics.totalClients !== 1 ? 's' : ''}</p>
+            </div>
+            <button onClick={() => navigate('/endomarketing')} className="action-link">
+              VER MÓDULO →
             </button>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">

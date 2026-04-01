@@ -284,9 +284,10 @@ export default function DesignerDashboard() {
 
         {/* Performance card - side panel */}
         <div className="glass-card p-5">
-          <h3 className="font-display font-semibold text-sm mb-4 flex items-center gap-2">
-            <BarChart3 size={16} /> Meu Desempenho
-          </h3>
+          <div className="section-header">
+            <BarChart3 size={16} className="text-primary" />
+            <h3 className="section-title">Meu Desempenho</h3>
+          </div>
           <div className="space-y-4">
             {/* Scoring card */}
             <div className="rounded-xl bg-gradient-to-br from-amber-500/15 to-yellow-500/5 border border-amber-500/20 p-3">

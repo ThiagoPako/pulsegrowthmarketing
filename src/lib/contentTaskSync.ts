@@ -146,7 +146,8 @@ export async function syncContentTaskColumnChange(
     updates.editing_started_at = null;
     updates.editing_paused_at = null;
     updates.editing_paused_seconds = 0;
-    // Don't assign anyone until they explicitly start the alteration
+    // Auto-assign alteration to the original editor (edited_by) — only they can fix it
+    // assigned_to is cleared until they click "Iniciar Alteração", but edited_by is preserved
     updates.assigned_to = null;
   }
   if (newColumn === 'envio') {

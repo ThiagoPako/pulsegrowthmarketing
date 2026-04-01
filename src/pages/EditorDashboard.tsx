@@ -280,8 +280,10 @@ export default function EditorDashboard() {
     if (!isEditorRole || !user) return tasks;
     return tasks.filter(t => {
       if (t.kanban_column === 'edicao') return !t.assigned_to || t.assigned_to === user.id;
-      // For review tasks, only show tasks this editor edited (edited_by or fallback to editing_started_at)
+      // For review tasks, only show tasks this editor edited
       if (t.kanban_column === 'revisao') return t.edited_by === user.id || (!t.edited_by && !!t.editing_started_at);
+      // For alteration tasks, ONLY the original editor (edited_by) can see/work on them
+      if (t.kanban_column === 'alteracao') return t.edited_by === user.id;
       return !t.assigned_to || t.assigned_to === user.id;
     });
   }, [tasks, isEditorRole, user]);

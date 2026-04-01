@@ -976,10 +976,13 @@ export default function Dashboard() {
         </div>
 
         {/* Videomaker progress */}
-        <div className="glass-card p-3 sm:p-5">
-          <div className="flex items-center gap-2 mb-3 sm:mb-4">
-            <FloatingRocket size={16} />
-            <h3 className="font-display font-semibold text-xs sm:text-sm">Progresso do Time</h3>
+        <div className="glass-card p-4 sm:p-5">
+          <div className="section-header">
+            <UsersIcon size={16} className="text-primary" />
+            <div className="flex-1">
+              <h3 className="section-title">Progresso do Time</h3>
+              <p className="section-subtitle">Desempenho semanal</p>
+            </div>
           </div>
           {videomakerStats.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-4">Cadastre videomakers</p>

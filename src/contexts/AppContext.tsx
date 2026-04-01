@@ -2,6 +2,7 @@ import React, { createContext, useContext, useCallback, useState, useEffect } fr
 import { useAuth, type Profile } from '@/hooks/useAuth';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { supabase } from '@/lib/vpsDb';
+import { usePresenceHeartbeat } from '@/hooks/usePresence';
 import { generateFixedRecordings } from '@/lib/schedulingUtils';
 import { sendRecordingScheduledNotification } from '@/services/whatsappService';
 import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek, Script, ActiveRecording, UserRole } from '@/types';

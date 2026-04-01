@@ -4429,9 +4429,149 @@ app.patch('/api/discount-campaigns/:id', async (req, res) => {
 // ─── Health check ───────────────────────────────────────────
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
+// ─── REST endpoint for presence (polling fallback) ──────────
+const presenceState = new Map(); // userId -> { userId, heartbeatAt, connectedAt }
+
+app.get('/api/presence', (req, res) => {
+  const now = Date.now();
+  const ONLINE_MS = 120_000;
+  const online = [];
+  for (const [uid, info] of presenceState) {
+    if (now - new Date(info.heartbeatAt).getTime() < ONLINE_MS) {
+      online.push(info);
+    } else {
+      presenceState.delete(uid);
+    }
+  }
+  res.json({ users: online });
+});
+
+app.post('/api/presence/heartbeat', (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+  const now = new Date().toISOString();
+  const existing = presenceState.get(userId);
+  presenceState.set(userId, {
+    userId,
+    heartbeatAt: now,
+    connectedAt: existing?.connectedAt || now,
+  });
+  // Broadcast to WebSocket clients
+  broadcastPresence();
+  res.json({ ok: true });
+});
+
+app.post('/api/presence/leave', (req, res) => {
+  const { userId } = req.body;
+  if (userId) presenceState.delete(userId);
+  broadcastPresence();
+  res.json({ ok: true });
+});
+
+// ─── Quick Chat REST endpoint ──────────────────────────────
+app.post('/api/quick-chat', (req, res) => {
+  const { fromUserId, toUserId, message } = req.body;
+  if (!fromUserId || !toUserId || !message) {
+    return res.status(400).json({ error: 'fromUserId, toUserId, message required' });
+  }
+  const payload = {
+    id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    fromUserId,
+    toUserId,
+    message,
+    createdAt: new Date().toISOString(),
+  };
+  // Broadcast to all WS clients
+  broadcastQuickMessage(payload);
+  res.json({ ok: true, message: payload });
+});
+
+// ─── WebSocket Server for real-time presence & chat ─────────
+import { WebSocketServer } from 'ws';
+import { createServer } from 'http';
+
+const server = createServer(app);
+const wss = new WebSocketServer({ server, path: '/ws/office' });
+
+const wsClients = new Set();
+
+function broadcastPresence() {
+  const now = Date.now();
+  const ONLINE_MS = 120_000;
+  const online = [];
+  for (const [uid, info] of presenceState) {
+    if (now - new Date(info.heartbeatAt).getTime() < ONLINE_MS) {
+      online.push(info);
+    }
+  }
+  const msg = JSON.stringify({ type: 'presence_sync', users: online });
+  for (const ws of wsClients) {
+    try { if (ws.readyState === 1) ws.send(msg); } catch { /* ignore */ }
+  }
+}
+
+function broadcastQuickMessage(payload) {
+  const msg = JSON.stringify({ type: 'quick_message', payload });
+  for (const ws of wsClients) {
+    try { if (ws.readyState === 1) ws.send(msg); } catch { /* ignore */ }
+  }
+}
+
+wss.on('connection', (ws) => {
+  wsClients.add(ws);
+
+  // Send current presence immediately
+  const now = Date.now();
+  const ONLINE_MS = 120_000;
+  const online = [];
+  for (const [uid, info] of presenceState) {
+    if (now - new Date(info.heartbeatAt).getTime() < ONLINE_MS) {
+      online.push(info);
+    }
+  }
+  ws.send(JSON.stringify({ type: 'presence_sync', users: online }));
+
+  ws.on('message', (raw) => {
+    try {
+      const data = JSON.parse(raw.toString());
+      if (data.type === 'heartbeat' && data.userId) {
+        const existing = presenceState.get(data.userId);
+        presenceState.set(data.userId, {
+          userId: data.userId,
+          heartbeatAt: new Date().toISOString(),
+          connectedAt: existing?.connectedAt || new Date().toISOString(),
+        });
+        broadcastPresence();
+      } else if (data.type === 'leave' && data.userId) {
+        presenceState.delete(data.userId);
+        broadcastPresence();
+      } else if (data.type === 'quick_message') {
+        broadcastQuickMessage(data.payload);
+      }
+    } catch { /* ignore malformed messages */ }
+  });
+
+  ws.on('close', () => { wsClients.delete(ws); });
+  ws.on('error', () => { wsClients.delete(ws); });
+});
+
+// Clean stale presence every 30s
+setInterval(() => {
+  const now = Date.now();
+  const ONLINE_MS = 120_000;
+  let changed = false;
+  for (const [uid, info] of presenceState) {
+    if (now - new Date(info.heartbeatAt).getTime() >= ONLINE_MS) {
+      presenceState.delete(uid);
+      changed = true;
+    }
+  }
+  if (changed) broadcastPresence();
+}, 30_000);
+
 // ─── Start ──────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`🚀 Pulse API Server running on port ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`🚀 Pulse API Server running on port ${PORT} (HTTP + WebSocket)`);
 });
 
 /*

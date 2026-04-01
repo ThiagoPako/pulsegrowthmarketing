@@ -1,5 +1,7 @@
-import { supabase as supabaseReal } from '@/integrations/supabase/client';
-import type { RealtimeChannel, RealtimeChannelSendResponse } from '@supabase/supabase-js';
+/**
+ * Virtual Office Realtime — VPS WebSocket-based presence & quick chat
+ * Connects to wss://agenciapulse.tech/ws/office
+ */
 
 export interface QuickMessage {
   id: string;
@@ -9,15 +11,19 @@ export interface QuickMessage {
   createdAt: string;
 }
 
-const CHANNEL_NAME = 'vo-shared';
-const REALTIME_FALLBACK_TOKEN = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const WS_URL = 'wss://agenciapulse.tech/ws/office';
+const REST_BASE = 'https://agenciapulse.tech/api';
 
-let _channel: RealtimeChannel | null = null;
-let _subscribed = false;
-let _subscribing = false;
+let _ws: WebSocket | null = null;
+let _connecting = false;
+let _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let _currentUserId: string | null = null;
 
 const _onSyncCallbacks = new Set<() => void>();
 const _onBroadcastCallbacks = new Set<(payload: any) => void>();
+
+// In-memory presence state (updated from server broadcasts)
+let _presenceUsers: Array<{ userId: string; heartbeatAt: string }> = [];
 
 function fireSyncCallbacks() {
   _onSyncCallbacks.forEach(cb => {
@@ -25,82 +31,73 @@ function fireSyncCallbacks() {
   });
 }
 
-function resetChannel() {
-  const current = _channel;
-  _channel = null;
-  _subscribed = false;
-  _subscribing = false;
-
-  if (!current) return;
-
-  try { current.unsubscribe(); } catch { /* ignore */ }
-  try { void supabaseReal.removeChannel(current); } catch { /* ignore */ }
+function scheduleReconnect() {
+  if (_reconnectTimer) return;
+  _reconnectTimer = setTimeout(() => {
+    _reconnectTimer = null;
+    connectWs();
+  }, 3000);
 }
 
-function getOrCreateChannel(): RealtimeChannel {
-  if (_channel) return _channel;
+function connectWs() {
+  if (_ws && (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING)) return;
+  if (_connecting) return;
+  _connecting = true;
 
-  if (REALTIME_FALLBACK_TOKEN) {
-    try { supabaseReal.realtime.setAuth(REALTIME_FALLBACK_TOKEN); } catch { /* ignore */ }
+  try {
+    _ws = new WebSocket(WS_URL);
+  } catch {
+    _connecting = false;
+    scheduleReconnect();
+    return;
   }
 
-  _channel = supabaseReal.channel(CHANNEL_NAME, {
-    config: {
-      presence: { key: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` },
-      broadcast: { self: false, ack: true },
-    },
-  });
-
-  // Register ALL event handlers BEFORE subscribe
-  _channel
-    .on('presence', { event: 'sync' }, fireSyncCallbacks)
-    .on('presence', { event: 'join' }, fireSyncCallbacks)
-    .on('presence', { event: 'leave' }, fireSyncCallbacks)
-    .on('broadcast', { event: 'quick_message' }, ({ payload }) => {
-      _onBroadcastCallbacks.forEach(cb => {
-        try { cb(payload); } catch { /* ignore */ }
-      });
-    });
-
-  return _channel;
-}
-
-function doSubscribe() {
-  if (_subscribed || _subscribing) return;
-  const ch = getOrCreateChannel();
-  _subscribing = true;
-
-  ch.subscribe((status) => {
-    if (status === 'SUBSCRIBED') {
-      _subscribed = true;
-      _subscribing = false;
-      fireSyncCallbacks();
-    } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-      resetChannel();
+  _ws.onopen = () => {
+    _connecting = false;
+    // If we have a userId, immediately send heartbeat
+    if (_currentUserId) {
+      _ws?.send(JSON.stringify({ type: 'heartbeat', userId: _currentUserId }));
     }
-  });
-}
+  };
 
-async function waitReady(ms = 5000): Promise<boolean> {
-  if (_subscribed) return true;
-  const t0 = Date.now();
-  while (Date.now() - t0 < ms) {
-    if (_subscribed) return true;
-    await new Promise(r => setTimeout(r, 60));
-  }
-  return _subscribed;
+  _ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === 'presence_sync') {
+        _presenceUsers = data.users || [];
+        fireSyncCallbacks();
+      } else if (data.type === 'quick_message') {
+        _onBroadcastCallbacks.forEach(cb => {
+          try { cb(data.payload); } catch { /* ignore */ }
+        });
+      }
+    } catch { /* ignore */ }
+  };
+
+  _ws.onclose = () => {
+    _connecting = false;
+    _ws = null;
+    scheduleReconnect();
+  };
+
+  _ws.onerror = () => {
+    _connecting = false;
+    try { _ws?.close(); } catch { /* ignore */ }
+    _ws = null;
+    scheduleReconnect();
+  };
 }
 
 // ── Public API ──
 
-/** Ensure the shared channel is alive and subscribed. Safe to call many times. */
+/** Ensure WebSocket connection is alive. Safe to call many times. */
 export function subscribeOfficeChannel() {
-  doSubscribe();
+  connectWs();
 }
 
-/** No-op — channel is kept alive for the app lifetime. */
+/** No-op — connection is kept alive for the app lifetime. */
 export function unsubscribeOfficeChannel() {
-  // intentionally kept alive as a true singleton
+  // intentionally kept alive
 }
 
 export function onPresenceSync(cb: () => void) {
@@ -113,49 +110,107 @@ export function onQuickMessage(cb: (payload: any) => void) {
   return () => { _onBroadcastCallbacks.delete(cb); };
 }
 
+/** Get current presence state as a map compatible with previous API */
 export function getPresenceState(): Record<string, any[]> {
-  if (!_channel) return {};
-  try { return _channel.presenceState() as Record<string, any[]>; } catch { return {}; }
-}
-
-export async function trackPresence(userId: string) {
-  doSubscribe();
-  let ready = await waitReady();
-  if (!ready) {
-    resetChannel();
-    doSubscribe();
-    ready = await waitReady();
+  const state: Record<string, any[]> = {};
+  for (const user of _presenceUsers) {
+    const key = `user-${user.userId}`;
+    state[key] = [user];
   }
-  if (!ready || !_channel) return false;
-  try {
-    await _channel.track({ userId, heartbeatAt: new Date().toISOString() });
-    fireSyncCallbacks();
-    return true;
-  } catch { return false; }
+  return state;
 }
 
-export async function untrackPresence() {
-  if (!_channel) return;
-  try { await _channel.untrack(); } catch { /* ignore */ }
+export async function trackPresence(userId: string): Promise<boolean> {
+  _currentUserId = userId;
+  connectWs();
+
+  // Try WebSocket first
+  if (_ws && _ws.readyState === WebSocket.OPEN) {
+    try {
+      _ws.send(JSON.stringify({ type: 'heartbeat', userId }));
+      return true;
+    } catch { /* fall through to REST */ }
+  }
+
+  // REST fallback
+  try {
+    const token = localStorage.getItem('pulse_jwt');
+    await fetch(`${REST_BASE}/presence/heartbeat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ userId }),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function untrackPresence(): Promise<void> {
+  const userId = _currentUserId;
+  _currentUserId = null;
+
+  if (_ws && _ws.readyState === WebSocket.OPEN && userId) {
+    try { _ws.send(JSON.stringify({ type: 'leave', userId })); } catch { /* ignore */ }
+  }
+
+  // Also REST fallback
+  if (userId) {
+    try {
+      const token = localStorage.getItem('pulse_jwt');
+      await fetch(`${REST_BASE}/presence/leave`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ userId }),
+      });
+    } catch { /* ignore */ }
+  }
 }
 
 export async function sendBroadcast(payload: any): Promise<boolean> {
-  doSubscribe();
-  let ready = await waitReady();
-  if (!ready) {
-    resetChannel();
-    doSubscribe();
-    ready = await waitReady();
+  connectWs();
+
+  if (_ws && _ws.readyState === WebSocket.OPEN) {
+    try {
+      _ws.send(JSON.stringify({ type: 'quick_message', payload }));
+      return true;
+    } catch { /* fall through */ }
   }
-  if (!ready || !_channel) return false;
+
+  // REST fallback
   try {
-    const r: RealtimeChannelSendResponse = await _channel.send({
-      type: 'broadcast', event: 'quick_message', payload,
+    const token = localStorage.getItem('pulse_jwt');
+    await fetch(`${REST_BASE}/quick-chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
     });
-    return r === 'ok';
-  } catch { return false; }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function getConversationKey(a: string, b: string) {
   return [a, b].sort().join(':');
+}
+
+/** Fetch presence via REST (polling fallback when WS is down) */
+export async function fetchPresenceRest(): Promise<any[]> {
+  try {
+    const res = await fetch(`${REST_BASE}/presence`);
+    const data = await res.json();
+    return data.users || [];
+  } catch {
+    return [];
+  }
 }

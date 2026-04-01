@@ -2047,36 +2047,6 @@ export default function Clients() {
                   </div>
                 </div>
               </div>
-              {/* Generate Checklist button for sem_contrato clients */}
-              {(c as any).clientType === 'sem_contrato' && (c as any).proposalId && (
-                <div className="px-4 pb-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full text-xs gap-1.5"
-                    disabled={generatingChecklistFor === c.id}
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      setGeneratingChecklistFor(c.id);
-                      try {
-                        await replaceProposalChecklist(c.id, (c as any).proposalId);
-                        toast.success('Checklist gerado com sucesso!');
-                        window.location.reload();
-                      } catch (err) {
-                        toast.error(err instanceof Error ? err.message : 'Erro ao gerar checklist');
-                      } finally {
-                        setGeneratingChecklistFor(null);
-                      }
-                    }}
-                  >
-                    {generatingChecklistFor === c.id ? (
-                      <><Loader2 size={12} className="animate-spin" /> Gerando...</>
-                    ) : (
-                      <><RefreshCw size={12} /> Gerar / Atualizar Checklist</>
-                    )}
-                  </Button>
-                </div>
-              )}
               {/* Action buttons row */}
               <div className="px-3 pb-3 flex items-center gap-0.5 flex-wrap border-t border-border/50 pt-2">
                 <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver Briefing" onClick={() => setBriefingClient(c)}>

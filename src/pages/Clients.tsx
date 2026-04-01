@@ -621,9 +621,7 @@ export default function Clients() {
             toast.success('Cliente cadastrado');
           }
         } else {
-          if (proposalId) {
-            await replaceProposalChecklist(clientId, proposalId);
-          }
+          // Checklist is now generated manually via button on the card
           toast.success('Cliente cadastrado (Pacotes de Serviços, vinculado à proposta)');
         }
       }

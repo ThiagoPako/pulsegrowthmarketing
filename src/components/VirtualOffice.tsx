@@ -42,8 +42,10 @@ export default function VirtualOffice() {
   const [chatMsgs, setChatMsgs] = useState<Record<string, QuickMessage[]>>({});
   const [chatTarget, setChatTarget] = useState<OfficeMember | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
   const membersRef = useRef<OfficeMember[]>([]);
   const chatRef = useRef<OfficeMember | null>(null);
+  const prevOnlineRef = useRef<Set<string>>(new Set());
   chatRef.current = chatTarget;
 
   const fetchProfiles = useCallback(async () => {

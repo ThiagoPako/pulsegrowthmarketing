@@ -1,52 +1,30 @@
 import { useEffect } from 'react';
-import {
-  subscribeOfficeChannel,
-  unsubscribeOfficeChannel,
-  trackPresence,
-  untrackPresence,
-} from '@/lib/virtualOfficeRealtime';
+import { subscribeOfficeChannel, trackPresence, untrackPresence } from '@/lib/virtualOfficeRealtime';
 
-/**
- * Mantém a presença do usuário no canal compartilhado do escritório virtual.
- * Faz track imediato ao entrar e heartbeat curto para refletir online/offline ao vivo.
- */
 export function usePresenceHeartbeat(userId: string | undefined) {
   useEffect(() => {
     if (!userId) return;
-
     let active = true;
+
     subscribeOfficeChannel();
 
-    const sendHeartbeat = () => {
-      if (!active) return;
-      void trackPresence(userId);
-    };
+    const beat = () => { if (active) void trackPresence(userId); };
+    beat();
 
-    sendHeartbeat();
+    const iv = window.setInterval(beat, 5_000);
 
-    const interval = window.setInterval(sendHeartbeat, 5_000);
+    const onVis = () => { if (document.visibilityState === 'visible') beat(); };
+    const onOn = () => beat();
 
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') sendHeartbeat();
-    };
-
-    const onOnline = () => sendHeartbeat();
-    const onPageHide = () => {
-      void untrackPresence();
-    };
-
-    document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('online', onOnline);
-    window.addEventListener('pagehide', onPageHide);
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('online', onOn);
 
     return () => {
       active = false;
-      window.clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('online', onOnline);
-      window.removeEventListener('pagehide', onPageHide);
+      window.clearInterval(iv);
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('online', onOn);
       void untrackPresence();
-      unsubscribeOfficeChannel();
     };
   }, [userId]);
 }

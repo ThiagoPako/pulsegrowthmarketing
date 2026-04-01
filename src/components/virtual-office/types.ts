@@ -7,6 +7,7 @@ export interface OfficeMember {
   avatarUrl?: string;
   isOnline: boolean;
   activity?: string;
+  gender?: 'male' | 'female';
 }
 
 export type RoomId = 'admin' | 'studio' | 'editing' | 'atelier' | 'social' | 'coffee' | 'endomarketing' | 'photo';

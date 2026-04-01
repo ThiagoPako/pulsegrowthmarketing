@@ -1705,6 +1705,10 @@ export default function Clients() {
                     {renderStep3()}
                     {renderStep4()}
                   </div>
+                ) : clientType === 'sem_contrato' ? (
+                  <>
+                    {step === 0 && renderStep0()}
+                  </>
                 ) : hasMetaApi ? (
                   <>
                     {step === 0 && renderStep0()}

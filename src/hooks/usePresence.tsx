@@ -14,7 +14,7 @@ export function usePresenceHeartbeat(userId: string | undefined) {
   useEffect(() => {
     if (!userId) return;
     ping(); // immediate
-    const interval = setInterval(ping, 30_000); // every 30s
+    const interval = setInterval(ping, 15_000); // every 15s for faster detection
     return () => clearInterval(interval);
   }, [userId, ping]);
 }

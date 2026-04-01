@@ -229,10 +229,10 @@ export default function DesignerDashboard() {
           </div>
 
           {todayTasks.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground text-sm">
-              <CheckCircle size={36} className="mx-auto mb-2 opacity-30" />
-              <p>Nenhuma tarefa pendente! 🎉</p>
-              <p className="text-xs mt-1">Verifique o Kanban para novas demandas</p>
+            <div className="empty-state">
+              <CheckCircle size={36} className="empty-state-icon" />
+              <p className="text-sm">Nenhuma tarefa pendente! 🎉</p>
+              <p className="text-xs text-muted-foreground">Verifique o Kanban para novas demandas</p>
             </div>
           ) : (
             <ScrollArea className="h-[340px]">

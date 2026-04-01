@@ -713,8 +713,8 @@ export default function FinancialDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader><CardTitle className="text-sm">Evolução Financeira (6 meses)</CardTitle></CardHeader>
+        <Card className="overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-blue-500/5 to-indigo-500/5 border-b border-border/60"><CardTitle className="text-sm flex items-center gap-2"><BarChart3 size={16} className="text-blue-500" /> Evolução Financeira (6 meses)</CardTitle></CardHeader>
           <CardContent>
             <ChartContainer config={chartConfig} className="h-64">
               <BarChart data={evolutionData}>

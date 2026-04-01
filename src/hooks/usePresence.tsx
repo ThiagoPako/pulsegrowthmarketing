@@ -9,7 +9,10 @@ import { supabase as supabaseReal } from '@/integrations/supabase/client';
 export function usePresenceHeartbeat(userId: string | undefined) {
   const ping = useCallback(async () => {
     if (!userId) return;
-    await supabase.from('profiles').update({ last_seen_at: new Date().toISOString() } as any).eq('id', userId);
+    // Use VPS DB for the update (works with VPS JWT auth)
+    await supabase.from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', userId);
+    // Also update via real Supabase for realtime triggers
+    await supabaseReal.from('profiles').update({ last_seen_at: new Date().toISOString() } as any).eq('id', userId).catch(() => {});
   }, [userId]);
 
   useEffect(() => {

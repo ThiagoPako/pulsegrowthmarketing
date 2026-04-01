@@ -1864,6 +1864,12 @@ export default function Clients() {
                   </div>
                 </div>
               </div>
+              {/* Checklist for sem_contrato clients */}
+              {(c as any).clientType === 'sem_contrato' && (
+                <div className="px-4 pb-2">
+                  <ProposalChecklist clientId={c.id} editable={true} />
+                </div>
+              )}
               {/* Action buttons row */}
               <div className="px-3 pb-3 flex items-center gap-0.5 flex-wrap border-t border-border/50 pt-2">
                 <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver Briefing" onClick={() => setBriefingClient(c)}>

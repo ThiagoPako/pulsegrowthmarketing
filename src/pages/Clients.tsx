@@ -23,6 +23,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import ClientGoalRocket from '@/components/ClientGoalRocket';
 import { syncFinancialContract } from '@/lib/financialContracts';
 import ProposalChecklist from '@/components/ProposalChecklist';
+import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 const CONTENT_TYPES: ContentType[] = ['reels', 'story', 'produto'];

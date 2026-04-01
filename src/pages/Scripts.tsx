@@ -1167,13 +1167,14 @@ export default function Scripts() {
 
             {/* Direct to editing toggle */}
             <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-accent/30">
-              <Switch checked={form.directToEditing} onCheckedChange={v => setForm({ ...form, directToEditing: v })} />
+              <Switch checked={form.directToEditing} onCheckedChange={v => setForm({ ...form, directToEditing: v })} disabled={isEditorRole} />
               <div>
                 <Label className="font-medium flex items-center gap-1.5">
                   🎬 Direto para Edição
+                  {isEditorRole && <Badge className="text-[9px] bg-blue-500/20 text-blue-600 border-blue-500/30 ml-1">Obrigatório</Badge>}
                 </Label>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Para materiais prontos do cliente. Fica em espera e sobe automaticamente para o editor com menos tarefas quando a fila esvaziar.
+                  {isEditorRole ? 'Editores criam roteiros que vão direto para a fila de edição.' : 'Para materiais prontos do cliente. Fica em espera e sobe automaticamente para o editor com menos tarefas quando a fila esvaziar.'}
                 </p>
               </div>
             </div>

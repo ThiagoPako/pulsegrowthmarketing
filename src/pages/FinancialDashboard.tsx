@@ -951,6 +951,11 @@ export default function FinancialDashboard() {
         onOpenChange={setShowImport}
         onImport={handleBankImport}
       />
+      <FinancialStartImport
+        open={showFinancialStart}
+        onOpenChange={setShowFinancialStart}
+        onImport={handleFinancialStart}
+      />
     </div>
   );
 }

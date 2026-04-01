@@ -220,11 +220,12 @@ export default function DesignerDashboard() {
       {/* Main row: Today's Tasks (left 2/3) + Performance (right 1/3) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 glass-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-              <CalendarDays size={16} className="text-primary" /> Tarefas do Dia
-            </h3>
-            <Badge variant="secondary" className="text-xs">{todayTasks.length} demandas</Badge>
+          <div className="section-header">
+            <CalendarDays size={16} className="text-primary" />
+            <div className="flex-1">
+              <h3 className="section-title">Tarefas do Dia</h3>
+              <p className="section-subtitle">{todayTasks.length} demandas ativas</p>
+            </div>
           </div>
 
           {todayTasks.length === 0 ? (

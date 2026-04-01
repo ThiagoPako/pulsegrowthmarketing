@@ -148,10 +148,11 @@ export default function FinancialRevenues() {
   const filtered = revenues.filter(r => normalizeDate(r.reference_month) === refMonth);
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  // Auto-generate revenues when month has none and data is loaded
+  // Auto-generate revenues when month has none and data is loaded (only from April 2026)
   const autoGenRef = useRef<string | null>(null);
   useEffect(() => {
     if (loading || autoGenRef.current === selectedMonth) return;
+    if (selectedMonth < '2026-04') return;
     if (filtered.length === 0 && clients.length > 0 && contracts.length > 0) {
       autoGenRef.current = selectedMonth;
       generateMonthlyRevenues(selectedMonth).then(count => {

@@ -2,10 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '@/lib/vpsDb';
 import { useApp } from '@/contexts/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, X, MessageCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import type { UserRole } from '@/types';
 import {
@@ -18,34 +15,11 @@ import {
   getConversationKey,
   type QuickMessage,
 } from '@/lib/virtualOfficeRealtime';
+import { ROOMS, shouldBeInCoffeeRoom, type OfficeMember } from './virtual-office/types';
+import RpgRoom from './virtual-office/RpgRoom';
+import QuickChatDialog from './virtual-office/QuickChatDialog';
 
 const ONLINE_THRESHOLD_MS = 25_000;
-
-interface TeamMember {
-  id: string;
-  name: string;
-  role: UserRole;
-  avatarUrl?: string;
-  lastSeenAt: string | null;
-  isOnline: boolean;
-  activity?: string;
-}
-
-const ROLE_LABEL: Record<string, string> = {
-  admin: 'Administração', videomaker: 'Estúdio', editor: 'Sala de Edição',
-  designer: 'Ateliê', social_media: 'Mídia Social', fotografo: 'Estúdio Foto',
-  parceiro: 'Parceiros', endomarketing: 'Endomarketing',
-};
-
-const ROLE_EMOJI: Record<string, string> = {
-  admin: '💼', videomaker: '🎬', editor: '✂️', designer: '🎨',
-  social_media: '📱', fotografo: '📷', parceiro: '🤝', endomarketing: '📣',
-};
-
-const ACTIVITY_LABELS: Record<string, string> = {
-  gravando: '🔴 Gravando', edicao: '✂️ Editando', revisao: '👁️ Revisando',
-  alteracao: '🔧 Alteração', aprovacao: '✅ Aprovando', designing: '🎨 Criando arte',
-};
 
 function normalizeQuickMessage(payload: unknown): QuickMessage | null {
   if (!payload || typeof payload !== 'object') return null;
@@ -61,111 +35,16 @@ function normalizeQuickMessage(payload: unknown): QuickMessage | null {
   return m;
 }
 
-function PixelAvatar({ member, onClick }: { member: TeamMember; onClick: () => void }) {
-  return (
-    <motion.button type="button" onClick={onClick} whileHover={{ scale: 1.06, y: -2 }}
-      className="group relative flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card/85 px-3 py-3 shadow-sm transition-colors hover:border-primary/40 hover:bg-card">
-      <div className="absolute right-2 top-2">
-        <span className={`block h-2.5 w-2.5 rounded-full ${member.isOnline ? 'bg-primary shadow-[0_0_10px_hsl(var(--primary)/0.65)]' : 'bg-muted-foreground/40'}`} />
-      </div>
-      <motion.div animate={member.isOnline ? { y: [0, -3, 0] } : {}} transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-        className="flex h-16 w-16 items-center justify-center rounded-2xl border border-border/70 bg-secondary/60 text-3xl">
-        <span className={member.isOnline ? '' : 'grayscale opacity-50'}>{ROLE_EMOJI[member.role] || '👤'}</span>
-      </motion.div>
-      <div className="space-y-1 text-center">
-        <p className="text-xs font-semibold leading-none text-foreground">{member.name.split(' ')[0]}</p>
-        <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{ROLE_LABEL[member.role] || member.role}</p>
-        <div className="min-h-4 text-[10px] text-primary">
-          {member.isOnline && member.activity ? ACTIVITY_LABELS[member.activity] : member.isOnline ? 'Online agora' : 'Offline'}
-        </div>
-      </div>
-    </motion.button>
-  );
-}
-
-function QuickChatDialog({ member, currentUserId, messages, onSend, onClose }: {
-  member: TeamMember; currentUserId: string; messages: QuickMessage[];
-  onSend: (text: string) => Promise<boolean>; onClose: () => void;
-}) {
-  const [message, setMessage] = useState('');
-  const [sending, setSending] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages]);
-
-  const handleSend = async () => {
-    if (!message.trim() || sending) return;
-    setSending(true);
-    const ok = await onSend(message.trim());
-    if (ok) setMessage('');
-    else toast.error('Erro ao enviar mensagem rápida.');
-    setSending(false);
-  };
-
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-background/70 backdrop-blur-sm" />
-      <motion.div initial={{ y: 16, scale: 0.96 }} animate={{ y: 0, scale: 1 }} exit={{ y: 16, scale: 0.96 }}
-        transition={{ duration: 0.18 }} onClick={e => e.stopPropagation()}
-        className="relative w-full max-w-md overflow-hidden rounded-3xl border border-border bg-card shadow-2xl">
-        <div className="flex items-center gap-3 border-b border-border/60 bg-secondary/40 px-4 py-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-card text-lg">
-            {ROLE_EMOJI[member.role] || '👤'}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-foreground">{member.name}</p>
-            <p className="text-[11px] text-muted-foreground">
-              {ROLE_LABEL[member.role] || member.role}
-              {member.isOnline ? ' • online ao vivo' : ' • offline'}
-            </p>
-          </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}><X size={16} /></Button>
-        </div>
-        <div ref={scrollRef} className="h-72 space-y-2 overflow-y-auto bg-background/50 px-4 py-4">
-          {messages.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-muted-foreground">
-              <MessageCircle size={18} className="opacity-60" />
-              <p className="text-xs">Envie uma mensagem rápida ao vivo.</p>
-            </div>
-          ) : messages.map(msg => (
-            <div key={msg.id} className={`flex ${msg.fromUserId === currentUserId ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[82%] rounded-2xl px-3 py-2 text-xs ${msg.fromUserId === currentUserId ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>
-                <p>{msg.message}</p>
-                <p className={`mt-1 text-[10px] ${msg.fromUserId === currentUserId ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                  {new Date(msg.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-2 border-t border-border/60 px-4 py-3">
-          <Input value={message} onChange={e => setMessage(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && void handleSend()}
-            placeholder={member.isOnline ? 'Mensagem rápida...' : 'Pessoa offline'}
-            className="h-10 text-sm" disabled={!member.isOnline || sending} />
-          <Button size="icon" className="h-10 w-10 shrink-0" onClick={() => void handleSend()}
-            disabled={!member.isOnline || sending || !message.trim()}>
-            <Send size={14} />
-          </Button>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-}
-
 export default function VirtualOffice() {
   const { currentUser } = useApp();
-  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [members, setMembers] = useState<OfficeMember[]>([]);
   const [activities, setActivities] = useState<Record<string, string>>({});
   const [presenceByUserId, setPresenceByUserId] = useState<Record<string, string>>({});
   const [chatMessages, setChatMessages] = useState<Record<string, QuickMessage[]>>({});
-  const [chatTarget, setChatTarget] = useState<TeamMember | null>(null);
+  const [chatTarget, setChatTarget] = useState<OfficeMember | null>(null);
   const [now, setNow] = useState(Date.now());
-  const membersRef = useRef<TeamMember[]>([]);
-  const chatTargetRef = useRef<TeamMember | null>(null);
+  const membersRef = useRef<OfficeMember[]>([]);
+  const chatTargetRef = useRef<OfficeMember | null>(null);
   chatTargetRef.current = chatTarget;
 
   const fetchProfiles = useCallback(async () => {
@@ -173,7 +52,7 @@ export default function VirtualOffice() {
     if (!data) return;
     setMembers(data.map((p: any) => ({
       id: p.id, name: p.name || 'Usuário', role: p.role as UserRole,
-      avatarUrl: p.avatar_url, lastSeenAt: null, isOnline: false,
+      avatarUrl: p.avatar_url, isOnline: false,
     })));
   }, []);
 
@@ -223,7 +102,6 @@ export default function VirtualOffice() {
   useEffect(() => {
     void fetchProfiles();
     void fetchActivities();
-
     subscribeOfficeChannel();
 
     const unsyncPresence = onPresenceSync(syncPresence);
@@ -270,74 +148,112 @@ export default function VirtualOffice() {
     return true;
   }, [appendChat, chatTarget, currentUser]);
 
-  const membersWithActivity = useMemo(() => {
-    const enriched = members.map(m => ({
+  // Enrich members with presence + activity
+  const enrichedMembers = useMemo(() => {
+    return members.map(m => ({
       ...m,
-      lastSeenAt: presenceByUserId[m.id] || null,
       isOnline: Boolean(presenceByUserId[m.id]) && now - new Date(presenceByUserId[m.id]).getTime() < ONLINE_THRESHOLD_MS,
       activity: activities[m.id] || undefined,
     }));
-    const sorted = [...enriched].sort((a, b) => {
+  }, [activities, members, now, presenceByUserId]);
+
+  // Sort: online first
+  const sortedMembers = useMemo(() => {
+    const sorted = [...enrichedMembers].sort((a, b) => {
       if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
       return a.name.localeCompare(b.name);
     });
     membersRef.current = sorted;
     return sorted;
-  }, [activities, members, now, presenceByUserId]);
+  }, [enrichedMembers]);
 
-  const grouped = useMemo(() => {
-    const g: Record<string, TeamMember[]> = {};
-    membersWithActivity.forEach(m => { if (!g[m.role]) g[m.role] = []; g[m.role].push(m); });
-    return g;
-  }, [membersWithActivity]);
+  // Assign members to rooms
+  const roomAssignments = useMemo(() => {
+    const assignments: Record<string, OfficeMember[]> = {};
+    ROOMS.forEach(r => { assignments[r.id] = []; });
 
-  const roleOrder = ['admin', 'videomaker', 'editor', 'designer', 'social_media', 'fotografo', 'parceiro', 'endomarketing'];
-  const activeRoles = roleOrder.filter(r => grouped[r]?.length);
-  const onlineCount = membersWithActivity.filter(m => m.isOnline).length;
+    sortedMembers.forEach(m => {
+      if (m.isOnline && shouldBeInCoffeeRoom(m)) {
+        assignments['coffee'].push(m);
+      } else {
+        const room = ROOMS.find(r => r.roles.includes(m.role));
+        if (room) assignments[room.id].push(m);
+      }
+    });
+
+    return assignments;
+  }, [sortedMembers]);
+
+  const onlineCount = sortedMembers.filter(m => m.isOnline).length;
+
   const conversation = useMemo(() => {
     if (!currentUser || !chatTarget) return [];
     return chatMessages[getConversationKey(currentUser.id, chatTarget.id)] || [];
   }, [chatMessages, chatTarget, currentUser]);
 
+  // Which rooms have members?
+  const activeRooms = ROOMS.filter(r => (roomAssignments[r.id]?.length ?? 0) > 0);
+
   return (
     <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+      {/* Header */}
       <div className="border-b border-border/60 bg-secondary/30 px-4 py-4 sm:px-5">
         <div className="flex items-center gap-3">
-          <motion.div animate={{ y: [0, -2, 0] }} transition={{ duration: 2, repeat: Infinity }} className="text-2xl">🏢</motion.div>
+          <motion.div
+            animate={{ y: [0, -3, 0] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            className="text-2xl"
+          >
+            🏰
+          </motion.div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-semibold text-foreground sm:text-base">Escritório Virtual Pulse</h3>
-              <Badge variant="secondary" className="text-[10px] font-mono">🟢 {onlineCount} online</Badge>
+              <h3 className="text-sm font-bold text-foreground sm:text-base">
+                Escritório Virtual Pulse
+              </h3>
+              <Badge variant="secondary" className="text-[10px] font-mono">
+                🟢 {onlineCount} online
+              </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">Acompanhe em tempo real quem está online e o que está fazendo</p>
+            <p className="text-xs text-muted-foreground">
+              RPG 2D • Acompanhe a equipe ao vivo
+            </p>
           </div>
         </div>
       </div>
-      <div className="bg-[radial-gradient(circle_at_top,hsl(var(--secondary))_0%,transparent_55%)] px-4 py-5 sm:px-5">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {activeRoles.map(role => (
-            <div key={role} className="rounded-2xl border border-border/70 bg-background/70 p-4 backdrop-blur-sm">
-              <div className="mb-4 flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">{ROLE_LABEL[role] || role}</p>
-                  <p className="text-[11px] text-muted-foreground">{grouped[role].filter(m => m.isOnline).length} ao vivo</p>
-                </div>
-                <div className="text-xl">{ROLE_EMOJI[role] || '👤'}</div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                {grouped[role].map(m => (
-                  <PixelAvatar key={m.id} member={m} onClick={() => setChatTarget(m)} />
-                ))}
-              </div>
-            </div>
+
+      {/* RPG World */}
+      <div className="bg-[radial-gradient(ellipse_at_top,hsl(var(--secondary)/0.5)_0%,transparent_70%)] px-3 py-4 sm:px-5">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {activeRooms.map(room => (
+            <RpgRoom
+              key={room.id}
+              config={room}
+              members={roomAssignments[room.id]}
+              onMemberClick={m => setChatTarget(m)}
+              isCoffeeRoom={room.id === 'coffee'}
+            />
           ))}
         </div>
+
+        {activeRooms.length === 0 && (
+          <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
+            <span className="text-4xl">🏚️</span>
+            <p className="text-sm">Nenhum membro cadastrado no escritório</p>
+          </div>
+        )}
       </div>
+
+      {/* Quick Chat */}
       <AnimatePresence>
         {chatTarget && currentUser && (
-          <QuickChatDialog member={chatTarget} currentUserId={currentUser.id}
-            messages={conversation} onSend={sendQuickMessage}
-            onClose={() => setChatTarget(null)} />
+          <QuickChatDialog
+            member={chatTarget}
+            currentUserId={currentUser.id}
+            messages={conversation}
+            onSend={sendQuickMessage}
+            onClose={() => setChatTarget(null)}
+          />
         )}
       </AnimatePresence>
     </div>

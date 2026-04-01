@@ -2,6 +2,17 @@ import { useState, useEffect, createContext, useContext, useCallback } from 'rea
 import { supabase } from '@/lib/vpsDb';
 import { supabase as supabaseReal } from '@/integrations/supabase/client';
 
+async function logLoginEntry(userId: string) {
+  try {
+    const { data: prof } = await supabase.from('profiles').select('name, role').eq('id', userId).single() as any;
+    await supabaseReal.from('login_logs').insert({
+      user_id: userId,
+      user_name: prof?.name || '',
+      user_role: prof?.role || '',
+    });
+  } catch { /* silent */ }
+}
+
 export type AppRole = 'admin' | 'videomaker' | 'social_media' | 'editor' | 'endomarketing' | 'parceiro' | 'fotografo' | 'designer';
 
 export interface Profile {

@@ -344,6 +344,8 @@ export default function Clients() {
       setPaymentMethod('pix');
       setSocialAccounts(emptySocialAccounts());
       setExistingSocialAccounts([]);
+      setClientType('novo');
+      setProposalId(null);
     }
     setLogoFile(null);
     setStep(0);

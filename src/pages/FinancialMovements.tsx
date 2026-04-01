@@ -68,9 +68,12 @@ export default function FinancialMovements() {
 
   const monthOptions = useMemo(() => {
     const options = [];
-    for (let i = -12; i <= 3; i++) {
-      const m = i === 0 ? new Date() : (i < 0 ? subMonths(new Date(), -i) : addMonths(new Date(), i));
-      options.push({ value: format(m, 'yyyy-MM'), label: format(m, 'MMMM yyyy', { locale: ptBR }) });
+    const start = new Date(2026, 0, 1); // January 2026
+    const end = addMonths(new Date(), 3);
+    let cur = start;
+    while (cur <= end) {
+      options.push({ value: format(cur, 'yyyy-MM'), label: format(cur, 'MMMM yyyy', { locale: ptBR }) });
+      cur = addMonths(cur, 1);
     }
     return options;
   }, []);

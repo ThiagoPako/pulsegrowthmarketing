@@ -1098,6 +1098,15 @@ export default function EditorDashboard() {
                         </div>
                       )}
                       {task.review_deadline && <DeadlineBadge deadline={task.review_deadline} label="Revisão" startedAt={task.approval_sent_at} />}
+                      {/* Ops! Volta aqui */}
+                      {task.edited_by === user?.id && (
+                        <motion.div whileTap={{ scale: 0.95 }}>
+                          <Button size="sm" variant="outline" className="w-full gap-1.5 h-7 text-xs border-amber-500/40 text-amber-600 hover:bg-amber-500/10 mt-1"
+                            onClick={(e) => { e.stopPropagation(); handleReturnFromReview(task); }}>
+                            <Undo2 size={11} /> Ops! Volta aqui
+                          </Button>
+                        </motion.div>
+                      )}
                     </div>
                   </motion.div>
                 );

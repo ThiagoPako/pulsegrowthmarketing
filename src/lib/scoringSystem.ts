@@ -47,6 +47,8 @@ export const EDITOR_SCORE = {
   ALTERACAO: 8,
   /** Bônus por tarefa prioritária */
   PRIORIDADE: 5,
+  /** Cada story editado e subido pelo editor */
+  STORY_EDITADO: 2,
 } as const;
 
 // ── Designer Scoring ──

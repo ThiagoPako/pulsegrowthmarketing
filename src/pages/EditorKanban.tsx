@@ -37,6 +37,8 @@ const EDITOR_COLUMNS = [
   { id: 'envio', label: 'Concluído', bg: '#2ecc71', icon: '✅' },
 ] as const;
 
+import { Undo2 } from 'lucide-react';
+
 interface EditorTask {
   id: string;
   client_id: string;

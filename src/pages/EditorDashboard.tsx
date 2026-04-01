@@ -710,6 +710,9 @@ export default function EditorDashboard() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => navigate('/roteiros')}>
+            <FileText size={14} /> Roteiros
+          </Button>
           <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
             onClick={() => setShowPerformance(!showPerformance)}
             className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 rounded-full px-3 py-1.5 cursor-pointer">

@@ -1991,8 +1991,9 @@ export default function Clients() {
           {filtered.map(c => (
             <div key={c.id} className="glass-card overflow-hidden"
               style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${c.color || '220 10% 50%'})` }}>
-              {/* Header row */}
-              <div className="p-4 pb-3 flex items-start gap-3">
+              {/* Header row - clickable for sem_contrato */}
+              <div className={`p-4 pb-3 flex items-start gap-3 ${(c as any).clientType === 'sem_contrato' ? 'cursor-pointer hover:bg-accent/30 transition-colors' : ''}`}
+                onClick={() => { if ((c as any).clientType === 'sem_contrato') handleOpen(c); }}>
                 {c.logoUrl ? (
                   <img src={c.logoUrl} alt={c.companyName} className="w-12 h-12 rounded-xl object-cover shrink-0 border border-border" />
                 ) : (
@@ -2031,10 +2032,34 @@ export default function Clients() {
                   </div>
                 </div>
               </div>
-              {/* Checklist for sem_contrato clients */}
-              {(c as any).clientType === 'sem_contrato' && (
+              {/* Generate Checklist button for sem_contrato clients */}
+              {(c as any).clientType === 'sem_contrato' && (c as any).proposalId && (
                 <div className="px-4 pb-2">
-                  <ProposalChecklist clientId={c.id} editable={true} />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs gap-1.5"
+                    disabled={generatingChecklistFor === c.id}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      setGeneratingChecklistFor(c.id);
+                      try {
+                        await replaceProposalChecklist(c.id, (c as any).proposalId);
+                        toast.success('Checklist gerado com sucesso!');
+                        window.location.reload();
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : 'Erro ao gerar checklist');
+                      } finally {
+                        setGeneratingChecklistFor(null);
+                      }
+                    }}
+                  >
+                    {generatingChecklistFor === c.id ? (
+                      <><Loader2 size={12} className="animate-spin" /> Gerando...</>
+                    ) : (
+                      <><RefreshCw size={12} /> Gerar / Atualizar Checklist</>
+                    )}
+                  </Button>
                 </div>
               )}
               {/* Action buttons row */}

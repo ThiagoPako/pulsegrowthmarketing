@@ -483,6 +483,9 @@ export default function Dashboard() {
         </motion.div>
       )}
 
+      {/* VIRTUAL OFFICE */}
+      <VirtualOffice />
+
       {/* LIVE ACTIVITY — Redesigned with proper status separation */}
       {(() => {
         const organizingRecordings = recordings.filter(r => r.status === 'organizando_material' && normalizeDateKey(r.date) === today);

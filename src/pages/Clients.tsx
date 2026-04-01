@@ -1887,8 +1887,22 @@ export default function Clients() {
                         <Label>Tipo de Cliente</Label>
                         <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30">📦 Pacotes de Serviços</Badge>
                         <div className="mt-2">
-                          <Label>Vincular a Proposta Aceita</Label>
-                          <Select value={proposalId || 'none'} onValueChange={v => setProposalId(v === 'none' ? null : v)}>
+                         <Label>Vincular a Proposta Aceita *</Label>
+                          <Select value={proposalId || 'none'} onValueChange={v => {
+                            const selectedId = v === 'none' ? null : v;
+                            setProposalId(selectedId);
+                            if (selectedId) {
+                              const p = proposals.find(pr => pr.id === selectedId);
+                              if (p) {
+                                setForm(prev => ({
+                                  ...prev,
+                                  companyName: p.client_company || prev.companyName || '',
+                                  responsiblePerson: p.client_name || prev.responsiblePerson || '',
+                                  whatsapp: p.whatsapp_number || prev.whatsapp || '',
+                                }));
+                              }
+                            }
+                          }}>
                             <SelectTrigger><SelectValue placeholder="Selecione uma proposta" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="none">Nenhuma proposta</SelectItem>

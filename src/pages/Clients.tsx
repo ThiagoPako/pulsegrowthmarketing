@@ -98,7 +98,7 @@ export default function Clients() {
   const [form, setForm] = useState<Partial<Client> & { clientType?: string }>(emptyClient());
   const [clientType, setClientType] = useState<'novo' | 'existente' | 'sem_contrato'>('novo');
   const [proposalId, setProposalId] = useState<string | null>(null);
-  const [proposals, setProposals] = useState<{ id: string; client_name: string; client_company: string; status: string; proposal_type: string; bonus_services: any; plan_snapshot: any }[]>([]);
+  const [proposals, setProposals] = useState<{ id: string; client_name: string; client_company: string; status: string; proposal_type: string; bonus_services: any; plan_snapshot: any; whatsapp_number: string | null }[]>([]);
   const [step, setStep] = useState(0);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -112,6 +112,7 @@ export default function Clients() {
   const [sendWaLoading, setSendWaLoading] = useState(false);
   const [artDbClient, setArtDbClient] = useState<Client | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [generatingChecklistFor, setGeneratingChecklistFor] = useState<string | null>(null);
   
   // Plan-related state
   const [plans, setPlans] = useState<{ id: string; name: string; status: string; reels_qty: number; creatives_qty: number; stories_qty: number; recording_sessions: number; accepts_extra_content: boolean }[]>([]);
@@ -138,7 +139,7 @@ export default function Clients() {
     supabase.from('api_integrations').select('id').eq('provider', 'meta').eq('status', 'ativo').limit(1).then(({ data }) => {
       setHasMetaApi(!!(data && data.length > 0));
     });
-    supabase.from('commercial_proposals').select('id, client_name, client_company, status, proposal_type, bonus_services, plan_snapshot').eq('status', 'aceita').then(({ data }) => {
+    supabase.from('commercial_proposals').select('id, client_name, client_company, status, proposal_type, bonus_services, plan_snapshot, whatsapp_number').eq('status', 'aceita').then(({ data }) => {
       if (data) setProposals(data as any[]);
     });
   }, []);
@@ -526,18 +527,7 @@ export default function Clients() {
           throw new Error(clientMetaUpdate.error.message || 'Erro ao atualizar dados contratuais do cliente');
         }
 
-        if (clientType === 'sem_contrato' && proposalId) {
-          const previousProposalId = (editing as any).proposalId || null;
-          const existingChecklist = await supabase.from('proposal_checklist_items').select('id').eq('client_id', editing.id).limit(1);
-          if (existingChecklist.error) {
-            throw new Error(existingChecklist.error.message || 'Erro ao verificar checklist do cliente');
-          }
-
-          const hasChecklist = Array.isArray(existingChecklist.data) && existingChecklist.data.length > 0;
-          if (!hasChecklist || previousProposalId !== proposalId) {
-            await replaceProposalChecklist(editing.id, proposalId);
-          }
-        }
+        // Checklist is now generated manually via button on the card
 
         await saveSocialAccounts(editing.id);
 
@@ -632,9 +622,7 @@ export default function Clients() {
             toast.success('Cliente cadastrado');
           }
         } else {
-          if (proposalId) {
-            await replaceProposalChecklist(clientId, proposalId);
-          }
+          // Checklist is now generated manually via button on the card
           toast.success('Cliente cadastrado (Pacotes de Serviços, vinculado à proposta)');
         }
       }
@@ -818,8 +806,22 @@ export default function Clients() {
           </div>
           {clientType === 'sem_contrato' && (
             <div className="mt-3 space-y-2">
-              <Label>Vincular a Proposta Aceita</Label>
-              <Select value={proposalId || 'none'} onValueChange={v => setProposalId(v === 'none' ? null : v)}>
+              <Label>Vincular a Proposta Aceita *</Label>
+              <Select value={proposalId || 'none'} onValueChange={v => {
+                const selectedId = v === 'none' ? null : v;
+                setProposalId(selectedId);
+                if (selectedId) {
+                  const p = proposals.find(pr => pr.id === selectedId);
+                  if (p) {
+                    setForm(prev => ({
+                      ...prev,
+                      companyName: p.client_company || prev.companyName || '',
+                      responsiblePerson: p.client_name || prev.responsiblePerson || '',
+                      whatsapp: p.whatsapp_number || prev.whatsapp || '',
+                    }));
+                  }
+                }
+              }}>
                 <SelectTrigger><SelectValue placeholder="Selecione uma proposta" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Nenhuma proposta</SelectItem>
@@ -830,6 +832,9 @@ export default function Clients() {
                   ))}
                 </SelectContent>
               </Select>
+              {proposalId && (
+                <p className="text-[10px] text-green-600">✅ Dados preenchidos da proposta. O checklist pode ser gerado após cadastrar.</p>
+              )}
               {proposals.length === 0 && (
                 <p className="text-[10px] text-muted-foreground">Nenhuma proposta aceita encontrada. Crie uma proposta primeiro.</p>
               )}
@@ -1882,8 +1887,22 @@ export default function Clients() {
                         <Label>Tipo de Cliente</Label>
                         <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30">📦 Pacotes de Serviços</Badge>
                         <div className="mt-2">
-                          <Label>Vincular a Proposta Aceita</Label>
-                          <Select value={proposalId || 'none'} onValueChange={v => setProposalId(v === 'none' ? null : v)}>
+                         <Label>Vincular a Proposta Aceita *</Label>
+                          <Select value={proposalId || 'none'} onValueChange={v => {
+                            const selectedId = v === 'none' ? null : v;
+                            setProposalId(selectedId);
+                            if (selectedId) {
+                              const p = proposals.find(pr => pr.id === selectedId);
+                              if (p) {
+                                setForm(prev => ({
+                                  ...prev,
+                                  companyName: p.client_company || prev.companyName || '',
+                                  responsiblePerson: p.client_name || prev.responsiblePerson || '',
+                                  whatsapp: p.whatsapp_number || prev.whatsapp || '',
+                                }));
+                              }
+                            }
+                          }}>
                             <SelectTrigger><SelectValue placeholder="Selecione uma proposta" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="none">Nenhuma proposta</SelectItem>
@@ -1986,8 +2005,9 @@ export default function Clients() {
           {filtered.map(c => (
             <div key={c.id} className="glass-card overflow-hidden"
               style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${c.color || '220 10% 50%'})` }}>
-              {/* Header row */}
-              <div className="p-4 pb-3 flex items-start gap-3">
+              {/* Header row - clickable for sem_contrato */}
+              <div className={`p-4 pb-3 flex items-start gap-3 ${(c as any).clientType === 'sem_contrato' ? 'cursor-pointer hover:bg-accent/30 transition-colors' : ''}`}
+                onClick={() => { if ((c as any).clientType === 'sem_contrato') handleOpen(c); }}>
                 {c.logoUrl ? (
                   <img src={c.logoUrl} alt={c.companyName} className="w-12 h-12 rounded-xl object-cover shrink-0 border border-border" />
                 ) : (
@@ -2026,10 +2046,34 @@ export default function Clients() {
                   </div>
                 </div>
               </div>
-              {/* Checklist for sem_contrato clients */}
-              {(c as any).clientType === 'sem_contrato' && (
+              {/* Generate Checklist button for sem_contrato clients */}
+              {(c as any).clientType === 'sem_contrato' && (c as any).proposalId && (
                 <div className="px-4 pb-2">
-                  <ProposalChecklist clientId={c.id} editable={true} />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs gap-1.5"
+                    disabled={generatingChecklistFor === c.id}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      setGeneratingChecklistFor(c.id);
+                      try {
+                        await replaceProposalChecklist(c.id, (c as any).proposalId);
+                        toast.success('Checklist gerado com sucesso!');
+                        window.location.reload();
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : 'Erro ao gerar checklist');
+                      } finally {
+                        setGeneratingChecklistFor(null);
+                      }
+                    }}
+                  >
+                    {generatingChecklistFor === c.id ? (
+                      <><Loader2 size={12} className="animate-spin" /> Gerando...</>
+                    ) : (
+                      <><RefreshCw size={12} /> Gerar / Atualizar Checklist</>
+                    )}
+                  </Button>
                 </div>
               )}
               {/* Action buttons row */}

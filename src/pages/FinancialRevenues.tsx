@@ -134,9 +134,12 @@ export default function FinancialRevenues() {
 
   const monthOptions = useMemo(() => {
     const options = [];
+    const APRIL_2026 = '2026-04';
     for (let i = -6; i <= 3; i++) {
       const m = i === 0 ? new Date() : (i < 0 ? subMonths(new Date(), -i) : addMonths(new Date(), i));
-      options.push({ value: format(m, 'yyyy-MM'), label: format(m, 'MMMM yyyy', { locale: ptBR }) });
+      const val = format(m, 'yyyy-MM');
+      if (val < APRIL_2026) continue;
+      options.push({ value: val, label: format(m, 'MMMM yyyy', { locale: ptBR }) });
     }
     return options;
   }, []);
@@ -145,10 +148,11 @@ export default function FinancialRevenues() {
   const filtered = revenues.filter(r => normalizeDate(r.reference_month) === refMonth);
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  // Auto-generate revenues when month has none and data is loaded
+  // Auto-generate revenues when month has none and data is loaded (only from April 2026)
   const autoGenRef = useRef<string | null>(null);
   useEffect(() => {
     if (loading || autoGenRef.current === selectedMonth) return;
+    if (selectedMonth < '2026-04') return;
     if (filtered.length === 0 && clients.length > 0 && contracts.length > 0) {
       autoGenRef.current = selectedMonth;
       generateMonthlyRevenues(selectedMonth).then(count => {

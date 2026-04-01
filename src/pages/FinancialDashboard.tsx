@@ -105,10 +105,56 @@ export default function FinancialDashboard() {
 
   const handleFinancialStart = async (items: { date: string; description: string; amount: number; type: 'entrada' | 'saida' }[], currentBalance: number) => {
     try {
-      const entradas = items.filter(i => i.type === 'entrada');
-      const saidas = items.filter(i => i.type === 'saida');
+      // 1. Save the final balance directly as the cash reserve entry
+      // First clear any existing "Start Financeiro" adjustments
+      const { data: existingAdj } = await supabase
+        .from('cash_reserve_movements')
+        .select('id')
+        .ilike('description', '%Start Financeiro%');
+      
+      if (existingAdj && existingAdj.length > 0) {
+        for (const adj of existingAdj) {
+          await supabase.from('cash_reserve_movements').delete().eq('id', adj.id);
+        }
+      }
 
-      // Import entradas as revenues (marked as received)
+      // 2. Insert the final balance as a single cash reserve entry
+      const { error: cashError } = await supabase.from('cash_reserve_movements').insert({
+        amount: Math.abs(currentBalance),
+        type: currentBalance >= 0 ? 'entrada' : 'saida',
+        description: `Start Financeiro - Saldo sincronizado do extrato bancário: ${currentBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`,
+        date: new Date().toISOString().split('T')[0],
+      } as any);
+
+      if (cashError) {
+        console.error('[FinancialStart] cash reserve insert error:', cashError);
+        return false;
+      }
+
+      // 3. Import individual movements as expenses (saidas) for tracking history
+      const saidas = items.filter(i => i.type === 'saida');
+      if (saidas.length > 0) {
+        let catId = categories.find(c => c.name === 'Outros')?.id;
+        if (!catId) {
+          const { data: newCat } = await supabase.from('expense_categories').insert({ name: 'Outros' } as any).select('id').single();
+          catId = newCat?.id || categories[0]?.id;
+        }
+        if (catId) {
+          for (const item of saidas) {
+            await supabase.from('expenses').insert({
+              date: item.date,
+              amount: item.amount,
+              description: item.description,
+              category_id: catId,
+              expense_type: 'variavel',
+              responsible: 'Start Financeiro',
+            } as any);
+          }
+        }
+      }
+
+      // 4. Import entradas as revenues for tracking history
+      const entradas = items.filter(i => i.type === 'entrada');
       for (const item of entradas) {
         await supabase.from('revenues').insert({
           client_id: '00000000-0000-0000-0000-000000000000',
@@ -118,41 +164,6 @@ export default function FinancialDashboard() {
           due_date: item.date,
           status: 'recebida',
           paid_at: item.date,
-        } as any);
-      }
-
-      // Import saidas as expenses
-      let catId = categories.find(c => c.name === 'Outros')?.id;
-      if (!catId) {
-        const { data: newCat } = await supabase.from('expense_categories').insert({ name: 'Outros' } as any).select('id').single();
-        catId = newCat?.id || categories[0]?.id;
-      }
-      if (catId) {
-        for (const item of saidas) {
-          await supabase.from('expenses').insert({
-            date: item.date,
-            amount: item.amount,
-            description: item.description,
-            category_id: catId,
-            expense_type: 'variavel',
-            responsible: 'Start Financeiro',
-          } as any);
-        }
-      }
-
-      // Calculate the adjustment needed so the system balance equals the real bank balance
-      const totalIn = entradas.reduce((s, i) => s + i.amount, 0);
-      const totalOut = saidas.reduce((s, i) => s + i.amount, 0);
-      const importedNet = totalIn - totalOut;
-      const adjustment = currentBalance - importedNet;
-
-      // If there's a difference, add a cash reserve adjustment to sync the balance
-      if (Math.abs(adjustment) > 0.01) {
-        await supabase.from('cash_reserve_movements').insert({
-          amount: Math.abs(adjustment),
-          type: adjustment >= 0 ? 'entrada' : 'saida',
-          description: `Ajuste Start Financeiro - Saldo sincronizado: R$ ${currentBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-          date: new Date().toISOString().split('T')[0],
         } as any);
       }
 
@@ -205,6 +216,12 @@ export default function FinancialDashboard() {
   const ticketMedio = activeClientsCount > 0 ? mrr / activeClientsCount : 0;
   const cancelados = contracts.filter(c => c.status === 'cancelado').length;
   const taxaCancelamento = contracts.length > 0 ? (cancelados / contracts.length * 100) : 0;
+
+  // Cash reserve balance (saldo do caixa = saldo real da conta)
+  const saldoCaixa = useMemo(() =>
+    cashMovements.reduce((acc, m) => acc + (m.type === 'entrada' ? Number(m.amount) : -Number(m.amount)), 0),
+    [cashMovements]
+  );
 
   // Expense by category chart
   const expenseByCat = useMemo(() => {
@@ -349,9 +366,12 @@ export default function FinancialDashboard() {
   // Month options
   const monthOptions = useMemo(() => {
     const options = [];
+    const APRIL_2026 = '2026-04';
     for (let i = -3; i <= 3; i++) {
       const m = i === 0 ? new Date() : (i < 0 ? subMonths(new Date(), -i) : addMonths(new Date(), i));
-      options.push({ value: format(m, 'yyyy-MM'), label: format(m, 'MMMM yyyy', { locale: ptBR }) });
+      const val = format(m, 'yyyy-MM');
+      if (val < APRIL_2026) continue;
+      options.push({ value: val, label: format(m, 'MMMM yyyy', { locale: ptBR }) });
     }
     return options;
   }, []);
@@ -447,10 +467,10 @@ export default function FinancialDashboard() {
   ];
 
   const kpiRow2 = [
+    { icon: <Wallet size={18} />, label: 'Saldo em Conta', value: fmt(saldoCaixa), gradient: saldoCaixa >= 0 ? 'from-teal-500/10 to-cyan-500/10' : 'from-rose-500/10 to-red-500/10', iconBg: saldoCaixa >= 0 ? 'bg-teal-500/20 text-teal-600' : 'bg-rose-500/20 text-rose-600', border: saldoCaixa >= 0 ? 'border-teal-200/50' : 'border-rose-200/50' },
     { icon: <AlertTriangle size={18} />, label: 'Em Atraso', value: fmt(revenueAtraso), gradient: 'from-orange-500/10 to-amber-500/10', iconBg: 'bg-orange-500/20 text-orange-600', border: 'border-orange-200/50' },
     { icon: <CreditCard size={18} />, label: 'Ticket Médio', value: fmt(ticketMedio), gradient: 'from-violet-500/10 to-purple-500/10', iconBg: 'bg-violet-500/20 text-violet-600', border: 'border-violet-200/50' },
     { icon: <Users size={18} />, label: 'Clientes Ativos', value: String(activeClientsCount), gradient: 'from-sky-500/10 to-cyan-500/10', iconBg: 'bg-sky-500/20 text-sky-600', border: 'border-sky-200/50' },
-    { icon: <TrendingDown size={18} />, label: 'Cancelamento', value: `${taxaCancelamento.toFixed(1)}%`, gradient: 'from-slate-500/10 to-gray-500/10', iconBg: 'bg-slate-500/20 text-slate-600', border: 'border-slate-200/50' },
   ];
 
 

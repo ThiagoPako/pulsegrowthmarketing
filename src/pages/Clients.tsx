@@ -292,14 +292,20 @@ export default function Clients() {
       setForm(client);
       setLogoPreview(client.logoUrl || null);
       setPreferredShift(client.fullShiftRecording ? (client.preferredShift === 'tarde' ? 'turnoB' : 'turnoA') : 'ambos');
+      // Restore clientType and proposalId from client data
+      setClientType(((client as any).clientType as any) || 'novo');
+      setProposalId((client as any).proposalId || null);
       // Load plan data for editing
-      supabase.from('clients').select('plan_id, contract_start_date, auto_renewal, contract_duration_months').eq('id', client.id).single().then(({ data }) => {
+      supabase.from('clients').select('plan_id, contract_start_date, auto_renewal, contract_duration_months, client_type, proposal_id').eq('id', client.id).single().then(({ data }) => {
         if (data) {
           setPlanId((data as any).plan_id || null);
           setContractStartDate((data as any).contract_start_date || '');
           setAutoRenewal((data as any).auto_renewal || false);
           setContractDurationMonths((data as any).contract_duration_months || 12);
           setShowMetrics((data as any).show_metrics !== false);
+          // Ensure clientType is correctly loaded from DB
+          if ((data as any).client_type) setClientType((data as any).client_type as any);
+          if ((data as any).proposal_id) setProposalId((data as any).proposal_id);
         }
       });
       // Load financial contract for editing
@@ -338,6 +344,8 @@ export default function Clients() {
       setPaymentMethod('pix');
       setSocialAccounts(emptySocialAccounts());
       setExistingSocialAccounts([]);
+      setClientType('novo');
+      setProposalId(null);
     }
     setLogoFile(null);
     setStep(0);
@@ -383,38 +391,42 @@ export default function Clients() {
       const logoUrl = await uploadLogo(editing.id);
       const updatedClient = { ...editing, ...form, logoUrl: logoUrl || undefined } as Client;
       await updateClient(updatedClient);
-      // Update plan fields
-      const clientMetaUpdate = await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, contract_duration_months: contractDurationMonths, show_metrics: showMetrics } as any).eq('id', editing.id);
+      // Update plan fields + client_type + proposal_id
+      const clientMetaUpdate = await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, contract_duration_months: contractDurationMonths, show_metrics: showMetrics, client_type: clientType, proposal_id: clientType === 'sem_contrato' ? proposalId : null } as any).eq('id', editing.id);
       if (clientMetaUpdate.error) {
         throw new Error(clientMetaUpdate.error.message || 'Erro ao atualizar dados contratuais do cliente');
       }
-      // Sync financial contract + open revenues
-      await syncFinancialContract({
-        client_id: editing.id,
-        plan_id: planId || null,
-        contract_value: contractValue,
-        contract_start_date: contractStartDate || new Date().toISOString().split('T')[0],
-        due_day: dueDay,
-        payment_method: paymentMethod,
-        status: 'ativo',
-      });
       // Save social accounts
       await saveSocialAccounts(editing.id);
-      // Auto-regenerate schedule if scheduling fields changed
-      const scheduleFieldsChanged =
-        editing.fixedDay !== updatedClient.fixedDay ||
-        editing.fixedTime !== updatedClient.fixedTime ||
-        editing.videomaker !== updatedClient.videomaker ||
-        editing.backupDay !== updatedClient.backupDay ||
-        editing.backupTime !== updatedClient.backupTime ||
-        editing.extraDay !== updatedClient.extraDay ||
-        editing.acceptsExtra !== updatedClient.acceptsExtra ||
-        editing.fullShiftRecording !== updatedClient.fullShiftRecording ||
-        editing.preferredShift !== updatedClient.preferredShift ||
-        editing.monthlyRecordings !== updatedClient.monthlyRecordings;
-      if (scheduleFieldsChanged) {
-        const { deleted, created } = await regenerateScheduleForClient(updatedClient);
-        toast.success(`Cliente atualizado — agenda regenerada: ${deleted} removida(s), ${created} criada(s)`);
+      if (clientType !== 'sem_contrato') {
+        // Sync financial contract + open revenues
+        await syncFinancialContract({
+          client_id: editing.id,
+          plan_id: planId || null,
+          contract_value: contractValue,
+          contract_start_date: contractStartDate || new Date().toISOString().split('T')[0],
+          due_day: dueDay,
+          payment_method: paymentMethod,
+          status: 'ativo',
+        });
+        // Auto-regenerate schedule if scheduling fields changed
+        const scheduleFieldsChanged =
+          editing.fixedDay !== updatedClient.fixedDay ||
+          editing.fixedTime !== updatedClient.fixedTime ||
+          editing.videomaker !== updatedClient.videomaker ||
+          editing.backupDay !== updatedClient.backupDay ||
+          editing.backupTime !== updatedClient.backupTime ||
+          editing.extraDay !== updatedClient.extraDay ||
+          editing.acceptsExtra !== updatedClient.acceptsExtra ||
+          editing.fullShiftRecording !== updatedClient.fullShiftRecording ||
+          editing.preferredShift !== updatedClient.preferredShift ||
+          editing.monthlyRecordings !== updatedClient.monthlyRecordings;
+        if (scheduleFieldsChanged) {
+          const { deleted, created } = await regenerateScheduleForClient(updatedClient);
+          toast.success(`Cliente atualizado — agenda regenerada: ${deleted} removida(s), ${created} criada(s)`);
+        } else {
+          toast.success('Cliente atualizado');
+        }
       } else {
         toast.success('Cliente atualizado');
       }
@@ -1736,14 +1748,39 @@ export default function Clients() {
               {/* Step content */}
               <div className="min-h-[200px]">
                 {editing ? (
-                  // Editing: show all fields together
-                  <div className="space-y-5">
-                    {renderStep0()}
-                    {hasMetaApi && renderStep1()}
-                    {renderStep2()}
-                    {renderStep3()}
-                    {renderStep4()}
-                  </div>
+                  // Editing: show fields based on client type
+                  clientType === 'sem_contrato' ? (
+                    <div className="space-y-5">
+                      {renderStep0()}
+                      {/* Proposal selector for sem_contrato editing */}
+                      <div className="space-y-2 border-t border-border/50 pt-4">
+                        <Label>Tipo de Cliente</Label>
+                        <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30">📄 Sem Contrato</Badge>
+                        <div className="mt-2">
+                          <Label>Vincular a Proposta Aceita</Label>
+                          <Select value={proposalId || 'none'} onValueChange={v => setProposalId(v === 'none' ? null : v)}>
+                            <SelectTrigger><SelectValue placeholder="Selecione uma proposta" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Nenhuma proposta</SelectItem>
+                              {proposals.map(p => (
+                                <SelectItem key={p.id} value={p.id}>
+                                  {p.client_company || p.client_name} — {p.proposal_type === 'marketing' ? 'Marketing' : p.proposal_type === 'sistema' ? 'Sistema' : p.proposal_type === 'endomarketing' ? 'Endomarketing' : p.proposal_type === 'cronograma' ? 'Cronograma' : 'Personalizada'}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-5">
+                      {renderStep0()}
+                      {hasMetaApi && renderStep1()}
+                      {renderStep2()}
+                      {renderStep3()}
+                      {renderStep4()}
+                    </div>
+                  )
                 ) : clientType === 'sem_contrato' ? (
                   <>
                     {step === 0 && renderStep0()}

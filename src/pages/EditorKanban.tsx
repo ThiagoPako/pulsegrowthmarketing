@@ -299,6 +299,16 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
             )}
           </div>
         )}
+
+        {/* Ops! Volta aqui - editor can return review task to editing */}
+        {task.kanban_column === 'revisao' && task.edited_by === currentUserId && (
+          <motion.div whileTap={{ scale: 0.95 }} className="mt-1">
+            <Button size="sm" variant="outline" className="w-full gap-1.5 h-7 text-xs border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
+              onClick={(e) => { e.stopPropagation(); onReturnFromReview(task); }}>
+              <Undo2 size={11} /> Ops! Volta aqui
+            </Button>
+          </motion.div>
+        )}
       </div>
     </div>
   );

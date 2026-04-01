@@ -607,22 +607,48 @@ export default function Clients() {
       {!editing && (
         <div className="space-y-2">
           <Label>Tipo de Cliente *</Label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button type="button" onClick={() => setClientType('novo')}
               className={`p-3 rounded-xl border-2 text-center transition-all text-sm ${
                 clientType === 'novo' ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
               }`}>
-              <span className="font-semibold block">🆕 Cliente Novo</span>
-              <span className="text-[10px] text-muted-foreground">Gera onboarding automático</span>
+              <span className="font-semibold block">🆕 Novo</span>
+              <span className="text-[10px] text-muted-foreground">Com onboarding</span>
             </button>
             <button type="button" onClick={() => setClientType('existente')}
               className={`p-3 rounded-xl border-2 text-center transition-all text-sm ${
                 clientType === 'existente' ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
               }`}>
-              <span className="font-semibold block">📋 Cliente Existente</span>
+              <span className="font-semibold block">📋 Existente</span>
               <span className="text-[10px] text-muted-foreground">Sem onboarding</span>
             </button>
+            <button type="button" onClick={() => setClientType('sem_contrato')}
+              className={`p-3 rounded-xl border-2 text-center transition-all text-sm ${
+                clientType === 'sem_contrato' ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
+              }`}>
+              <span className="font-semibold block">📄 Proposta</span>
+              <span className="text-[10px] text-muted-foreground">Sem contrato</span>
+            </button>
           </div>
+          {clientType === 'sem_contrato' && (
+            <div className="mt-3 space-y-2">
+              <Label>Vincular a Proposta Aceita</Label>
+              <Select value={proposalId || 'none'} onValueChange={v => setProposalId(v === 'none' ? null : v)}>
+                <SelectTrigger><SelectValue placeholder="Selecione uma proposta" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhuma proposta</SelectItem>
+                  {proposals.map(p => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.client_company || p.client_name} — {p.proposal_type === 'marketing' ? 'Marketing' : p.proposal_type === 'sistema' ? 'Sistema' : p.proposal_type === 'endomarketing' ? 'Endomarketing' : p.proposal_type === 'cronograma' ? 'Cronograma' : 'Personalizada'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {proposals.length === 0 && (
+                <p className="text-[10px] text-muted-foreground">Nenhuma proposta aceita encontrada. Crie uma proposta primeiro.</p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

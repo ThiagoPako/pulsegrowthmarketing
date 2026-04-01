@@ -149,9 +149,10 @@ interface Props {
   member: OfficeMember;
   onClick: () => void;
   inCoffeeRoom?: boolean;
+  justJoined?: boolean;
 }
 
-export default function PixelCharacter({ member, onClick, inCoffeeRoom }: Props) {
+export default function PixelCharacter({ member, onClick, inCoffeeRoom, justJoined }: Props) {
   const { pos, facingRight } = useWalk(member.isOnline);
   const delay = useMemo(() => Math.random() * 0.5, []);
 

@@ -105,10 +105,56 @@ export default function FinancialDashboard() {
 
   const handleFinancialStart = async (items: { date: string; description: string; amount: number; type: 'entrada' | 'saida' }[], currentBalance: number) => {
     try {
-      const entradas = items.filter(i => i.type === 'entrada');
-      const saidas = items.filter(i => i.type === 'saida');
+      // 1. Save the final balance directly as the cash reserve entry
+      // First clear any existing "Start Financeiro" adjustments
+      const { data: existingAdj } = await supabase
+        .from('cash_reserve_movements')
+        .select('id')
+        .ilike('description', '%Start Financeiro%');
+      
+      if (existingAdj && existingAdj.length > 0) {
+        for (const adj of existingAdj) {
+          await supabase.from('cash_reserve_movements').delete().eq('id', adj.id);
+        }
+      }
 
-      // Import entradas as revenues (marked as received)
+      // 2. Insert the final balance as a single cash reserve entry
+      const { error: cashError } = await supabase.from('cash_reserve_movements').insert({
+        amount: Math.abs(currentBalance),
+        type: currentBalance >= 0 ? 'entrada' : 'saida',
+        description: `Start Financeiro - Saldo sincronizado do extrato bancário: ${currentBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`,
+        date: new Date().toISOString().split('T')[0],
+      } as any);
+
+      if (cashError) {
+        console.error('[FinancialStart] cash reserve insert error:', cashError);
+        return false;
+      }
+
+      // 3. Import individual movements as expenses (saidas) for tracking history
+      const saidas = items.filter(i => i.type === 'saida');
+      if (saidas.length > 0) {
+        let catId = categories.find(c => c.name === 'Outros')?.id;
+        if (!catId) {
+          const { data: newCat } = await supabase.from('expense_categories').insert({ name: 'Outros' } as any).select('id').single();
+          catId = newCat?.id || categories[0]?.id;
+        }
+        if (catId) {
+          for (const item of saidas) {
+            await supabase.from('expenses').insert({
+              date: item.date,
+              amount: item.amount,
+              description: item.description,
+              category_id: catId,
+              expense_type: 'variavel',
+              responsible: 'Start Financeiro',
+            } as any);
+          }
+        }
+      }
+
+      // 4. Import entradas as revenues for tracking history
+      const entradas = items.filter(i => i.type === 'entrada');
       for (const item of entradas) {
         await supabase.from('revenues').insert({
           client_id: '00000000-0000-0000-0000-000000000000',
@@ -118,41 +164,6 @@ export default function FinancialDashboard() {
           due_date: item.date,
           status: 'recebida',
           paid_at: item.date,
-        } as any);
-      }
-
-      // Import saidas as expenses
-      let catId = categories.find(c => c.name === 'Outros')?.id;
-      if (!catId) {
-        const { data: newCat } = await supabase.from('expense_categories').insert({ name: 'Outros' } as any).select('id').single();
-        catId = newCat?.id || categories[0]?.id;
-      }
-      if (catId) {
-        for (const item of saidas) {
-          await supabase.from('expenses').insert({
-            date: item.date,
-            amount: item.amount,
-            description: item.description,
-            category_id: catId,
-            expense_type: 'variavel',
-            responsible: 'Start Financeiro',
-          } as any);
-        }
-      }
-
-      // Calculate the adjustment needed so the system balance equals the real bank balance
-      const totalIn = entradas.reduce((s, i) => s + i.amount, 0);
-      const totalOut = saidas.reduce((s, i) => s + i.amount, 0);
-      const importedNet = totalIn - totalOut;
-      const adjustment = currentBalance - importedNet;
-
-      // If there's a difference, add a cash reserve adjustment to sync the balance
-      if (Math.abs(adjustment) > 0.01) {
-        await supabase.from('cash_reserve_movements').insert({
-          amount: Math.abs(adjustment),
-          type: adjustment >= 0 ? 'entrada' : 'saida',
-          description: `Ajuste Start Financeiro - Saldo sincronizado: R$ ${currentBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-          date: new Date().toISOString().split('T')[0],
         } as any);
       }
 

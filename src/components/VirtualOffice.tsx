@@ -165,11 +165,10 @@ export default function VirtualOffice() {
   const enriched = useMemo(() => {
     const list = members.map(m => {
       const hasHeartbeat = Boolean(presence[m.id]) && now - new Date(presence[m.id]).getTime() < ONLINE_MS;
-      const hasActivity = Boolean(activities[m.id]);
       return {
         ...m,
-        isOnline: hasHeartbeat || hasActivity,
-        activity: activities[m.id] || undefined,
+        isOnline: hasHeartbeat,
+        activity: hasHeartbeat ? (activities[m.id] || undefined) : undefined,
       };
     });
     list.sort((a, b) => (a.isOnline !== b.isOnline ? (a.isOnline ? -1 : 1) : a.name.localeCompare(b.name)));

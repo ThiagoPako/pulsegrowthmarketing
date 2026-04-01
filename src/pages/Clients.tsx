@@ -424,31 +424,37 @@ export default function Clients() {
       const ok = await addClient(newClient);
       if (!ok) { toast.error('Empresa já cadastrada'); return; }
       // Update plan fields after insert
-      const clientMetaUpdate = await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, contract_duration_months: contractDurationMonths, client_type: clientType, client_login: newClient.clientLogin, show_metrics: showMetrics } as any).eq('id', clientId);
+      const clientMetaUpdate = await supabase.from('clients').update({ plan_id: planId || null, contract_start_date: contractStartDate || null, auto_renewal: autoRenewal, contract_duration_months: contractDurationMonths, client_type: clientType, client_login: newClient.clientLogin, show_metrics: showMetrics, proposal_id: clientType === 'sem_contrato' ? proposalId : null } as any).eq('id', clientId);
       if (clientMetaUpdate.error) {
         throw new Error(clientMetaUpdate.error.message || 'Erro ao complementar dados do cliente');
       }
-      // Create financial contract
-      await syncFinancialContract({
-        client_id: clientId,
-        plan_id: planId || null,
-        contract_value: contractValue,
-        contract_start_date: contractStartDate || new Date().toISOString().split('T')[0],
-        due_day: dueDay,
-        payment_method: paymentMethod,
-        status: 'ativo',
-      });
+      // Create financial contract only if not sem_contrato
+      if (clientType !== 'sem_contrato') {
+        await syncFinancialContract({
+          client_id: clientId,
+          plan_id: planId || null,
+          contract_value: contractValue,
+          contract_start_date: contractStartDate || new Date().toISOString().split('T')[0],
+          due_day: dueDay,
+          payment_method: paymentMethod,
+          status: 'ativo',
+        });
+      }
       // Save social accounts
       await saveSocialAccounts(clientId);
       // Generate onboarding tasks for new clients
       if (clientType === 'novo') {
         await createOnboardingForClient.mutateAsync(clientId);
       }
-      const count = await generateScheduleForClient(newClient);
-      if (count > 0) {
-        toast.success(`Cliente cadastrado — ${count} gravação(ões) criada(s) na agenda`);
+      if (clientType !== 'sem_contrato') {
+        const count = await generateScheduleForClient(newClient);
+        if (count > 0) {
+          toast.success(`Cliente cadastrado — ${count} gravação(ões) criada(s) na agenda`);
+        } else {
+          toast.success('Cliente cadastrado');
+        }
       } else {
-        toast.success('Cliente cadastrado');
+        toast.success('Cliente cadastrado (sem contrato, vinculado à proposta)');
       }
     }
     setOpen(false);

@@ -130,7 +130,7 @@ Gere entre 5 e 15 entregas relevantes organizadas em 2-4 fases. Os preços devem
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
+          model: "google/gemini-2.5-flash",
           messages: [
             { role: "system", content: "Você é um gestor de projetos de marketing digital. Responda APENAS com JSON válido." },
             { role: "user", content: timelinePrompt },

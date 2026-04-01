@@ -2735,6 +2735,7 @@ export type Database = {
           font_scale: string | null
           id: string
           job_title: string | null
+          last_seen_at: string | null
           name: string
           role: Database["public"]["Enums"]["app_role"]
           updated_at: string
@@ -2749,6 +2750,7 @@ export type Database = {
           font_scale?: string | null
           id: string
           job_title?: string | null
+          last_seen_at?: string | null
           name: string
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
@@ -2763,6 +2765,7 @@ export type Database = {
           font_scale?: string | null
           id?: string
           job_title?: string | null
+          last_seen_at?: string | null
           name?: string
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
@@ -3307,6 +3310,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      team_messages: {
+        Row: {
+          created_at: string
+          from_user_id: string
+          id: string
+          message: string
+          read: boolean
+          to_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          from_user_id: string
+          id?: string
+          message?: string
+          read?: boolean
+          to_user_id: string
+        }
+        Update: {
+          created_at?: string
+          from_user_id?: string
+          id?: string
+          message?: string
+          read?: boolean
+          to_user_id?: string
+        }
+        Relationships: []
       }
       traffic_campaigns: {
         Row: {

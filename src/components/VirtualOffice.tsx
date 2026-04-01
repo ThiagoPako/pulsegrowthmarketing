@@ -463,37 +463,33 @@ export default function VirtualOffice() {
     fetchActivities();
 
     // Realtime for profiles — listen to ALL events
-    const profileChannel = supabase
+    const profileChannel = supabaseReal
       .channel('vo-presence-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, handleProfileChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        // Re-fetch via VPS on any realtime change
+        fetchProfiles();
+      })
       .subscribe();
 
     // Realtime for active_recordings changes → update activities
-    const activityChannel = supabase
+    const activityChannel = supabaseReal
       .channel('vo-activity-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'active_recordings' }, () => fetchActivities())
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'content_tasks' }, () => fetchActivities())
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'design_tasks' }, () => fetchActivities())
       .subscribe();
 
-    // Refresh online threshold every 30s (to mark stale users offline)
+    // Refresh online threshold every 15s (to mark stale users offline quickly)
     const thresholdInterval = setInterval(() => {
-      setMembers(prev => {
-        const now = Date.now();
-        const updated = prev.map(m => ({
-          ...m,
-          isOnline: m.lastSeenAt ? (now - new Date(m.lastSeenAt).getTime()) < ONLINE_THRESHOLD_MS : false,
-        }));
-        return sortMembers(updated);
-      });
-    }, 30_000);
+      fetchProfiles(); // re-fetch to get fresh last_seen_at
+    }, 15_000);
 
     // Refresh activities every 30s as a fallback
     const activityInterval = setInterval(fetchActivities, 30_000);
 
     return () => {
-      supabase.removeChannel(profileChannel);
-      supabase.removeChannel(activityChannel);
+      supabaseReal.removeChannel(profileChannel);
+      supabaseReal.removeChannel(activityChannel);
       clearInterval(thresholdInterval);
       clearInterval(activityInterval);
     };

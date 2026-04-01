@@ -41,9 +41,10 @@ interface Props {
   members: OfficeMember[];
   onMemberClick: (m: OfficeMember) => void;
   isCoffeeRoom?: boolean;
+  joinedIds?: Set<string>;
 }
 
-export default function PixelRoom({ config, members, onMemberClick, isCoffeeRoom }: Props) {
+export default function PixelRoom({ config, members, onMemberClick, isCoffeeRoom, joinedIds }: Props) {
   const onlineCount = members.filter(m => m.isOnline).length;
 
   return (

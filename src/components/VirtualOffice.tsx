@@ -48,13 +48,20 @@ export default function VirtualOffice() {
   const prevOnlineRef = useRef<Set<string>>(new Set());
   chatRef.current = chatTarget;
 
+  // Names known to be female
+  const FEMALE_NAMES = ['rayssa', 'adrielly', 'naraely', 'priscylla', 'ana', 'mariana', 'thaís', 'thais'];
+
   const fetchProfiles = useCallback(async () => {
     const { data } = await supabase.from('profiles').select('id, name, role, avatar_url') as any;
     if (!data) return;
-    setMembers(data.map((p: any) => ({
-      id: p.id, name: p.name || 'Usuário', role: p.role as UserRole,
-      avatarUrl: p.avatar_url, isOnline: false,
-    })));
+    setMembers(data.map((p: any) => {
+      const firstName = (p.name || '').split(' ')[0].toLowerCase();
+      const gender = FEMALE_NAMES.includes(firstName) ? 'female' as const : 'male' as const;
+      return {
+        id: p.id, name: p.name || 'Usuário', role: p.role as UserRole,
+        avatarUrl: p.avatar_url, isOnline: false, gender,
+      };
+    }));
   }, []);
 
   const fetchActivities = useCallback(async () => {
@@ -65,10 +72,26 @@ export default function VirtualOffice() {
       supabase.from('design_tasks').select('assigned_to, kanban_column').in('kanban_column', ['em_andamento', 'revisao']),
       supabase.from('profiles').select('id, role'),
     ]) as any;
-    // Social Media e Admin: considerar "gestão" sempre que estiverem com heartbeat ativo
+
+    // Get current presence to check who actually has heartbeat
+    const presState = getPresenceState();
+    const activeUserIds = new Set<string>();
+    Object.values(presState).forEach(entries => {
+      if (!Array.isArray(entries)) return;
+      entries.forEach(e => {
+        const uid = typeof e?.userId === 'string' ? e.userId : null;
+        const hb = typeof e?.heartbeatAt === 'string' ? e.heartbeatAt : null;
+        if (uid && hb && (Date.now() - new Date(hb).getTime() < ONLINE_MS)) {
+          activeUserIds.add(uid);
+        }
+      });
+    });
+
+    // Social Media e Admin: considerar "gestão" SOMENTE se tiver heartbeat ativo
     profiles?.forEach((p: any) => {
-      if (p.role === 'social_media') act[p.id] = 'gestao';
-      if (p.role === 'admin') act[p.id] = 'gestao';
+      if ((p.role === 'social_media' || p.role === 'admin') && activeUserIds.has(p.id)) {
+        act[p.id] = 'gestao';
+      }
     });
     recs?.forEach((r: any) => { if (r.videomaker_id) act[r.videomaker_id] = 'gravando'; });
     ct?.forEach((t: any) => {
@@ -142,11 +165,10 @@ export default function VirtualOffice() {
   const enriched = useMemo(() => {
     const list = members.map(m => {
       const hasHeartbeat = Boolean(presence[m.id]) && now - new Date(presence[m.id]).getTime() < ONLINE_MS;
-      const hasActivity = Boolean(activities[m.id]);
       return {
         ...m,
-        isOnline: hasHeartbeat || hasActivity,
-        activity: activities[m.id] || undefined,
+        isOnline: hasHeartbeat,
+        activity: hasHeartbeat ? (activities[m.id] || undefined) : undefined,
       };
     });
     list.sort((a, b) => (a.isOnline !== b.isOnline ? (a.isOnline ? -1 : 1) : a.name.localeCompare(b.name)));

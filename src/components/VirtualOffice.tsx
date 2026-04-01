@@ -18,7 +18,7 @@ import { ROOMS, shouldBeInCoffeeRoom, type OfficeMember } from './virtual-office
 import PixelRoom from './virtual-office/PixelRoom';
 import QuickChatDialog from './virtual-office/QuickChatDialog';
 
-const ONLINE_MS = 25_000;
+const ONLINE_MS = 120_000;
 
 function normalizeMsg(p: unknown): QuickMessage | null {
   if (!p || typeof p !== 'object') return null;

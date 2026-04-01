@@ -10,6 +10,7 @@ export interface QuickMessage {
 }
 
 const CHANNEL_NAME = 'vo-shared';
+const REALTIME_FALLBACK_TOKEN = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 let _channel: RealtimeChannel | null = null;
 let _subscribed = false;
@@ -24,8 +25,24 @@ function fireSyncCallbacks() {
   });
 }
 
+function resetChannel() {
+  const current = _channel;
+  _channel = null;
+  _subscribed = false;
+  _subscribing = false;
+
+  if (!current) return;
+
+  try { current.unsubscribe(); } catch { /* ignore */ }
+  try { void supabaseReal.removeChannel(current); } catch { /* ignore */ }
+}
+
 function getOrCreateChannel(): RealtimeChannel {
   if (_channel) return _channel;
+
+  if (REALTIME_FALLBACK_TOKEN) {
+    try { supabaseReal.realtime.setAuth(REALTIME_FALLBACK_TOKEN); } catch { /* ignore */ }
+  }
 
   _channel = supabaseReal.channel(CHANNEL_NAME, {
     config: {
@@ -59,8 +76,7 @@ function doSubscribe() {
       _subscribing = false;
       fireSyncCallbacks();
     } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-      _subscribed = false;
-      _subscribing = false;
+      resetChannel();
     }
   });
 }
@@ -104,7 +120,12 @@ export function getPresenceState(): Record<string, any[]> {
 
 export async function trackPresence(userId: string) {
   doSubscribe();
-  const ready = await waitReady();
+  let ready = await waitReady();
+  if (!ready) {
+    resetChannel();
+    doSubscribe();
+    ready = await waitReady();
+  }
   if (!ready || !_channel) return false;
   try {
     await _channel.track({ userId, heartbeatAt: new Date().toISOString() });
@@ -120,7 +141,12 @@ export async function untrackPresence() {
 
 export async function sendBroadcast(payload: any): Promise<boolean> {
   doSubscribe();
-  const ready = await waitReady();
+  let ready = await waitReady();
+  if (!ready) {
+    resetChannel();
+    doSubscribe();
+    ready = await waitReady();
+  }
   if (!ready || !_channel) return false;
   try {
     const r: RealtimeChannelSendResponse = await _channel.send({

@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
+import { supabase as supabaseReal } from '@/integrations/supabase/client';
 
 /**
  * Updates `last_seen_at` on the profiles table every 30s

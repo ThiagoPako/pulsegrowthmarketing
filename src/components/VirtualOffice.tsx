@@ -415,15 +415,32 @@ export default function VirtualOffice() {
     setActivities(actMap);
   }, []);
 
-  // Full fetch profiles
+  // Full fetch profiles — use VPS for name/role, Supabase Cloud for last_seen_at
   const fetchProfiles = useCallback(async () => {
     const now = Date.now();
-    const { data: profiles } = await supabase.from('profiles').select('id, name, role, avatar_url, last_seen_at') as any;
-    if (profiles) {
-      const mapped = sortMembers(profiles.map((p: any) => profileToMember(p, now)));
-      membersRef.current = mapped;
-      setMembers(mapped);
+    // Fetch basic profile data from VPS
+    const { data: profiles } = await supabase.from('profiles').select('id, name, role, avatar_url') as any;
+    if (!profiles) return;
+
+    // Fetch last_seen_at from Supabase Cloud (VPS doesn't have this column)
+    let presenceMap: Record<string, string> = {};
+    try {
+      const { data: presenceData } = await supabaseReal.from('profiles').select('id, last_seen_at') as any;
+      if (presenceData) {
+        presenceData.forEach((p: any) => { if (p.last_seen_at) presenceMap[p.id] = p.last_seen_at; });
+      }
+    } catch {
+      // Supabase Cloud may not be available
     }
+
+    const merged = profiles.map((p: any) => ({
+      ...p,
+      last_seen_at: presenceMap[p.id] || null,
+    }));
+
+    const mapped = sortMembers(merged.map((p: any) => profileToMember(p, now)));
+    membersRef.current = mapped;
+    setMembers(mapped);
   }, [profileToMember, sortMembers]);
 
   // Handle a single profile update from realtime

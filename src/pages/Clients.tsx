@@ -406,39 +406,72 @@ export default function Clients() {
   };
 
   const buildProposalChecklistItems = (clientId: string, proposal: { bonus_services: any; plan_snapshot: any }) => {
-    const checklistItems: { client_id: string; title: string; description: string | null; sort_order: number }[] = [];
-    let order = 0;
+    const items: { client_id: string; title: string; description: string | null; sort_order: number }[] = [];
+    let o = 0;
+    const add = (title: string, desc: string | null = null) => items.push({ client_id: clientId, title, description: desc, sort_order: o++ });
     const snap = proposal.plan_snapshot as any;
 
     if (snap) {
-      if (snap.has_strategy !== false) checklistItems.push({ client_id: clientId, title: 'Estratégia de Marketing', description: 'Planejamento estratégico definido', sort_order: order++ });
-      if (snap.has_traffic !== false) checklistItems.push({ client_id: clientId, title: 'Gestão de Tráfego', description: 'Campanhas configuradas e ativas', sort_order: order++ });
-      if (snap.has_scripts !== false) checklistItems.push({ client_id: clientId, title: 'Roteiros', description: 'Roteiros entregues ao cliente', sort_order: order++ });
-      if ((snap.reels_qty || 0) > 0) checklistItems.push({ client_id: clientId, title: `Produção de ${snap.reels_qty} Reels`, description: 'Reels gravados e editados', sort_order: order++ });
-      if ((snap.creatives_qty || 0) > 0) checklistItems.push({ client_id: clientId, title: `Produção de ${snap.creatives_qty} Criativos`, description: 'Criativos produzidos', sort_order: order++ });
-      if ((snap.stories_qty || 0) > 0) checklistItems.push({ client_id: clientId, title: `Produção de ${snap.stories_qty} Stories`, description: 'Stories produzidos', sort_order: order++ });
-      if (snap.has_recording !== false) checklistItems.push({ client_id: clientId, title: 'Gravação', description: 'Sessão de gravação realizada', sort_order: order++ });
-      if (snap.has_photography) checklistItems.push({ client_id: clientId, title: 'Fotografia', description: 'Ensaio fotográfico realizado', sort_order: order++ });
+      // Plano base
+      if (snap.name) add(`Plano: ${snap.name}`, snap.description || 'Plano contratado');
+
+      // Gravações
+      const sessions = snap.recording_sessions || 0;
+      if (snap.has_recording !== false && sessions > 0) {
+        add(`${sessions} Sessão(ões) de Gravação`, `${snap.recording_hours || 2}h por sessão`);
+      } else if (snap.has_recording !== false) {
+        add('Gravação', 'Sessão de gravação realizada');
+      }
+
+      // Reels
+      const reels = snap.reels_qty || 0;
+      if (reels > 0) add(`${reels} Reels`, 'Reels gravados e editados');
+
+      // Criativos
+      const creatives = snap.creatives_qty || 0;
+      if (creatives > 0) add(`${creatives} Criativos`, 'Artes criativas produzidas');
+
+      // Stories
+      const stories = snap.stories_qty || 0;
+      if (stories > 0) add(`${stories} Stories`, 'Stories produzidos e publicados');
+
+      // Artes
+      const arts = snap.arts_qty || 0;
+      if (arts > 0) add(`${arts} Artes`, 'Artes gráficas produzidas');
+
+      // Fotografia
+      if (snap.has_photography) add('Ensaio Fotográfico', 'Sessão de fotos realizada');
+
+      // Conteúdo extra
+      if (snap.accepts_extra_content || snap.extra_content_allowed) add('Conteúdo Extra', 'Produção de conteúdo adicional');
+
+      // Serviços inclusos no plano
+      const services = snap.services as any[];
+      if (Array.isArray(services)) {
+        services.forEach((s: any) => {
+          const name = typeof s === 'string' ? s : (s.name || s.title || '');
+          if (name) add(name, typeof s === 'object' ? (s.description || null) : null);
+        });
+      }
     }
 
+    // Bônus / serviços extras da proposta
     const bonuses = proposal.bonus_services as any[];
     if (Array.isArray(bonuses)) {
       bonuses.forEach((b: any) => {
-        if (b.name || b.title) {
-          checklistItems.push({ client_id: clientId, title: b.name || b.title, description: b.description || null, sort_order: order++ });
-        }
+        const name = b.name || b.title;
+        if (name) add(name, b.description || null);
       });
     }
 
-    if (checklistItems.length === 0) {
-      checklistItems.push(
-        { client_id: clientId, title: 'Briefing Inicial', description: 'Reunião de alinhamento', sort_order: 0 },
-        { client_id: clientId, title: 'Entrega de Materiais', description: 'Materiais enviados ao cliente', sort_order: 1 },
-        { client_id: clientId, title: 'Aprovação Final', description: 'Cliente aprovou as entregas', sort_order: 2 },
-      );
+    // Fallback mínimo
+    if (items.length === 0) {
+      add('Briefing Inicial', 'Reunião de alinhamento');
+      add('Entrega de Materiais', 'Materiais enviados ao cliente');
+      add('Aprovação Final', 'Cliente aprovou as entregas');
     }
 
-    return checklistItems;
+    return items;
   };
 
   const replaceProposalChecklist = async (clientId: string, selectedProposalId: string) => {

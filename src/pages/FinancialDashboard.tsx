@@ -103,12 +103,12 @@ export default function FinancialDashboard() {
     }
   };
 
-  const handleFinancialStart = async (items: { date: string; description: string; amount: number; type: 'entrada' | 'saida' }[]) => {
+  const handleFinancialStart = async (items: { date: string; description: string; amount: number; type: 'entrada' | 'saida' }[], currentBalance: number) => {
     try {
       const entradas = items.filter(i => i.type === 'entrada');
       const saidas = items.filter(i => i.type === 'saida');
 
-      // Import entradas as revenues
+      // Import entradas as revenues (marked as received)
       for (const item of entradas) {
         await supabase.from('revenues').insert({
           client_id: '00000000-0000-0000-0000-000000000000',
@@ -138,6 +138,22 @@ export default function FinancialDashboard() {
             responsible: 'Start Financeiro',
           } as any);
         }
+      }
+
+      // Calculate the adjustment needed so the system balance equals the real bank balance
+      const totalIn = entradas.reduce((s, i) => s + i.amount, 0);
+      const totalOut = saidas.reduce((s, i) => s + i.amount, 0);
+      const importedNet = totalIn - totalOut;
+      const adjustment = currentBalance - importedNet;
+
+      // If there's a difference, add a cash reserve adjustment to sync the balance
+      if (Math.abs(adjustment) > 0.01) {
+        await supabase.from('cash_reserve_movements').insert({
+          amount: Math.abs(adjustment),
+          type: adjustment >= 0 ? 'entrada' : 'saida',
+          description: `Ajuste Start Financeiro - Saldo sincronizado: R$ ${currentBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+          date: new Date().toISOString().split('T')[0],
+        } as any);
       }
 
       await refetch();

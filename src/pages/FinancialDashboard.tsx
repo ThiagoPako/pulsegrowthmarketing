@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Users, FileText, CreditCard, ArrowRight, BarChart3, CalendarClock, CheckCircle, Wallet, ArrowUpCircle, ArrowDownCircle, History, ClipboardList, Loader2, Upload } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Users, FileText, CreditCard, ArrowRight, BarChart3, CalendarClock, CheckCircle, Wallet, ArrowUpCircle, ArrowDownCircle, History, ClipboardList, Loader2, Upload, Rocket } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -32,6 +32,7 @@ import ClientLogo from '@/components/ClientLogo';
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
 import SalaryRaiseAlert from '@/components/financial/SalaryRaiseAlert';
 import BankStatementImport from '@/components/financial/BankStatementImport';
+import FinancialStartImport from '@/components/financial/FinancialStartImport';
 import { supabase } from '@/lib/vpsDb';
 
 const fadeUp = {
@@ -54,6 +55,7 @@ export default function FinancialDashboard() {
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMsg, setCelebrationMsg] = useState('');
   const [showImport, setShowImport] = useState(false);
+  const [showFinancialStart, setShowFinancialStart] = useState(false);
 
   const handleBankImport = async (items: { date: string; description: string; amount: number }[], type: 'entrada' | 'saida') => {
     try {
@@ -101,6 +103,50 @@ export default function FinancialDashboard() {
     }
   };
 
+  const handleFinancialStart = async (items: { date: string; description: string; amount: number; type: 'entrada' | 'saida' }[]) => {
+    try {
+      const entradas = items.filter(i => i.type === 'entrada');
+      const saidas = items.filter(i => i.type === 'saida');
+
+      // Import entradas as revenues
+      for (const item of entradas) {
+        await supabase.from('revenues').insert({
+          client_id: '00000000-0000-0000-0000-000000000000',
+          contract_id: '00000000-0000-0000-0000-000000000000',
+          reference_month: item.date.slice(0, 8) + '01',
+          amount: item.amount,
+          due_date: item.date,
+          status: 'recebida',
+          paid_at: item.date,
+        } as any);
+      }
+
+      // Import saidas as expenses
+      let catId = categories.find(c => c.name === 'Outros')?.id;
+      if (!catId) {
+        const { data: newCat } = await supabase.from('expense_categories').insert({ name: 'Outros' } as any).select('id').single();
+        catId = newCat?.id || categories[0]?.id;
+      }
+      if (catId) {
+        for (const item of saidas) {
+          await supabase.from('expenses').insert({
+            date: item.date,
+            amount: item.amount,
+            description: item.description,
+            category_id: catId,
+            expense_type: 'variavel',
+            responsible: 'Start Financeiro',
+          } as any);
+        }
+      }
+
+      await refetch();
+      return true;
+    } catch (err) {
+      console.error('[FinancialStart] import error:', err);
+      return false;
+    }
+  };
   const monthStart = useMemo(() => startOfMonth(new Date(selectedMonth + '-01T12:00:00')), [selectedMonth]);
   const monthEnd = useMemo(() => endOfMonth(monthStart), [monthStart]);
 
@@ -443,6 +489,10 @@ export default function FinancialDashboard() {
           <p className="text-sm text-muted-foreground">Visão geral da saúde financeira</p>
         </div>
         <div className="flex items-center gap-3">
+          <Button size="sm" onClick={() => setShowFinancialStart(true)} className="gap-2 shadow-sm bg-gradient-to-r from-primary to-primary/80">
+            <Rocket className="h-4 w-4" />
+            Start Financeiro
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setShowImport(true)} className="gap-2 shadow-sm">
             <Upload className="h-4 w-4" />
             Importar Extrato
@@ -900,6 +950,11 @@ export default function FinancialDashboard() {
         open={showImport}
         onOpenChange={setShowImport}
         onImport={handleBankImport}
+      />
+      <FinancialStartImport
+        open={showFinancialStart}
+        onOpenChange={setShowFinancialStart}
+        onImport={handleFinancialStart}
       />
     </div>
   );

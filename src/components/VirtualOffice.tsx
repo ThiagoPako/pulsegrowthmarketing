@@ -42,8 +42,10 @@ export default function VirtualOffice() {
   const [chatMsgs, setChatMsgs] = useState<Record<string, QuickMessage[]>>({});
   const [chatTarget, setChatTarget] = useState<OfficeMember | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
   const membersRef = useRef<OfficeMember[]>([]);
   const chatRef = useRef<OfficeMember | null>(null);
+  const prevOnlineRef = useRef<Set<string>>(new Set());
   chatRef.current = chatTarget;
 
   const fetchProfiles = useCallback(async () => {
@@ -139,8 +141,37 @@ export default function VirtualOffice() {
     }));
     list.sort((a, b) => (a.isOnline !== b.isOnline ? (a.isOnline ? -1 : 1) : a.name.localeCompare(b.name)));
     membersRef.current = list;
+
+    // Detect new joins
+    const currentOnline = new Set(list.filter(m => m.isOnline).map(m => m.id));
+    const prev = prevOnlineRef.current;
+    const newJoins = new Set<string>();
+    currentOnline.forEach(id => {
+      if (!prev.has(id) && id !== currentUser?.id) {
+        newJoins.add(id);
+        const member = list.find(m => m.id === id);
+        if (member) {
+          toast.message(`🏰 ${member.name} entrou no escritório!`, { duration: 3000 });
+        }
+      }
+    });
+    if (newJoins.size > 0) {
+      setJoinedIds(s => {
+        const next = new Set(s);
+        newJoins.forEach(id => next.add(id));
+        // Clear after 3s
+        setTimeout(() => setJoinedIds(s2 => {
+          const n2 = new Set(s2);
+          newJoins.forEach(id => n2.delete(id));
+          return n2;
+        }), 3000);
+        return next;
+      });
+    }
+    prevOnlineRef.current = currentOnline;
+
     return list;
-  }, [activities, members, now, presence]);
+  }, [activities, members, now, presence, currentUser]);
 
   const roomAssign = useMemo(() => {
     const a: Record<string, OfficeMember[]> = {};
@@ -184,7 +215,7 @@ export default function VirtualOffice() {
       }}>
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {activeRooms.map(room => (
-            <PixelRoom key={room.id} config={room} members={roomAssign[room.id]} onMemberClick={setChatTarget} isCoffeeRoom={room.id === 'coffee'} />
+            <PixelRoom key={room.id} config={room} members={roomAssign[room.id]} onMemberClick={setChatTarget} isCoffeeRoom={room.id === 'coffee'} joinedIds={joinedIds} />
           ))}
         </div>
         {activeRooms.length === 0 && (

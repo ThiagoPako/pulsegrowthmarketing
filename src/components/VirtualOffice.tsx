@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useApp } from '@/contexts/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import type { UserRole } from '@/types';
 
+const ONLINE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
+
 interface TeamMember {
   id: string;
   name: string;
@@ -16,6 +18,7 @@ interface TeamMember {
   avatarUrl?: string;
   lastSeenAt: string | null;
   isOnline: boolean;
+  activity?: string; // current activity description
 }
 
 /* ─── Pixel character colors by role ─── */
@@ -41,6 +44,16 @@ const ROLE_LABEL: Record<string, string> = {
   endomarketing: 'Endomarketing',
 };
 
+const ACTIVITY_LABELS: Record<string, string> = {
+  gravando: '🔴 Gravando',
+  edicao: '✂️ Editando',
+  revisao: '👁️ Revisando',
+  alteracao: '🔧 Alteração',
+  aprovacao: '✅ Aprovando',
+  designing: '🎨 Criando arte',
+  idle: '',
+};
+
 /* ─── Pixel Art Character (pure CSS) ─── */
 function PixelCharacter({ member, style, onClick }: { member: TeamMember; style: typeof ROLE_STYLE.admin; onClick: () => void }) {
   const isOnline = member.isOnline;
@@ -60,6 +73,19 @@ function PixelCharacter({ member, style, onClick }: { member: TeamMember; style:
         </span>
       </div>
 
+      {/* Activity badge */}
+      {isOnline && member.activity && ACTIVITY_LABELS[member.activity] && (
+        <motion.div
+          className="absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap z-20"
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <span className="text-[8px] bg-black/70 text-white px-1.5 py-0.5 rounded-full backdrop-blur-sm">
+            {ACTIVITY_LABELS[member.activity]}
+          </span>
+        </motion.div>
+      )}
+
       {/* Character body - pixel art style */}
       <motion.div
         animate={isOnline ? { y: [0, -2, 0, -1, 0] } : {}}
@@ -68,11 +94,8 @@ function PixelCharacter({ member, style, onClick }: { member: TeamMember; style:
       >
         {/* Head */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-8 rounded-sm overflow-hidden" style={{ imageRendering: 'pixelated' }}>
-          {/* Skin */}
           <div className="w-full h-full bg-[#f4c99a] rounded-sm relative">
-            {/* Hair */}
             <div className="absolute top-0 left-0 right-0 h-3 rounded-t-sm" style={{ backgroundColor: style.hair }} />
-            {/* Eyes */}
             <motion.div
               className="absolute top-3.5 flex gap-1.5 justify-center w-full"
               animate={isOnline ? { scaleY: [1, 1, 0.1, 1, 1] } : {}}
@@ -81,7 +104,6 @@ function PixelCharacter({ member, style, onClick }: { member: TeamMember; style:
               <div className="w-1 h-1 bg-[#1a1a1a] rounded-full" />
               <div className="w-1 h-1 bg-[#1a1a1a] rounded-full" />
             </motion.div>
-            {/* Mouth */}
             {isOnline && <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-2 h-0.5 bg-[#c0392b] rounded-full" />}
           </div>
         </div>
@@ -91,7 +113,6 @@ function PixelCharacter({ member, style, onClick }: { member: TeamMember; style:
           className="absolute top-7 left-1/2 -translate-x-1/2 w-9 h-7 rounded-b-sm"
           style={{ backgroundColor: style.shirt }}
         >
-          {/* Arms - typing animation for online users */}
           {isOnline && (
             <>
               <motion.div
@@ -136,11 +157,9 @@ function PixelCharacter({ member, style, onClick }: { member: TeamMember; style:
 function Desk({ hasMonitor = true }: { hasMonitor?: boolean }) {
   return (
     <div className="relative w-14 h-8">
-      {/* Desk surface */}
       <div className="absolute bottom-0 w-full h-3 bg-[#8B6914] rounded-sm shadow-inner" style={{ imageRendering: 'pixelated' }}>
         <div className="absolute inset-x-0.5 top-0 h-0.5 bg-[#a67c1e]" />
       </div>
-      {/* Monitor */}
       {hasMonitor && (
         <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2">
           <div className="w-7 h-5 bg-[#2a2a2a] rounded-sm border border-[#444] relative">
@@ -233,7 +252,6 @@ function QuickChatDialog({ member, currentUserId, onClose }: { member: TeamMembe
     >
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div className="relative w-full max-w-sm rounded-2xl border border-border bg-card shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        {/* Header */}
         <div className="p-3 border-b border-border/50 flex items-center gap-3" style={{ background: `linear-gradient(135deg, ${style.shirt}22, ${style.shirt}11)` }}>
           <div className="relative">
             <div className="w-9 h-9 rounded-full flex items-center justify-center text-lg" style={{ backgroundColor: `${style.shirt}33` }}>
@@ -246,12 +264,14 @@ function QuickChatDialog({ member, currentUserId, onClose }: { member: TeamMembe
             <p className="text-[10px] text-muted-foreground">
               {ROLE_LABEL[member.role] || member.role}
               {member.isOnline && <span className="text-green-400 ml-1">• Online</span>}
+              {member.activity && ACTIVITY_LABELS[member.activity] && (
+                <span className="ml-1 text-yellow-400">— {ACTIVITY_LABELS[member.activity]}</span>
+              )}
             </p>
           </div>
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}><X size={16} /></Button>
         </div>
 
-        {/* Messages */}
         <div ref={scrollRef} className="h-56 overflow-y-auto p-3 space-y-2 bg-background/50">
           {messages.length === 0 && (
             <div className="flex items-center justify-center h-full text-muted-foreground/50 text-xs">
@@ -274,7 +294,6 @@ function QuickChatDialog({ member, currentUserId, onClose }: { member: TeamMembe
           ))}
         </div>
 
-        {/* Input */}
         <div className="p-3 border-t border-border/50 flex gap-2">
           <Input value={message} onChange={e => setMessage(e.target.value)} placeholder="Mensagem rápida..." className="text-xs h-9" onKeyDown={e => e.key === 'Enter' && sendMessage()} />
           <Button size="icon" className="h-9 w-9 shrink-0" onClick={sendMessage} disabled={sending || !message.trim()}>
@@ -290,13 +309,11 @@ function QuickChatDialog({ member, currentUserId, onClose }: { member: TeamMembe
 function OfficeDecor() {
   return (
     <>
-      {/* Bookshelf top-right */}
       <div className="absolute top-2 right-4 flex gap-0.5">
         {['#8B4513', '#2E86C1', '#C0392B', '#27AE60', '#8E44AD', '#D35400'].map((c, i) => (
           <div key={i} className="w-2 h-5 rounded-sm" style={{ backgroundColor: c, opacity: 0.7 }} />
         ))}
       </div>
-      {/* Plant bottom-left */}
       <motion.div
         className="absolute bottom-4 left-4 text-xl"
         animate={{ rotate: [-2, 2, -2] }}
@@ -304,9 +321,7 @@ function OfficeDecor() {
       >
         🪴
       </motion.div>
-      {/* Coffee machine */}
       <div className="absolute top-4 left-4 text-lg">☕</div>
-      {/* Clock */}
       <motion.div
         className="absolute top-3 left-1/2 -translate-x-1/2 text-lg"
         animate={{ scale: [1, 1.05, 1] }}
@@ -322,7 +337,6 @@ function OfficeDecor() {
 function FloorPattern() {
   return (
     <div className="absolute inset-0 overflow-hidden rounded-xl" style={{ imageRendering: 'pixelated' }}>
-      {/* Wood floor */}
       <div className="absolute inset-0" style={{
         background: `
           repeating-linear-gradient(
@@ -337,7 +351,6 @@ function FloorPattern() {
           )
         `,
       }} />
-      {/* Subtle overlay */}
       <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/30" />
     </div>
   );
@@ -347,64 +360,164 @@ function FloorPattern() {
 export default function VirtualOffice() {
   const { currentUser } = useApp();
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [activities, setActivities] = useState<Record<string, string>>({});
   const [chatTarget, setChatTarget] = useState<TeamMember | null>(null);
+  const membersRef = useRef<TeamMember[]>([]);
 
-  const mapProfiles = (profiles: any[]) => {
-    const now = Date.now();
-    const mapped: TeamMember[] = profiles.map((p: any) => ({
-      id: p.id,
-      name: p.name || 'Usuário',
-      role: p.role as UserRole,
-      avatarUrl: p.avatar_url,
-      lastSeenAt: p.last_seen_at,
-      isOnline: p.last_seen_at ? (now - new Date(p.last_seen_at).getTime()) < 5 * 60 * 1000 : false,
-    }));
-    mapped.sort((a, b) => {
+  // Build isOnline from a profile row
+  const profileToMember = useCallback((p: any, now: number): TeamMember => ({
+    id: p.id,
+    name: p.name || 'Usuário',
+    role: p.role as UserRole,
+    avatarUrl: p.avatar_url,
+    lastSeenAt: p.last_seen_at,
+    isOnline: p.last_seen_at ? (now - new Date(p.last_seen_at).getTime()) < ONLINE_THRESHOLD_MS : false,
+  }), []);
+
+  const sortMembers = useCallback((list: TeamMember[]) => {
+    return [...list].sort((a, b) => {
       if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
       return a.role.localeCompare(b.role);
     });
-    return mapped;
-  };
+  }, []);
+
+  // Fetch activities (content_tasks being edited, active_recordings, design_tasks in progress)
+  const fetchActivities = useCallback(async () => {
+    const actMap: Record<string, string> = {};
+
+    // Active recordings → videomaker is "gravando"
+    const { data: activeRecs } = await supabase.from('active_recordings').select('videomaker_id');
+    activeRecs?.forEach((r: any) => { actMap[r.videomaker_id] = 'gravando'; });
+
+    // Content tasks being edited/reviewed
+    const { data: contentTasks } = await supabase
+      .from('content_tasks')
+      .select('assigned_to, edited_by, reviewing_by, kanban_column')
+      .in('kanban_column', ['edicao', 'revisao', 'alteracao', 'aprovacao']);
+    contentTasks?.forEach((t: any) => {
+      if (t.kanban_column === 'edicao' && t.edited_by) actMap[t.edited_by] = 'edicao';
+      if (t.kanban_column === 'edicao' && t.assigned_to && !t.edited_by) actMap[t.assigned_to] = 'edicao';
+      if (t.kanban_column === 'revisao' && t.reviewing_by) actMap[t.reviewing_by] = 'revisao';
+      if (t.kanban_column === 'alteracao' && (t.edited_by || t.assigned_to)) actMap[t.edited_by || t.assigned_to] = 'alteracao';
+      if (t.kanban_column === 'aprovacao' && t.assigned_to) actMap[t.assigned_to] = 'aprovacao';
+    });
+
+    // Design tasks in progress
+    const { data: designTasks } = await supabase
+      .from('design_tasks')
+      .select('assigned_to, kanban_column')
+      .in('kanban_column', ['em_andamento', 'revisao']);
+    designTasks?.forEach((t: any) => {
+      if (t.assigned_to && !actMap[t.assigned_to]) actMap[t.assigned_to] = 'designing';
+    });
+
+    setActivities(actMap);
+  }, []);
+
+  // Full fetch profiles
+  const fetchProfiles = useCallback(async () => {
+    const now = Date.now();
+    const { data: profiles } = await supabase.from('profiles').select('id, name, role, avatar_url, last_seen_at') as any;
+    if (profiles) {
+      const mapped = sortMembers(profiles.map((p: any) => profileToMember(p, now)));
+      membersRef.current = mapped;
+      setMembers(mapped);
+    }
+  }, [profileToMember, sortMembers]);
+
+  // Handle a single profile update from realtime
+  const handleProfileChange = useCallback((payload: any) => {
+    const now = Date.now();
+    if (payload.eventType === 'DELETE' && payload.old) {
+      setMembers(prev => {
+        const updated = prev.filter(m => m.id !== payload.old.id);
+        membersRef.current = updated;
+        return updated;
+      });
+      return;
+    }
+
+    const p = payload.new;
+    if (!p) return;
+
+    setMembers(prev => {
+      const idx = prev.findIndex(m => m.id === p.id);
+      const member = profileToMember(p, now);
+      let updated: TeamMember[];
+      if (idx > -1) {
+        updated = [...prev];
+        updated[idx] = { ...member, activity: updated[idx].activity };
+      } else {
+        updated = [...prev, member];
+      }
+      const sorted = sortMembers(updated);
+      membersRef.current = sorted;
+      return sorted;
+    });
+  }, [profileToMember, sortMembers]);
 
   useEffect(() => {
     // Initial fetch
-    const fetchPresence = async () => {
-      const { data: profiles } = await supabase.from('profiles').select('id, name, role, avatar_url, last_seen_at') as any;
-      if (profiles) setMembers(mapProfiles(profiles));
-    };
-    fetchPresence();
+    fetchProfiles();
+    fetchActivities();
 
-    // Realtime subscription — instant updates
-    const channel = supabase
-      .channel('virtual-office-presence')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, () => {
-        // Re-fetch all on any profile update
-        fetchPresence();
-      })
+    // Realtime for profiles — listen to ALL events
+    const profileChannel = supabase
+      .channel('vo-presence-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, handleProfileChange)
       .subscribe();
 
-    // Also refresh the "online" threshold every 60s (to mark people offline after 5min)
-    const interval = setInterval(fetchPresence, 60_000);
+    // Realtime for active_recordings changes → update activities
+    const activityChannel = supabase
+      .channel('vo-activity-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'active_recordings' }, () => fetchActivities())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'content_tasks' }, () => fetchActivities())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'design_tasks' }, () => fetchActivities())
+      .subscribe();
+
+    // Refresh online threshold every 30s (to mark stale users offline)
+    const thresholdInterval = setInterval(() => {
+      setMembers(prev => {
+        const now = Date.now();
+        const updated = prev.map(m => ({
+          ...m,
+          isOnline: m.lastSeenAt ? (now - new Date(m.lastSeenAt).getTime()) < ONLINE_THRESHOLD_MS : false,
+        }));
+        return sortMembers(updated);
+      });
+    }, 30_000);
+
+    // Refresh activities every 30s as a fallback
+    const activityInterval = setInterval(fetchActivities, 30_000);
 
     return () => {
-      supabase.removeChannel(channel);
-      clearInterval(interval);
+      supabase.removeChannel(profileChannel);
+      supabase.removeChannel(activityChannel);
+      clearInterval(thresholdInterval);
+      clearInterval(activityInterval);
     };
-  }, []);
+  }, [fetchProfiles, fetchActivities, handleProfileChange, sortMembers]);
 
-  const onlineCount = members.filter(m => m.isOnline).length;
+  // Merge activities into members
+  const membersWithActivity = useMemo(() => {
+    return members.map(m => ({
+      ...m,
+      activity: activities[m.id] || undefined,
+    }));
+  }, [members, activities]);
+
+  const onlineCount = membersWithActivity.filter(m => m.isOnline).length;
 
   // Group by role
   const grouped = useMemo(() => {
     const groups: Record<string, TeamMember[]> = {};
-    members.forEach(m => {
+    membersWithActivity.forEach(m => {
       if (!groups[m.role]) groups[m.role] = [];
       groups[m.role].push(m);
     });
     return groups;
-  }, [members]);
+  }, [membersWithActivity]);
 
-  // Layout positions for each "room"
   const roleOrder = ['admin', 'videomaker', 'editor', 'designer', 'social_media', 'fotografo', 'parceiro', 'endomarketing'];
   const activeRoles = roleOrder.filter(r => grouped[r]?.length);
 
@@ -425,8 +538,9 @@ export default function VirtualOffice() {
             <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-mono">
               🟢 {onlineCount} online
             </Badge>
+            <span className="text-[9px] text-muted-foreground/50 font-mono">ao vivo</span>
           </h3>
-          <p className="text-[10px] text-muted-foreground">Clique em um colega para enviar mensagem rápida</p>
+          <p className="text-[10px] text-muted-foreground">Acompanhe em tempo real o que cada membro da equipe está fazendo</p>
         </div>
       </div>
 

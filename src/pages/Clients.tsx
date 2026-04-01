@@ -635,7 +635,7 @@ export default function Clients() {
           if (proposalId) {
             await replaceProposalChecklist(clientId, proposalId);
           }
-          toast.success('Cliente cadastrado (sem contrato, vinculado à proposta)');
+          toast.success('Cliente cadastrado (Pacotes de Serviços, vinculado à proposta)');
         }
       }
 

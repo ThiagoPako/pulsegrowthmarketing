@@ -15,10 +15,12 @@ import {
   LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Bot, Plug, Car, Menu, X, Video, Handshake, Star, Rocket, Type, Gift
 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import NotificationBell from '@/components/NotificationBell';
 import BirthdayOverlay from '@/components/BirthdayOverlay';
 import ProductionAssistant from '@/components/ProductionAssistant';
 import WelcomeRocket from '@/components/WelcomeRocket';
+import VirtualOffice from '@/components/VirtualOffice';
 
 type NavCategory = {
   label: string;
@@ -301,6 +303,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 ml-auto shrink-0">
+            {/* Virtual Office button */}
+            <Dialog>
+              <DialogTrigger asChild>
+                <button className="p-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors" title="Escritório Virtual">
+                  <Building2 size={18} />
+                </button>
+              </DialogTrigger>
+              <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto p-0 gap-0">
+                <VirtualOffice />
+              </DialogContent>
+            </Dialog>
             {/* Font size control */}
             <Popover>
               <PopoverTrigger asChild>

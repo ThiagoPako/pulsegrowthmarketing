@@ -184,7 +184,8 @@ export function useFinancialData() {
       const today = new Date().toISOString().split('T')[0];
       const revenueData = rRes.data as any[];
 
-      const uniqueRevenues = deduplicateRevenues(revenueData);
+      const uniqueRevenues = deduplicateRevenues(revenueData)
+        .filter((r: any) => normalizeDate(r.reference_month) >= '2026-04-01' || r.status === 'recebida');
 
       const overdueIds: string[] = [];
       const APRIL_2026 = '2026-04-01';

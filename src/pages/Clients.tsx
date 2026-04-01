@@ -138,7 +138,7 @@ export default function Clients() {
     supabase.from('api_integrations').select('id').eq('provider', 'meta').eq('status', 'ativo').limit(1).then(({ data }) => {
       setHasMetaApi(!!(data && data.length > 0));
     });
-    supabase.from('commercial_proposals').select('id, client_name, client_company, status, proposal_type, bonus_services, plan_snapshot').eq('status', 'aceita').then(({ data }) => {
+    supabase.from('commercial_proposals').select('id, client_name, client_company, status, proposal_type, bonus_services, plan_snapshot, whatsapp_number').eq('status', 'aceita').then(({ data }) => {
       if (data) setProposals(data as any[]);
     });
   }, []);

@@ -409,17 +409,16 @@ export default function Dashboard() {
   };
 
   const statItems = [
-    { label: 'Gravados', value: stats.todayDone, icon: Video, color: 'bg-success/15 text-success' },
-    { label: 'Agendados', value: stats.todayScheduled, icon: Clock, color: 'bg-info/15 text-info' },
-    { label: 'Extras', value: stats.todayExtras, icon: Plus, color: 'bg-warning/15 text-warning' },
-    { label: 'Cancelados', value: stats.todayCancelled, icon: XCircle, color: 'bg-destructive/15 text-destructive' },
-    { label: 'Semana', value: stats.weekDone, icon: TrendingUp, color: 'bg-primary/15 text-primary' },
-    { label: 'Clientes', value: stats.totalClients, icon: UsersIcon, color: 'bg-info/15 text-info' },
-    { label: 'WhatsApp', value: waStats.sent, icon: MessageSquare, color: 'bg-success/15 text-success' },
+    { label: 'Gravados Hoje', value: stats.todayDone, icon: Video, color: 'bg-success/15 text-success', border: 'border-success/20' },
+    { label: 'Agendados', value: stats.todayScheduled, icon: Clock, color: 'bg-info/15 text-info', border: 'border-info/20' },
+    { label: 'Extras', value: stats.todayExtras, icon: Plus, color: 'bg-warning/15 text-warning', border: 'border-warning/20' },
+    { label: 'Cancelados', value: stats.todayCancelled, icon: XCircle, color: 'bg-destructive/15 text-destructive', border: 'border-destructive/20' },
+    { label: 'Semana', value: stats.weekDone, icon: TrendingUp, color: 'bg-primary/15 text-primary', border: 'border-primary/20' },
+    { label: 'Total Clientes', value: stats.totalClients, icon: UsersIcon, color: 'bg-info/15 text-info', border: 'border-info/20' },
   ];
 
   return (
-    <div className="space-y-4 sm:space-y-5 max-w-[1400px]">
+    <div className="space-y-5 sm:space-y-6 max-w-[1400px]">
       {/* Header with rocket */}
       <motion.div
         className="flex items-center justify-between"
@@ -435,37 +434,26 @@ export default function Dashboard() {
             <p className="text-muted-foreground text-xs sm:text-sm">{format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
           </div>
         </div>
-        {/* Mini rocket exhaust on desktop */}
-        {!isMobile && (
-          <motion.div
-            animate={{ scale: [1, 1.1, 1], opacity: [0.5, 1, 0.5] }}
-            transition={{ duration: 2, repeat: Infinity }}
-            className="text-primary/30"
-          >
-            <Rocket size={40} />
-          </motion.div>
-        )}
       </motion.div>
 
       <BonusCongratsBanner />
       <BirthdayCountdown />
 
-      {/* Stats grid — 4 cols mobile, 7 cols desktop */}
-      <div className="grid grid-cols-4 sm:grid-cols-4 lg:grid-cols-7 gap-1.5 sm:gap-3">
+      {/* KPI Stats — clear grid with borders */}
+      <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
         {statItems.map((s, i) => (
           <motion.div
             key={s.label}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: i * 0.03 }}
-            whileTap={{ scale: 0.95 }}
-            className="stat-card p-2 sm:p-3"
+            transition={{ delay: i * 0.04 }}
+            className={`stat-card border ${s.border}`}
           >
-            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center mb-1 sm:mb-2 ${s.color}`}>
-              <s.icon size={isMobile ? 12 : 16} />
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${s.color}`}>
+              <s.icon size={16} />
             </div>
-            <p className="text-base sm:text-xl font-display font-bold">{s.value}</p>
-            <p className="text-[9px] sm:text-xs text-muted-foreground mt-0.5 truncate">{s.label}</p>
+            <p className="text-xl sm:text-2xl font-display font-bold">{s.value}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 leading-tight">{s.label}</p>
           </motion.div>
         ))}
       </div>

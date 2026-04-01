@@ -100,7 +100,7 @@ export default function Clients() {
   const [form, setForm] = useState<Partial<Client> & { clientType?: string }>(emptyClient());
   const [clientType, setClientType] = useState<'novo' | 'existente' | 'sem_contrato'>('novo');
   const [proposalId, setProposalId] = useState<string | null>(null);
-  const [proposals, setProposals] = useState<{ id: string; client_name: string; client_company: string; status: string; proposal_type: string; bonus_services: any; plan_snapshot: any; whatsapp_number: string | null }[]>([]);
+  const [proposals, setProposals] = useState<{ id: string; client_name: string; client_company: string; status: string; proposal_type: string; bonus_services: any; plan_snapshot: any; whatsapp_number: string | null; system_data: any }[]>([]);
   const [step, setStep] = useState(0);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -142,7 +142,7 @@ export default function Clients() {
     supabase.from('api_integrations').select('id').eq('provider', 'meta').eq('status', 'ativo').limit(1).then(({ data }) => {
       setHasMetaApi(!!(data && data.length > 0));
     });
-    supabase.from('commercial_proposals').select('id, client_name, client_company, status, proposal_type, bonus_services, plan_snapshot, whatsapp_number').eq('status', 'aceita').then(({ data }) => {
+    supabase.from('commercial_proposals').select('id, client_name, client_company, status, proposal_type, bonus_services, plan_snapshot, whatsapp_number, system_data').eq('status', 'aceita').then(({ data }) => {
       if (data) setProposals(data as any[]);
     });
   }, []);
@@ -390,7 +390,7 @@ export default function Clients() {
 
     const { data, error } = await supabase
       .from('commercial_proposals')
-      .select('id, client_name, client_company, status, proposal_type, bonus_services, plan_snapshot')
+      .select('id, client_name, client_company, status, proposal_type, bonus_services, plan_snapshot, system_data')
       .eq('id', selectedProposalId)
       .single();
 
@@ -398,68 +398,107 @@ export default function Clients() {
       throw new Error(error.message || 'Erro ao carregar proposta vinculada');
     }
 
-    return data as {
-      id: string;
-      client_name: string;
-      client_company: string;
-      status: string;
-      proposal_type: string;
-      bonus_services: any;
-      plan_snapshot: any;
-    };
+    return data as any;
   };
 
-  const buildProposalChecklistItems = (clientId: string, proposal: { bonus_services: any; plan_snapshot: any }) => {
+  const buildProposalChecklistItems = (clientId: string, proposal: { proposal_type: string; bonus_services: any; plan_snapshot: any; system_data: any }) => {
     const items: { client_id: string; title: string; description: string | null; sort_order: number }[] = [];
     let o = 0;
     const add = (title: string, desc: string | null = null) => items.push({ client_id: clientId, title, description: desc, sort_order: o++ });
-    const snap = proposal.plan_snapshot as any;
+    const pType = proposal.proposal_type || 'marketing';
 
-    if (snap) {
-      // Plano base
-      if (snap.name) add(`Plano: ${snap.name}`, snap.description || 'Plano contratado');
-
-      // Gravações
-      const sessions = snap.recording_sessions || 0;
-      if (snap.has_recording !== false && sessions > 0) {
-        add(`${sessions} Sessão(ões) de Gravação`, `${snap.recording_hours || 2}h por sessão`);
-      } else if (snap.has_recording !== false) {
-        add('Gravação', 'Sessão de gravação realizada');
-      }
-
-      // Reels
-      const reels = snap.reels_qty || 0;
-      if (reels > 0) add(`${reels} Reels`, 'Reels gravados e editados');
-
-      // Criativos
-      const creatives = snap.creatives_qty || 0;
-      if (creatives > 0) add(`${creatives} Criativos`, 'Artes criativas produzidas');
-
-      // Stories
-      const stories = snap.stories_qty || 0;
-      if (stories > 0) add(`${stories} Stories`, 'Stories produzidos e publicados');
-
-      // Artes
-      const arts = snap.arts_qty || 0;
-      if (arts > 0) add(`${arts} Artes`, 'Artes gráficas produzidas');
-
-      // Fotografia
-      if (snap.has_photography) add('Ensaio Fotográfico', 'Sessão de fotos realizada');
-
-      // Conteúdo extra
-      if (snap.accepts_extra_content || snap.extra_content_allowed) add('Conteúdo Extra', 'Produção de conteúdo adicional');
-
-      // Serviços inclusos no plano
-      const services = snap.services as any[];
-      if (Array.isArray(services)) {
-        services.forEach((s: any) => {
-          const name = typeof s === 'string' ? s : (s.name || s.title || '');
-          if (name) add(name, typeof s === 'object' ? (s.description || null) : null);
+    // ===== CRONOGRAMA: each deliverable is a checklist item =====
+    if (pType === 'cronograma') {
+      const sys = (proposal.system_data || {}) as any;
+      const deliverables = sys.deliverables as any[];
+      if (Array.isArray(deliverables) && deliverables.length > 0) {
+        deliverables.forEach((d: any) => {
+          const qty = d.quantity || 1;
+          const name = d.name || d.title || '';
+          if (name) {
+            const qtyLabel = qty > 1 ? ` (${qty}x)` : '';
+            add(`${name}${qtyLabel}`, d.description || null);
+          }
         });
       }
     }
 
-    // Bônus / serviços extras da proposta
+    // ===== PERSONALIZADA: each service item =====
+    if (pType === 'personalizada') {
+      const sys = (proposal.system_data || {}) as any;
+      if (sys.videos) add(`${sys.videos} Vídeo(s)`, 'Vídeos produzidos');
+      if (sys.stories) add(`${sys.stories} Stories`, 'Stories produzidos');
+      if (sys.arts) add(`${sys.arts} Artes`, 'Artes gráficas');
+      if (sys.eventCoverage) add(`${sys.eventCoverage} Cobertura(s) de Evento`, 'Cobertura de eventos');
+      if (sys.socialMedia) add('Gestão de Redes Sociais', 'Gerenciamento de mídias sociais');
+      if (sys.trafficMgmt) add('Gestão de Tráfego', 'Tráfego pago');
+      if (sys.recordings) add(`${sys.recordings} Gravação(ões)`, 'Sessões de gravação');
+      // Deliverables inside personalizada system_data
+      const deliverables = sys.deliverables as any[];
+      if (Array.isArray(deliverables)) {
+        deliverables.forEach((d: any) => {
+          const name = d.name || d.title || '';
+          if (name) add(name, d.description || null);
+        });
+      }
+    }
+
+    // ===== SISTEMA: scope items as deliverables =====
+    if (pType === 'sistema') {
+      const sys = (proposal.system_data || {}) as any;
+      const scope = sys.scope as any[];
+      if (Array.isArray(scope)) {
+        scope.forEach((s: any) => {
+          const desc = s.description || s.name || '';
+          if (desc) add(desc);
+        });
+      }
+      const deliverables = sys.deliverables as any[];
+      if (Array.isArray(deliverables)) {
+        deliverables.forEach((d: any) => {
+          const name = d.name || d.title || '';
+          if (name) add(name, d.description || null);
+        });
+      }
+    }
+
+    // ===== MARKETING: plan_snapshot items =====
+    if (pType === 'marketing') {
+      const snap = proposal.plan_snapshot as any;
+      if (snap) {
+        const sessions = snap.recording_sessions || 0;
+        if (snap.has_recording !== false && sessions > 0) {
+          add(`${sessions} Sessão(ões) de Gravação`, `${snap.recording_hours || 2}h por sessão`);
+        }
+        const reels = snap.reels_qty || 0;
+        if (reels > 0) add(`${reels} Reels`, 'Reels gravados e editados');
+        const creatives = snap.creatives_qty || 0;
+        if (creatives > 0) add(`${creatives} Criativos`, 'Artes criativas produzidas');
+        const stories = snap.stories_qty || 0;
+        if (stories > 0) add(`${stories} Stories`, 'Stories produzidos e publicados');
+        const arts = snap.arts_qty || 0;
+        if (arts > 0) add(`${arts} Artes`, 'Artes gráficas produzidas');
+        if (snap.has_photography) add('Ensaio Fotográfico', 'Sessão de fotos realizada');
+        if (snap.accepts_extra_content) add('Conteúdo Extra', 'Produção de conteúdo adicional');
+        const services = snap.services as any[];
+        if (Array.isArray(services)) {
+          services.forEach((s: any) => {
+            const name = typeof s === 'string' ? s : (s.name || s.title || '');
+            if (name) add(name, typeof s === 'object' ? (s.description || null) : null);
+          });
+        }
+      }
+    }
+
+    // ===== ENDOMARKETING =====
+    if (pType === 'endomarketing') {
+      const endo = (proposal as any).endomarketing_data || {};
+      if (endo.plan) add(`Plano ${endo.plan}`, 'Plano de endomarketing contratado');
+      if (endo.daysPerWeek) add(`${endo.daysPerWeek}x por semana`, 'Presença semanal');
+      if (endo.storiesPerDay) add(`${endo.storiesPerDay} Stories/dia`, 'Stories diários');
+    }
+
+    // Bônus / serviços extras (all types)
     const bonuses = proposal.bonus_services as any[];
     if (Array.isArray(bonuses)) {
       bonuses.forEach((b: any) => {
@@ -468,7 +507,7 @@ export default function Clients() {
       });
     }
 
-    // Fallback mínimo
+    // Fallback
     if (items.length === 0) {
       add('Briefing Inicial', 'Reunião de alinhamento');
       add('Entrega de Materiais', 'Materiais enviados ao cliente');

@@ -495,7 +495,7 @@ export default function Clients() {
       toast.error('Preencha todos os campos obrigatórios'); return;
     }
     if (clientType === 'sem_contrato' && !proposalId) {
-      toast.error('Selecione uma proposta para clientes sem contrato'); return;
+      toast.error('Selecione uma proposta para Pacotes de Serviços'); return;
     }
 
     setSaving(true);
@@ -635,7 +635,7 @@ export default function Clients() {
           if (proposalId) {
             await replaceProposalChecklist(clientId, proposalId);
           }
-          toast.success('Cliente cadastrado (sem contrato, vinculado à proposta)');
+          toast.success('Cliente cadastrado (Pacotes de Serviços, vinculado à proposta)');
         }
       }
 
@@ -812,8 +812,8 @@ export default function Clients() {
               className={`p-3 rounded-xl border-2 text-center transition-all text-sm ${
                 clientType === 'sem_contrato' ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-border hover:border-primary/40'
               }`}>
-              <span className="font-semibold block">📄 Proposta</span>
-              <span className="text-[10px] text-muted-foreground">Sem contrato</span>
+              <span className="font-semibold block">📦 Pacotes</span>
+              <span className="text-[10px] text-muted-foreground">Pacotes de Serviços</span>
             </button>
           </div>
           {clientType === 'sem_contrato' && (
@@ -1880,7 +1880,7 @@ export default function Clients() {
                       {/* Proposal selector for sem_contrato editing */}
                       <div className="space-y-2 border-t border-border/50 pt-4">
                         <Label>Tipo de Cliente</Label>
-                        <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30">📄 Sem Contrato</Badge>
+                        <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30">📦 Pacotes de Serviços</Badge>
                         <div className="mt-2">
                           <Label>Vincular a Proposta Aceita</Label>
                           <Select value={proposalId || 'none'} onValueChange={v => setProposalId(v === 'none' ? null : v)}>
@@ -2005,7 +2005,7 @@ export default function Clients() {
                   )}
                   <div className="flex gap-1.5 mt-2 flex-wrap">
                    {(c as any).clientType === 'sem_contrato' && (
-                      <Badge className="text-[10px] px-1.5 py-0.5 bg-blue-500/20 text-blue-600 border-blue-500/30">📄 Sem Contrato</Badge>
+                      <Badge className="text-[10px] px-1.5 py-0.5 bg-blue-500/20 text-blue-600 border-blue-500/30">📦 Pacotes de Serviços</Badge>
                     )}
                     {(c as any).clientType === 'sem_contrato' && (
                       <ProposalChecklist clientId={c.id} editable={false} compact={true} />

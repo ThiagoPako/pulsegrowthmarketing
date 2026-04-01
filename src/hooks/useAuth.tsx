@@ -126,6 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(u);
         setSession({ access_token: data.token });
         await fetchProfile(u.id);
+        logLoginEntry(u.id);
         return { error: null };}
 
       if (res.status === 401 || res.status === 400) {

@@ -230,6 +230,20 @@ export function getConversationKey(a: string, b: string) {
   return [a, b].sort().join(':');
 }
 
+/** Send leave signal via sendBeacon — works reliably on tab/browser close */
+export function sendLeaveBeacon(userId: string) {
+  try {
+    const url = `${REST_BASE}/presence/leave`;
+    const body = JSON.stringify({ userId });
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
+    } else {
+      // Fallback: fire-and-forget fetch
+      fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {});
+    }
+  } catch { /* ignore */ }
+}
+
 /** Fetch presence via REST (polling fallback when WS is down) */
 export async function fetchPresenceRest(): Promise<any[]> {
   try {

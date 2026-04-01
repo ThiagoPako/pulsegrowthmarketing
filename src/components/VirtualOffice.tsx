@@ -18,7 +18,7 @@ import { ROOMS, shouldBeInCoffeeRoom, type OfficeMember } from './virtual-office
 import PixelRoom from './virtual-office/PixelRoom';
 import QuickChatDialog from './virtual-office/QuickChatDialog';
 
-const ONLINE_MS = 120_000;
+const ONLINE_MS = 30_000; // 30s — user goes offline quickly after closing tab
 
 function normalizeMsg(p: unknown): QuickMessage | null {
   if (!p || typeof p !== 'object') return null;

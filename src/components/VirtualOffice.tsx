@@ -210,7 +210,7 @@ function QuickChatDialog({ member, currentUserId, onClose }: { member: TeamMembe
     };
     loadMessages();
 
-    const channel = supabase
+    const channel = supabaseReal
       .channel(`chat-${member.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'team_messages' }, (payload) => {
         const msg = payload.new as any;
@@ -221,7 +221,7 @@ function QuickChatDialog({ member, currentUserId, onClose }: { member: TeamMembe
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => { supabaseReal.removeChannel(channel); };
   }, [member.id, currentUserId]);
 
   useEffect(() => {

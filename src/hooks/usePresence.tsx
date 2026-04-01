@@ -15,15 +15,18 @@ export function usePresenceHeartbeat(userId: string | undefined) {
 
     const onVis = () => { if (document.visibilityState === 'visible') beat(); };
     const onOn = () => beat();
+    const onFocus = () => beat();
 
     document.addEventListener('visibilitychange', onVis);
     window.addEventListener('online', onOn);
+    window.addEventListener('focus', onFocus);
 
     return () => {
       active = false;
       window.clearInterval(iv);
       document.removeEventListener('visibilitychange', onVis);
       window.removeEventListener('online', onOn);
+      window.removeEventListener('focus', onFocus);
       void untrackPresence();
     };
   }, [userId]);

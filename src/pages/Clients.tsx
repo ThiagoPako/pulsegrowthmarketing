@@ -2008,7 +2008,7 @@ export default function Clients() {
               style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${c.color || '220 10% 50%'})` }}>
               {/* Header row - clickable for sem_contrato */}
               <div className={`p-4 pb-3 flex items-start gap-3 ${(c as any).clientType === 'sem_contrato' ? 'cursor-pointer hover:bg-accent/30 transition-colors' : ''}`}
-                onClick={() => { if ((c as any).clientType === 'sem_contrato') handleOpen(c); }}>
+                onClick={() => { if ((c as any).clientType === 'sem_contrato') setChecklistClient(c); }}>
                 {c.logoUrl ? (
                   <img src={c.logoUrl} alt={c.companyName} className="w-12 h-12 rounded-xl object-cover shrink-0 border border-border" />
                 ) : (

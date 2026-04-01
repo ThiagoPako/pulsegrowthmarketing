@@ -667,6 +667,7 @@ export type Database = {
           plan_id: string | null
           preferred_shift: string
           presence_days: number
+          proposal_id: string | null
           responsible_person: string
           selected_weeks: number[]
           show_metrics: boolean
@@ -720,6 +721,7 @@ export type Database = {
           plan_id?: string | null
           preferred_shift?: string
           presence_days?: number
+          proposal_id?: string | null
           responsible_person?: string
           selected_weeks?: number[]
           show_metrics?: boolean
@@ -773,6 +775,7 @@ export type Database = {
           plan_id?: string | null
           preferred_shift?: string
           presence_days?: number
+          proposal_id?: string | null
           responsible_person?: string
           selected_weeks?: number[]
           show_metrics?: boolean
@@ -791,6 +794,13 @@ export type Database = {
             columns: ["plan_id"]
             isOneToOne: false
             referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clients_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "commercial_proposals"
             referencedColumns: ["id"]
           },
           {

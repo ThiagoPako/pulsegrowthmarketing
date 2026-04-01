@@ -1,7 +1,5 @@
 import { supabase as supabaseReal } from '@/integrations/supabase/client';
 
-export const VIRTUAL_OFFICE_CHANNEL = 'virtual-office-live';
-
 export interface QuickMessage {
   id: string;
   fromUserId: string;
@@ -11,29 +9,33 @@ export interface QuickMessage {
 }
 
 /**
- * Creates a channel for the virtual office.
- * Each caller gets its own channel instance with a unique key for presence tracking.
- * The channel name is always the same so all participants share the same presence pool.
+ * A single shared Realtime channel for the entire virtual office.
+ * Both the heartbeat (usePresence) and the viewer (VirtualOffice) subscribe
+ * to this same channel instance so presence state is unified.
  */
-export function createVirtualOfficeChannel(presenceKey: string) {
-  return supabaseReal.channel(VIRTUAL_OFFICE_CHANNEL + '-' + presenceKey, {
-    config: {
-      presence: { key: presenceKey },
-    },
-  });
+let sharedChannel: ReturnType<typeof supabaseReal.channel> | null = null;
+let subscriberCount = 0;
+
+export function getSharedOfficeChannel() {
+  if (!sharedChannel) {
+    sharedChannel = supabaseReal.channel('vo-shared', {
+      config: {
+        presence: { key: '' }, // will be overridden per-track call
+        broadcast: { self: false, ack: true },
+      },
+    });
+  }
+  subscriberCount++;
+  return sharedChannel;
 }
 
-/**
- * Creates a shared channel for viewing presence state and receiving broadcasts.
- * Uses a unique suffix to avoid collision with the heartbeat channels.
- */
-export function createVirtualOfficeViewerChannel(viewerKey: string) {
-  return supabaseReal.channel('vo-viewer-' + viewerKey, {
-    config: {
-      presence: { key: viewerKey },
-      broadcast: { self: false, ack: true },
-    },
-  });
+export function releaseSharedOfficeChannel() {
+  subscriberCount--;
+  if (subscriberCount <= 0 && sharedChannel) {
+    void supabaseReal.removeChannel(sharedChannel);
+    sharedChannel = null;
+    subscriberCount = 0;
+  }
 }
 
 export function getConversationKey(userA: string, userB: string) {

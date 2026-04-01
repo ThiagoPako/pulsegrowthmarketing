@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -14,7 +15,7 @@ import {
   Film, Megaphone, Image, Palette, ExternalLink, Clock, AlertTriangle,
   Eye, Star, TrendingUp, BarChart3, Timer, Scissors, ArrowRight, Check,
   Search, Users, Upload, Send, History, Zap, Flame, Flag,
-  Play, Rocket, Trophy, FileText, FolderOpen, X, Link2, Video, Pause
+  Play, Rocket, Trophy, FileText, FolderOpen, X, Link2, Video, Pause, Undo2
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import UserAvatar from '@/components/UserAvatar';

@@ -533,7 +533,7 @@ export default function FinancialDashboard() {
             <p className="text-sm text-muted-foreground">Visão geral da saúde financeira</p>
           </div>
           <PiggyBankWidget
-            balance={saldoCaixa}
+            balance={piggyBalance}
             onAddReserve={async (amount, description, date) => {
               try {
                 await supabase.from('cash_reserve_movements').insert({
@@ -541,6 +541,7 @@ export default function FinancialDashboard() {
                   description,
                   date,
                   type: 'entrada',
+                  is_reserve: true,
                 } as any);
                 await refetch();
                 return true;

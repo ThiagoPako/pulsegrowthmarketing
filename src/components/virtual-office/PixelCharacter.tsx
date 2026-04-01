@@ -35,22 +35,66 @@ const PALETTES: Record<string, { skin: string; hair: string; shirt: string; pant
   parceiro:     { skin: '#e0b090', hair: '#2a2a3a', shirt: '#6366f1', pants: '#2c2c3c', accent: '#818cf8' },
 };
 
-function getPalette(role: string) {
-  return PALETTES[role] || PALETTES.admin;
+/* Female palettes — slightly different hair/shirt for variety */
+const FEMALE_OVERRIDES: Record<string, Partial<typeof PALETTES['admin']>> = {
+  admin:        { hair: '#5a3020', shirt: '#2e4a7f' },
+  social_media: { hair: '#6b3010', shirt: '#2d7a5e' },
+  editor:       { hair: '#4a2a3e', shirt: '#5a3c7a' },
+  videomaker:   { hair: '#3a2010', shirt: '#d04a3b' },
+  designer:     { hair: '#c04500', shirt: '#d06a22' },
+  fotografo:    { hair: '#5a3828', shirt: '#d06090' },
+  endomarketing:{ hair: '#6a4030', shirt: '#1095d0' },
+  parceiro:     { hair: '#3a2a4a', shirt: '#7376f1' },
+};
+
+function getPalette(role: string, gender?: 'male' | 'female') {
+  const base = PALETTES[role] || PALETTES.admin;
+  if (gender === 'female') {
+    const overrides = FEMALE_OVERRIDES[role] || {};
+    return { ...base, ...overrides };
+  }
+  return base;
 }
 
+/* ── Activity labels ── */
+const ACTIVITY_LABELS: Record<string, string> = {
+  gestao: '📋 Gestão',
+  gravando: '🎬 Gravando',
+  edicao: '✂️ Editando',
+  revisao: '👁️ Revisando',
+  alteracao: '🔧 Alteração',
+  aprovacao: '✅ Aprovação',
+  designing: '🎨 Criando arte',
+  idle: '💤 Ocioso',
+  paused: '⏸️ Pausado',
+};
+
 /* ── Pixel Person Sprite (CSS-based) ── */
-function PersonSprite({ role, isTyping, isRecording }: { role: string; isTyping?: boolean; isRecording?: boolean }) {
-  const p = getPalette(role);
+function PersonSprite({ role, gender, isTyping, isRecording }: { role: string; gender?: 'male' | 'female'; isTyping?: boolean; isRecording?: boolean }) {
+  const p = getPalette(role, gender);
+  const isFemale = gender === 'female';
 
   return (
     <div className="relative flex flex-col items-center" style={{ width: 24, height: 36 }}>
       {/* Hair */}
       <div style={{
-        width: 14, height: 5, backgroundColor: p.hair,
-        borderRadius: '4px 4px 0 0',
-        position: 'absolute', top: 0, left: 5,
+        width: isFemale ? 16 : 14, height: isFemale ? 7 : 5, backgroundColor: p.hair,
+        borderRadius: isFemale ? '6px 6px 1px 1px' : '4px 4px 0 0',
+        position: 'absolute', top: 0, left: isFemale ? 4 : 5,
       }} />
+      {/* Long hair sides (female) */}
+      {isFemale && (
+        <>
+          <div style={{
+            width: 3, height: 14, backgroundColor: p.hair,
+            position: 'absolute', top: 4, left: 3, borderRadius: '0 0 2px 2px',
+          }} />
+          <div style={{
+            width: 3, height: 14, backgroundColor: p.hair,
+            position: 'absolute', top: 4, right: 2, borderRadius: '0 0 2px 2px',
+          }} />
+        </>
+      )}
       {/* Head */}
       <div style={{
         width: 12, height: 10, backgroundColor: p.skin,
@@ -67,10 +111,18 @@ function PersonSprite({ role, isTyping, isRecording }: { role: string; isTyping?
           position: 'absolute', top: 3, right: 2,
           width: 2, height: 2, backgroundColor: '#1a1a2e', borderRadius: 1,
         }} />
+        {/* Eyelashes (female) */}
+        {isFemale && (
+          <>
+            <div style={{ position: 'absolute', top: 2, left: 1, width: 3, height: 1, backgroundColor: '#1a1a2e' }} />
+            <div style={{ position: 'absolute', top: 2, right: 1, width: 3, height: 1, backgroundColor: '#1a1a2e' }} />
+          </>
+        )}
         {/* Mouth */}
         <div style={{
           position: 'absolute', bottom: 2, left: '50%', transform: 'translateX(-50%)',
-          width: 4, height: 1, backgroundColor: '#c0392b', borderRadius: 1,
+          width: isFemale ? 3 : 4, height: 1,
+          backgroundColor: isFemale ? '#e06080' : '#c0392b', borderRadius: 1,
         }} />
       </div>
       {/* Body/Shirt */}
@@ -78,9 +130,9 @@ function PersonSprite({ role, isTyping, isRecording }: { role: string; isTyping?
         animate={isTyping ? { y: [0, -0.5, 0] } : {}}
         transition={{ duration: 0.3, repeat: Infinity }}
         style={{
-          width: 16, height: 10, backgroundColor: p.shirt,
+          width: isFemale ? 14 : 16, height: 10, backgroundColor: p.shirt,
           borderRadius: '2px 2px 0 0',
-          position: 'absolute', top: 14, left: 4,
+          position: 'absolute', top: 14, left: isFemale ? 5 : 4,
           boxShadow: `inset -3px 0 0 rgba(0,0,0,0.1)`,
         }}
       >
@@ -96,7 +148,7 @@ function PersonSprite({ role, isTyping, isRecording }: { role: string; isTyping?
         transition={{ duration: isTyping ? 0.4 : 2, repeat: Infinity }}
         style={{
           width: 4, height: 8, backgroundColor: p.shirt,
-          position: 'absolute', top: 15, left: 0, borderRadius: 2,
+          position: 'absolute', top: 15, left: isFemale ? 1 : 0, borderRadius: 2,
           transformOrigin: 'top center',
         }}
       >
@@ -107,39 +159,47 @@ function PersonSprite({ role, isTyping, isRecording }: { role: string; isTyping?
         transition={{ duration: isTyping ? 0.4 : 2, repeat: Infinity, delay: 0.15 }}
         style={{
           width: 4, height: 8, backgroundColor: p.shirt,
-          position: 'absolute', top: 15, right: 0, borderRadius: 2,
+          position: 'absolute', top: 15, right: isFemale ? 1 : 0, borderRadius: 2,
           transformOrigin: 'top center',
         }}
       >
         <div style={{ position: 'absolute', bottom: 0, left: 0, width: 4, height: 3, backgroundColor: p.skin, borderRadius: '0 0 2px 2px' }} />
       </motion.div>
-      {/* Pants */}
-      <div style={{
-        width: 14, height: 6, backgroundColor: p.pants,
-        position: 'absolute', top: 24, left: 5,
-      }}>
+      {/* Pants/Skirt */}
+      {isFemale ? (
         <div style={{
-          position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
-          width: 1, height: '100%', backgroundColor: 'rgba(0,0,0,0.15)',
+          width: 16, height: 8, backgroundColor: p.pants,
+          position: 'absolute', top: 23, left: 4,
+          borderRadius: '0 0 4px 4px',
+          clipPath: 'polygon(10% 0, 90% 0, 100% 100%, 0% 100%)',
         }} />
-      </div>
+      ) : (
+        <div style={{
+          width: 14, height: 6, backgroundColor: p.pants,
+          position: 'absolute', top: 24, left: 5,
+        }}>
+          <div style={{
+            position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
+            width: 1, height: '100%', backgroundColor: 'rgba(0,0,0,0.15)',
+          }} />
+        </div>
+      )}
       {/* Legs */}
       <motion.div
-        animate={!isTyping && !isRecording ? { rotate: [0, 0, 0] } : {}}
         style={{
           position: 'absolute', bottom: 0, left: 6,
-          width: 5, height: 6, backgroundColor: p.pants, borderRadius: '0 0 2px 2px',
+          width: 5, height: isFemale ? 5 : 6, backgroundColor: isFemale ? p.skin : p.pants, borderRadius: '0 0 2px 2px',
         }}
       >
-        <div style={{ position: 'absolute', bottom: 0, left: -1, width: 6, height: 2, backgroundColor: '#1a1a1a', borderRadius: 1 }} />
+        <div style={{ position: 'absolute', bottom: 0, left: -1, width: 6, height: 2, backgroundColor: isFemale ? '#e06080' : '#1a1a1a', borderRadius: 1 }} />
       </motion.div>
       <motion.div
         style={{
           position: 'absolute', bottom: 0, right: 5,
-          width: 5, height: 6, backgroundColor: p.pants, borderRadius: '0 0 2px 2px',
+          width: 5, height: isFemale ? 5 : 6, backgroundColor: isFemale ? p.skin : p.pants, borderRadius: '0 0 2px 2px',
         }}
       >
-        <div style={{ position: 'absolute', bottom: 0, right: -1, width: 6, height: 2, backgroundColor: '#1a1a1a', borderRadius: 1 }} />
+        <div style={{ position: 'absolute', bottom: 0, right: -1, width: 6, height: 2, backgroundColor: isFemale ? '#e06080' : '#1a1a1a', borderRadius: 1 }} />
       </motion.div>
     </div>
   );
@@ -149,13 +209,11 @@ function PersonSprite({ role, isTyping, isRecording }: { role: string; isTyping?
 function DeskWithMonitor({ screenColor, screenGlow }: { screenColor: string; screenGlow?: string }) {
   return (
     <div className="relative" style={{ width: 28, height: 22 }}>
-      {/* Monitor */}
       <div style={{
         width: 20, height: 14, backgroundColor: '#2a2a2e',
         borderRadius: 2, position: 'absolute', top: 0, left: 4,
         border: '1px solid #444',
       }}>
-        {/* Screen */}
         <motion.div
           animate={{ opacity: [0.8, 1, 0.8] }}
           transition={{ duration: 3, repeat: Infinity }}
@@ -165,7 +223,6 @@ function DeskWithMonitor({ screenColor, screenGlow }: { screenColor: string; scr
             boxShadow: screenGlow ? `0 0 8px ${screenGlow}` : undefined,
           }}
         >
-          {/* Screen lines */}
           {[0, 1, 2].map(i => (
             <motion.div
               key={i}
@@ -179,12 +236,7 @@ function DeskWithMonitor({ screenColor, screenGlow }: { screenColor: string; scr
           ))}
         </motion.div>
       </div>
-      {/* Monitor stand */}
-      <div style={{
-        width: 4, height: 3, backgroundColor: '#3a3a3e',
-        position: 'absolute', bottom: 5, left: 12,
-      }} />
-      {/* Desk surface */}
+      <div style={{ width: 4, height: 3, backgroundColor: '#3a3a3e', position: 'absolute', bottom: 5, left: 12 }} />
       <div style={{
         width: 28, height: 4, backgroundColor: '#8B6914',
         borderRadius: 1, position: 'absolute', bottom: 0, left: 0,
@@ -198,10 +250,8 @@ function DeskWithMonitor({ screenColor, screenGlow }: { screenColor: string; scr
 function CameraRig() {
   return (
     <div className="relative" style={{ width: 16, height: 20 }}>
-      {/* Tripod */}
       <div style={{ width: 2, height: 12, backgroundColor: '#555', position: 'absolute', bottom: 0, left: 7 }} />
       <div style={{ width: 8, height: 2, backgroundColor: '#555', position: 'absolute', bottom: 0, left: 4, borderRadius: 1 }} />
-      {/* Camera body */}
       <motion.div
         animate={{ rotate: [-3, 3, -3] }}
         transition={{ duration: 4, repeat: Infinity }}
@@ -211,7 +261,6 @@ function CameraRig() {
           border: '1px solid #444',
         }}
       >
-        {/* Lens */}
         <div style={{
           width: 6, height: 6, backgroundColor: '#1a1a1e',
           borderRadius: '50%', position: 'absolute', top: 1, right: -2,
@@ -219,7 +268,6 @@ function CameraRig() {
         }}>
           <div style={{ width: 3, height: 3, backgroundColor: '#334', borderRadius: '50%', position: 'absolute', top: 1, left: 1 }} />
         </div>
-        {/* Red light */}
         <motion.div
           animate={{ opacity: [1, 0.2, 1] }}
           transition={{ duration: 0.8, repeat: Infinity }}
@@ -238,10 +286,8 @@ function CameraRig() {
 function Easel() {
   return (
     <div className="relative" style={{ width: 20, height: 24 }}>
-      {/* Legs */}
       <div style={{ width: 2, height: 18, backgroundColor: '#8B6914', position: 'absolute', bottom: 0, left: 3, transform: 'rotate(-5deg)' }} />
       <div style={{ width: 2, height: 18, backgroundColor: '#8B6914', position: 'absolute', bottom: 0, right: 3, transform: 'rotate(5deg)' }} />
-      {/* Canvas */}
       <motion.div
         style={{
           width: 16, height: 14, backgroundColor: '#fef9ef',
@@ -249,7 +295,6 @@ function Easel() {
           position: 'absolute', top: 0, left: 2,
         }}
       >
-        {/* Paint strokes */}
         <motion.div
           animate={{ width: ['0%', '70%', '40%', '90%'] }}
           transition={{ duration: 4, repeat: Infinity }}
@@ -282,14 +327,10 @@ function PixelCat({ index }: { index: number }) {
       transition={{ duration: 3 + index * 0.5, repeat: Infinity, delay: index * 0.4 }}
     >
       <div className="relative" style={{ width: 8, height: 8 }}>
-        {/* Body */}
         <div style={{ width: 7, height: 4, backgroundColor: color, borderRadius: 2, position: 'absolute', bottom: 0, left: 0 }} />
-        {/* Head */}
         <div style={{ width: 5, height: 4, backgroundColor: color, borderRadius: '2px 2px 1px 1px', position: 'absolute', top: 0, left: 0 }} />
-        {/* Ears */}
         <div style={{ width: 0, height: 0, borderLeft: '2px solid transparent', borderRight: '2px solid transparent', borderBottom: `3px solid ${color}`, position: 'absolute', top: -2, left: 0 }} />
         <div style={{ width: 0, height: 0, borderLeft: '2px solid transparent', borderRight: '2px solid transparent', borderBottom: `3px solid ${color}`, position: 'absolute', top: -2, left: 3 }} />
-        {/* Eyes */}
         <motion.div
           animate={{ scaleY: [1, 0.1, 1] }}
           transition={{ duration: 4, repeat: Infinity, delay: index * 2 }}
@@ -300,7 +341,6 @@ function PixelCat({ index }: { index: number }) {
           transition={{ duration: 4, repeat: Infinity, delay: index * 2 }}
           style={{ width: 1, height: 1, backgroundColor: '#22c55e', borderRadius: '50%', position: 'absolute', top: 2, left: 3 }}
         />
-        {/* Tail */}
         <motion.div
           animate={{ rotate: [0, 30, -20, 0] }}
           transition={{ duration: 2, repeat: Infinity }}
@@ -329,20 +369,19 @@ function Tablet() {
 
 /* ── Activity Scene (full workstation) ── */
 function ActivityScene({ member, inCoffeeRoom }: { member: OfficeMember; inCoffeeRoom?: boolean }) {
-  const { role, activity, isOnline } = member;
+  const { role, activity, isOnline, gender } = member;
 
   if (!isOnline) {
     return (
       <div className="flex flex-col items-center opacity-25">
-        <PersonSprite role={role} />
+        <PersonSprite role={role} gender={gender} />
       </div>
     );
   }
 
-  // Coffee room
   if (inCoffeeRoom) return (
     <div className="flex items-end gap-1">
-      <PersonSprite role={role} />
+      <PersonSprite role={role} gender={gender} />
       <div className="relative mb-1">
         <div style={{ width: 8, height: 8, backgroundColor: '#8B6914', borderRadius: '0 0 2px 2px', border: '1px solid #6a4f10' }}>
           <motion.div
@@ -355,10 +394,9 @@ function ActivityScene({ member, inCoffeeRoom }: { member: OfficeMember; inCoffe
     </div>
   );
 
-  // Videomaker gravando
   if (role === 'videomaker' && activity === 'gravando') return (
     <div className="relative flex items-end gap-1">
-      <PersonSprite role={role} isRecording />
+      <PersonSprite role={role} gender={gender} isRecording />
       <CameraRig />
       <motion.div
         className="absolute -top-3 right-0 rounded px-1 text-[7px] font-bold"
@@ -371,11 +409,10 @@ function ActivityScene({ member, inCoffeeRoom }: { member: OfficeMember; inCoffe
     </div>
   );
 
-  // Editor
   if (role === 'editor' && (activity === 'edicao' || activity === 'revisao' || activity === 'alteracao')) return (
     <div className="flex flex-col items-center gap-0.5">
       <div className="flex items-end gap-1">
-        <PersonSprite role={role} isTyping />
+        <PersonSprite role={role} gender={gender} isTyping />
         <DeskWithMonitor
           screenColor={activity === 'edicao' ? '#1a1a3e' : activity === 'revisao' ? '#1e3a1e' : '#3e1a1a'}
           screenGlow={activity === 'edicao' ? '#6366f1' : activity === 'revisao' ? '#22c55e' : '#ef4444'}
@@ -390,19 +427,17 @@ function ActivityScene({ member, inCoffeeRoom }: { member: OfficeMember; inCoffe
     </div>
   );
 
-  // Designer
   if (role === 'designer' && activity === 'designing') return (
     <div className="flex items-end gap-1">
-      <PersonSprite role={role} isTyping />
+      <PersonSprite role={role} gender={gender} isTyping />
       <Easel />
     </div>
   );
 
-  // Social media
   if (role === 'social_media') return (
     <div className="flex flex-col items-center gap-0.5">
       <div className="flex items-end gap-1">
-        <PersonSprite role={role} isTyping />
+        <PersonSprite role={role} gender={gender} isTyping />
         <div className="flex items-end gap-0.5">
           <DeskWithMonitor screenColor="#064e3b" screenGlow="#10b981" />
           <div className="mb-1"><Tablet /></div>
@@ -414,42 +449,37 @@ function ActivityScene({ member, inCoffeeRoom }: { member: OfficeMember; inCoffe
     </div>
   );
 
-  // Admin
   if (role === 'admin') return (
     <div className="flex items-end gap-1">
-      <PersonSprite role={role} isTyping />
+      <PersonSprite role={role} gender={gender} isTyping />
       <DeskWithMonitor screenColor="#1a2a3e" screenGlow="#3b82f6" />
     </div>
   );
 
-  // Videomaker idle
   if (role === 'videomaker') return (
     <div className="flex items-end gap-1">
-      <PersonSprite role={role} />
+      <PersonSprite role={role} gender={gender} />
       <CameraRig />
     </div>
   );
 
-  // Designer idle
   if (role === 'designer') return (
     <div className="flex items-end gap-1">
-      <PersonSprite role={role} />
+      <PersonSprite role={role} gender={gender} />
       <Easel />
     </div>
   );
 
-  // Editor idle
   if (role === 'editor') return (
     <div className="flex items-end gap-1">
-      <PersonSprite role={role} />
+      <PersonSprite role={role} gender={gender} />
       <DeskWithMonitor screenColor="#1a1a2e" />
     </div>
   );
 
-  // Default — person at desk
   return (
     <div className="flex items-end gap-1">
-      <PersonSprite role={role} />
+      <PersonSprite role={role} gender={gender} />
       <DeskWithMonitor screenColor="#1a2a2e" />
     </div>
   );
@@ -466,11 +496,26 @@ interface Props {
 export default function PixelCharacter({ member, onClick, inCoffeeRoom, justJoined }: Props) {
   const { pos, facingRight } = useWalk(member.isOnline);
   const delay = useMemo(() => Math.random() * 0.5, []);
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  const activityLabel = member.activity ? (ACTIVITY_LABELS[member.activity] || `⚙️ ${member.activity}`) : (member.isOnline ? '🟢 Online' : '⚫ Offline');
+
+  const handleClick = () => {
+    setShowTooltip(prev => !prev);
+    onClick();
+  };
+
+  // Auto-hide tooltip after 4s
+  useEffect(() => {
+    if (!showTooltip) return;
+    const t = setTimeout(() => setShowTooltip(false), 4000);
+    return () => clearTimeout(t);
+  }, [showTooltip]);
 
   return (
     <motion.button
       type="button"
-      onClick={onClick}
+      onClick={handleClick}
       initial={justJoined ? { scale: 0, y: 40, opacity: 0 } : false}
       animate={{ x: pos.x, y: pos.y, scale: 1, opacity: 1 }}
       transition={{ duration: justJoined ? 0.6 : 2.5, ease: justJoined ? 'backOut' : 'easeInOut', delay }}
@@ -478,6 +523,34 @@ export default function PixelCharacter({ member, onClick, inCoffeeRoom, justJoin
       className="group relative flex flex-col items-center gap-0.5 p-1.5 rounded-lg"
       style={{ imageRendering: 'pixelated' as any }}
     >
+      {/* Activity tooltip */}
+      <AnimatePresence>
+        {showTooltip && (
+          <motion.div
+            initial={{ opacity: 0, y: 8, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 4, scale: 0.95 }}
+            className="absolute -top-10 z-30 whitespace-nowrap rounded px-2 py-1 text-[9px] font-bold shadow-lg"
+            style={{
+              backgroundColor: 'rgba(0,0,0,0.9)',
+              color: '#fff',
+              border: `1px solid ${getPalette(member.role, member.gender).accent}`,
+              pointerEvents: 'none',
+            }}
+          >
+            <div>{member.name}</div>
+            <div style={{ color: getPalette(member.role, member.gender).accent }}>{activityLabel}</div>
+            {/* Arrow */}
+            <div style={{
+              position: 'absolute', bottom: -4, left: '50%', transform: 'translateX(-50%)',
+              width: 0, height: 0,
+              borderLeft: '4px solid transparent', borderRight: '4px solid transparent',
+              borderTop: '4px solid rgba(0,0,0,0.9)',
+            }} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Join sparkle effect */}
       <AnimatePresence>
         {justJoined && (
@@ -488,7 +561,6 @@ export default function PixelCharacter({ member, onClick, inCoffeeRoom, justJoin
             exit={{ opacity: 0 }}
             transition={{ duration: 1.5 }}
           >
-            {/* Pixel sparkles */}
             {[0, 1, 2, 3, 4, 5].map(i => (
               <motion.div
                 key={i}
@@ -550,7 +622,7 @@ export default function PixelCharacter({ member, onClick, inCoffeeRoom, justJoin
           backgroundColor: 'rgba(0,0,0,0.75)',
           color: member.isOnline ? '#fff' : '#666',
           transform: facingRight ? 'scaleX(1)' : 'scaleX(-1)',
-          border: member.isOnline ? `1px solid ${getPalette(member.role).accent}44` : '1px solid transparent',
+          border: member.isOnline ? `1px solid ${getPalette(member.role, member.gender).accent}44` : '1px solid transparent',
         }}
       >
         {member.name.split(' ')[0]}

@@ -48,13 +48,20 @@ export default function VirtualOffice() {
   const prevOnlineRef = useRef<Set<string>>(new Set());
   chatRef.current = chatTarget;
 
+  // Names known to be female
+  const FEMALE_NAMES = ['rayssa', 'adrielly', 'naraely', 'priscylla', 'ana', 'mariana', 'thaís', 'thais'];
+
   const fetchProfiles = useCallback(async () => {
     const { data } = await supabase.from('profiles').select('id, name, role, avatar_url') as any;
     if (!data) return;
-    setMembers(data.map((p: any) => ({
-      id: p.id, name: p.name || 'Usuário', role: p.role as UserRole,
-      avatarUrl: p.avatar_url, isOnline: false,
-    })));
+    setMembers(data.map((p: any) => {
+      const firstName = (p.name || '').split(' ')[0].toLowerCase();
+      const gender = FEMALE_NAMES.includes(firstName) ? 'female' as const : 'male' as const;
+      return {
+        id: p.id, name: p.name || 'Usuário', role: p.role as UserRole,
+        avatarUrl: p.avatar_url, isOnline: false, gender,
+      };
+    }));
   }, []);
 
   const fetchActivities = useCallback(async () => {

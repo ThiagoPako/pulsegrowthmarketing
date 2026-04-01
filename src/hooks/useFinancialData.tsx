@@ -380,9 +380,7 @@ export function useFinancialData() {
       // Normalize date to YYYY-MM-DD to prevent timezone issues
       const payload = { ...e };
       if (payload.date) payload.date = normalizeDate(payload.date);
-      console.log('[useFinancialData] addExpense payload:', JSON.stringify(payload));
-      const { data, error } = await supabase.from('expenses').insert(payload as any);
-      console.log('[useFinancialData] addExpense result:', { data, error });
+      const { error } = await supabase.from('expenses').insert(payload as any);
       if (error) {
         console.error('[useFinancialData] addExpense error:', error);
         return false;

@@ -547,6 +547,37 @@ export default function EditorKanban() {
     fetchTasks();
   };
 
+  // Ops! Volta aqui — editor returns task from review back to editing
+  const handleReturnFromReview = async (task: EditorTask) => {
+    if (!user) return;
+    const { error } = await supabase.from('content_tasks').update({
+      kanban_column: 'edicao',
+      editing_started_at: new Date().toISOString(),
+      assigned_to: user.id,
+      edited_by: user.id,
+      reviewing_by: null,
+      reviewing_by_name: null,
+      reviewing_at: null,
+      review_deadline: null,
+      approval_sent_at: null,
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', task.id);
+    if (error) { toast.error('Erro ao devolver tarefa'); return; }
+
+    // Remove social_media_deliveries record since task is back in editing
+    await supabase.from('social_media_deliveries').delete().eq('content_task_id', task.id);
+
+    // Log
+    await supabase.from('task_history').insert({
+      task_id: task.id,
+      user_id: user.id,
+      action: 'Ops! Volta aqui — editor devolveu da revisão para corrigir',
+    });
+
+    toast.success('📥 Tarefa devolvida para edição!');
+    fetchTasks();
+  };
+
   // ─── VIDEO LINK DIALOG ─────────────────────────────────────
   const openVideoLinkDialog = (task: EditorTask) => {
     setVideoLinkTask(task);

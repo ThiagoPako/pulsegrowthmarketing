@@ -526,18 +526,7 @@ export default function Clients() {
           throw new Error(clientMetaUpdate.error.message || 'Erro ao atualizar dados contratuais do cliente');
         }
 
-        if (clientType === 'sem_contrato' && proposalId) {
-          const previousProposalId = (editing as any).proposalId || null;
-          const existingChecklist = await supabase.from('proposal_checklist_items').select('id').eq('client_id', editing.id).limit(1);
-          if (existingChecklist.error) {
-            throw new Error(existingChecklist.error.message || 'Erro ao verificar checklist do cliente');
-          }
-
-          const hasChecklist = Array.isArray(existingChecklist.data) && existingChecklist.data.length > 0;
-          if (!hasChecklist || previousProposalId !== proposalId) {
-            await replaceProposalChecklist(editing.id, proposalId);
-          }
-        }
+        // Checklist is now generated manually via button on the card
 
         await saveSocialAccounts(editing.id);
 

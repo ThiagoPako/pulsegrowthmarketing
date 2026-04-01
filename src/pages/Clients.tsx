@@ -100,7 +100,7 @@ export default function Clients() {
   const [form, setForm] = useState<Partial<Client> & { clientType?: string }>(emptyClient());
   const [clientType, setClientType] = useState<'novo' | 'existente' | 'sem_contrato'>('novo');
   const [proposalId, setProposalId] = useState<string | null>(null);
-  const [proposals, setProposals] = useState<{ id: string; client_name: string; client_company: string; status: string; proposal_type: string; bonus_services: any; plan_snapshot: any; whatsapp_number: string | null }[]>([]);
+  const [proposals, setProposals] = useState<{ id: string; client_name: string; client_company: string; status: string; proposal_type: string; bonus_services: any; plan_snapshot: any; whatsapp_number: string | null; system_data: any }[]>([]);
   const [step, setStep] = useState(0);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);

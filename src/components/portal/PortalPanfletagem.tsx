@@ -1016,17 +1016,19 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.globalAlpha = 1;
   }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
 
-  // VENDIDO layout — matching reference exactly
+  // VENDIDO layout — all elements draggable
+  // We store computed positions in a ref so drag handlers can use them
+  const vendidoZonesRef = useRef<{ stampY: number; stampH: number; frameX: number; frameY: number; frameW: number; frameH: number; parabensY: number; parabensH: number; footerY: number; footerH: number }>({ stampY: 0, stampH: 120, frameX: 55, frameY: 250, frameW: 970, frameH: 600, parabensY: 900, parabensH: 180, footerY: 1100, footerH: 200 });
+
   const drawCanvasVendido = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {
     const fs = vendidoFontScale;
     const vc = vendidoColors;
-    const DARK_BLUE = darkenHex(vc.background, 40);
 
     // Full background
     ctx.fillStyle = vc.background;
     ctx.fillRect(0, 0, W, H);
 
-    // White top section (approx 12% of height) with diagonal cut
+    // White top section with diagonal cut
     const whiteH = Math.round(H * 0.12);
     ctx.fillStyle = vc.stripColor;
     ctx.beginPath();
@@ -1037,18 +1039,17 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.closePath();
     ctx.fill();
 
-    // ---- "VENDIDO" stamp (red, bold italic, top-left) ----
+    // ---- "VENDIDO" stamp ----
     const stampFs = vendidoStampFontScale * fs;
     const stampFontSize = Math.round(90 * stampFs);
     ctx.save();
     ctx.font = `bold italic ${stampFontSize}px 'Raleway', Impact, sans-serif`;
     ctx.textAlign = 'left';
     const vendidoMetrics = ctx.measureText('VENDIDO');
-    const barX = 0;
+    const barX = 0 + vStampOffX;
     const barW = vendidoMetrics.width + 60;
     const barH = Math.round(stampFontSize * 1.15);
-    const barY = Math.round(30 * fs);
-    // Red bar behind text
+    const barY = Math.round(30 * fs) + vStampOffY;
     ctx.fillStyle = vc.stampBg;
     ctx.beginPath();
     ctx.moveTo(barX, barY);
@@ -1057,28 +1058,39 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.lineTo(barX, barY + barH);
     ctx.closePath();
     ctx.fill();
-    // "VENDIDO" text
     ctx.fillStyle = vc.stampText;
     ctx.fillText('VENDIDO', barX + 25, barY + barH - Math.round(22 * stampFs));
     ctx.restore();
 
-    // "+1 CLIENTE SATISFEITO" below stamp
+    // "+1 CLIENTE SATISFEITO"
     const satisfeitoY = barY + barH + Math.round(40 * fs);
     ctx.fillStyle = vc.satisfeitoText;
     ctx.font = `bold ${Math.round(30 * fs)}px 'Raleway', sans-serif`;
     ctx.textAlign = 'left';
-    ctx.fillText('+1 CLIENTE SATISFEITO', 30, satisfeitoY);
+    ctx.fillText('+1 CLIENTE SATISFEITO', 30 + vStampOffX, satisfeitoY);
+
+    // Store stamp zone for hit detection
+    vendidoZonesRef.current.stampY = barY;
+    vendidoZonesRef.current.stampH = satisfeitoY - barY + 40;
 
     // ---- Polaroid-style photo frame ----
-    const frameMarginX = Math.round(55 * fs);
-    const frameTop = satisfeitoY + Math.round(30 * fs);
-    const frameW = W - frameMarginX * 2;
+    const baseFrameMarginX = Math.round(55 * fs);
+    const baseFrameTop = satisfeitoY + Math.round(30 * fs);
+    const frameMarginX = baseFrameMarginX + vFrameOffX;
+    const frameTop = baseFrameTop + vFrameOffY;
+    const frameW = W - baseFrameMarginX * 2;
     const frameBorder = Math.round(24 * fs);
     const photoAspect = 4 / 3;
     const innerPhotoW = frameW - frameBorder * 2;
     const innerPhotoH = Math.round(innerPhotoW / photoAspect);
     const framePadBottom = Math.round(20 * fs);
     const totalFrameH = innerPhotoH + frameBorder * 2 + framePadBottom;
+
+    // Store frame zone
+    vendidoZonesRef.current.frameX = frameMarginX;
+    vendidoZonesRef.current.frameY = frameTop;
+    vendidoZonesRef.current.frameW = frameW;
+    vendidoZonesRef.current.frameH = totalFrameH;
 
     // Frame shadow
     ctx.save();
@@ -1117,10 +1129,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillText('Adicione uma foto', photoX + innerPhotoW / 2, photoY + innerPhotoH / 2);
     }
 
-    // ---- "PARABÉNS" + buyer name BELOW the frame ----
+    // ---- "PARABÉNS" + buyer name ----
     const pFs = vendidoParabensFontScale * fs;
-    const textBelowFrameY = frameTop + totalFrameH + Math.round(20 * fs);
-    const centerX = W / 2;
+    const baseTextBelowY = frameTop + totalFrameH + Math.round(20 * fs);
+    const textBelowFrameY = baseTextBelowY + vParabensOffY;
+    const centerX = W / 2 + vParabensOffX;
     ctx.fillStyle = vc.parabensText;
     ctx.textAlign = 'center';
 
@@ -1147,11 +1160,20 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     });
     if (nameLine) ctx.fillText(nameLine, centerX, nameLineY);
 
+    // Store parabens zone
+    vendidoZonesRef.current.parabensY = textBelowFrameY;
+    vendidoZonesRef.current.parabensH = nameLineY - textBelowFrameY + 60;
+
     // ---- Footer: WhatsApp + Address ----
     const fFs = vendidoFooterFontScale * fs;
-    const footerStartY = nameLineY + Math.round(40 * fs);
+    const baseFooterStartY = nameLineY + Math.round(40 * fs);
+    const footerStartY = baseFooterStartY + vFooterOffY;
+    const footerCenterX = W / 2 + vFooterOffX;
     const wpText = footerWhatsapp || '';
     const addrText = footerAddress || '';
+
+    vendidoZonesRef.current.footerY = footerStartY;
+    vendidoZonesRef.current.footerH = Math.round(140 * fs);
 
     if (wpText) {
       const wpImg = wpIconRef.current;
@@ -1163,11 +1185,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         const iconS = Math.round(40 * fFs);
         const textW = ctx.measureText(wpText).width;
         const totalW = iconS + 14 + textW;
-        const startX = W / 2 - totalW / 2;
+        const startX = footerCenterX - totalW / 2;
         ctx.drawImage(wpImg, startX, wpDisplayY - iconS * 0.7, iconS, iconS);
         ctx.fillText(wpText, startX + iconS + 14 + textW / 2, wpDisplayY + Math.round(5 * fFs));
       } else {
-        ctx.fillText(wpText, W / 2, wpDisplayY);
+        ctx.fillText(wpText, footerCenterX, wpDisplayY);
       }
     }
 
@@ -1179,7 +1201,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       const pinSize = Math.round(18 * fFs);
       const addrFullText = addrText.toUpperCase();
       const addrTW = ctx.measureText(addrFullText).width;
-      const addrStartX = W / 2 - (pinSize + 8 + addrTW) / 2;
+      const addrStartX = footerCenterX - (pinSize + 8 + addrTW) / 2;
       ctx.save();
       ctx.fillStyle = vc.footerText;
       ctx.beginPath();
@@ -1200,19 +1222,19 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       aWords.forEach(word => {
         const test = aLine + (aLine ? ' ' : '') + word;
         if (ctx.measureText(test).width > maxAW && aLine) {
-          ctx.fillText(aLine, W / 2, aLineY);
+          ctx.fillText(aLine, footerCenterX, aLineY);
           aLine = word;
           aLineY += Math.round(24 * fFs);
         } else { aLine = test; }
       });
-      if (aLine) ctx.fillText(aLine, W / 2, aLineY);
+      if (aLine) ctx.fillText(aLine, footerCenterX, aLineY);
     }
 
     // Logo (draggable)
     if (lImg) {
       ctx.drawImage(lImg, logoX, logoY, logoW, logoH);
     }
-  }, [vendidoFontScale, vendidoStampFontScale, vendidoParabensFontScale, vendidoNomeFontScale, vendidoFooterFontScale, vendidoColors, buyerName, footerWhatsapp, footerAddress, logoW, logoH, logoX, logoY, photoOffsetX, photoOffsetY]);
+  }, [vendidoFontScale, vendidoStampFontScale, vendidoParabensFontScale, vendidoNomeFontScale, vendidoFooterFontScale, vendidoColors, buyerName, footerWhatsapp, footerAddress, logoW, logoH, logoX, logoY, photoOffsetX, photoOffsetY, vStampOffX, vStampOffY, vFrameOffX, vFrameOffY, vParabensOffX, vParabensOffY, vFooterOffX, vFooterOffY]);
 
   // Unified draw function
   const drawCanvas = useCallback((canvas: HTMLCanvasElement, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null, fImg: HTMLImageElement | null = null) => {

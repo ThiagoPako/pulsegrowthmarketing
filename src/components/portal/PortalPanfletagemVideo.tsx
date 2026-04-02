@@ -618,7 +618,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
       <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-4 space-y-3">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold text-white" style={{ backgroundColor: `hsl(${clientColor})` }}>
-            <Film size={12} /> 1080 × 1920 — Reels
+            <Film size={12} /> 1080 × 1350 — Feed
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-medium">
             <VolumeX size={11} /> Vídeos mutados — apenas música de fundo

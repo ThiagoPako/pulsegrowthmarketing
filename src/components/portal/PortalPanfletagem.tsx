@@ -187,6 +187,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const logoFileInputRef = useRef<HTMLInputElement>(null);
    const wpIconRef = useRef<HTMLImageElement | null>(null);
   const vendidoBgRef = useRef<HTMLImageElement | null>(null);
+  const vendidoZonesRef = useRef({ stampY: 0, stampH: 100, frameX: 0, frameY: 0, frameW: 100, frameH: 100, parabensY: 0, parabensH: 80, footerY: 0, footerH: 80 });
 
   // Preload WhatsApp icon + Vendido background
   useEffect(() => {

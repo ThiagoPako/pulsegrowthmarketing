@@ -368,107 +368,14 @@ export default function DesignerDashboard() {
           <ScrollArea className="max-h-[500px]">
             <div className="space-y-2 pr-2">
               <AnimatePresence mode="popLayout">
-                {queueTasks.map((task, i) => {
-                  const p = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.media;
-                  const color = task.clients?.color || '217 91% 60%';
-                  const deadlineStatus = getDesignDeadlineStatus(task);
-                  const isAdjustment = task.kanban_column === 'ajustes';
-                  const isExecuting = task.kanban_column === 'executando';
-                  const deadline = getDesignDeadline(task);
-                  const colLabel = COL_LABELS[task.kanban_column] || task.kanban_column;
-
-                  return (
-                    <motion.div key={task.id}
-                      layout
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 10 }}
-                      transition={{ delay: i * 0.02 }}
-                      onClick={() => setSelectedTaskId(task.id)}
-                      className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer group hover:shadow-md ${
-                        deadlineStatus.variant === 'destructive'
-                          ? 'border-destructive/40 bg-destructive/5 hover:border-destructive/60'
-                          : isAdjustment
-                            ? 'border-orange-400/30 bg-orange-500/5 hover:border-orange-400/50'
-                            : isExecuting
-                              ? 'border-primary/30 bg-primary/5 hover:border-primary/50'
-                              : 'border-border bg-card hover:border-primary/30'
-                      }`}>
-                      {/* Color bar */}
-                      <div className="w-1 h-14 rounded-full shrink-0" style={{ backgroundColor: `hsl(${color})` }} />
-
-                      {/* Client logo */}
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div>
-                              <ClientLogo
-                                client={{ companyName: task.clients?.company_name || '', color, logoUrl: task.clients?.logo_url }}
-                                size="md"
-                              />
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent side="top">
-                            <p className="text-xs font-medium">{task.clients?.company_name}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-
-                      {/* Task info */}
-                      <div className="flex-1 min-w-0 space-y-1">
-                        <div className="flex items-center gap-1.5">
-                          {isAdjustment && <RotateCcw size={12} className="text-orange-500 shrink-0" />}
-                          {isExecuting && <Play size={12} className="text-primary shrink-0" />}
-                          {task.priority === 'urgente' && <Flame size={12} className="text-destructive shrink-0 animate-pulse" />}
-                          <span className="font-medium text-sm truncate group-hover:text-primary transition-colors">{task.title}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                          <span className="truncate">{task.clients?.company_name}</span>
-                          <span className="text-muted-foreground/40">•</span>
-                          <span>{FORMAT_LABELS[task.format_type] || task.format_type}</span>
-                          {task.version > 1 && (
-                            <>
-                              <span className="text-muted-foreground/40">•</span>
-                              <span>v{task.version}</span>
-                            </>
-                          )}
-                        </div>
-                        {/* Deadline bar */}
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 max-w-[200px]">
-                            <Progress
-                              value={deadlineStatus.progress}
-                              className={`h-1.5 ${
-                                deadlineStatus.variant === 'destructive' ? '[&>div]:bg-destructive' :
-                                deadlineStatus.variant === 'warning' ? '[&>div]:bg-orange-500' :
-                                '[&>div]:bg-emerald-500'
-                              }`}
-                            />
-                          </div>
-                          <span className={`text-[10px] font-medium flex items-center gap-1 ${
-                            deadlineStatus.variant === 'destructive' ? 'text-destructive' :
-                            deadlineStatus.variant === 'warning' ? 'text-orange-500' :
-                            'text-muted-foreground'
-                          }`}>
-                            <Clock size={10} />
-                            {deadlineStatus.label}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Right side badges */}
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <Badge className={`text-[9px] ${p.color}`}>{p.label}</Badge>
-                        <Badge variant="outline" className="text-[9px]">{colLabel}</Badge>
-                        {task.timer_running && (
-                          <Badge className="bg-primary/20 text-primary border-primary/30 text-[9px] animate-pulse">● Timer</Badge>
-                        )}
-                      </div>
-
-                      <ArrowRight size={14} className="text-muted-foreground/30 shrink-0 group-hover:text-primary/60 transition-colors" />
-                    </motion.div>
-                  );
-                })}
+                {queueTasks.map((task, i) => (
+                  <DesignerTaskCard
+                    key={task.id}
+                    task={task}
+                    index={i}
+                    onOpenDetail={setSelectedTaskId}
+                  />
+                ))}
               </AnimatePresence>
             </div>
           </ScrollArea>

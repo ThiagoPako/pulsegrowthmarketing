@@ -185,14 +185,20 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoFileInputRef = useRef<HTMLInputElement>(null);
-  const wpIconRef = useRef<HTMLImageElement | null>(null);
+   const wpIconRef = useRef<HTMLImageElement | null>(null);
+  const vendidoBgRef = useRef<HTMLImageElement | null>(null);
 
-  // Preload WhatsApp icon
+  // Preload WhatsApp icon + Vendido background
   useEffect(() => {
     const img = document.createElement('img') as HTMLImageElement;
     img.src = whatsappIconSrc;
     img.onload = () => { wpIconRef.current = img; };
     if (img.complete && img.naturalWidth > 0) wpIconRef.current = img;
+
+    const bgImg = document.createElement('img') as HTMLImageElement;
+    bgImg.src = vendidoBgSrc;
+    bgImg.onload = () => { vendidoBgRef.current = bgImg; };
+    if (bgImg.complete && bgImg.naturalWidth > 0) vendidoBgRef.current = bgImg;
   }, []);
 
   // Form state — load from localStorage

@@ -295,7 +295,7 @@ export function useFinancialData() {
 
   const updateRevenue = async (id: string, updates: Partial<Revenue>) => {
     try {
-      // Always update by ID only — never by client_id+month to avoid cross-contamination
+      const previousRevenue = revenues.find(r => r.id === id);
       const { error } = await supabase.from('revenues').update(updates as any).eq('id', id);
 
       if (error) {
@@ -304,9 +304,32 @@ export function useFinancialData() {
       }
 
       const action = updates.status === 'recebida' ? 'Marcou receita como paga' : updates.status === 'prevista' ? 'Reverteu receita para pendente' : 'Atualizou receita';
+      const revenueAmount = Number(updates.amount || previousRevenue?.amount || 0);
 
-      // Log first, then refresh data to ensure UI always shows latest state
-      await logActivity('edição', 'receita', `${action} - R$ ${Number(updates.amount || revenues.find(r => r.id === id)?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, updates);
+      // Sync with account balance (cash_reserve_movements)
+      if (updates.status === 'recebida' && previousRevenue?.status !== 'recebida') {
+        // Revenue received → add entrada to account balance
+        await supabase.from('cash_reserve_movements').insert({
+          amount: revenueAmount,
+          type: 'entrada',
+          description: `[Receita] ${previousRevenue?.client_id ? 'Recebimento de cliente' : 'Receita avulsa'} - ID: ${id}`,
+          date: updates.paid_at || new Date().toISOString().split('T')[0],
+          is_reserve: false,
+        } as any);
+      } else if (updates.status === 'prevista' && previousRevenue?.status === 'recebida') {
+        // Revenue reverted → remove the linked cash movement
+        const { data: linked } = await supabase
+          .from('cash_reserve_movements')
+          .select('id')
+          .ilike('description', `%[Receita]%ID: ${id}%`);
+        if (linked && linked.length > 0) {
+          for (const l of linked) {
+            await supabase.from('cash_reserve_movements').delete().eq('id', l.id);
+          }
+        }
+      }
+
+      await logActivity('edição', 'receita', `${action} - R$ ${revenueAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, updates);
       await fetchAll();
 
       return true;
@@ -368,6 +391,20 @@ export function useFinancialData() {
       const revenue = revenues.find(r => r.id === id);
       const { error } = await supabase.from('revenues').delete().eq('id', id);
       if (error) { console.error('[useFinancialData] deleteRevenue error:', error); return false; }
+
+      // If revenue was received, remove the linked cash movement
+      if (revenue?.status === 'recebida') {
+        const { data: linked } = await supabase
+          .from('cash_reserve_movements')
+          .select('id')
+          .ilike('description', `%[Receita]%ID: ${id}%`);
+        if (linked && linked.length > 0) {
+          for (const l of linked) {
+            await supabase.from('cash_reserve_movements').delete().eq('id', l.id);
+          }
+        }
+      }
+
       await Promise.allSettled([
         logActivity('exclusão', 'receita', `Excluiu receita - R$ ${Number(revenue?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id),
         fetchAll(),
@@ -379,17 +416,28 @@ export function useFinancialData() {
   // Expense CRUD
   const addExpense = async (e: Partial<Expense>) => {
     try {
-      // Normalize date to YYYY-MM-DD to prevent timezone issues
       const payload = { ...e };
       if (payload.date) payload.date = normalizeDate(payload.date);
-      const { error } = await supabase.from('expenses').insert(payload as any);
+      const { data: inserted, error } = await supabase.from('expenses').insert(payload as any).select('id').single();
       if (error) {
         console.error('[useFinancialData] addExpense error:', error);
         return false;
       }
-      // Re-fetch ALL financial data to ensure full sync across modules
+
+      // Create cash movement (saida) linked to this expense
+      const expenseId = (inserted as any)?.id;
+      if (expenseId) {
+        await supabase.from('cash_reserve_movements').insert({
+          amount: Number(e.amount || 0),
+          type: 'saida',
+          description: `[Despesa] ${e.description || 'Despesa'} - ID: ${expenseId}`,
+          date: payload.date || new Date().toISOString().split('T')[0],
+          is_reserve: false,
+        } as any);
+      }
+
       await fetchAll();
-      await logActivity('criação', 'despesa', `Registrou despesa - R$ ${Number(e.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${e.description}`, undefined, payload);
+      await logActivity('criação', 'despesa', `Registrou despesa - R$ ${Number(e.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${e.description}`, expenseId, payload);
       return true;
     } catch (err) {
       console.error('[useFinancialData] addExpense unexpected error:', err);
@@ -406,6 +454,24 @@ export function useFinancialData() {
         console.error('[useFinancialData] updateExpense error:', error);
         return false;
       }
+
+      // Update linked cash movement if amount or date changed
+      const { data: linked } = await supabase
+        .from('cash_reserve_movements')
+        .select('id')
+        .ilike('description', `%[Despesa]%ID: ${id}%`);
+      if (linked && linked.length > 0) {
+        const cashUpdates: any = {};
+        if (updates.amount !== undefined) cashUpdates.amount = Number(updates.amount);
+        if (updates.date) cashUpdates.date = normalizeDate(updates.date);
+        if (updates.description) cashUpdates.description = `[Despesa] ${updates.description} - ID: ${id}`;
+        if (Object.keys(cashUpdates).length > 0) {
+          for (const l of linked) {
+            await supabase.from('cash_reserve_movements').update(cashUpdates).eq('id', l.id);
+          }
+        }
+      }
+
       await fetchAll();
       await logActivity('edição', 'despesa', `Editou despesa - R$ ${Number(updates.amount || expenses.find(ex => ex.id === id)?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, payload);
       return true;
@@ -418,6 +484,18 @@ export function useFinancialData() {
   const deleteExpense = async (id: string) => {
     const expense = expenses.find(e => e.id === id);
     await supabase.from('expenses').delete().eq('id', id);
+
+    // Remove linked cash movement
+    const { data: linked } = await supabase
+      .from('cash_reserve_movements')
+      .select('id')
+      .ilike('description', `%[Despesa]%ID: ${id}%`);
+    if (linked && linked.length > 0) {
+      for (const l of linked) {
+        await supabase.from('cash_reserve_movements').delete().eq('id', l.id);
+      }
+    }
+
     await logActivity('exclusão', 'despesa', `Excluiu despesa - R$ ${Number(expense?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${expense?.description}`, id);
     await fetchAll();
   };

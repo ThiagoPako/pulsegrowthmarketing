@@ -1012,9 +1012,73 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.globalAlpha = 1;
   }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
  
-  // VENDIDO layout — all elements draggable
-  // We store computed positions in a ref so drag handlers can use them
-...
+  // VENDIDO layout — draw sold overlay with background image and badge
+  const drawCanvasVendido = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {
+    // Draw vehicle photo as background
+    if (vImg) {
+      const scale = Math.max(W / vImg.width, H / vImg.height);
+      const sw = vImg.width * scale;
+      const sh = vImg.height * scale;
+      ctx.drawImage(vImg, (W - sw) / 2, (H - sh) / 2, sw, sh);
+    } else {
+      ctx.fillStyle = '#1a1a2e';
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // Draw vendido background overlay if available
+    if (vendidoBgRef.current) {
+      ctx.drawImage(vendidoBgRef.current, 0, 0, W, H);
+    } else {
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // Draw logo
+    if (lImg) {
+      const lw = 180 * (logoScale || 1);
+      const lh = (lImg.height / lImg.width) * lw;
+      ctx.drawImage(lImg, W - lw - 30, 30, lw, lh);
+    }
+
+    // Draw "+1 Cliente Satisfeito" badge
+    const badgeW = 320;
+    const badgeH = 80;
+    const badgeX = (W - badgeW) / 2;
+    const badgeY = H * 0.75;
+    ctx.fillStyle = '#FFD700';
+    const r = 16;
+    ctx.beginPath();
+    ctx.moveTo(badgeX + r, badgeY);
+    ctx.lineTo(badgeX + badgeW - r, badgeY);
+    ctx.quadraticCurveTo(badgeX + badgeW, badgeY, badgeX + badgeW, badgeY + r);
+    ctx.lineTo(badgeX + badgeW, badgeY + badgeH - r);
+    ctx.quadraticCurveTo(badgeX + badgeW, badgeY + badgeH, badgeX + badgeW - r, badgeY + badgeH);
+    ctx.lineTo(badgeX + r, badgeY + badgeH);
+    ctx.quadraticCurveTo(badgeX, badgeY + badgeH, badgeX, badgeY + badgeH - r);
+    ctx.lineTo(badgeX, badgeY + r);
+    ctx.quadraticCurveTo(badgeX, badgeY, badgeX + r, badgeY);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#1a1a2e';
+    ctx.font = 'bold 28px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('+1 Cliente Satisfeito', W / 2, badgeY + badgeH / 2 + 10);
+    ctx.textAlign = 'start';
+
+    // Vehicle info
+    if (model) {
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 36px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(model.toUpperCase(), W / 2, H * 0.4);
+      if (year) {
+        ctx.font = '24px Inter, sans-serif';
+        ctx.fillText(year, W / 2, H * 0.4 + 36);
+      }
+      ctx.textAlign = 'start';
+    }
+  }, [model, year, logoScale]);
   // Unified draw function
   const drawCanvas = useCallback((canvas: HTMLCanvasElement, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null, fImg: HTMLImageElement | null = null, options?: { overlayOnly?: boolean }) => {
     const ctx = canvas.getContext('2d');

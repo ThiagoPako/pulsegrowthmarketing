@@ -78,7 +78,30 @@ const DEFAULT_COLORS: LayoutColors = {
   footerText: '#FFFFFF',
 };
 
-interface VendidoColors {
+interface FormatLayout {
+  colors: LayoutColors;
+  fontScale: number;
+  headerFontScale: number;
+  priceFontScale: number;
+  footerFontScale: number;
+  infoBoxScale: number;
+  modelFontScale: number;
+  yearFontScale: number;
+  transmissionFontScale: number;
+  obsFontScale: number;
+  labelFontScale: number;
+  pillHeightScale: number;
+  pillRadiusScale: number;
+}
+
+const DEFAULT_FORMAT_LAYOUT: FormatLayout = {
+  colors: { ...DEFAULT_COLORS },
+  fontScale: 1.0, headerFontScale: 1.0, priceFontScale: 1.0, footerFontScale: 1.0,
+  infoBoxScale: 1.0, modelFontScale: 1.0, yearFontScale: 1.0, transmissionFontScale: 1.0,
+  obsFontScale: 1.0, labelFontScale: 1.0, pillHeightScale: 1.0, pillRadiusScale: 1.0,
+};
+
+
   background: string;
   stripColor: string;
   stampBg: string;

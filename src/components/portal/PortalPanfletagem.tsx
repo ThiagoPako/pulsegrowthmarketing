@@ -2133,7 +2133,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
               <div className="grid grid-cols-2 gap-3">
                 {items.map(item => (
                   <div key={item.id} className="relative group">
-                    <button onClick={() => setPreviewItem(item)}
+                   <button onClick={() => setPreviewItem(item)}
                       className="w-full relative aspect-[4/5] rounded-xl overflow-hidden border border-white/[0.08] hover:border-white/[0.2] transition-all">
                       {item.generated_image_url ? (
                         <img src={item.generated_image_url} alt="" className="w-full h-full object-cover" />
@@ -2147,10 +2147,18 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
                         <p className="text-[10px] text-white/50">{item.vehicle_year} • {item.price || 'Sem preço'}</p>
                       </div>
                     </button>
-                    <button onClick={() => handleDeleteItem(item.id)}
-                      className="absolute top-2 right-2 w-7 h-7 rounded-full bg-red-600/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500">
-                      <Trash2 size={12} className="text-white" />
-                    </button>
+                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {item.generated_image_url && (
+                        <button onClick={(e) => { e.stopPropagation(); handleDownload(item); }}
+                          className="w-7 h-7 rounded-full bg-green-600/80 flex items-center justify-center hover:bg-green-500">
+                          <Download size={12} className="text-white" />
+                        </button>
+                      )}
+                      <button onClick={() => handleDeleteItem(item.id)}
+                        className="w-7 h-7 rounded-full bg-red-600/80 flex items-center justify-center hover:bg-red-500">
+                        <Trash2 size={12} className="text-white" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

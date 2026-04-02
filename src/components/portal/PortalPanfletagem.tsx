@@ -1028,13 +1028,25 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.fillStyle = vc.background;
     ctx.fillRect(0, 0, W, H);
 
-    // White top section with diagonal cut
-    const whiteH = Math.round(H * 0.12);
+    // Dark blue vertical strip on the RIGHT side (like Canva reference)
+    const stripW = Math.round(W * 0.12);
+    const darkBlue = '#022a54';
+    ctx.fillStyle = darkBlue;
+    ctx.beginPath();
+    ctx.moveTo(W - stripW, 0);
+    ctx.lineTo(W, 0);
+    ctx.lineTo(W, H);
+    ctx.lineTo(W - stripW - Math.round(stripW * 0.4), H);
+    ctx.closePath();
+    ctx.fill();
+
+    // White top section with diagonal cut (smaller, top-left only)
+    const whiteH = Math.round(H * 0.10);
     ctx.fillStyle = vc.stripColor;
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(W, 0);
-    ctx.lineTo(W, whiteH * 0.4);
+    ctx.lineTo(W * 0.65, 0);
+    ctx.lineTo(W * 0.45, whiteH);
     ctx.lineTo(0, whiteH);
     ctx.closePath();
     ctx.fill();

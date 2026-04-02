@@ -1415,7 +1415,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-8">
+      <div className="flex gap-2 mb-4">
         <button onClick={() => setActiveTab('image')}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'image' ? 'text-white border-2' : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'}`}
           style={activeTab === 'image' ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}>
@@ -1427,6 +1427,20 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           <Film size={16} /> Vídeo
         </button>
       </div>
+
+      {/* Mode Toggle: Venda / Vendido */}
+      {activeTab === 'image' && (
+        <div className="flex gap-2 mb-8">
+          <button onClick={() => setFlyerMode('venda')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all ${flyerMode === 'venda' ? 'text-white border-2 bg-blue-600/20 border-blue-500' : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'}`}>
+            <Car size={16} /> À Venda
+          </button>
+          <button onClick={() => setFlyerMode('vendido')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${flyerMode === 'vendido' ? 'text-white border-2 bg-red-600/20 border-red-500' : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'}`}>
+            <Check size={16} /> VENDIDO
+          </button>
+        </div>
+      )}
 
       {activeTab === 'video' ? (
         <PortalPanfletagemVideo

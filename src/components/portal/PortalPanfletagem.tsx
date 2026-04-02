@@ -1909,10 +1909,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
                 className="flex-1 border-white/[0.1] text-white/70 hover:text-white hover:bg-white/[0.06] text-xs">
                 <Palette size={12} /> Importar cores do {canvasFormat === 'feed' ? 'Story' : 'Feed'}
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setColors({ ...DEFAULT_COLORS })} className="text-white/40 hover:text-white text-xs">
-                Resetar
+              <Button variant="outline" size="sm" onClick={importAllFromOtherFormat}
+                className="flex-1 border-white/[0.1] text-white/70 hover:text-white hover:bg-white/[0.06] text-xs">
+                <Download size={12} /> Importar tudo do {canvasFormat === 'feed' ? 'Story' : 'Feed'}
               </Button>
             </div>
+            <Button variant="ghost" size="sm" onClick={() => setColors({ ...DEFAULT_COLORS })} className="text-white/40 hover:text-white text-xs w-full">
+              Resetar Cores Padrão
+            </Button>
           </div>
           </>
           )}

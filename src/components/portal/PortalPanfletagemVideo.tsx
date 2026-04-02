@@ -563,12 +563,28 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     }
   };
 
-  const handleDownload = () => {
-    if (!generatedVideoUrl) return;
-    const a = document.createElement('a');
-    a.href = generatedVideoUrl;
-    a.download = `panfleto-${model || 'video'}-${Date.now()}.webm`;
-    a.click();
+  const handleDownload = async () => {
+    if (!generatedVideoBlob && !generatedVideoUrl) return;
+    try {
+      let blob = generatedVideoBlob;
+      if (!blob && generatedVideoUrl) {
+        const res = await fetch(generatedVideoUrl);
+        blob = await res.blob();
+      }
+      if (!blob) return;
+      const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `panfleto-${model || 'video'}-${Date.now()}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast.success('Download iniciado!');
+    } catch (err) {
+      toast.error('Erro ao baixar vídeo');
+    }
   };
 
   // Cleanup

@@ -241,17 +241,48 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     if (!files?.length) return;
 
     if (segment === 'car') {
-      const newUrls: string[] = [];
-      const newFiles: File[] = [];
+      const validFiles: File[] = [];
       Array.from(files).forEach(file => {
         if (!file.type.startsWith('video/')) { toast.error(`${file.name} não é vídeo`); return; }
         if (file.size > 200 * 1024 * 1024) { toast.error(`${file.name} muito grande (max 200MB)`); return; }
-        newUrls.push(URL.createObjectURL(file));
-        newFiles.push(file);
+        validFiles.push(file);
       });
-      setCarVideos(prev => [...prev, ...newUrls]);
-      setCarFiles(prev => [...prev, ...newFiles]);
-      if (newFiles.length) toast.success(`${newFiles.length} vídeo(s) do veículo adicionado(s)!`);
+      if (!validFiles.length) return;
+
+      // Add placeholder entries with loading state
+      const startIdx = carVideos.length;
+      const placeholderUrls = validFiles.map(() => '');
+      setCarVideos(prev => [...prev, ...placeholderUrls]);
+      setCarFiles(prev => [...prev, ...validFiles]);
+      
+      // Set loading for each new index
+      const loadingUpdate: Record<number, boolean> = {};
+      validFiles.forEach((_, i) => { loadingUpdate[startIdx + i] = true; });
+      setCarVideoLoading(prev => ({ ...prev, ...loadingUpdate }));
+
+      // Load each video and confirm it's playable
+      validFiles.forEach((file, i) => {
+        const idx = startIdx + i;
+        const url = URL.createObjectURL(file);
+        const testVideo = document.createElement('video');
+        testVideo.preload = 'metadata';
+        testVideo.muted = true;
+        testVideo.onloadeddata = () => {
+          setCarVideos(prev => { const n = [...prev]; n[idx] = url; return n; });
+          setCarVideoLoading(prev => ({ ...prev, [idx]: false }));
+          testVideo.remove();
+        };
+        testVideo.onerror = () => {
+          toast.error(`Erro ao carregar ${file.name}`);
+          URL.revokeObjectURL(url);
+          setCarVideos(prev => { const n = [...prev]; n.splice(idx, 1); return n; });
+          setCarFiles(prev => { const n = [...prev]; n.splice(idx, 1); return n; });
+          setCarVideoLoading(prev => { const n = { ...prev }; delete n[idx]; return n; });
+          testVideo.remove();
+        };
+        testVideo.src = url;
+      });
+      toast.info(`Carregando ${validFiles.length} vídeo(s)...`);
     } else {
       const file = files[0];
       if (!file.type.startsWith('video/')) { toast.error('Selecione um vídeo'); return; }

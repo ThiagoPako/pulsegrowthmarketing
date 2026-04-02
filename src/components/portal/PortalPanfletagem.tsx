@@ -926,22 +926,23 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.globalAlpha = priceIsExample ? 0.4 : 1;
  
     const priceBaseY = pillY + yearPillH + 30;
+    const pfs = priceFontScale * fs;
     ctx.textAlign = 'left';
     ctx.fillStyle = c.priceText;
-    ctx.font = `bold ${Math.round(30 * fs)}px 'Raleway', sans-serif`;
+    ctx.font = `bold ${Math.round(30 * pfs)}px 'Raleway', sans-serif`;
     ctx.fillText('R$', rightX, priceBaseY + 30);
  
     const priceNumMatch = priceVal.match(/[\d.,]+/);
     const priceNum = priceNumMatch ? priceNumMatch[0] : '0,00';
     const priceParts = priceNum.split(',');
  
-    ctx.font = `900 ${Math.round(80 * fs)}px 'Raleway', sans-serif`;
+    ctx.font = `900 ${Math.round(80 * pfs)}px 'Raleway', sans-serif`;
     const mainWidth = ctx.measureText(priceParts[0]).width;
-    ctx.fillText(priceParts[0], rightX + Math.round(55 * fs), priceBaseY + 40);
+    ctx.fillText(priceParts[0], rightX + Math.round(55 * pfs), priceBaseY + 40);
  
     if (priceParts[1]) {
-      ctx.font = `bold ${Math.round(38 * fs)}px 'Raleway', sans-serif`;
-      ctx.fillText(`,${priceParts[1]}`, rightX + Math.round(55 * fs) + mainWidth + 4, priceBaseY + 30);
+      ctx.font = `bold ${Math.round(38 * pfs)}px 'Raleway', sans-serif`;
+      ctx.fillText(`,${priceParts[1]}`, rightX + Math.round(55 * pfs) + mainWidth + 4, priceBaseY + 30);
     }
     ctx.globalAlpha = 1;
  

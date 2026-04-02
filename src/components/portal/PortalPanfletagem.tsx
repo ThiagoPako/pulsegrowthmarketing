@@ -77,6 +77,39 @@ const DEFAULT_COLORS: LayoutColors = {
   footerText: '#FFFFFF',
 };
 
+interface VendidoColors {
+  background: string;
+  stripColor: string;
+  stampBg: string;
+  stampText: string;
+  satisfeitoText: string;
+  parabensText: string;
+  nomeText: string;
+  footerText: string;
+}
+
+const DEFAULT_VENDIDO_COLORS: VendidoColors = {
+  background: '#034e98',
+  stripColor: '#FFFFFF',
+  stampBg: '#CC0000',
+  stampText: '#FFFFFF',
+  satisfeitoText: '#FFFFFF',
+  parabensText: '#FFFFFF',
+  nomeText: '#FFFFFF',
+  footerText: '#FFFFFF',
+};
+
+const VENDIDO_COLOR_LABELS: { key: keyof VendidoColors; label: string }[] = [
+  { key: 'background', label: 'Fundo' },
+  { key: 'stripColor', label: 'Faixa Diagonal' },
+  { key: 'stampBg', label: 'Selo VENDIDO' },
+  { key: 'stampText', label: 'Texto VENDIDO' },
+  { key: 'satisfeitoText', label: 'Texto +1 Cliente' },
+  { key: 'parabensText', label: 'Texto PARABÉNS' },
+  { key: 'nomeText', label: 'Texto Nome' },
+  { key: 'footerText', label: 'Texto Rodapé' },
+];
+
 const TRANSMISSION_OPTIONS = [
   { value: 'manual', label: 'Manual', icon: Gauge },
   { value: 'automatico', label: 'Automático', icon: Gauge },
@@ -236,6 +269,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [logoImgObj, setLogoImgObj] = useState<HTMLImageElement | null>(null);
   const [frameImgObj, setFrameImgObj] = useState<HTMLImageElement | null>(null);
 
+  // Vendido-specific colors and font scales
+  const [vendidoColors, setVendidoColors] = useState<VendidoColors>({ ...DEFAULT_VENDIDO_COLORS });
+  const [vendidoFontScale, setVendidoFontScale] = useState(1.0);
+  const [vendidoStampFontScale, setVendidoStampFontScale] = useState(1.0);
+  const [vendidoParabensFontScale, setVendidoParabensFontScale] = useState(1.0);
+  const [vendidoNomeFontScale, setVendidoNomeFontScale] = useState(1.0);
+  const [vendidoFooterFontScale, setVendidoFooterFontScale] = useState(1.0);
+
   // Canvas click → zone color picker
   const [activeColorZone, setActiveColorZone] = useState<CanvasZone>(null);
 
@@ -283,6 +324,12 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (s.footerAddress != null) setFooterAddress(s.footerAddress);
         if (s.footerWhatsapp != null) setFooterWhatsapp(s.footerWhatsapp);
         if (s.canvasFormat) setCanvasFormat(s.canvasFormat);
+        if (s.vendidoColors) setVendidoColors({ ...DEFAULT_VENDIDO_COLORS, ...s.vendidoColors });
+        if (s.vendidoFontScale != null) setVendidoFontScale(s.vendidoFontScale);
+        if (s.vendidoStampFontScale != null) setVendidoStampFontScale(s.vendidoStampFontScale);
+        if (s.vendidoParabensFontScale != null) setVendidoParabensFontScale(s.vendidoParabensFontScale);
+        if (s.vendidoNomeFontScale != null) setVendidoNomeFontScale(s.vendidoNomeFontScale);
+        if (s.vendidoFooterFontScale != null) setVendidoFooterFontScale(s.vendidoFooterFontScale);
       } catch { /* ignore */ }
     }
   }, [clientId]);
@@ -296,7 +343,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   }, [clientWhatsapp]);
 
   const saveLayoutSettings = () => {
-    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, footerPosX, footerPosY, photoOffsetX, photoOffsetY, colors, footerAddress, footerWhatsapp, canvasFormat };
+    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, footerPosX, footerPosY, photoOffsetX, photoOffsetY, colors, footerAddress, footerWhatsapp, canvasFormat, vendidoColors, vendidoFontScale, vendidoStampFontScale, vendidoParabensFontScale, vendidoNomeFontScale, vendidoFooterFontScale };
     localStorage.setItem(`flyer-layout-${clientId}`, JSON.stringify(settings));
     toast.success('Layout salvo!');
   };
@@ -953,65 +1000,69 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
 
   // VENDIDO layout — matching reference exactly
   const drawCanvasVendido = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {
-    const fs = fontScale;
-    const BLUE = '#034e98';
-    const DARK_BLUE = '#022d5a';
+    const fs = vendidoFontScale;
+    const vc = vendidoColors;
+    const DARK_BLUE = darkenHex(vc.background, 40);
 
-    // Full blue background
-    ctx.fillStyle = BLUE;
+    // Full background
+    ctx.fillStyle = vc.background;
     ctx.fillRect(0, 0, W, H);
 
-    // White top section (approx 12% of height) with diagonal cut
-    const whiteH = Math.round(H * 0.12);
-    ctx.fillStyle = '#FFFFFF';
+    // Diagonal strip on the LEFT side (was right side)
+    ctx.fillStyle = vc.stripColor;
+    ctx.globalAlpha = 0.15;
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(W, 0);
-    ctx.lineTo(W, whiteH * 0.4);
-    ctx.lineTo(0, whiteH);
+    ctx.lineTo(W * 0.12, 0);
+    ctx.lineTo(W * 0.08, H);
+    ctx.lineTo(0, H);
     ctx.closePath();
     ctx.fill();
+    ctx.globalAlpha = 1;
 
-    // Dark blue right edge strip (diagonal)
+    // Subtle dark accent on left edge
     ctx.fillStyle = DARK_BLUE;
+    ctx.globalAlpha = 0.4;
     ctx.beginPath();
-    ctx.moveTo(W * 0.92, 0);
-    ctx.lineTo(W, 0);
-    ctx.lineTo(W, H);
-    ctx.lineTo(W * 0.88, H);
+    ctx.moveTo(0, 0);
+    ctx.lineTo(W * 0.04, 0);
+    ctx.lineTo(W * 0.02, H);
+    ctx.lineTo(0, H);
     ctx.closePath();
     ctx.fill();
+    ctx.globalAlpha = 1;
 
-    // ---- "VENDIDO" stamp (red, bold italic, top-left) ----
-    const stampFontSize = Math.round(90 * fs);
+    // ---- "VENDIDO" stamp (red, bold italic, top-right area) ----
+    const stampFs = vendidoStampFontScale * fs;
+    const stampFontSize = Math.round(90 * stampFs);
     ctx.save();
     ctx.font = `bold italic ${stampFontSize}px 'Raleway', Impact, sans-serif`;
     ctx.textAlign = 'left';
     const vendidoMetrics = ctx.measureText('VENDIDO');
-    const barX = 0;
     const barW = vendidoMetrics.width + 60;
     const barH = Math.round(stampFontSize * 1.15);
     const barY = Math.round(30 * fs);
+    const barX = W - barW - 20;
     // Red bar behind text
-    ctx.fillStyle = '#CC0000';
+    ctx.fillStyle = vc.stampBg;
     ctx.beginPath();
-    ctx.moveTo(barX, barY);
+    ctx.moveTo(barX + 10, barY);
     ctx.lineTo(barX + barW + 20, barY);
-    ctx.lineTo(barX + barW - 10, barY + barH);
-    ctx.lineTo(barX, barY + barH);
+    ctx.lineTo(barX + barW + 20, barY + barH);
+    ctx.lineTo(barX - 10, barY + barH);
     ctx.closePath();
     ctx.fill();
     // "VENDIDO" text
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillText('VENDIDO', barX + 25, barY + barH - Math.round(22 * fs));
+    ctx.fillStyle = vc.stampText;
+    ctx.fillText('VENDIDO', barX + 25, barY + barH - Math.round(22 * stampFs));
     ctx.restore();
 
     // "+1 CLIENTE SATISFEITO" below stamp
     const satisfeitoY = barY + barH + Math.round(40 * fs);
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = vc.satisfeitoText;
     ctx.font = `bold ${Math.round(30 * fs)}px 'Raleway', sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.fillText('+1 CLIENTE SATISFEITO', 30, satisfeitoY);
+    ctx.textAlign = 'center';
+    ctx.fillText('+1 CLIENTE SATISFEITO', W / 2, satisfeitoY);
 
     // ---- Polaroid-style photo frame ----
     const frameMarginX = Math.round(55 * fs);
@@ -1021,7 +1072,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const photoAspect = 4 / 3;
     const innerPhotoW = frameW - frameBorder * 2;
     const innerPhotoH = Math.round(innerPhotoW / photoAspect);
-    const framePadBottom = Math.round(20 * fs); // small bottom padding, text goes OUTSIDE frame
+    const framePadBottom = Math.round(20 * fs);
     const totalFrameH = innerPhotoH + frameBorder * 2 + framePadBottom;
 
     // Frame shadow
@@ -1061,17 +1112,20 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillText('Adicione uma foto', photoX + innerPhotoW / 2, photoY + innerPhotoH / 2);
     }
 
-    // ---- "PARABÉNS" + buyer name BELOW the frame (white text on blue bg) ----
+    // ---- "PARABÉNS" + buyer name BELOW the frame ----
+    const pFs = vendidoParabensFontScale * fs;
     const textBelowFrameY = frameTop + totalFrameH + Math.round(20 * fs);
     const centerX = W / 2;
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = vc.parabensText;
     ctx.textAlign = 'center';
 
-    ctx.font = `bold ${Math.round(52 * fs)}px 'Raleway', sans-serif`;
+    ctx.font = `bold ${Math.round(52 * pFs)}px 'Raleway', sans-serif`;
     ctx.fillText('PARABÉNS', centerX, textBelowFrameY + Math.round(55 * fs));
 
+    const nFs = vendidoNomeFontScale * fs;
     const displayName = buyerName.trim() || 'NOME DO CLIENTE';
-    ctx.font = `bold ${Math.round(48 * fs)}px 'Raleway', sans-serif`;
+    ctx.fillStyle = vc.nomeText;
+    ctx.font = `bold ${Math.round(48 * nFs)}px 'Raleway', sans-serif`;
     const maxNameW = W - 120;
     const nameWords = displayName.toUpperCase().split(' ');
     let nameLine = '';
@@ -1081,7 +1135,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       if (ctx.measureText(test).width > maxNameW && nameLine) {
         ctx.fillText(nameLine, centerX, nameLineY);
         nameLine = word;
-        nameLineY += Math.round(56 * fs);
+        nameLineY += Math.round(56 * nFs);
       } else {
         nameLine = test;
       }
@@ -1089,40 +1143,40 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (nameLine) ctx.fillText(nameLine, centerX, nameLineY);
 
     // ---- Footer: WhatsApp + Address ----
+    const fFs = vendidoFooterFontScale * fs;
     const footerStartY = nameLineY + Math.round(40 * fs);
     const wpText = footerWhatsapp || '';
     const addrText = footerAddress || '';
 
     if (wpText) {
       const wpImg = wpIconRef.current;
-      ctx.fillStyle = '#FFFFFF';
+      ctx.fillStyle = vc.footerText;
       ctx.textAlign = 'center';
-      ctx.font = `bold ${Math.round(36 * fs)}px 'Raleway', sans-serif`;
+      ctx.font = `bold ${Math.round(36 * fFs)}px 'Raleway', sans-serif`;
       const wpDisplayY = footerStartY + Math.round(35 * fs);
       if (wpImg) {
-        const iconS = Math.round(40 * fs);
+        const iconS = Math.round(40 * fFs);
         const textW = ctx.measureText(wpText).width;
         const totalW = iconS + 14 + textW;
         const startX = W / 2 - totalW / 2;
         ctx.drawImage(wpImg, startX, wpDisplayY - iconS * 0.7, iconS, iconS);
-        ctx.fillText(wpText, startX + iconS + 14 + textW / 2, wpDisplayY + Math.round(5 * fs));
+        ctx.fillText(wpText, startX + iconS + 14 + textW / 2, wpDisplayY + Math.round(5 * fFs));
       } else {
         ctx.fillText(wpText, W / 2, wpDisplayY);
       }
     }
 
     if (addrText) {
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = `bold ${Math.round(18 * fs)}px 'Raleway', sans-serif`;
+      ctx.fillStyle = vc.footerText;
+      ctx.font = `bold ${Math.round(18 * fFs)}px 'Raleway', sans-serif`;
       ctx.textAlign = 'center';
       const addrY = footerStartY + Math.round(85 * fs);
-      // Pin icon
-      const pinSize = Math.round(18 * fs);
+      const pinSize = Math.round(18 * fFs);
       const addrFullText = addrText.toUpperCase();
       const addrTW = ctx.measureText(addrFullText).width;
       const addrStartX = W / 2 - (pinSize + 8 + addrTW) / 2;
       ctx.save();
-      ctx.fillStyle = '#FFFFFF';
+      ctx.fillStyle = vc.footerText;
       ctx.beginPath();
       ctx.arc(addrStartX + pinSize / 2, addrY - pinSize * 0.3, pinSize * 0.4, 0, Math.PI * 2);
       ctx.fill();
@@ -1133,8 +1187,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.closePath();
       ctx.fill();
       ctx.restore();
-      // Wrap address
-      ctx.fillStyle = '#FFFFFF';
+      ctx.fillStyle = vc.footerText;
       ctx.textAlign = 'center';
       const maxAW = W - 100;
       const aWords = addrFullText.split(' ');
@@ -1144,7 +1197,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (ctx.measureText(test).width > maxAW && aLine) {
           ctx.fillText(aLine, W / 2, aLineY);
           aLine = word;
-          aLineY += Math.round(24 * fs);
+          aLineY += Math.round(24 * fFs);
         } else { aLine = test; }
       });
       if (aLine) ctx.fillText(aLine, W / 2, aLineY);
@@ -1154,7 +1207,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (lImg) {
       ctx.drawImage(lImg, logoX, logoY, logoW, logoH);
     }
-  }, [fontScale, buyerName, footerWhatsapp, footerAddress, logoW, logoH, logoX, logoY, photoOffsetX, photoOffsetY]);
+  }, [vendidoFontScale, vendidoStampFontScale, vendidoParabensFontScale, vendidoNomeFontScale, vendidoFooterFontScale, vendidoColors, buyerName, footerWhatsapp, footerAddress, logoW, logoH, logoX, logoY, photoOffsetX, photoOffsetY]);
 
   // Unified draw function
   const drawCanvas = useCallback((canvas: HTMLCanvasElement, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null, fImg: HTMLImageElement | null = null) => {
@@ -1753,6 +1806,57 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
               ))}
             </div>
             <Button variant="ghost" size="sm" onClick={() => setColors({ ...DEFAULT_COLORS })} className="text-white/40 hover:text-white text-xs w-full">
+              Resetar Cores Padrão
+            </Button>
+          </div>
+          </>
+          )}
+
+          {/* VENDIDO mode: Font + Color controls */}
+          {flyerMode === 'vendido' && (
+          <>
+          <div className="bg-white/[0.04] border border-red-500/20 rounded-2xl p-6 space-y-4">
+            <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+              <Type size={16} className="text-red-400" /> Fontes do VENDIDO
+            </h3>
+            {[
+              { label: 'Escala Geral', value: vendidoFontScale, setter: setVendidoFontScale },
+              { label: 'Selo VENDIDO', value: vendidoStampFontScale, setter: setVendidoStampFontScale },
+              { label: 'PARABÉNS', value: vendidoParabensFontScale, setter: setVendidoParabensFontScale },
+              { label: 'Nome do Cliente', value: vendidoNomeFontScale, setter: setVendidoNomeFontScale },
+              { label: 'Rodapé (WhatsApp/Endereço)', value: vendidoFooterFontScale, setter: setVendidoFooterFontScale },
+            ].map(({ label, value, setter }) => (
+              <div key={label} className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-white/60">{label}</Label>
+                  <span className="text-xs text-white/40 font-mono">{Math.round(value * 100)}%</span>
+                </div>
+                <Slider value={[value * 100]} onValueChange={v => setter(v[0] / 100)} min={50} max={200} step={5} className="w-full" />
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white/[0.04] border border-red-500/20 rounded-2xl p-6 space-y-4">
+            <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+              <Palette size={16} className="text-red-400" /> Cores do VENDIDO
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              {VENDIDO_COLOR_LABELS.map(({ key, label }) => (
+                <div key={key} className="flex items-center gap-3">
+                  <label className="relative w-9 h-9 rounded-lg overflow-hidden border-2 border-white/[0.15] cursor-pointer hover:border-white/[0.3] transition-colors flex-shrink-0">
+                    <input
+                      type="color"
+                      value={vendidoColors[key]}
+                      onChange={e => setVendidoColors(prev => ({ ...prev, [key]: e.target.value }))}
+                      className="absolute inset-0 w-full h-full cursor-pointer opacity-0"
+                    />
+                    <div className="w-full h-full" style={{ backgroundColor: vendidoColors[key] }} />
+                  </label>
+                  <span className="text-[11px] text-white/60 leading-tight">{label}</span>
+                </div>
+              ))}
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setVendidoColors({ ...DEFAULT_VENDIDO_COLORS })} className="text-white/40 hover:text-white text-xs w-full">
               Resetar Cores Padrão
             </Button>
           </div>

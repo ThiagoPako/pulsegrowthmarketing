@@ -1830,8 +1830,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
               <Palette size={16} style={{ color: `hsl(${clientColor})` }} /> Cores do Layout
+              <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: `hsl(${clientColor} / 0.2)`, color: `hsl(${clientColor})` }}>
+                {canvasFormat === 'feed' ? 'FEED' : 'STORY'}
+              </span>
             </h3>
-            <p className="text-[11px] text-white/40">💡 Dica: clique em uma área da prévia para filtrar as cores daquela seção.</p>
+            <p className="text-[11px] text-white/40">Configuração individual para {canvasFormat === 'feed' ? 'Feed (4:5)' : 'Story (9:16)'}.</p>
             <div className="grid grid-cols-2 gap-3">
               {COLOR_LABELS.map(({ key, label }) => (
                 <div key={key} className="flex items-center gap-3">
@@ -1848,9 +1851,15 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
                 </div>
               ))}
             </div>
-            <Button variant="ghost" size="sm" onClick={() => setColors({ ...DEFAULT_COLORS })} className="text-white/40 hover:text-white text-xs w-full">
-              Resetar Cores Padrão
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={importColorsFromOtherFormat}
+                className="flex-1 border-white/[0.1] text-white/70 hover:text-white hover:bg-white/[0.06] text-xs">
+                <Palette size={12} /> Importar cores do {canvasFormat === 'feed' ? 'Story' : 'Feed'}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setColors({ ...DEFAULT_COLORS })} className="text-white/40 hover:text-white text-xs">
+                Resetar
+              </Button>
+            </div>
           </div>
           </>
           )}

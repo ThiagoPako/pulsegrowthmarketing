@@ -177,6 +177,7 @@ export default function ClientPortal() {
       niche: data.niche || null,
       whatsapp: data.whatsapp,
       city: data.city,
+      client_type: data.client_type || 'novo',
     });
 
     let clientData: ClientData | null = null;

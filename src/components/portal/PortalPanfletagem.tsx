@@ -187,6 +187,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const logoFileInputRef = useRef<HTMLInputElement>(null);
    const wpIconRef = useRef<HTMLImageElement | null>(null);
   const vendidoBgRef = useRef<HTMLImageElement | null>(null);
+  const vendidoZonesRef = useRef({ stampY: 0, stampH: 100, frameX: 0, frameY: 0, frameW: 100, frameH: 100, parabensY: 0, parabensH: 80, footerY: 0, footerH: 80 });
 
   // Preload WhatsApp icon + Vendido background
   useEffect(() => {
@@ -235,6 +236,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
 
   // Font size multiplier
   const [fontScale, setFontScale] = useState(1.0);
+
+  // Per-block font scales
+  const [headerFontScale, setHeaderFontScale] = useState(1.0);
+  const [priceFontScale, setPriceFontScale] = useState(1.0);
+  const [footerFontScale, setFooterFontScale] = useState(1.0);
 
   // Info box scale (controls pill/box size proportionally)
   const [infoBoxScale, setInfoBoxScale] = useState(1.0);
@@ -314,6 +320,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (s.layoutLocked != null) setLayoutLocked(s.layoutLocked);
         if (s.customLogoDataUrl) setCustomLogoDataUrl(s.customLogoDataUrl);
         if (s.fontScale != null) setFontScale(s.fontScale);
+        if (s.headerFontScale != null) setHeaderFontScale(s.headerFontScale);
+        if (s.priceFontScale != null) setPriceFontScale(s.priceFontScale);
+        if (s.footerFontScale != null) setFooterFontScale(s.footerFontScale);
         if (s.infoBoxScale != null) setInfoBoxScale(s.infoBoxScale);
         // Legacy support: if old single infoFontScale exists, apply to all
         if (s.modelFontScale != null) setModelFontScale(s.modelFontScale);
@@ -368,7 +377,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   }, [clientWhatsapp]);
 
   const saveLayoutSettings = () => {
-    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, footerPosX, footerPosY, photoOffsetX, photoOffsetY, colors, footerAddress, footerWhatsapp, canvasFormat, vendidoColors, vendidoFontScale, vendidoStampFontScale, vendidoParabensFontScale, vendidoNomeFontScale, vendidoFooterFontScale, vStampOffX, vStampOffY, vFrameOffX, vFrameOffY, vParabensOffX, vParabensOffY, vFooterOffX, vFooterOffY };
+    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, headerFontScale, priceFontScale, footerFontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, footerPosX, footerPosY, photoOffsetX, photoOffsetY, colors, footerAddress, footerWhatsapp, canvasFormat, vendidoColors, vendidoFontScale, vendidoStampFontScale, vendidoParabensFontScale, vendidoNomeFontScale, vendidoFooterFontScale, vStampOffX, vStampOffY, vFrameOffX, vFrameOffY, vParabensOffX, vParabensOffY, vFooterOffX, vFooterOffY };
     localStorage.setItem(`flyer-layout-${clientId}`, JSON.stringify(settings));
     toast.success('Layout salvo!');
   };
@@ -553,11 +562,12 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.fill();
  
     ctx.fillStyle = c.headerText;
-    ctx.font = `bold ${Math.round(52 * fs)}px 'Raleway', sans-serif`;
+    const hfs = headerFontScale * fs;
+    ctx.font = `bold ${Math.round(52 * hfs)}px 'Raleway', sans-serif`;
     ctx.textAlign = 'left';
     ctx.fillText('Seu próximo', 40, 80);
     ctx.fillText('carro está', 40, 140);
-    ctx.font = `bold italic ${Math.round(52 * fs)}px 'Raleway', sans-serif`;
+    ctx.font = `bold italic ${Math.round(52 * hfs)}px 'Raleway', sans-serif`;
     ctx.fillStyle = c.header;
     ctx.fillText('aqui!', 40, 200);
  
@@ -579,6 +589,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const priceText = price ? formatPrice(price) : 'R$ 00.000,00';
     const priceIsExample = !price;
     {
+      const pfs = priceFontScale * fs;
       const priceBoxW = Math.round(460 * bs), priceBoxH = Math.round(120 * bs);
       const priceX = W - priceBoxW - 30;
       const priceYpos = infoPosY - priceBoxH - 30;
@@ -589,9 +600,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillStyle = priceGrad;
       ctx.beginPath(); ctx.roundRect(priceX, priceYpos, priceBoxW, priceBoxH, 16); ctx.fill();
       ctx.globalAlpha = priceIsExample ? 0.4 : 1;
-      ctx.fillStyle = c.priceText; ctx.font = `${Math.round(20 * fs)}px Arial, sans-serif`; ctx.textAlign = 'left';
+      ctx.fillStyle = c.priceText; ctx.font = `${Math.round(20 * pfs)}px Arial, sans-serif`; ctx.textAlign = 'left';
       ctx.fillText('POR APENAS:', priceX + 24, priceYpos + Math.round(35 * bs));
-      ctx.font = `bold ${Math.round(52 * fs)}px Arial, sans-serif`;
+      ctx.font = `bold ${Math.round(52 * pfs)}px Arial, sans-serif`;
       ctx.fillText(priceText, priceX + 24, priceYpos + Math.round(90 * bs));
       ctx.globalAlpha = 1;
     }
@@ -711,12 +722,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     };
  
     if (addrText) {
+      const ffs = footerFontScale * fs;
       drawPinIcon(55 + footContentOffX, footContentCenterY, 24);
       ctx.fillStyle = c.footerText;
-      ctx.font = `bold ${Math.round(12 * fs)}px 'Raleway', sans-serif`;
+      ctx.font = `bold ${Math.round(12 * ffs)}px 'Raleway', sans-serif`;
       ctx.textAlign = 'left';
       ctx.fillText('ENDEREÇO', 92 + footContentOffX, footContentCenterY - 18);
-      ctx.font = `bold ${Math.round(18 * fs)}px 'Raleway', sans-serif`;
+      ctx.font = `bold ${Math.round(18 * ffs)}px 'Raleway', sans-serif`;
       const maxAddrW = W / 2 - 120;
       const addrWords = addrText.split(' ');
       let addrLine = ''; let addrLineY = footContentCenterY + 6;
@@ -730,13 +742,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     }
  
     if (wpText) {
+      const ffs = footerFontScale * fs;
       const wpX = W / 2 + 40 + footContentOffX;
       drawWhatsAppIcon(wpX + 24, footContentCenterY, 24);
       ctx.fillStyle = c.footerText;
-      ctx.font = `bold ${Math.round(12 * fs)}px 'Raleway', sans-serif`;
+      ctx.font = `bold ${Math.round(12 * ffs)}px 'Raleway', sans-serif`;
       ctx.textAlign = 'left';
       ctx.fillText('WHATSAPP', wpX + 58, footContentCenterY - 18);
-      ctx.font = `bold ${Math.round(24 * fs)}px 'Raleway', sans-serif`;
+      ctx.font = `bold ${Math.round(24 * ffs)}px 'Raleway', sans-serif`;
       ctx.fillText(wpText, wpX + 58, footContentCenterY + 12);
     }
  
@@ -747,7 +760,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillStyle = '#FFFFFF'; ctx.font = `bold ${Math.round(36 * fs)}px Arial, sans-serif`; ctx.textAlign = 'left';
       ctx.fillText(clientName, logoX, logoY + 40);
     }
-  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
+  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, headerFontScale, priceFontScale, footerFontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
  
   // Core draw function — STORY/REELS format (1080x1920)
   // Matches reference: compact header → big photo → info bar → footer → thin brand bar
@@ -811,9 +824,10 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
  
     ctx.fillStyle = c.headerText;
     ctx.textAlign = 'left';
-    ctx.font = `bold ${Math.round(30 * fs)}px 'Raleway', sans-serif`;
+    const hfs = headerFontScale * fs;
+    ctx.font = `bold ${Math.round(30 * hfs)}px 'Raleway', sans-serif`;
     ctx.fillText('QUALIDADE, CONFIANÇA E AS', 30, 45);
-    ctx.font = `900 ${Math.round(38 * fs)}px 'Raleway', sans-serif`;
+    ctx.font = `900 ${Math.round(38 * hfs)}px 'Raleway', sans-serif`;
     ctx.fillText('MELHORES CONDIÇÕES!', 30, 90);
  
     ctx.fillStyle = c.infoPills;
@@ -912,22 +926,23 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.globalAlpha = priceIsExample ? 0.4 : 1;
  
     const priceBaseY = pillY + yearPillH + 30;
+    const pfs = priceFontScale * fs;
     ctx.textAlign = 'left';
     ctx.fillStyle = c.priceText;
-    ctx.font = `bold ${Math.round(30 * fs)}px 'Raleway', sans-serif`;
+    ctx.font = `bold ${Math.round(30 * pfs)}px 'Raleway', sans-serif`;
     ctx.fillText('R$', rightX, priceBaseY + 30);
  
     const priceNumMatch = priceVal.match(/[\d.,]+/);
     const priceNum = priceNumMatch ? priceNumMatch[0] : '0,00';
     const priceParts = priceNum.split(',');
  
-    ctx.font = `900 ${Math.round(80 * fs)}px 'Raleway', sans-serif`;
+    ctx.font = `900 ${Math.round(80 * pfs)}px 'Raleway', sans-serif`;
     const mainWidth = ctx.measureText(priceParts[0]).width;
-    ctx.fillText(priceParts[0], rightX + Math.round(55 * fs), priceBaseY + 40);
+    ctx.fillText(priceParts[0], rightX + Math.round(55 * pfs), priceBaseY + 40);
  
     if (priceParts[1]) {
-      ctx.font = `bold ${Math.round(38 * fs)}px 'Raleway', sans-serif`;
-      ctx.fillText(`,${priceParts[1]}`, rightX + Math.round(55 * fs) + mainWidth + 4, priceBaseY + 30);
+      ctx.font = `bold ${Math.round(38 * pfs)}px 'Raleway', sans-serif`;
+      ctx.fillText(`,${priceParts[1]}`, rightX + Math.round(55 * pfs) + mainWidth + 4, priceBaseY + 30);
     }
     ctx.globalAlpha = 1;
  
@@ -952,20 +967,22 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const addrText = footerAddress || '';
  
     if (wpText) {
+      const ffs = footerFontScale * fs;
       const wpImg = wpIconRef.current;
       if (wpImg) {
         ctx.drawImage(wpImg, 40 + footerPosX, footCenterY - 19, 38, 38);
       }
       ctx.fillStyle = c.footerAccent;
       ctx.textAlign = 'left';
-      ctx.font = `900 ${Math.round(18 * fs)}px 'Raleway', sans-serif`;
+      ctx.font = `900 ${Math.round(18 * ffs)}px 'Raleway', sans-serif`;
       ctx.fillText('COMPRE AGORA!', 90 + footerPosX, footCenterY - 10);
       ctx.fillStyle = c.footerText;
-      ctx.font = `bold ${Math.round(26 * fs)}px 'Raleway', sans-serif`;
+      ctx.font = `bold ${Math.round(26 * ffs)}px 'Raleway', sans-serif`;
       ctx.fillText(wpText, 90 + footerPosX, footCenterY + 20);
     }
  
     if (addrText) {
+      const ffs = footerFontScale * fs;
       const addrX = W / 2 + 40 + footerPosX;
       ctx.save();
       ctx.fillStyle = c.footerAccent;
@@ -982,7 +999,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
  
       ctx.fillStyle = c.footerText;
       ctx.textAlign = 'left';
-      ctx.font = `bold ${Math.round(16 * fs)}px 'Raleway', sans-serif`;
+      ctx.font = `bold ${Math.round(16 * ffs)}px 'Raleway', sans-serif`;
       const maxW = W / 2 - 120;
       const words = addrText.toUpperCase().split(' ');
       let line = ''; let ly = footCenterY - 10;
@@ -1010,7 +1027,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.moveTo(W, H); ctx.lineTo(W * 0.35, H); ctx.lineTo(W, bottomBarY + 10); ctx.closePath();
     ctx.fill();
     ctx.globalAlpha = 1;
-  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
+  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, headerFontScale, priceFontScale, footerFontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
  
   // VENDIDO layout — draw sold overlay with background image and badge
   const drawCanvasVendido = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {
@@ -1645,23 +1662,38 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             </div>
           </div>
 
-          {/* Font Size Control — only for venda mode */}
+          {/* Font Size Controls — per block — only for venda mode */}
           {flyerMode !== 'vendido' && (
           <>
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
-              <Type size={16} style={{ color: `hsl(${clientColor})` }} /> Tamanho da Fonte
+              <Type size={16} style={{ color: `hsl(${clientColor})` }} /> Tamanho das Fontes
             </h3>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs text-white/60">Escala</Label>
-                <span className="text-xs text-white/40 font-mono">{Math.round(fontScale * 100)}%</span>
+            <p className="text-[11px] text-white/40">Clique em cada bloco para ajustar o tamanho individualmente.</p>
+            {[
+              { key: 'global', label: '🔧 Escala Geral', value: fontScale, setter: setFontScale, min: 70, max: 150 },
+              { key: 'header', label: '📌 Cabeçalho', value: headerFontScale, setter: setHeaderFontScale, min: 50, max: 200 },
+              { key: 'price', label: '💰 Preço', value: priceFontScale, setter: setPriceFontScale, min: 50, max: 200 },
+              { key: 'footer', label: '📍 Rodapé', value: footerFontScale, setter: setFooterFontScale, min: 50, max: 200 },
+            ].map(({ key, label, value, setter, min, max }) => (
+              <div key={key} className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveFieldEditor(activeFieldEditor === key ? null : key)}
+                  className={`w-full text-left text-xs font-semibold px-2 py-1.5 rounded-lg transition-colors ${activeFieldEditor === key ? 'bg-white/[0.1] text-white' : 'text-white/60 hover:text-white/80 hover:bg-white/[0.04]'}`}
+                >
+                  {label} — {Math.round(value * 100)}%
+                </button>
+                {activeFieldEditor === key && (
+                  <div className="pl-2 pr-1">
+                    <Slider value={[value * 100]} onValueChange={v => setter(v[0] / 100)} min={min} max={max} step={5} className="w-full" />
+                    <div className="flex justify-between text-[9px] text-white/30 mt-0.5">
+                      <span>{min}%</span><span>100%</span><span>{max}%</span>
+                    </div>
+                  </div>
+                )}
               </div>
-              <Slider value={[fontScale * 100]} onValueChange={v => setFontScale(v[0] / 100)} min={70} max={150} step={5} className="w-full" />
-              <div className="flex justify-between text-[10px] text-white/30">
-                <span>Menor</span><span>Normal</span><span>Maior</span>
-              </div>
-            </div>
+            ))}
           </div>
 
           {/* Info Box Scale */}

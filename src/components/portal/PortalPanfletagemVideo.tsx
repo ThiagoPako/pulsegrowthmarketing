@@ -191,6 +191,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
 
   const compositionCanvasRef = useRef<HTMLCanvasElement>(null);
   const hiddenVideoRef = useRef<HTMLVideoElement>(null);
+  const hiddenVideo2Ref = useRef<HTMLVideoElement>(null);
   const hiddenAudioRef = useRef<HTMLAudioElement>(null);
   const animFrameRef = useRef(0);
   const compositionSegmentsRef = useRef<CompSegment[]>([]);
@@ -199,6 +200,8 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
   const recordedChunksRef = useRef<Blob[]>([]);
   const isGeneratingRef = useRef(false);
   const blobUrlsToRevokeRef = useRef<string[]>([]);
+  const transitionProgressRef = useRef(-1);
+  const transitionStartTimeRef = useRef(0);
 
   // Layout overlay image
   const [layoutOverlayImg, setLayoutOverlayImg] = useState<HTMLImageElement | null>(null);

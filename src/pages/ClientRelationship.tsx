@@ -83,7 +83,7 @@ export default function ClientRelationship() {
   const handleApprove = async (req: SpecialRequest) => {
     setProcessing(req.id);
     try {
-      const res = await fetch('https://agenciapulse.tech/api/portal-actions', {
+      const res = await fetch('https://agenciapulse.tech/api/portal-recordings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'approve_special', client_id: req.client_id, recording_id: req.id }),

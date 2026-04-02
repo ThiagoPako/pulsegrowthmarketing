@@ -416,17 +416,28 @@ export function useFinancialData() {
   // Expense CRUD
   const addExpense = async (e: Partial<Expense>) => {
     try {
-      // Normalize date to YYYY-MM-DD to prevent timezone issues
       const payload = { ...e };
       if (payload.date) payload.date = normalizeDate(payload.date);
-      const { error } = await supabase.from('expenses').insert(payload as any);
+      const { data: inserted, error } = await supabase.from('expenses').insert(payload as any).select('id').single();
       if (error) {
         console.error('[useFinancialData] addExpense error:', error);
         return false;
       }
-      // Re-fetch ALL financial data to ensure full sync across modules
+
+      // Create cash movement (saida) linked to this expense
+      const expenseId = (inserted as any)?.id;
+      if (expenseId) {
+        await supabase.from('cash_reserve_movements').insert({
+          amount: Number(e.amount || 0),
+          type: 'saida',
+          description: `[Despesa] ${e.description || 'Despesa'} - ID: ${expenseId}`,
+          date: payload.date || new Date().toISOString().split('T')[0],
+          is_reserve: false,
+        } as any);
+      }
+
       await fetchAll();
-      await logActivity('criação', 'despesa', `Registrou despesa - R$ ${Number(e.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${e.description}`, undefined, payload);
+      await logActivity('criação', 'despesa', `Registrou despesa - R$ ${Number(e.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${e.description}`, expenseId, payload);
       return true;
     } catch (err) {
       console.error('[useFinancialData] addExpense unexpected error:', err);

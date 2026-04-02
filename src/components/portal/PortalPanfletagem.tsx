@@ -1024,50 +1024,46 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const fs = vendidoFontScale;
     const vc = vendidoColors;
 
-    // Full background
+    // Full blue background — NO white diagonal strip
     ctx.fillStyle = vc.background;
     ctx.fillRect(0, 0, W, H);
 
-    // White top section with diagonal cut
-    const whiteH = Math.round(H * 0.12);
-    ctx.fillStyle = vc.stripColor;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(W, 0);
-    ctx.lineTo(W, whiteH * 0.4);
-    ctx.lineTo(0, whiteH);
-    ctx.closePath();
-    ctx.fill();
-
-    // ---- "VENDIDO" stamp ----
+    // ---- "VENDIDO" large red banner ----
     const stampFs = vendidoStampFontScale * fs;
-    const stampFontSize = Math.round(90 * stampFs);
+    const stampFontSize = Math.round(100 * stampFs);
     ctx.save();
     ctx.font = `bold italic ${stampFontSize}px 'Raleway', Impact, sans-serif`;
     ctx.textAlign = 'left';
     const vendidoMetrics = ctx.measureText('VENDIDO');
     const barX = 0 + vStampOffX;
-    const barW = vendidoMetrics.width + 60;
-    const barH = Math.round(stampFontSize * 1.15);
-    const barY = Math.round(30 * fs) + vStampOffY;
+    const barW = vendidoMetrics.width + 70;
+    const barH = Math.round(stampFontSize * 1.2);
+    const barY = Math.round(25 * fs) + vStampOffY;
     ctx.fillStyle = vc.stampBg;
     ctx.beginPath();
     ctx.moveTo(barX, barY);
-    ctx.lineTo(barX + barW + 20, barY);
+    ctx.lineTo(barX + barW + 30, barY);
     ctx.lineTo(barX + barW - 10, barY + barH);
     ctx.lineTo(barX, barY + barH);
     ctx.closePath();
     ctx.fill();
     ctx.fillStyle = vc.stampText;
-    ctx.fillText('VENDIDO', barX + 25, barY + barH - Math.round(22 * stampFs));
+    ctx.fillText('VENDIDO', barX + 30, barY + barH - Math.round(28 * stampFs));
     ctx.restore();
 
-    // "+1 CLIENTE SATISFEITO"
-    const satisfeitoY = barY + barH + Math.round(40 * fs);
+    // "+1 CLIENTE SATISFEITO" — red strip below VENDIDO
+    const satFs = Math.round(26 * fs);
+    const satH = Math.round(satFs * 1.8);
+    const satY = barY + barH + Math.round(4 * fs);
+    ctx.font = `bold ${satFs}px 'Raleway', sans-serif`;
+    const satTextW = ctx.measureText('+1 CLIENTE SATISFEITO').width;
+    const satBarW = satTextW + 50;
+    ctx.fillStyle = vc.stampBg;
+    ctx.fillRect(barX, satY, satBarW, satH);
     ctx.fillStyle = vc.satisfeitoText;
-    ctx.font = `bold ${Math.round(30 * fs)}px 'Raleway', sans-serif`;
     ctx.textAlign = 'left';
-    ctx.fillText('+1 CLIENTE SATISFEITO', 30 + vStampOffX, satisfeitoY);
+    ctx.fillText('+1 CLIENTE SATISFEITO', barX + 25, satY + satH - Math.round(satFs * 0.35));
+    const satisfeitoY = satY + satH;
 
     // Store stamp zone for hit detection
     vendidoZonesRef.current.stampY = barY;

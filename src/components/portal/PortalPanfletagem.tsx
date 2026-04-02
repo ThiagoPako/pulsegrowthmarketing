@@ -353,14 +353,21 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   };
 
   const importColorsFromOtherFormat = () => {
-    // First save current layout to the active ref
     const current = collectCurrentLayout();
     if (canvasFormat === 'feed') feedLayoutRef.current = current;
     else storyLayoutRef.current = current;
-    // Get colors from other format
     const otherRef = canvasFormat === 'feed' ? storyLayoutRef : feedLayoutRef;
     setColors({ ...otherRef.current.colors });
     toast.success(`Cores importadas do ${canvasFormat === 'feed' ? 'Story' : 'Feed'}!`);
+  };
+
+  const importAllFromOtherFormat = () => {
+    const current = collectCurrentLayout();
+    if (canvasFormat === 'feed') feedLayoutRef.current = current;
+    else storyLayoutRef.current = current;
+    const otherRef = canvasFormat === 'feed' ? storyLayoutRef : feedLayoutRef;
+    applyLayout({ ...otherRef.current, colors: { ...otherRef.current.colors } });
+    toast.success(`Layout completo importado do ${canvasFormat === 'feed' ? 'Story' : 'Feed'}!`);
   };
 
   // Lock

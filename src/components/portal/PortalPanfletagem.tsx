@@ -1737,11 +1737,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           {/* Font Size Controls — per block — only for venda mode */}
           {flyerMode !== 'vendido' && (
           <>
-          <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
+           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
               <Type size={16} style={{ color: `hsl(${clientColor})` }} /> Tamanho das Fontes
+              <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: `hsl(${clientColor} / 0.2)`, color: `hsl(${clientColor})` }}>
+                {canvasFormat === 'feed' ? 'FEED' : 'STORY'}
+              </span>
             </h3>
-            <p className="text-[11px] text-white/40">Clique em cada bloco para ajustar o tamanho individualmente.</p>
+            <p className="text-[11px] text-white/40">Configuração individual para {canvasFormat === 'feed' ? 'Feed (4:5)' : 'Story (9:16)'}.</p>
             {[
               { key: 'global', label: '🔧 Escala Geral', value: fontScale, setter: setFontScale, min: 70, max: 150 },
               { key: 'header', label: '📌 Cabeçalho', value: headerFontScale, setter: setHeaderFontScale, min: 50, max: 200 },

@@ -236,6 +236,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   // Font size multiplier
   const [fontScale, setFontScale] = useState(1.0);
 
+  // Per-block font scales
+  const [headerFontScale, setHeaderFontScale] = useState(1.0);
+  const [priceFontScale, setPriceFontScale] = useState(1.0);
+  const [footerFontScale, setFooterFontScale] = useState(1.0);
+
   // Info box scale (controls pill/box size proportionally)
   const [infoBoxScale, setInfoBoxScale] = useState(1.0);
 

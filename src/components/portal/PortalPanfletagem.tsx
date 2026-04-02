@@ -366,37 +366,47 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (s.infoPosY != null) setInfoPosY(s.infoPosY);
         if (s.layoutLocked != null) setLayoutLocked(s.layoutLocked);
         if (s.customLogoDataUrl) setCustomLogoDataUrl(s.customLogoDataUrl);
-        if (s.fontScale != null) setFontScale(s.fontScale);
-        if (s.headerFontScale != null) setHeaderFontScale(s.headerFontScale);
-        if (s.priceFontScale != null) setPriceFontScale(s.priceFontScale);
-        if (s.footerFontScale != null) setFooterFontScale(s.footerFontScale);
-        if (s.infoBoxScale != null) setInfoBoxScale(s.infoBoxScale);
-        // Legacy support: if old single infoFontScale exists, apply to all
-        if (s.modelFontScale != null) setModelFontScale(s.modelFontScale);
-        else if (s.infoFontScale != null) setModelFontScale(s.infoFontScale);
-        if (s.yearFontScale != null) setYearFontScale(s.yearFontScale);
-        else if (s.infoFontScale != null) setYearFontScale(s.infoFontScale);
-        if (s.transmissionFontScale != null) setTransmissionFontScale(s.transmissionFontScale);
-        else if (s.infoFontScale != null) setTransmissionFontScale(s.infoFontScale);
-        if (s.obsFontScale != null) setObsFontScale(s.obsFontScale);
-        else if (s.infoFontScale != null) setObsFontScale(s.infoFontScale);
-        if (s.labelFontScale != null) setLabelFontScale(s.labelFontScale);
-        if (s.pillHeightScale != null) setPillHeightScale(s.pillHeightScale);
-        if (s.pillRadiusScale != null) setPillRadiusScale(s.pillRadiusScale);
         if (s.footerPosX != null) setFooterPosX(s.footerPosX);
         if (s.footerPosY != null) setFooterPosY(s.footerPosY);
         if (s.photoOffsetX != null) setPhotoOffsetX(s.photoOffsetX);
         if (s.photoOffsetY != null) setPhotoOffsetY(s.photoOffsetY);
-        if (s.colors) {
-          const migrated = { ...DEFAULT_COLORS, ...s.colors };
-          // Legacy: migrate old single infoText to split fields
-          if (s.colors.infoText && !s.colors.infoLabelText) migrated.infoLabelText = s.colors.infoText;
-          if (s.colors.infoText && !s.colors.infoValueText) migrated.infoValueText = s.colors.infoText;
-          setColors(migrated);
-        }
         if (s.footerAddress != null) setFooterAddress(s.footerAddress);
         if (s.footerWhatsapp != null) setFooterWhatsapp(s.footerWhatsapp);
         if (s.canvasFormat) setCanvasFormat(s.canvasFormat);
+
+        // Load per-format layouts (new system)
+        if (s.feedLayout) {
+          feedLayoutRef.current = { ...DEFAULT_FORMAT_LAYOUT, ...s.feedLayout, colors: { ...DEFAULT_COLORS, ...(s.feedLayout.colors || {}) } };
+        } else {
+          // Legacy: build feed layout from old flat fields
+          const legacyColors = s.colors ? { ...DEFAULT_COLORS, ...s.colors } : { ...DEFAULT_COLORS };
+          if (s.colors?.infoText && !s.colors?.infoLabelText) legacyColors.infoLabelText = s.colors.infoText;
+          if (s.colors?.infoText && !s.colors?.infoValueText) legacyColors.infoValueText = s.colors.infoText;
+          feedLayoutRef.current = {
+            colors: legacyColors,
+            fontScale: s.fontScale ?? 1.0, headerFontScale: s.headerFontScale ?? 1.0,
+            priceFontScale: s.priceFontScale ?? 1.0, footerFontScale: s.footerFontScale ?? 1.0,
+            infoBoxScale: s.infoBoxScale ?? 1.0, modelFontScale: s.modelFontScale ?? s.infoFontScale ?? 1.0,
+            yearFontScale: s.yearFontScale ?? s.infoFontScale ?? 1.0,
+            transmissionFontScale: s.transmissionFontScale ?? s.infoFontScale ?? 1.0,
+            obsFontScale: s.obsFontScale ?? s.infoFontScale ?? 1.0,
+            labelFontScale: s.labelFontScale ?? 1.0,
+            pillHeightScale: s.pillHeightScale ?? 1.0, pillRadiusScale: s.pillRadiusScale ?? 1.0,
+          };
+        }
+        if (s.storyLayout) {
+          storyLayoutRef.current = { ...DEFAULT_FORMAT_LAYOUT, ...s.storyLayout, colors: { ...DEFAULT_COLORS, ...(s.storyLayout.colors || {}) } };
+        } else {
+          // Legacy: story starts with same as feed
+          storyLayoutRef.current = { ...feedLayoutRef.current, colors: { ...feedLayoutRef.current.colors } };
+        }
+
+        // Apply the active format's layout
+        const activeFormat = s.canvasFormat || 'feed';
+        const activeLayout = activeFormat === 'feed' ? feedLayoutRef.current : storyLayoutRef.current;
+        applyLayout(activeLayout);
+
+        // Vendido settings
         if (s.vendidoColors) setVendidoColors({ ...DEFAULT_VENDIDO_COLORS, ...s.vendidoColors });
         if (s.vendidoFontScale != null) setVendidoFontScale(s.vendidoFontScale);
         if (s.vendidoStampFontScale != null) setVendidoStampFontScale(s.vendidoStampFontScale);

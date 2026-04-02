@@ -722,12 +722,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     };
  
     if (addrText) {
+      const ffs = footerFontScale * fs;
       drawPinIcon(55 + footContentOffX, footContentCenterY, 24);
       ctx.fillStyle = c.footerText;
-      ctx.font = `bold ${Math.round(12 * fs)}px 'Raleway', sans-serif`;
+      ctx.font = `bold ${Math.round(12 * ffs)}px 'Raleway', sans-serif`;
       ctx.textAlign = 'left';
       ctx.fillText('ENDEREÇO', 92 + footContentOffX, footContentCenterY - 18);
-      ctx.font = `bold ${Math.round(18 * fs)}px 'Raleway', sans-serif`;
+      ctx.font = `bold ${Math.round(18 * ffs)}px 'Raleway', sans-serif`;
       const maxAddrW = W / 2 - 120;
       const addrWords = addrText.split(' ');
       let addrLine = ''; let addrLineY = footContentCenterY + 6;
@@ -741,13 +742,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     }
  
     if (wpText) {
+      const ffs = footerFontScale * fs;
       const wpX = W / 2 + 40 + footContentOffX;
       drawWhatsAppIcon(wpX + 24, footContentCenterY, 24);
       ctx.fillStyle = c.footerText;
-      ctx.font = `bold ${Math.round(12 * fs)}px 'Raleway', sans-serif`;
+      ctx.font = `bold ${Math.round(12 * ffs)}px 'Raleway', sans-serif`;
       ctx.textAlign = 'left';
       ctx.fillText('WHATSAPP', wpX + 58, footContentCenterY - 18);
-      ctx.font = `bold ${Math.round(24 * fs)}px 'Raleway', sans-serif`;
+      ctx.font = `bold ${Math.round(24 * ffs)}px 'Raleway', sans-serif`;
       ctx.fillText(wpText, wpX + 58, footContentCenterY + 12);
     }
  

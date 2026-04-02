@@ -92,6 +92,15 @@ interface FormatLayout {
   labelFontScale: number;
   pillHeightScale: number;
   pillRadiusScale: number;
+  logoX: number;
+  logoY: number;
+  logoScale: number;
+  infoPosY: number;
+  footerPosX: number;
+  footerPosY: number;
+  photoOffsetX: number;
+  photoOffsetY: number;
+  customLogoDataUrl: string | null;
 }
 
 const DEFAULT_FORMAT_LAYOUT: FormatLayout = {
@@ -99,7 +108,11 @@ const DEFAULT_FORMAT_LAYOUT: FormatLayout = {
   fontScale: 1.0, headerFontScale: 1.0, priceFontScale: 1.0, footerFontScale: 1.0,
   infoBoxScale: 1.0, modelFontScale: 1.0, yearFontScale: 1.0, transmissionFontScale: 1.0,
   obsFontScale: 1.0, labelFontScale: 1.0, pillHeightScale: 1.0, pillRadiusScale: 1.0,
+  logoX: 820, logoY: 60, logoScale: 100, infoPosY: 920,
+  footerPosX: 0, footerPosY: 0, photoOffsetX: 0, photoOffsetY: 0,
+  customLogoDataUrl: null,
 };
+
 
 interface VendidoColors {
   background: string;

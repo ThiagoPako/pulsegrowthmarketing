@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Textarea } from '@/components/ui/textarea';
 import whatsappIconSrc from '@/assets/whatsapp_icon.png';
+import vendidoBgSrc from '@/assets/vendido_bg.png';
 import PortalPanfletagemVideo from './PortalPanfletagemVideo';
 import {
   Car, Download, Eye, Plus, X, Image, Loader2, Check,
@@ -184,14 +185,20 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoFileInputRef = useRef<HTMLInputElement>(null);
-  const wpIconRef = useRef<HTMLImageElement | null>(null);
+   const wpIconRef = useRef<HTMLImageElement | null>(null);
+  const vendidoBgRef = useRef<HTMLImageElement | null>(null);
 
-  // Preload WhatsApp icon
+  // Preload WhatsApp icon + Vendido background
   useEffect(() => {
     const img = document.createElement('img') as HTMLImageElement;
     img.src = whatsappIconSrc;
     img.onload = () => { wpIconRef.current = img; };
     if (img.complete && img.naturalWidth > 0) wpIconRef.current = img;
+
+    const bgImg = document.createElement('img') as HTMLImageElement;
+    bgImg.src = vendidoBgSrc;
+    bgImg.onload = () => { vendidoBgRef.current = bgImg; };
+    if (bgImg.complete && bgImg.naturalWidth > 0) vendidoBgRef.current = bgImg;
   }, []);
 
   // Form state — load from localStorage
@@ -1024,9 +1031,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const fs = vendidoFontScale;
     const vc = vendidoColors;
 
-    // Full blue background — NO white diagonal strip
+    // Full blue background + background image
     ctx.fillStyle = vc.background;
     ctx.fillRect(0, 0, W, H);
+    const bgImg = vendidoBgRef.current;
+    if (bgImg) {
+      ctx.drawImage(bgImg, 0, 0, W, H);
+    }
 
     // ---- "VENDIDO" large red banner ----
     const stampFs = vendidoStampFontScale * fs;

@@ -8,25 +8,29 @@ import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import ClientLogo from '@/components/ClientLogo';
 import DesignTaskDetailSheet from '@/components/designer/DesignTaskDetailSheet';
 import DesignTaskCreateDialog from '@/components/designer/DesignTaskCreateDialog';
-import { motion } from 'framer-motion';
-import { format, addDays, startOfWeek, isSameDay } from 'date-fns';
+import { motion, AnimatePresence } from 'framer-motion';
+import { format, addDays, startOfWeek, isSameDay, differenceInHours, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Palette, CheckCircle, Clock, Play, Eye, RotateCcw, Kanban, BarChart3,
   TrendingUp, Zap, Timer, Building2, CalendarDays,
-  Flame, Target, Award, Send, ArrowRight, FileText, Plus
+  Flame, Target, Award, Send, ArrowRight, FileText, Plus, Search,
+  AlertTriangle, ListFilter, Layers
 } from 'lucide-react';
 
-const PRIORITY_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
-  baixa: { label: 'Baixa', color: 'bg-muted text-muted-foreground', dot: 'bg-muted-foreground' },
-  media: { label: 'Média', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300', dot: 'bg-blue-500' },
-  alta: { label: 'Alta', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300', dot: 'bg-amber-500' },
-  urgente: { label: 'Urgente', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 animate-pulse', dot: 'bg-red-500' },
+const PRIORITY_CONFIG: Record<string, { label: string; color: string; dot: string; slaHours: number }> = {
+  baixa: { label: 'Baixa', color: 'bg-muted text-muted-foreground', dot: 'bg-muted-foreground', slaHours: 96 },
+  media: { label: 'Média', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300', dot: 'bg-blue-500', slaHours: 72 },
+  alta: { label: 'Alta', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300', dot: 'bg-amber-500', slaHours: 48 },
+  urgente: { label: 'Urgente', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 animate-pulse', dot: 'bg-red-500', slaHours: 24 },
 };
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -38,6 +42,28 @@ const COL_LABELS: Record<string, string> = {
   em_analise: 'Análise', enviar_cliente: 'P/ Cliente', aprovado: 'Aprovado',
 };
 
+/* ── Deadline helpers for design tasks ── */
+function getDesignDeadline(task: DesignTask): Date {
+  const sla = PRIORITY_CONFIG[task.priority]?.slaHours || 72;
+  return addDays(new Date(task.created_at), sla / 24);
+}
+
+function getDesignDeadlineStatus(task: DesignTask) {
+  if (['aprovado'].includes(task.kanban_column)) return { label: 'Concluído', variant: 'success' as const, hoursLeft: 0, progress: 100 };
+  const deadline = getDesignDeadline(task);
+  const now = new Date();
+  const hoursLeft = differenceInHours(deadline, now);
+  const totalHours = PRIORITY_CONFIG[task.priority]?.slaHours || 72;
+  const elapsed = differenceInHours(now, new Date(task.created_at));
+  const progress = Math.min(100, Math.max(0, Math.round((elapsed / totalHours) * 100)));
+
+  if (isPast(deadline)) return { label: 'Atrasado', variant: 'destructive' as const, hoursLeft, progress: 100 };
+  if (hoursLeft <= 6) return { label: `${hoursLeft}h restantes`, variant: 'warning' as const, hoursLeft, progress };
+  if (hoursLeft <= 24) return { label: `${hoursLeft}h restantes`, variant: 'warning' as const, hoursLeft, progress };
+  const days = Math.ceil(hoursLeft / 24);
+  return { label: `${days}d restantes`, variant: 'default' as const, hoursLeft, progress };
+}
+
 export default function DesignerDashboard() {
   const { tasksQuery } = useDesignTasks();
   const { user } = useAuth();
@@ -45,6 +71,10 @@ export default function DesignerDashboard() {
   const navigate = useNavigate();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterClient, setFilterClient] = useState('all');
+  const [filterPriority, setFilterPriority] = useState('all');
+  const [queueView, setQueueView] = useState<'all' | 'nova_tarefa' | 'executando' | 'ajustes'>('all');
 
   const tasks = tasksQuery.data || [];
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
@@ -80,18 +110,14 @@ export default function DesignerDashboard() {
     const completedThisMonth = completed.filter(t => new Date(t.completed_at || t.updated_at) >= monthStart);
 
     const totalTime = completedWithTime.reduce((s, t) => s + t.time_spent_seconds, 0);
-
-    // Clients served
     const uniqueClients = new Set(completed.map(t => t.client_id)).size;
 
-    // By format
     const byFormat: Record<string, number> = {};
     completed.forEach(t => {
       const label = FORMAT_LABELS[t.format_type] || t.format_type;
       byFormat[label] = (byFormat[label] || 0) + 1;
     });
 
-    // By client (active)
     const byClient: Record<string, { name: string; count: number; color: string; logoUrl: string | null }> = {};
     myTasks.filter(t => !['aprovado', 'concluida', 'aprovada_cliente'].includes(t.kanban_column)).forEach(t => {
       const cid = t.client_id;
@@ -104,7 +130,13 @@ export default function DesignerDashboard() {
       byClient[cid].count++;
     });
 
-    // ── Scoring (DESIGNER_SCORE) ──
+    // Overdue count
+    const overdue = myTasks.filter(t =>
+      !['aprovado', 'concluida', 'aprovada_cliente'].includes(t.kanban_column) &&
+      getDesignDeadlineStatus(t).variant === 'destructive'
+    ).length;
+
+    // Scoring
     const monthTasks = myAssigned;
     const scoringCompleted = monthTasks.filter(t => ['concluida', 'aprovada_cliente', 'aprovado'].includes(t.kanban_column)).length;
     const scoringInProgress = monthTasks.filter(t => ['executando', 'em_analise', 'ajustes', 'enviar_cliente'].includes(t.kanban_column)).length;
@@ -122,13 +154,52 @@ export default function DesignerDashboard() {
       adjustments: adjustments.length, completed: completed.length,
       urgent: urgent.length, avgTime, completedToday: completedToday.length,
       completedThisWeek: completedThisWeek.length, completedThisMonth: completedThisMonth.length,
-      uniqueClients, totalTime,
+      uniqueClients, totalTime, overdue,
       totalActive: pending.length + inProgress.length + adjustments.length,
       byFormat: Object.entries(byFormat).map(([name, value]) => ({ name, value })),
       byClient: Object.values(byClient).sort((a, b) => b.count - a.count),
       designerScore, scoringCompleted, scoringInProgress, scoringHours, scoringVersions, scoringPriority,
     };
   }, [myTasks, tasks, user?.id, todayStr]);
+
+  // Queue tasks (fila do designer)
+  const queueTasks = useMemo(() => {
+    const activeCols = queueView === 'all'
+      ? ['nova_tarefa', 'executando', 'ajustes', 'em_analise', 'enviar_cliente']
+      : [queueView];
+
+    return myTasks
+      .filter(t => activeCols.includes(t.kanban_column))
+      .filter(t => {
+        if (filterClient !== 'all' && t.client_id !== filterClient) return false;
+        if (filterPriority !== 'all' && t.priority !== filterPriority) return false;
+        if (searchQuery) {
+          const q = searchQuery.toLowerCase();
+          if (!t.title.toLowerCase().includes(q) && !(t.clients?.company_name || '').toLowerCase().includes(q)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        // Adjustments first, then by deadline urgency
+        if (a.kanban_column === 'ajustes' && b.kanban_column !== 'ajustes') return -1;
+        if (b.kanban_column === 'ajustes' && a.kanban_column !== 'ajustes') return 1;
+        const priorityOrder: Record<string, number> = { urgente: 0, alta: 1, media: 2, baixa: 3 };
+        const pa = priorityOrder[a.priority] ?? 9;
+        const pb = priorityOrder[b.priority] ?? 9;
+        if (pa !== pb) return pa - pb;
+        // Then by created_at (oldest first)
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+  }, [myTasks, queueView, filterClient, filterPriority, searchQuery]);
+
+  // Unique clients for filter
+  const activeClients = useMemo(() => {
+    const map = new Map<string, string>();
+    myTasks.filter(t => !['aprovado'].includes(t.kanban_column)).forEach(t => {
+      if (t.clients?.company_name) map.set(t.client_id, t.clients.company_name);
+    });
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [myTasks]);
 
   // Today's actionable tasks
   const todayTasks = useMemo(() => {
@@ -144,16 +215,11 @@ export default function DesignerDashboard() {
     });
   }, [myTasks]);
 
-  // Tasks for a specific day (by created_at or started_at)
   const getTasksForDay = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     return myTasks.filter(t => {
-      if (t.kanban_column === 'aprovado') {
-        return t.completed_at?.startsWith(dateStr);
-      }
-      if (t.kanban_column === 'executando' && t.started_at) {
-        return t.started_at.startsWith(dateStr);
-      }
+      if (t.kanban_column === 'aprovado') return t.completed_at?.startsWith(dateStr);
+      if (t.kanban_column === 'executando' && t.started_at) return t.started_at.startsWith(dateStr);
       return t.created_at?.startsWith(dateStr) && !['aprovado'].includes(t.kanban_column);
     }).sort((a, b) => {
       const priorityOrder: Record<string, number> = { urgente: 0, alta: 1, media: 2, baixa: 3 };
@@ -199,10 +265,11 @@ export default function DesignerDashboard() {
         </div>
       </div>
 
-      {/* Quick Stats - same style as videomaker */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* Quick Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
           { label: 'Tarefas Ativas', value: stats.totalActive, icon: Palette, color: 'bg-primary/15 text-primary' },
+          { label: 'Atrasadas', value: stats.overdue, icon: AlertTriangle, color: stats.overdue > 0 ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground' },
           { label: 'Clientes Atendidos', value: stats.uniqueClients, icon: Building2, color: 'bg-info/15 text-info' },
           { label: 'Concluídas (mês)', value: stats.completedThisMonth, icon: TrendingUp, color: 'bg-success/15 text-success' },
           { label: 'Tempo Médio', value: formatTime(stats.avgTime), icon: Timer, color: 'bg-warning/15 text-warning' },
@@ -217,72 +284,199 @@ export default function DesignerDashboard() {
         ))}
       </div>
 
-      {/* Main row: Today's Tasks (left 2/3) + Performance (right 1/3) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 glass-card p-5">
-          <div className="section-header">
-            <CalendarDays size={16} className="text-primary" />
-            <div className="flex-1">
-              <h3 className="section-title">Tarefas do Dia</h3>
-              <p className="section-subtitle">{todayTasks.length} demandas ativas</p>
+      {/* ═══════════════ FILA DO DESIGNER ═══════════════ */}
+      <div className="glass-card p-5">
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+          <div className="flex items-center gap-2">
+            <Layers size={16} className="text-primary" />
+            <div>
+              <h3 className="font-display font-semibold text-sm">Fila do Designer</h3>
+              <p className="text-[11px] text-muted-foreground">{queueTasks.length} tarefa{queueTasks.length !== 1 ? 's' : ''} na fila</p>
             </div>
           </div>
-
-          {todayTasks.length === 0 ? (
-            <div className="empty-state">
-              <CheckCircle size={36} className="empty-state-icon" />
-              <p className="text-sm">Nenhuma tarefa pendente! 🎉</p>
-              <p className="text-xs text-muted-foreground">Verifique o Kanban para novas demandas</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Column filter tabs */}
+            <div className="flex rounded-lg border bg-muted/30 p-0.5 gap-0.5">
+              {[
+                { key: 'all' as const, label: 'Todas', count: myTasks.filter(t => !['aprovado'].includes(t.kanban_column)).length },
+                { key: 'nova_tarefa' as const, label: 'Novas', count: myTasks.filter(t => t.kanban_column === 'nova_tarefa').length },
+                { key: 'executando' as const, label: 'Executando', count: myTasks.filter(t => t.kanban_column === 'executando').length },
+                { key: 'ajustes' as const, label: 'Ajustes', count: myTasks.filter(t => t.kanban_column === 'ajustes').length },
+              ].map(tab => (
+                <button key={tab.key}
+                  onClick={() => setQueueView(tab.key)}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-all flex items-center gap-1 ${
+                    queueView === tab.key ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}>
+                  {tab.label}
+                  {tab.count > 0 && (
+                    <span className={`text-[9px] px-1 rounded-full ${
+                      queueView === tab.key ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
+                    }`}>{tab.count}</span>
+                  )}
+                </button>
+              ))}
             </div>
-          ) : (
-            <ScrollArea className="h-[340px]">
-              <div className="space-y-2 pr-2">
-                {todayTasks.map((task, i) => {
+          </div>
+        </div>
+
+        {/* Filters row */}
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <div className="relative flex-1 min-w-[180px] max-w-xs">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar tarefa ou cliente..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="h-8 pl-8 text-xs"
+            />
+          </div>
+          <Select value={filterClient} onValueChange={setFilterClient}>
+            <SelectTrigger className="h-8 w-[160px] text-xs">
+              <SelectValue placeholder="Cliente" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os clientes</SelectItem>
+              {activeClients.map(([id, name]) => (
+                <SelectItem key={id} value={id}>{name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterPriority} onValueChange={setFilterPriority}>
+            <SelectTrigger className="h-8 w-[130px] text-xs">
+              <SelectValue placeholder="Prioridade" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              <SelectItem value="urgente">🔥 Urgente</SelectItem>
+              <SelectItem value="alta">⚡ Alta</SelectItem>
+              <SelectItem value="media">Média</SelectItem>
+              <SelectItem value="baixa">Baixa</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Queue list */}
+        {queueTasks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+            <CheckCircle size={36} className="mb-2 opacity-40" />
+            <p className="text-sm font-medium">Nenhuma tarefa na fila! 🎉</p>
+            <p className="text-xs">Todas as demandas foram atendidas</p>
+          </div>
+        ) : (
+          <ScrollArea className="max-h-[500px]">
+            <div className="space-y-2 pr-2">
+              <AnimatePresence mode="popLayout">
+                {queueTasks.map((task, i) => {
                   const p = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.media;
                   const color = task.clients?.color || '217 91% 60%';
+                  const deadlineStatus = getDesignDeadlineStatus(task);
                   const isAdjustment = task.kanban_column === 'ajustes';
                   const isExecuting = task.kanban_column === 'executando';
+                  const deadline = getDesignDeadline(task);
+                  const colLabel = COL_LABELS[task.kanban_column] || task.kanban_column;
 
                   return (
-                    <motion.div key={task.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
+                    <motion.div key={task.id}
+                      layout
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 10 }}
+                      transition={{ delay: i * 0.02 }}
                       onClick={() => setSelectedTaskId(task.id)}
-                      className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer hover:shadow-md ${
-                        isAdjustment ? 'border-destructive/30 bg-destructive/5' :
-                        isExecuting ? 'border-primary bg-primary/5 ring-1 ring-primary/30' :
-                        'border-border bg-secondary/50'
+                      className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer group hover:shadow-md ${
+                        deadlineStatus.variant === 'destructive'
+                          ? 'border-destructive/40 bg-destructive/5 hover:border-destructive/60'
+                          : isAdjustment
+                            ? 'border-orange-400/30 bg-orange-500/5 hover:border-orange-400/50'
+                            : isExecuting
+                              ? 'border-primary/30 bg-primary/5 hover:border-primary/50'
+                              : 'border-border bg-card hover:border-primary/30'
                       }`}>
-                      <div className="w-1.5 h-12 rounded-full shrink-0" style={{ backgroundColor: `hsl(${color})` }} />
-                      <ClientLogo
-                        client={{ companyName: task.clients?.company_name || '', color, logoUrl: task.clients?.logo_url }}
-                        size="sm"
-                      />
-                      <div className="flex-1 min-w-0">
+                      {/* Color bar */}
+                      <div className="w-1 h-14 rounded-full shrink-0" style={{ backgroundColor: `hsl(${color})` }} />
+
+                      {/* Client logo */}
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div>
+                              <ClientLogo
+                                client={{ companyName: task.clients?.company_name || '', color, logoUrl: task.clients?.logo_url }}
+                                size="md"
+                              />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            <p className="text-xs font-medium">{task.clients?.company_name}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+
+                      {/* Task info */}
+                      <div className="flex-1 min-w-0 space-y-1">
                         <div className="flex items-center gap-1.5">
-                          {isAdjustment && <RotateCcw size={12} className="text-destructive shrink-0" />}
+                          {isAdjustment && <RotateCcw size={12} className="text-orange-500 shrink-0" />}
                           {isExecuting && <Play size={12} className="text-primary shrink-0" />}
                           {task.priority === 'urgente' && <Flame size={12} className="text-destructive shrink-0 animate-pulse" />}
-                          <span className="font-medium text-sm truncate">{task.title}</span>
+                          <span className="font-medium text-sm truncate group-hover:text-primary transition-colors">{task.title}</span>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">{task.clients?.company_name}</p>
+                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                          <span className="truncate">{task.clients?.company_name}</span>
+                          <span className="text-muted-foreground/40">•</span>
+                          <span>{FORMAT_LABELS[task.format_type] || task.format_type}</span>
+                          {task.version > 1 && (
+                            <>
+                              <span className="text-muted-foreground/40">•</span>
+                              <span>v{task.version}</span>
+                            </>
+                          )}
+                        </div>
+                        {/* Deadline bar */}
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 max-w-[200px]">
+                            <Progress
+                              value={deadlineStatus.progress}
+                              className={`h-1.5 ${
+                                deadlineStatus.variant === 'destructive' ? '[&>div]:bg-destructive' :
+                                deadlineStatus.variant === 'warning' ? '[&>div]:bg-orange-500' :
+                                '[&>div]:bg-emerald-500'
+                              }`}
+                            />
+                          </div>
+                          <span className={`text-[10px] font-medium flex items-center gap-1 ${
+                            deadlineStatus.variant === 'destructive' ? 'text-destructive' :
+                            deadlineStatus.variant === 'warning' ? 'text-orange-500' :
+                            'text-muted-foreground'
+                          }`}>
+                            <Clock size={10} />
+                            {deadlineStatus.label}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <Badge variant="outline" className="text-[9px]">{FORMAT_LABELS[task.format_type] || task.format_type}</Badge>
+
+                      {/* Right side badges */}
+                      <div className="flex flex-col items-end gap-1 shrink-0">
                         <Badge className={`text-[9px] ${p.color}`}>{p.label}</Badge>
-                        {isAdjustment && <Badge className="bg-destructive/20 text-destructive border-destructive/30 text-[9px]">Ajuste</Badge>}
-                        {isExecuting && task.timer_running && (
+                        <Badge variant="outline" className="text-[9px]">{colLabel}</Badge>
+                        {task.timer_running && (
                           <Badge className="bg-primary/20 text-primary border-primary/30 text-[9px] animate-pulse">● Timer</Badge>
                         )}
                       </div>
-                      <ArrowRight size={14} className="text-muted-foreground/40 shrink-0" />
+
+                      <ArrowRight size={14} className="text-muted-foreground/30 shrink-0 group-hover:text-primary/60 transition-colors" />
                     </motion.div>
                   );
                 })}
-              </div>
-            </ScrollArea>
-          )}
-        </div>
+              </AnimatePresence>
+            </div>
+          </ScrollArea>
+        )}
+      </div>
 
-        {/* Performance card - side panel */}
+      {/* Main row: Performance (left 1/3) + Week (right 2/3) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Performance card */}
         <div className="glass-card p-5">
           <div className="section-header">
             <BarChart3 size={16} className="text-primary" />
@@ -396,14 +590,13 @@ export default function DesignerDashboard() {
             )}
           </div>
         </div>
-      </div>
 
-      {/* Weekly Kanban - same style as videomaker */}
-      <div className="glass-card p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display font-semibold text-sm">Minha Semana</h3>
-          <div className="flex items-center gap-3">
-            {/* Pipeline legend */}
+        {/* Weekly Kanban */}
+        <div className="lg:col-span-2 glass-card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display font-semibold text-sm flex items-center gap-2">
+              <CalendarDays size={16} className="text-primary" /> Minha Semana
+            </h3>
             <div className="hidden md:flex items-center gap-3 text-[10px] text-muted-foreground">
               {DESIGN_COLUMNS.filter(c => c.key !== 'aprovado').map(col => (
                 <div key={col.key} className="flex items-center gap-1">
@@ -413,74 +606,78 @@ export default function DesignerDashboard() {
               ))}
             </div>
           </div>
-        </div>
 
-        <div className="grid grid-cols-5 gap-2 min-h-[300px]">
-          {weekDays.map(day => {
-            const dateStr = format(day, 'yyyy-MM-dd');
-            const isToday = isSameDay(day, today);
-            const dayTasks = getTasksForDay(day);
+          <div className="grid grid-cols-5 gap-2 min-h-[300px]">
+            {weekDays.map(day => {
+              const dateStr = format(day, 'yyyy-MM-dd');
+              const isToday = isSameDay(day, today);
+              const dayTasks = getTasksForDay(day);
 
-            return (
-              <div key={dateStr} className={`glass-card p-3 ${isToday ? 'ring-1 ring-primary' : ''}`}>
-                <div className="text-center mb-3">
-                  <p className={`text-xs font-semibold uppercase ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
-                    {format(day, 'EEE', { locale: ptBR })}
-                  </p>
-                  <p className={`text-lg font-display font-bold ${isToday ? 'text-primary' : ''}`}>
-                    {format(day, 'd')}
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  {dayTasks.length === 0 && (
-                    <p className="text-[10px] text-muted-foreground text-center py-4">Livre</p>
-                  )}
-                  {dayTasks.slice(0, 6).map(task => {
-                    const color = task.clients?.color || '217 91% 60%';
-                    const isApproved = task.kanban_column === 'aprovado';
-                    const isAdjustment = task.kanban_column === 'ajustes';
-                    const col = DESIGN_COLUMNS.find(c => c.key === task.kanban_column);
+              return (
+                <div key={dateStr} className={`glass-card p-3 ${isToday ? 'ring-1 ring-primary' : ''}`}>
+                  <div className="text-center mb-3">
+                    <p className={`text-xs font-semibold uppercase ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
+                      {format(day, 'EEE', { locale: ptBR })}
+                    </p>
+                    <p className={`text-lg font-display font-bold ${isToday ? 'text-primary' : ''}`}>
+                      {format(day, 'd')}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    {dayTasks.length === 0 && (
+                      <p className="text-[10px] text-muted-foreground text-center py-4">Livre</p>
+                    )}
+                    {dayTasks.slice(0, 6).map(task => {
+                      const taskColor = task.clients?.color || '217 91% 60%';
+                      const isApproved = task.kanban_column === 'aprovado';
+                      const isAdj = task.kanban_column === 'ajustes';
+                      const col = DESIGN_COLUMNS.find(c => c.key === task.kanban_column);
+                      const ds = getDesignDeadlineStatus(task);
 
-                    return (
-                      <div key={task.id}
-                        onClick={() => setSelectedTaskId(task.id)}
-                        className={`rounded-lg border p-2 text-xs space-y-1 cursor-pointer transition-all hover:shadow-md ${
-                          isApproved ? 'border-emerald-500/30 bg-emerald-500/5 opacity-70' :
-                          isAdjustment ? 'border-destructive/30 bg-destructive/5' :
-                          'border-border bg-card hover:border-primary/40'
-                        }`}
-                        style={{ borderLeftWidth: 3, borderLeftColor: `hsl(${color})` }}
-                      >
-                        <p className="font-medium truncate">{task.clients?.company_name || '—'}</p>
-                        <p className="text-muted-foreground truncate">{task.title}</p>
-                        {isApproved && (
-                          <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 text-[9px]">✓ Aprovado</Badge>
-                        )}
-                        {isAdjustment && (
-                          <Badge className="bg-destructive/20 text-destructive border-destructive/30 text-[9px]">↻ Ajuste</Badge>
-                        )}
-                        {task.priority === 'urgente' && !isApproved && (
-                          <Badge className="bg-destructive/20 text-destructive border-destructive/30 text-[9px] animate-pulse">🔥 Urgente</Badge>
-                        )}
-                        {task.timer_running && (
-                          <Badge className="bg-primary/20 text-primary border-primary/30 text-[9px] animate-pulse">● Timer</Badge>
-                        )}
-                        {col && !isApproved && !isAdjustment && task.priority !== 'urgente' && !task.timer_running && (
-                          <div className="flex items-center gap-1">
-                            <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: `hsl(${col.color})` }} />
-                            <span className="text-[9px] text-muted-foreground">{col.label}</span>
+                      return (
+                        <div key={task.id}
+                          onClick={() => setSelectedTaskId(task.id)}
+                          className={`rounded-lg border p-2 text-xs space-y-1 cursor-pointer transition-all hover:shadow-md ${
+                            isApproved ? 'border-emerald-500/30 bg-emerald-500/5 opacity-70' :
+                            isAdj ? 'border-orange-400/30 bg-orange-500/5' :
+                            ds.variant === 'destructive' ? 'border-destructive/30 bg-destructive/5' :
+                            'border-border bg-card hover:border-primary/40'
+                          }`}
+                          style={{ borderLeftWidth: 3, borderLeftColor: `hsl(${taskColor})` }}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <ClientLogo client={{ companyName: task.clients?.company_name || '', color: taskColor, logoUrl: task.clients?.logo_url }} size="sm" />
+                            <span className="font-medium truncate flex-1">{task.clients?.company_name || '—'}</span>
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {dayTasks.length > 6 && (
-                    <p className="text-[10px] text-muted-foreground text-center">+{dayTasks.length - 6} mais</p>
-                  )}
+                          <p className="text-muted-foreground truncate">{task.title}</p>
+                          {!isApproved && (
+                            <div className="flex items-center gap-1">
+                              <Clock size={9} className={ds.variant === 'destructive' ? 'text-destructive' : ds.variant === 'warning' ? 'text-orange-500' : 'text-muted-foreground'} />
+                              <span className={`text-[9px] ${ds.variant === 'destructive' ? 'text-destructive font-bold' : ds.variant === 'warning' ? 'text-orange-500' : 'text-muted-foreground'}`}>
+                                {ds.label}
+                              </span>
+                            </div>
+                          )}
+                          {isApproved && (
+                            <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 text-[9px]">✓ Aprovado</Badge>
+                          )}
+                          {isAdj && (
+                            <Badge className="bg-orange-500/20 text-orange-600 border-orange-500/30 text-[9px]">↻ Ajuste</Badge>
+                          )}
+                          {task.priority === 'urgente' && !isApproved && (
+                            <Badge className="bg-destructive/20 text-destructive border-destructive/30 text-[9px] animate-pulse">🔥</Badge>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {dayTasks.length > 6 && (
+                      <p className="text-[10px] text-muted-foreground text-center">+{dayTasks.length - 6} mais</p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
 

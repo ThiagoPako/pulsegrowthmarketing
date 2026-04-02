@@ -121,20 +121,21 @@ export function getDeadlineProgress(startedAt: string | null | undefined, deadli
   const now = Date.now();
 
   if (totalHours && totalHours > 0) {
-    // totalHours is in BUSINESS hours, so total ms excludes weekends
+    // The deadline IS the end. Start = deadline - totalHours (in real hours).
+    // Progress = how much of the totalHours window has elapsed (in business time).
     const totalMs = totalHours * 60 * 60 * 1000;
-    const start = end - totalMs; // approximate start (raw)
+    const start = end - totalMs;
 
-    // Calculate business elapsed (subtract weekend time from elapsed)
+    if (now <= start) return 0;
+    if (now >= end) return 100;
+
     const rawElapsed = now - start;
     const weekendElapsed = getWeekendMsBetween(new Date(start), new Date(now));
-    const businessElapsed = rawElapsed - weekendElapsed;
+    const businessElapsed = Math.max(0, rawElapsed - weekendElapsed);
 
-    // Total business duration also needs adjustment
     const weekendInTotal = getWeekendMsBetween(new Date(start), new Date(end));
-    const businessTotal = (end - start) - weekendInTotal;
+    const businessTotal = Math.max(1, totalMs - weekendInTotal);
 
-    if (businessTotal <= 0) return 100;
     return Math.min(100, Math.max(0, Math.round((businessElapsed / businessTotal) * 100)));
   }
 

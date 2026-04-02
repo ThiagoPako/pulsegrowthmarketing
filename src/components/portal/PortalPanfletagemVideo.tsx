@@ -355,18 +355,11 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     const sy = (CANVAS_H - sh) / 2;
     ctx.drawImage(video, sx, sy, sw, sh);
 
-    // Overlay layout during vehicle segments
+    // Overlay layout during vehicle segments — same frame as image module
     const seg = compositionSegmentsRef.current[currentSegIndexRef.current];
     if (seg?.type === 'vehicle' && layoutOverlayImg) {
       ctx.globalAlpha = 1.0;
-      const overlayRatio = layoutOverlayImg.naturalWidth / layoutOverlayImg.naturalHeight;
-      if (overlayRatio < 0.6) {
-        ctx.drawImage(layoutOverlayImg, 0, 0, CANVAS_W, CANVAS_H);
-      } else {
-        const lh = Math.round(CANVAS_H * (1350 / 1920));
-        const ly = Math.round((CANVAS_H - lh) / 2);
-        ctx.drawImage(layoutOverlayImg, 0, ly, CANVAS_W, lh);
-      }
+      ctx.drawImage(layoutOverlayImg, 0, 0, CANVAS_W, CANVAS_H);
     }
 
     animFrameRef.current = requestAnimationFrame(drawFrame);

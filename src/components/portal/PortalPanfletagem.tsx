@@ -2071,6 +2071,22 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
               />
+              {/* Download preview button */}
+              <button
+                onClick={() => {
+                  const canvas = previewCanvasRef.current;
+                  if (!canvas) return;
+                  const link = document.createElement('a');
+                  link.download = `panfleto-preview-${Date.now()}.jpg`;
+                  link.href = canvas.toDataURL('image/jpeg', 0.92);
+                  link.click();
+                  toast.success('Imagem baixada!');
+                }}
+                className="absolute bottom-3 right-3 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center text-white transition-colors"
+                title="Baixar prévia"
+              >
+                <Download size={16} />
+              </button>
             </div>
 
             {/* Zone-specific color picker (appears when clicking a zone on the preview) */}

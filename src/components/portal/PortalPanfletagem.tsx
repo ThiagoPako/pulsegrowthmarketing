@@ -407,16 +407,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (saved) {
       try {
         const s = JSON.parse(saved);
-        if (s.logoX != null) setLogoX(s.logoX);
-        if (s.logoY != null) setLogoY(s.logoY);
-        if (s.logoScale != null) setLogoScale(s.logoScale);
-        if (s.infoPosY != null) setInfoPosY(s.infoPosY);
         if (s.layoutLocked != null) setLayoutLocked(s.layoutLocked);
-        if (s.customLogoDataUrl) setCustomLogoDataUrl(s.customLogoDataUrl);
-        if (s.footerPosX != null) setFooterPosX(s.footerPosX);
-        if (s.footerPosY != null) setFooterPosY(s.footerPosY);
-        if (s.photoOffsetX != null) setPhotoOffsetX(s.photoOffsetX);
-        if (s.photoOffsetY != null) setPhotoOffsetY(s.photoOffsetY);
         if (s.footerAddress != null) setFooterAddress(s.footerAddress);
         if (s.footerWhatsapp != null) setFooterWhatsapp(s.footerWhatsapp);
         if (s.canvasFormat) setCanvasFormat(s.canvasFormat);
@@ -439,6 +430,10 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             obsFontScale: s.obsFontScale ?? s.infoFontScale ?? 1.0,
             labelFontScale: s.labelFontScale ?? 1.0,
             pillHeightScale: s.pillHeightScale ?? 1.0, pillRadiusScale: s.pillRadiusScale ?? 1.0,
+            logoX: s.logoX ?? 820, logoY: s.logoY ?? 60, logoScale: s.logoScale ?? 100,
+            infoPosY: s.infoPosY ?? 920, footerPosX: s.footerPosX ?? 0, footerPosY: s.footerPosY ?? 0,
+            photoOffsetX: s.photoOffsetX ?? 0, photoOffsetY: s.photoOffsetY ?? 0,
+            customLogoDataUrl: s.customLogoDataUrl ?? null,
           };
         }
         if (s.storyLayout) {

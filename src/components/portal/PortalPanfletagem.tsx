@@ -1352,14 +1352,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       const result = await portalAction({
         action: 'create_flyer_item',
         client_id: clientId,
-        template_id: selectedTemplate || null,
-        vehicle_model: model.trim(),
-        vehicle_year: year.trim(),
-        transmission,
-        fuel_type: fuelType,
-        tire_condition: tireCondition,
-        price: price ? formatPrice(price) : '',
-        extra_info: extraInfo.trim() || null,
+        template_id: flyerMode === 'vendido' ? null : (selectedTemplate || null),
+        vehicle_model: flyerMode === 'vendido' ? `VENDIDO - ${buyerName.trim() || 'Cliente'}` : model.trim(),
+        vehicle_year: flyerMode === 'vendido' ? '' : year.trim(),
+        transmission: flyerMode === 'vendido' ? '' : transmission,
+        fuel_type: flyerMode === 'vendido' ? '' : fuelType,
+        tire_condition: flyerMode === 'vendido' ? '' : tireCondition,
+        price: flyerMode === 'vendido' ? '' : (price ? formatPrice(price) : ''),
+        extra_info: flyerMode === 'vendido' ? `Comprador: ${buyerName.trim()}` : (extraInfo.trim() || null),
         media_urls: uploadedUrls,
       });
 

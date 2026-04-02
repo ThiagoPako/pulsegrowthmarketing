@@ -1812,6 +1812,57 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           </>
           )}
 
+          {/* VENDIDO mode: Font + Color controls */}
+          {flyerMode === 'vendido' && (
+          <>
+          <div className="bg-white/[0.04] border border-red-500/20 rounded-2xl p-6 space-y-4">
+            <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+              <Type size={16} className="text-red-400" /> Fontes do VENDIDO
+            </h3>
+            {[
+              { label: 'Escala Geral', value: vendidoFontScale, setter: setVendidoFontScale },
+              { label: 'Selo VENDIDO', value: vendidoStampFontScale, setter: setVendidoStampFontScale },
+              { label: 'PARABÉNS', value: vendidoParabensFontScale, setter: setVendidoParabensFontScale },
+              { label: 'Nome do Cliente', value: vendidoNomeFontScale, setter: setVendidoNomeFontScale },
+              { label: 'Rodapé (WhatsApp/Endereço)', value: vendidoFooterFontScale, setter: setVendidoFooterFontScale },
+            ].map(({ label, value, setter }) => (
+              <div key={label} className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-white/60">{label}</Label>
+                  <span className="text-xs text-white/40 font-mono">{Math.round(value * 100)}%</span>
+                </div>
+                <Slider value={[value * 100]} onValueChange={v => setter(v[0] / 100)} min={50} max={200} step={5} className="w-full" />
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white/[0.04] border border-red-500/20 rounded-2xl p-6 space-y-4">
+            <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+              <Palette size={16} className="text-red-400" /> Cores do VENDIDO
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              {VENDIDO_COLOR_LABELS.map(({ key, label }) => (
+                <div key={key} className="flex items-center gap-3">
+                  <label className="relative w-9 h-9 rounded-lg overflow-hidden border-2 border-white/[0.15] cursor-pointer hover:border-white/[0.3] transition-colors flex-shrink-0">
+                    <input
+                      type="color"
+                      value={vendidoColors[key]}
+                      onChange={e => setVendidoColors(prev => ({ ...prev, [key]: e.target.value }))}
+                      className="absolute inset-0 w-full h-full cursor-pointer opacity-0"
+                    />
+                    <div className="w-full h-full" style={{ backgroundColor: vendidoColors[key] }} />
+                  </label>
+                  <span className="text-[11px] text-white/60 leading-tight">{label}</span>
+                </div>
+              ))}
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setVendidoColors({ ...DEFAULT_VENDIDO_COLORS })} className="text-white/40 hover:text-white text-xs w-full">
+              Resetar Cores Padrão
+            </Button>
+          </div>
+          </>
+          )}
+
           {/* Animated Lock + Save */}
           <div className="flex gap-3">
             <motion.button

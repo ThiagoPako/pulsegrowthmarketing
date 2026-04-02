@@ -967,20 +967,22 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const addrText = footerAddress || '';
  
     if (wpText) {
+      const ffs = footerFontScale * fs;
       const wpImg = wpIconRef.current;
       if (wpImg) {
         ctx.drawImage(wpImg, 40 + footerPosX, footCenterY - 19, 38, 38);
       }
       ctx.fillStyle = c.footerAccent;
       ctx.textAlign = 'left';
-      ctx.font = `900 ${Math.round(18 * fs)}px 'Raleway', sans-serif`;
+      ctx.font = `900 ${Math.round(18 * ffs)}px 'Raleway', sans-serif`;
       ctx.fillText('COMPRE AGORA!', 90 + footerPosX, footCenterY - 10);
       ctx.fillStyle = c.footerText;
-      ctx.font = `bold ${Math.round(26 * fs)}px 'Raleway', sans-serif`;
+      ctx.font = `bold ${Math.round(26 * ffs)}px 'Raleway', sans-serif`;
       ctx.fillText(wpText, 90 + footerPosX, footCenterY + 20);
     }
  
     if (addrText) {
+      const ffs = footerFontScale * fs;
       const addrX = W / 2 + 40 + footerPosX;
       ctx.save();
       ctx.fillStyle = c.footerAccent;
@@ -997,7 +999,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
  
       ctx.fillStyle = c.footerText;
       ctx.textAlign = 'left';
-      ctx.font = `bold ${Math.round(16 * fs)}px 'Raleway', sans-serif`;
+      ctx.font = `bold ${Math.round(16 * ffs)}px 'Raleway', sans-serif`;
       const maxW = W / 2 - 120;
       const words = addrText.toUpperCase().split(' ');
       let line = ''; let ly = footCenterY - 10;

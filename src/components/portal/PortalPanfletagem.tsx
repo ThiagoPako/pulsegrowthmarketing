@@ -1150,71 +1150,149 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
  
   // VENDIDO layout — draw sold overlay with background image and badge
   const drawCanvasVendido = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {
-    // Draw vehicle photo as background
-    if (vImg) {
-      const scale = Math.max(W / vImg.width, H / vImg.height);
-      const sw = vImg.width * scale;
-      const sh = vImg.height * scale;
-      ctx.drawImage(vImg, (W - sw) / 2, (H - sh) / 2, sw, sh);
-    } else {
-      ctx.fillStyle = '#1a1a2e';
-      ctx.fillRect(0, 0, W, H);
-    }
+    const vc = vendidoColors;
+    const fs = vendidoFontScale;
 
-    // Draw vendido background overlay if available
+    // 1) Background color
+    ctx.fillStyle = vc.background;
+    ctx.fillRect(0, 0, W, H);
+
+    // 2) Draw vendido_bg.png overlay (the blue/white curve design)
     if (vendidoBgRef.current) {
       ctx.drawImage(vendidoBgRef.current, 0, 0, W, H);
-    } else {
-      ctx.fillStyle = 'rgba(0,0,0,0.4)';
-      ctx.fillRect(0, 0, W, H);
     }
 
-    // Draw logo
-    if (lImg) {
-      const lw = 180 * (logoScale || 1);
-      const lh = (lImg.height / lImg.width) * lw;
-      ctx.drawImage(lImg, W - lw - 30, 30, lw, lh);
-    }
-
-    // Draw "+1 Cliente Satisfeito" badge
-    const badgeW = 320;
-    const badgeH = 80;
-    const badgeX = (W - badgeW) / 2;
-    const badgeY = H * 0.75;
-    ctx.fillStyle = '#FFD700';
-    const r = 16;
+    // 3) "VENDIDO" red stamp (top-left) — draggable
+    const stampFs = vendidoStampFontScale * fs;
+    const barH = Math.round(65 * stampFs);
+    const barW = Math.round(380 * stampFs);
+    const barX = 0 + vStampOffX;
+    const barY = Math.round(30 * stampFs) + vStampOffY;
+    ctx.fillStyle = vc.stampBg;
     ctx.beginPath();
-    ctx.moveTo(badgeX + r, badgeY);
-    ctx.lineTo(badgeX + badgeW - r, badgeY);
-    ctx.quadraticCurveTo(badgeX + badgeW, badgeY, badgeX + badgeW, badgeY + r);
-    ctx.lineTo(badgeX + badgeW, badgeY + badgeH - r);
-    ctx.quadraticCurveTo(badgeX + badgeW, badgeY + badgeH, badgeX + badgeW - r, badgeY + badgeH);
-    ctx.lineTo(badgeX + r, badgeY + badgeH);
-    ctx.quadraticCurveTo(badgeX, badgeY + badgeH, badgeX, badgeY + badgeH - r);
-    ctx.lineTo(badgeX, badgeY + r);
-    ctx.quadraticCurveTo(badgeX, badgeY, badgeX + r, badgeY);
+    ctx.moveTo(barX, barY);
+    ctx.lineTo(barX + barW + 20, barY);
+    ctx.lineTo(barX + barW - 10, barY + barH);
+    ctx.lineTo(barX, barY + barH);
     ctx.closePath();
     ctx.fill();
+    ctx.fillStyle = vc.stampText;
+    ctx.font = `bold italic ${Math.round(48 * stampFs)}px Inter, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.fillText('VENDIDO', barX + Math.round(25 * stampFs), barY + barH - Math.round(15 * stampFs));
 
-    ctx.fillStyle = '#1a1a2e';
-    ctx.font = 'bold 28px Inter, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('+1 Cliente Satisfeito', W / 2, badgeY + badgeH / 2 + 10);
-    ctx.textAlign = 'start';
+    // 4) "+1 CLIENTE SATISFEITO" red strip below stamp
+    const satFs = vendidoStampFontScale * fs;
+    const satH = Math.round(36 * satFs);
+    const satBarW = Math.round(340 * satFs);
+    const satY = barY + barH + Math.round(4 * fs);
+    ctx.fillStyle = vc.stampBg;
+    ctx.fillRect(barX, satY, satBarW, satH);
+    ctx.fillStyle = vc.satisfeitoText;
+    ctx.font = `bold ${Math.round(18 * satFs)}px Inter, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.fillText('+1 CLIENTE SATISFEITO', barX + Math.round(25 * satFs), satY + satH - Math.round(satFs * 10));
 
-    // Vehicle info
-    if (model) {
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 36px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(model.toUpperCase(), W / 2, H * 0.4);
-      if (year) {
-        ctx.font = '24px Inter, sans-serif';
-        ctx.fillText(year, W / 2, H * 0.4 + 36);
-      }
-      ctx.textAlign = 'start';
+    // Store stamp zone for drag detection
+    vendidoZonesRef.current.stampY = barY;
+    vendidoZonesRef.current.stampH = (satY + satH) - barY;
+
+    // 5) Polaroid frame with vehicle photo — draggable
+    const frameMargin = 0.08;
+    const baseFrameMarginX = Math.round(W * frameMargin);
+    const baseFrameTop = Math.round(H * 0.22);
+    const frameW = W - baseFrameMarginX * 2;
+    const totalFrameH = Math.round(H * 0.52);
+    const fmx = baseFrameMarginX + vFrameOffX;
+    const fmy = baseFrameTop + vFrameOffY;
+    const framePad = 20;
+    const framePadBottom = 50;
+
+    // Shadow
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.35)';
+    ctx.shadowBlur = 25;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.roundRect(fmx, fmy, frameW, totalFrameH, 6);
+    ctx.fill();
+    ctx.restore();
+
+    // Vehicle photo inside frame
+    if (vImg) {
+      const photoX = fmx + framePad;
+      const photoY = fmy + framePad;
+      const photoW = frameW - framePad * 2;
+      const photoH = totalFrameH - framePad - framePadBottom;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(photoX, photoY, photoW, photoH);
+      ctx.clip();
+      const pScale = Math.max(photoW / vImg.width, photoH / vImg.height);
+      const pw = vImg.width * pScale;
+      const ph = vImg.height * pScale;
+      ctx.drawImage(vImg, photoX + (photoW - pw) / 2 + photoOffsetX, photoY + (photoH - ph) / 2 + photoOffsetY, pw, ph);
+      ctx.restore();
     }
-  }, [model, year, logoScale]);
+
+    // Store frame zone for drag detection
+    vendidoZonesRef.current.frameX = fmx;
+    vendidoZonesRef.current.frameY = fmy;
+    vendidoZonesRef.current.frameW = frameW;
+    vendidoZonesRef.current.frameH = totalFrameH;
+
+    // 6) "PARABÉNS [NOME]" — draggable
+    const parabensFs = vendidoParabensFontScale * fs;
+    const parabensY = fmy + totalFrameH + Math.round(30 * fs) + vParabensOffY;
+    ctx.fillStyle = vc.parabensText;
+    ctx.font = `bold ${Math.round(32 * parabensFs)}px Inter, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('PARABÉNS', W / 2 + vParabensOffX, parabensY);
+
+    if (buyerName) {
+      const nomeFs = vendidoNomeFontScale * fs;
+      ctx.fillStyle = vc.nomeText;
+      ctx.font = `bold ${Math.round(40 * nomeFs)}px Inter, sans-serif`;
+      ctx.fillText(buyerName.toUpperCase(), W / 2 + vParabensOffX, parabensY + Math.round(45 * nomeFs));
+    }
+
+    vendidoZonesRef.current.parabensY = parabensY - Math.round(35 * parabensFs);
+    vendidoZonesRef.current.parabensH = Math.round(100 * parabensFs);
+
+    // 7) Footer — WhatsApp + Address — draggable
+    const footFs = vendidoFooterFontScale * fs;
+    const footerBaseY = H - Math.round(70 * footFs) + vFooterOffY;
+    ctx.fillStyle = vc.footerText;
+    ctx.font = `${Math.round(18 * footFs)}px Inter, sans-serif`;
+    ctx.textAlign = 'center';
+
+    if (wpIconRef.current && footerWhatsapp) {
+      const iconS = Math.round(22 * footFs);
+      const wpText = footerWhatsapp;
+      const wpTw = ctx.measureText(wpText).width;
+      const wpTotalW = iconS + 8 + wpTw;
+      const wpStartX = W / 2 - wpTotalW / 2 + vFooterOffX;
+      ctx.drawImage(wpIconRef.current, wpStartX, footerBaseY - iconS + 4, iconS, iconS);
+      ctx.textAlign = 'left';
+      ctx.fillText(wpText, wpStartX + iconS + 8, footerBaseY + 4);
+    }
+
+    if (footerAddress) {
+      ctx.textAlign = 'center';
+      ctx.font = `${Math.round(14 * footFs)}px Inter, sans-serif`;
+      ctx.fillText(footerAddress, W / 2 + vFooterOffX, footerBaseY + Math.round(28 * footFs));
+    }
+
+    vendidoZonesRef.current.footerY = footerBaseY - Math.round(25 * footFs);
+    vendidoZonesRef.current.footerH = Math.round(60 * footFs);
+
+    // 8) Logo (draggable — uses shared logoX, logoY)
+    if (lImg) {
+      ctx.drawImage(lImg, logoX, logoY, logoW, logoH);
+    }
+
+    ctx.textAlign = 'start';
+  }, [model, year, logoScale, vendidoColors, vendidoFontScale, vendidoStampFontScale, vendidoParabensFontScale, vendidoNomeFontScale, vendidoFooterFontScale, vStampOffX, vStampOffY, vFrameOffX, vFrameOffY, vParabensOffX, vParabensOffY, vFooterOffX, vFooterOffY, photoOffsetX, photoOffsetY, buyerName, footerWhatsapp, footerAddress, logoX, logoY, logoW, logoH]);
   // Unified draw function
   const drawCanvas = useCallback((canvas: HTMLCanvasElement, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null, fImg: HTMLImageElement | null = null, options?: { overlayOnly?: boolean }) => {
     const ctx = canvas.getContext('2d');

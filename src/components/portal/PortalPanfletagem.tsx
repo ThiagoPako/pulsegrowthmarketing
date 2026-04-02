@@ -1028,25 +1028,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.fillStyle = vc.background;
     ctx.fillRect(0, 0, W, H);
 
-    // Dark blue vertical strip on the RIGHT side (like Canva reference)
-    const stripW = Math.round(W * 0.12);
-    const darkBlue = '#022a54';
-    ctx.fillStyle = darkBlue;
-    ctx.beginPath();
-    ctx.moveTo(W - stripW, 0);
-    ctx.lineTo(W, 0);
-    ctx.lineTo(W, H);
-    ctx.lineTo(W - stripW - Math.round(stripW * 0.4), H);
-    ctx.closePath();
-    ctx.fill();
-
-    // White top section with diagonal cut (smaller, top-left only)
-    const whiteH = Math.round(H * 0.10);
+    // White top section with diagonal cut
+    const whiteH = Math.round(H * 0.12);
     ctx.fillStyle = vc.stripColor;
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(W * 0.65, 0);
-    ctx.lineTo(W * 0.45, whiteH);
+    ctx.lineTo(W, 0);
+    ctx.lineTo(W, whiteH * 0.4);
     ctx.lineTo(0, whiteH);
     ctx.closePath();
     ctx.fill();
@@ -1091,7 +1079,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const frameMarginX = baseFrameMarginX + vFrameOffX;
     const frameTop = baseFrameTop + vFrameOffY;
     const frameW = W - baseFrameMarginX * 2;
-    const frameBorder = Math.round(30 * fs);
+    const frameBorder = Math.round(24 * fs);
     const photoAspect = 4 / 3;
     const innerPhotoW = frameW - frameBorder * 2;
     const innerPhotoH = Math.round(innerPhotoW / photoAspect);

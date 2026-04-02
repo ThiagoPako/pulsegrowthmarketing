@@ -526,29 +526,32 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   };
 
   // Core draw function — FEED format (1080x1350)
-  const drawCanvasFeed = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {
+  const drawCanvasFeed = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null, options?: { overlayOnly?: boolean }) => {
     const fs = fontScale;
     const bs = infoBoxScale;
     const c = colors;
     const BRAND_DARK = darkenHex(c.header);
-
+    const overlayOnly = options?.overlayOnly ?? false;
+ 
     // Background
-    ctx.fillStyle = '#0d1117';
-    ctx.fillRect(0, 0, W, H);
-
+    if (!overlayOnly) {
+      ctx.fillStyle = '#0d1117';
+      ctx.fillRect(0, 0, W, H);
+    }
+ 
     // Header
     const headerGrad = ctx.createLinearGradient(0, 0, W, 0);
     headerGrad.addColorStop(0, c.header);
     headerGrad.addColorStop(1, BRAND_DARK);
     ctx.fillStyle = headerGrad;
     ctx.fillRect(0, 0, W, 260);
-
+ 
     // White diagonal
     ctx.fillStyle = '#FFFFFF';
     ctx.beginPath();
     ctx.moveTo(0, 0); ctx.lineTo(580, 0); ctx.quadraticCurveTo(480, 260, 0, 260); ctx.closePath();
     ctx.fill();
-
+ 
     ctx.fillStyle = c.headerText;
     ctx.font = `bold ${Math.round(52 * fs)}px 'Raleway', sans-serif`;
     ctx.textAlign = 'left';
@@ -557,13 +560,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.font = `bold italic ${Math.round(52 * fs)}px 'Raleway', sans-serif`;
     ctx.fillStyle = c.header;
     ctx.fillText('aqui!', 40, 200);
-
+ 
     // Vehicle photo
     const photoY = 260;
     const photoH = infoPosY - photoY;
     if (vImg && photoH > 0) {
       drawImageCover(ctx, vImg, 0, photoY, W, photoH, photoOffsetX, photoOffsetY);
-    } else {
+    } else if (!overlayOnly) {
       ctx.fillStyle = '#111';
       ctx.fillRect(0, photoY, W, Math.max(photoH, 100));
       ctx.fillStyle = '#555';
@@ -571,7 +574,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.textAlign = 'center';
       ctx.fillText('Adicione uma foto do veículo', W / 2, photoY + Math.max(photoH, 100) / 2);
     }
-
+ 
     // Price overlay
     const priceText = price ? formatPrice(price) : 'R$ 00.000,00';
     const priceIsExample = !price;
@@ -592,14 +595,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillText(priceText, priceX + 24, priceYpos + Math.round(90 * bs));
       ctx.globalAlpha = 1;
     }
-
+ 
     // Info bar
     const infoH = Math.round(260 * bs);
     ctx.fillStyle = c.infoBg;
     ctx.fillRect(0, infoPosY, W, infoH);
     ctx.fillStyle = c.infoPills;
     ctx.fillRect(0, infoPosY, W, 4);
-
+ 
     const data = {
       model: model || 'Modelo',
       year: year || 'Ano',
@@ -608,7 +611,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       tires: tireCondition,
       extraInfo: extraInfo.trim(),
     };
-
+ 
     const obsLines: string[] = [];
     obsLines.push(`• ${FUEL_OPTIONS.find(f => f.value === data.fuel)?.label || data.fuel}`);
     obsLines.push(`• Pneus ${TIRE_OPTIONS.find(t => t.value === data.tires)?.label || data.tires}`);
@@ -619,7 +622,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         obsLines.push(`• ${line.trim()}`);
       });
     }
-
+ 
     const cols = [
       { label: 'MODELO', value: data.model },
       { label: 'ANO', value: data.year },
@@ -630,7 +633,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const colPad = Math.round(12 * bs);
     const pillH = Math.round(44 * bs * pillHeightScale);
     const pillR = Math.round(22 * bs * pillRadiusScale);
-
+ 
     cols.forEach((col, i) => {
       const cx = i * colW + colPad;
       const cw = colW - colPad * 2;
@@ -638,7 +641,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.beginPath(); ctx.roundRect(cx, infoPosY + Math.round(24 * bs), cw, pillH, pillR); ctx.fill();
       ctx.fillStyle = c.infoLabelText; ctx.font = `bold ${Math.round(20 * labelFontScale * fs)}px 'Raleway', sans-serif`; ctx.textAlign = 'center';
       ctx.fillText(col.label, cx + cw / 2, infoPosY + Math.round(24 * bs) + pillH / 2 + Math.round(7 * fs));
-
+ 
       const fieldScales = [modelFontScale, yearFontScale, transmissionFontScale, obsFontScale];
       const ifs = fieldScales[i];
       ctx.fillStyle = c.infoValueText;
@@ -664,7 +667,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         ctx.beginPath(); ctx.moveTo((i + 1) * colW, infoPosY + Math.round(24 * bs)); ctx.lineTo((i + 1) * colW, infoPosY + infoH - 20); ctx.stroke();
       }
     });
-
+ 
     // Footer
     const footY = infoPosY + infoH;
     const footH = H - footY;
@@ -675,13 +678,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.fillRect(0, footY, W, footH);
     ctx.fillStyle = c.footerAccent;
     ctx.fillRect(0, footY, W, 3);
-
+ 
     const footCenterY = footY + footH / 2;
     const footContentCenterY = footCenterY + footerPosY;
     const footContentOffX = footerPosX;
     const addrText = footerAddress || '';
     const wpText = footerWhatsapp || '';
-
+ 
     const drawPinIcon = (icx: number, icy: number, size: number) => {
       ctx.save();
       ctx.fillStyle = c.footerAccent;
@@ -698,7 +701,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.beginPath(); ctx.arc(icx, icy - ps * 0.3, ps * 0.25, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     };
-
+ 
     const drawWhatsAppIcon = (icx: number, icy: number, size: number) => {
       const wpImg = wpIconRef.current;
       if (wpImg) {
@@ -706,7 +709,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         ctx.drawImage(wpImg, icx - s2 / 2, icy - s2 / 2, s2, s2);
       }
     };
-
+ 
     if (addrText) {
       drawPinIcon(55 + footContentOffX, footContentCenterY, 24);
       ctx.fillStyle = c.footerText;
@@ -725,7 +728,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       });
       if (addrLine) ctx.fillText(addrLine, 92 + footContentOffX, addrLineY);
     }
-
+ 
     if (wpText) {
       const wpX = W / 2 + 40 + footContentOffX;
       drawWhatsAppIcon(wpX + 24, footContentCenterY, 24);
@@ -736,7 +739,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.font = `bold ${Math.round(24 * fs)}px 'Raleway', sans-serif`;
       ctx.fillText(wpText, wpX + 58, footContentCenterY + 12);
     }
-
+ 
     // Logo
     if (lImg) {
       ctx.drawImage(lImg, logoX, logoY, logoW, logoH);
@@ -745,41 +748,45 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillText(clientName, logoX, logoY + 40);
     }
   }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
-
+ 
   // Core draw function — STORY/REELS format (1080x1920)
   // Matches reference: compact header → big photo → info bar → footer → thin brand bar
-  const drawCanvasStory = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {
+  const drawCanvasStory = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null, options?: { overlayOnly?: boolean }) => {
     const fs = fontScale;
     const c = colors;
     const BRAND_DARK = darkenHex(c.header);
     const bs = infoBoxScale;
-
+    const overlayOnly = options?.overlayOnly ?? false;
+ 
     // ---- LAYOUT ZONES (matching reference image proportions) ----
-    const headerH = 120;        // Compact header
-    const infoBarH = 280;       // Info section
-    const footerH = 110;        // Footer with WhatsApp + address
-    const bottomBarH = 100;     // Thin brand bar at very bottom
-    const infoStartY = H - infoBarH - footerH - bottomBarH; // ~1430
-    const footY = infoStartY + infoBarH;       // ~1710
-    const bottomBarY = footY + footerH;         // ~1820
-
+    const headerH = 120;
+    const infoBarH = 280;
+    const footerH = 110;
+    const bottomBarH = 100;
+    const infoStartY = H - infoBarH - footerH - bottomBarH;
+    const footY = infoStartY + infoBarH;
+    const bottomBarY = footY + footerH;
+ 
     // ---- 1. BACKGROUND ----
-    ctx.fillStyle = c.footerBg;
-    ctx.fillRect(0, 0, W, H);
-
+    if (!overlayOnly) {
+      ctx.fillStyle = c.footerBg;
+      ctx.fillRect(0, 0, W, H);
+    }
+ 
     // ---- 2. VEHICLE PHOTO (full bleed from header to info) ----
     const photoY = headerH;
     const photoH = infoStartY - photoY;
-
+ 
     if (vImg && photoH > 0) {
       drawImageCover(ctx, vImg, 0, photoY, W, photoH, photoOffsetX, photoOffsetY);
-      // Bottom gradient blend into info bar
-      const blendGrad = ctx.createLinearGradient(0, infoStartY - 100, 0, infoStartY);
-      blendGrad.addColorStop(0, 'rgba(0,0,0,0)');
-      blendGrad.addColorStop(1, c.infoBg);
-      ctx.fillStyle = blendGrad;
-      ctx.fillRect(0, infoStartY - 100, W, 100);
-    } else {
+      if (!overlayOnly) {
+        const blendGrad = ctx.createLinearGradient(0, infoStartY - 100, 0, infoStartY);
+        blendGrad.addColorStop(0, 'rgba(0,0,0,0)');
+        blendGrad.addColorStop(1, c.infoBg);
+        ctx.fillStyle = blendGrad;
+        ctx.fillRect(0, infoStartY - 100, W, 100);
+      }
+    } else if (!overlayOnly) {
       ctx.fillStyle = '#111';
       ctx.fillRect(0, photoY, W, Math.max(photoH, 200));
       ctx.fillStyle = '#555';
@@ -787,34 +794,31 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.textAlign = 'center';
       ctx.fillText('Adicione uma foto do veículo', W / 2, photoY + Math.max(photoH, 200) / 2);
     }
-
+ 
     // ---- 3. HEADER BAR (top, over photo) ----
     const headerGrad = ctx.createLinearGradient(0, 0, W, 0);
     headerGrad.addColorStop(0, c.header);
     headerGrad.addColorStop(1, BRAND_DARK);
     ctx.fillStyle = headerGrad;
     ctx.fillRect(0, 0, W, headerH);
-
-    // Diagonal white accent (like feed reference)
+ 
     ctx.fillStyle = '#FFFFFF';
     ctx.beginPath();
     ctx.moveTo(0, 0); ctx.lineTo(W * 0.55, 0);
     ctx.quadraticCurveTo(W * 0.4, headerH, 0, headerH);
     ctx.closePath();
     ctx.fill();
-
-    // Header text on white area
+ 
     ctx.fillStyle = c.headerText;
     ctx.textAlign = 'left';
     ctx.font = `bold ${Math.round(30 * fs)}px 'Raleway', sans-serif`;
     ctx.fillText('QUALIDADE, CONFIANÇA E AS', 30, 45);
     ctx.font = `900 ${Math.round(38 * fs)}px 'Raleway', sans-serif`;
     ctx.fillText('MELHORES CONDIÇÕES!', 30, 90);
-
-    // Accent line at bottom of header
+ 
     ctx.fillStyle = c.infoPills;
     ctx.fillRect(0, headerH - 3, W, 3);
-
+ 
     // ---- 4. LOGO (overlapping photo area, upper right) ----
     if (lImg) {
       ctx.drawImage(lImg, logoX, logoY, logoW, logoH);
@@ -824,40 +828,37 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.textAlign = 'left';
       ctx.fillText(clientName, logoX, logoY + 40);
     }
-
+ 
     // ---- 5. INFO BAR ----
     ctx.fillStyle = c.infoBg;
     ctx.fillRect(0, infoStartY, W, infoBarH);
     ctx.fillStyle = c.infoPills;
     ctx.fillRect(0, infoStartY, W, 4);
-
-    // -- Left side: Model name, submodel, fuel, extras --
+ 
     const leftX = 40;
     const modelText = model || 'MODELO';
     const modelParts = modelText.split(' ');
     const mainModel = modelParts.slice(0, 2).join(' ').toUpperCase();
     const subModel = modelParts.slice(2).join(' ').toUpperCase();
-
+ 
     ctx.fillStyle = c.infoValueText;
     ctx.textAlign = 'left';
     ctx.font = `900 ${Math.round(46 * modelFontScale * fs)}px 'Raleway', sans-serif`;
     ctx.fillText(mainModel, leftX, infoStartY + 65);
-
+ 
     let nextLineY = infoStartY + 65;
     if (subModel) {
       ctx.font = `bold ${Math.round(34 * modelFontScale * fs)}px 'Raleway', sans-serif`;
       nextLineY += 45;
       ctx.fillText(subModel, leftX, nextLineY);
     }
-
-    // Fuel type
+ 
     const fuelLabel = FUEL_OPTIONS.find(f => f.value === fuelType)?.label?.toUpperCase() || fuelType.toUpperCase();
     nextLineY += 38;
     ctx.font = `bold ${Math.round(24 * obsFontScale * fs)}px 'Raleway', sans-serif`;
     ctx.fillStyle = c.infoLabelText;
     ctx.fillText(fuelLabel, leftX, nextLineY);
-
-    // Extra observations (transmission, tires, etc.)
+ 
     const obsItems: string[] = [];
     const transLabel = transmission === 'automatico' ? 'Automático' : 'Manual';
     obsItems.push(transLabel);
@@ -870,7 +871,6 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       nextLineY += 32;
       ctx.font = `${Math.round(20 * obsFontScale * fs)}px 'Raleway', sans-serif`;
       ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      // Wrap if too long
       const maxLeftW = W / 2 - 60;
       const obsText = obsItems.join(' • ');
       if (ctx.measureText(obsText).width > maxLeftW) {
@@ -881,15 +881,12 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         ctx.fillText(obsText, leftX, nextLineY);
       }
     }
-
-    // -- Right side: Year pill, KM pill, Price --
+ 
     const rightX = W / 2 + 20;
-
-    // Year pill with calendar icon text
     const pillY = infoStartY + 22;
     const yearPillW = Math.round(190 * bs);
     const yearPillH = Math.round(42 * bs);
-
+ 
     ctx.fillStyle = c.infoPills;
     ctx.beginPath(); ctx.roundRect(rightX, pillY, yearPillW, yearPillH, 8); ctx.fill();
     ctx.fillStyle = c.infoLabelText;
@@ -897,8 +894,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.textAlign = 'center';
     const yearDisplay = `Ano: ${year || '----'}`;
     ctx.fillText(yearDisplay, rightX + yearPillW / 2, pillY + yearPillH / 2 + 7);
-
-    // KM pill
+ 
     const extraLines = extraInfo.trim().split('\n').filter(l => l.trim());
     const kmLine = extraLines.find(l => l.toLowerCase().includes('km'));
     if (kmLine) {
@@ -910,41 +906,38 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillStyle = c.infoLabelText;
       ctx.fillText(kmText, kmPillX + kmPillW / 2, pillY + yearPillH / 2 + 7);
     }
-
-    // Price (large, below pills)
+ 
     const priceVal = price ? formatPrice(price) : 'R$ 00.000,00';
     const priceIsExample = !price;
     ctx.globalAlpha = priceIsExample ? 0.4 : 1;
-
+ 
     const priceBaseY = pillY + yearPillH + 30;
     ctx.textAlign = 'left';
     ctx.fillStyle = c.priceText;
     ctx.font = `bold ${Math.round(30 * fs)}px 'Raleway', sans-serif`;
     ctx.fillText('R$', rightX, priceBaseY + 30);
-
+ 
     const priceNumMatch = priceVal.match(/[\d.,]+/);
     const priceNum = priceNumMatch ? priceNumMatch[0] : '0,00';
     const priceParts = priceNum.split(',');
-
+ 
     ctx.font = `900 ${Math.round(80 * fs)}px 'Raleway', sans-serif`;
-    const rsW = ctx.measureText('R$ ').width;
+    const mainWidth = ctx.measureText(priceParts[0]).width;
     ctx.fillText(priceParts[0], rightX + Math.round(55 * fs), priceBaseY + 40);
-
+ 
     if (priceParts[1]) {
-      const mainWidth = ctx.measureText(priceParts[0]).width;
       ctx.font = `bold ${Math.round(38 * fs)}px 'Raleway', sans-serif`;
       ctx.fillText(`,${priceParts[1]}`, rightX + Math.round(55 * fs) + mainWidth + 4, priceBaseY + 30);
     }
     ctx.globalAlpha = 1;
-
-    // Vertical divider between left and right
+ 
     ctx.strokeStyle = 'rgba(255,255,255,0.15)';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(W / 2, infoStartY + 14);
     ctx.lineTo(W / 2, infoStartY + infoBarH - 14);
     ctx.stroke();
-
+ 
     // ---- 6. FOOTER ----
     const footGrad = ctx.createLinearGradient(0, footY, 0, footY + footerH);
     footGrad.addColorStop(0, c.footerBg);
@@ -953,12 +946,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.fillRect(0, footY, W, footerH);
     ctx.fillStyle = c.footerAccent;
     ctx.fillRect(0, footY, W, 3);
-
+ 
     const footCenterY = footY + footerH / 2 + footerPosY;
     const wpText = footerWhatsapp || '';
     const addrText = footerAddress || '';
-
-    // WhatsApp (left)
+ 
     if (wpText) {
       const wpImg = wpIconRef.current;
       if (wpImg) {
@@ -972,11 +964,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.font = `bold ${Math.round(26 * fs)}px 'Raleway', sans-serif`;
       ctx.fillText(wpText, 90 + footerPosX, footCenterY + 20);
     }
-
-    // Address (right)
+ 
     if (addrText) {
       const addrX = W / 2 + 40 + footerPosX;
-      // Pin icon
       ctx.save();
       ctx.fillStyle = c.footerAccent;
       ctx.beginPath(); ctx.arc(addrX + 16, footCenterY, 18, 0, Math.PI * 2); ctx.fill();
@@ -989,7 +979,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.quadraticCurveTo(addrX + 16 + ps, footCenterY, addrX + 16, footCenterY + ps * 1.3);
       ctx.fill();
       ctx.restore();
-
+ 
       ctx.fillStyle = c.footerText;
       ctx.textAlign = 'left';
       ctx.font = `bold ${Math.round(16 * fs)}px 'Raleway', sans-serif`;
@@ -1004,8 +994,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       });
       if (line) ctx.fillText(line, addrX + 44, ly);
     }
-
-    // ---- 7. BOTTOM BRAND BAR (thin, fills remaining space) ----
+ 
+    // ---- 7. BOTTOM BRAND BAR ----
     const botGrad = ctx.createLinearGradient(0, bottomBarY, 0, H);
     botGrad.addColorStop(0, BRAND_DARK);
     botGrad.addColorStop(1, c.header);
@@ -1013,8 +1003,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.fillRect(0, bottomBarY, W, bottomBarH);
     ctx.fillStyle = c.infoPills;
     ctx.fillRect(0, bottomBarY, W, 3);
-
-    // Subtle diagonal accent
+ 
     ctx.fillStyle = '#FFFFFF';
     ctx.globalAlpha = 0.06;
     ctx.beginPath();
@@ -1022,262 +1011,42 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.fill();
     ctx.globalAlpha = 1;
   }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
-
+ 
   // VENDIDO layout — all elements draggable
   // We store computed positions in a ref so drag handlers can use them
-  const vendidoZonesRef = useRef<{ stampY: number; stampH: number; frameX: number; frameY: number; frameW: number; frameH: number; parabensY: number; parabensH: number; footerY: number; footerH: number }>({ stampY: 0, stampH: 120, frameX: 55, frameY: 250, frameW: 970, frameH: 600, parabensY: 900, parabensH: 180, footerY: 1100, footerH: 200 });
-
-  const drawCanvasVendido = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {
-    const fs = vendidoFontScale;
-    const vc = vendidoColors;
-
-    // Full blue background + background image
-    ctx.fillStyle = vc.background;
-    ctx.fillRect(0, 0, W, H);
-    const bgImg = vendidoBgRef.current;
-    if (bgImg) {
-      ctx.drawImage(bgImg, 0, 0, W, H);
-    }
-
-    // ---- "VENDIDO" large red banner ----
-    const stampFs = vendidoStampFontScale * fs;
-    const stampFontSize = Math.round(100 * stampFs);
-    ctx.save();
-    ctx.font = `bold italic ${stampFontSize}px 'Raleway', Impact, sans-serif`;
-    ctx.textAlign = 'left';
-    const vendidoMetrics = ctx.measureText('VENDIDO');
-    const barX = 0 + vStampOffX;
-    const barW = vendidoMetrics.width + 70;
-    const barH = Math.round(stampFontSize * 1.2);
-    const barY = Math.round(25 * fs) + vStampOffY;
-    ctx.fillStyle = vc.stampBg;
-    ctx.beginPath();
-    ctx.moveTo(barX, barY);
-    ctx.lineTo(barX + barW + 30, barY);
-    ctx.lineTo(barX + barW - 10, barY + barH);
-    ctx.lineTo(barX, barY + barH);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = vc.stampText;
-    ctx.fillText('VENDIDO', barX + 30, barY + barH - Math.round(28 * stampFs));
-    ctx.restore();
-
-    // "+1 CLIENTE SATISFEITO" — red strip below VENDIDO
-    const satFs = Math.round(26 * fs);
-    const satH = Math.round(satFs * 1.8);
-    const satY = barY + barH + Math.round(4 * fs);
-    ctx.font = `bold ${satFs}px 'Raleway', sans-serif`;
-    const satTextW = ctx.measureText('+1 CLIENTE SATISFEITO').width;
-    const satBarW = satTextW + 50;
-    ctx.fillStyle = vc.stampBg;
-    ctx.fillRect(barX, satY, satBarW, satH);
-    ctx.fillStyle = vc.satisfeitoText;
-    ctx.textAlign = 'left';
-    ctx.fillText('+1 CLIENTE SATISFEITO', barX + 25, satY + satH - Math.round(satFs * 0.35));
-    const satisfeitoY = satY + satH;
-
-    // Store stamp zone for hit detection
-    vendidoZonesRef.current.stampY = barY;
-    vendidoZonesRef.current.stampH = satisfeitoY - barY + 40;
-
-    // ---- Polaroid-style photo frame ----
-    const baseFrameMarginX = Math.round(55 * fs);
-    const baseFrameTop = satisfeitoY + Math.round(30 * fs);
-    const frameMarginX = baseFrameMarginX + vFrameOffX;
-    const frameTop = baseFrameTop + vFrameOffY;
-    const frameW = W - baseFrameMarginX * 2;
-    const frameBorder = Math.round(24 * fs);
-    const photoAspect = 4 / 3;
-    const innerPhotoW = frameW - frameBorder * 2;
-    const innerPhotoH = Math.round(innerPhotoW / photoAspect);
-    const framePadBottom = Math.round(20 * fs);
-    const totalFrameH = innerPhotoH + frameBorder * 2 + framePadBottom;
-
-    // Store frame zone
-    vendidoZonesRef.current.frameX = frameMarginX;
-    vendidoZonesRef.current.frameY = frameTop;
-    vendidoZonesRef.current.frameW = frameW;
-    vendidoZonesRef.current.frameH = totalFrameH;
-
-    // Frame shadow
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.35)';
-    ctx.shadowBlur = 25;
-    ctx.shadowOffsetX = 8;
-    ctx.shadowOffsetY = 8;
-    ctx.fillStyle = '#FFFFFF';
-    ctx.beginPath();
-    ctx.roundRect(frameMarginX, frameTop, frameW, totalFrameH, 6);
-    ctx.fill();
-    ctx.restore();
-
-    // White frame
-    ctx.fillStyle = '#FFFFFF';
-    ctx.beginPath();
-    ctx.roundRect(frameMarginX, frameTop, frameW, totalFrameH, 6);
-    ctx.fill();
-
-    // Photo inside frame
-    const photoX = frameMarginX + frameBorder;
-    const photoY = frameTop + frameBorder;
-    if (vImg) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(photoX, photoY, innerPhotoW, innerPhotoH);
-      ctx.clip();
-      drawImageCover(ctx, vImg, photoX, photoY, innerPhotoW, innerPhotoH, photoOffsetX, photoOffsetY);
-      ctx.restore();
-    } else {
-      ctx.fillStyle = '#e0e0e0';
-      ctx.fillRect(photoX, photoY, innerPhotoW, innerPhotoH);
-      ctx.fillStyle = '#999';
-      ctx.font = `${Math.round(28 * fs)}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.fillText('Adicione uma foto', photoX + innerPhotoW / 2, photoY + innerPhotoH / 2);
-    }
-
-    // ---- "PARABÉNS" + buyer name ----
-    const pFs = vendidoParabensFontScale * fs;
-    const baseTextBelowY = frameTop + totalFrameH + Math.round(20 * fs);
-    const textBelowFrameY = baseTextBelowY + vParabensOffY;
-    const centerX = W / 2 + vParabensOffX;
-    ctx.fillStyle = vc.parabensText;
-    ctx.textAlign = 'center';
-
-    ctx.font = `bold ${Math.round(52 * pFs)}px 'Raleway', sans-serif`;
-    ctx.fillText('PARABÉNS', centerX, textBelowFrameY + Math.round(55 * fs));
-
-    const nFs = vendidoNomeFontScale * fs;
-    const displayName = buyerName.trim() || 'NOME DO CLIENTE';
-    ctx.fillStyle = vc.nomeText;
-    ctx.font = `bold ${Math.round(48 * nFs)}px 'Raleway', sans-serif`;
-    const maxNameW = W - 120;
-    const nameWords = displayName.toUpperCase().split(' ');
-    let nameLine = '';
-    let nameLineY = textBelowFrameY + Math.round(115 * fs);
-    nameWords.forEach(word => {
-      const test = nameLine + (nameLine ? ' ' : '') + word;
-      if (ctx.measureText(test).width > maxNameW && nameLine) {
-        ctx.fillText(nameLine, centerX, nameLineY);
-        nameLine = word;
-        nameLineY += Math.round(56 * nFs);
-      } else {
-        nameLine = test;
-      }
-    });
-    if (nameLine) ctx.fillText(nameLine, centerX, nameLineY);
-
-    // Store parabens zone
-    vendidoZonesRef.current.parabensY = textBelowFrameY;
-    vendidoZonesRef.current.parabensH = nameLineY - textBelowFrameY + 60;
-
-    // ---- Footer: WhatsApp + Address ----
-    const fFs = vendidoFooterFontScale * fs;
-    const baseFooterStartY = nameLineY + Math.round(40 * fs);
-    const footerStartY = baseFooterStartY + vFooterOffY;
-    const footerCenterX = W / 2 + vFooterOffX;
-    const wpText = footerWhatsapp || '';
-    const addrText = footerAddress || '';
-
-    vendidoZonesRef.current.footerY = footerStartY;
-    vendidoZonesRef.current.footerH = Math.round(140 * fs);
-
-    if (wpText) {
-      const wpImg = wpIconRef.current;
-      ctx.fillStyle = vc.footerText;
-      ctx.textAlign = 'center';
-      ctx.font = `bold ${Math.round(36 * fFs)}px 'Raleway', sans-serif`;
-      const wpDisplayY = footerStartY + Math.round(35 * fs);
-      if (wpImg) {
-        const iconS = Math.round(40 * fFs);
-        const textW = ctx.measureText(wpText).width;
-        const totalW = iconS + 14 + textW;
-        const startX = footerCenterX - totalW / 2;
-        ctx.drawImage(wpImg, startX, wpDisplayY - iconS * 0.7, iconS, iconS);
-        ctx.fillText(wpText, startX + iconS + 14 + textW / 2, wpDisplayY + Math.round(5 * fFs));
-      } else {
-        ctx.fillText(wpText, footerCenterX, wpDisplayY);
-      }
-    }
-
-    if (addrText) {
-      ctx.fillStyle = vc.footerText;
-      ctx.font = `bold ${Math.round(18 * fFs)}px 'Raleway', sans-serif`;
-      ctx.textAlign = 'center';
-      const addrY = footerStartY + Math.round(85 * fs);
-      const pinSize = Math.round(18 * fFs);
-      const addrFullText = addrText.toUpperCase();
-      const addrTW = ctx.measureText(addrFullText).width;
-      const addrStartX = footerCenterX - (pinSize + 8 + addrTW) / 2;
-      ctx.save();
-      ctx.fillStyle = vc.footerText;
-      ctx.beginPath();
-      ctx.arc(addrStartX + pinSize / 2, addrY - pinSize * 0.3, pinSize * 0.4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(addrStartX + pinSize / 2, addrY + pinSize * 0.4);
-      ctx.lineTo(addrStartX + pinSize * 0.2, addrY - pinSize * 0.3);
-      ctx.lineTo(addrStartX + pinSize * 0.8, addrY - pinSize * 0.3);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-      ctx.fillStyle = vc.footerText;
-      ctx.textAlign = 'center';
-      const maxAW = W - 100;
-      const aWords = addrFullText.split(' ');
-      let aLine = ''; let aLineY = addrY;
-      aWords.forEach(word => {
-        const test = aLine + (aLine ? ' ' : '') + word;
-        if (ctx.measureText(test).width > maxAW && aLine) {
-          ctx.fillText(aLine, footerCenterX, aLineY);
-          aLine = word;
-          aLineY += Math.round(24 * fFs);
-        } else { aLine = test; }
-      });
-      if (aLine) ctx.fillText(aLine, footerCenterX, aLineY);
-    }
-
-    // Logo (draggable)
-    if (lImg) {
-      ctx.drawImage(lImg, logoX, logoY, logoW, logoH);
-    }
-  }, [vendidoFontScale, vendidoStampFontScale, vendidoParabensFontScale, vendidoNomeFontScale, vendidoFooterFontScale, vendidoColors, buyerName, footerWhatsapp, footerAddress, logoW, logoH, logoX, logoY, photoOffsetX, photoOffsetY, vStampOffX, vStampOffY, vFrameOffX, vFrameOffY, vParabensOffX, vParabensOffY, vFooterOffX, vFooterOffY]);
-
+...
   // Unified draw function
-  const drawCanvas = useCallback((canvas: HTMLCanvasElement, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null, fImg: HTMLImageElement | null = null) => {
+  const drawCanvas = useCallback((canvas: HTMLCanvasElement, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null, fImg: HTMLImageElement | null = null, options?: { overlayOnly?: boolean }) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const W = CANVAS_W;
     const H = CANVAS_H_VAL;
     canvas.width = W;
     canvas.height = H;
+    ctx.clearRect(0, 0, W, H);
     if (flyerMode === 'vendido') {
       drawCanvasVendido(ctx, W, H, vImg, lImg);
     } else if (canvasFormat === 'story') {
-      drawCanvasStory(ctx, W, H, vImg, lImg);
+      drawCanvasStory(ctx, W, H, vImg, lImg, options);
     } else {
-      drawCanvasFeed(ctx, W, H, vImg, lImg);
+      drawCanvasFeed(ctx, W, H, vImg, lImg, options);
     }
-    // Draw frame overlay on top of everything (not for vendido mode)
     if (fImg && flyerMode !== 'vendido') {
       ctx.drawImage(fImg, 0, 0, W, H);
     }
   }, [canvasFormat, CANVAS_H_VAL, drawCanvasFeed, drawCanvasStory, drawCanvasVendido, flyerMode]);
-
+ 
   // Live preview rendering + capture for video tab
   useEffect(() => {
     const canvas = previewCanvasRef.current;
     if (!canvas) return;
     drawCanvas(canvas, vehicleImgObj, logoImgObj, frameImgObj);
-    // Capture full flyer image for preview display
     try { setFlyerImageDataUrl(canvas.toDataURL('image/jpeg', 0.8)); } catch {}
-    // Generate transparent overlay (frame only, no vehicle photo) for video composition
     try {
       const overlayCanvas = document.createElement('canvas');
       overlayCanvas.width = CANVAS_W;
       overlayCanvas.height = CANVAS_H_VAL;
-      // Draw frame WITHOUT vehicle image — pass null for vImg
-      drawCanvas(overlayCanvas, null, logoImgObj, frameImgObj);
+      drawCanvas(overlayCanvas, null, logoImgObj, frameImgObj, { overlayOnly: true });
       setFlyerOverlayDataUrl(overlayCanvas.toDataURL('image/png'));
     } catch {}
   }, [drawCanvas, vehicleImgObj, logoImgObj, frameImgObj, CANVAS_H_VAL]);

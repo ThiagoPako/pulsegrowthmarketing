@@ -589,6 +589,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const priceText = price ? formatPrice(price) : 'R$ 00.000,00';
     const priceIsExample = !price;
     {
+      const pfs = priceFontScale * fs;
       const priceBoxW = Math.round(460 * bs), priceBoxH = Math.round(120 * bs);
       const priceX = W - priceBoxW - 30;
       const priceYpos = infoPosY - priceBoxH - 30;
@@ -599,9 +600,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillStyle = priceGrad;
       ctx.beginPath(); ctx.roundRect(priceX, priceYpos, priceBoxW, priceBoxH, 16); ctx.fill();
       ctx.globalAlpha = priceIsExample ? 0.4 : 1;
-      ctx.fillStyle = c.priceText; ctx.font = `${Math.round(20 * fs)}px Arial, sans-serif`; ctx.textAlign = 'left';
+      ctx.fillStyle = c.priceText; ctx.font = `${Math.round(20 * pfs)}px Arial, sans-serif`; ctx.textAlign = 'left';
       ctx.fillText('POR APENAS:', priceX + 24, priceYpos + Math.round(35 * bs));
-      ctx.font = `bold ${Math.round(52 * fs)}px Arial, sans-serif`;
+      ctx.font = `bold ${Math.round(52 * pfs)}px Arial, sans-serif`;
       ctx.fillText(priceText, priceX + 24, priceYpos + Math.round(90 * bs));
       ctx.globalAlpha = 1;
     }

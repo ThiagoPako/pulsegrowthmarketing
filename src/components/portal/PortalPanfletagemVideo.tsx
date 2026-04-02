@@ -137,6 +137,9 @@ function uploadWithProgress(file: File, folder: string, onProgress: (pct: number
 
 interface CompSegment { type: 'intro' | 'vehicle' | 'closing'; blobUrl: string; originalUrl: string; }
 
+const TRANSITION_DURATION_MS = 800;
+const TRANSITION_FRAMES = Math.round((TRANSITION_DURATION_MS / 1000) * FPS);
+
 /* ================================================================ */
 /*  COMPONENT                                                        */
 /* ================================================================ */

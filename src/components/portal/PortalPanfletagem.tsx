@@ -92,6 +92,15 @@ interface FormatLayout {
   labelFontScale: number;
   pillHeightScale: number;
   pillRadiusScale: number;
+  logoX: number;
+  logoY: number;
+  logoScale: number;
+  infoPosY: number;
+  footerPosX: number;
+  footerPosY: number;
+  photoOffsetX: number;
+  photoOffsetY: number;
+  customLogoDataUrl: string | null;
 }
 
 const DEFAULT_FORMAT_LAYOUT: FormatLayout = {
@@ -99,7 +108,11 @@ const DEFAULT_FORMAT_LAYOUT: FormatLayout = {
   fontScale: 1.0, headerFontScale: 1.0, priceFontScale: 1.0, footerFontScale: 1.0,
   infoBoxScale: 1.0, modelFontScale: 1.0, yearFontScale: 1.0, transmissionFontScale: 1.0,
   obsFontScale: 1.0, labelFontScale: 1.0, pillHeightScale: 1.0, pillRadiusScale: 1.0,
+  logoX: 820, logoY: 60, logoScale: 100, infoPosY: 920,
+  footerPosX: 0, footerPosY: 0, photoOffsetX: 0, photoOffsetY: 0,
+  customLogoDataUrl: null,
 };
+
 
 interface VendidoColors {
   background: string;
@@ -300,6 +313,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     colors: { ...colors }, fontScale, headerFontScale, priceFontScale, footerFontScale,
     infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale,
     obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale,
+    logoX, logoY, logoScale, infoPosY, footerPosX, footerPosY,
+    photoOffsetX, photoOffsetY, customLogoDataUrl,
   });
 
   const applyLayout = (layout: FormatLayout) => {
@@ -316,6 +331,15 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     setLabelFontScale(layout.labelFontScale);
     setPillHeightScale(layout.pillHeightScale);
     setPillRadiusScale(layout.pillRadiusScale);
+    setLogoX(layout.logoX);
+    setLogoY(layout.logoY);
+    setLogoScale(layout.logoScale);
+    setInfoPosY(layout.infoPosY);
+    setFooterPosX(layout.footerPosX);
+    setFooterPosY(layout.footerPosY);
+    setPhotoOffsetX(layout.photoOffsetX);
+    setPhotoOffsetY(layout.photoOffsetY);
+    setCustomLogoDataUrl(layout.customLogoDataUrl);
   };
 
   const switchFormat = (newFormat: CanvasFormat) => {
@@ -329,14 +353,21 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   };
 
   const importColorsFromOtherFormat = () => {
-    // First save current layout to the active ref
     const current = collectCurrentLayout();
     if (canvasFormat === 'feed') feedLayoutRef.current = current;
     else storyLayoutRef.current = current;
-    // Get colors from other format
     const otherRef = canvasFormat === 'feed' ? storyLayoutRef : feedLayoutRef;
     setColors({ ...otherRef.current.colors });
     toast.success(`Cores importadas do ${canvasFormat === 'feed' ? 'Story' : 'Feed'}!`);
+  };
+
+  const importAllFromOtherFormat = () => {
+    const current = collectCurrentLayout();
+    if (canvasFormat === 'feed') feedLayoutRef.current = current;
+    else storyLayoutRef.current = current;
+    const otherRef = canvasFormat === 'feed' ? storyLayoutRef : feedLayoutRef;
+    applyLayout({ ...otherRef.current, colors: { ...otherRef.current.colors } });
+    toast.success(`Layout completo importado do ${canvasFormat === 'feed' ? 'Story' : 'Feed'}!`);
   };
 
   // Lock
@@ -383,16 +414,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (saved) {
       try {
         const s = JSON.parse(saved);
-        if (s.logoX != null) setLogoX(s.logoX);
-        if (s.logoY != null) setLogoY(s.logoY);
-        if (s.logoScale != null) setLogoScale(s.logoScale);
-        if (s.infoPosY != null) setInfoPosY(s.infoPosY);
         if (s.layoutLocked != null) setLayoutLocked(s.layoutLocked);
-        if (s.customLogoDataUrl) setCustomLogoDataUrl(s.customLogoDataUrl);
-        if (s.footerPosX != null) setFooterPosX(s.footerPosX);
-        if (s.footerPosY != null) setFooterPosY(s.footerPosY);
-        if (s.photoOffsetX != null) setPhotoOffsetX(s.photoOffsetX);
-        if (s.photoOffsetY != null) setPhotoOffsetY(s.photoOffsetY);
         if (s.footerAddress != null) setFooterAddress(s.footerAddress);
         if (s.footerWhatsapp != null) setFooterWhatsapp(s.footerWhatsapp);
         if (s.canvasFormat) setCanvasFormat(s.canvasFormat);
@@ -415,6 +437,10 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             obsFontScale: s.obsFontScale ?? s.infoFontScale ?? 1.0,
             labelFontScale: s.labelFontScale ?? 1.0,
             pillHeightScale: s.pillHeightScale ?? 1.0, pillRadiusScale: s.pillRadiusScale ?? 1.0,
+            logoX: s.logoX ?? 820, logoY: s.logoY ?? 60, logoScale: s.logoScale ?? 100,
+            infoPosY: s.infoPosY ?? 920, footerPosX: s.footerPosX ?? 0, footerPosY: s.footerPosY ?? 0,
+            photoOffsetX: s.photoOffsetX ?? 0, photoOffsetY: s.photoOffsetY ?? 0,
+            customLogoDataUrl: s.customLogoDataUrl ?? null,
           };
         }
         if (s.storyLayout) {
@@ -463,9 +489,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     else storyLayoutRef.current = current;
 
     const settings = {
-      logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl,
-      footerPosX, footerPosY, photoOffsetX, photoOffsetY,
-      footerAddress, footerWhatsapp, canvasFormat,
+      layoutLocked, footerAddress, footerWhatsapp, canvasFormat,
       feedLayout: feedLayoutRef.current,
       storyLayout: storyLayoutRef.current,
       vendidoColors, vendidoFontScale, vendidoStampFontScale, vendidoParabensFontScale,
@@ -1724,8 +1748,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
               <Upload size={16} style={{ color: `hsl(${clientColor})` }} /> Logo
+              <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: `hsl(${clientColor} / 0.2)`, color: `hsl(${clientColor})` }}>
+                {canvasFormat === 'feed' ? 'FEED' : 'STORY'}
+              </span>
             </h3>
-            <p className="text-[11px] text-white/40">A logo original do cadastro é usada. Envie outra se precisar, ou ajuste o tamanho (proporcional).</p>
+            <p className="text-[11px] text-white/40">Configuração individual para {canvasFormat === 'feed' ? 'Feed' : 'Story'}. Envie outra logo ou ajuste o tamanho.</p>
             <div className="flex items-center gap-4">
               {(customLogoDataUrl || clientLogoUrl) && (
                 <div className="w-16 h-16 rounded-lg bg-white/[0.06] overflow-hidden flex items-center justify-center">
@@ -1798,8 +1825,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
               <Palette size={16} style={{ color: `hsl(${clientColor})` }} /> Tamanho das Caixas (Info)
+              <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: `hsl(${clientColor} / 0.2)`, color: `hsl(${clientColor})` }}>
+                {canvasFormat === 'feed' ? 'FEED' : 'STORY'}
+              </span>
             </h3>
-            <p className="text-[11px] text-white/40">Controla a escala das caixinhas de Modelo, Ano, Câmbio, etc. mantendo as proporções.</p>
+            <p className="text-[11px] text-white/40">Configuração individual para {canvasFormat === 'feed' ? 'Feed' : 'Story'}.</p>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-xs text-white/60">Escala</Label>
@@ -1879,10 +1909,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
                 className="flex-1 border-white/[0.1] text-white/70 hover:text-white hover:bg-white/[0.06] text-xs">
                 <Palette size={12} /> Importar cores do {canvasFormat === 'feed' ? 'Story' : 'Feed'}
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setColors({ ...DEFAULT_COLORS })} className="text-white/40 hover:text-white text-xs">
-                Resetar
+              <Button variant="outline" size="sm" onClick={importAllFromOtherFormat}
+                className="flex-1 border-white/[0.1] text-white/70 hover:text-white hover:bg-white/[0.06] text-xs">
+                <Download size={12} /> Importar tudo do {canvasFormat === 'feed' ? 'Story' : 'Feed'}
               </Button>
             </div>
+            <Button variant="ghost" size="sm" onClick={() => setColors({ ...DEFAULT_COLORS })} className="text-white/40 hover:text-white text-xs w-full">
+              Resetar Cores Padrão
+            </Button>
           </div>
           </>
           )}

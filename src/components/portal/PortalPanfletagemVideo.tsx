@@ -57,7 +57,7 @@ const IPVA_OPTIONS = [
 const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
 const CANVAS_W = 1080;
-const CANVAS_H = 1920;
+const CANVAS_H = 1350;
 const FPS = 30;
 
 /* ================================================================ */

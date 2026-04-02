@@ -1328,8 +1328,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   }, [drawCanvas, customLogoDataUrl, clientLogoUrl, frameImgObj]);
 
   const handleCreate = async () => {
-    if (!model.trim() || !year.trim()) { toast.error('Preencha modelo e ano do veículo'); return; }
-    if (mediaFiles.length === 0 && mediaPreviews.length === 0) { toast.error('Adicione pelo menos uma foto do veículo'); return; }
+    if (flyerMode !== 'vendido' && (!model.trim() || !year.trim())) { toast.error('Preencha modelo e ano do veículo'); return; }
+    if (mediaFiles.length === 0 && mediaPreviews.length === 0) { toast.error('Adicione pelo menos uma foto'); return; }
 
     setCreating(true);
     try {

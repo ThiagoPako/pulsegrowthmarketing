@@ -466,6 +466,18 @@ export function useFinancialData() {
   const deleteExpense = async (id: string) => {
     const expense = expenses.find(e => e.id === id);
     await supabase.from('expenses').delete().eq('id', id);
+
+    // Remove linked cash movement
+    const { data: linked } = await supabase
+      .from('cash_reserve_movements')
+      .select('id')
+      .ilike('description', `%[Despesa]%ID: ${id}%`);
+    if (linked && linked.length > 0) {
+      for (const l of linked) {
+        await supabase.from('cash_reserve_movements').delete().eq('id', l.id);
+      }
+    }
+
     await logActivity('exclusão', 'despesa', `Excluiu despesa - R$ ${Number(expense?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${expense?.description}`, id);
     await fetchAll();
   };

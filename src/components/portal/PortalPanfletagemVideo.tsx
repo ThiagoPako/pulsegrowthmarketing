@@ -346,15 +346,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     blobUrlsToRevokeRef.current = [];
   }, []);
 
-  const drawFrame = useCallback(() => {
-    const canvas = compositionCanvasRef.current;
-    const video = hiddenVideoRef.current;
-    if (!canvas || !video || video.paused || video.ended) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Draw video frame scaled to fill canvas (cover)
+  const drawVideoToCanvas = useCallback((ctx: CanvasRenderingContext2D, video: HTMLVideoElement, alpha: number) => {
     const vw = video.videoWidth || CANVAS_W;
     const vh = video.videoHeight || CANVAS_H;
     const scale = Math.max(CANVAS_W / vw, CANVAS_H / vh);
@@ -362,11 +354,13 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     const sh = vh * scale;
     const sx = (CANVAS_W - sw) / 2;
     const sy = (CANVAS_H - sh) / 2;
+    ctx.globalAlpha = alpha;
     ctx.drawImage(video, sx, sy, sw, sh);
+    ctx.globalAlpha = 1.0;
+  }, []);
 
-    // Overlay layout during vehicle segments
-    const seg = compositionSegmentsRef.current[currentSegIndexRef.current];
-    if (seg?.type === 'vehicle' && layoutOverlayImg) {
+  const drawOverlay = useCallback((ctx: CanvasRenderingContext2D, segType: string) => {
+    if (segType === 'vehicle' && layoutOverlayImg) {
       ctx.globalAlpha = 1.0;
       const overlayRatio = layoutOverlayImg.naturalWidth / layoutOverlayImg.naturalHeight;
       if (overlayRatio < 0.6) {
@@ -377,9 +371,59 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
         ctx.drawImage(layoutOverlayImg, 0, ly, CANVAS_W, lh);
       }
     }
+  }, [layoutOverlayImg]);
+
+  const drawFrame = useCallback(() => {
+    const canvas = compositionCanvasRef.current;
+    const video = hiddenVideoRef.current;
+    if (!canvas || !video || (video.paused && transitionProgressRef.current < 0)) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+    // Check if we're in a crossfade transition
+    if (transitionProgressRef.current >= 0) {
+      const elapsed = performance.now() - transitionStartTimeRef.current;
+      const progress = Math.min(elapsed / TRANSITION_DURATION_MS, 1);
+      transitionProgressRef.current = progress;
+
+      const video2 = hiddenVideo2Ref.current;
+
+      // Draw outgoing video (fading out)
+      if (video2 && !video2.paused) {
+        drawVideoToCanvas(ctx, video2, 1 - progress);
+        const prevIdx = currentSegIndexRef.current - 1;
+        if (prevIdx >= 0) {
+          drawOverlay(ctx, compositionSegmentsRef.current[prevIdx].type);
+        }
+      }
+
+      // Draw incoming video (fading in)
+      if (!video.paused) {
+        drawVideoToCanvas(ctx, video, progress);
+        const seg = compositionSegmentsRef.current[currentSegIndexRef.current];
+        if (seg) drawOverlay(ctx, seg.type);
+      }
+
+      if (progress >= 1) {
+        transitionProgressRef.current = -1;
+        if (video2) { video2.pause(); }
+      }
+    } else {
+      // Normal playback - no transition
+      if (!video.paused && !video.ended) {
+        drawVideoToCanvas(ctx, video, 1);
+        const seg = compositionSegmentsRef.current[currentSegIndexRef.current];
+        if (seg) drawOverlay(ctx, seg.type);
+      }
+    }
 
     animFrameRef.current = requestAnimationFrame(drawFrame);
-  }, [layoutOverlayImg]);
+  }, [drawVideoToCanvas, drawOverlay]);
 
   const playNextSegment = useCallback(() => {
     const segments = compositionSegmentsRef.current;

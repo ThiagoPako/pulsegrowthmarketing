@@ -178,18 +178,19 @@ export default function DeadlineBadge({ deadline, label, startedAt, totalHours }
       : '[&>div]:bg-emerald-500';
 
   return (
-    <div className="w-full space-y-0.5">
+    <div className={`w-full space-y-0.5 ${info.isExpired ? 'animate-pulse' : ''}`}>
       <span className={`inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-md ${
         info.variant === 'expired'
-          ? 'bg-red-100 text-red-800 border border-red-300 dark:bg-red-900/40 dark:text-red-300 animate-pulse'
+          ? 'bg-red-100 text-red-800 border border-red-300 dark:bg-red-900/40 dark:text-red-300'
           : info.variant === 'warning'
             ? 'bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400'
             : 'bg-muted text-muted-foreground border border-border'
       }`}>
-        <Clock size={9} />
+        {info.isExpired ? <Flame size={10} className="text-red-600 animate-bounce" /> : <Clock size={9} />}
         {label && <span>{label}:</span>}
         {info.timeStr}
         {progress > 0 && <span className="ml-0.5">({progress}%)</span>}
+        {info.isExpired && <Flame size={10} className="text-orange-500 animate-bounce" />}
       </span>
       {progress > 0 && (
         <Progress value={progress} className={`h-1.5 w-full bg-muted/50 ${barColor}`} />

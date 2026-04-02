@@ -951,120 +951,133 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.globalAlpha = 1;
   }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
 
-  // VENDIDO layout — matching reference: dark blue bg, "VENDIDO" red stamp, polaroid photo, "PARABÉNS [NOME]", footer
+  // VENDIDO layout — matching reference: #034e98 blue bg, white diagonal, polaroid frame, "PARABÉNS [NOME]"
   const drawCanvasVendido = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {
     const fs = fontScale;
-    const c = colors;
 
-    // Background — dark navy blue
-    const bgGrad = ctx.createLinearGradient(0, 0, W, H);
-    bgGrad.addColorStop(0, '#0a1628');
-    bgGrad.addColorStop(0.5, '#0d2147');
-    bgGrad.addColorStop(1, '#0a1628');
-    ctx.fillStyle = bgGrad;
+    // Background — solid blue #034e98
+    ctx.fillStyle = '#034e98';
     ctx.fillRect(0, 0, W, H);
 
-    // Subtle diagonal accent
-    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    // White diagonal accent on right side (like reference)
+    ctx.fillStyle = '#FFFFFF';
     ctx.beginPath();
-    ctx.moveTo(W * 0.6, 0); ctx.lineTo(W, 0); ctx.lineTo(W, H * 0.5); ctx.closePath();
+    ctx.moveTo(W * 0.82, 0);
+    ctx.lineTo(W, 0);
+    ctx.lineTo(W, H * 0.62);
+    ctx.lineTo(W * 0.68, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // Darker blue accent strip on right edge
+    ctx.fillStyle = '#022d5a';
+    ctx.beginPath();
+    ctx.moveTo(W * 0.88, 0);
+    ctx.lineTo(W, 0);
+    ctx.lineTo(W, H * 0.45);
+    ctx.closePath();
     ctx.fill();
 
     // ---- "VENDIDO" stamp (red, bold italic, top-left) ----
-    const stampY = 80;
+    const stampFontSize = Math.round(100 * fs);
     ctx.save();
-    ctx.font = `bold italic ${Math.round(90 * fs)}px 'Raleway', Impact, sans-serif`;
+    ctx.font = `bold italic ${stampFontSize}px 'Raleway', Impact, sans-serif`;
     ctx.textAlign = 'left';
-    // Red background bar behind text
     const vendidoMetrics = ctx.measureText('VENDIDO');
-    const barX = 20;
-    const barW = vendidoMetrics.width + 40;
-    const barH = Math.round(100 * fs);
+    const barX = 0;
+    const barW = vendidoMetrics.width + 50;
+    const barH = Math.round(stampFontSize * 1.2);
+    const barY = Math.round(50 * fs);
+    // Red skewed bar behind text
     ctx.fillStyle = '#CC0000';
     ctx.beginPath();
-    // Skewed rectangle
-    ctx.moveTo(barX, stampY - barH * 0.7);
-    ctx.lineTo(barX + barW + 15, stampY - barH * 0.7);
-    ctx.lineTo(barX + barW, stampY + barH * 0.3);
-    ctx.lineTo(barX - 5, stampY + barH * 0.3);
+    ctx.moveTo(barX, barY);
+    ctx.lineTo(barX + barW + 20, barY);
+    ctx.lineTo(barX + barW - 10, barY + barH);
+    ctx.lineTo(barX, barY + barH);
     ctx.closePath();
     ctx.fill();
+    // "VENDIDO" text
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillText('VENDIDO', barX + 20, stampY + Math.round(10 * fs));
+    ctx.fillText('VENDIDO', barX + 25, barY + barH - Math.round(25 * fs));
     ctx.restore();
 
-    // "+1 CLIENTE SATISFEITO"
+    // "+1 CLIENTE SATISFEITO" below stamp
+    const satisfeitoY = barY + barH + Math.round(45 * fs);
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = `bold ${Math.round(32 * fs)}px 'Raleway', sans-serif`;
+    ctx.font = `bold ${Math.round(34 * fs)}px 'Raleway', sans-serif`;
     ctx.textAlign = 'left';
-    ctx.fillText('+1 CLIENTE SATISFEITO', 30, stampY + Math.round(70 * fs));
+    ctx.fillText('+1 CLIENTE SATISFEITO', 30, satisfeitoY);
 
-    // ---- Polaroid-style photo frame ----
-    const frameMargin = 80;
-    const frameTop = stampY + Math.round(110 * fs);
-    const frameW = W - frameMargin * 2;
+    // ---- Polaroid-style photo frame (white, thick borders) ----
+    const frameMarginX = 70;
+    const frameTop = satisfeitoY + Math.round(35 * fs);
+    const frameW = W - frameMarginX * 2;
+    const frameBorder = 28; // thick white border like reference
     const photoAspect = 4 / 3;
-    const innerPhotoH = Math.round(frameW / photoAspect);
-    const framePadding = 24;
-    const framePadBottom = Math.round(160 * fs); // extra space below for name
-    const totalFrameH = innerPhotoH + framePadding * 2 + framePadBottom;
+    const innerPhotoW = frameW - frameBorder * 2;
+    const innerPhotoH = Math.round(innerPhotoW / photoAspect);
+    const framePadBottom = Math.round(170 * fs); // space for "PARABÉNS" text
+    const totalFrameH = innerPhotoH + frameBorder * 2 + framePadBottom;
 
-    // White frame shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    // Frame shadow
     ctx.save();
-    ctx.translate(6, 6);
+    ctx.shadowColor = 'rgba(0,0,0,0.35)';
+    ctx.shadowBlur = 20;
+    ctx.shadowOffsetX = 5;
+    ctx.shadowOffsetY = 5;
+    ctx.fillStyle = '#FFFFFF';
     ctx.beginPath();
-    ctx.roundRect(frameMargin, frameTop, frameW, totalFrameH, 8);
+    ctx.roundRect(frameMarginX, frameTop, frameW, totalFrameH, 6);
     ctx.fill();
     ctx.restore();
 
-    // White frame
-    ctx.fillStyle = '#F5F5F0';
+    // White frame (clean)
+    ctx.fillStyle = '#FFFFFF';
     ctx.beginPath();
-    ctx.roundRect(frameMargin, frameTop, frameW, totalFrameH, 8);
+    ctx.roundRect(frameMarginX, frameTop, frameW, totalFrameH, 6);
     ctx.fill();
 
     // Photo inside frame
-    const photoX = frameMargin + framePadding;
-    const photoY = frameTop + framePadding;
-    const photoW = frameW - framePadding * 2;
+    const photoX = frameMarginX + frameBorder;
+    const photoY = frameTop + frameBorder;
     if (vImg) {
       ctx.save();
       ctx.beginPath();
-      ctx.roundRect(photoX, photoY, photoW, innerPhotoH, 4);
+      ctx.rect(photoX, photoY, innerPhotoW, innerPhotoH);
       ctx.clip();
-      drawImageCover(ctx, vImg, photoX, photoY, photoW, innerPhotoH, photoOffsetX, photoOffsetY);
+      drawImageCover(ctx, vImg, photoX, photoY, innerPhotoW, innerPhotoH, photoOffsetX, photoOffsetY);
       ctx.restore();
     } else {
-      ctx.fillStyle = '#ddd';
-      ctx.fillRect(photoX, photoY, photoW, innerPhotoH);
+      ctx.fillStyle = '#e0e0e0';
+      ctx.fillRect(photoX, photoY, innerPhotoW, innerPhotoH);
       ctx.fillStyle = '#999';
-      ctx.font = `${Math.round(24 * fs)}px Arial`;
+      ctx.font = `${Math.round(28 * fs)}px Arial`;
       ctx.textAlign = 'center';
-      ctx.fillText('Adicione uma foto', photoX + photoW / 2, photoY + innerPhotoH / 2);
+      ctx.fillText('Adicione uma foto', photoX + innerPhotoW / 2, photoY + innerPhotoH / 2);
     }
 
-    // "PARABÉNS" + buyer name inside polaroid bottom
-    const nameAreaY = photoY + innerPhotoH + Math.round(20 * fs);
-    ctx.fillStyle = '#1a2a4a';
-    ctx.font = `bold ${Math.round(42 * fs)}px 'Raleway', sans-serif`;
+    // "PARABÉNS" + buyer name inside the white frame bottom (dark blue text)
+    const nameAreaTop = photoY + innerPhotoH + Math.round(25 * fs);
+    const centerX = frameMarginX + frameW / 2;
+    ctx.fillStyle = '#034e98';
     ctx.textAlign = 'center';
-    const centerX = frameMargin + frameW / 2;
-    ctx.fillText('PARABÉNS', centerX, nameAreaY + Math.round(45 * fs));
+    
+    ctx.font = `bold ${Math.round(48 * fs)}px 'Raleway', sans-serif`;
+    ctx.fillText('PARABÉNS', centerX, nameAreaTop + Math.round(50 * fs));
 
     const displayName = buyerName.trim() || 'NOME DO CLIENTE';
-    ctx.font = `bold ${Math.round(38 * fs)}px 'Raleway', sans-serif`;
-    // Word wrap the name
-    const maxNameW = frameW - framePadding * 4;
+    ctx.font = `bold ${Math.round(44 * fs)}px 'Raleway', sans-serif`;
+    const maxNameW = frameW - frameBorder * 4;
     const nameWords = displayName.toUpperCase().split(' ');
     let nameLine = '';
-    let nameLineY = nameAreaY + Math.round(95 * fs);
+    let nameLineY = nameAreaTop + Math.round(105 * fs);
     nameWords.forEach(word => {
       const test = nameLine + (nameLine ? ' ' : '') + word;
       if (ctx.measureText(test).width > maxNameW && nameLine) {
         ctx.fillText(nameLine, centerX, nameLineY);
         nameLine = word;
-        nameLineY += Math.round(48 * fs);
+        nameLineY += Math.round(52 * fs);
       } else {
         nameLine = test;
       }
@@ -1072,7 +1085,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (nameLine) ctx.fillText(nameLine, centerX, nameLineY);
 
     // ---- Footer: WhatsApp + Address ----
-    const footerStartY = frameTop + totalFrameH + Math.round(30 * fs);
+    const footerStartY = frameTop + totalFrameH + Math.round(25 * fs);
     const wpText = footerWhatsapp || '';
     const addrText = footerAddress || '';
 
@@ -1080,33 +1093,32 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       const wpImg = wpIconRef.current;
       ctx.fillStyle = '#FFFFFF';
       ctx.textAlign = 'center';
-      ctx.font = `bold ${Math.round(36 * fs)}px 'Raleway', sans-serif`;
-      const wpDisplayY = footerStartY + Math.round(30 * fs);
+      ctx.font = `bold ${Math.round(38 * fs)}px 'Raleway', sans-serif`;
+      const wpDisplayY = footerStartY + Math.round(35 * fs);
       if (wpImg) {
-        const iconS = Math.round(40 * fs);
+        const iconS = Math.round(42 * fs);
         const textW = ctx.measureText(wpText).width;
-        const totalW = iconS + 12 + textW;
+        const totalW = iconS + 14 + textW;
         const startX = W / 2 - totalW / 2;
         ctx.drawImage(wpImg, startX, wpDisplayY - iconS * 0.7, iconS, iconS);
-        ctx.fillText(wpText, startX + iconS + 12 + textW / 2, wpDisplayY + Math.round(5 * fs));
+        ctx.fillText(wpText, startX + iconS + 14 + textW / 2, wpDisplayY + Math.round(5 * fs));
       } else {
         ctx.fillText(wpText, W / 2, wpDisplayY);
       }
     }
 
     if (addrText) {
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.font = `${Math.round(20 * fs)}px 'Raleway', sans-serif`;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `bold ${Math.round(20 * fs)}px 'Raleway', sans-serif`;
       ctx.textAlign = 'center';
-      const addrY = footerStartY + Math.round(80 * fs);
-      // Pin icon before address
-      const pinSize = Math.round(16 * fs);
+      const addrY = footerStartY + Math.round(85 * fs);
+      // Pin icon
+      const pinSize = Math.round(18 * fs);
       const addrFullText = addrText.toUpperCase();
       const addrTW = ctx.measureText(addrFullText).width;
       const addrStartX = W / 2 - (pinSize + 8 + addrTW) / 2;
-      // Simple pin icon
       ctx.save();
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
       ctx.arc(addrStartX + pinSize / 2, addrY - pinSize * 0.3, pinSize * 0.4, 0, Math.PI * 2);
       ctx.fill();
@@ -1117,8 +1129,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.closePath();
       ctx.fill();
       ctx.restore();
-      // Wrap address text
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      // Wrap address
+      ctx.fillStyle = '#FFFFFF';
       ctx.textAlign = 'center';
       const maxAW = W - 100;
       const aWords = addrFullText.split(' ');
@@ -1134,13 +1146,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       if (aLine) ctx.fillText(aLine, W / 2, aLineY);
     }
 
-    // Logo (top right corner, smaller)
+    // Logo (draggable — uses same logoX, logoY as venda mode)
     if (lImg) {
-      const lW = Math.round(logoW * 0.7);
-      const lH = Math.round(logoH * 0.7);
-      ctx.drawImage(lImg, W - lW - 30, 20, lW, lH);
+      ctx.drawImage(lImg, logoX, logoY, logoW, logoH);
     }
-  }, [fontScale, colors, buyerName, footerWhatsapp, footerAddress, logoW, logoH, photoOffsetX, photoOffsetY]);
+  }, [fontScale, buyerName, footerWhatsapp, footerAddress, logoW, logoH, logoX, logoY, photoOffsetX, photoOffsetY]);
 
   // Unified draw function
   const drawCanvas = useCallback((canvas: HTMLCanvasElement, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null, fImg: HTMLImageElement | null = null) => {

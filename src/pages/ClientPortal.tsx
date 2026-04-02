@@ -59,6 +59,7 @@ interface ClientData {
   monthly_recordings: number; plan_id: string | null; show_metrics: boolean;
   has_vehicle_flyer: boolean; niche: string | null;
   whatsapp?: string; city?: string;
+  client_type?: string;
 }
 
 type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem' | 'designer' | 'descontos' | 'entregas';
@@ -176,6 +177,7 @@ export default function ClientPortal() {
       niche: data.niche || null,
       whatsapp: data.whatsapp,
       city: data.city,
+      client_type: data.client_type || 'novo',
     });
 
     let clientData: ClientData | null = null;
@@ -539,12 +541,14 @@ export default function ClientPortal() {
               >
                 Agenda
               </button>
+              {client.client_type === 'sem_contrato' && (
               <button
                 onClick={() => setActiveTab('entregas')}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'entregas' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
               >
                 📋 Entregas
               </button>
+              )}
               {(client.show_metrics || isTeamMember) && (
                 <button
                   onClick={() => setActiveTab('metrics')}
@@ -632,9 +636,11 @@ export default function ClientPortal() {
         <button onClick={() => setActiveTab('agenda')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'agenda' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'agenda' ? { borderColor: `hsl(${clientColor})` } : {}}>
           Agenda
         </button>
+        {client.client_type === 'sem_contrato' && (
         <button onClick={() => setActiveTab('entregas')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'entregas' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'entregas' ? { borderColor: `hsl(${clientColor})` } : {}}>
           📋 Entregas
         </button>
+        )}
         {(client.show_metrics || isTeamMember) && (
           <button onClick={() => setActiveTab('metrics')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'metrics' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'metrics' ? { borderColor: `hsl(${clientColor})` } : {}}>
             Métricas

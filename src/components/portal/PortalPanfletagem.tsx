@@ -1288,40 +1288,67 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const handlePreviewMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     didDragRef.current = false;
     const { cx, cy } = getCanvasCoords(e);
-    // Check logo hit (only when unlocked)
+
+    // Logo always first (both modes)
     if (!layoutLocked && cx >= logoX && cx <= logoX + logoW && cy >= logoY && cy <= logoY + logoH) {
       e.preventDefault(); e.stopPropagation();
       setDragging('logo'); setDragOffset({ x: cx - logoX, y: cy - logoY }); return;
     }
-    const infoH = Math.round(260 * infoBoxScale);
-    // Photo zone is ALWAYS draggable (even when locked)
-    const photoY = 260;
-    if (cy >= photoY && cy < infoPosY) {
-      e.preventDefault(); e.stopPropagation();
-      setDragging('photo'); setDragOffset({ x: cx - photoOffsetX, y: cy - photoOffsetY }); return;
-    }
-    if (!layoutLocked && cy >= infoPosY && cy <= infoPosY + infoH) {
-      setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); return;
-    }
-    // Check footer hit (only when unlocked)
-    const footY = infoPosY + infoH;
-    if (!layoutLocked && cy >= footY) {
-      setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + (CANVAS_H_VAL - footY) / 2 + footerPosY) }); return;
+
+    if (flyerMode === 'vendido') {
+      // Vendido mode zones
+      const z = vendidoZonesRef.current;
+      if (!layoutLocked) {
+        if (cy >= z.stampY && cy <= z.stampY + z.stampH) {
+          setDragging('v-stamp'); setDragOffset({ x: cx - vStampOffX, y: cy - vStampOffY }); e.preventDefault(); return;
+        }
+        if (cx >= z.frameX && cx <= z.frameX + z.frameW && cy >= z.frameY && cy <= z.frameY + z.frameH) {
+          setDragging('v-frame'); setDragOffset({ x: cx - vFrameOffX, y: cy - vFrameOffY }); e.preventDefault(); return;
+        }
+        if (cy >= z.parabensY && cy <= z.parabensY + z.parabensH) {
+          setDragging('v-parabens'); setDragOffset({ x: cx - vParabensOffX, y: cy - vParabensOffY }); e.preventDefault(); return;
+        }
+        if (cy >= z.footerY && cy <= z.footerY + z.footerH) {
+          setDragging('v-footer'); setDragOffset({ x: cx - vFooterOffX, y: cy - vFooterOffY }); e.preventDefault(); return;
+        }
+      }
+      // Photo inside frame always draggable
+      const fz = z;
+      const photoX = fz.frameX + 24;
+      const photoYtop = fz.frameY + 24;
+      const photoXend = fz.frameX + fz.frameW - 24;
+      const photoYend = fz.frameY + fz.frameH - 44;
+      if (cx >= photoX && cx <= photoXend && cy >= photoYtop && cy <= photoYend) {
+        setDragging('photo'); setDragOffset({ x: cx - photoOffsetX, y: cy - photoOffsetY }); e.preventDefault(); return;
+      }
+    } else {
+      // Venda mode zones
+      const infoH = Math.round(260 * infoBoxScale);
+      const photoY = 260;
+      if (cy >= photoY && cy < infoPosY) {
+        e.preventDefault(); e.stopPropagation();
+        setDragging('photo'); setDragOffset({ x: cx - photoOffsetX, y: cy - photoOffsetY }); return;
+      }
+      if (!layoutLocked && cy >= infoPosY && cy <= infoPosY + infoH) {
+        setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); return;
+      }
+      const footY = infoPosY + infoH;
+      if (!layoutLocked && cy >= footY) {
+        setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + (CANVAS_H_VAL - footY) / 2 + footerPosY) }); return;
+      }
     }
   };
 
   const handlePreviewClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (didDragRef.current) { didDragRef.current = false; return; }
-    const { cy } = getCanvasCoords(e);
-    const zone = detectZone(cy);
-    setActiveColorZone(prev => prev === zone ? null : zone);
+    if (flyerMode !== 'vendido') {
+      const { cy } = getCanvasCoords(e);
+      const zone = detectZone(cy);
+      setActiveColorZone(prev => prev === zone ? null : zone);
+    }
   };
 
-  const handlePreviewMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!dragging || (layoutLocked && dragging !== 'photo')) return;
-    e.preventDefault();
-    didDragRef.current = true;
-    const { cx, cy } = getCanvasCoords(e);
+  const applyDragMove = (cx: number, cy: number) => {
     if (dragging === 'logo') {
       setLogoX(Math.max(-logoW / 2, Math.min(CANVAS_W - logoW / 2, cx - dragOffset.x)));
       setLogoY(Math.max(-logoH / 2, Math.min(CANVAS_H_VAL - logoH / 2, cy - dragOffset.y)));
@@ -1336,7 +1363,27 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       const footCenterDefault = footY + (CANVAS_H_VAL - footY) / 2;
       setFooterPosX(cx - dragOffset.x);
       setFooterPosY(cy - dragOffset.y - footCenterDefault);
+    } else if (dragging === 'v-stamp') {
+      setVStampOffX(cx - dragOffset.x);
+      setVStampOffY(cy - dragOffset.y);
+    } else if (dragging === 'v-frame') {
+      setVFrameOffX(cx - dragOffset.x);
+      setVFrameOffY(cy - dragOffset.y);
+    } else if (dragging === 'v-parabens') {
+      setVParabensOffX(cx - dragOffset.x);
+      setVParabensOffY(cy - dragOffset.y);
+    } else if (dragging === 'v-footer') {
+      setVFooterOffX(cx - dragOffset.x);
+      setVFooterOffY(cy - dragOffset.y);
     }
+  };
+
+  const handlePreviewMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!dragging || (layoutLocked && dragging !== 'photo')) return;
+    e.preventDefault();
+    didDragRef.current = true;
+    const { cx, cy } = getCanvasCoords(e);
+    applyDragMove(cx, cy);
   };
 
   const handlePreviewMouseUp = () => { setDragging(null); };
@@ -1355,20 +1402,48 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
     didDragRef.current = false;
     const { cx, cy } = getTouchCoords(e);
+
     if (!layoutLocked && cx >= logoX && cx <= logoX + logoW && cy >= logoY && cy <= logoY + logoH) {
       setDragging('logo'); setDragOffset({ x: cx - logoX, y: cy - logoY }); e.preventDefault(); return;
     }
-    const infoH = Math.round(260 * infoBoxScale);
-    const photoY = 260;
-    if (cy >= photoY && cy < infoPosY) {
-      setDragging('photo'); setDragOffset({ x: cx - photoOffsetX, y: cy - photoOffsetY }); e.preventDefault(); return;
-    }
-    if (!layoutLocked && cy >= infoPosY && cy <= infoPosY + infoH) {
-      setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); e.preventDefault(); return;
-    }
-    const footY = infoPosY + infoH;
-    if (!layoutLocked && cy >= footY) {
-      setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + (CANVAS_H_VAL - footY) / 2 + footerPosY) }); e.preventDefault(); return;
+
+    if (flyerMode === 'vendido') {
+      const z = vendidoZonesRef.current;
+      if (!layoutLocked) {
+        if (cy >= z.stampY && cy <= z.stampY + z.stampH) {
+          setDragging('v-stamp'); setDragOffset({ x: cx - vStampOffX, y: cy - vStampOffY }); e.preventDefault(); return;
+        }
+        if (cx >= z.frameX && cx <= z.frameX + z.frameW && cy >= z.frameY && cy <= z.frameY + z.frameH) {
+          setDragging('v-frame'); setDragOffset({ x: cx - vFrameOffX, y: cy - vFrameOffY }); e.preventDefault(); return;
+        }
+        if (cy >= z.parabensY && cy <= z.parabensY + z.parabensH) {
+          setDragging('v-parabens'); setDragOffset({ x: cx - vParabensOffX, y: cy - vParabensOffY }); e.preventDefault(); return;
+        }
+        if (cy >= z.footerY && cy <= z.footerY + z.footerH) {
+          setDragging('v-footer'); setDragOffset({ x: cx - vFooterOffX, y: cy - vFooterOffY }); e.preventDefault(); return;
+        }
+      }
+      const fz = z;
+      const photoX = fz.frameX + 24;
+      const photoYtop = fz.frameY + 24;
+      const photoXend = fz.frameX + fz.frameW - 24;
+      const photoYend = fz.frameY + fz.frameH - 44;
+      if (cx >= photoX && cx <= photoXend && cy >= photoYtop && cy <= photoYend) {
+        setDragging('photo'); setDragOffset({ x: cx - photoOffsetX, y: cy - photoOffsetY }); e.preventDefault(); return;
+      }
+    } else {
+      const infoH = Math.round(260 * infoBoxScale);
+      const photoY = 260;
+      if (cy >= photoY && cy < infoPosY) {
+        setDragging('photo'); setDragOffset({ x: cx - photoOffsetX, y: cy - photoOffsetY }); e.preventDefault(); return;
+      }
+      if (!layoutLocked && cy >= infoPosY && cy <= infoPosY + infoH) {
+        setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); e.preventDefault(); return;
+      }
+      const footY = infoPosY + infoH;
+      if (!layoutLocked && cy >= footY) {
+        setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + (CANVAS_H_VAL - footY) / 2 + footerPosY) }); e.preventDefault(); return;
+      }
     }
   };
 
@@ -1377,21 +1452,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     e.preventDefault();
     didDragRef.current = true;
     const { cx, cy } = getTouchCoords(e);
-    if (dragging === 'logo') {
-      setLogoX(Math.max(-logoW / 2, Math.min(CANVAS_W - logoW / 2, cx - dragOffset.x)));
-      setLogoY(Math.max(-logoH / 2, Math.min(CANVAS_H_VAL - logoH / 2, cy - dragOffset.y)));
-    } else if (dragging === 'photo') {
-      setPhotoOffsetX(cx - dragOffset.x);
-      setPhotoOffsetY(cy - dragOffset.y);
-    } else if (dragging === 'info') {
-      setInfoPosY(Math.max(400, Math.min(CANVAS_H_VAL - 330, cy - dragOffset.y)));
-    } else if (dragging === 'footer') {
-      const infoH = Math.round(260 * infoBoxScale);
-      const footY = infoPosY + infoH;
-      const footCenterDefault = footY + (CANVAS_H_VAL - footY) / 2;
-      setFooterPosX(cx - dragOffset.x);
-      setFooterPosY(cy - dragOffset.y - footCenterDefault);
-    }
+    applyDragMove(cx, cy);
   };
 
   const handleTouchEnd = () => setDragging(null);

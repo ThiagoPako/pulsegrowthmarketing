@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, Flame } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 
 interface DeadlineBadgeProps {

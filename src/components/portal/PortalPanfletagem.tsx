@@ -260,7 +260,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [layoutLocked, setLayoutLocked] = useState(false);
 
   // Drag state
-  const [dragging, setDragging] = useState<'logo' | 'info' | 'footer' | 'photo' | null>(null);
+  const [dragging, setDragging] = useState<'logo' | 'info' | 'footer' | 'photo' | 'v-stamp' | 'v-frame' | 'v-parabens' | 'v-footer' | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const didDragRef = useRef(false);
 

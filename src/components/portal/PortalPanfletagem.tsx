@@ -1091,7 +1091,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const frameMarginX = baseFrameMarginX + vFrameOffX;
     const frameTop = baseFrameTop + vFrameOffY;
     const frameW = W - baseFrameMarginX * 2;
-    const frameBorder = Math.round(24 * fs);
+    const frameBorder = Math.round(30 * fs);
     const photoAspect = 4 / 3;
     const innerPhotoW = frameW - frameBorder * 2;
     const innerPhotoH = Math.round(innerPhotoW / photoAspect);

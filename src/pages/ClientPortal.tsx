@@ -541,12 +541,14 @@ export default function ClientPortal() {
               >
                 Agenda
               </button>
+              {client.client_type === 'sem_contrato' && (
               <button
                 onClick={() => setActiveTab('entregas')}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'entregas' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
               >
                 📋 Entregas
               </button>
+              )}
               {(client.show_metrics || isTeamMember) && (
                 <button
                   onClick={() => setActiveTab('metrics')}

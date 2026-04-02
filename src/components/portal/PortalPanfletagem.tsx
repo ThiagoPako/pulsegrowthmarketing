@@ -2007,6 +2007,10 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
                 <Eye size={16} style={{ color: `hsl(${clientColor})` }} /> Prévia em Tempo Real
               </h3>
               <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={saveLayoutSettings}
+                  className="border-white/[0.1] text-white/70 hover:text-white hover:bg-white/[0.06] text-xs h-7 px-3">
+                  <Save size={12} /> Salvar Layout
+                </Button>
                 {layoutLocked && (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.8 }}

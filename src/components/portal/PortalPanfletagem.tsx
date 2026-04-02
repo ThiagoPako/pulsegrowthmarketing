@@ -277,6 +277,16 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [vendidoNomeFontScale, setVendidoNomeFontScale] = useState(1.0);
   const [vendidoFooterFontScale, setVendidoFooterFontScale] = useState(1.0);
 
+  // Vendido draggable position offsets
+  const [vStampOffX, setVStampOffX] = useState(0);
+  const [vStampOffY, setVStampOffY] = useState(0);
+  const [vFrameOffX, setVFrameOffX] = useState(0);
+  const [vFrameOffY, setVFrameOffY] = useState(0);
+  const [vParabensOffX, setVParabensOffX] = useState(0);
+  const [vParabensOffY, setVParabensOffY] = useState(0);
+  const [vFooterOffX, setVFooterOffX] = useState(0);
+  const [vFooterOffY, setVFooterOffY] = useState(0);
+
   // Canvas click → zone color picker
   const [activeColorZone, setActiveColorZone] = useState<CanvasZone>(null);
 

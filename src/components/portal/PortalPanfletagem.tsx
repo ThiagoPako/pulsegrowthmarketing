@@ -269,6 +269,53 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   // Per-component colors
   const [colors, setColors] = useState<LayoutColors>({ ...DEFAULT_COLORS });
 
+  // Per-format layout refs (store the "other" format's layout while editing current)
+  const feedLayoutRef = useRef<FormatLayout>({ ...DEFAULT_FORMAT_LAYOUT });
+  const storyLayoutRef = useRef<FormatLayout>({ ...DEFAULT_FORMAT_LAYOUT });
+
+  const collectCurrentLayout = (): FormatLayout => ({
+    colors: { ...colors }, fontScale, headerFontScale, priceFontScale, footerFontScale,
+    infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale,
+    obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale,
+  });
+
+  const applyLayout = (layout: FormatLayout) => {
+    setColors(layout.colors);
+    setFontScale(layout.fontScale);
+    setHeaderFontScale(layout.headerFontScale);
+    setPriceFontScale(layout.priceFontScale);
+    setFooterFontScale(layout.footerFontScale);
+    setInfoBoxScale(layout.infoBoxScale);
+    setModelFontScale(layout.modelFontScale);
+    setYearFontScale(layout.yearFontScale);
+    setTransmissionFontScale(layout.transmissionFontScale);
+    setObsFontScale(layout.obsFontScale);
+    setLabelFontScale(layout.labelFontScale);
+    setPillHeightScale(layout.pillHeightScale);
+    setPillRadiusScale(layout.pillRadiusScale);
+  };
+
+  const switchFormat = (newFormat: CanvasFormat) => {
+    if (newFormat === canvasFormat) return;
+    const current = collectCurrentLayout();
+    if (canvasFormat === 'feed') feedLayoutRef.current = current;
+    else storyLayoutRef.current = current;
+    const target = newFormat === 'feed' ? feedLayoutRef.current : storyLayoutRef.current;
+    applyLayout(target);
+    setCanvasFormat(newFormat);
+  };
+
+  const importColorsFromOtherFormat = () => {
+    // First save current layout to the active ref
+    const current = collectCurrentLayout();
+    if (canvasFormat === 'feed') feedLayoutRef.current = current;
+    else storyLayoutRef.current = current;
+    // Get colors from other format
+    const otherRef = canvasFormat === 'feed' ? storyLayoutRef : feedLayoutRef;
+    setColors({ ...otherRef.current.colors });
+    toast.success(`Cores importadas do ${canvasFormat === 'feed' ? 'Story' : 'Feed'}!`);
+  };
+
   // Lock
   const [layoutLocked, setLayoutLocked] = useState(false);
 

@@ -1102,7 +1102,7 @@ export default function EditorDashboard() {
                           <span>Editado por você</span>
                         </div>
                       )}
-                      {task.review_deadline && <DeadlineBadge deadline={task.review_deadline} label="Revisão" startedAt={task.approval_sent_at} />}
+                      {task.review_deadline && <DeadlineBadge deadline={task.review_deadline} label="Revisão" startedAt={task.approval_sent_at} totalHours={24} />}
                       {/* Ops! Volta aqui */}
                       {task.edited_by === user?.id && (
                         <motion.div whileTap={{ scale: 0.95 }}>

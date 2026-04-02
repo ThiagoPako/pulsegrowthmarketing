@@ -295,7 +295,7 @@ export function useFinancialData() {
 
   const updateRevenue = async (id: string, updates: Partial<Revenue>) => {
     try {
-      // Always update by ID only — never by client_id+month to avoid cross-contamination
+      const previousRevenue = revenues.find(r => r.id === id);
       const { error } = await supabase.from('revenues').update(updates as any).eq('id', id);
 
       if (error) {
@@ -304,9 +304,32 @@ export function useFinancialData() {
       }
 
       const action = updates.status === 'recebida' ? 'Marcou receita como paga' : updates.status === 'prevista' ? 'Reverteu receita para pendente' : 'Atualizou receita';
+      const revenueAmount = Number(updates.amount || previousRevenue?.amount || 0);
 
-      // Log first, then refresh data to ensure UI always shows latest state
-      await logActivity('edição', 'receita', `${action} - R$ ${Number(updates.amount || revenues.find(r => r.id === id)?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, updates);
+      // Sync with account balance (cash_reserve_movements)
+      if (updates.status === 'recebida' && previousRevenue?.status !== 'recebida') {
+        // Revenue received → add entrada to account balance
+        await supabase.from('cash_reserve_movements').insert({
+          amount: revenueAmount,
+          type: 'entrada',
+          description: `[Receita] ${previousRevenue?.client_id ? 'Recebimento de cliente' : 'Receita avulsa'} - ID: ${id}`,
+          date: updates.paid_at || new Date().toISOString().split('T')[0],
+          is_reserve: false,
+        } as any);
+      } else if (updates.status === 'prevista' && previousRevenue?.status === 'recebida') {
+        // Revenue reverted → remove the linked cash movement
+        const { data: linked } = await supabase
+          .from('cash_reserve_movements')
+          .select('id')
+          .ilike('description', `%[Receita]%ID: ${id}%`);
+        if (linked && linked.length > 0) {
+          for (const l of linked) {
+            await supabase.from('cash_reserve_movements').delete().eq('id', l.id);
+          }
+        }
+      }
+
+      await logActivity('edição', 'receita', `${action} - R$ ${revenueAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, updates);
       await fetchAll();
 
       return true;

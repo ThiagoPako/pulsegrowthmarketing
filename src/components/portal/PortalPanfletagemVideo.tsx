@@ -429,7 +429,6 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     const segments = compositionSegmentsRef.current;
     const idx = currentSegIndexRef.current;
     if (idx >= segments.length) {
-      // Composition ended
       cancelAnimationFrame(animFrameRef.current);
       const audio = hiddenAudioRef.current;
       if (audio) { audio.pause(); }
@@ -444,14 +443,27 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     }
 
     const seg = segments[idx];
-    setCurrentSegLabel(seg.type === 'intro' ? 'Abertura' : seg.type === 'closing' ? 'Finalização' : `Veículo ${idx - (compositionSegmentsRef.current[0]?.type === 'intro' ? 1 : 0) + (compositionSegmentsRef.current[0]?.type !== 'intro' ? 1 : 0)}`);
+    setCurrentSegLabel(seg.type === 'intro' ? 'Abertura' : seg.type === 'closing' ? 'Finalização' : `Veículo ${idx - (segments[0]?.type === 'intro' ? 1 : 0) + (segments[0]?.type !== 'intro' ? 1 : 0)}`);
     setCompositionProgress(Math.round(((idx) / segments.length) * 100));
 
     const video = hiddenVideoRef.current;
+    const video2 = hiddenVideo2Ref.current;
     if (!video) return;
 
+    // If this is not the first segment, start crossfade transition
+    const isFirstSegment = idx === 0;
+
     video.onended = () => {
+      // Before moving to next, copy current video to video2 for crossfade
+      if (video2 && idx + 1 < segments.length) {
+        video2.src = video.src;
+        video2.currentTime = Math.max(0, video.duration - 0.1);
+        video2.muted = true;
+        video2.play().catch(() => {});
+      }
       currentSegIndexRef.current += 1;
+      transitionProgressRef.current = 0;
+      transitionStartTimeRef.current = performance.now();
       playNextSegment();
     };
 
@@ -465,6 +477,9 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     video.muted = true;
     video.load();
     video.play().then(() => {
+      if (isFirstSegment) {
+        transitionProgressRef.current = -1;
+      }
       drawFrame();
     }).catch(() => {
       currentSegIndexRef.current += 1;

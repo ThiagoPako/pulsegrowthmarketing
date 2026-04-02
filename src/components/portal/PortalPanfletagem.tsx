@@ -313,6 +313,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     colors: { ...colors }, fontScale, headerFontScale, priceFontScale, footerFontScale,
     infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale,
     obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale,
+    logoX, logoY, logoScale, infoPosY, footerPosX, footerPosY,
+    photoOffsetX, photoOffsetY, customLogoDataUrl,
   });
 
   const applyLayout = (layout: FormatLayout) => {
@@ -329,6 +331,15 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     setLabelFontScale(layout.labelFontScale);
     setPillHeightScale(layout.pillHeightScale);
     setPillRadiusScale(layout.pillRadiusScale);
+    setLogoX(layout.logoX);
+    setLogoY(layout.logoY);
+    setLogoScale(layout.logoScale);
+    setInfoPosY(layout.infoPosY);
+    setFooterPosX(layout.footerPosX);
+    setFooterPosY(layout.footerPosY);
+    setPhotoOffsetX(layout.photoOffsetX);
+    setPhotoOffsetY(layout.photoOffsetY);
+    setCustomLogoDataUrl(layout.customLogoDataUrl);
   };
 
   const switchFormat = (newFormat: CanvasFormat) => {

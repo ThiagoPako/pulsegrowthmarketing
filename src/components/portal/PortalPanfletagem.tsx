@@ -269,6 +269,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [logoImgObj, setLogoImgObj] = useState<HTMLImageElement | null>(null);
   const [frameImgObj, setFrameImgObj] = useState<HTMLImageElement | null>(null);
 
+  // Vendido-specific colors and font scales
+  const [vendidoColors, setVendidoColors] = useState<VendidoColors>({ ...DEFAULT_VENDIDO_COLORS });
+  const [vendidoFontScale, setVendidoFontScale] = useState(1.0);
+  const [vendidoStampFontScale, setVendidoStampFontScale] = useState(1.0);
+  const [vendidoParabensFontScale, setVendidoParabensFontScale] = useState(1.0);
+  const [vendidoNomeFontScale, setVendidoNomeFontScale] = useState(1.0);
+  const [vendidoFooterFontScale, setVendidoFooterFontScale] = useState(1.0);
+
   // Canvas click → zone color picker
   const [activeColorZone, setActiveColorZone] = useState<CanvasZone>(null);
 

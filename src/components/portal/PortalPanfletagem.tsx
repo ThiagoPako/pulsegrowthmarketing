@@ -1642,7 +1642,9 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             </div>
           </div>
 
-          {/* Font Size Control */}
+          {/* Font Size Control — only for venda mode */}
+          {flyerMode !== 'vendido' && (
+          <>
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
               <Type size={16} style={{ color: `hsl(${clientColor})` }} /> Tamanho da Fonte
@@ -1740,6 +1742,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
               Resetar Cores Padrão
             </Button>
           </div>
+          </>
+          )}
 
           {/* Animated Lock + Save */}
           <div className="flex gap-3">

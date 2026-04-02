@@ -1042,10 +1042,31 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
                   </div>
                 )}
 
-                <Button variant="outline" size="sm" onClick={() => { stopComposition(); setCompositionState('idle'); }}
-                  className="w-full text-xs border-white/[0.1] text-white/60">
-                  {compositionState === 'done' ? 'Fechar' : 'Parar'}
-                </Button>
+                {compositionState === 'done' && generatedVideoUrl ? (
+                  <div className="space-y-2">
+                    <div className="relative rounded-xl overflow-hidden bg-black aspect-[9/16]">
+                      <video src={generatedVideoUrl} controls className="w-full h-full object-contain" playsInline />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button onClick={handleDownload} className="text-xs font-bold h-12" style={{ backgroundColor: '#22c55e' }}>
+                        <Download size={16} className="mr-1.5" /> Baixar Vídeo
+                      </Button>
+                      <Button onClick={saveToPortal} disabled={savingToPortal} className="text-xs h-12" style={{ backgroundColor: `hsl(${clientColor})` }}>
+                        {savingToPortal ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Cloud size={14} className="mr-1.5" />}
+                        Salvar Portal
+                      </Button>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => { stopComposition(); setCompositionState('idle'); setGeneratedVideoUrl(null); setGeneratedVideoBlob(null); }}
+                      className="w-full text-xs border-white/[0.1] text-white/60">
+                      Fechar
+                    </Button>
+                  </div>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={() => { stopComposition(); setCompositionState('idle'); }}
+                    className="w-full text-xs border-white/[0.1] text-white/60">
+                    Parar
+                  </Button>
+                )}
               </div>
             ) : generatedVideoUrl ? (
               <div className="space-y-3">

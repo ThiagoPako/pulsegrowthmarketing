@@ -137,6 +137,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [templates, setTemplates] = useState<FlyerTemplate[]>([]);
   const [canvasFormat, setCanvasFormat] = useState<CanvasFormat>('feed');
   const CANVAS_H_VAL = canvasFormat === 'story' ? CANVAS_H_STORY : CANVAS_H_FEED;
+  const [flyerMode, setFlyerMode] = useState<FlyerMode>('venda');
+  const [buyerName, setBuyerName] = useState('');
   const [activeTab, setActiveTab] = useState<'image' | 'video'>('image');
   const [flyerImageDataUrl, setFlyerImageDataUrl] = useState<string | null>(null);
   const [flyerOverlayDataUrl, setFlyerOverlayDataUrl] = useState<string | null>(null);

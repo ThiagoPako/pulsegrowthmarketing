@@ -539,13 +539,13 @@ function DeliveryCard({
             </Badge>
             {/* Deadline badges */}
             {td && columnId === 'revisao' && td.review_deadline && (
-              <DeadlineBadge deadline={td.review_deadline} label="Revisão" startedAt={td.approval_sent_at} />
+              <DeadlineBadge deadline={td.review_deadline} label="Revisão" startedAt={td.approval_sent_at} totalHours={24} />
             )}
             {td && columnId === 'alteracao' && td.alteration_deadline && !td.immediate_alteration && (
-              <DeadlineBadge deadline={td.alteration_deadline} label="Alteração" startedAt={td.editing_started_at} />
+              <DeadlineBadge deadline={td.alteration_deadline} label="Alteração" startedAt={td.editing_started_at} totalHours={24} />
             )}
             {td && columnId === 'envio' && td.approval_deadline && (
-              <DeadlineBadge deadline={td.approval_deadline} label="Aprovação" startedAt={td.approval_sent_at} />
+              <DeadlineBadge deadline={td.approval_deadline} label="Aprovação" startedAt={td.approval_sent_at} totalHours={24} />
             )}
             {d.platform && columnId === 'agendado' && (
               <Badge variant="outline" className="text-[9px] px-1.5 py-0">{d.platform}</Badge>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, Flame } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 
 interface DeadlineBadgeProps {
@@ -121,20 +121,21 @@ export function getDeadlineProgress(startedAt: string | null | undefined, deadli
   const now = Date.now();
 
   if (totalHours && totalHours > 0) {
-    // totalHours is in BUSINESS hours, so total ms excludes weekends
+    // The deadline IS the end. Start = deadline - totalHours (in real hours).
+    // Progress = how much of the totalHours window has elapsed (in business time).
     const totalMs = totalHours * 60 * 60 * 1000;
-    const start = end - totalMs; // approximate start (raw)
+    const start = end - totalMs;
 
-    // Calculate business elapsed (subtract weekend time from elapsed)
+    if (now <= start) return 0;
+    if (now >= end) return 100;
+
     const rawElapsed = now - start;
     const weekendElapsed = getWeekendMsBetween(new Date(start), new Date(now));
-    const businessElapsed = rawElapsed - weekendElapsed;
+    const businessElapsed = Math.max(0, rawElapsed - weekendElapsed);
 
-    // Total business duration also needs adjustment
     const weekendInTotal = getWeekendMsBetween(new Date(start), new Date(end));
-    const businessTotal = (end - start) - weekendInTotal;
+    const businessTotal = Math.max(1, totalMs - weekendInTotal);
 
-    if (businessTotal <= 0) return 100;
     return Math.min(100, Math.max(0, Math.round((businessElapsed / businessTotal) * 100)));
   }
 
@@ -177,18 +178,19 @@ export default function DeadlineBadge({ deadline, label, startedAt, totalHours }
       : '[&>div]:bg-emerald-500';
 
   return (
-    <div className="w-full space-y-0.5">
+    <div className={`w-full space-y-0.5 ${info.isExpired ? 'animate-pulse' : ''}`}>
       <span className={`inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-md ${
         info.variant === 'expired'
-          ? 'bg-red-100 text-red-800 border border-red-300 dark:bg-red-900/40 dark:text-red-300 animate-pulse'
+          ? 'bg-red-100 text-red-800 border border-red-300 dark:bg-red-900/40 dark:text-red-300'
           : info.variant === 'warning'
             ? 'bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400'
             : 'bg-muted text-muted-foreground border border-border'
       }`}>
-        <Clock size={9} />
+        {info.isExpired ? <Flame size={10} className="text-red-600 animate-bounce" /> : <Clock size={9} />}
         {label && <span>{label}:</span>}
         {info.timeStr}
         {progress > 0 && <span className="ml-0.5">({progress}%)</span>}
+        {info.isExpired && <Flame size={10} className="text-orange-500 animate-bounce" />}
       </span>
       {progress > 0 && (
         <Progress value={progress} className={`h-1.5 w-full bg-muted/50 ${barColor}`} />

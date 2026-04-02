@@ -847,7 +847,7 @@ export default function EditorDashboard() {
 
               {/* Deadline warning */}
               {activeEditTask.editing_deadline && (
-                <DeadlineBadge deadline={activeEditTask.editing_deadline} label="Prazo de edição" startedAt={activeEditTask.editing_started_at} />
+                <DeadlineBadge deadline={activeEditTask.editing_deadline} label="Prazo de edição" startedAt={activeEditTask.editing_started_at} totalHours={48} />
               )}
 
               {/* Adjustment notes */}
@@ -1102,7 +1102,7 @@ export default function EditorDashboard() {
                           <span>Editado por você</span>
                         </div>
                       )}
-                      {task.review_deadline && <DeadlineBadge deadline={task.review_deadline} label="Revisão" startedAt={task.approval_sent_at} />}
+                      {task.review_deadline && <DeadlineBadge deadline={task.review_deadline} label="Revisão" startedAt={task.approval_sent_at} totalHours={24} />}
                       {/* Ops! Volta aqui */}
                       {task.edited_by === user?.id && (
                         <motion.div whileTap={{ scale: 0.95 }}>
@@ -1287,7 +1287,7 @@ function QueueCard({ task, clients, recordings, index, onStartEditing, onClaimTa
 
         <p className="text-sm font-semibold text-foreground leading-tight">{task.title}</p>
 
-        {task.editing_deadline && <DeadlineBadge deadline={task.editing_deadline} label="Edição" startedAt={task.editing_started_at} />}
+        {task.editing_deadline && <DeadlineBadge deadline={task.editing_deadline} label="Edição" startedAt={task.editing_started_at} totalHours={48} />}
 
         {task.assigned_to && claimedUser && (
           <AnimatePresence>

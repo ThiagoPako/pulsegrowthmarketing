@@ -200,16 +200,16 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
 
         {/* Deadlines per column */}
         {task.kanban_column === 'edicao' && task.editing_deadline && (
-          <DeadlineBadge deadline={task.editing_deadline} label="Edição" startedAt={task.editing_started_at} />
+          <DeadlineBadge deadline={task.editing_deadline} label="Edição" startedAt={task.editing_started_at} totalHours={48} />
         )}
         {task.kanban_column === 'revisao' && task.review_deadline && (
-          <DeadlineBadge deadline={task.review_deadline} label="Revisão" startedAt={task.approval_sent_at} />
+          <DeadlineBadge deadline={task.review_deadline} label="Revisão" startedAt={task.approval_sent_at} totalHours={24} />
         )}
         {task.kanban_column === 'alteracao' && task.alteration_deadline && !task.immediate_alteration && (
-          <DeadlineBadge deadline={task.alteration_deadline} label="Alteração" startedAt={task.editing_started_at} />
+          <DeadlineBadge deadline={task.alteration_deadline} label="Alteração" startedAt={task.editing_started_at} totalHours={24} />
         )}
         {task.kanban_column === 'envio' && task.approval_deadline && (
-          <DeadlineBadge deadline={task.approval_deadline} label="Aprovação" startedAt={task.approval_sent_at} />
+          <DeadlineBadge deadline={task.approval_deadline} label="Aprovação" startedAt={task.approval_sent_at} totalHours={24} />
         )}
 
         {/* Animated editor claim flag */}

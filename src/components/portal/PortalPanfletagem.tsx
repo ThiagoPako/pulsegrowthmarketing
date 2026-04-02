@@ -78,6 +78,29 @@ const DEFAULT_COLORS: LayoutColors = {
   footerText: '#FFFFFF',
 };
 
+interface FormatLayout {
+  colors: LayoutColors;
+  fontScale: number;
+  headerFontScale: number;
+  priceFontScale: number;
+  footerFontScale: number;
+  infoBoxScale: number;
+  modelFontScale: number;
+  yearFontScale: number;
+  transmissionFontScale: number;
+  obsFontScale: number;
+  labelFontScale: number;
+  pillHeightScale: number;
+  pillRadiusScale: number;
+}
+
+const DEFAULT_FORMAT_LAYOUT: FormatLayout = {
+  colors: { ...DEFAULT_COLORS },
+  fontScale: 1.0, headerFontScale: 1.0, priceFontScale: 1.0, footerFontScale: 1.0,
+  infoBoxScale: 1.0, modelFontScale: 1.0, yearFontScale: 1.0, transmissionFontScale: 1.0,
+  obsFontScale: 1.0, labelFontScale: 1.0, pillHeightScale: 1.0, pillRadiusScale: 1.0,
+};
+
 interface VendidoColors {
   background: string;
   stripColor: string;
@@ -269,6 +292,53 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   // Per-component colors
   const [colors, setColors] = useState<LayoutColors>({ ...DEFAULT_COLORS });
 
+  // Per-format layout refs (store the "other" format's layout while editing current)
+  const feedLayoutRef = useRef<FormatLayout>({ ...DEFAULT_FORMAT_LAYOUT });
+  const storyLayoutRef = useRef<FormatLayout>({ ...DEFAULT_FORMAT_LAYOUT });
+
+  const collectCurrentLayout = (): FormatLayout => ({
+    colors: { ...colors }, fontScale, headerFontScale, priceFontScale, footerFontScale,
+    infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale,
+    obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale,
+  });
+
+  const applyLayout = (layout: FormatLayout) => {
+    setColors(layout.colors);
+    setFontScale(layout.fontScale);
+    setHeaderFontScale(layout.headerFontScale);
+    setPriceFontScale(layout.priceFontScale);
+    setFooterFontScale(layout.footerFontScale);
+    setInfoBoxScale(layout.infoBoxScale);
+    setModelFontScale(layout.modelFontScale);
+    setYearFontScale(layout.yearFontScale);
+    setTransmissionFontScale(layout.transmissionFontScale);
+    setObsFontScale(layout.obsFontScale);
+    setLabelFontScale(layout.labelFontScale);
+    setPillHeightScale(layout.pillHeightScale);
+    setPillRadiusScale(layout.pillRadiusScale);
+  };
+
+  const switchFormat = (newFormat: CanvasFormat) => {
+    if (newFormat === canvasFormat) return;
+    const current = collectCurrentLayout();
+    if (canvasFormat === 'feed') feedLayoutRef.current = current;
+    else storyLayoutRef.current = current;
+    const target = newFormat === 'feed' ? feedLayoutRef.current : storyLayoutRef.current;
+    applyLayout(target);
+    setCanvasFormat(newFormat);
+  };
+
+  const importColorsFromOtherFormat = () => {
+    // First save current layout to the active ref
+    const current = collectCurrentLayout();
+    if (canvasFormat === 'feed') feedLayoutRef.current = current;
+    else storyLayoutRef.current = current;
+    // Get colors from other format
+    const otherRef = canvasFormat === 'feed' ? storyLayoutRef : feedLayoutRef;
+    setColors({ ...otherRef.current.colors });
+    toast.success(`Cores importadas do ${canvasFormat === 'feed' ? 'Story' : 'Feed'}!`);
+  };
+
   // Lock
   const [layoutLocked, setLayoutLocked] = useState(false);
 
@@ -319,37 +389,47 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (s.infoPosY != null) setInfoPosY(s.infoPosY);
         if (s.layoutLocked != null) setLayoutLocked(s.layoutLocked);
         if (s.customLogoDataUrl) setCustomLogoDataUrl(s.customLogoDataUrl);
-        if (s.fontScale != null) setFontScale(s.fontScale);
-        if (s.headerFontScale != null) setHeaderFontScale(s.headerFontScale);
-        if (s.priceFontScale != null) setPriceFontScale(s.priceFontScale);
-        if (s.footerFontScale != null) setFooterFontScale(s.footerFontScale);
-        if (s.infoBoxScale != null) setInfoBoxScale(s.infoBoxScale);
-        // Legacy support: if old single infoFontScale exists, apply to all
-        if (s.modelFontScale != null) setModelFontScale(s.modelFontScale);
-        else if (s.infoFontScale != null) setModelFontScale(s.infoFontScale);
-        if (s.yearFontScale != null) setYearFontScale(s.yearFontScale);
-        else if (s.infoFontScale != null) setYearFontScale(s.infoFontScale);
-        if (s.transmissionFontScale != null) setTransmissionFontScale(s.transmissionFontScale);
-        else if (s.infoFontScale != null) setTransmissionFontScale(s.infoFontScale);
-        if (s.obsFontScale != null) setObsFontScale(s.obsFontScale);
-        else if (s.infoFontScale != null) setObsFontScale(s.infoFontScale);
-        if (s.labelFontScale != null) setLabelFontScale(s.labelFontScale);
-        if (s.pillHeightScale != null) setPillHeightScale(s.pillHeightScale);
-        if (s.pillRadiusScale != null) setPillRadiusScale(s.pillRadiusScale);
         if (s.footerPosX != null) setFooterPosX(s.footerPosX);
         if (s.footerPosY != null) setFooterPosY(s.footerPosY);
         if (s.photoOffsetX != null) setPhotoOffsetX(s.photoOffsetX);
         if (s.photoOffsetY != null) setPhotoOffsetY(s.photoOffsetY);
-        if (s.colors) {
-          const migrated = { ...DEFAULT_COLORS, ...s.colors };
-          // Legacy: migrate old single infoText to split fields
-          if (s.colors.infoText && !s.colors.infoLabelText) migrated.infoLabelText = s.colors.infoText;
-          if (s.colors.infoText && !s.colors.infoValueText) migrated.infoValueText = s.colors.infoText;
-          setColors(migrated);
-        }
         if (s.footerAddress != null) setFooterAddress(s.footerAddress);
         if (s.footerWhatsapp != null) setFooterWhatsapp(s.footerWhatsapp);
         if (s.canvasFormat) setCanvasFormat(s.canvasFormat);
+
+        // Load per-format layouts (new system)
+        if (s.feedLayout) {
+          feedLayoutRef.current = { ...DEFAULT_FORMAT_LAYOUT, ...s.feedLayout, colors: { ...DEFAULT_COLORS, ...(s.feedLayout.colors || {}) } };
+        } else {
+          // Legacy: build feed layout from old flat fields
+          const legacyColors = s.colors ? { ...DEFAULT_COLORS, ...s.colors } : { ...DEFAULT_COLORS };
+          if (s.colors?.infoText && !s.colors?.infoLabelText) legacyColors.infoLabelText = s.colors.infoText;
+          if (s.colors?.infoText && !s.colors?.infoValueText) legacyColors.infoValueText = s.colors.infoText;
+          feedLayoutRef.current = {
+            colors: legacyColors,
+            fontScale: s.fontScale ?? 1.0, headerFontScale: s.headerFontScale ?? 1.0,
+            priceFontScale: s.priceFontScale ?? 1.0, footerFontScale: s.footerFontScale ?? 1.0,
+            infoBoxScale: s.infoBoxScale ?? 1.0, modelFontScale: s.modelFontScale ?? s.infoFontScale ?? 1.0,
+            yearFontScale: s.yearFontScale ?? s.infoFontScale ?? 1.0,
+            transmissionFontScale: s.transmissionFontScale ?? s.infoFontScale ?? 1.0,
+            obsFontScale: s.obsFontScale ?? s.infoFontScale ?? 1.0,
+            labelFontScale: s.labelFontScale ?? 1.0,
+            pillHeightScale: s.pillHeightScale ?? 1.0, pillRadiusScale: s.pillRadiusScale ?? 1.0,
+          };
+        }
+        if (s.storyLayout) {
+          storyLayoutRef.current = { ...DEFAULT_FORMAT_LAYOUT, ...s.storyLayout, colors: { ...DEFAULT_COLORS, ...(s.storyLayout.colors || {}) } };
+        } else {
+          // Legacy: story starts with same as feed
+          storyLayoutRef.current = { ...feedLayoutRef.current, colors: { ...feedLayoutRef.current.colors } };
+        }
+
+        // Apply the active format's layout
+        const activeFormat = s.canvasFormat || 'feed';
+        const activeLayout = activeFormat === 'feed' ? feedLayoutRef.current : storyLayoutRef.current;
+        applyLayout(activeLayout);
+
+        // Vendido settings
         if (s.vendidoColors) setVendidoColors({ ...DEFAULT_VENDIDO_COLORS, ...s.vendidoColors });
         if (s.vendidoFontScale != null) setVendidoFontScale(s.vendidoFontScale);
         if (s.vendidoStampFontScale != null) setVendidoStampFontScale(s.vendidoStampFontScale);
@@ -377,7 +457,22 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   }, [clientWhatsapp]);
 
   const saveLayoutSettings = () => {
-    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, headerFontScale, priceFontScale, footerFontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, footerPosX, footerPosY, photoOffsetX, photoOffsetY, colors, footerAddress, footerWhatsapp, canvasFormat, vendidoColors, vendidoFontScale, vendidoStampFontScale, vendidoParabensFontScale, vendidoNomeFontScale, vendidoFooterFontScale, vStampOffX, vStampOffY, vFrameOffX, vFrameOffY, vParabensOffX, vParabensOffY, vFooterOffX, vFooterOffY };
+    // Update current format's ref before saving
+    const current = collectCurrentLayout();
+    if (canvasFormat === 'feed') feedLayoutRef.current = current;
+    else storyLayoutRef.current = current;
+
+    const settings = {
+      logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl,
+      footerPosX, footerPosY, photoOffsetX, photoOffsetY,
+      footerAddress, footerWhatsapp, canvasFormat,
+      feedLayout: feedLayoutRef.current,
+      storyLayout: storyLayoutRef.current,
+      vendidoColors, vendidoFontScale, vendidoStampFontScale, vendidoParabensFontScale,
+      vendidoNomeFontScale, vendidoFooterFontScale,
+      vStampOffX, vStampOffY, vFrameOffX, vFrameOffY,
+      vParabensOffX, vParabensOffY, vFooterOffX, vFooterOffY,
+    };
     localStorage.setItem(`flyer-layout-${clientId}`, JSON.stringify(settings));
     toast.success('Layout salvo!');
   };
@@ -1665,11 +1760,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           {/* Font Size Controls — per block — only for venda mode */}
           {flyerMode !== 'vendido' && (
           <>
-          <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
+           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
               <Type size={16} style={{ color: `hsl(${clientColor})` }} /> Tamanho das Fontes
+              <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: `hsl(${clientColor} / 0.2)`, color: `hsl(${clientColor})` }}>
+                {canvasFormat === 'feed' ? 'FEED' : 'STORY'}
+              </span>
             </h3>
-            <p className="text-[11px] text-white/40">Clique em cada bloco para ajustar o tamanho individualmente.</p>
+            <p className="text-[11px] text-white/40">Configuração individual para {canvasFormat === 'feed' ? 'Feed (4:5)' : 'Story (9:16)'}.</p>
             {[
               { key: 'global', label: '🔧 Escala Geral', value: fontScale, setter: setFontScale, min: 70, max: 150 },
               { key: 'header', label: '📌 Cabeçalho', value: headerFontScale, setter: setHeaderFontScale, min: 50, max: 200 },
@@ -1755,8 +1853,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
               <Palette size={16} style={{ color: `hsl(${clientColor})` }} /> Cores do Layout
+              <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: `hsl(${clientColor} / 0.2)`, color: `hsl(${clientColor})` }}>
+                {canvasFormat === 'feed' ? 'FEED' : 'STORY'}
+              </span>
             </h3>
-            <p className="text-[11px] text-white/40">💡 Dica: clique em uma área da prévia para filtrar as cores daquela seção.</p>
+            <p className="text-[11px] text-white/40">Configuração individual para {canvasFormat === 'feed' ? 'Feed (4:5)' : 'Story (9:16)'}.</p>
             <div className="grid grid-cols-2 gap-3">
               {COLOR_LABELS.map(({ key, label }) => (
                 <div key={key} className="flex items-center gap-3">
@@ -1773,9 +1874,15 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
                 </div>
               ))}
             </div>
-            <Button variant="ghost" size="sm" onClick={() => setColors({ ...DEFAULT_COLORS })} className="text-white/40 hover:text-white text-xs w-full">
-              Resetar Cores Padrão
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={importColorsFromOtherFormat}
+                className="flex-1 border-white/[0.1] text-white/70 hover:text-white hover:bg-white/[0.06] text-xs">
+                <Palette size={12} /> Importar cores do {canvasFormat === 'feed' ? 'Story' : 'Feed'}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setColors({ ...DEFAULT_COLORS })} className="text-white/40 hover:text-white text-xs">
+                Resetar
+              </Button>
+            </div>
           </div>
           </>
           )}
@@ -1914,14 +2021,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             {/* Format selector */}
             <div className="flex gap-2">
               <button
-                onClick={() => setCanvasFormat('feed')}
+                onClick={() => switchFormat('feed')}
                 className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all ${canvasFormat === 'feed' ? 'text-white border-2' : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'}`}
                 style={canvasFormat === 'feed' ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}
               >
                 <Image size={14} /> Feed (4:5)
               </button>
               <button
-                onClick={() => setCanvasFormat('story')}
+                onClick={() => switchFormat('story')}
                 className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all ${canvasFormat === 'story' ? 'text-white border-2' : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'}`}
                 style={canvasFormat === 'story' ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}
               >

@@ -703,6 +703,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     <div className="space-y-6">
       {/* Hidden elements */}
       <video ref={hiddenVideoRef} className="hidden" playsInline muted preload="auto" />
+      <video ref={hiddenVideo2Ref} className="hidden" playsInline muted preload="auto" />
       <audio ref={hiddenAudioRef} className="hidden" preload="auto" />
 
       {/* Header */}

@@ -482,9 +482,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     else storyLayoutRef.current = current;
 
     const settings = {
-      logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl,
-      footerPosX, footerPosY, photoOffsetX, photoOffsetY,
-      footerAddress, footerWhatsapp, canvasFormat,
+      layoutLocked, footerAddress, footerWhatsapp, canvasFormat,
       feedLayout: feedLayoutRef.current,
       storyLayout: storyLayoutRef.current,
       vendidoColors, vendidoFontScale, vendidoStampFontScale, vendidoParabensFontScale,

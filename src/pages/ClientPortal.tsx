@@ -636,9 +636,11 @@ export default function ClientPortal() {
         <button onClick={() => setActiveTab('agenda')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'agenda' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'agenda' ? { borderColor: `hsl(${clientColor})` } : {}}>
           Agenda
         </button>
+        {client.client_type === 'sem_contrato' && (
         <button onClick={() => setActiveTab('entregas')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'entregas' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'entregas' ? { borderColor: `hsl(${clientColor})` } : {}}>
           📋 Entregas
         </button>
+        )}
         {(client.show_metrics || isTeamMember) && (
           <button onClick={() => setActiveTab('metrics')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'metrics' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'metrics' ? { borderColor: `hsl(${clientColor})` } : {}}>
             Métricas

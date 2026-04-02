@@ -108,6 +108,7 @@ const CANVAS_H_FEED = 1350;
 const CANVAS_H_STORY = 1920;
 
 type CanvasFormat = 'feed' | 'story';
+type FlyerMode = 'venda' | 'vendido';
 type CanvasZone = 'header' | 'price' | 'info' | 'footer' | null;
 
 const COLOR_LABELS: { key: keyof LayoutColors; label: string; zone: CanvasZone }[] = [

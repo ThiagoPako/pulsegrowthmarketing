@@ -101,7 +101,7 @@ const DEFAULT_FORMAT_LAYOUT: FormatLayout = {
   obsFontScale: 1.0, labelFontScale: 1.0, pillHeightScale: 1.0, pillRadiusScale: 1.0,
 };
 
-
+interface VendidoColors {
   background: string;
   stripColor: string;
   stampBg: string;

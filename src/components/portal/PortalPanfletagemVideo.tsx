@@ -154,6 +154,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
 
   const [carVideos, setCarVideos] = useState<string[]>([]);
   const [carFiles, setCarFiles] = useState<File[]>([]);
+  const [carVideoLoading, setCarVideoLoading] = useState<Record<number, boolean>>({});
 
   const [closingVideo, setClosingVideo] = useState<string | null>(saved.closingUrl || null);
   const [closingFile, setClosingFile] = useState<File | null>(null);

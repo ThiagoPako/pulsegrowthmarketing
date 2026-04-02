@@ -928,14 +928,23 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
                     <p className="text-[11px] text-white/40">Adicione um ou mais vídeos do veículo. O layout será sobreposto.</p>
                     {carVideos.map((cv, i) => (
                       <div key={i} className="relative rounded-xl overflow-hidden bg-black aspect-video max-h-32">
-                        <video src={cv} className="w-full h-full object-cover" muted playsInline preload="metadata" controls />
+                        {carVideoLoading[i] || !cv ? (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10">
+                            <Loader2 size={24} className="animate-spin text-white/60 mb-2" />
+                            <p className="text-[10px] text-white/40">Carregando vídeo...</p>
+                          </div>
+                        ) : (
+                          <video src={cv} className="w-full h-full object-cover" muted playsInline preload="metadata" controls />
+                        )}
                         <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-bold text-white" style={{ backgroundColor: `hsl(${clientColor})` }}>
                           {i + 1}
                         </div>
-                        <button onClick={() => removeSegment('car', i)}
-                          className="absolute top-2 right-2 w-7 h-7 rounded-full bg-red-600/60 flex items-center justify-center hover:bg-red-600/80">
-                          <Trash2 size={10} className="text-white" />
-                        </button>
+                        {!carVideoLoading[i] && cv && (
+                          <button onClick={() => removeSegment('car', i)}
+                            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-red-600/60 flex items-center justify-center hover:bg-red-600/80">
+                            <Trash2 size={10} className="text-white" />
+                          </button>
+                        )}
                       </div>
                     ))}
                     <button onClick={() => carInputRef.current?.click()}

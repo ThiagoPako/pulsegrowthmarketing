@@ -1748,8 +1748,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
               <Upload size={16} style={{ color: `hsl(${clientColor})` }} /> Logo
+              <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: `hsl(${clientColor} / 0.2)`, color: `hsl(${clientColor})` }}>
+                {canvasFormat === 'feed' ? 'FEED' : 'STORY'}
+              </span>
             </h3>
-            <p className="text-[11px] text-white/40">A logo original do cadastro é usada. Envie outra se precisar, ou ajuste o tamanho (proporcional).</p>
+            <p className="text-[11px] text-white/40">Configuração individual para {canvasFormat === 'feed' ? 'Feed' : 'Story'}. Envie outra logo ou ajuste o tamanho.</p>
             <div className="flex items-center gap-4">
               {(customLogoDataUrl || clientLogoUrl) && (
                 <div className="w-16 h-16 rounded-lg bg-white/[0.06] overflow-hidden flex items-center justify-center">

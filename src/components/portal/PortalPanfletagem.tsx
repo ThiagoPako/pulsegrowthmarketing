@@ -1456,7 +1456,21 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Left: Form */}
         <div className="space-y-6">
-          {/* Vehicle Info */}
+          {/* VENDIDO mode: simplified form */}
+          {flyerMode === 'vendido' ? (
+            <div className="bg-white/[0.04] border border-red-500/20 rounded-2xl p-6 space-y-5">
+              <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+                <Check size={16} className="text-red-400" /> Dados do VENDIDO
+              </h3>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-white/60">Nome do Cliente (comprador) *</Label>
+                <Input value={buyerName} onChange={e => setBuyerName(e.target.value)} placeholder="Ex: Fábio e Família"
+                  className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30 text-lg font-bold" />
+                <p className="text-[10px] text-white/30">Aparece como "PARABÉNS [NOME]" no panfleto</p>
+              </div>
+            </div>
+          ) : (
+          /* Vehicle Info (venda mode) */
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-5">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
@@ -1544,6 +1558,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
                 className="bg-white/[0.06] border-white/[0.1] text-white placeholder:text-white/30 resize-none" />
             </div>
           </div>
+          )}
 
           {/* Footer / Address & WhatsApp */}
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">

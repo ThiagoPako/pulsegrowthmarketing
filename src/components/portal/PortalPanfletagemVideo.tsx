@@ -332,6 +332,8 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     cancelAnimationFrame(animFrameRef.current);
     const video = hiddenVideoRef.current;
     if (video) { video.pause(); video.removeAttribute('src'); video.load(); }
+    const video2 = hiddenVideo2Ref.current;
+    if (video2) { video2.pause(); video2.removeAttribute('src'); video2.load(); }
     const audio = hiddenAudioRef.current;
     if (audio) { audio.pause(); audio.removeAttribute('src'); audio.load(); }
     if (mediaRecorderRef.current?.state === 'recording') {
@@ -339,6 +341,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     }
     mediaRecorderRef.current = null;
     isGeneratingRef.current = false;
+    transitionProgressRef.current = -1;
     blobUrlsToRevokeRef.current.forEach(u => URL.revokeObjectURL(u));
     blobUrlsToRevokeRef.current = [];
   }, []);

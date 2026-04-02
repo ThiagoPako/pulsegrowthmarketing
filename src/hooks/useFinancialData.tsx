@@ -454,6 +454,24 @@ export function useFinancialData() {
         console.error('[useFinancialData] updateExpense error:', error);
         return false;
       }
+
+      // Update linked cash movement if amount or date changed
+      const { data: linked } = await supabase
+        .from('cash_reserve_movements')
+        .select('id')
+        .ilike('description', `%[Despesa]%ID: ${id}%`);
+      if (linked && linked.length > 0) {
+        const cashUpdates: any = {};
+        if (updates.amount !== undefined) cashUpdates.amount = Number(updates.amount);
+        if (updates.date) cashUpdates.date = normalizeDate(updates.date);
+        if (updates.description) cashUpdates.description = `[Despesa] ${updates.description} - ID: ${id}`;
+        if (Object.keys(cashUpdates).length > 0) {
+          for (const l of linked) {
+            await supabase.from('cash_reserve_movements').update(cashUpdates).eq('id', l.id);
+          }
+        }
+      }
+
       await fetchAll();
       await logActivity('edição', 'despesa', `Editou despesa - R$ ${Number(updates.amount || expenses.find(ex => ex.id === id)?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, payload);
       return true;

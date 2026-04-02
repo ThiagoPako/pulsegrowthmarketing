@@ -847,7 +847,7 @@ export default function EditorDashboard() {
 
               {/* Deadline warning */}
               {activeEditTask.editing_deadline && (
-                <DeadlineBadge deadline={activeEditTask.editing_deadline} label="Prazo de edição" startedAt={activeEditTask.editing_started_at} />
+                <DeadlineBadge deadline={activeEditTask.editing_deadline} label="Prazo de edição" startedAt={activeEditTask.editing_started_at} totalHours={48} />
               )}
 
               {/* Adjustment notes */}

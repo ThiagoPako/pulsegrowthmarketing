@@ -824,9 +824,10 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
  
     ctx.fillStyle = c.headerText;
     ctx.textAlign = 'left';
-    ctx.font = `bold ${Math.round(30 * fs)}px 'Raleway', sans-serif`;
+    const hfs = headerFontScale * fs;
+    ctx.font = `bold ${Math.round(30 * hfs)}px 'Raleway', sans-serif`;
     ctx.fillText('QUALIDADE, CONFIANÇA E AS', 30, 45);
-    ctx.font = `900 ${Math.round(38 * fs)}px 'Raleway', sans-serif`;
+    ctx.font = `900 ${Math.round(38 * hfs)}px 'Raleway', sans-serif`;
     ctx.fillText('MELHORES CONDIÇÕES!', 30, 90);
  
     ctx.fillStyle = c.infoPills;

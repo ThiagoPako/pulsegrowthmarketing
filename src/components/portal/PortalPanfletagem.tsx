@@ -1500,7 +1500,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       let generatedUrl = '';
       const firstImage = uploadedUrls[0] || mediaPreviews[0];
       if (firstImage) {
-        try { generatedUrl = await generateFinalArt(firstImage); } catch (err) { console.warn('Art generation failed:', err); }
+        try {
+          const dataUrl = await generateFinalArt(firstImage);
+          // Convert data URL to blob and upload to VPS
+          const resp = await fetch(dataUrl);
+          const blob = await resp.blob();
+          const artFile = new File([blob], `flyer-art-${Date.now()}.jpg`, { type: 'image/jpeg' });
+          generatedUrl = await uploadFileToVps(artFile, `flyers/${clientId}/generated`);
+        } catch (err) { console.warn('Art generation failed:', err); }
       }
       setGenerating(false);
 
@@ -1516,6 +1523,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         price: flyerMode === 'vendido' ? '' : (price ? formatPrice(price) : ''),
         extra_info: flyerMode === 'vendido' ? `Comprador: ${buyerName.trim()}` : (extraInfo.trim() || null),
         media_urls: uploadedUrls,
+        generated_image_url: generatedUrl || null,
       });
 
       if (result?.error) throw new Error(result.error);

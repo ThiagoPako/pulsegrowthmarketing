@@ -1662,22 +1662,38 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             </div>
           </div>
 
-          {/* Font Size Control — only for venda mode */}
+          {/* Font Size Controls — per block — only for venda mode */}
           {flyerMode !== 'vendido' && (
           <>
           <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 space-y-4">
             <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
-              <Type size={16} style={{ color: `hsl(${clientColor})` }} /> Tamanho da Fonte
+              <Type size={16} style={{ color: `hsl(${clientColor})` }} /> Tamanho das Fontes
             </h3>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs text-white/60">Escala</Label>
-                <span className="text-xs text-white/40 font-mono">{Math.round(fontScale * 100)}%</span>
+            <p className="text-[11px] text-white/40">Clique em cada bloco para ajustar o tamanho individualmente.</p>
+            {[
+              { key: 'global', label: '🔧 Escala Geral', value: fontScale, setter: setFontScale, min: 70, max: 150 },
+              { key: 'header', label: '📌 Cabeçalho', value: headerFontScale, setter: setHeaderFontScale, min: 50, max: 200 },
+              { key: 'price', label: '💰 Preço', value: priceFontScale, setter: setPriceFontScale, min: 50, max: 200 },
+              { key: 'footer', label: '📍 Rodapé', value: footerFontScale, setter: setFooterFontScale, min: 50, max: 200 },
+            ].map(({ key, label, value, setter, min, max }) => (
+              <div key={key} className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveFieldEditor(activeFieldEditor === key ? null : key)}
+                  className={`w-full text-left text-xs font-semibold px-2 py-1.5 rounded-lg transition-colors ${activeFieldEditor === key ? 'bg-white/[0.1] text-white' : 'text-white/60 hover:text-white/80 hover:bg-white/[0.04]'}`}
+                >
+                  {label} — {Math.round(value * 100)}%
+                </button>
+                {activeFieldEditor === key && (
+                  <div className="pl-2 pr-1">
+                    <Slider value={[value * 100]} onValueChange={v => setter(v[0] / 100)} min={min} max={max} step={5} className="w-full" />
+                    <div className="flex justify-between text-[9px] text-white/30 mt-0.5">
+                      <span>{min}%</span><span>100%</span><span>{max}%</span>
+                    </div>
+                  </div>
+                )}
               </div>
-              <Slider value={[fontScale * 100]} onValueChange={v => setFontScale(v[0] / 100)} min={70} max={150} step={5} className="w-full" />
-              <div className="flex justify-between text-[10px] text-white/30">
-                <span>Menor</span><span>Normal</span><span>Maior</span>
-              </div>
+            ))}
             </div>
           </div>
 

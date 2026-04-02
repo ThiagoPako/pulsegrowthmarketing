@@ -57,7 +57,7 @@ const IPVA_OPTIONS = [
 const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
 const CANVAS_W = 1080;
-const CANVAS_H = 1920;
+const CANVAS_H = 1350;
 const FPS = 30;
 
 /* ================================================================ */
@@ -355,18 +355,11 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     const sy = (CANVAS_H - sh) / 2;
     ctx.drawImage(video, sx, sy, sw, sh);
 
-    // Overlay layout during vehicle segments
+    // Overlay layout during vehicle segments — same frame as image module
     const seg = compositionSegmentsRef.current[currentSegIndexRef.current];
     if (seg?.type === 'vehicle' && layoutOverlayImg) {
       ctx.globalAlpha = 1.0;
-      const overlayRatio = layoutOverlayImg.naturalWidth / layoutOverlayImg.naturalHeight;
-      if (overlayRatio < 0.6) {
-        ctx.drawImage(layoutOverlayImg, 0, 0, CANVAS_W, CANVAS_H);
-      } else {
-        const lh = Math.round(CANVAS_H * (1350 / 1920));
-        const ly = Math.round((CANVAS_H - lh) / 2);
-        ctx.drawImage(layoutOverlayImg, 0, ly, CANVAS_W, lh);
-      }
+      ctx.drawImage(layoutOverlayImg, 0, 0, CANVAS_W, CANVAS_H);
     }
 
     animFrameRef.current = requestAnimationFrame(drawFrame);
@@ -625,7 +618,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
       <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-4 space-y-3">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold text-white" style={{ backgroundColor: `hsl(${clientColor})` }}>
-            <Film size={12} /> 1080 × 1920 — Reels
+            <Film size={12} /> 1080 × 1350 — Feed
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-medium">
             <VolumeX size={11} /> Vídeos mutados — apenas música de fundo

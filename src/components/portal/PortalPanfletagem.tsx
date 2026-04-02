@@ -1031,9 +1031,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const fs = vendidoFontScale;
     const vc = vendidoColors;
 
-    // Full blue background — NO white diagonal strip
+    // Full blue background + background image
     ctx.fillStyle = vc.background;
     ctx.fillRect(0, 0, W, H);
+    const bgImg = vendidoBgRef.current;
+    if (bgImg) {
+      ctx.drawImage(bgImg, 0, 0, W, H);
+    }
 
     // ---- "VENDIDO" large red banner ----
     const stampFs = vendidoStampFontScale * fs;

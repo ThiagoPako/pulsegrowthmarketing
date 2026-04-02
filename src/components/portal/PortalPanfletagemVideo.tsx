@@ -137,6 +137,9 @@ function uploadWithProgress(file: File, folder: string, onProgress: (pct: number
 
 interface CompSegment { type: 'intro' | 'vehicle' | 'closing'; blobUrl: string; originalUrl: string; }
 
+const TRANSITION_DURATION_MS = 800;
+const TRANSITION_FRAMES = Math.round((TRANSITION_DURATION_MS / 1000) * FPS);
+
 /* ================================================================ */
 /*  COMPONENT                                                        */
 /* ================================================================ */
@@ -188,6 +191,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
 
   const compositionCanvasRef = useRef<HTMLCanvasElement>(null);
   const hiddenVideoRef = useRef<HTMLVideoElement>(null);
+  const hiddenVideo2Ref = useRef<HTMLVideoElement>(null);
   const hiddenAudioRef = useRef<HTMLAudioElement>(null);
   const animFrameRef = useRef(0);
   const compositionSegmentsRef = useRef<CompSegment[]>([]);
@@ -196,6 +200,8 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
   const recordedChunksRef = useRef<Blob[]>([]);
   const isGeneratingRef = useRef(false);
   const blobUrlsToRevokeRef = useRef<string[]>([]);
+  const transitionProgressRef = useRef(-1);
+  const transitionStartTimeRef = useRef(0);
 
   // Layout overlay image
   const [layoutOverlayImg, setLayoutOverlayImg] = useState<HTMLImageElement | null>(null);
@@ -326,6 +332,8 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     cancelAnimationFrame(animFrameRef.current);
     const video = hiddenVideoRef.current;
     if (video) { video.pause(); video.removeAttribute('src'); video.load(); }
+    const video2 = hiddenVideo2Ref.current;
+    if (video2) { video2.pause(); video2.removeAttribute('src'); video2.load(); }
     const audio = hiddenAudioRef.current;
     if (audio) { audio.pause(); audio.removeAttribute('src'); audio.load(); }
     if (mediaRecorderRef.current?.state === 'recording') {
@@ -333,19 +341,12 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     }
     mediaRecorderRef.current = null;
     isGeneratingRef.current = false;
+    transitionProgressRef.current = -1;
     blobUrlsToRevokeRef.current.forEach(u => URL.revokeObjectURL(u));
     blobUrlsToRevokeRef.current = [];
   }, []);
 
-  const drawFrame = useCallback(() => {
-    const canvas = compositionCanvasRef.current;
-    const video = hiddenVideoRef.current;
-    if (!canvas || !video || video.paused || video.ended) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Draw video frame scaled to fill canvas (cover)
+  const drawVideoToCanvas = useCallback((ctx: CanvasRenderingContext2D, video: HTMLVideoElement, alpha: number) => {
     const vw = video.videoWidth || CANVAS_W;
     const vh = video.videoHeight || CANVAS_H;
     const scale = Math.max(CANVAS_W / vw, CANVAS_H / vh);
@@ -353,11 +354,13 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     const sh = vh * scale;
     const sx = (CANVAS_W - sw) / 2;
     const sy = (CANVAS_H - sh) / 2;
+    ctx.globalAlpha = alpha;
     ctx.drawImage(video, sx, sy, sw, sh);
+    ctx.globalAlpha = 1.0;
+  }, []);
 
-    // Overlay layout during vehicle segments
-    const seg = compositionSegmentsRef.current[currentSegIndexRef.current];
-    if (seg?.type === 'vehicle' && layoutOverlayImg) {
+  const drawOverlay = useCallback((ctx: CanvasRenderingContext2D, segType: string) => {
+    if (segType === 'vehicle' && layoutOverlayImg) {
       ctx.globalAlpha = 1.0;
       const overlayRatio = layoutOverlayImg.naturalWidth / layoutOverlayImg.naturalHeight;
       if (overlayRatio < 0.6) {
@@ -368,15 +371,64 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
         ctx.drawImage(layoutOverlayImg, 0, ly, CANVAS_W, lh);
       }
     }
+  }, [layoutOverlayImg]);
+
+  const drawFrame = useCallback(() => {
+    const canvas = compositionCanvasRef.current;
+    const video = hiddenVideoRef.current;
+    if (!canvas || !video || (video.paused && transitionProgressRef.current < 0)) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+    // Check if we're in a crossfade transition
+    if (transitionProgressRef.current >= 0) {
+      const elapsed = performance.now() - transitionStartTimeRef.current;
+      const progress = Math.min(elapsed / TRANSITION_DURATION_MS, 1);
+      transitionProgressRef.current = progress;
+
+      const video2 = hiddenVideo2Ref.current;
+
+      // Draw outgoing video (fading out)
+      if (video2 && !video2.paused) {
+        drawVideoToCanvas(ctx, video2, 1 - progress);
+        const prevIdx = currentSegIndexRef.current - 1;
+        if (prevIdx >= 0) {
+          drawOverlay(ctx, compositionSegmentsRef.current[prevIdx].type);
+        }
+      }
+
+      // Draw incoming video (fading in)
+      if (!video.paused) {
+        drawVideoToCanvas(ctx, video, progress);
+        const seg = compositionSegmentsRef.current[currentSegIndexRef.current];
+        if (seg) drawOverlay(ctx, seg.type);
+      }
+
+      if (progress >= 1) {
+        transitionProgressRef.current = -1;
+        if (video2) { video2.pause(); }
+      }
+    } else {
+      // Normal playback - no transition
+      if (!video.paused && !video.ended) {
+        drawVideoToCanvas(ctx, video, 1);
+        const seg = compositionSegmentsRef.current[currentSegIndexRef.current];
+        if (seg) drawOverlay(ctx, seg.type);
+      }
+    }
 
     animFrameRef.current = requestAnimationFrame(drawFrame);
-  }, [layoutOverlayImg]);
+  }, [drawVideoToCanvas, drawOverlay]);
 
   const playNextSegment = useCallback(() => {
     const segments = compositionSegmentsRef.current;
     const idx = currentSegIndexRef.current;
     if (idx >= segments.length) {
-      // Composition ended
       cancelAnimationFrame(animFrameRef.current);
       const audio = hiddenAudioRef.current;
       if (audio) { audio.pause(); }
@@ -391,14 +443,27 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     }
 
     const seg = segments[idx];
-    setCurrentSegLabel(seg.type === 'intro' ? 'Abertura' : seg.type === 'closing' ? 'Finalização' : `Veículo ${idx - (compositionSegmentsRef.current[0]?.type === 'intro' ? 1 : 0) + (compositionSegmentsRef.current[0]?.type !== 'intro' ? 1 : 0)}`);
+    setCurrentSegLabel(seg.type === 'intro' ? 'Abertura' : seg.type === 'closing' ? 'Finalização' : `Veículo ${idx - (segments[0]?.type === 'intro' ? 1 : 0) + (segments[0]?.type !== 'intro' ? 1 : 0)}`);
     setCompositionProgress(Math.round(((idx) / segments.length) * 100));
 
     const video = hiddenVideoRef.current;
+    const video2 = hiddenVideo2Ref.current;
     if (!video) return;
 
+    // If this is not the first segment, start crossfade transition
+    const isFirstSegment = idx === 0;
+
     video.onended = () => {
+      // Before moving to next, copy current video to video2 for crossfade
+      if (video2 && idx + 1 < segments.length) {
+        video2.src = video.src;
+        video2.currentTime = Math.max(0, video.duration - 0.1);
+        video2.muted = true;
+        video2.play().catch(() => {});
+      }
       currentSegIndexRef.current += 1;
+      transitionProgressRef.current = 0;
+      transitionStartTimeRef.current = performance.now();
       playNextSegment();
     };
 
@@ -412,6 +477,9 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     video.muted = true;
     video.load();
     video.play().then(() => {
+      if (isFirstSegment) {
+        transitionProgressRef.current = -1;
+      }
       drawFrame();
     }).catch(() => {
       currentSegIndexRef.current += 1;
@@ -635,6 +703,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     <div className="space-y-6">
       {/* Hidden elements */}
       <video ref={hiddenVideoRef} className="hidden" playsInline muted preload="auto" />
+      <video ref={hiddenVideo2Ref} className="hidden" playsInline muted preload="auto" />
       <audio ref={hiddenAudioRef} className="hidden" preload="auto" />
 
       {/* Header */}
@@ -780,7 +849,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
                       {seg.canSave && seg.video && renderSaveButton(seg.key as 'intro' | 'closing', seg.saved, !!seg.file)}
                       {seg.video ? (
                         <div className="relative rounded-xl overflow-hidden bg-black aspect-video max-h-40">
-                          <video src={seg.video} className="w-full h-full object-cover" muted playsInline />
+                          <video src={seg.video} className="w-full h-full object-cover" muted playsInline preload="metadata" controls />
                           <button onClick={() => removeSegment(seg.key)}
                             className="absolute top-2 right-2 w-7 h-7 rounded-full bg-red-600/60 flex items-center justify-center hover:bg-red-600/80">
                             <X size={10} className="text-white" />
@@ -827,7 +896,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
                     <p className="text-[11px] text-white/40">Adicione um ou mais vídeos do veículo. O layout será sobreposto.</p>
                     {carVideos.map((cv, i) => (
                       <div key={i} className="relative rounded-xl overflow-hidden bg-black aspect-video max-h-32">
-                        <video src={cv} className="w-full h-full object-cover" muted playsInline />
+                        <video src={cv} className="w-full h-full object-cover" muted playsInline preload="metadata" controls />
                         <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-bold text-white" style={{ backgroundColor: `hsl(${clientColor})` }}>
                           {i + 1}
                         </div>
@@ -973,10 +1042,31 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
                   </div>
                 )}
 
-                <Button variant="outline" size="sm" onClick={() => { stopComposition(); setCompositionState('idle'); }}
-                  className="w-full text-xs border-white/[0.1] text-white/60">
-                  {compositionState === 'done' ? 'Fechar' : 'Parar'}
-                </Button>
+                {compositionState === 'done' && generatedVideoUrl ? (
+                  <div className="space-y-2">
+                    <div className="relative rounded-xl overflow-hidden bg-black aspect-[9/16]">
+                      <video src={generatedVideoUrl} controls className="w-full h-full object-contain" playsInline />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button onClick={handleDownload} className="text-xs font-bold h-12" style={{ backgroundColor: '#22c55e' }}>
+                        <Download size={16} className="mr-1.5" /> Baixar Vídeo
+                      </Button>
+                      <Button onClick={saveToPortal} disabled={savingToPortal} className="text-xs h-12" style={{ backgroundColor: `hsl(${clientColor})` }}>
+                        {savingToPortal ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Cloud size={14} className="mr-1.5" />}
+                        Salvar Portal
+                      </Button>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => { stopComposition(); setCompositionState('idle'); setGeneratedVideoUrl(null); setGeneratedVideoBlob(null); }}
+                      className="w-full text-xs border-white/[0.1] text-white/60">
+                      Fechar
+                    </Button>
+                  </div>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={() => { stopComposition(); setCompositionState('idle'); }}
+                    className="w-full text-xs border-white/[0.1] text-white/60">
+                    Parar
+                  </Button>
+                )}
               </div>
             ) : generatedVideoUrl ? (
               <div className="space-y-3">

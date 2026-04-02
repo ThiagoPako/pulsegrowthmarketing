@@ -849,7 +849,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
                       {seg.canSave && seg.video && renderSaveButton(seg.key as 'intro' | 'closing', seg.saved, !!seg.file)}
                       {seg.video ? (
                         <div className="relative rounded-xl overflow-hidden bg-black aspect-video max-h-40">
-                          <video src={seg.video} className="w-full h-full object-cover" muted playsInline />
+                          <video src={seg.video} className="w-full h-full object-cover" muted playsInline preload="metadata" controls />
                           <button onClick={() => removeSegment(seg.key)}
                             className="absolute top-2 right-2 w-7 h-7 rounded-full bg-red-600/60 flex items-center justify-center hover:bg-red-600/80">
                             <X size={10} className="text-white" />

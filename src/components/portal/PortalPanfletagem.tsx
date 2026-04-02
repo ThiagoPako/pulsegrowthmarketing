@@ -951,6 +951,197 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.globalAlpha = 1;
   }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
 
+  // VENDIDO layout — matching reference: dark blue bg, "VENDIDO" red stamp, polaroid photo, "PARABÉNS [NOME]", footer
+  const drawCanvasVendido = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {
+    const fs = fontScale;
+    const c = colors;
+
+    // Background — dark navy blue
+    const bgGrad = ctx.createLinearGradient(0, 0, W, H);
+    bgGrad.addColorStop(0, '#0a1628');
+    bgGrad.addColorStop(0.5, '#0d2147');
+    bgGrad.addColorStop(1, '#0a1628');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle diagonal accent
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    ctx.beginPath();
+    ctx.moveTo(W * 0.6, 0); ctx.lineTo(W, 0); ctx.lineTo(W, H * 0.5); ctx.closePath();
+    ctx.fill();
+
+    // ---- "VENDIDO" stamp (red, bold italic, top-left) ----
+    const stampY = 80;
+    ctx.save();
+    ctx.font = `bold italic ${Math.round(90 * fs)}px 'Raleway', Impact, sans-serif`;
+    ctx.textAlign = 'left';
+    // Red background bar behind text
+    const vendidoMetrics = ctx.measureText('VENDIDO');
+    const barX = 20;
+    const barW = vendidoMetrics.width + 40;
+    const barH = Math.round(100 * fs);
+    ctx.fillStyle = '#CC0000';
+    ctx.beginPath();
+    // Skewed rectangle
+    ctx.moveTo(barX, stampY - barH * 0.7);
+    ctx.lineTo(barX + barW + 15, stampY - barH * 0.7);
+    ctx.lineTo(barX + barW, stampY + barH * 0.3);
+    ctx.lineTo(barX - 5, stampY + barH * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText('VENDIDO', barX + 20, stampY + Math.round(10 * fs));
+    ctx.restore();
+
+    // "+1 CLIENTE SATISFEITO"
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `bold ${Math.round(32 * fs)}px 'Raleway', sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.fillText('+1 CLIENTE SATISFEITO', 30, stampY + Math.round(70 * fs));
+
+    // ---- Polaroid-style photo frame ----
+    const frameMargin = 80;
+    const frameTop = stampY + Math.round(110 * fs);
+    const frameW = W - frameMargin * 2;
+    const photoAspect = 4 / 3;
+    const innerPhotoH = Math.round(frameW / photoAspect);
+    const framePadding = 24;
+    const framePadBottom = Math.round(160 * fs); // extra space below for name
+    const totalFrameH = innerPhotoH + framePadding * 2 + framePadBottom;
+
+    // White frame shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.save();
+    ctx.translate(6, 6);
+    ctx.beginPath();
+    ctx.roundRect(frameMargin, frameTop, frameW, totalFrameH, 8);
+    ctx.fill();
+    ctx.restore();
+
+    // White frame
+    ctx.fillStyle = '#F5F5F0';
+    ctx.beginPath();
+    ctx.roundRect(frameMargin, frameTop, frameW, totalFrameH, 8);
+    ctx.fill();
+
+    // Photo inside frame
+    const photoX = frameMargin + framePadding;
+    const photoY = frameTop + framePadding;
+    const photoW = frameW - framePadding * 2;
+    if (vImg) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(photoX, photoY, photoW, innerPhotoH, 4);
+      ctx.clip();
+      drawImageCover(ctx, vImg, photoX, photoY, photoW, innerPhotoH, photoOffsetX, photoOffsetY);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = '#ddd';
+      ctx.fillRect(photoX, photoY, photoW, innerPhotoH);
+      ctx.fillStyle = '#999';
+      ctx.font = `${Math.round(24 * fs)}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.fillText('Adicione uma foto', photoX + photoW / 2, photoY + innerPhotoH / 2);
+    }
+
+    // "PARABÉNS" + buyer name inside polaroid bottom
+    const nameAreaY = photoY + innerPhotoH + Math.round(20 * fs);
+    ctx.fillStyle = '#1a2a4a';
+    ctx.font = `bold ${Math.round(42 * fs)}px 'Raleway', sans-serif`;
+    ctx.textAlign = 'center';
+    const centerX = frameMargin + frameW / 2;
+    ctx.fillText('PARABÉNS', centerX, nameAreaY + Math.round(45 * fs));
+
+    const displayName = buyerName.trim() || 'NOME DO CLIENTE';
+    ctx.font = `bold ${Math.round(38 * fs)}px 'Raleway', sans-serif`;
+    // Word wrap the name
+    const maxNameW = frameW - framePadding * 4;
+    const nameWords = displayName.toUpperCase().split(' ');
+    let nameLine = '';
+    let nameLineY = nameAreaY + Math.round(95 * fs);
+    nameWords.forEach(word => {
+      const test = nameLine + (nameLine ? ' ' : '') + word;
+      if (ctx.measureText(test).width > maxNameW && nameLine) {
+        ctx.fillText(nameLine, centerX, nameLineY);
+        nameLine = word;
+        nameLineY += Math.round(48 * fs);
+      } else {
+        nameLine = test;
+      }
+    });
+    if (nameLine) ctx.fillText(nameLine, centerX, nameLineY);
+
+    // ---- Footer: WhatsApp + Address ----
+    const footerStartY = frameTop + totalFrameH + Math.round(30 * fs);
+    const wpText = footerWhatsapp || '';
+    const addrText = footerAddress || '';
+
+    if (wpText) {
+      const wpImg = wpIconRef.current;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'center';
+      ctx.font = `bold ${Math.round(36 * fs)}px 'Raleway', sans-serif`;
+      const wpDisplayY = footerStartY + Math.round(30 * fs);
+      if (wpImg) {
+        const iconS = Math.round(40 * fs);
+        const textW = ctx.measureText(wpText).width;
+        const totalW = iconS + 12 + textW;
+        const startX = W / 2 - totalW / 2;
+        ctx.drawImage(wpImg, startX, wpDisplayY - iconS * 0.7, iconS, iconS);
+        ctx.fillText(wpText, startX + iconS + 12 + textW / 2, wpDisplayY + Math.round(5 * fs));
+      } else {
+        ctx.fillText(wpText, W / 2, wpDisplayY);
+      }
+    }
+
+    if (addrText) {
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = `${Math.round(20 * fs)}px 'Raleway', sans-serif`;
+      ctx.textAlign = 'center';
+      const addrY = footerStartY + Math.round(80 * fs);
+      // Pin icon before address
+      const pinSize = Math.round(16 * fs);
+      const addrFullText = addrText.toUpperCase();
+      const addrTW = ctx.measureText(addrFullText).width;
+      const addrStartX = W / 2 - (pinSize + 8 + addrTW) / 2;
+      // Simple pin icon
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.beginPath();
+      ctx.arc(addrStartX + pinSize / 2, addrY - pinSize * 0.3, pinSize * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(addrStartX + pinSize / 2, addrY + pinSize * 0.4);
+      ctx.lineTo(addrStartX + pinSize * 0.2, addrY - pinSize * 0.3);
+      ctx.lineTo(addrStartX + pinSize * 0.8, addrY - pinSize * 0.3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      // Wrap address text
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.textAlign = 'center';
+      const maxAW = W - 100;
+      const aWords = addrFullText.split(' ');
+      let aLine = ''; let aLineY = addrY;
+      aWords.forEach(word => {
+        const test = aLine + (aLine ? ' ' : '') + word;
+        if (ctx.measureText(test).width > maxAW && aLine) {
+          ctx.fillText(aLine, W / 2, aLineY);
+          aLine = word;
+          aLineY += Math.round(26 * fs);
+        } else { aLine = test; }
+      });
+      if (aLine) ctx.fillText(aLine, W / 2, aLineY);
+    }
+
+    // Logo (top right corner, smaller)
+    if (lImg) {
+      const lW = Math.round(logoW * 0.7);
+      const lH = Math.round(logoH * 0.7);
+      ctx.drawImage(lImg, W - lW - 30, 20, lW, lH);
+    }
+  }, [fontScale, colors, buyerName, footerWhatsapp, footerAddress, logoW, logoH, photoOffsetX, photoOffsetY]);
+
   // Unified draw function
   const drawCanvas = useCallback((canvas: HTMLCanvasElement, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null, fImg: HTMLImageElement | null = null) => {
     const ctx = canvas.getContext('2d');
@@ -959,16 +1150,18 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const H = CANVAS_H_VAL;
     canvas.width = W;
     canvas.height = H;
-    if (canvasFormat === 'story') {
+    if (flyerMode === 'vendido') {
+      drawCanvasVendido(ctx, W, H, vImg, lImg);
+    } else if (canvasFormat === 'story') {
       drawCanvasStory(ctx, W, H, vImg, lImg);
     } else {
       drawCanvasFeed(ctx, W, H, vImg, lImg);
     }
-    // Draw frame overlay on top of everything
-    if (fImg) {
+    // Draw frame overlay on top of everything (not for vendido mode)
+    if (fImg && flyerMode !== 'vendido') {
       ctx.drawImage(fImg, 0, 0, W, H);
     }
-  }, [canvasFormat, CANVAS_H_VAL, drawCanvasFeed, drawCanvasStory]);
+  }, [canvasFormat, CANVAS_H_VAL, drawCanvasFeed, drawCanvasStory, drawCanvasVendido, flyerMode]);
 
   // Live preview rendering + capture for video tab
   useEffect(() => {

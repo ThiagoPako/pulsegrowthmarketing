@@ -1500,7 +1500,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       let generatedUrl = '';
       const firstImage = uploadedUrls[0] || mediaPreviews[0];
       if (firstImage) {
-        try { generatedUrl = await generateFinalArt(firstImage); } catch (err) { console.warn('Art generation failed:', err); }
+        try {
+          const dataUrl = await generateFinalArt(firstImage);
+          // Convert data URL to blob and upload to VPS
+          const resp = await fetch(dataUrl);
+          const blob = await resp.blob();
+          const artFile = new File([blob], `flyer-art-${Date.now()}.jpg`, { type: 'image/jpeg' });
+          generatedUrl = await uploadFileToVps(artFile, `flyers/${clientId}/generated`);
+        } catch (err) { console.warn('Art generation failed:', err); }
       }
       setGenerating(false);
 
@@ -1516,6 +1523,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         price: flyerMode === 'vendido' ? '' : (price ? formatPrice(price) : ''),
         extra_info: flyerMode === 'vendido' ? `Comprador: ${buyerName.trim()}` : (extraInfo.trim() || null),
         media_urls: uploadedUrls,
+        generated_image_url: generatedUrl || null,
       });
 
       if (result?.error) throw new Error(result.error);
@@ -2063,6 +2071,22 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
               />
+              {/* Download preview button */}
+              <button
+                onClick={() => {
+                  const canvas = previewCanvasRef.current;
+                  if (!canvas) return;
+                  const link = document.createElement('a');
+                  link.download = `panfleto-preview-${Date.now()}.jpg`;
+                  link.href = canvas.toDataURL('image/jpeg', 0.92);
+                  link.click();
+                  toast.success('Imagem baixada!');
+                }}
+                className="absolute bottom-3 right-3 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center text-white transition-colors"
+                title="Baixar prévia"
+              >
+                <Download size={16} />
+              </button>
             </div>
 
             {/* Zone-specific color picker (appears when clicking a zone on the preview) */}
@@ -2125,7 +2149,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
               <div className="grid grid-cols-2 gap-3">
                 {items.map(item => (
                   <div key={item.id} className="relative group">
-                    <button onClick={() => setPreviewItem(item)}
+                   <button onClick={() => setPreviewItem(item)}
                       className="w-full relative aspect-[4/5] rounded-xl overflow-hidden border border-white/[0.08] hover:border-white/[0.2] transition-all">
                       {item.generated_image_url ? (
                         <img src={item.generated_image_url} alt="" className="w-full h-full object-cover" />
@@ -2139,10 +2163,18 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
                         <p className="text-[10px] text-white/50">{item.vehicle_year} • {item.price || 'Sem preço'}</p>
                       </div>
                     </button>
-                    <button onClick={() => handleDeleteItem(item.id)}
-                      className="absolute top-2 right-2 w-7 h-7 rounded-full bg-red-600/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500">
-                      <Trash2 size={12} className="text-white" />
-                    </button>
+                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {item.generated_image_url && (
+                        <button onClick={(e) => { e.stopPropagation(); handleDownload(item); }}
+                          className="w-7 h-7 rounded-full bg-green-600/80 flex items-center justify-center hover:bg-green-500">
+                          <Download size={12} className="text-white" />
+                        </button>
+                      )}
+                      <button onClick={() => handleDeleteItem(item.id)}
+                        className="w-7 h-7 rounded-full bg-red-600/80 flex items-center justify-center hover:bg-red-500">
+                        <Trash2 size={12} className="text-white" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

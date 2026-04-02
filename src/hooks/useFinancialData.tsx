@@ -391,6 +391,20 @@ export function useFinancialData() {
       const revenue = revenues.find(r => r.id === id);
       const { error } = await supabase.from('revenues').delete().eq('id', id);
       if (error) { console.error('[useFinancialData] deleteRevenue error:', error); return false; }
+
+      // If revenue was received, remove the linked cash movement
+      if (revenue?.status === 'recebida') {
+        const { data: linked } = await supabase
+          .from('cash_reserve_movements')
+          .select('id')
+          .ilike('description', `%[Receita]%ID: ${id}%`);
+        if (linked && linked.length > 0) {
+          for (const l of linked) {
+            await supabase.from('cash_reserve_movements').delete().eq('id', l.id);
+          }
+        }
+      }
+
       await Promise.allSettled([
         logActivity('exclusão', 'receita', `Excluiu receita - R$ ${Number(revenue?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id),
         fetchAll(),

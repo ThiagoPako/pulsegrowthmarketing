@@ -1986,14 +1986,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
             {/* Format selector */}
             <div className="flex gap-2">
               <button
-                onClick={() => setCanvasFormat('feed')}
+                onClick={() => switchFormat('feed')}
                 className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all ${canvasFormat === 'feed' ? 'text-white border-2' : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'}`}
                 style={canvasFormat === 'feed' ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}
               >
                 <Image size={14} /> Feed (4:5)
               </button>
               <button
-                onClick={() => setCanvasFormat('story')}
+                onClick={() => switchFormat('story')}
                 className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all ${canvasFormat === 'story' ? 'text-white border-2' : 'bg-white/[0.04] border border-white/[0.08] text-white/50 hover:bg-white/[0.08]'}`}
                 style={canvasFormat === 'story' ? { borderColor: `hsl(${clientColor})`, backgroundColor: `hsl(${clientColor} / 0.15)` } : {}}
               >

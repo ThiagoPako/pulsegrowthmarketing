@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Textarea } from '@/components/ui/textarea';
 import whatsappIconSrc from '@/assets/whatsapp_icon.png';
+import vendidoBgSrc from '@/assets/vendido_bg.png';
 import PortalPanfletagemVideo from './PortalPanfletagemVideo';
 import {
   Car, Download, Eye, Plus, X, Image, Loader2, Check,

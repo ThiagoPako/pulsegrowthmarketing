@@ -340,6 +340,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (s.vendidoParabensFontScale != null) setVendidoParabensFontScale(s.vendidoParabensFontScale);
         if (s.vendidoNomeFontScale != null) setVendidoNomeFontScale(s.vendidoNomeFontScale);
         if (s.vendidoFooterFontScale != null) setVendidoFooterFontScale(s.vendidoFooterFontScale);
+        if (s.vStampOffX != null) setVStampOffX(s.vStampOffX);
+        if (s.vStampOffY != null) setVStampOffY(s.vStampOffY);
+        if (s.vFrameOffX != null) setVFrameOffX(s.vFrameOffX);
+        if (s.vFrameOffY != null) setVFrameOffY(s.vFrameOffY);
+        if (s.vParabensOffX != null) setVParabensOffX(s.vParabensOffX);
+        if (s.vParabensOffY != null) setVParabensOffY(s.vParabensOffY);
+        if (s.vFooterOffX != null) setVFooterOffX(s.vFooterOffX);
+        if (s.vFooterOffY != null) setVFooterOffY(s.vFooterOffY);
       } catch { /* ignore */ }
     }
   }, [clientId]);

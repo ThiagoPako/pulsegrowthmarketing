@@ -1008,48 +1008,35 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.fillStyle = vc.background;
     ctx.fillRect(0, 0, W, H);
 
-    // Diagonal strip on the LEFT side (was right side)
+    // White top section (approx 12% of height) with diagonal cut
+    const whiteH = Math.round(H * 0.12);
     ctx.fillStyle = vc.stripColor;
-    ctx.globalAlpha = 0.15;
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(W * 0.12, 0);
-    ctx.lineTo(W * 0.08, H);
-    ctx.lineTo(0, H);
+    ctx.lineTo(W, 0);
+    ctx.lineTo(W, whiteH * 0.4);
+    ctx.lineTo(0, whiteH);
     ctx.closePath();
     ctx.fill();
-    ctx.globalAlpha = 1;
 
-    // Subtle dark accent on left edge
-    ctx.fillStyle = DARK_BLUE;
-    ctx.globalAlpha = 0.4;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(W * 0.04, 0);
-    ctx.lineTo(W * 0.02, H);
-    ctx.lineTo(0, H);
-    ctx.closePath();
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    // ---- "VENDIDO" stamp (red, bold italic, top-right area) ----
+    // ---- "VENDIDO" stamp (red, bold italic, top-left) ----
     const stampFs = vendidoStampFontScale * fs;
     const stampFontSize = Math.round(90 * stampFs);
     ctx.save();
     ctx.font = `bold italic ${stampFontSize}px 'Raleway', Impact, sans-serif`;
     ctx.textAlign = 'left';
     const vendidoMetrics = ctx.measureText('VENDIDO');
+    const barX = 0;
     const barW = vendidoMetrics.width + 60;
     const barH = Math.round(stampFontSize * 1.15);
     const barY = Math.round(30 * fs);
-    const barX = W - barW - 20;
     // Red bar behind text
     ctx.fillStyle = vc.stampBg;
     ctx.beginPath();
-    ctx.moveTo(barX + 10, barY);
+    ctx.moveTo(barX, barY);
     ctx.lineTo(barX + barW + 20, barY);
-    ctx.lineTo(barX + barW + 20, barY + barH);
-    ctx.lineTo(barX - 10, barY + barH);
+    ctx.lineTo(barX + barW - 10, barY + barH);
+    ctx.lineTo(barX, barY + barH);
     ctx.closePath();
     ctx.fill();
     // "VENDIDO" text
@@ -1061,8 +1048,8 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     const satisfeitoY = barY + barH + Math.round(40 * fs);
     ctx.fillStyle = vc.satisfeitoText;
     ctx.font = `bold ${Math.round(30 * fs)}px 'Raleway', sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText('+1 CLIENTE SATISFEITO', W / 2, satisfeitoY);
+    ctx.textAlign = 'left';
+    ctx.fillText('+1 CLIENTE SATISFEITO', 30, satisfeitoY);
 
     // ---- Polaroid-style photo frame ----
     const frameMarginX = Math.round(55 * fs);

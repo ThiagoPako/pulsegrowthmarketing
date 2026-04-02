@@ -1023,7 +1023,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.moveTo(W, H); ctx.lineTo(W * 0.35, H); ctx.lineTo(W, bottomBarY + 10); ctx.closePath();
     ctx.fill();
     ctx.globalAlpha = 1;
-  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
+  }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, headerFontScale, priceFontScale, footerFontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
  
   // VENDIDO layout — draw sold overlay with background image and badge
   const drawCanvasVendido = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {

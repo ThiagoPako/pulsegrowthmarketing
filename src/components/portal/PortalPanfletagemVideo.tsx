@@ -542,7 +542,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
       };
 
       if (introVideo) segments.push(await prepare(introVideo, 'intro'));
-      for (const cv of carVideos) segments.push(await prepare(cv, 'vehicle'));
+      for (const cv of carVideos) { if (cv) segments.push(await prepare(cv, 'vehicle')); }
       if (closingVideo) segments.push(await prepare(closingVideo, 'closing'));
 
       if (segments.length === 0) { toast.error('Nenhum segmento disponível'); setCompositionState('idle'); return; }

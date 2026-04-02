@@ -1775,10 +1775,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
           </div>
 
           {/* Generate button */}
-          <Button onClick={handleCreate} disabled={creating || generating || uploading || !model.trim() || !year.trim()}
-            className="w-full h-12 rounded-xl text-sm font-semibold text-white" style={{ background: `hsl(${clientColor})` }}>
+          <Button onClick={handleCreate} disabled={creating || generating || uploading || (flyerMode === 'vendido' ? false : (!model.trim() || !year.trim()))}
+            className="w-full h-12 rounded-xl text-sm font-semibold text-white"
+            style={{ background: flyerMode === 'vendido' ? '#CC0000' : `hsl(${clientColor})` }}>
             {creating || generating || uploading ? (
               <><Loader2 size={16} className="animate-spin" /> {uploading ? 'Enviando fotos...' : generating ? 'Gerando arte...' : 'Criando...'}</>
+            ) : flyerMode === 'vendido' ? (
+              <><Check size={16} /> Gerar Panfleto VENDIDO</>
             ) : (
               <><Car size={16} /> Gerar Panfleto Digital</>
             )}

@@ -77,6 +77,39 @@ const DEFAULT_COLORS: LayoutColors = {
   footerText: '#FFFFFF',
 };
 
+interface VendidoColors {
+  background: string;
+  stripColor: string;
+  stampBg: string;
+  stampText: string;
+  satisfeitoText: string;
+  parabensText: string;
+  nomeText: string;
+  footerText: string;
+}
+
+const DEFAULT_VENDIDO_COLORS: VendidoColors = {
+  background: '#034e98',
+  stripColor: '#FFFFFF',
+  stampBg: '#CC0000',
+  stampText: '#FFFFFF',
+  satisfeitoText: '#FFFFFF',
+  parabensText: '#FFFFFF',
+  nomeText: '#FFFFFF',
+  footerText: '#FFFFFF',
+};
+
+const VENDIDO_COLOR_LABELS: { key: keyof VendidoColors; label: string }[] = [
+  { key: 'background', label: 'Fundo' },
+  { key: 'stripColor', label: 'Faixa Diagonal' },
+  { key: 'stampBg', label: 'Selo VENDIDO' },
+  { key: 'stampText', label: 'Texto VENDIDO' },
+  { key: 'satisfeitoText', label: 'Texto +1 Cliente' },
+  { key: 'parabensText', label: 'Texto PARABÉNS' },
+  { key: 'nomeText', label: 'Texto Nome' },
+  { key: 'footerText', label: 'Texto Rodapé' },
+];
+
 const TRANSMISSION_OPTIONS = [
   { value: 'manual', label: 'Manual', icon: Gauge },
   { value: 'automatico', label: 'Automático', icon: Gauge },

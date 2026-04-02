@@ -260,7 +260,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [layoutLocked, setLayoutLocked] = useState(false);
 
   // Drag state
-  const [dragging, setDragging] = useState<'logo' | 'info' | 'footer' | 'photo' | null>(null);
+  const [dragging, setDragging] = useState<'logo' | 'info' | 'footer' | 'photo' | 'v-stamp' | 'v-frame' | 'v-parabens' | 'v-footer' | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const didDragRef = useRef(false);
 
@@ -276,6 +276,16 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const [vendidoParabensFontScale, setVendidoParabensFontScale] = useState(1.0);
   const [vendidoNomeFontScale, setVendidoNomeFontScale] = useState(1.0);
   const [vendidoFooterFontScale, setVendidoFooterFontScale] = useState(1.0);
+
+  // Vendido draggable position offsets
+  const [vStampOffX, setVStampOffX] = useState(0);
+  const [vStampOffY, setVStampOffY] = useState(0);
+  const [vFrameOffX, setVFrameOffX] = useState(0);
+  const [vFrameOffY, setVFrameOffY] = useState(0);
+  const [vParabensOffX, setVParabensOffX] = useState(0);
+  const [vParabensOffY, setVParabensOffY] = useState(0);
+  const [vFooterOffX, setVFooterOffX] = useState(0);
+  const [vFooterOffY, setVFooterOffY] = useState(0);
 
   // Canvas click → zone color picker
   const [activeColorZone, setActiveColorZone] = useState<CanvasZone>(null);
@@ -330,6 +340,14 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (s.vendidoParabensFontScale != null) setVendidoParabensFontScale(s.vendidoParabensFontScale);
         if (s.vendidoNomeFontScale != null) setVendidoNomeFontScale(s.vendidoNomeFontScale);
         if (s.vendidoFooterFontScale != null) setVendidoFooterFontScale(s.vendidoFooterFontScale);
+        if (s.vStampOffX != null) setVStampOffX(s.vStampOffX);
+        if (s.vStampOffY != null) setVStampOffY(s.vStampOffY);
+        if (s.vFrameOffX != null) setVFrameOffX(s.vFrameOffX);
+        if (s.vFrameOffY != null) setVFrameOffY(s.vFrameOffY);
+        if (s.vParabensOffX != null) setVParabensOffX(s.vParabensOffX);
+        if (s.vParabensOffY != null) setVParabensOffY(s.vParabensOffY);
+        if (s.vFooterOffX != null) setVFooterOffX(s.vFooterOffX);
+        if (s.vFooterOffY != null) setVFooterOffY(s.vFooterOffY);
       } catch { /* ignore */ }
     }
   }, [clientId]);
@@ -343,7 +361,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   }, [clientWhatsapp]);
 
   const saveLayoutSettings = () => {
-    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, footerPosX, footerPosY, photoOffsetX, photoOffsetY, colors, footerAddress, footerWhatsapp, canvasFormat, vendidoColors, vendidoFontScale, vendidoStampFontScale, vendidoParabensFontScale, vendidoNomeFontScale, vendidoFooterFontScale };
+    const settings = { logoX, logoY, logoScale, infoPosY, layoutLocked, customLogoDataUrl, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, footerPosX, footerPosY, photoOffsetX, photoOffsetY, colors, footerAddress, footerWhatsapp, canvasFormat, vendidoColors, vendidoFontScale, vendidoStampFontScale, vendidoParabensFontScale, vendidoNomeFontScale, vendidoFooterFontScale, vStampOffX, vStampOffY, vFrameOffX, vFrameOffY, vParabensOffX, vParabensOffY, vFooterOffX, vFooterOffY };
     localStorage.setItem(`flyer-layout-${clientId}`, JSON.stringify(settings));
     toast.success('Layout salvo!');
   };
@@ -998,17 +1016,19 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.globalAlpha = 1;
   }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
 
-  // VENDIDO layout — matching reference exactly
+  // VENDIDO layout — all elements draggable
+  // We store computed positions in a ref so drag handlers can use them
+  const vendidoZonesRef = useRef<{ stampY: number; stampH: number; frameX: number; frameY: number; frameW: number; frameH: number; parabensY: number; parabensH: number; footerY: number; footerH: number }>({ stampY: 0, stampH: 120, frameX: 55, frameY: 250, frameW: 970, frameH: 600, parabensY: 900, parabensH: 180, footerY: 1100, footerH: 200 });
+
   const drawCanvasVendido = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {
     const fs = vendidoFontScale;
     const vc = vendidoColors;
-    const DARK_BLUE = darkenHex(vc.background, 40);
 
     // Full background
     ctx.fillStyle = vc.background;
     ctx.fillRect(0, 0, W, H);
 
-    // White top section (approx 12% of height) with diagonal cut
+    // White top section with diagonal cut
     const whiteH = Math.round(H * 0.12);
     ctx.fillStyle = vc.stripColor;
     ctx.beginPath();
@@ -1019,18 +1039,17 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.closePath();
     ctx.fill();
 
-    // ---- "VENDIDO" stamp (red, bold italic, top-left) ----
+    // ---- "VENDIDO" stamp ----
     const stampFs = vendidoStampFontScale * fs;
     const stampFontSize = Math.round(90 * stampFs);
     ctx.save();
     ctx.font = `bold italic ${stampFontSize}px 'Raleway', Impact, sans-serif`;
     ctx.textAlign = 'left';
     const vendidoMetrics = ctx.measureText('VENDIDO');
-    const barX = 0;
+    const barX = 0 + vStampOffX;
     const barW = vendidoMetrics.width + 60;
     const barH = Math.round(stampFontSize * 1.15);
-    const barY = Math.round(30 * fs);
-    // Red bar behind text
+    const barY = Math.round(30 * fs) + vStampOffY;
     ctx.fillStyle = vc.stampBg;
     ctx.beginPath();
     ctx.moveTo(barX, barY);
@@ -1039,28 +1058,39 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.lineTo(barX, barY + barH);
     ctx.closePath();
     ctx.fill();
-    // "VENDIDO" text
     ctx.fillStyle = vc.stampText;
     ctx.fillText('VENDIDO', barX + 25, barY + barH - Math.round(22 * stampFs));
     ctx.restore();
 
-    // "+1 CLIENTE SATISFEITO" below stamp
+    // "+1 CLIENTE SATISFEITO"
     const satisfeitoY = barY + barH + Math.round(40 * fs);
     ctx.fillStyle = vc.satisfeitoText;
     ctx.font = `bold ${Math.round(30 * fs)}px 'Raleway', sans-serif`;
     ctx.textAlign = 'left';
-    ctx.fillText('+1 CLIENTE SATISFEITO', 30, satisfeitoY);
+    ctx.fillText('+1 CLIENTE SATISFEITO', 30 + vStampOffX, satisfeitoY);
+
+    // Store stamp zone for hit detection
+    vendidoZonesRef.current.stampY = barY;
+    vendidoZonesRef.current.stampH = satisfeitoY - barY + 40;
 
     // ---- Polaroid-style photo frame ----
-    const frameMarginX = Math.round(55 * fs);
-    const frameTop = satisfeitoY + Math.round(30 * fs);
-    const frameW = W - frameMarginX * 2;
+    const baseFrameMarginX = Math.round(55 * fs);
+    const baseFrameTop = satisfeitoY + Math.round(30 * fs);
+    const frameMarginX = baseFrameMarginX + vFrameOffX;
+    const frameTop = baseFrameTop + vFrameOffY;
+    const frameW = W - baseFrameMarginX * 2;
     const frameBorder = Math.round(24 * fs);
     const photoAspect = 4 / 3;
     const innerPhotoW = frameW - frameBorder * 2;
     const innerPhotoH = Math.round(innerPhotoW / photoAspect);
     const framePadBottom = Math.round(20 * fs);
     const totalFrameH = innerPhotoH + frameBorder * 2 + framePadBottom;
+
+    // Store frame zone
+    vendidoZonesRef.current.frameX = frameMarginX;
+    vendidoZonesRef.current.frameY = frameTop;
+    vendidoZonesRef.current.frameW = frameW;
+    vendidoZonesRef.current.frameH = totalFrameH;
 
     // Frame shadow
     ctx.save();
@@ -1099,10 +1129,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillText('Adicione uma foto', photoX + innerPhotoW / 2, photoY + innerPhotoH / 2);
     }
 
-    // ---- "PARABÉNS" + buyer name BELOW the frame ----
+    // ---- "PARABÉNS" + buyer name ----
     const pFs = vendidoParabensFontScale * fs;
-    const textBelowFrameY = frameTop + totalFrameH + Math.round(20 * fs);
-    const centerX = W / 2;
+    const baseTextBelowY = frameTop + totalFrameH + Math.round(20 * fs);
+    const textBelowFrameY = baseTextBelowY + vParabensOffY;
+    const centerX = W / 2 + vParabensOffX;
     ctx.fillStyle = vc.parabensText;
     ctx.textAlign = 'center';
 
@@ -1129,11 +1160,20 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     });
     if (nameLine) ctx.fillText(nameLine, centerX, nameLineY);
 
+    // Store parabens zone
+    vendidoZonesRef.current.parabensY = textBelowFrameY;
+    vendidoZonesRef.current.parabensH = nameLineY - textBelowFrameY + 60;
+
     // ---- Footer: WhatsApp + Address ----
     const fFs = vendidoFooterFontScale * fs;
-    const footerStartY = nameLineY + Math.round(40 * fs);
+    const baseFooterStartY = nameLineY + Math.round(40 * fs);
+    const footerStartY = baseFooterStartY + vFooterOffY;
+    const footerCenterX = W / 2 + vFooterOffX;
     const wpText = footerWhatsapp || '';
     const addrText = footerAddress || '';
+
+    vendidoZonesRef.current.footerY = footerStartY;
+    vendidoZonesRef.current.footerH = Math.round(140 * fs);
 
     if (wpText) {
       const wpImg = wpIconRef.current;
@@ -1145,11 +1185,11 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         const iconS = Math.round(40 * fFs);
         const textW = ctx.measureText(wpText).width;
         const totalW = iconS + 14 + textW;
-        const startX = W / 2 - totalW / 2;
+        const startX = footerCenterX - totalW / 2;
         ctx.drawImage(wpImg, startX, wpDisplayY - iconS * 0.7, iconS, iconS);
         ctx.fillText(wpText, startX + iconS + 14 + textW / 2, wpDisplayY + Math.round(5 * fFs));
       } else {
-        ctx.fillText(wpText, W / 2, wpDisplayY);
+        ctx.fillText(wpText, footerCenterX, wpDisplayY);
       }
     }
 
@@ -1161,7 +1201,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       const pinSize = Math.round(18 * fFs);
       const addrFullText = addrText.toUpperCase();
       const addrTW = ctx.measureText(addrFullText).width;
-      const addrStartX = W / 2 - (pinSize + 8 + addrTW) / 2;
+      const addrStartX = footerCenterX - (pinSize + 8 + addrTW) / 2;
       ctx.save();
       ctx.fillStyle = vc.footerText;
       ctx.beginPath();
@@ -1182,19 +1222,19 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       aWords.forEach(word => {
         const test = aLine + (aLine ? ' ' : '') + word;
         if (ctx.measureText(test).width > maxAW && aLine) {
-          ctx.fillText(aLine, W / 2, aLineY);
+          ctx.fillText(aLine, footerCenterX, aLineY);
           aLine = word;
           aLineY += Math.round(24 * fFs);
         } else { aLine = test; }
       });
-      if (aLine) ctx.fillText(aLine, W / 2, aLineY);
+      if (aLine) ctx.fillText(aLine, footerCenterX, aLineY);
     }
 
     // Logo (draggable)
     if (lImg) {
       ctx.drawImage(lImg, logoX, logoY, logoW, logoH);
     }
-  }, [vendidoFontScale, vendidoStampFontScale, vendidoParabensFontScale, vendidoNomeFontScale, vendidoFooterFontScale, vendidoColors, buyerName, footerWhatsapp, footerAddress, logoW, logoH, logoX, logoY, photoOffsetX, photoOffsetY]);
+  }, [vendidoFontScale, vendidoStampFontScale, vendidoParabensFontScale, vendidoNomeFontScale, vendidoFooterFontScale, vendidoColors, buyerName, footerWhatsapp, footerAddress, logoW, logoH, logoX, logoY, photoOffsetX, photoOffsetY, vStampOffX, vStampOffY, vFrameOffX, vFrameOffY, vParabensOffX, vParabensOffY, vFooterOffX, vFooterOffY]);
 
   // Unified draw function
   const drawCanvas = useCallback((canvas: HTMLCanvasElement, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null, fImg: HTMLImageElement | null = null) => {
@@ -1248,40 +1288,67 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const handlePreviewMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     didDragRef.current = false;
     const { cx, cy } = getCanvasCoords(e);
-    // Check logo hit (only when unlocked)
+
+    // Logo always first (both modes)
     if (!layoutLocked && cx >= logoX && cx <= logoX + logoW && cy >= logoY && cy <= logoY + logoH) {
       e.preventDefault(); e.stopPropagation();
       setDragging('logo'); setDragOffset({ x: cx - logoX, y: cy - logoY }); return;
     }
-    const infoH = Math.round(260 * infoBoxScale);
-    // Photo zone is ALWAYS draggable (even when locked)
-    const photoY = 260;
-    if (cy >= photoY && cy < infoPosY) {
-      e.preventDefault(); e.stopPropagation();
-      setDragging('photo'); setDragOffset({ x: cx - photoOffsetX, y: cy - photoOffsetY }); return;
-    }
-    if (!layoutLocked && cy >= infoPosY && cy <= infoPosY + infoH) {
-      setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); return;
-    }
-    // Check footer hit (only when unlocked)
-    const footY = infoPosY + infoH;
-    if (!layoutLocked && cy >= footY) {
-      setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + (CANVAS_H_VAL - footY) / 2 + footerPosY) }); return;
+
+    if (flyerMode === 'vendido') {
+      // Vendido mode zones
+      const z = vendidoZonesRef.current;
+      if (!layoutLocked) {
+        if (cy >= z.stampY && cy <= z.stampY + z.stampH) {
+          setDragging('v-stamp'); setDragOffset({ x: cx - vStampOffX, y: cy - vStampOffY }); e.preventDefault(); return;
+        }
+        if (cx >= z.frameX && cx <= z.frameX + z.frameW && cy >= z.frameY && cy <= z.frameY + z.frameH) {
+          setDragging('v-frame'); setDragOffset({ x: cx - vFrameOffX, y: cy - vFrameOffY }); e.preventDefault(); return;
+        }
+        if (cy >= z.parabensY && cy <= z.parabensY + z.parabensH) {
+          setDragging('v-parabens'); setDragOffset({ x: cx - vParabensOffX, y: cy - vParabensOffY }); e.preventDefault(); return;
+        }
+        if (cy >= z.footerY && cy <= z.footerY + z.footerH) {
+          setDragging('v-footer'); setDragOffset({ x: cx - vFooterOffX, y: cy - vFooterOffY }); e.preventDefault(); return;
+        }
+      }
+      // Photo inside frame always draggable
+      const fz = z;
+      const photoX = fz.frameX + 24;
+      const photoYtop = fz.frameY + 24;
+      const photoXend = fz.frameX + fz.frameW - 24;
+      const photoYend = fz.frameY + fz.frameH - 44;
+      if (cx >= photoX && cx <= photoXend && cy >= photoYtop && cy <= photoYend) {
+        setDragging('photo'); setDragOffset({ x: cx - photoOffsetX, y: cy - photoOffsetY }); e.preventDefault(); return;
+      }
+    } else {
+      // Venda mode zones
+      const infoH = Math.round(260 * infoBoxScale);
+      const photoY = 260;
+      if (cy >= photoY && cy < infoPosY) {
+        e.preventDefault(); e.stopPropagation();
+        setDragging('photo'); setDragOffset({ x: cx - photoOffsetX, y: cy - photoOffsetY }); return;
+      }
+      if (!layoutLocked && cy >= infoPosY && cy <= infoPosY + infoH) {
+        setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); return;
+      }
+      const footY = infoPosY + infoH;
+      if (!layoutLocked && cy >= footY) {
+        setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + (CANVAS_H_VAL - footY) / 2 + footerPosY) }); return;
+      }
     }
   };
 
   const handlePreviewClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (didDragRef.current) { didDragRef.current = false; return; }
-    const { cy } = getCanvasCoords(e);
-    const zone = detectZone(cy);
-    setActiveColorZone(prev => prev === zone ? null : zone);
+    if (flyerMode !== 'vendido') {
+      const { cy } = getCanvasCoords(e);
+      const zone = detectZone(cy);
+      setActiveColorZone(prev => prev === zone ? null : zone);
+    }
   };
 
-  const handlePreviewMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!dragging || (layoutLocked && dragging !== 'photo')) return;
-    e.preventDefault();
-    didDragRef.current = true;
-    const { cx, cy } = getCanvasCoords(e);
+  const applyDragMove = (cx: number, cy: number) => {
     if (dragging === 'logo') {
       setLogoX(Math.max(-logoW / 2, Math.min(CANVAS_W - logoW / 2, cx - dragOffset.x)));
       setLogoY(Math.max(-logoH / 2, Math.min(CANVAS_H_VAL - logoH / 2, cy - dragOffset.y)));
@@ -1296,7 +1363,27 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       const footCenterDefault = footY + (CANVAS_H_VAL - footY) / 2;
       setFooterPosX(cx - dragOffset.x);
       setFooterPosY(cy - dragOffset.y - footCenterDefault);
+    } else if (dragging === 'v-stamp') {
+      setVStampOffX(cx - dragOffset.x);
+      setVStampOffY(cy - dragOffset.y);
+    } else if (dragging === 'v-frame') {
+      setVFrameOffX(cx - dragOffset.x);
+      setVFrameOffY(cy - dragOffset.y);
+    } else if (dragging === 'v-parabens') {
+      setVParabensOffX(cx - dragOffset.x);
+      setVParabensOffY(cy - dragOffset.y);
+    } else if (dragging === 'v-footer') {
+      setVFooterOffX(cx - dragOffset.x);
+      setVFooterOffY(cy - dragOffset.y);
     }
+  };
+
+  const handlePreviewMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!dragging || (layoutLocked && dragging !== 'photo')) return;
+    e.preventDefault();
+    didDragRef.current = true;
+    const { cx, cy } = getCanvasCoords(e);
+    applyDragMove(cx, cy);
   };
 
   const handlePreviewMouseUp = () => { setDragging(null); };
@@ -1315,20 +1402,48 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
     didDragRef.current = false;
     const { cx, cy } = getTouchCoords(e);
+
     if (!layoutLocked && cx >= logoX && cx <= logoX + logoW && cy >= logoY && cy <= logoY + logoH) {
       setDragging('logo'); setDragOffset({ x: cx - logoX, y: cy - logoY }); e.preventDefault(); return;
     }
-    const infoH = Math.round(260 * infoBoxScale);
-    const photoY = 260;
-    if (cy >= photoY && cy < infoPosY) {
-      setDragging('photo'); setDragOffset({ x: cx - photoOffsetX, y: cy - photoOffsetY }); e.preventDefault(); return;
-    }
-    if (!layoutLocked && cy >= infoPosY && cy <= infoPosY + infoH) {
-      setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); e.preventDefault(); return;
-    }
-    const footY = infoPosY + infoH;
-    if (!layoutLocked && cy >= footY) {
-      setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + (CANVAS_H_VAL - footY) / 2 + footerPosY) }); e.preventDefault(); return;
+
+    if (flyerMode === 'vendido') {
+      const z = vendidoZonesRef.current;
+      if (!layoutLocked) {
+        if (cy >= z.stampY && cy <= z.stampY + z.stampH) {
+          setDragging('v-stamp'); setDragOffset({ x: cx - vStampOffX, y: cy - vStampOffY }); e.preventDefault(); return;
+        }
+        if (cx >= z.frameX && cx <= z.frameX + z.frameW && cy >= z.frameY && cy <= z.frameY + z.frameH) {
+          setDragging('v-frame'); setDragOffset({ x: cx - vFrameOffX, y: cy - vFrameOffY }); e.preventDefault(); return;
+        }
+        if (cy >= z.parabensY && cy <= z.parabensY + z.parabensH) {
+          setDragging('v-parabens'); setDragOffset({ x: cx - vParabensOffX, y: cy - vParabensOffY }); e.preventDefault(); return;
+        }
+        if (cy >= z.footerY && cy <= z.footerY + z.footerH) {
+          setDragging('v-footer'); setDragOffset({ x: cx - vFooterOffX, y: cy - vFooterOffY }); e.preventDefault(); return;
+        }
+      }
+      const fz = z;
+      const photoX = fz.frameX + 24;
+      const photoYtop = fz.frameY + 24;
+      const photoXend = fz.frameX + fz.frameW - 24;
+      const photoYend = fz.frameY + fz.frameH - 44;
+      if (cx >= photoX && cx <= photoXend && cy >= photoYtop && cy <= photoYend) {
+        setDragging('photo'); setDragOffset({ x: cx - photoOffsetX, y: cy - photoOffsetY }); e.preventDefault(); return;
+      }
+    } else {
+      const infoH = Math.round(260 * infoBoxScale);
+      const photoY = 260;
+      if (cy >= photoY && cy < infoPosY) {
+        setDragging('photo'); setDragOffset({ x: cx - photoOffsetX, y: cy - photoOffsetY }); e.preventDefault(); return;
+      }
+      if (!layoutLocked && cy >= infoPosY && cy <= infoPosY + infoH) {
+        setDragging('info'); setDragOffset({ x: 0, y: cy - infoPosY }); e.preventDefault(); return;
+      }
+      const footY = infoPosY + infoH;
+      if (!layoutLocked && cy >= footY) {
+        setDragging('footer'); setDragOffset({ x: cx - footerPosX, y: cy - (footY + (CANVAS_H_VAL - footY) / 2 + footerPosY) }); e.preventDefault(); return;
+      }
     }
   };
 
@@ -1337,21 +1452,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     e.preventDefault();
     didDragRef.current = true;
     const { cx, cy } = getTouchCoords(e);
-    if (dragging === 'logo') {
-      setLogoX(Math.max(-logoW / 2, Math.min(CANVAS_W - logoW / 2, cx - dragOffset.x)));
-      setLogoY(Math.max(-logoH / 2, Math.min(CANVAS_H_VAL - logoH / 2, cy - dragOffset.y)));
-    } else if (dragging === 'photo') {
-      setPhotoOffsetX(cx - dragOffset.x);
-      setPhotoOffsetY(cy - dragOffset.y);
-    } else if (dragging === 'info') {
-      setInfoPosY(Math.max(400, Math.min(CANVAS_H_VAL - 330, cy - dragOffset.y)));
-    } else if (dragging === 'footer') {
-      const infoH = Math.round(260 * infoBoxScale);
-      const footY = infoPosY + infoH;
-      const footCenterDefault = footY + (CANVAS_H_VAL - footY) / 2;
-      setFooterPosX(cx - dragOffset.x);
-      setFooterPosY(cy - dragOffset.y - footCenterDefault);
-    }
+    applyDragMove(cx, cy);
   };
 
   const handleTouchEnd = () => setDragging(null);
@@ -1906,6 +2007,10 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
                 <Eye size={16} style={{ color: `hsl(${clientColor})` }} /> Prévia em Tempo Real
               </h3>
               <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={saveLayoutSettings}
+                  className="border-white/[0.1] text-white/70 hover:text-white hover:bg-white/[0.06] text-xs h-7 px-3">
+                  <Save size={12} /> Salvar Layout
+                </Button>
                 {layoutLocked && (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.8 }}

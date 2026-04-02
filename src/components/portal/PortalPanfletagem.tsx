@@ -951,44 +951,48 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.globalAlpha = 1;
   }, [model, year, transmission, fuelType, tireCondition, price, extraInfo, infoPosY, logoX, logoY, logoW, logoH, clientName, fontScale, infoBoxScale, modelFontScale, yearFontScale, transmissionFontScale, obsFontScale, labelFontScale, pillHeightScale, pillRadiusScale, colors, footerAddress, footerWhatsapp, logoScale, ipvaStatus, footerPosX, footerPosY, photoOffsetX, photoOffsetY]);
 
-  // VENDIDO layout — matching reference: #034e98 blue bg, white diagonal, polaroid frame, "PARABÉNS [NOME]"
+  // VENDIDO layout — matching reference exactly
   const drawCanvasVendido = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number, vImg: HTMLImageElement | null, lImg: HTMLImageElement | null) => {
     const fs = fontScale;
+    const BLUE = '#034e98';
+    const DARK_BLUE = '#022d5a';
 
-    // Background — solid blue #034e98
-    ctx.fillStyle = '#034e98';
+    // Full blue background
+    ctx.fillStyle = BLUE;
     ctx.fillRect(0, 0, W, H);
 
-    // White diagonal accent on right side (like reference)
+    // White top section (approx 12% of height) with diagonal cut
+    const whiteH = Math.round(H * 0.12);
     ctx.fillStyle = '#FFFFFF';
     ctx.beginPath();
-    ctx.moveTo(W * 0.82, 0);
+    ctx.moveTo(0, 0);
     ctx.lineTo(W, 0);
-    ctx.lineTo(W, H * 0.62);
-    ctx.lineTo(W * 0.68, 0);
+    ctx.lineTo(W, whiteH * 0.4);
+    ctx.lineTo(0, whiteH);
     ctx.closePath();
     ctx.fill();
 
-    // Darker blue accent strip on right edge
-    ctx.fillStyle = '#022d5a';
+    // Dark blue right edge strip (diagonal)
+    ctx.fillStyle = DARK_BLUE;
     ctx.beginPath();
-    ctx.moveTo(W * 0.88, 0);
+    ctx.moveTo(W * 0.92, 0);
     ctx.lineTo(W, 0);
-    ctx.lineTo(W, H * 0.45);
+    ctx.lineTo(W, H);
+    ctx.lineTo(W * 0.88, H);
     ctx.closePath();
     ctx.fill();
 
     // ---- "VENDIDO" stamp (red, bold italic, top-left) ----
-    const stampFontSize = Math.round(100 * fs);
+    const stampFontSize = Math.round(90 * fs);
     ctx.save();
     ctx.font = `bold italic ${stampFontSize}px 'Raleway', Impact, sans-serif`;
     ctx.textAlign = 'left';
     const vendidoMetrics = ctx.measureText('VENDIDO');
     const barX = 0;
-    const barW = vendidoMetrics.width + 50;
-    const barH = Math.round(stampFontSize * 1.2);
-    const barY = Math.round(50 * fs);
-    // Red skewed bar behind text
+    const barW = vendidoMetrics.width + 60;
+    const barH = Math.round(stampFontSize * 1.15);
+    const barY = Math.round(30 * fs);
+    // Red bar behind text
     ctx.fillStyle = '#CC0000';
     ctx.beginPath();
     ctx.moveTo(barX, barY);
@@ -999,40 +1003,40 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     ctx.fill();
     // "VENDIDO" text
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillText('VENDIDO', barX + 25, barY + barH - Math.round(25 * fs));
+    ctx.fillText('VENDIDO', barX + 25, barY + barH - Math.round(22 * fs));
     ctx.restore();
 
     // "+1 CLIENTE SATISFEITO" below stamp
-    const satisfeitoY = barY + barH + Math.round(45 * fs);
+    const satisfeitoY = barY + barH + Math.round(40 * fs);
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = `bold ${Math.round(34 * fs)}px 'Raleway', sans-serif`;
+    ctx.font = `bold ${Math.round(30 * fs)}px 'Raleway', sans-serif`;
     ctx.textAlign = 'left';
     ctx.fillText('+1 CLIENTE SATISFEITO', 30, satisfeitoY);
 
-    // ---- Polaroid-style photo frame (white, thick borders) ----
-    const frameMarginX = 70;
-    const frameTop = satisfeitoY + Math.round(35 * fs);
+    // ---- Polaroid-style photo frame ----
+    const frameMarginX = Math.round(55 * fs);
+    const frameTop = satisfeitoY + Math.round(30 * fs);
     const frameW = W - frameMarginX * 2;
-    const frameBorder = 28; // thick white border like reference
+    const frameBorder = Math.round(24 * fs);
     const photoAspect = 4 / 3;
     const innerPhotoW = frameW - frameBorder * 2;
     const innerPhotoH = Math.round(innerPhotoW / photoAspect);
-    const framePadBottom = Math.round(170 * fs); // space for "PARABÉNS" text
+    const framePadBottom = Math.round(20 * fs); // small bottom padding, text goes OUTSIDE frame
     const totalFrameH = innerPhotoH + frameBorder * 2 + framePadBottom;
 
     // Frame shadow
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.35)';
-    ctx.shadowBlur = 20;
-    ctx.shadowOffsetX = 5;
-    ctx.shadowOffsetY = 5;
+    ctx.shadowBlur = 25;
+    ctx.shadowOffsetX = 8;
+    ctx.shadowOffsetY = 8;
     ctx.fillStyle = '#FFFFFF';
     ctx.beginPath();
     ctx.roundRect(frameMarginX, frameTop, frameW, totalFrameH, 6);
     ctx.fill();
     ctx.restore();
 
-    // White frame (clean)
+    // White frame
     ctx.fillStyle = '#FFFFFF';
     ctx.beginPath();
     ctx.roundRect(frameMarginX, frameTop, frameW, totalFrameH, 6);
@@ -1057,27 +1061,27 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       ctx.fillText('Adicione uma foto', photoX + innerPhotoW / 2, photoY + innerPhotoH / 2);
     }
 
-    // "PARABÉNS" + buyer name inside the white frame bottom (dark blue text)
-    const nameAreaTop = photoY + innerPhotoH + Math.round(25 * fs);
-    const centerX = frameMarginX + frameW / 2;
-    ctx.fillStyle = '#034e98';
+    // ---- "PARABÉNS" + buyer name BELOW the frame (white text on blue bg) ----
+    const textBelowFrameY = frameTop + totalFrameH + Math.round(20 * fs);
+    const centerX = W / 2;
+    ctx.fillStyle = '#FFFFFF';
     ctx.textAlign = 'center';
-    
-    ctx.font = `bold ${Math.round(48 * fs)}px 'Raleway', sans-serif`;
-    ctx.fillText('PARABÉNS', centerX, nameAreaTop + Math.round(50 * fs));
+
+    ctx.font = `bold ${Math.round(52 * fs)}px 'Raleway', sans-serif`;
+    ctx.fillText('PARABÉNS', centerX, textBelowFrameY + Math.round(55 * fs));
 
     const displayName = buyerName.trim() || 'NOME DO CLIENTE';
-    ctx.font = `bold ${Math.round(44 * fs)}px 'Raleway', sans-serif`;
-    const maxNameW = frameW - frameBorder * 4;
+    ctx.font = `bold ${Math.round(48 * fs)}px 'Raleway', sans-serif`;
+    const maxNameW = W - 120;
     const nameWords = displayName.toUpperCase().split(' ');
     let nameLine = '';
-    let nameLineY = nameAreaTop + Math.round(105 * fs);
+    let nameLineY = textBelowFrameY + Math.round(115 * fs);
     nameWords.forEach(word => {
       const test = nameLine + (nameLine ? ' ' : '') + word;
       if (ctx.measureText(test).width > maxNameW && nameLine) {
         ctx.fillText(nameLine, centerX, nameLineY);
         nameLine = word;
-        nameLineY += Math.round(52 * fs);
+        nameLineY += Math.round(56 * fs);
       } else {
         nameLine = test;
       }
@@ -1085,7 +1089,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     if (nameLine) ctx.fillText(nameLine, centerX, nameLineY);
 
     // ---- Footer: WhatsApp + Address ----
-    const footerStartY = frameTop + totalFrameH + Math.round(25 * fs);
+    const footerStartY = nameLineY + Math.round(40 * fs);
     const wpText = footerWhatsapp || '';
     const addrText = footerAddress || '';
 
@@ -1093,10 +1097,10 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
       const wpImg = wpIconRef.current;
       ctx.fillStyle = '#FFFFFF';
       ctx.textAlign = 'center';
-      ctx.font = `bold ${Math.round(38 * fs)}px 'Raleway', sans-serif`;
+      ctx.font = `bold ${Math.round(36 * fs)}px 'Raleway', sans-serif`;
       const wpDisplayY = footerStartY + Math.round(35 * fs);
       if (wpImg) {
-        const iconS = Math.round(42 * fs);
+        const iconS = Math.round(40 * fs);
         const textW = ctx.measureText(wpText).width;
         const totalW = iconS + 14 + textW;
         const startX = W / 2 - totalW / 2;
@@ -1109,7 +1113,7 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
 
     if (addrText) {
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = `bold ${Math.round(20 * fs)}px 'Raleway', sans-serif`;
+      ctx.font = `bold ${Math.round(18 * fs)}px 'Raleway', sans-serif`;
       ctx.textAlign = 'center';
       const addrY = footerStartY + Math.round(85 * fs);
       // Pin icon
@@ -1140,13 +1144,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
         if (ctx.measureText(test).width > maxAW && aLine) {
           ctx.fillText(aLine, W / 2, aLineY);
           aLine = word;
-          aLineY += Math.round(26 * fs);
+          aLineY += Math.round(24 * fs);
         } else { aLine = test; }
       });
       if (aLine) ctx.fillText(aLine, W / 2, aLineY);
     }
 
-    // Logo (draggable — uses same logoX, logoY as venda mode)
+    // Logo (draggable)
     if (lImg) {
       ctx.drawImage(lImg, logoX, logoY, logoW, logoH);
     }

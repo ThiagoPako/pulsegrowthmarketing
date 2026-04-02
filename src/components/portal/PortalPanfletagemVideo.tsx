@@ -154,6 +154,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
 
   const [carVideos, setCarVideos] = useState<string[]>([]);
   const [carFiles, setCarFiles] = useState<File[]>([]);
+  const [carVideoLoading, setCarVideoLoading] = useState<Record<number, boolean>>({});
 
   const [closingVideo, setClosingVideo] = useState<string | null>(saved.closingUrl || null);
   const [closingFile, setClosingFile] = useState<File | null>(null);
@@ -240,17 +241,48 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
     if (!files?.length) return;
 
     if (segment === 'car') {
-      const newUrls: string[] = [];
-      const newFiles: File[] = [];
+      const validFiles: File[] = [];
       Array.from(files).forEach(file => {
         if (!file.type.startsWith('video/')) { toast.error(`${file.name} não é vídeo`); return; }
         if (file.size > 200 * 1024 * 1024) { toast.error(`${file.name} muito grande (max 200MB)`); return; }
-        newUrls.push(URL.createObjectURL(file));
-        newFiles.push(file);
+        validFiles.push(file);
       });
-      setCarVideos(prev => [...prev, ...newUrls]);
-      setCarFiles(prev => [...prev, ...newFiles]);
-      if (newFiles.length) toast.success(`${newFiles.length} vídeo(s) do veículo adicionado(s)!`);
+      if (!validFiles.length) return;
+
+      // Add placeholder entries with loading state
+      const startIdx = carVideos.length;
+      const placeholderUrls = validFiles.map(() => '');
+      setCarVideos(prev => [...prev, ...placeholderUrls]);
+      setCarFiles(prev => [...prev, ...validFiles]);
+      
+      // Set loading for each new index
+      const loadingUpdate: Record<number, boolean> = {};
+      validFiles.forEach((_, i) => { loadingUpdate[startIdx + i] = true; });
+      setCarVideoLoading(prev => ({ ...prev, ...loadingUpdate }));
+
+      // Load each video and confirm it's playable
+      validFiles.forEach((file, i) => {
+        const idx = startIdx + i;
+        const url = URL.createObjectURL(file);
+        const testVideo = document.createElement('video');
+        testVideo.preload = 'metadata';
+        testVideo.muted = true;
+        testVideo.onloadeddata = () => {
+          setCarVideos(prev => { const n = [...prev]; n[idx] = url; return n; });
+          setCarVideoLoading(prev => ({ ...prev, [idx]: false }));
+          testVideo.remove();
+        };
+        testVideo.onerror = () => {
+          toast.error(`Erro ao carregar ${file.name}`);
+          URL.revokeObjectURL(url);
+          setCarVideos(prev => { const n = [...prev]; n.splice(idx, 1); return n; });
+          setCarFiles(prev => { const n = [...prev]; n.splice(idx, 1); return n; });
+          setCarVideoLoading(prev => { const n = { ...prev }; delete n[idx]; return n; });
+          testVideo.remove();
+        };
+        testVideo.src = url;
+      });
+      toast.info(`Carregando ${validFiles.length} vídeo(s)...`);
     } else {
       const file = files[0];
       if (!file.type.startsWith('video/')) { toast.error('Selecione um vídeo'); return; }
@@ -510,7 +542,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
       };
 
       if (introVideo) segments.push(await prepare(introVideo, 'intro'));
-      for (const cv of carVideos) segments.push(await prepare(cv, 'vehicle'));
+      for (const cv of carVideos) { if (cv) segments.push(await prepare(cv, 'vehicle')); }
       if (closingVideo) segments.push(await prepare(closingVideo, 'closing'));
 
       if (segments.length === 0) { toast.error('Nenhum segmento disponível'); setCompositionState('idle'); return; }
@@ -896,14 +928,23 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
                     <p className="text-[11px] text-white/40">Adicione um ou mais vídeos do veículo. O layout será sobreposto.</p>
                     {carVideos.map((cv, i) => (
                       <div key={i} className="relative rounded-xl overflow-hidden bg-black aspect-video max-h-32">
-                        <video src={cv} className="w-full h-full object-cover" muted playsInline preload="metadata" controls />
+                        {carVideoLoading[i] || !cv ? (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10">
+                            <Loader2 size={24} className="animate-spin text-white/60 mb-2" />
+                            <p className="text-[10px] text-white/40">Carregando vídeo...</p>
+                          </div>
+                        ) : (
+                          <video src={cv} className="w-full h-full object-cover" muted playsInline preload="metadata" controls />
+                        )}
                         <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-bold text-white" style={{ backgroundColor: `hsl(${clientColor})` }}>
                           {i + 1}
                         </div>
-                        <button onClick={() => removeSegment('car', i)}
-                          className="absolute top-2 right-2 w-7 h-7 rounded-full bg-red-600/60 flex items-center justify-center hover:bg-red-600/80">
-                          <Trash2 size={10} className="text-white" />
-                        </button>
+                        {!carVideoLoading[i] && cv && (
+                          <button onClick={() => removeSegment('car', i)}
+                            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-red-600/60 flex items-center justify-center hover:bg-red-600/80">
+                            <Trash2 size={10} className="text-white" />
+                          </button>
+                        )}
                       </div>
                     ))}
                     <button onClick={() => carInputRef.current?.click()}

@@ -896,7 +896,7 @@ export default function PortalPanfletagemVideo({ clientId, clientColor, clientNa
                     <p className="text-[11px] text-white/40">Adicione um ou mais vídeos do veículo. O layout será sobreposto.</p>
                     {carVideos.map((cv, i) => (
                       <div key={i} className="relative rounded-xl overflow-hidden bg-black aspect-video max-h-32">
-                        <video src={cv} className="w-full h-full object-cover" muted playsInline />
+                        <video src={cv} className="w-full h-full object-cover" muted playsInline preload="metadata" controls />
                         <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-bold text-white" style={{ backgroundColor: `hsl(${clientColor})` }}>
                           {i + 1}
                         </div>

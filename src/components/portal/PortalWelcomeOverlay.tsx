@@ -16,17 +16,11 @@ interface PortalVideo {
 const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
 
-async function resolveVideoUrl(url: string): Promise<string> {
+function resolveVideoUrl(url: string): string {
   if (!url.startsWith(VPS_UPLOADS_URL)) return url;
-  const response = await fetch(PORTAL_MEDIA_PROXY_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }),
-  });
-  if (!response.ok) throw new Error(`Proxy error ${response.status}`);
-  const blob = await response.blob();
-  if (!blob.size) throw new Error('Video empty');
-  return URL.createObjectURL(blob);
+  // Use streaming proxy URL instead of downloading entire blob
+  const params = new URLSearchParams({ url, quality: '480p' });
+  return `${PORTAL_MEDIA_PROXY_URL}?${params.toString()}`;
 }
 
 const PARTICLE_COUNT = 30;

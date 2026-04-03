@@ -100,13 +100,8 @@ export default function PortalWelcomeOverlay({ clientId, onVideosLoaded }: Porta
   }, [clientId]);
 
   useEffect(() => {
-    if (!video) return;
-    let cancelled = false;
-    setResolvedUrl(null);
-    resolveVideoUrl(video.video_url)
-      .then(url => { if (!cancelled) setResolvedUrl(url); })
-      .catch(err => console.error('[WelcomeOverlay] proxy error:', err));
-    return () => { cancelled = true; };
+    if (!video) { setResolvedUrl(null); return; }
+    setResolvedUrl(resolveVideoUrl(video.video_url));
   }, [video]);
 
   const checkForVideos = async () => {

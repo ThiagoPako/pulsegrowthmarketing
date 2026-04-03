@@ -135,7 +135,24 @@ export default function CompanySettings() {
   const [assistantEnabled, setAssistantEnabled] = useState(() => localStorage.getItem(ASSISTANT_KEY) !== 'false');
   const [pixelId, setPixelId] = useState('');
 
+  // Holiday states
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [newHolidayName, setNewHolidayName] = useState('');
+  const [newHolidayDate, setNewHolidayDate] = useState('');
+  const [newHolidayRecurring, setNewHolidayRecurring] = useState(true);
+  const [autoHolidayNotification, setAutoHolidayNotification] = useState(false);
+  const [sendingHoliday, setSendingHoliday] = useState<string | null>(null);
+
   const isAdmin = currentUser?.role === 'admin';
+
+  const loadHolidays = useCallback(async () => {
+    const h = await getHolidays();
+    setHolidays(h);
+    const cfg = await getWhatsAppConfig();
+    if (cfg) setAutoHolidayNotification(cfg.autoHolidayNotification);
+  }, []);
+
+  useEffect(() => { loadHolidays(); }, [loadHolidays]);
 
   useEffect(() => {
     supabaseCloud

@@ -16,6 +16,7 @@ export interface WhatsAppConfig {
   autoTaskEditing: boolean;
   autoTaskApproved: boolean;
   autoApprovalExpired: boolean;
+  autoHolidayNotification: boolean;
   msgRecordingScheduled: string;
   msgRecordingReminder: string;
   msgVideoApproval: string;
@@ -28,6 +29,7 @@ export interface WhatsAppConfig {
   msgTaskEditing: string;
   msgTaskApproved: string;
   msgApprovalExpired: string;
+  msgHoliday: string;
 }
 
 interface SendMessageParams {
@@ -82,6 +84,7 @@ function rowToConfig(r: any): WhatsAppConfig {
     autoTaskEditing: r.auto_task_editing ?? true,
     autoTaskApproved: r.auto_task_approved ?? true,
     autoApprovalExpired: r.auto_approval_expired ?? true,
+    autoHolidayNotification: r.auto_holiday_notification ?? false,
     msgRecordingScheduled: r.msg_recording_scheduled || '',
     msgRecordingReminder: r.msg_recording_reminder || '',
     msgVideoApproval: r.msg_video_approval || '',
@@ -94,6 +97,7 @@ function rowToConfig(r: any): WhatsAppConfig {
     msgTaskEditing: r.msg_task_editing || '',
     msgTaskApproved: r.msg_task_approved || '',
     msgApprovalExpired: r.msg_approval_expired || '',
+    msgHoliday: r.msg_holiday || `Olá, {nome_cliente}! 🚀\n\nInformamos que no dia *{data_feriado}* ({nome_feriado}) *não haverá gravações*.\n\nNossa equipe retorna normalmente no próximo dia útil.\n\n📱 Acompanhe tudo na sua Área do Cliente:\n{link_portal}\n\nEquipe Pulse Growth Marketing`,
   };
 }
 
@@ -135,6 +139,7 @@ export async function updateWhatsAppConfig(config: Partial<WhatsAppConfig>): Pro
   if (config.autoTaskEditing !== undefined) updateData.auto_task_editing = config.autoTaskEditing;
   if (config.autoTaskApproved !== undefined) updateData.auto_task_approved = config.autoTaskApproved;
   if (config.autoApprovalExpired !== undefined) updateData.auto_approval_expired = config.autoApprovalExpired;
+  if (config.autoHolidayNotification !== undefined) updateData.auto_holiday_notification = config.autoHolidayNotification;
   if (config.msgRecordingScheduled !== undefined) updateData.msg_recording_scheduled = config.msgRecordingScheduled;
   if (config.msgRecordingReminder !== undefined) updateData.msg_recording_reminder = config.msgRecordingReminder;
   if (config.msgVideoApproval !== undefined) updateData.msg_video_approval = config.msgVideoApproval;
@@ -147,6 +152,7 @@ export async function updateWhatsAppConfig(config: Partial<WhatsAppConfig>): Pro
   if (config.msgTaskEditing !== undefined) updateData.msg_task_editing = config.msgTaskEditing;
   if (config.msgTaskApproved !== undefined) updateData.msg_task_approved = config.msgTaskApproved;
   if (config.msgApprovalExpired !== undefined) updateData.msg_approval_expired = config.msgApprovalExpired;
+  if (config.msgHoliday !== undefined) updateData.msg_holiday = config.msgHoliday;
   updateData.updated_at = new Date().toISOString();
 
   const { error } = await supabase.from('whatsapp_config').update(updateData).eq('id', current.id);
@@ -473,4 +479,74 @@ export async function sendManualConfirmation(
   });
 
   return result;
+}
+
+// ── Holiday notification ──
+
+export interface Holiday {
+  id: string;
+  name: string;
+  date: string;
+  recurring: boolean;
+  notification_sent: boolean;
+  created_at: string;
+}
+
+export async function getHolidays(): Promise<Holiday[]> {
+  const { data } = await supabase.from('holidays').select('*').order('date', { ascending: true });
+  return (data || []) as Holiday[];
+}
+
+export async function createHoliday(name: string, date: string, recurring: boolean): Promise<boolean> {
+  const { error } = await supabase.from('holidays').insert({ name, date, recurring });
+  return !error;
+}
+
+export async function deleteHoliday(id: string): Promise<boolean> {
+  const { error } = await supabase.from('holidays').delete().eq('id', id);
+  return !error;
+}
+
+/**
+ * Send holiday notification to clients who have recordings on the holiday week
+ */
+export async function sendHolidayNotifications(
+  holidayDate: string,
+  holidayName: string,
+  clients: { id: string; company_name: string; whatsapp: string }[],
+): Promise<{ sent: number; failed: number }> {
+  const config = await getWhatsAppConfig();
+  if (!config?.integrationActive || !config.apiToken) {
+    return { sent: 0, failed: 0 };
+  }
+
+  const template = config.msgHoliday;
+  let sent = 0;
+  let failed = 0;
+
+  for (const client of clients) {
+    if (!client.whatsapp) { failed++; continue; }
+
+    const message = applyTemplate(template, {
+      nome_cliente: client.company_name,
+      data_feriado: holidayDate,
+      nome_feriado: holidayName,
+      link_portal: getPortalLink(client.id),
+    });
+
+    const result = await sendWhatsAppMessage({
+      number: client.whatsapp,
+      message,
+      clientId: client.id,
+      triggerType: 'manual',
+    });
+
+    if (result.success) sent++;
+    else failed++;
+  }
+
+  // Mark holiday as notification sent
+  await supabase.from('holidays').update({ notification_sent: true }).eq('date', holidayDate);
+
+  return { sent, failed };
 }

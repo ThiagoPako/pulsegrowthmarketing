@@ -214,6 +214,63 @@ export default function CompanySettings() {
     toast.success('Configurações salvas');
   };
 
+  const handleAddHoliday = async () => {
+    if (!newHolidayName.trim() || !newHolidayDate) {
+      toast.error('Preencha o nome e a data do feriado');
+      return;
+    }
+    const ok = await createHoliday(newHolidayName.trim(), newHolidayDate, newHolidayRecurring);
+    if (ok) {
+      toast.success('Feriado cadastrado!');
+      setNewHolidayName('');
+      setNewHolidayDate('');
+      loadHolidays();
+    } else {
+      toast.error('Erro ao cadastrar feriado');
+    }
+  };
+
+  const handleDeleteHoliday = async (id: string) => {
+    await deleteHoliday(id);
+    toast.success('Feriado removido');
+    loadHolidays();
+  };
+
+  const handleToggleAutoHoliday = async (checked: boolean) => {
+    setAutoHolidayNotification(checked);
+    await updateWhatsAppConfig({ autoHolidayNotification: checked });
+    toast.success(checked ? 'Notificação automática de feriado ativada' : 'Notificação automática desativada');
+  };
+
+  const handleSendHolidayNotification = async (holiday: Holiday) => {
+    setSendingHoliday(holiday.id);
+    try {
+      // Get recordings on the holiday date
+      const { data: recs } = await supabase.from('recordings').select('client_id').eq('date', holiday.date);
+      const clientIds = [...new Set((recs || []).map((r: any) => r.client_id).filter(Boolean))];
+
+      if (clientIds.length === 0) {
+        toast.info('Nenhum cliente com gravação nesta data');
+        setSendingHoliday(null);
+        return;
+      }
+
+      // Get client details
+      const { data: clientsData } = await supabase.from('clients').select('id, company_name, whatsapp').in('id', clientIds);
+      const clientsList = (clientsData || []) as { id: string; company_name: string; whatsapp: string }[];
+
+      const formattedDate = format(parseISO(holiday.date), "dd/MM/yyyy (EEEE)", { locale: ptBR });
+      const result = await sendHolidayNotifications(formattedDate, holiday.name, clientsList);
+
+      toast.success(`Aviso enviado! ${result.sent} enviados, ${result.failed} falharam`);
+      loadHolidays();
+    } catch (err) {
+      toast.error('Erro ao enviar notificações');
+    } finally {
+      setSendingHoliday(null);
+    }
+  };
+
   const formatDeadlineLabel = (hours: number) => {
     if (hours < 24) return `${hours}h`;
     const days = Math.floor(hours / 24);

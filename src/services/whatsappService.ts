@@ -16,6 +16,7 @@ export interface WhatsAppConfig {
   autoTaskEditing: boolean;
   autoTaskApproved: boolean;
   autoApprovalExpired: boolean;
+  autoHolidayNotification: boolean;
   msgRecordingScheduled: string;
   msgRecordingReminder: string;
   msgVideoApproval: string;
@@ -28,6 +29,7 @@ export interface WhatsAppConfig {
   msgTaskEditing: string;
   msgTaskApproved: string;
   msgApprovalExpired: string;
+  msgHoliday: string;
 }
 
 interface SendMessageParams {

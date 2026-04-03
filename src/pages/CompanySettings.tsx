@@ -537,6 +537,120 @@ export default function CompanySettings() {
 
       <Button onClick={handleSave} className="w-full">Salvar Configurações</Button>
 
+      {/* Feriados */}
+      <div className="glass-card p-6 space-y-5">
+        <div className="flex items-center gap-2 text-primary">
+          <CalendarOff size={18} />
+          <h2 className="text-base font-semibold">Feriados</h2>
+        </div>
+        <p className="text-xs text-muted-foreground -mt-2">
+          Cadastre feriados para avisar clientes com gravação na data via WhatsApp.
+        </p>
+
+        {/* Toggle auto */}
+        <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
+          <div>
+            <p className="text-sm font-medium">Envio automático (2 dias antes)</p>
+            <p className="text-[11px] text-muted-foreground">Avisa automaticamente clientes com gravação no feriado</p>
+          </div>
+          <Switch checked={autoHolidayNotification} onCheckedChange={handleToggleAutoHoliday} />
+        </div>
+
+        {/* Add new holiday */}
+        <div className="space-y-3 p-4 rounded-xl border border-primary/20 bg-primary/5">
+          <Label className="text-sm font-semibold">Novo Feriado</Label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Input
+              placeholder="Nome do feriado"
+              value={newHolidayName}
+              onChange={e => setNewHolidayName(e.target.value)}
+            />
+            <Input
+              type="date"
+              value={newHolidayDate}
+              onChange={e => setNewHolidayDate(e.target.value)}
+            />
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer text-sm">
+                <Checkbox checked={newHolidayRecurring} onCheckedChange={(v) => setNewHolidayRecurring(!!v)} />
+                Anual
+              </label>
+              <Button size="sm" onClick={handleAddHoliday} className="gap-1.5">
+                <Plus size={14} /> Adicionar
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* List holidays */}
+        <div className="space-y-2 max-h-[300px] overflow-y-auto">
+          {holidays.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-4">Nenhum feriado cadastrado</p>
+          ) : (
+            holidays.map(h => {
+              const holidayDate = parseISO(h.date);
+              const isPast = holidayDate < new Date();
+              const daysUntil = Math.ceil((holidayDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+              return (
+                <div
+                  key={h.id}
+                  className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
+                    isPast ? 'border-border bg-muted/20 opacity-60' : 'border-primary/20 bg-background'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="text-center w-12 shrink-0">
+                      <p className="text-lg font-bold leading-none">{format(holidayDate, 'dd')}</p>
+                      <p className="text-[10px] text-muted-foreground uppercase">{format(holidayDate, 'MMM', { locale: ptBR })}</p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{h.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {h.recurring && (
+                          <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">Anual</span>
+                        )}
+                        {!isPast && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                            daysUntil <= 2 ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'
+                          }`}>
+                            {daysUntil === 0 ? 'Hoje' : daysUntil === 1 ? 'Amanhã' : `em ${daysUntil} dias`}
+                          </span>
+                        )}
+                        {h.notification_sent && (
+                          <span className="text-[10px] bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded-full">✓ Enviado</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {!isPast && !h.notification_sent && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1 text-xs h-7"
+                        disabled={sendingHoliday === h.id}
+                        onClick={() => handleSendHolidayNotification(h)}
+                      >
+                        {sendingHoliday === h.id ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                        Avisar
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                      onClick={() => handleDeleteHoliday(h.id)}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
       {/* Zona de Perigo — Admin Only */}
       {isAdmin && (
         <>

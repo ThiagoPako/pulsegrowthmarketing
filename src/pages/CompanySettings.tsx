@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { DAY_LABELS } from '@/types';
 import type { DayOfWeek } from '@/types';
@@ -10,10 +10,13 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket, RotateCcw } from 'lucide-react';
+import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket, RotateCcw, CalendarOff, Plus, Send, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
 import { supabase as supabaseCloud } from '@/integrations/supabase/client';
 import { ASSISTANT_KEY } from '@/components/ProductionAssistant';
+import { getHolidays, createHoliday, deleteHoliday, sendHolidayNotifications, getWhatsAppConfig, updateWhatsAppConfig, type Holiday } from '@/services/whatsappService';
+import { format, parseISO, addDays, isSameDay, startOfWeek, endOfWeek } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 const ALL_DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 

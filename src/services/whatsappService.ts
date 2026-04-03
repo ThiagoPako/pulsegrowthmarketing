@@ -139,6 +139,7 @@ export async function updateWhatsAppConfig(config: Partial<WhatsAppConfig>): Pro
   if (config.autoTaskEditing !== undefined) updateData.auto_task_editing = config.autoTaskEditing;
   if (config.autoTaskApproved !== undefined) updateData.auto_task_approved = config.autoTaskApproved;
   if (config.autoApprovalExpired !== undefined) updateData.auto_approval_expired = config.autoApprovalExpired;
+  if (config.autoHolidayNotification !== undefined) updateData.auto_holiday_notification = config.autoHolidayNotification;
   if (config.msgRecordingScheduled !== undefined) updateData.msg_recording_scheduled = config.msgRecordingScheduled;
   if (config.msgRecordingReminder !== undefined) updateData.msg_recording_reminder = config.msgRecordingReminder;
   if (config.msgVideoApproval !== undefined) updateData.msg_video_approval = config.msgVideoApproval;
@@ -151,6 +152,7 @@ export async function updateWhatsAppConfig(config: Partial<WhatsAppConfig>): Pro
   if (config.msgTaskEditing !== undefined) updateData.msg_task_editing = config.msgTaskEditing;
   if (config.msgTaskApproved !== undefined) updateData.msg_task_approved = config.msgTaskApproved;
   if (config.msgApprovalExpired !== undefined) updateData.msg_approval_expired = config.msgApprovalExpired;
+  if (config.msgHoliday !== undefined) updateData.msg_holiday = config.msgHoliday;
   updateData.updated_at = new Date().toISOString();
 
   const { error } = await supabase.from('whatsapp_config').update(updateData).eq('id', current.id);

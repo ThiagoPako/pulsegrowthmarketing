@@ -1118,6 +1118,33 @@ CREATE TABLE IF NOT EXISTS auth_users (
   last_sign_in TIMESTAMPTZ
 );
 
+-- Table: holidays
+CREATE TABLE IF NOT EXISTS holidays (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL DEFAULT '',
+  date DATE NOT NULL,
+  recurring BOOLEAN NOT NULL DEFAULT true,
+  notification_sent BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Seed Brazilian national holidays (recurring)
+INSERT INTO holidays (name, date, recurring) VALUES
+  ('Confraternização Universal', '2026-01-01', true),
+  ('Carnaval', '2026-02-16', false),
+  ('Carnaval', '2026-02-17', false),
+  ('Quarta-feira de Cinzas', '2026-02-18', false),
+  ('Sexta-feira Santa', '2026-04-03', false),
+  ('Tiradentes', '2026-04-21', true),
+  ('Dia do Trabalho', '2026-05-01', true),
+  ('Corpus Christi', '2026-06-04', false),
+  ('Independência do Brasil', '2026-09-07', true),
+  ('Nossa Sra. Aparecida', '2026-10-12', true),
+  ('Finados', '2026-11-02', true),
+  ('Proclamação da República', '2026-11-15', true),
+  ('Natal', '2026-12-25', true)
+ON CONFLICT DO NOTHING;
+
 -- Table: recording_wait_logs
 CREATE TABLE IF NOT EXISTS recording_wait_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

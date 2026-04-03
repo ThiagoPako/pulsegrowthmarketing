@@ -480,3 +480,73 @@ export async function sendManualConfirmation(
 
   return result;
 }
+
+// ── Holiday notification ──
+
+export interface Holiday {
+  id: string;
+  name: string;
+  date: string;
+  recurring: boolean;
+  notification_sent: boolean;
+  created_at: string;
+}
+
+export async function getHolidays(): Promise<Holiday[]> {
+  const { data } = await supabase.from('holidays').select('*').order('date', { ascending: true });
+  return (data || []) as Holiday[];
+}
+
+export async function createHoliday(name: string, date: string, recurring: boolean): Promise<boolean> {
+  const { error } = await supabase.from('holidays').insert({ name, date, recurring });
+  return !error;
+}
+
+export async function deleteHoliday(id: string): Promise<boolean> {
+  const { error } = await supabase.from('holidays').delete().eq('id', id);
+  return !error;
+}
+
+/**
+ * Send holiday notification to clients who have recordings on the holiday week
+ */
+export async function sendHolidayNotifications(
+  holidayDate: string,
+  holidayName: string,
+  clients: { id: string; company_name: string; whatsapp: string }[],
+): Promise<{ sent: number; failed: number }> {
+  const config = await getWhatsAppConfig();
+  if (!config?.integrationActive || !config.apiToken) {
+    return { sent: 0, failed: 0 };
+  }
+
+  const template = config.msgHoliday;
+  let sent = 0;
+  let failed = 0;
+
+  for (const client of clients) {
+    if (!client.whatsapp) { failed++; continue; }
+
+    const message = applyTemplate(template, {
+      nome_cliente: client.company_name,
+      data_feriado: holidayDate,
+      nome_feriado: holidayName,
+      link_portal: getPortalLink(client.id),
+    });
+
+    const result = await sendWhatsAppMessage({
+      number: client.whatsapp,
+      message,
+      clientId: client.id,
+      triggerType: 'manual',
+    });
+
+    if (result.success) sent++;
+    else failed++;
+  }
+
+  // Mark holiday as notification sent
+  await supabase.from('holidays').update({ notification_sent: true }).eq('date', holidayDate);
+
+  return { sent, failed };
+}

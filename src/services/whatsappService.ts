@@ -84,6 +84,7 @@ function rowToConfig(r: any): WhatsAppConfig {
     autoTaskEditing: r.auto_task_editing ?? true,
     autoTaskApproved: r.auto_task_approved ?? true,
     autoApprovalExpired: r.auto_approval_expired ?? true,
+    autoHolidayNotification: r.auto_holiday_notification ?? false,
     msgRecordingScheduled: r.msg_recording_scheduled || '',
     msgRecordingReminder: r.msg_recording_reminder || '',
     msgVideoApproval: r.msg_video_approval || '',
@@ -96,6 +97,7 @@ function rowToConfig(r: any): WhatsAppConfig {
     msgTaskEditing: r.msg_task_editing || '',
     msgTaskApproved: r.msg_task_approved || '',
     msgApprovalExpired: r.msg_approval_expired || '',
+    msgHoliday: r.msg_holiday || `Olá, {nome_cliente}! 🚀\n\nInformamos que no dia *{data_feriado}* ({nome_feriado}) *não haverá gravações*.\n\nNossa equipe retorna normalmente no próximo dia útil.\n\n📱 Acompanhe tudo na sua Área do Cliente:\n{link_portal}\n\nEquipe Pulse Growth Marketing`,
   };
 }
 

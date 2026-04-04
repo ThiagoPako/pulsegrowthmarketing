@@ -73,6 +73,7 @@ const AvulsoApproval = lazy(() => import("@/pages/AvulsoApproval"));
 const DiscountClub = lazy(() => import("@/pages/DiscountClub"));
 const DiscountClubHome = lazy(() => import("@/pages/DiscountClubHome"));
 const DiscountAdmin = lazy(() => import("@/pages/DiscountAdmin"));
+const TvDashboard = lazy(() => import("@/pages/TvDashboard"));
 
 const queryClient = new QueryClient({
   defaultOptions: {

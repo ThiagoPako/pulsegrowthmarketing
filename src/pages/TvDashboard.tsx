@@ -270,6 +270,93 @@ export default function TvDashboard() {
         </div>
       )}
 
+      {/* Today's recording schedule */}
+      {schedule.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <CalendarDays className="w-4 h-4 text-blue-400" />
+            <h2 className="text-sm font-bold text-white/60 uppercase tracking-widest">Agenda de Gravações — Hoje</h2>
+            <span className="text-xs text-white/30 ml-2">{schedule.length} gravações</span>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {schedule.map((item, idx) => {
+              const now = new Date();
+              const [h, m] = item.startTime.split(':').map(Number);
+              const startDate = new Date(); startDate.setHours(h, m, 0, 0);
+              const isNow = item.status === 'em_andamento' || (item.status === 'agendada' && now >= startDate && now <= new Date(startDate.getTime() + 90 * 60000));
+              const isDone = item.status === 'concluida';
+              const isCancelled = item.status === 'cancelada';
+
+              return (
+                <motion.div
+                  key={item.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                  className={`relative rounded-xl border overflow-hidden ${
+                    isCancelled ? 'opacity-40 border-red-500/30 bg-red-500/5' :
+                    isDone ? 'border-green-500/30 bg-green-500/5' :
+                    isNow ? 'border-blue-400/50 bg-blue-500/10' :
+                    'border-white/10 bg-white/5'
+                  }`}
+                >
+                  {isNow && (
+                    <motion.div
+                      className="absolute inset-0 rounded-xl pointer-events-none"
+                      animate={{ opacity: [0.05, 0.15, 0.05] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                      style={{ boxShadow: 'inset 0 0 20px rgba(59,130,246,0.3)' }}
+                    />
+                  )}
+                  <div className="p-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-lg font-mono font-bold text-white/90">{item.startTime}</span>
+                      <div className="flex items-center gap-1.5">
+                        {isDone && <CheckCircle2 className="w-4 h-4 text-green-400" />}
+                        {isCancelled && <XCircle className="w-4 h-4 text-red-400" />}
+                        {isNow && (
+                          <motion.div
+                            className="flex items-center gap-1 rounded-full px-2 py-0.5 bg-blue-500/20"
+                            animate={{ opacity: [1, 0.6, 1] }}
+                            transition={{ duration: 1.5, repeat: Infinity }}
+                          >
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                            <span className="text-[10px] font-bold text-blue-300">AO VIVO</span>
+                          </motion.div>
+                        )}
+                        {!isDone && !isCancelled && !isNow && <Circle className="w-3.5 h-3.5 text-white/20" />}
+                        {item.type === 'event' && (
+                          <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300">Evento</span>
+                        )}
+                        {item.recordingType === 'extra' && (
+                          <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300">Extra</span>
+                        )}
+                        {item.recordingType === 'backup' && (
+                          <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">Backup</span>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-sm font-semibold text-white truncate">{item.clientName}</p>
+                    {item.videomakerName && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <Camera className="w-3 h-3 text-blue-400/60" />
+                        <span className="text-xs text-white/50">{item.videomakerName}</span>
+                      </div>
+                    )}
+                    {item.address && (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <MapPin className="w-3 h-3 text-orange-400/60" />
+                        <span className="text-[11px] text-white/40 truncate">{item.address}</span>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Offline members */}
       {offlineMembers.length > 0 && (
         <div>

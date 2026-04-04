@@ -171,14 +171,14 @@ function MemberCard({ member, index }: { member: TeamMember; index: number }) {
             <motion.img
               src={member.avatarUrl}
               alt={member.name}
-              className="w-14 h-14 rounded-xl object-cover ring-2"
-              style={{ ringColor: config.color }}
+              className="w-14 h-14 rounded-xl object-cover border-2"
+              style={{ borderColor: config.color }}
               layoutId={`avatar-${member.id}`}
             />
           ) : (
             <motion.div
-              className="w-14 h-14 rounded-xl flex items-center justify-center text-lg font-bold ring-2"
-              style={{ ringColor: config.color, backgroundColor: `${config.color}18`, color: config.color }}
+              className="w-14 h-14 rounded-xl flex items-center justify-center text-lg font-bold border-2"
+              style={{ borderColor: config.color, backgroundColor: `${config.color}18`, color: config.color }}
               layoutId={`avatar-${member.id}`}
             >
               {getInitials(member.name)}

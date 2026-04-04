@@ -3190,6 +3190,7 @@ const ALLOWED_TABLES = [
   'traffic_campaigns','whatsapp_config','whatsapp_messages','whatsapp_confirmations',
   'recording_wait_logs','portal_videos','portal_video_views','commercial_proposals','proposal_comments',
   'event_recordings','client_testimonials','proposal_checklist_items','holidays',
+  'tv_settings',
 ];
 
 function sanitizeIdentifier(name) {

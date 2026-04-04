@@ -3,7 +3,7 @@ import { motion, AnimatePresence, useMotionValue, useTransform, animate } from '
 import {
   Monitor, Clock, Coffee, Camera, Film, Palette, Megaphone, Image, Users,
   Wifi, WifiOff, Activity, CalendarDays, MapPin, CheckCircle2, Circle,
-  XCircle, Rocket, Zap, TrendingUp
+  XCircle, Rocket, Zap, TrendingUp, Music, Settings
 } from 'lucide-react';
 
 const VPS = 'https://agenciapulse.tech/api';

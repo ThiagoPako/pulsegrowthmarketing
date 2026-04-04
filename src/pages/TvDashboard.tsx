@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Monitor, Clock, Coffee, Camera, Film, Palette, Megaphone, Image, Users, Wifi, WifiOff, Activity } from 'lucide-react';
+import { Monitor, Clock, Coffee, Camera, Film, Palette, Megaphone, Image, Users, Wifi, WifiOff, Activity, CalendarDays, MapPin, CheckCircle2, Circle, XCircle } from 'lucide-react';
 
 const VPS = 'https://agenciapulse.tech/api';
 

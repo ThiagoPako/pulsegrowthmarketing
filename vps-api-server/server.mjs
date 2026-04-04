@@ -4429,7 +4429,171 @@ app.patch('/api/discount-campaigns/:id', async (req, res) => {
 // ─── Health check ───────────────────────────────────────────
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
-// ─── REST endpoint for presence (polling fallback) ──────────
+// ─── TV Dashboard endpoint ──────────────────────────────────
+app.get('/api/tv-dashboard', async (req, res) => {
+  try {
+    // 1. Get all team profiles
+    const { rows: profiles } = await pool.query(`
+      SELECT p.id, p.name, p.role, p.avatar_url
+      FROM profiles p
+      WHERE p.role IS NOT NULL
+      ORDER BY p.name
+    `);
+
+    // 2. Get online user IDs from presence
+    const now = Date.now();
+    const ONLINE_MS = 120_000;
+    const onlineIds = new Set();
+    for (const [uid, info] of presenceState) {
+      if (now - new Date(info.heartbeatAt).getTime() < ONLINE_MS) {
+        onlineIds.add(uid);
+      }
+    }
+
+    // 3. Get active content tasks (editing/reviewing/altering)
+    const { rows: contentTasks } = await pool.query(`
+      SELECT ct.id, ct.title, ct.kanban_column, ct.assigned_to, ct.editing_started_at,
+             ct.editing_paused_at, ct.editing_paused_seconds, ct.reviewing_by,
+             ct.reviewing_at, ct.client_id, ct.edited_by,
+             c.company_name AS client_name
+      FROM content_tasks ct
+      LEFT JOIN clients c ON c.id = ct.client_id
+      WHERE ct.kanban_column IN ('edicao', 'revisao', 'alteracao', 'gravacao')
+        AND (ct.assigned_to IS NOT NULL OR ct.reviewing_by IS NOT NULL OR ct.edited_by IS NOT NULL)
+    `);
+
+    // 4. Get active design tasks
+    const { rows: designTasks } = await pool.query(`
+      SELECT dt.id, dt.title, dt.kanban_column, dt.assigned_to, dt.timer_running,
+             dt.timer_started_at, dt.time_spent_seconds,
+             c.company_name AS client_name
+      FROM design_tasks dt
+      LEFT JOIN clients c ON c.id = dt.client_id
+      WHERE dt.kanban_column IN ('em_andamento', 'revisao_interna')
+        AND dt.assigned_to IS NOT NULL
+    `);
+
+    // 5. Get active recordings
+    const { rows: activeRecs } = await pool.query(`
+      SELECT ar.videomaker_id, ar.started_at, c.company_name AS client_name
+      FROM active_recordings ar
+      LEFT JOIN clients c ON c.id = ar.client_id
+    `);
+
+    // Build activity map: userId -> activity info
+    const activityMap = new Map();
+
+    // Content tasks
+    for (const t of contentTasks) {
+      const userId = t.edited_by || t.assigned_to || t.reviewing_by;
+      if (!userId) continue;
+      
+      let activity = 'editing';
+      let timeOnTask = 0;
+      
+      if (t.kanban_column === 'revisao') {
+        activity = 'reviewing';
+        if (t.reviewing_at) {
+          timeOnTask = Math.floor((Date.now() - new Date(t.reviewing_at).getTime()) / 1000);
+        }
+      } else if (t.kanban_column === 'alteracao') {
+        activity = 'editing';
+        if (t.editing_started_at && !t.editing_paused_at) {
+          const elapsed = Math.floor((Date.now() - new Date(t.editing_started_at).getTime()) / 1000);
+          timeOnTask = elapsed - (t.editing_paused_seconds || 0);
+        }
+      } else if (t.kanban_column === 'gravacao') {
+        activity = 'recording';
+      } else {
+        // edicao
+        if (t.editing_started_at && !t.editing_paused_at) {
+          const elapsed = Math.floor((Date.now() - new Date(t.editing_started_at).getTime()) / 1000);
+          timeOnTask = elapsed - (t.editing_paused_seconds || 0);
+        } else if (t.editing_paused_at) {
+          activity = 'paused';
+          timeOnTask = t.editing_paused_seconds || 0;
+        }
+      }
+
+      // Only override if not already set or this has active timer
+      if (!activityMap.has(userId) || (timeOnTask > 0 && !activityMap.get(userId).timeOnTask)) {
+        activityMap.set(userId, {
+          activity,
+          taskTitle: t.title,
+          clientName: t.client_name,
+          timeOnTask: Math.max(0, timeOnTask),
+        });
+      }
+    }
+
+    // Design tasks
+    for (const t of designTasks) {
+      if (!t.assigned_to || activityMap.has(t.assigned_to)) continue;
+      let timeOnTask = t.time_spent_seconds || 0;
+      if (t.timer_running && t.timer_started_at) {
+        timeOnTask += Math.floor((Date.now() - new Date(t.timer_started_at).getTime()) / 1000);
+      }
+      activityMap.set(t.assigned_to, {
+        activity: 'designing',
+        taskTitle: t.title,
+        clientName: t.client_name,
+        timeOnTask,
+      });
+    }
+
+    // Active recordings
+    for (const r of activeRecs) {
+      if (!r.videomaker_id || activityMap.has(r.videomaker_id)) continue;
+      const timeOnTask = r.started_at ? Math.floor((Date.now() - new Date(r.started_at).getTime()) / 1000) : 0;
+      activityMap.set(r.videomaker_id, {
+        activity: 'recording',
+        taskTitle: 'Gravação ativa',
+        clientName: r.client_name,
+        timeOnTask,
+      });
+    }
+
+    // Admin/social_media are always "management" when online
+    const managementRoles = new Set(['admin', 'social_media']);
+
+    // Build response
+    const members = profiles.map(p => {
+      const isOnline = onlineIds.has(p.id);
+      const taskInfo = activityMap.get(p.id);
+
+      let activity = 'idle';
+      if (taskInfo) {
+        activity = taskInfo.activity;
+      } else if (isOnline && managementRoles.has(p.role)) {
+        activity = 'management';
+      }
+
+      return {
+        id: p.id,
+        name: p.name,
+        role: p.role,
+        avatarUrl: p.avatar_url || null,
+        isOnline,
+        activity,
+        clientName: taskInfo?.clientName || null,
+        taskTitle: taskInfo?.taskTitle || null,
+        timeOnTask: taskInfo?.timeOnTask || 0,
+      };
+    });
+
+    // Sort: online first, then by role
+    members.sort((a, b) => {
+      if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    res.json({ members, updatedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('[tv-dashboard] Error:', err);
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
+
 const presenceState = new Map(); // userId -> { userId, heartbeatAt, connectedAt }
 
 app.get('/api/presence', (req, res) => {

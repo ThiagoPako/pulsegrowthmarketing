@@ -73,6 +73,7 @@ const AvulsoApproval = lazy(() => import("@/pages/AvulsoApproval"));
 const DiscountClub = lazy(() => import("@/pages/DiscountClub"));
 const DiscountClubHome = lazy(() => import("@/pages/DiscountClubHome"));
 const DiscountAdmin = lazy(() => import("@/pages/DiscountAdmin"));
+const TvDashboard = lazy(() => import("@/pages/TvDashboard"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -185,6 +186,7 @@ function AppRoutes() {
         <Route path="/clube" element={<DiscountClubHome />} />
         <Route path="/clube/:clientId" element={<DiscountClub />} />
         <Route path="/clube-descontos" element={<ProtectedRoute><DiscountAdmin /></ProtectedRoute>} />
+        <Route path="/tv" element={<Suspense fallback={<PageLoader />}><TvDashboard /></Suspense>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>

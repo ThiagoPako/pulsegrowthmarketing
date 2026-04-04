@@ -310,15 +310,9 @@ function ScheduleCard({ item, index }: { item: ScheduleItem; index: number }) {
 
   return (
     <motion.div
-      custom={index}
-      variants={cardVariants}
-      initial="hidden"
-      animate="visible"
-      exit="exit"
-      layout
-      className={`relative rounded-xl overflow-hidden backdrop-blur-sm ${
-        isCancelled ? 'opacity-35' : ''
-      }`}
+      initial={false}
+      animate={{ opacity: isCancelled ? 0.35 : 1 }}
+      className={`relative rounded-xl overflow-hidden backdrop-blur-sm`}
       style={{
         border: `1px solid ${borderColor}`,
         background: isNow

@@ -614,16 +614,12 @@ export default function TvDashboard() {
               <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent" />
               <span className="text-xs font-mono text-white/25">{onlineMembers.length} membros</span>
             </div>
-            <motion.div
+            <div
               className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
             >
-              <AnimatePresence mode="popLayout">
-                {onlineMembers.map((m, i) => (
-                  <MemberCard key={m.id} member={m} index={i} />
-                ))}
+              {onlineMembers.map((m, i) => (
+                <MemberCard key={m.id} member={m} index={i} />
+              ))}
               </AnimatePresence>
             </motion.div>
           </motion.div>

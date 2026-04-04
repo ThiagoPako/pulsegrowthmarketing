@@ -3,7 +3,7 @@ import { motion, AnimatePresence, useMotionValue, useTransform, animate } from '
 import {
   Monitor, Clock, Coffee, Camera, Film, Palette, Megaphone, Image, Users,
   Wifi, WifiOff, Activity, CalendarDays, MapPin, CheckCircle2, Circle,
-  XCircle, Rocket, Zap, TrendingUp
+  XCircle, Rocket, Zap, TrendingUp, Music, Settings
 } from 'lucide-react';
 
 const VPS = 'https://agenciapulse.tech/api';
@@ -421,12 +421,140 @@ function FloatingParticles() {
   );
 }
 
+/* ─── YouTube Playlist Widget ───────────────────────────── */
+function YouTubePlayer({ url }: { url: string }) {
+  const embedUrl = useMemo(() => {
+    if (!url) return '';
+    // Handle playlist URL
+    const listMatch = url.match(/[?&]list=([^&]+)/);
+    if (listMatch) {
+      return `https://www.youtube.com/embed/videoseries?list=${listMatch[1]}&autoplay=1&mute=1&loop=1&controls=0&showinfo=0&rel=0`;
+    }
+    // Handle single video
+    const videoMatch = url.match(/(?:watch\?v=|youtu\.be\/|embed\/)([^&?]+)/);
+    if (videoMatch) {
+      return `https://www.youtube.com/embed/${videoMatch[1]}?autoplay=1&mute=1&loop=1&controls=0&showinfo=0&rel=0&playlist=${videoMatch[1]}`;
+    }
+    return '';
+  }, [url]);
+
+  if (!embedUrl) return null;
+
+  return (
+    <motion.div
+      className="rounded-2xl overflow-hidden border relative"
+      style={{
+        borderColor: `${PULSE_ORANGE}33`,
+        background: `linear-gradient(135deg, ${PULSE_ORANGE}08, transparent 70%)`,
+        boxShadow: `0 0 30px ${PULSE_ORANGE}11`,
+      }}
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.6 }}
+    >
+      {/* Top accent */}
+      <motion.div
+        className="absolute top-0 left-0 right-0 h-[2px] z-10"
+        style={{ background: `linear-gradient(90deg, transparent, ${PULSE_ORANGE}, transparent)` }}
+        animate={{ opacity: [0.3, 0.8, 0.3] }}
+        transition={{ duration: 3, repeat: Infinity }}
+      />
+
+      <div className="flex items-center gap-2 px-4 py-2.5" style={{ background: 'rgba(255,255,255,0.03)' }}>
+        <Music className="w-3.5 h-3.5" style={{ color: PULSE_ORANGE }} />
+        <span className="text-[11px] font-bold text-white/40 uppercase tracking-[0.15em]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+          Pulse Radio
+        </span>
+        <motion.div
+          className="flex gap-0.5 ml-2"
+          animate={{ opacity: [0.4, 1, 0.4] }}
+          transition={{ duration: 1.5, repeat: Infinity }}
+        >
+          {[3, 5, 2, 4, 3].map((h, i) => (
+            <motion.div
+              key={i}
+              className="w-[3px] rounded-full"
+              style={{ backgroundColor: PULSE_ORANGE, height: h * 2 }}
+              animate={{ height: [h * 2, h * 4, h * 2] }}
+              transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15, ease: 'easeInOut' }}
+            />
+          ))}
+        </motion.div>
+      </div>
+
+      <div className="aspect-video">
+        <iframe
+          src={embedUrl}
+          className="w-full h-full"
+          allow="autoplay; encrypted-media"
+          allowFullScreen
+          style={{ border: 0 }}
+        />
+      </div>
+    </motion.div>
+  );
+}
+
+/* ─── Playlist URL Editor (click to edit) ───────────────── */
+function PlaylistEditor({ url, onSave }: { url: string; onSave: (url: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(url);
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => { setDraft(url); setEditing(true); }}
+        className="flex items-center gap-1.5 text-[10px] text-white/20 hover:text-white/50 transition-colors"
+        title="Configurar playlist"
+      >
+        <Settings className="w-3 h-3" />
+        <span>Playlist</span>
+      </button>
+    );
+  }
+
+  return (
+    <motion.div
+      className="flex items-center gap-2"
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+    >
+      <input
+        type="text"
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        placeholder="Cole o link da playlist do YouTube"
+        className="text-xs bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white/80 placeholder:text-white/20 w-80 outline-none focus:border-orange-500/50"
+        autoFocus
+        onKeyDown={e => {
+          if (e.key === 'Enter') { onSave(draft); setEditing(false); }
+          if (e.key === 'Escape') setEditing(false);
+        }}
+      />
+      <button
+        onClick={() => { onSave(draft); setEditing(false); }}
+        className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md"
+        style={{ backgroundColor: `${PULSE_ORANGE}22`, color: PULSE_ORANGE }}
+      >
+        Salvar
+      </button>
+      <button
+        onClick={() => setEditing(false)}
+        className="text-[10px] text-white/30 hover:text-white/60"
+      >
+        ✕
+      </button>
+    </motion.div>
+  );
+}
+
 /* ─── Main TV Dashboard ─────────────────────────────────── */
 export default function TvDashboard() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
   const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());
+  const [playlistUrl, setPlaylistUrl] = useState('');
   const timerRef = useRef<number>();
   const isFirstLoad = useRef(true);
 
@@ -444,11 +572,34 @@ export default function TvDashboard() {
     }
   }, []);
 
+  // Load playlist URL
+  const fetchPlaylist = useCallback(async () => {
+    try {
+      const res = await fetch(`${VPS}/data/tv_settings?key=eq.youtube_playlist_url`);
+      if (res.ok) {
+        const rows = await res.json();
+        if (rows.length > 0 && rows[0].value) setPlaylistUrl(rows[0].value);
+      }
+    } catch {}
+  }, []);
+
+  const savePlaylist = useCallback(async (url: string) => {
+    setPlaylistUrl(url);
+    try {
+      await fetch(`${VPS}/data/tv_settings?key=eq.youtube_playlist_url`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: url, updated_at: new Date().toISOString() }),
+      });
+    } catch {}
+  }, []);
+
   useEffect(() => {
     fetchData();
+    fetchPlaylist();
     const iv = setInterval(fetchData, 10_000);
     return () => clearInterval(iv);
-  }, [fetchData]);
+  }, [fetchData, fetchPlaylist]);
 
   // Clock tick
   useEffect(() => {
@@ -616,6 +767,36 @@ export default function TvDashboard() {
             </div>
           </motion.div>
         )}
+
+        {/* ─── YouTube Playlist ──────────────────────────── */}
+        <motion.div
+          className="mb-8"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5, duration: 0.5 }}
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <Music className="w-4 h-4" style={{ color: PULSE_ORANGE }} />
+            <h2 className="text-xs font-bold text-white/50 uppercase tracking-[0.2em]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+              Pulse Radio
+            </h2>
+            <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent" />
+            <PlaylistEditor url={playlistUrl} onSave={savePlaylist} />
+          </div>
+          {playlistUrl ? (
+            <div className="max-w-lg">
+              <YouTubePlayer url={playlistUrl} />
+            </div>
+          ) : (
+            <div
+              className="rounded-2xl border border-dashed border-white/10 p-8 text-center max-w-lg"
+              style={{ background: 'rgba(255,255,255,0.02)' }}
+            >
+              <Music className="w-8 h-8 mx-auto mb-2" style={{ color: `${PULSE_ORANGE}33` }} />
+              <p className="text-xs text-white/25">Clique em "Playlist" acima para configurar</p>
+            </div>
+          )}
+        </motion.div>
 
         {/* ─── Offline Members ───────────────────────────── */}
         {offlineMembers.length > 0 && (

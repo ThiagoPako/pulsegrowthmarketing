@@ -242,19 +242,6 @@ function MemberCard({ member, index }: { member: TeamMember; index: number }) {
             )}
           </AnimatePresence>
 
-          {/* Timer */}
-          {isWorking && member.timeOnTask != null && member.timeOnTask > 0 && (
-            <motion.div
-              className="mt-2 flex items-center gap-1.5"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
-              <Clock className="w-3.5 h-3.5 text-white/50" />
-              <span className="text-sm font-mono font-bold text-white/70 tabular-nums">
-                {formatDuration(member.timeOnTask)}
-              </span>
-            </motion.div>
-          )}
         </div>
       </div>
     </motion.div>

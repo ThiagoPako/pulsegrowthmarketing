@@ -572,11 +572,34 @@ export default function TvDashboard() {
     }
   }, []);
 
+  // Load playlist URL
+  const fetchPlaylist = useCallback(async () => {
+    try {
+      const res = await fetch(`${VPS}/data/tv_settings?key=eq.youtube_playlist_url`);
+      if (res.ok) {
+        const rows = await res.json();
+        if (rows.length > 0 && rows[0].value) setPlaylistUrl(rows[0].value);
+      }
+    } catch {}
+  }, []);
+
+  const savePlaylist = useCallback(async (url: string) => {
+    setPlaylistUrl(url);
+    try {
+      await fetch(`${VPS}/data/tv_settings?key=eq.youtube_playlist_url`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: url, updated_at: new Date().toISOString() }),
+      });
+    } catch {}
+  }, []);
+
   useEffect(() => {
     fetchData();
+    fetchPlaylist();
     const iv = setInterval(fetchData, 10_000);
     return () => clearInterval(iv);
-  }, [fetchData]);
+  }, [fetchData, fetchPlaylist]);
 
   // Clock tick
   useEffect(() => {

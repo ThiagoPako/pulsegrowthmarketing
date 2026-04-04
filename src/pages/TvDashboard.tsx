@@ -88,7 +88,6 @@ const cardVariants = {
 };
 
 const staggerContainer = {
-  hidden: {},
   visible: { transition: { staggerChildren: 0.06, delayChildren: 0.1 } },
 };
 
@@ -127,13 +126,10 @@ function MemberCard({ member, index }: { member: TeamMember; index: number }) {
 
   return (
     <motion.div
-      layout
-      layoutId={`member-${member.id}`}
       custom={index}
       variants={cardVariants}
-      initial="hidden"
+      initial={false}
       animate="visible"
-      exit="exit"
       className={`relative rounded-2xl border overflow-hidden backdrop-blur-sm bg-gradient-to-br ${config.gradient}`}
       style={{
         borderColor: `${config.color}33`,
@@ -168,21 +164,19 @@ function MemberCard({ member, index }: { member: TeamMember; index: number }) {
         {/* Avatar */}
         <div className="relative flex-shrink-0">
           {member.avatarUrl ? (
-            <motion.img
+            <img
               src={member.avatarUrl}
               alt={member.name}
               className="w-14 h-14 rounded-xl object-cover border-2"
               style={{ borderColor: config.color }}
-              layoutId={`avatar-${member.id}`}
             />
           ) : (
-            <motion.div
+            <div
               className="w-14 h-14 rounded-xl flex items-center justify-center text-lg font-bold border-2"
               style={{ borderColor: config.color, backgroundColor: `${config.color}18`, color: config.color }}
-              layoutId={`avatar-${member.id}`}
             >
               {getInitials(member.name)}
-            </motion.div>
+            </div>
           )}
           {/* Online indicator */}
           <motion.div
@@ -316,15 +310,9 @@ function ScheduleCard({ item, index }: { item: ScheduleItem; index: number }) {
 
   return (
     <motion.div
-      custom={index}
-      variants={cardVariants}
-      initial="hidden"
-      animate="visible"
-      exit="exit"
-      layout
-      className={`relative rounded-xl overflow-hidden backdrop-blur-sm ${
-        isCancelled ? 'opacity-35' : ''
-      }`}
+      initial={false}
+      animate={{ opacity: isCancelled ? 0.35 : 1 }}
+      className={`relative rounded-xl overflow-hidden backdrop-blur-sm`}
       style={{
         border: `1px solid ${borderColor}`,
         background: isNow
@@ -496,6 +484,7 @@ export default function TvDashboard() {
 
   const onlineMembers = members.filter(m => m.isOnline);
   const offlineMembers = members.filter(m => !m.isOnline);
+  const hasLoaded = !isFirstLoad.current;
 
   const timeStr = clock.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const dateStr = clock.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
@@ -619,18 +608,13 @@ export default function TvDashboard() {
               <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent" />
               <span className="text-xs font-mono text-white/25">{onlineMembers.length} membros</span>
             </div>
-            <motion.div
+            <div
               className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
             >
-              <AnimatePresence mode="popLayout">
-                {onlineMembers.map((m, i) => (
-                  <MemberCard key={m.id} member={m} index={i} />
-                ))}
-              </AnimatePresence>
-            </motion.div>
+              {onlineMembers.map((m, i) => (
+                <MemberCard key={m.id} member={m} index={i} />
+              ))}
+            </div>
           </motion.div>
         )}
 
@@ -650,18 +634,11 @@ export default function TvDashboard() {
               <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent" />
               <span className="text-xs font-mono text-white/25">{schedule.length} gravações</span>
             </div>
-            <motion.div
-              className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3"
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
-            >
-              <AnimatePresence mode="popLayout">
-                {schedule.map((item, idx) => (
-                  <ScheduleCard key={item.id} item={item} index={idx} />
-                ))}
-              </AnimatePresence>
-            </motion.div>
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {schedule.map((item, idx) => (
+                <ScheduleCard key={item.id} item={item} index={idx} />
+              ))}
+            </div>
           </motion.div>
         )}
 
@@ -679,46 +656,32 @@ export default function TvDashboard() {
               </h2>
               <div className="flex-1 h-px bg-white/5" />
             </div>
-            <motion.div
-              className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3"
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
-            >
-              <AnimatePresence mode="popLayout">
-                {offlineMembers.map((m, i) => {
-                  const config = ROLE_CONFIG[m.role] || ROLE_CONFIG.admin;
-                  return (
-                    <motion.div
-                      key={m.id}
-                      layout
-                      layoutId={`member-${m.id}`}
-                      custom={i}
-                      variants={cardVariants}
-                      initial="hidden"
-                      animate="visible"
-                      exit="exit"
-                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 border border-white/5"
-                      style={{ background: 'rgba(255,255,255,0.02)' }}
-                    >
-                      {m.avatarUrl ? (
-                        <img src={m.avatarUrl} alt={m.name} className="w-8 h-8 rounded-lg object-cover grayscale opacity-40" />
-                      ) : (
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold bg-white/5 text-white/25">
-                          {getInitials(m.name)}
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <p className="text-sm text-white/35 truncate font-medium">{m.name}</p>
-                        <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: `${config.color}55` }}>
-                          {config.label}
-                        </p>
+            <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+              {offlineMembers.map((m, i) => {
+                const config = ROLE_CONFIG[m.role] || ROLE_CONFIG.admin;
+                return (
+                  <div
+                    key={m.id}
+                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 border border-white/5"
+                    style={{ background: 'rgba(255,255,255,0.02)' }}
+                  >
+                    {m.avatarUrl ? (
+                      <img src={m.avatarUrl} alt={m.name} className="w-8 h-8 rounded-lg object-cover grayscale opacity-40" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold bg-white/5 text-white/25">
+                        {getInitials(m.name)}
                       </div>
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-            </motion.div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-sm text-white/35 truncate font-medium">{m.name}</p>
+                      <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: `${config.color}55` }}>
+                        {config.label}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </motion.div>
         )}
 

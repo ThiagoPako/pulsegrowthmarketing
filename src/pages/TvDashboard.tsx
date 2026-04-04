@@ -768,6 +768,36 @@ export default function TvDashboard() {
           </motion.div>
         )}
 
+        {/* ─── YouTube Playlist ──────────────────────────── */}
+        <motion.div
+          className="mb-8"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5, duration: 0.5 }}
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <Music className="w-4 h-4" style={{ color: PULSE_ORANGE }} />
+            <h2 className="text-xs font-bold text-white/50 uppercase tracking-[0.2em]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+              Pulse Radio
+            </h2>
+            <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent" />
+            <PlaylistEditor url={playlistUrl} onSave={savePlaylist} />
+          </div>
+          {playlistUrl ? (
+            <div className="max-w-lg">
+              <YouTubePlayer url={playlistUrl} />
+            </div>
+          ) : (
+            <div
+              className="rounded-2xl border border-dashed border-white/10 p-8 text-center max-w-lg"
+              style={{ background: 'rgba(255,255,255,0.02)' }}
+            >
+              <Music className="w-8 h-8 mx-auto mb-2" style={{ color: `${PULSE_ORANGE}33` }} />
+              <p className="text-xs text-white/25">Clique em "Playlist" acima para configurar</p>
+            </div>
+          )}
+        </motion.div>
+
         {/* ─── Offline Members ───────────────────────────── */}
         {offlineMembers.length > 0 && (
           <motion.div

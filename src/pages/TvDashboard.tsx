@@ -88,7 +88,6 @@ const cardVariants = {
 };
 
 const staggerContainer = {
-  hidden: {},
   visible: { transition: { staggerChildren: 0.06, delayChildren: 0.1 } },
 };
 

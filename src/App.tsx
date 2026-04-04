@@ -186,6 +186,7 @@ function AppRoutes() {
         <Route path="/clube" element={<DiscountClubHome />} />
         <Route path="/clube/:clientId" element={<DiscountClub />} />
         <Route path="/clube-descontos" element={<ProtectedRoute><DiscountAdmin /></ProtectedRoute>} />
+        <Route path="/tv" element={<Suspense fallback={<PageLoader />}><TvDashboard /></Suspense>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>

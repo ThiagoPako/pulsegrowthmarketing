@@ -456,18 +456,6 @@ export default function TvDashboard() {
     return () => clearInterval(timerRef.current);
   }, []);
 
-  // Increment local timers
-  useEffect(() => {
-    const iv = setInterval(() => {
-      setMembers(prev => prev.map(m => {
-        if (m.isOnline && m.activity && m.activity !== 'idle' && m.activity !== 'paused' && m.timeOnTask != null) {
-          return { ...m, timeOnTask: m.timeOnTask + 1 };
-        }
-        return m;
-      }));
-    }, 1000);
-    return () => clearInterval(iv);
-  }, []);
 
   const onlineMembers = members.filter(m => m.isOnline);
   const offlineMembers = members.filter(m => !m.isOnline);

@@ -662,46 +662,32 @@ export default function TvDashboard() {
               </h2>
               <div className="flex-1 h-px bg-white/5" />
             </div>
-            <motion.div
-              className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3"
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
-            >
-              <AnimatePresence mode="popLayout">
-                {offlineMembers.map((m, i) => {
-                  const config = ROLE_CONFIG[m.role] || ROLE_CONFIG.admin;
-                  return (
-                    <motion.div
-                      key={m.id}
-                      layout
-                      layoutId={`member-${m.id}`}
-                      custom={i}
-                      variants={cardVariants}
-                      initial="hidden"
-                      animate="visible"
-                      exit="exit"
-                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 border border-white/5"
-                      style={{ background: 'rgba(255,255,255,0.02)' }}
-                    >
-                      {m.avatarUrl ? (
-                        <img src={m.avatarUrl} alt={m.name} className="w-8 h-8 rounded-lg object-cover grayscale opacity-40" />
-                      ) : (
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold bg-white/5 text-white/25">
-                          {getInitials(m.name)}
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <p className="text-sm text-white/35 truncate font-medium">{m.name}</p>
-                        <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: `${config.color}55` }}>
-                          {config.label}
-                        </p>
+            <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+              {offlineMembers.map((m, i) => {
+                const config = ROLE_CONFIG[m.role] || ROLE_CONFIG.admin;
+                return (
+                  <div
+                    key={m.id}
+                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 border border-white/5"
+                    style={{ background: 'rgba(255,255,255,0.02)' }}
+                  >
+                    {m.avatarUrl ? (
+                      <img src={m.avatarUrl} alt={m.name} className="w-8 h-8 rounded-lg object-cover grayscale opacity-40" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold bg-white/5 text-white/25">
+                        {getInitials(m.name)}
                       </div>
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-            </motion.div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-sm text-white/35 truncate font-medium">{m.name}</p>
+                      <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: `${config.color}55` }}>
+                        {config.label}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </motion.div>
         )}
 

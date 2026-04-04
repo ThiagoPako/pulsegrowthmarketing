@@ -126,13 +126,10 @@ function MemberCard({ member, index }: { member: TeamMember; index: number }) {
 
   return (
     <motion.div
-      layout
-      layoutId={`member-${member.id}`}
       custom={index}
       variants={cardVariants}
-      initial="hidden"
+      initial={false}
       animate="visible"
-      exit="exit"
       className={`relative rounded-2xl border overflow-hidden backdrop-blur-sm bg-gradient-to-br ${config.gradient}`}
       style={{
         borderColor: `${config.color}33`,

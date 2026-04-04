@@ -620,8 +620,7 @@ export default function TvDashboard() {
               {onlineMembers.map((m, i) => (
                 <MemberCard key={m.id} member={m} index={i} />
               ))}
-              </AnimatePresence>
-            </motion.div>
+            </div>
           </motion.div>
         )}
 

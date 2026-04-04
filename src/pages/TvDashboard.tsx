@@ -242,19 +242,6 @@ function MemberCard({ member, index }: { member: TeamMember; index: number }) {
             )}
           </AnimatePresence>
 
-          {/* Timer */}
-          {isWorking && member.timeOnTask != null && member.timeOnTask > 0 && (
-            <motion.div
-              className="mt-2 flex items-center gap-1.5"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
-              <Clock className="w-3.5 h-3.5 text-white/50" />
-              <span className="text-sm font-mono font-bold text-white/70 tabular-nums">
-                {formatDuration(member.timeOnTask)}
-              </span>
-            </motion.div>
-          )}
         </div>
       </div>
     </motion.div>
@@ -469,18 +456,6 @@ export default function TvDashboard() {
     return () => clearInterval(timerRef.current);
   }, []);
 
-  // Increment local timers
-  useEffect(() => {
-    const iv = setInterval(() => {
-      setMembers(prev => prev.map(m => {
-        if (m.isOnline && m.activity && m.activity !== 'idle' && m.activity !== 'paused' && m.timeOnTask != null) {
-          return { ...m, timeOnTask: m.timeOnTask + 1 };
-        }
-        return m;
-      }));
-    }, 1000);
-    return () => clearInterval(iv);
-  }, []);
 
   const onlineMembers = members.filter(m => m.isOnline);
   const offlineMembers = members.filter(m => !m.isOnline);

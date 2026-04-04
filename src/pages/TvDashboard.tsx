@@ -164,21 +164,19 @@ function MemberCard({ member, index }: { member: TeamMember; index: number }) {
         {/* Avatar */}
         <div className="relative flex-shrink-0">
           {member.avatarUrl ? (
-            <motion.img
+            <img
               src={member.avatarUrl}
               alt={member.name}
               className="w-14 h-14 rounded-xl object-cover border-2"
               style={{ borderColor: config.color }}
-              layoutId={`avatar-${member.id}`}
             />
           ) : (
-            <motion.div
+            <div
               className="w-14 h-14 rounded-xl flex items-center justify-center text-lg font-bold border-2"
               style={{ borderColor: config.color, backgroundColor: `${config.color}18`, color: config.color }}
-              layoutId={`avatar-${member.id}`}
             >
               {getInitials(member.name)}
-            </motion.div>
+            </div>
           )}
           {/* Online indicator */}
           <motion.div

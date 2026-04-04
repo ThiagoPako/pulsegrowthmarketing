@@ -17,6 +17,22 @@ interface TeamMember {
   taskType?: string;
 }
 
+interface ScheduleItem {
+  id: string;
+  type: 'recording' | 'event';
+  clientName: string;
+  clientLogo?: string | null;
+  clientColor?: string | null;
+  videomakerName?: string | null;
+  startTime: string;
+  endTime?: string;
+  recordingType?: string;
+  status: string;
+  confirmationStatus?: string;
+  title?: string;
+  address?: string;
+}
+
 const ROLE_CONFIG: Record<string, { label: string; color: string; icon: any; gradient: string }> = {
   admin:          { label: 'Administração',  color: '#f59e0b', icon: Monitor,   gradient: 'from-amber-500/20 to-amber-600/10' },
   social_media:   { label: 'Social Media',   color: '#22c55e', icon: Users,     gradient: 'from-green-500/20 to-green-600/10' },

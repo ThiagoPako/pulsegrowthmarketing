@@ -186,6 +186,7 @@ export default function TvDashboard() {
       if (!res.ok) throw new Error('fetch failed');
       const data = await res.json();
       setMembers(data.members || []);
+      setSchedule(data.todaySchedule || []);
       setConnected(true);
     } catch {
       setConnected(false);

@@ -3,7 +3,7 @@ import { motion, AnimatePresence, useMotionValue, useTransform, animate } from '
 import {
   Monitor, Clock, Coffee, Camera, Film, Palette, Megaphone, Image, Users,
   Wifi, WifiOff, Activity, CalendarDays, MapPin, CheckCircle2, Circle,
-  XCircle, Rocket, Zap, TrendingUp, Music, Settings
+  XCircle, Rocket, Zap, TrendingUp, Music, Settings, Link as LinkIcon
 } from 'lucide-react';
 
 const VPS = 'https://agenciapulse.tech/api';
@@ -504,11 +504,12 @@ function PlaylistEditor({ url, onSave }: { url: string; onSave: (url: string) =>
     return (
       <button
         onClick={() => { setDraft(url); setEditing(true); }}
-        className="flex items-center gap-1.5 text-[10px] text-white/20 hover:text-white/50 transition-colors"
-        title="Configurar playlist"
+        className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider px-3 py-1.5 rounded-lg transition-all hover:scale-105"
+        style={{ backgroundColor: `${PULSE_ORANGE}20`, color: PULSE_ORANGE, border: `1px solid ${PULSE_ORANGE}40` }}
+        title="Adicionar link do YouTube"
       >
-        <Settings className="w-3 h-3" />
-        <span>Playlist</span>
+        <LinkIcon className="w-3.5 h-3.5" />
+        <span>{url ? 'Trocar Link' : 'Adicionar Link'}</span>
       </button>
     );
   }

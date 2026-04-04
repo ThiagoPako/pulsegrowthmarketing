@@ -640,18 +640,11 @@ export default function TvDashboard() {
               <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent" />
               <span className="text-xs font-mono text-white/25">{schedule.length} gravações</span>
             </div>
-            <motion.div
-              className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3"
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
-            >
-              <AnimatePresence mode="popLayout">
-                {schedule.map((item, idx) => (
-                  <ScheduleCard key={item.id} item={item} index={idx} />
-                ))}
-              </AnimatePresence>
-            </motion.div>
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {schedule.map((item, idx) => (
+                <ScheduleCard key={item.id} item={item} index={idx} />
+              ))}
+            </div>
           </motion.div>
         )}
 

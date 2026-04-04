@@ -4587,7 +4587,63 @@ app.get('/api/tv-dashboard', async (req, res) => {
       return a.name.localeCompare(b.name);
     });
 
-    res.json({ members, updatedAt: new Date().toISOString() });
+    // 6. Get today's recordings schedule
+    const today = new Date().toISOString().split('T')[0];
+    const { rows: recordings } = await pool.query(`
+      SELECT r.id, r.client_id, r.videomaker_id, r.start_time, r.type, r.status,
+             r.confirmation_status,
+             c.company_name AS client_name, c.logo_url AS client_logo, c.color AS client_color,
+             p.name AS videomaker_name
+      FROM recordings r
+      LEFT JOIN clients c ON c.id = r.client_id
+      LEFT JOIN profiles p ON p.id = r.videomaker_id
+      WHERE r.date::date = $1::date
+      ORDER BY r.start_time ASC
+    `, [today]);
+
+    // 7. Get today's event recordings
+    const { rows: events } = await pool.query(`
+      SELECT er.id, er.title, er.start_time, er.end_time, er.address, er.status,
+             er.client_id, er.videomaker_id,
+             c.company_name AS client_name,
+             p.name AS videomaker_name
+      FROM event_recordings er
+      LEFT JOIN clients c ON c.id = er.client_id
+      LEFT JOIN profiles p ON p.id = er.videomaker_id
+      WHERE er.date::date = $1::date
+      ORDER BY er.start_time ASC
+    `, [today]);
+
+    const schedule = recordings.map(r => ({
+      id: r.id,
+      type: 'recording',
+      clientName: r.client_name || 'Cliente',
+      clientLogo: r.client_logo || null,
+      clientColor: r.client_color || null,
+      videomakerName: r.videomaker_name || null,
+      startTime: r.start_time,
+      recordingType: r.type,
+      status: r.status,
+      confirmationStatus: r.confirmation_status,
+    }));
+
+    const eventItems = events.map(e => ({
+      id: e.id,
+      type: 'event',
+      clientName: e.client_name || e.title,
+      clientLogo: null,
+      clientColor: null,
+      videomakerName: e.videomaker_name || null,
+      startTime: e.start_time,
+      endTime: e.end_time,
+      title: e.title,
+      address: e.address,
+      status: e.status,
+    }));
+
+    const todaySchedule = [...schedule, ...eventItems].sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+    res.json({ members, todaySchedule, updatedAt: new Date().toISOString() });
   } catch (err) {
     console.error('[tv-dashboard] Error:', err);
     res.status(500).json({ error: 'Internal error' });

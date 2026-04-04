@@ -175,6 +175,7 @@ function StatusSummary({ members }: { members: TeamMember[] }) {
 
 export default function TvDashboard() {
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
   const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());
   const timerRef = useRef<number>();

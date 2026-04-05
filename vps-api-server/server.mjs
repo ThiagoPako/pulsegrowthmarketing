@@ -4594,7 +4594,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
       SELECT r.id, r.client_id, r.videomaker_id, r.start_time, r.type, r.status,
              r.confirmation_status,
              c.company_name AS client_name, c.logo_url AS client_logo, c.color AS client_color,
-             p.name AS videomaker_name
+             p.name AS videomaker_name, p.avatar_url AS videomaker_avatar
       FROM recordings r
       LEFT JOIN clients c ON c.id = r.client_id
       LEFT JOIN profiles p ON p.id = r.videomaker_id
@@ -4607,7 +4607,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
       SELECT er.id, er.title, er.start_time, er.end_time, er.address, er.status,
              er.client_id, er.videomaker_id,
              c.company_name AS client_name,
-             p.name AS videomaker_name
+             p.name AS videomaker_name, p.avatar_url AS videomaker_avatar
       FROM event_recordings er
       LEFT JOIN clients c ON c.id = er.client_id
       LEFT JOIN profiles p ON p.id = er.videomaker_id
@@ -4622,6 +4622,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
       clientLogo: r.client_logo || null,
       clientColor: r.client_color || null,
       videomakerName: r.videomaker_name || null,
+      videomakerAvatar: r.videomaker_avatar || null,
       startTime: r.start_time,
       recordingType: r.type,
       status: r.status,
@@ -4635,6 +4636,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
       clientLogo: null,
       clientColor: null,
       videomakerName: e.videomaker_name || null,
+      videomakerAvatar: e.videomaker_avatar || null,
       startTime: e.start_time,
       endTime: e.end_time,
       title: e.title,
@@ -4644,7 +4646,72 @@ app.get('/api/tv-dashboard', async (req, res) => {
 
     const todaySchedule = [...schedule, ...eventItems].sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-    res.json({ members, todaySchedule, updatedAt: new Date().toISOString() });
+    // 8. Get editing tasks (active editing pipeline)
+    const { rows: editingTasks } = await pool.query(`
+      SELECT ct.id, ct.title, ct.kanban_column, ct.content_type, ct.editing_started_at,
+             ct.editing_paused_at, ct.editing_paused_seconds, ct.edited_by,
+             ct.reviewing_by, ct.reviewing_by_name, ct.reviewing_at,
+             ct.client_id, ct.edited_video_link,
+             c.company_name AS client_name, c.logo_url AS client_logo, c.color AS client_color,
+             pe.name AS editor_name, pe.avatar_url AS editor_avatar,
+             pr.name AS reviewer_name, pr.avatar_url AS reviewer_avatar
+      FROM content_tasks ct
+      LEFT JOIN clients c ON c.id = ct.client_id
+      LEFT JOIN profiles pe ON pe.id = ct.edited_by
+      LEFT JOIN profiles pr ON pr.id = ct.reviewing_by
+      WHERE ct.kanban_column IN ('edicao', 'revisao', 'alteracao')
+      ORDER BY ct.updated_at DESC
+    `);
+
+    const editingPipeline = editingTasks.map(t => {
+      let timeOnTask = 0;
+      if (t.kanban_column === 'revisao' && t.reviewing_at) {
+        timeOnTask = Math.floor((Date.now() - new Date(t.reviewing_at).getTime()) / 1000);
+      } else if (t.editing_started_at && !t.editing_paused_at) {
+        const elapsed = Math.floor((Date.now() - new Date(t.editing_started_at).getTime()) / 1000);
+        timeOnTask = elapsed - (t.editing_paused_seconds || 0);
+      }
+      return {
+        id: t.id,
+        title: t.title,
+        column: t.kanban_column,
+        contentType: t.content_type,
+        clientName: t.client_name || 'Cliente',
+        clientLogo: t.client_logo || null,
+        clientColor: t.client_color || null,
+        editorName: t.editor_name || null,
+        editorAvatar: t.editor_avatar || null,
+        reviewerName: t.reviewer_name || t.reviewing_by_name || null,
+        reviewerAvatar: t.reviewer_avatar || null,
+        timeOnTask: Math.max(0, timeOnTask),
+        isPaused: !!t.editing_paused_at,
+      };
+    });
+
+    // 9. Get today's scheduled posts (social media deliveries)
+    const { rows: scheduledPosts } = await pool.query(`
+      SELECT smd.id, smd.title, smd.content_type, smd.platform, smd.status,
+             smd.scheduled_time, smd.delivered_at, smd.posted_at,
+             c.company_name AS client_name, c.logo_url AS client_logo, c.color AS client_color
+      FROM social_media_deliveries smd
+      LEFT JOIN clients c ON c.id = smd.client_id
+      WHERE (smd.delivered_at::date = $1::date OR smd.scheduled_time::date = $1::date OR smd.posted_at::date = $1::date)
+      ORDER BY COALESCE(smd.scheduled_time, smd.delivered_at) ASC
+    `, [today]);
+
+    const todayPosts = scheduledPosts.map(p => ({
+      id: p.id,
+      title: p.title || 'Sem título',
+      contentType: p.content_type,
+      platform: p.platform,
+      status: p.status,
+      scheduledTime: p.scheduled_time || p.delivered_at,
+      clientName: p.client_name || 'Cliente',
+      clientLogo: p.client_logo || null,
+      clientColor: p.client_color || null,
+    }));
+
+    res.json({ members, todaySchedule, editingPipeline, todayPosts, updatedAt: new Date().toISOString() });
   } catch (err) {
     console.error('[tv-dashboard] Error:', err);
     res.status(500).json({ error: 'Internal error' });

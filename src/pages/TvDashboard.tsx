@@ -4,9 +4,10 @@ import {
   Monitor, Clock, Coffee, Camera, Film, Palette, Megaphone, Image, Users,
   Wifi, WifiOff, Activity, CalendarDays, MapPin, CheckCircle2, Circle,
   XCircle, Rocket, Zap, TrendingUp, Music, Settings, Link as LinkIcon,
-  Flame, Sparkles, AlertTriangle, Gift, Star
+  Flame, Sparkles, AlertTriangle, Gift, Star, Send, Play, Pause,
+  Eye, Scissors, FileVideo, Instagram, Facebook, Youtube, Globe
 } from 'lucide-react';
-import { fetchAISeasonalAlerts, AISeasonalAlert, NICHE_OPTIONS } from '@/lib/seasonalDates';
+import { fetchAISeasonalAlerts, AISeasonalAlert } from '@/lib/seasonalDates';
 
 const VPS = 'https://agenciapulse.tech/api';
 
@@ -31,6 +32,7 @@ interface ScheduleItem {
   clientLogo?: string | null;
   clientColor?: string | null;
   videomakerName?: string | null;
+  videomakerAvatar?: string | null;
   startTime: string;
   endTime?: string;
   recordingType?: string;
@@ -40,20 +42,58 @@ interface ScheduleItem {
   address?: string;
 }
 
-/* ─── Brand colors (Pulse identity) ─────────────────────── */
+interface EditingTask {
+  id: string;
+  title: string;
+  column: string;
+  contentType: string;
+  clientName: string;
+  clientLogo?: string | null;
+  clientColor?: string | null;
+  editorName?: string | null;
+  editorAvatar?: string | null;
+  reviewerName?: string | null;
+  reviewerAvatar?: string | null;
+  timeOnTask: number;
+  isPaused: boolean;
+}
+
+interface ScheduledPost {
+  id: string;
+  title: string;
+  contentType: string;
+  platform?: string;
+  status: string;
+  scheduledTime?: string;
+  clientName: string;
+  clientLogo?: string | null;
+  clientColor?: string | null;
+}
+
+interface SeasonalSlide {
+  label: string;
+  date: string;
+  daysUntil: number;
+  urgency: 'high' | 'medium' | 'low';
+  suggestion: string;
+  clients: { name: string; niche: string }[];
+}
+
+/* ─── Brand ─────────────────────────────────────────────── */
 const PULSE_ORANGE = 'hsl(16, 82%, 51%)';
 const PULSE_DARK = '#0c0a14';
-const PULSE_DARK_CARD = 'rgba(255,255,255,0.04)';
+const PULSE_CARD = 'rgba(255,255,255,0.035)';
+const SPACE = "'Space Grotesk', sans-serif";
 
-const ROLE_CONFIG: Record<string, { label: string; color: string; icon: any; gradient: string }> = {
-  admin:         { label: 'Administração',  color: PULSE_ORANGE, icon: Monitor,   gradient: 'from-orange-500/20 to-orange-600/5' },
-  social_media:  { label: 'Social Media',   color: '#22c55e',    icon: Users,     gradient: 'from-green-500/15 to-green-600/5' },
-  videomaker:    { label: 'Videomaker',      color: '#3b82f6',    icon: Camera,    gradient: 'from-blue-500/15 to-blue-600/5' },
-  editor:        { label: 'Editor',          color: '#8b5cf6',    icon: Film,      gradient: 'from-violet-500/15 to-violet-600/5' },
-  designer:      { label: 'Designer',        color: '#f97316',    icon: Palette,   gradient: 'from-orange-400/15 to-orange-500/5' },
-  fotografo:     { label: 'Fotógrafo',       color: '#ec4899',    icon: Image,     gradient: 'from-pink-500/15 to-pink-600/5' },
-  endomarketing: { label: 'Endomarketing',   color: '#06b6d4',    icon: Megaphone, gradient: 'from-cyan-500/15 to-cyan-600/5' },
-  parceiro:      { label: 'Parceiro',        color: '#14b8a6',    icon: Megaphone, gradient: 'from-teal-500/15 to-teal-600/5' },
+const ROLE_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
+  admin:         { label: 'ADMINISTRAÇÃO',  color: PULSE_ORANGE, icon: Monitor },
+  social_media:  { label: 'SOCIAL MEDIA',   color: '#22c55e',    icon: Users },
+  videomaker:    { label: 'VIDEOMAKER',      color: '#3b82f6',    icon: Camera },
+  editor:        { label: 'EDITOR',          color: '#8b5cf6',    icon: Film },
+  designer:      { label: 'DESIGNER',        color: '#f97316',    icon: Palette },
+  fotografo:     { label: 'FOTÓGRAFO',       color: '#ec4899',    icon: Image },
+  endomarketing: { label: 'ENDOMARKETING',   color: '#06b6d4',    icon: Megaphone },
+  parceiro:      { label: 'PARCEIRO',        color: '#14b8a6',    icon: Megaphone },
 };
 
 const ACTIVITY_LABELS: Record<string, string> = {
@@ -66,222 +106,165 @@ const ACTIVITY_LABELS: Record<string, string> = {
   management: '📋 Gestão',
 };
 
-/* ─── Utils ─────────────────────────────────────────────── */
-function formatDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
-  return `${m}m ${String(s).padStart(2, '0')}s`;
-}
+const COLUMN_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
+  edicao:    { label: 'Editando',  color: '#8b5cf6', icon: Scissors },
+  revisao:   { label: 'Em Revisão', color: '#f59e0b', icon: Eye },
+  alteracao: { label: 'Alteração', color: '#ef4444', icon: FileVideo },
+};
 
+/* ─── Utils ─────────────────────────────────────────────── */
 function getInitials(name: string) {
   return name.split(' ').map(n => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
 }
 
-/* ─── Animation variants ────────────────────────────────── */
-const cardVariants = {
-  hidden: { opacity: 0, y: 20, scale: 0.95 },
-  visible: (i: number) => ({
-    opacity: 1, y: 0, scale: 1,
-    transition: { delay: i * 0.06, duration: 0.5, ease: 'easeOut' as const },
-  }),
-  exit: { opacity: 0, scale: 0.9, transition: { duration: 0.3 } },
-};
-
-const staggerContainer = {
-  visible: { transition: { staggerChildren: 0.06, delayChildren: 0.1 } },
-};
-
-const pulseGlow = {
-  animate: {
-    boxShadow: [
-      '0 0 20px rgba(234, 88, 12, 0)',
-      '0 0 30px rgba(234, 88, 12, 0.15)',
-      '0 0 20px rgba(234, 88, 12, 0)',
-    ],
-  },
-  transition: { duration: 3, repeat: Infinity, ease: 'easeInOut' as const },
-};
-
-/* ─── Animated number (imperceptible transitions) ────── */
-function AnimatedNumber({ value }: { value: number }) {
-  const motionVal = useMotionValue(value);
-  const rounded = useTransform(motionVal, v => Math.round(v));
-  const [display, setDisplay] = useState(value);
-
-  useEffect(() => {
-    const controls = animate(motionVal, value, { duration: 0.8, ease: 'easeOut' });
-    const unsub = rounded.on('change', v => setDisplay(v));
-    return () => { controls.stop(); unsub(); };
-  }, [value]);
-
-  return <span>{display}</span>;
-}
-
-/* ─── Member Card ───────────────────────────────────────── */
-function MemberCard({ member, index }: { member: TeamMember; index: number }) {
-  const config = ROLE_CONFIG[member.role] || ROLE_CONFIG.admin;
-  const Icon = config.icon;
-  const activityLabel = member.activity ? (ACTIVITY_LABELS[member.activity] || member.activity) : '☕ Disponível';
-  const isWorking = member.activity && member.activity !== 'idle' && member.activity !== 'paused';
-
+function SectionHeader({ icon: Icon, iconColor, title, badge, children }: {
+  icon: any; iconColor?: string; title: string; badge?: string | number; children?: React.ReactNode;
+}) {
   return (
-    <motion.div
-      custom={index}
-      variants={cardVariants}
-      initial={false}
-      animate="visible"
-      className={`relative rounded-2xl border overflow-hidden backdrop-blur-sm bg-gradient-to-br ${config.gradient}`}
-      style={{
-        borderColor: `${config.color}33`,
-        background: `linear-gradient(135deg, ${config.color}11, transparent 70%)`,
-      }}
-      whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
-    >
-      {/* Working glow effect */}
-      {isWorking && (
-        <motion.div
-          className="absolute inset-0 rounded-2xl pointer-events-none"
-          animate={{
-            boxShadow: [
-              `inset 0 0 30px ${config.color}11`,
-              `inset 0 0 40px ${config.color}22`,
-              `inset 0 0 30px ${config.color}11`,
-            ],
-          }}
-          transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-        />
-      )}
-
-      {/* Animated top accent bar */}
-      <motion.div
-        className="absolute top-0 left-0 right-0 h-[2px]"
-        style={{ background: `linear-gradient(90deg, transparent, ${config.color}, transparent)` }}
-        animate={isWorking ? { opacity: [0.3, 1, 0.3] } : { opacity: 0.4 }}
-        transition={{ duration: 2, repeat: Infinity }}
-      />
-
-      <div className="p-4 flex items-start gap-4">
-        {/* Avatar */}
-        <div className="relative flex-shrink-0">
-          {member.avatarUrl ? (
-            <img
-              src={member.avatarUrl}
-              alt={member.name}
-              className="w-14 h-14 rounded-xl object-cover border-2"
-              style={{ borderColor: config.color }}
-            />
-          ) : (
-            <div
-              className="w-14 h-14 rounded-xl flex items-center justify-center text-lg font-bold border-2"
-              style={{ borderColor: config.color, backgroundColor: `${config.color}18`, color: config.color }}
-            >
-              {getInitials(member.name)}
-            </div>
-          )}
-          {/* Online indicator */}
-          <motion.div
-            className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2"
-            style={{
-              borderColor: PULSE_DARK,
-              backgroundColor: member.isOnline ? '#22c55e' : '#6b7280',
-            }}
-            animate={member.isOnline ? { scale: [1, 1.15, 1], opacity: [1, 0.8, 1] } : {}}
-            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-          />
-        </div>
-
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <h3 className="text-base font-bold text-white truncate" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-            {member.name}
-          </h3>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <Icon className="w-3 h-3" style={{ color: config.color }} />
-            <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: config.color }}>
-              {config.label}
-            </span>
-          </div>
-
-          {/* Activity */}
-          <motion.div
-            className="mt-2 flex items-center gap-2"
-            key={member.activity}
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.4 }}
-          >
-            {isWorking && (
-              <motion.div
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: config.color }}
-                animate={{ scale: [1, 1.4, 1], opacity: [1, 0.5, 1] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-              />
-            )}
-            <span className={`text-sm font-semibold ${isWorking ? 'text-white' : 'text-white/40'}`}>
-              {activityLabel}
-            </span>
-          </motion.div>
-
-          {/* Task info */}
-          <AnimatePresence mode="wait">
-            {member.taskTitle && (
-              <motion.div
-                key={member.taskTitle}
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.3 }}
-                className="mt-1.5 bg-black/20 rounded-lg px-3 py-1.5 border border-white/5"
-              >
-                <p className="text-xs text-white/60 truncate">📌 {member.taskTitle}</p>
-                {member.clientName && (
-                  <p className="text-[11px] text-white/40 truncate">🏢 {member.clientName}</p>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-        </div>
-      </div>
-    </motion.div>
+    <div className="flex items-center gap-3 mb-4">
+      <Icon className="w-4 h-4" style={{ color: iconColor || PULSE_ORANGE }} />
+      <h2 className="text-xs font-bold text-white/50 uppercase tracking-[0.2em]" style={{ fontFamily: SPACE }}>
+        {title}
+      </h2>
+      <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent" />
+      {badge !== undefined && <span className="text-xs font-mono text-white/25">{badge}</span>}
+      {children}
+    </div>
   );
 }
 
-/* ─── Status Summary Bar ────────────────────────────────── */
+/* ─── Animated Number ───────────────────────────────────── */
+function AnimatedNumber({ value }: { value: number }) {
+  const mv = useMotionValue(value);
+  const rounded = useTransform(mv, v => Math.round(v));
+  const [d, setD] = useState(value);
+  useEffect(() => {
+    const c = animate(mv, value, { duration: 0.8, ease: 'easeOut' });
+    const u = rounded.on('change', v => setD(v));
+    return () => { c.stop(); u(); };
+  }, [value]);
+  return <span>{d}</span>;
+}
+
+/* ─── Floating Particles ────────────────────────────────── */
+function FloatingParticles() {
+  const particles = useMemo(() =>
+    Array.from({ length: 15 }, (_, i) => ({
+      id: i, x: Math.random() * 100, y: Math.random() * 100,
+      size: Math.random() * 2.5 + 1, duration: Math.random() * 25 + 15, delay: Math.random() * 10,
+    })), []);
+
+  return (
+    <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+      {particles.map(p => (
+        <motion.div key={p.id} className="absolute rounded-full"
+          style={{ left: `${p.x}%`, top: `${p.y}%`, width: p.size, height: p.size, background: PULSE_ORANGE }}
+          animate={{ y: [0, -30, 0], x: [0, 10, -8, 0], opacity: [0, 0.2, 0.1, 0] }}
+          transition={{ duration: p.duration, delay: p.delay, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ─── Status Summary ────────────────────────────────────── */
 function StatusSummary({ members }: { members: TeamMember[] }) {
   const online = members.filter(m => m.isOnline).length;
   const working = members.filter(m => m.isOnline && m.activity && m.activity !== 'idle' && m.activity !== 'paused').length;
   const idle = online - working;
 
   return (
-    <motion.div
-      className="flex items-center gap-5"
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.3, duration: 0.5 }}
-    >
+    <div className="flex items-center gap-5">
       {[
-        { icon: <div className="w-2.5 h-2.5 rounded-full bg-green-500" />, label: 'Online', value: online, color: '#22c55e' },
+        { icon: <div className="w-2 h-2 rounded-full bg-green-500" />, label: 'Online', value: online, color: '#22c55e' },
         { icon: <Zap className="w-3.5 h-3.5 text-orange-400" />, label: 'Produzindo', value: working, color: PULSE_ORANGE },
         { icon: <Coffee className="w-3.5 h-3.5 text-white/40" />, label: 'Disponível', value: idle, color: '#94a3b8' },
       ].map((item) => (
-        <div key={item.label} className="flex items-center gap-2">
+        <div key={item.label} className="flex items-center gap-1.5">
           {item.icon}
-          <span className="text-xs text-white/50 font-medium">{item.label}:</span>
-          <span className="text-sm font-bold" style={{ color: item.color }}>
-            <AnimatedNumber value={item.value} />
-          </span>
+          <span className="text-[10px] text-white/40 font-medium">{item.label}:</span>
+          <span className="text-sm font-bold" style={{ color: item.color }}><AnimatedNumber value={item.value} /></span>
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ─── Member Card (compact) ─────────────────────────────── */
+function MemberCard({ member }: { member: TeamMember }) {
+  const config = ROLE_CONFIG[member.role] || ROLE_CONFIG.admin;
+  const isWorking = member.activity && member.activity !== 'idle' && member.activity !== 'paused';
+  const activityLabel = member.activity ? (ACTIVITY_LABELS[member.activity] || member.activity) : '☕ Disponível';
+
+  return (
+    <motion.div
+      className="relative rounded-xl border overflow-hidden"
+      style={{
+        borderColor: `${config.color}25`,
+        background: `linear-gradient(135deg, ${config.color}0a, transparent 70%)`,
+      }}
+      layout
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      transition={{ duration: 0.4 }}
+    >
+      {isWorking && (
+        <motion.div className="absolute top-0 left-0 right-0 h-[2px]"
+          style={{ background: `linear-gradient(90deg, transparent, ${config.color}, transparent)` }}
+          animate={{ opacity: [0.3, 1, 0.3] }}
+          transition={{ duration: 2, repeat: Infinity }}
+        />
+      )}
+
+      <div className="p-3 flex items-center gap-3">
+        <div className="relative flex-shrink-0">
+          {member.avatarUrl ? (
+            <img src={member.avatarUrl} alt={member.name}
+              className="w-10 h-10 rounded-lg object-cover border"
+              style={{ borderColor: `${config.color}55` }}
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold border"
+              style={{ borderColor: `${config.color}55`, backgroundColor: `${config.color}15`, color: config.color }}>
+              {getInitials(member.name)}
+            </div>
+          )}
+          <motion.div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
+            style={{ borderColor: PULSE_DARK, backgroundColor: member.isOnline ? '#22c55e' : '#6b7280' }}
+            animate={member.isOnline ? { scale: [1, 1.2, 1] } : {}}
+            transition={{ duration: 2, repeat: Infinity }}
+          />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-bold text-white truncate">{member.name}</h3>
+          <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: config.color }}>
+            {config.label}
+          </span>
+          <motion.div className="flex items-center gap-1.5 mt-0.5" key={member.activity}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
+            {isWorking && (
+              <motion.div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: config.color }}
+                animate={{ scale: [1, 1.4, 1], opacity: [1, 0.5, 1] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+              />
+            )}
+            <span className={`text-[11px] font-medium ${isWorking ? 'text-white/70' : 'text-white/30'}`}>
+              {activityLabel}
+            </span>
+          </motion.div>
+          {member.clientName && (
+            <p className="text-[10px] text-white/35 truncate mt-0.5">🏢 {member.clientName}</p>
+          )}
+        </div>
+      </div>
     </motion.div>
   );
 }
 
-/* ─── Schedule Card ─────────────────────────────────────── */
-function ScheduleCard({ item, index }: { item: ScheduleItem; index: number }) {
+/* ─── Schedule Card (enhanced with logo + avatar) ───────── */
+function ScheduleCard({ item }: { item: ScheduleItem }) {
   const now = new Date();
   const [h, m] = item.startTime.split(':').map(Number);
   const startDate = new Date(); startDate.setHours(h, m, 0, 0);
@@ -289,90 +272,82 @@ function ScheduleCard({ item, index }: { item: ScheduleItem; index: number }) {
   const isDone = item.status === 'concluida';
   const isCancelled = item.status === 'cancelada';
 
-  const borderColor = isCancelled
-    ? 'rgba(239,68,68,0.25)'
-    : isDone
-    ? 'rgba(34,197,94,0.25)'
-    : isNow
-    ? `${PULSE_ORANGE}55`
-    : 'rgba(255,255,255,0.08)';
+  const borderColor = isCancelled ? 'rgba(239,68,68,0.2)' : isDone ? 'rgba(34,197,94,0.2)' : isNow ? `${PULSE_ORANGE}44` : 'rgba(255,255,255,0.06)';
 
   return (
     <motion.div
-      initial={false}
-      animate={{ opacity: isCancelled ? 0.35 : 1 }}
-      className={`relative rounded-xl overflow-hidden backdrop-blur-sm`}
+      className="relative rounded-xl overflow-hidden"
       style={{
         border: `1px solid ${borderColor}`,
-        background: isNow
-          ? `linear-gradient(135deg, ${PULSE_ORANGE}11, transparent)`
-          : isDone
-          ? 'linear-gradient(135deg, rgba(34,197,94,0.05), transparent)'
-          : PULSE_DARK_CARD,
+        background: isNow ? `linear-gradient(135deg, ${PULSE_ORANGE}0c, transparent)` : isDone ? 'linear-gradient(135deg, rgba(34,197,94,0.04), transparent)' : PULSE_CARD,
+        opacity: isCancelled ? 0.35 : 1,
       }}
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: isCancelled ? 0.35 : 1, y: 0 }}
+      transition={{ duration: 0.4 }}
     >
-      {/* Live glow */}
       {isNow && (
-        <motion.div
-          className="absolute inset-0 rounded-xl pointer-events-none"
-          animate={{
-            boxShadow: [
-              `inset 0 0 15px ${PULSE_ORANGE}11`,
-              `inset 0 0 25px ${PULSE_ORANGE}22`,
-              `inset 0 0 15px ${PULSE_ORANGE}11`,
-            ],
-          }}
-          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+        <motion.div className="absolute inset-0 rounded-xl pointer-events-none"
+          animate={{ boxShadow: [`inset 0 0 15px ${PULSE_ORANGE}0a`, `inset 0 0 25px ${PULSE_ORANGE}18`, `inset 0 0 15px ${PULSE_ORANGE}0a`] }}
+          transition={{ duration: 2.5, repeat: Infinity }}
         />
       )}
 
-      <div className="p-3">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-lg font-mono font-bold text-white/85 tabular-nums">{item.startTime}</span>
-          <div className="flex items-center gap-1.5">
-            {isDone && <CheckCircle2 className="w-4 h-4 text-green-400" />}
-            {isCancelled && <XCircle className="w-4 h-4 text-red-400" />}
+      <div className="p-3 flex items-center gap-3">
+        {/* Client Logo */}
+        <div className="flex-shrink-0 w-10 h-10 rounded-lg overflow-hidden border flex items-center justify-center"
+          style={{
+            borderColor: item.clientColor ? `hsl(${item.clientColor} / 0.3)` : 'rgba(255,255,255,0.1)',
+            backgroundColor: item.clientColor ? `hsl(${item.clientColor} / 0.1)` : 'rgba(255,255,255,0.03)',
+          }}>
+          {item.clientLogo ? (
+            <img src={item.clientLogo} alt="" className="w-full h-full object-contain p-1" />
+          ) : (
+            <span className="text-[10px] font-bold text-white/40">{getInitials(item.clientName)}</span>
+          )}
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-base font-mono font-bold text-white/85 tabular-nums">{item.startTime}</span>
             {isNow && (
-              <motion.div
-                className="flex items-center gap-1 rounded-full px-2 py-0.5"
-                style={{ backgroundColor: `${PULSE_ORANGE}22` }}
-                animate={{ opacity: [1, 0.6, 1] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-              >
-                <motion.div
-                  className="w-1.5 h-1.5 rounded-full"
-                  style={{ backgroundColor: PULSE_ORANGE }}
-                  animate={{ scale: [1, 1.5, 1] }}
-                  transition={{ duration: 1, repeat: Infinity }}
-                />
-                <span className="text-[10px] font-bold" style={{ color: PULSE_ORANGE }}>AO VIVO</span>
+              <motion.div className="flex items-center gap-1 rounded-full px-1.5 py-0.5" style={{ backgroundColor: `${PULSE_ORANGE}1a` }}
+                animate={{ opacity: [1, 0.5, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                <motion.div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: PULSE_ORANGE }}
+                  animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 1, repeat: Infinity }} />
+                <span className="text-[9px] font-bold" style={{ color: PULSE_ORANGE }}>AO VIVO</span>
               </motion.div>
             )}
-            {!isDone && !isCancelled && !isNow && <Circle className="w-3.5 h-3.5 text-white/15" />}
+            {isDone && <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />}
+            {isCancelled && <XCircle className="w-3.5 h-3.5 text-red-400" />}
             {item.type === 'event' && (
-              <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ backgroundColor: `${PULSE_ORANGE}18`, color: PULSE_ORANGE }}>
-                Evento
-              </span>
+              <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ backgroundColor: `${PULSE_ORANGE}15`, color: PULSE_ORANGE }}>Evento</span>
             )}
-            {item.recordingType === 'extra' && (
-              <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300">Extra</span>
-            )}
-            {item.recordingType === 'backup' && (
-              <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300">Backup</span>
-            )}
+            {item.recordingType === 'extra' && <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-300">Extra</span>}
+            {item.recordingType === 'backup' && <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300">Backup</span>}
           </div>
+          <p className="text-sm font-semibold text-white truncate">{item.clientName}</p>
+          {item.address && (
+            <div className="flex items-center gap-1 mt-0.5">
+              <MapPin className="w-2.5 h-2.5" style={{ color: `${PULSE_ORANGE}55` }} />
+              <span className="text-[10px] text-white/30 truncate">{item.address}</span>
+            </div>
+          )}
         </div>
-        <p className="text-sm font-semibold text-white truncate">{item.clientName}</p>
+
+        {/* Videomaker Avatar */}
         {item.videomakerName && (
-          <div className="flex items-center gap-1 mt-1">
-            <Camera className="w-3 h-3 text-blue-400/50" />
-            <span className="text-xs text-white/45">{item.videomakerName}</span>
-          </div>
-        )}
-        {item.address && (
-          <div className="flex items-center gap-1 mt-0.5">
-            <MapPin className="w-3 h-3" style={{ color: `${PULSE_ORANGE}66` }} />
-            <span className="text-[11px] text-white/35 truncate">{item.address}</span>
+          <div className="flex-shrink-0 flex flex-col items-center gap-0.5">
+            <div className="w-8 h-8 rounded-full overflow-hidden border border-blue-500/30 bg-blue-500/10 flex items-center justify-center">
+              {item.videomakerAvatar ? (
+                <img src={item.videomakerAvatar} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <Camera className="w-3.5 h-3.5 text-blue-400/60" />
+              )}
+            </div>
+            <span className="text-[9px] text-white/30 truncate max-w-[60px]">{item.videomakerName.split(' ')[0]}</span>
           </div>
         )}
       </div>
@@ -380,187 +355,194 @@ function ScheduleCard({ item, index }: { item: ScheduleItem; index: number }) {
   );
 }
 
-/* ─── Floating Particles Background ─────────────────────── */
-function FloatingParticles() {
-  const particles = useMemo(() =>
-    Array.from({ length: 20 }, (_, i) => ({
-      id: i,
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: Math.random() * 3 + 1,
-      duration: Math.random() * 20 + 15,
-      delay: Math.random() * 10,
-    })),
-  []);
+/* ─── Editing Pipeline Card ─────────────────────────────── */
+function EditingCard({ task }: { task: EditingTask }) {
+  const col = COLUMN_CONFIG[task.column] || COLUMN_CONFIG.edicao;
+  const ColIcon = col.icon;
+  const personName = task.column === 'revisao' ? task.reviewerName : task.editorName;
+  const personAvatar = task.column === 'revisao' ? task.reviewerAvatar : task.editorAvatar;
 
   return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      {particles.map(p => (
-        <motion.div
-          key={p.id}
-          className="absolute rounded-full"
-          style={{
-            left: `${p.x}%`,
-            top: `${p.y}%`,
-            width: p.size,
-            height: p.size,
-            background: `${PULSE_ORANGE}`,
-          }}
-          animate={{
-            y: [0, -40, 0],
-            x: [0, 15, -10, 0],
-            opacity: [0, 0.25, 0.15, 0],
-          }}
-          transition={{
-            duration: p.duration,
-            delay: p.delay,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          }}
-        />
-      ))}
-    </div>
+    <motion.div
+      className="rounded-xl overflow-hidden border"
+      style={{
+        borderColor: `${col.color}22`,
+        background: `linear-gradient(135deg, ${col.color}08, transparent 70%)`,
+      }}
+      layout
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      transition={{ duration: 0.4 }}
+    >
+      <div className="p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full" style={{ backgroundColor: `${col.color}18` }}>
+            <ColIcon className="w-3 h-3" style={{ color: col.color }} />
+            <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: col.color }}>{col.label}</span>
+          </div>
+          {task.isPaused && (
+            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/15">
+              <Pause className="w-2.5 h-2.5 text-amber-400" />
+              <span className="text-[8px] font-bold text-amber-400">PAUSADO</span>
+            </div>
+          )}
+          {!task.isPaused && task.column === 'edicao' && (
+            <motion.div className="flex items-center gap-1"
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 2, repeat: Infinity }}>
+              <Play className="w-2.5 h-2.5 text-green-400" />
+            </motion.div>
+          )}
+        </div>
+
+        <p className="text-sm font-semibold text-white truncate">{task.title}</p>
+
+        <div className="flex items-center gap-2 mt-2">
+          {/* Client */}
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            {task.clientLogo ? (
+              <img src={task.clientLogo} alt="" className="w-5 h-5 rounded object-contain" />
+            ) : (
+              <div className="w-5 h-5 rounded flex items-center justify-center text-[7px] font-bold"
+                style={{ backgroundColor: task.clientColor ? `hsl(${task.clientColor} / 0.15)` : 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)' }}>
+                {getInitials(task.clientName)}
+              </div>
+            )}
+            <span className="text-[11px] text-white/45 truncate">{task.clientName}</span>
+          </div>
+
+          {/* Editor/Reviewer */}
+          {personName && (
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className="w-6 h-6 rounded-full overflow-hidden border flex items-center justify-center"
+                style={{ borderColor: `${col.color}33`, backgroundColor: `${col.color}10` }}>
+                {personAvatar ? (
+                  <img src={personAvatar} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-[8px] font-bold" style={{ color: col.color }}>{getInitials(personName)}</span>
+                )}
+              </div>
+              <span className="text-[10px] text-white/35">{personName.split(' ')[0]}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1 mt-1.5">
+          <span className="text-[9px] uppercase tracking-wider font-medium px-1.5 py-0.5 rounded"
+            style={{ backgroundColor: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.25)' }}>
+            {task.contentType}
+          </span>
+        </div>
+      </div>
+    </motion.div>
   );
 }
 
-/* ─── YouTube Playlist Widget ───────────────────────────── */
+/* ─── Scheduled Post Card ───────────────────────────────── */
+function PostCard({ post }: { post: ScheduledPost }) {
+  const statusConfig: Record<string, { color: string; label: string }> = {
+    entregue:    { color: '#22c55e', label: 'Entregue' },
+    agendado:    { color: '#3b82f6', label: 'Agendado' },
+    publicado:   { color: '#22c55e', label: 'Publicado' },
+    revisao:     { color: '#f59e0b', label: 'Revisão' },
+    pendente:    { color: '#6b7280', label: 'Pendente' },
+    rascunho:    { color: '#6b7280', label: 'Rascunho' },
+  };
+  const st = statusConfig[post.status] || statusConfig.pendente;
+
+  return (
+    <motion.div className="rounded-lg border p-2.5 flex items-center gap-2.5"
+      style={{ borderColor: 'rgba(255,255,255,0.06)', background: PULSE_CARD }}
+      layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+      {post.clientLogo ? (
+        <img src={post.clientLogo} alt="" className="w-7 h-7 rounded object-contain flex-shrink-0" />
+      ) : (
+        <div className="w-7 h-7 rounded flex items-center justify-center text-[8px] font-bold flex-shrink-0"
+          style={{ backgroundColor: post.clientColor ? `hsl(${post.clientColor} / 0.12)` : 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.35)' }}>
+          {getInitials(post.clientName)}
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] font-semibold text-white/70 truncate">{post.title}</p>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className="text-[9px] text-white/25">{post.clientName}</span>
+          <span className="text-[9px] uppercase font-bold px-1 py-0.5 rounded"
+            style={{ backgroundColor: `${st.color}15`, color: st.color }}>{st.label}</span>
+        </div>
+      </div>
+      <div className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-white/5 text-white/25">
+        {post.contentType}
+      </div>
+    </motion.div>
+  );
+}
+
+/* ─── YouTube Player ────────────────────────────────────── */
 function YouTubePlayer({ url }: { url: string }) {
   const embedUrl = useMemo(() => {
     if (!url) return '';
-    // Handle playlist URL
     const listMatch = url.match(/[?&]list=([^&]+)/);
-    if (listMatch) {
-      return `https://www.youtube.com/embed/videoseries?list=${listMatch[1]}&autoplay=1&mute=1&loop=1&controls=0&showinfo=0&rel=0`;
-    }
-    // Handle single video
+    if (listMatch) return `https://www.youtube.com/embed/videoseries?list=${listMatch[1]}&autoplay=1&mute=1&loop=1&controls=0&showinfo=0&rel=0`;
     const videoMatch = url.match(/(?:watch\?v=|youtu\.be\/|embed\/)([^&?]+)/);
-    if (videoMatch) {
-      return `https://www.youtube.com/embed/${videoMatch[1]}?autoplay=1&mute=1&loop=1&controls=0&showinfo=0&rel=0&playlist=${videoMatch[1]}`;
-    }
+    if (videoMatch) return `https://www.youtube.com/embed/${videoMatch[1]}?autoplay=1&mute=1&loop=1&controls=0&showinfo=0&rel=0&playlist=${videoMatch[1]}`;
     return '';
   }, [url]);
 
   if (!embedUrl) return null;
-
   return (
-    <motion.div
-      className="rounded-2xl overflow-hidden border relative"
-      style={{
-        borderColor: `${PULSE_ORANGE}33`,
-        background: `linear-gradient(135deg, ${PULSE_ORANGE}08, transparent 70%)`,
-        boxShadow: `0 0 30px ${PULSE_ORANGE}11`,
-      }}
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.6 }}
-    >
-      {/* Top accent */}
-      <motion.div
-        className="absolute top-0 left-0 right-0 h-[2px] z-10"
-        style={{ background: `linear-gradient(90deg, transparent, ${PULSE_ORANGE}, transparent)` }}
-        animate={{ opacity: [0.3, 0.8, 0.3] }}
-        transition={{ duration: 3, repeat: Infinity }}
-      />
-
-      <div className="flex items-center gap-2 px-4 py-2.5" style={{ background: 'rgba(255,255,255,0.03)' }}>
-        <Music className="w-3.5 h-3.5" style={{ color: PULSE_ORANGE }} />
-        <span className="text-[11px] font-bold text-white/40 uppercase tracking-[0.15em]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-          Pulse Radio
-        </span>
-        <motion.div
-          className="flex gap-0.5 ml-2"
-          animate={{ opacity: [0.4, 1, 0.4] }}
-          transition={{ duration: 1.5, repeat: Infinity }}
-        >
+    <motion.div className="rounded-xl overflow-hidden border" style={{ borderColor: `${PULSE_ORANGE}22` }}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
+      <div className="flex items-center gap-2 px-3 py-1.5" style={{ background: 'rgba(255,255,255,0.02)' }}>
+        <Music className="w-3 h-3" style={{ color: PULSE_ORANGE }} />
+        <span className="text-[10px] font-bold text-white/35 uppercase tracking-[0.15em]">Pulse Radio</span>
+        <motion.div className="flex gap-0.5 ml-1" animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.5, repeat: Infinity }}>
           {[3, 5, 2, 4, 3].map((h, i) => (
-            <motion.div
-              key={i}
-              className="w-[3px] rounded-full"
-              style={{ backgroundColor: PULSE_ORANGE, height: h * 2 }}
-              animate={{ height: [h * 2, h * 4, h * 2] }}
-              transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15, ease: 'easeInOut' }}
-            />
+            <motion.div key={i} className="w-[2px] rounded-full" style={{ backgroundColor: PULSE_ORANGE, height: h * 2 }}
+              animate={{ height: [h * 2, h * 3.5, h * 2] }}
+              transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.12 }} />
           ))}
         </motion.div>
       </div>
-
       <div className="aspect-video">
-        <iframe
-          src={embedUrl}
-          className="w-full h-full"
-          allow="autoplay; encrypted-media"
-          allowFullScreen
-          style={{ border: 0 }}
-        />
+        <iframe src={embedUrl} className="w-full h-full" allow="autoplay; encrypted-media" allowFullScreen style={{ border: 0 }} />
       </div>
     </motion.div>
   );
 }
 
-/* ─── Playlist URL Editor (click to edit) ───────────────── */
+/* ─── Playlist Editor ───────────────────────────────────── */
 function PlaylistEditor({ url, onSave }: { url: string; onSave: (url: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(url);
 
   if (!editing) {
     return (
-      <button
-        onClick={() => { setDraft(url); setEditing(true); }}
-        className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider px-3 py-1.5 rounded-lg transition-all hover:scale-105"
-        style={{ backgroundColor: `${PULSE_ORANGE}20`, color: PULSE_ORANGE, border: `1px solid ${PULSE_ORANGE}40` }}
-        title="Adicionar link do YouTube"
-      >
-        <LinkIcon className="w-3.5 h-3.5" />
-        <span>{url ? 'Trocar Link' : 'Adicionar Link'}</span>
+      <button onClick={() => { setDraft(url); setEditing(true); }}
+        className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg transition-all hover:scale-105"
+        style={{ backgroundColor: `${PULSE_ORANGE}18`, color: PULSE_ORANGE, border: `1px solid ${PULSE_ORANGE}33` }}>
+        <LinkIcon className="w-3 h-3" />
+        <span>{url ? 'Trocar' : 'Adicionar Link'}</span>
       </button>
     );
   }
 
   return (
-    <motion.div
-      className="flex items-center gap-2"
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-    >
-      <input
-        type="text"
-        value={draft}
-        onChange={e => setDraft(e.target.value)}
-        placeholder="Cole o link da playlist do YouTube"
-        className="text-xs bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white/80 placeholder:text-white/20 w-80 outline-none focus:border-orange-500/50"
+    <motion.div className="flex items-center gap-2" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}>
+      <input type="text" value={draft} onChange={e => setDraft(e.target.value)}
+        placeholder="Link da playlist YouTube"
+        className="text-xs bg-white/5 border border-white/10 rounded-lg px-3 py-1 text-white/80 placeholder:text-white/20 w-72 outline-none focus:border-orange-500/50"
         autoFocus
-        onKeyDown={e => {
-          if (e.key === 'Enter') { onSave(draft); setEditing(false); }
-          if (e.key === 'Escape') setEditing(false);
-        }}
+        onKeyDown={e => { if (e.key === 'Enter') { onSave(draft); setEditing(false); } if (e.key === 'Escape') setEditing(false); }}
       />
-      <button
-        onClick={() => { onSave(draft); setEditing(false); }}
-        className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md"
-        style={{ backgroundColor: `${PULSE_ORANGE}22`, color: PULSE_ORANGE }}
-      >
-        Salvar
-      </button>
-      <button
-        onClick={() => setEditing(false)}
-        className="text-[10px] text-white/30 hover:text-white/60"
-      >
-        ✕
-      </button>
+      <button onClick={() => { onSave(draft); setEditing(false); }}
+        className="text-[9px] font-bold uppercase px-2 py-1 rounded-md" style={{ backgroundColor: `${PULSE_ORANGE}20`, color: PULSE_ORANGE }}>Salvar</button>
+      <button onClick={() => setEditing(false)} className="text-[10px] text-white/30 hover:text-white/60">✕</button>
     </motion.div>
   );
 }
 
-/* ─── Seasonal Dates Banner Slider ──────────────────────── */
-interface SeasonalSlide {
-  label: string;
-  date: string;
-  daysUntil: number;
-  urgency: 'high' | 'medium' | 'low';
-  suggestion: string;
-  clients: { name: string; niche: string }[];
-}
-
+/* ─── Seasonal Banner ───────────────────────────────────── */
 function SeasonalBanner({ slides }: { slides: SeasonalSlide[] }) {
   const [current, setCurrent] = useState(0);
 
@@ -573,64 +555,37 @@ function SeasonalBanner({ slides }: { slides: SeasonalSlide[] }) {
   if (!slides.length) return null;
 
   const urgencyConfig = {
-    high: { color: '#ef4444', bg: 'rgba(239,68,68,0.12)', icon: Flame, label: 'URGENTE', glow: 'rgba(239,68,68,0.3)' },
-    medium: { color: PULSE_ORANGE, bg: `${PULSE_ORANGE}18`, icon: AlertTriangle, label: 'EM BREVE', glow: `${PULSE_ORANGE}33` },
-    low: { color: '#22c55e', bg: 'rgba(34,197,94,0.12)', icon: Gift, label: 'PLANEJE-SE', glow: 'rgba(34,197,94,0.2)' },
+    high:   { color: '#ef4444', bg: 'rgba(239,68,68,0.1)',  icon: Flame, label: 'URGENTE', glow: 'rgba(239,68,68,0.25)' },
+    medium: { color: PULSE_ORANGE, bg: `${PULSE_ORANGE}14`, icon: AlertTriangle, label: 'EM BREVE', glow: `${PULSE_ORANGE}28` },
+    low:    { color: '#22c55e', bg: 'rgba(34,197,94,0.1)',   icon: Gift, label: 'PLANEJE-SE', glow: 'rgba(34,197,94,0.18)' },
   };
 
   return (
-    <motion.div
-      className="mb-8 relative overflow-hidden rounded-2xl"
-      style={{
-        background: `linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01))`,
-        border: '1px solid rgba(255,255,255,0.08)',
-      }}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.35, duration: 0.5 }}
-    >
-      {/* Shimmer accent */}
-      <motion.div
-        className="absolute top-0 left-0 right-0 h-[2px]"
+    <motion.div className="relative overflow-hidden rounded-2xl"
+      style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}
+      initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.5 }}>
+      <motion.div className="absolute top-0 left-0 right-0 h-[2px]"
         style={{ background: `linear-gradient(90deg, transparent, ${PULSE_ORANGE}, transparent)` }}
-        animate={{ opacity: [0.3, 0.8, 0.3] }}
-        transition={{ duration: 4, repeat: Infinity }}
-      />
+        animate={{ opacity: [0.2, 0.7, 0.2] }}
+        transition={{ duration: 4, repeat: Infinity }} />
 
-      {/* Section header */}
-      <div className="flex items-center gap-3 px-5 pt-4 pb-2">
-        <motion.div
-          animate={{ rotate: [0, 15, -15, 0] }}
-          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-        >
-          <Sparkles className="w-4 h-4" style={{ color: PULSE_ORANGE }} />
+      <div className="flex items-center gap-3 px-5 pt-3 pb-1.5">
+        <motion.div animate={{ rotate: [0, 12, -12, 0] }} transition={{ duration: 3, repeat: Infinity }}>
+          <Sparkles className="w-3.5 h-3.5" style={{ color: PULSE_ORANGE }} />
         </motion.div>
-        <h2 className="text-xs font-bold text-white/50 uppercase tracking-[0.2em]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-          Datas Sazonais
-        </h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent" />
-        {/* Slide indicators */}
-        <div className="flex gap-1.5">
+        <h2 className="text-[10px] font-bold text-white/45 uppercase tracking-[0.2em]" style={{ fontFamily: SPACE }}>Datas Sazonais</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-white/8 to-transparent" />
+        <div className="flex gap-1">
           {slides.map((_, i) => (
-            <motion.div
-              key={i}
-              className="rounded-full cursor-pointer"
-              style={{
-                width: current === i ? 16 : 6,
-                height: 6,
-                backgroundColor: current === i ? PULSE_ORANGE : 'rgba(255,255,255,0.15)',
-              }}
-              animate={{ width: current === i ? 16 : 6 }}
-              transition={{ duration: 0.3 }}
-              onClick={() => setCurrent(i)}
-            />
+            <motion.div key={i} className="rounded-full cursor-pointer"
+              style={{ width: current === i ? 14 : 5, height: 5, backgroundColor: current === i ? PULSE_ORANGE : 'rgba(255,255,255,0.12)' }}
+              animate={{ width: current === i ? 14 : 5 }} transition={{ duration: 0.3 }}
+              onClick={() => setCurrent(i)} />
           ))}
         </div>
-        <span className="text-xs font-mono text-white/20">{current + 1}/{slides.length}</span>
       </div>
 
-      {/* Slides */}
-      <div className="relative h-[140px] px-5 pb-4">
+      <div className="relative h-[120px] px-5 pb-3">
         <AnimatePresence mode="wait">
           {slides.map((slide, i) => {
             if (i !== current) return null;
@@ -638,87 +593,52 @@ function SeasonalBanner({ slides }: { slides: SeasonalSlide[] }) {
             const UrgIcon = urg.icon;
 
             return (
-              <motion.div
-                key={`${slide.label}-${i}`}
-                className="absolute inset-x-5 top-0 bottom-4 flex gap-5"
-                initial={{ opacity: 0, x: 60 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -60 }}
-                transition={{ duration: 0.5, ease: 'easeInOut' }}
-              >
-                {/* Countdown block */}
-                <motion.div
-                  className="flex-shrink-0 w-[130px] rounded-xl flex flex-col items-center justify-center relative overflow-hidden"
-                  style={{
-                    background: urg.bg,
-                    border: `1px solid ${urg.color}33`,
-                    boxShadow: `0 0 30px ${urg.glow}`,
-                  }}
-                  animate={{
-                    boxShadow: [`0 0 20px ${urg.glow}`, `0 0 40px ${urg.glow}`, `0 0 20px ${urg.glow}`],
-                  }}
-                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                >
-                  <motion.div
-                    animate={slide.urgency === 'high' ? { scale: [1, 1.1, 1] } : {}}
-                    transition={{ duration: 1.5, repeat: Infinity }}
-                  >
-                    <span className="text-4xl font-black tabular-nums" style={{ color: urg.color, fontFamily: "'Space Grotesk', sans-serif" }}>
-                      {slide.daysUntil}
-                    </span>
-                  </motion.div>
-                  <span className="text-[10px] font-bold uppercase tracking-[0.15em] mt-0.5" style={{ color: `${urg.color}cc` }}>
+              <motion.div key={`${slide.label}-${i}`} className="absolute inset-x-5 top-0 bottom-3 flex gap-4"
+                initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }}
+                transition={{ duration: 0.45, ease: 'easeInOut' }}>
+                {/* Countdown */}
+                <motion.div className="flex-shrink-0 w-[110px] rounded-xl flex flex-col items-center justify-center"
+                  style={{ background: urg.bg, border: `1px solid ${urg.color}28`, boxShadow: `0 0 25px ${urg.glow}` }}
+                  animate={{ boxShadow: [`0 0 15px ${urg.glow}`, `0 0 35px ${urg.glow}`, `0 0 15px ${urg.glow}`] }}
+                  transition={{ duration: 3, repeat: Infinity }}>
+                  <motion.span className="text-3xl font-black tabular-nums" style={{ color: urg.color, fontFamily: SPACE }}
+                    animate={slide.urgency === 'high' ? { scale: [1, 1.08, 1] } : {}}
+                    transition={{ duration: 1.5, repeat: Infinity }}>
+                    {slide.daysUntil}
+                  </motion.span>
+                  <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5" style={{ color: `${urg.color}bb` }}>
                     {slide.daysUntil === 1 ? 'dia' : 'dias'}
                   </span>
-                  <div className="flex items-center gap-1 mt-2 px-2 py-0.5 rounded-full" style={{ backgroundColor: `${urg.color}22` }}>
-                    <UrgIcon className="w-3 h-3" style={{ color: urg.color }} />
-                    <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: urg.color }}>{urg.label}</span>
+                  <div className="flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full" style={{ backgroundColor: `${urg.color}1a` }}>
+                    <UrgIcon className="w-2.5 h-2.5" style={{ color: urg.color }} />
+                    <span className="text-[8px] font-bold uppercase" style={{ color: urg.color }}>{urg.label}</span>
                   </div>
                 </motion.div>
 
-                {/* Info block */}
+                {/* Info */}
                 <div className="flex-1 flex flex-col justify-center min-w-0">
-                  <h3 className="text-xl font-bold text-white truncate" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                    {slide.label}
-                  </h3>
-                  <p className="text-xs text-white/40 mt-0.5 font-mono">
-                    📅 {new Date(slide.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                  <h3 className="text-lg font-bold text-white truncate" style={{ fontFamily: SPACE }}>{slide.label}</h3>
+                  <p className="text-[10px] text-white/35 mt-0.5 font-mono">
+                    📅 {new Date(slide.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })}
                   </p>
                   {slide.suggestion && (
-                    <motion.p
-                      className="text-xs text-white/50 mt-2 line-clamp-2 leading-relaxed"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.3 }}
-                    >
-                      💡 {slide.suggestion}
-                    </motion.p>
+                    <p className="text-[10px] text-white/40 mt-1.5 line-clamp-2">💡 {slide.suggestion}</p>
                   )}
                 </div>
 
-                {/* Clients badges */}
-                <div className="flex-shrink-0 flex flex-col justify-center gap-1.5 max-w-[280px]">
-                  <span className="text-[9px] uppercase tracking-[0.15em] font-bold text-white/25 mb-1">Clientes do nicho</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {slide.clients.slice(0, 6).map((c, ci) => (
-                      <motion.div
-                        key={ci}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg"
-                        style={{
-                          background: `${urg.color}11`,
-                          border: `1px solid ${urg.color}22`,
-                        }}
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.2 + ci * 0.08 }}
-                      >
-                        <Star className="w-2.5 h-2.5" style={{ color: `${urg.color}88` }} />
-                        <span className="text-[11px] font-semibold text-white/70 truncate max-w-[100px]">{c.name}</span>
+                {/* Clients */}
+                <div className="flex-shrink-0 flex flex-col justify-center gap-1 max-w-[250px]">
+                  <span className="text-[8px] uppercase tracking-wider font-bold text-white/20 mb-0.5">Clientes</span>
+                  <div className="flex flex-wrap gap-1">
+                    {slide.clients.slice(0, 5).map((c, ci) => (
+                      <motion.div key={ci} className="px-2 py-0.5 rounded-md text-[10px] font-medium text-white/60"
+                        style={{ background: `${urg.color}0c`, border: `1px solid ${urg.color}1a` }}
+                        initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.15 + ci * 0.06 }}>
+                        {c.name}
                       </motion.div>
                     ))}
-                    {slide.clients.length > 6 && (
-                      <span className="text-[10px] text-white/25 px-2 py-1">+{slide.clients.length - 6}</span>
-                    )}
+                    {slide.clients.length > 5 && <span className="text-[9px] text-white/20 px-1">+{slide.clients.length - 5}</span>}
                   </div>
                 </div>
               </motion.div>
@@ -730,39 +650,38 @@ function SeasonalBanner({ slides }: { slides: SeasonalSlide[] }) {
   );
 }
 
-/* ─── Main TV Dashboard ─────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════
+   MAIN TV DASHBOARD
+   ═══════════════════════════════════════════════════════════ */
 export default function TvDashboard() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
+  const [editingPipeline, setEditingPipeline] = useState<EditingTask[]>([]);
+  const [todayPosts, setTodayPosts] = useState<ScheduledPost[]>([]);
   const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());
   const [playlistUrl, setPlaylistUrl] = useState('');
   const [seasonalSlides, setSeasonalSlides] = useState<SeasonalSlide[]>([]);
-  const timerRef = useRef<number>();
   const isFirstLoad = useRef(true);
 
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch(`${VPS}/tv-dashboard`);
-      if (!res.ok) throw new Error('fetch failed');
+      if (!res.ok) throw new Error('fail');
       const data = await res.json();
       setMembers(data.members || []);
       setSchedule(data.todaySchedule || []);
+      setEditingPipeline(data.editingPipeline || []);
+      setTodayPosts(data.todayPosts || []);
       setConnected(true);
       isFirstLoad.current = false;
-    } catch {
-      setConnected(false);
-    }
+    } catch { setConnected(false); }
   }, []);
 
-  // Load playlist URL
   const fetchPlaylist = useCallback(async () => {
     try {
       const res = await fetch(`${VPS}/data/tv_settings?key=eq.youtube_playlist_url`);
-      if (res.ok) {
-        const rows = await res.json();
-        if (rows.length > 0 && rows[0].value) setPlaylistUrl(rows[0].value);
-      }
+      if (res.ok) { const rows = await res.json(); if (rows.length > 0 && rows[0].value) setPlaylistUrl(rows[0].value); }
     } catch {}
   }, []);
 
@@ -770,32 +689,22 @@ export default function TvDashboard() {
     setPlaylistUrl(url);
     try {
       await fetch(`${VPS}/data/tv_settings?key=eq.youtube_playlist_url`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value: url, updated_at: new Date().toISOString() }),
       });
     } catch {}
   }, []);
 
-  // Fetch seasonal alerts
   const fetchSeasonal = useCallback(async () => {
     try {
       const alerts = await fetchAISeasonalAlerts();
       if (!alerts.length) return;
-      // Group dates across clients, merge by label+date
       const dateMap = new Map<string, SeasonalSlide>();
       for (const alert of alerts) {
         for (const d of alert.dates) {
           const key = `${d.label}|${d.date}`;
           if (!dateMap.has(key)) {
-            dateMap.set(key, {
-              label: d.label,
-              date: d.date,
-              daysUntil: d.days_until,
-              urgency: d.urgency,
-              suggestion: d.suggestion,
-              clients: [],
-            });
+            dateMap.set(key, { label: d.label, date: d.date, daysUntil: d.days_until, urgency: d.urgency, suggestion: d.suggestion, clients: [] });
           }
           const entry = dateMap.get(key)!;
           if (!entry.clients.find(c => c.name === alert.clientName)) {
@@ -803,290 +712,208 @@ export default function TvDashboard() {
           }
         }
       }
-      const sorted = Array.from(dateMap.values()).sort((a, b) => a.daysUntil - b.daysUntil).slice(0, 15);
-      setSeasonalSlides(sorted);
-    } catch (e) {
-      console.error('Seasonal fetch error:', e);
-    }
+      setSeasonalSlides(Array.from(dateMap.values()).sort((a, b) => a.daysUntil - b.daysUntil).slice(0, 15));
+    } catch (e) { console.error('Seasonal fetch error:', e); }
   }, []);
 
   useEffect(() => {
-    fetchData();
-    fetchPlaylist();
-    fetchSeasonal();
+    fetchData(); fetchPlaylist(); fetchSeasonal();
     const iv = setInterval(fetchData, 10_000);
     return () => clearInterval(iv);
   }, [fetchData, fetchPlaylist, fetchSeasonal]);
 
-  // Clock tick
   useEffect(() => {
-    timerRef.current = window.setInterval(() => setClock(new Date()), 1000);
-    return () => clearInterval(timerRef.current);
+    const iv = window.setInterval(() => setClock(new Date()), 1000);
+    return () => clearInterval(iv);
   }, []);
-
 
   const onlineMembers = members.filter(m => m.isOnline);
   const offlineMembers = members.filter(m => !m.isOnline);
-  const hasLoaded = !isFirstLoad.current;
-
   const timeStr = clock.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const dateStr = clock.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 
   return (
-    <div
-      className="min-h-screen text-white p-6 overflow-hidden relative"
-      style={{ fontFamily: "'Space Grotesk', 'Inter', sans-serif", backgroundColor: PULSE_DARK }}
-    >
+    <div className="min-h-screen text-white overflow-hidden relative" style={{ fontFamily: `${SPACE}, 'Inter', sans-serif`, backgroundColor: PULSE_DARK }}>
       <FloatingParticles />
+      <div className="fixed inset-0 pointer-events-none z-0" style={{ background: `radial-gradient(ellipse 80% 50% at 50% -10%, ${PULSE_ORANGE}06, transparent 70%)` }} />
 
-      {/* Gradient overlay */}
-      <div
-        className="fixed inset-0 pointer-events-none z-0"
-        style={{
-          background: `radial-gradient(ellipse 80% 50% at 50% -10%, ${PULSE_ORANGE}08, transparent 70%)`,
-        }}
-      />
-
-      <div className="relative z-10">
-        {/* ─── Header ────────────────────────────────────── */}
-        <motion.div
-          className="flex items-center justify-between mb-8"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: 'easeOut' }}
-        >
-          <div className="flex items-center gap-5">
-            {/* Logo / Brand */}
-            <motion.div
-              className="flex items-center gap-3"
-              {...pulseGlow}
-            >
-              <motion.div
-                className="w-10 h-10 rounded-xl flex items-center justify-center"
-                style={{
-                  background: `linear-gradient(135deg, ${PULSE_ORANGE}, hsl(16, 82%, 40%))`,
-                  boxShadow: `0 4px 20px ${PULSE_ORANGE}44`,
-                }}
-                animate={{ rotate: [0, 3, -3, 0] }}
-                transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
-              >
+      <div className="relative z-10 p-5">
+        {/* ─── Header ───────────────────────────────────── */}
+        <motion.div className="flex items-center justify-between mb-5"
+          initial={{ opacity: 0, y: -15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              <motion.div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                style={{ background: `linear-gradient(135deg, ${PULSE_ORANGE}, hsl(16, 82%, 40%))`, boxShadow: `0 4px 15px ${PULSE_ORANGE}40` }}
+                animate={{ rotate: [0, 3, -3, 0] }} transition={{ duration: 6, repeat: Infinity }}>
                 <Rocket className="w-5 h-5 text-white" />
               </motion.div>
               <div>
-                <h1 className="text-2xl font-black tracking-tight" style={{ color: PULSE_ORANGE }}>
-                  PULSE
-                </h1>
-                <p className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-medium -mt-0.5">
-                  Growth Marketing
-                </p>
+                <h1 className="text-xl font-black tracking-tight" style={{ color: PULSE_ORANGE }}>PULSE</h1>
+                <p className="text-[9px] uppercase tracking-[0.3em] text-white/25 font-medium -mt-0.5">Growth Marketing</p>
               </div>
-            </motion.div>
-
-            <div className="h-10 w-px bg-white/10" />
-
-            <motion.div
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-white/5"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.4 }}
-            >
-              <TrendingUp className="w-3.5 h-3.5" style={{ color: PULSE_ORANGE }} />
-              <span className="text-xs font-semibold text-white/60 uppercase tracking-wider">Painel Operacional</span>
-            </motion.div>
+            </div>
+            <div className="h-8 w-px bg-white/8" />
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-white/8 bg-white/3">
+              <TrendingUp className="w-3 h-3" style={{ color: PULSE_ORANGE }} />
+              <span className="text-[10px] font-semibold text-white/50 uppercase tracking-wider">Painel Operacional</span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-5">
             <StatusSummary members={members} />
-
-            <div className="h-8 w-px bg-white/10" />
-
-            {/* Connection */}
-            <motion.div
-              animate={{ opacity: connected ? 1 : 0.5 }}
-              className="flex items-center gap-1.5"
-            >
+            <div className="h-7 w-px bg-white/8" />
+            <motion.div className="flex items-center gap-1.5" animate={{ opacity: connected ? 1 : 0.5 }}>
               {connected ? (
-                <motion.div animate={{ opacity: [1, 0.5, 1] }} transition={{ duration: 2, repeat: Infinity }}>
-                  <Wifi className="w-4 h-4 text-green-400" />
+                <motion.div animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 2, repeat: Infinity }}>
+                  <Wifi className="w-3.5 h-3.5 text-green-400" />
                 </motion.div>
-              ) : (
-                <WifiOff className="w-4 h-4 text-red-400" />
-              )}
-              <span className="text-[10px] text-white/30 font-medium">{connected ? 'LIVE' : 'OFFLINE'}</span>
+              ) : <WifiOff className="w-3.5 h-3.5 text-red-400" />}
+              <span className="text-[9px] text-white/25 font-medium">{connected ? 'LIVE' : 'OFF'}</span>
             </motion.div>
-
-            {/* Clock */}
             <div className="text-right">
-              <motion.div
-                key={timeStr}
-                className="text-2xl font-mono font-bold tabular-nums text-white/90"
-                initial={false}
-                animate={{ opacity: 1 }}
-              >
-                {timeStr}
-              </motion.div>
-              <div className="text-[11px] text-white/30 capitalize font-medium">{dateStr}</div>
+              <div className="text-xl font-mono font-bold tabular-nums text-white/85">{timeStr}</div>
+              <div className="text-[10px] text-white/25 capitalize">{dateStr}</div>
             </div>
           </div>
         </motion.div>
 
-        {/* ─── Seasonal Dates Banner ────────────────────── */}
-        {seasonalSlides.length > 0 && <SeasonalBanner slides={seasonalSlides} />}
-
-        {/* ─── Online Members ────────────────────────────── */}
-        {onlineMembers.length > 0 && (
-          <motion.div
-            className="mb-8"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-          >
-            <div className="flex items-center gap-3 mb-4">
-              <motion.div
-                className="w-2.5 h-2.5 rounded-full"
-                style={{ backgroundColor: '#22c55e' }}
-                animate={{ scale: [1, 1.3, 1], opacity: [1, 0.5, 1] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-              />
-              <h2 className="text-xs font-bold text-white/50 uppercase tracking-[0.2em]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                Equipe Online
-              </h2>
-              <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent" />
-              <span className="text-xs font-mono text-white/25">{onlineMembers.length} membros</span>
-            </div>
-            <div
-              className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
-            >
-              {onlineMembers.map((m, i) => (
-                <MemberCard key={m.id} member={m} index={i} />
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        {/* ─── Schedule ──────────────────────────────────── */}
-        {schedule.length > 0 && (
-          <motion.div
-            className="mb-8"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4, duration: 0.5 }}
-          >
-            <div className="flex items-center gap-3 mb-4">
-              <CalendarDays className="w-4 h-4" style={{ color: PULSE_ORANGE }} />
-              <h2 className="text-xs font-bold text-white/50 uppercase tracking-[0.2em]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                Agenda do Dia
-              </h2>
-              <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent" />
-              <span className="text-xs font-mono text-white/25">{schedule.length} gravações</span>
-            </div>
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {schedule.map((item, idx) => (
-                <ScheduleCard key={item.id} item={item} index={idx} />
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        {/* ─── YouTube Playlist ──────────────────────────── */}
-        <motion.div
-          className="mb-8"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5, duration: 0.5 }}
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <Music className="w-4 h-4" style={{ color: PULSE_ORANGE }} />
-            <h2 className="text-xs font-bold text-white/50 uppercase tracking-[0.2em]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-              Pulse Radio
-            </h2>
-            <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent" />
-            <PlaylistEditor url={playlistUrl} onSave={savePlaylist} />
+        {/* ─── Seasonal Banner ──────────────────────────── */}
+        {seasonalSlides.length > 0 && (
+          <div className="mb-5">
+            <SeasonalBanner slides={seasonalSlides} />
           </div>
-          {playlistUrl ? (
-            <div className="max-w-lg">
-              <YouTubePlayer url={playlistUrl} />
-            </div>
-          ) : (
-            <div
-              className="rounded-2xl border border-dashed border-white/10 p-8 text-center max-w-lg"
-              style={{ background: 'rgba(255,255,255,0.02)' }}
-            >
-              <Music className="w-8 h-8 mx-auto mb-2" style={{ color: `${PULSE_ORANGE}33` }} />
-              <p className="text-xs text-white/25">Clique em "Playlist" acima para configurar</p>
-            </div>
-          )}
-        </motion.div>
+        )}
 
-        {/* ─── Offline Members ───────────────────────────── */}
-        {offlineMembers.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.6 }}
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-2.5 h-2.5 rounded-full bg-white/15" />
-              <h2 className="text-xs font-bold text-white/25 uppercase tracking-[0.2em]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                Offline
-              </h2>
-              <div className="flex-1 h-px bg-white/5" />
+        {/* ─── Main Grid: 3 columns ────────────────────── */}
+        <div className="grid grid-cols-12 gap-5">
+          {/* LEFT COLUMN: Team Online + Offline (4 cols) */}
+          <div className="col-span-4 space-y-5">
+            {/* Online */}
+            <div>
+              <SectionHeader icon={() => (
+                <motion.div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#22c55e' }}
+                  animate={{ scale: [1, 1.3, 1], opacity: [1, 0.5, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
+              )} title="Equipe Online" badge={`${onlineMembers.length} membros`} />
+              <div className="grid grid-cols-1 gap-2.5">
+                <AnimatePresence>
+                  {onlineMembers.map(m => <MemberCard key={m.id} member={m} />)}
+                </AnimatePresence>
+              </div>
             </div>
-            <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-              {offlineMembers.map((m, i) => {
-                const config = ROLE_CONFIG[m.role] || ROLE_CONFIG.admin;
-                return (
-                  <div
-                    key={m.id}
-                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 border border-white/5"
-                    style={{ background: 'rgba(255,255,255,0.02)' }}
-                  >
-                    {m.avatarUrl ? (
-                      <img src={m.avatarUrl} alt={m.name} className="w-8 h-8 rounded-lg object-cover grayscale opacity-40" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold bg-white/5 text-white/25">
-                        {getInitials(m.name)}
+
+            {/* Pulse Radio */}
+            <div>
+              <SectionHeader icon={Music} title="Pulse Radio">
+                <PlaylistEditor url={playlistUrl} onSave={savePlaylist} />
+              </SectionHeader>
+              {playlistUrl ? (
+                <YouTubePlayer url={playlistUrl} />
+              ) : (
+                <div className="rounded-xl border border-dashed border-white/8 p-6 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                  <Music className="w-6 h-6 mx-auto mb-1.5" style={{ color: `${PULSE_ORANGE}28` }} />
+                  <p className="text-[10px] text-white/20">Adicione um link acima</p>
+                </div>
+              )}
+            </div>
+
+            {/* Offline */}
+            {offlineMembers.length > 0 && (
+              <div>
+                <SectionHeader icon={() => <div className="w-2.5 h-2.5 rounded-full bg-white/12" />} title="Offline" iconColor="#6b7280" />
+                <div className="grid grid-cols-2 gap-2">
+                  {offlineMembers.map(m => {
+                    const config = ROLE_CONFIG[m.role] || ROLE_CONFIG.admin;
+                    return (
+                      <div key={m.id} className="flex items-center gap-2 rounded-lg px-2.5 py-2 border border-white/4"
+                        style={{ background: 'rgba(255,255,255,0.015)' }}>
+                        {m.avatarUrl ? (
+                          <img src={m.avatarUrl} alt="" className="w-6 h-6 rounded object-cover grayscale opacity-35" />
+                        ) : (
+                          <div className="w-6 h-6 rounded flex items-center justify-center text-[9px] font-bold bg-white/4 text-white/20">
+                            {getInitials(m.name)}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-[11px] text-white/30 truncate font-medium">{m.name}</p>
+                          <p className="text-[8px] uppercase tracking-wider font-bold" style={{ color: `${config.color}44` }}>{config.label}</p>
+                        </div>
                       </div>
-                    )}
-                    <div className="min-w-0">
-                      <p className="text-sm text-white/35 truncate font-medium">{m.name}</p>
-                      <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: `${config.color}55` }}>
-                        {config.label}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </motion.div>
-        )}
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
 
-        {/* ─── Empty state ───────────────────────────────── */}
+          {/* CENTER COLUMN: Schedule + Posts (4 cols) */}
+          <div className="col-span-4 space-y-5">
+            {/* Schedule */}
+            <div>
+              <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${schedule.length} gravações`} />
+              {schedule.length > 0 ? (
+                <div className="space-y-2.5">
+                  <AnimatePresence>
+                    {schedule.map(item => <ScheduleCard key={item.id} item={item} />)}
+                  </AnimatePresence>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-white/8 p-6 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                  <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                  <p className="text-[10px] text-white/20">Nenhuma gravação hoje</p>
+                </div>
+              )}
+            </div>
+
+            {/* Scheduled Posts */}
+            <div>
+              <SectionHeader icon={Send} iconColor="#3b82f6" title="Posts do Dia" badge={`${todayPosts.length} posts`} />
+              {todayPosts.length > 0 ? (
+                <div className="space-y-2">
+                  <AnimatePresence>
+                    {todayPosts.map(post => <PostCard key={post.id} post={post} />)}
+                  </AnimatePresence>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-white/8 p-6 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                  <Send className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                  <p className="text-[10px] text-white/20">Nenhum post agendado hoje</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN: Editing Pipeline (4 cols) */}
+          <div className="col-span-4 space-y-5">
+            <div>
+              <SectionHeader icon={Film} iconColor="#8b5cf6" title="Pós-Produção" badge={`${editingPipeline.length} vídeos`} />
+              {editingPipeline.length > 0 ? (
+                <div className="space-y-2.5">
+                  <AnimatePresence>
+                    {editingPipeline.map(task => <EditingCard key={task.id} task={task} />)}
+                  </AnimatePresence>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-white/8 p-6 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                  <Film className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                  <p className="text-[10px] text-white/20">Nenhum vídeo em edição</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Empty state ──────────────────────────────── */}
         {members.length === 0 && (
-          <motion.div
-            className="flex flex-col items-center justify-center h-[60vh] gap-6"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.6 }}
-          >
-            <motion.div
-              animate={{ rotate: [0, 10, -10, 0], y: [0, -8, 0] }}
-              transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              <Rocket className="w-16 h-16" style={{ color: `${PULSE_ORANGE}44` }} />
+          <motion.div className="flex flex-col items-center justify-center h-[60vh] gap-5"
+            initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6 }}>
+            <motion.div animate={{ rotate: [0, 10, -10, 0], y: [0, -8, 0] }} transition={{ duration: 3, repeat: Infinity }}>
+              <Rocket className="w-14 h-14" style={{ color: `${PULSE_ORANGE}40` }} />
             </motion.div>
-            <p className="text-white/25 text-lg font-medium" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-              Carregando equipe...
-            </p>
-            <motion.div
-              className="w-32 h-1 rounded-full overflow-hidden bg-white/5"
-            >
-              <motion.div
-                className="h-full rounded-full"
-                style={{ backgroundColor: PULSE_ORANGE }}
-                animate={{ x: ['-100%', '100%'] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-              />
+            <p className="text-white/20 text-base font-medium" style={{ fontFamily: SPACE }}>Carregando equipe...</p>
+            <motion.div className="w-28 h-1 rounded-full overflow-hidden bg-white/5">
+              <motion.div className="h-full rounded-full" style={{ backgroundColor: PULSE_ORANGE }}
+                animate={{ x: ['-100%', '100%'] }} transition={{ duration: 1.5, repeat: Infinity }} />
             </motion.div>
           </motion.div>
         )}

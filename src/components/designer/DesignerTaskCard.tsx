@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn } from '@/hooks/useDesignTasks';
+import { useDesignTasks, DesignTask } from '@/hooks/useDesignTasks';
 import { useAuth } from '@/hooks/useAuth';
 import { uploadFileToVps } from '@/services/vpsApi';
 import ClientLogo from '@/components/ClientLogo';
@@ -8,27 +8,32 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import rocketGirlsImg from '@/assets/rocket-girls.png';
 import {
-  Play, Pause, Square, Send, Clock, Upload, Link2, CheckCircle,
-  RotateCcw, Flame, ArrowRight, Loader2, Eye, Image
+  Play, Pause, Send, Clock, Upload, Link2, CheckCircle,
+  RotateCcw, Flame, Loader2, Eye, Image, Sparkles, Heart
 } from 'lucide-react';
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string; dot: string; slaHours: number }> = {
-  baixa: { label: 'Baixa', color: 'bg-muted text-muted-foreground', dot: 'bg-muted-foreground', slaHours: 96 },
-  media: { label: 'Média', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300', dot: 'bg-blue-500', slaHours: 72 },
-  alta: { label: 'Alta', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300', dot: 'bg-amber-500', slaHours: 48 },
-  urgente: { label: 'Urgente', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 animate-pulse', dot: 'bg-red-500', slaHours: 24 },
+  baixa: { label: 'Baixa', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300', dot: 'bg-emerald-500', slaHours: 72 },
+  media: { label: 'Média', color: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300', dot: 'bg-violet-500', slaHours: 72 },
+  alta: { label: 'Alta', color: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300', dot: 'bg-rose-500', slaHours: 48 },
+  urgente: { label: 'Urgente', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300', dot: 'bg-red-500', slaHours: 24 },
 };
 
 const FORMAT_LABELS: Record<string, string> = {
-  feed: 'Feed', story: 'Story', logomarca: 'Logomarca', midia_fisica: 'Mídia Física',
+  feed: '📐 Feed', story: '📱 Story', logomarca: '🎨 Logo', midia_fisica: '🖨 Mídia Física',
 };
 
-const COL_LABELS: Record<string, string> = {
-  nova_tarefa: 'Nova', executando: 'Executando', ajustes: 'Ajustes',
-  em_analise: 'Análise', enviar_cliente: 'P/ Cliente', aprovado: 'Aprovado',
+const COL_LABELS: Record<string, { label: string; emoji: string }> = {
+  nova_tarefa: { label: 'Nova', emoji: '✨' },
+  executando: { label: 'Em execução', emoji: '🎨' },
+  ajustes: { label: 'Ajustes', emoji: '🔄' },
+  em_analise: { label: 'Em análise', emoji: '👀' },
+  enviar_cliente: { label: 'P/ Cliente', emoji: '💌' },
+  aprovado: { label: 'Aprovado', emoji: '💖' },
 };
 
 interface Props {
@@ -38,7 +43,7 @@ interface Props {
 }
 
 function getDesignDeadlineStatus(task: DesignTask) {
-  if (['aprovado'].includes(task.kanban_column)) return { label: 'Concluído', variant: 'success' as const, progress: 100 };
+  if (['aprovado'].includes(task.kanban_column)) return { label: 'Concluído 💖', variant: 'success' as const, progress: 100 };
   const sla = PRIORITY_CONFIG[task.priority]?.slaHours || 72;
   const deadline = new Date(new Date(task.created_at).getTime() + sla * 3600000);
   const now = new Date();
@@ -46,11 +51,11 @@ function getDesignDeadlineStatus(task: DesignTask) {
   const progress = Math.min(100, Math.max(0, Math.round((elapsed / sla) * 100)));
   const hoursLeft = Math.round((deadline.getTime() - now.getTime()) / 3600000);
 
-  if (hoursLeft <= 0) return { label: 'Atrasado', variant: 'destructive' as const, progress: 100 };
-  if (hoursLeft <= 6) return { label: `${hoursLeft}h`, variant: 'warning' as const, progress };
-  if (hoursLeft <= 24) return { label: `${hoursLeft}h`, variant: 'warning' as const, progress };
+  if (hoursLeft <= 0) return { label: 'Atrasado!', variant: 'destructive' as const, progress: 100 };
+  if (hoursLeft <= 6) return { label: `${hoursLeft}h restantes`, variant: 'warning' as const, progress };
+  if (hoursLeft <= 24) return { label: `${hoursLeft}h restantes`, variant: 'warning' as const, progress };
   const days = Math.ceil(hoursLeft / 24);
-  return { label: `${days}d`, variant: 'default' as const, progress };
+  return { label: `${days} dia${days > 1 ? 's' : ''}`, variant: 'default' as const, progress };
 }
 
 export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
@@ -60,12 +65,11 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
   const [uploading, setUploading] = useState(false);
   const [artLink, setArtLink] = useState('');
   const [showArtInput, setShowArtInput] = useState(false);
+  const [showRocket, setShowRocket] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Live timer
   useEffect(() => {
     if (!task.timer_running || !task.timer_started_at) {
-      // Show accumulated time
       setElapsed(task.time_spent_seconds || 0);
       return;
     }
@@ -87,6 +91,10 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
 
   const handleStart = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    // Show rocket celebration
+    setShowRocket(true);
+    setTimeout(() => setShowRocket(false), 3000);
+
     const now = new Date().toISOString();
     await updateTask.mutateAsync({
       id: task.id,
@@ -97,19 +105,15 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
       timer_started_at: now,
     } as any);
     await addHistory.mutateAsync({ task_id: task.id, action: 'Iniciou execução', user_id: user?.id });
-    toast.success('Timer iniciado! 🎨');
+    toast.success('Bora criar! 🎨✨');
   };
 
   const handleResume = async (e: React.MouseEvent) => {
     e.stopPropagation();
     const now = new Date().toISOString();
-    await updateTask.mutateAsync({
-      id: task.id,
-      timer_running: true,
-      timer_started_at: now,
-    } as any);
+    await updateTask.mutateAsync({ id: task.id, timer_running: true, timer_started_at: now } as any);
     await addHistory.mutateAsync({ task_id: task.id, action: 'Timer retomado', user_id: user?.id });
-    toast.success('Timer retomado!');
+    toast.success('Continuando... 💪');
   };
 
   const handlePause = async (e: React.MouseEvent) => {
@@ -118,13 +122,10 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
     const additionalSeconds = Math.floor((Date.now() - new Date(task.timer_started_at).getTime()) / 1000);
     const totalSeconds = (task.time_spent_seconds || 0) + additionalSeconds;
     await updateTask.mutateAsync({
-      id: task.id,
-      timer_running: false,
-      timer_started_at: null,
-      time_spent_seconds: totalSeconds,
+      id: task.id, timer_running: false, timer_started_at: null, time_spent_seconds: totalSeconds,
     } as any);
-    await addHistory.mutateAsync({ task_id: task.id, action: 'Timer pausado', details: `Tempo acumulado: ${formatTime(totalSeconds)}`, user_id: user?.id });
-    toast.info('Timer pausado ⏸');
+    await addHistory.mutateAsync({ task_id: task.id, action: 'Timer pausado', details: `Tempo: ${formatTime(totalSeconds)}`, user_id: user?.id });
+    toast.info('Pausado ☕');
   };
 
   const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -136,7 +137,7 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
       const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
       await updateTask.mutateAsync({ id: task.id, attachment_url: publicUrl } as any);
       await addHistory.mutateAsync({ task_id: task.id, action: 'Arte anexada', details: file.name, user_id: user?.id });
-      toast.success('Arte anexada com sucesso! 🎉');
+      toast.success('Arte anexada! 🎉');
       setShowArtInput(false);
     } catch (err: any) {
       toast.error(err.message || 'Erro ao enviar arquivo');
@@ -149,30 +150,27 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
     e.stopPropagation();
     if (!artLink.trim()) { toast.error('Cole o link da arte'); return; }
     await updateTask.mutateAsync({ id: task.id, attachment_url: artLink } as any);
-    await addHistory.mutateAsync({ task_id: task.id, action: 'Arte anexada via link', details: artLink, user_id: user?.id });
-    toast.success('Link da arte salvo!');
+    await addHistory.mutateAsync({ task_id: task.id, action: 'Arte via link', details: artLink, user_id: user?.id });
+    toast.success('Link salvo! 💜');
     setArtLink('');
     setShowArtInput(false);
   };
 
   const handleSendForReview = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!task.attachment_url) { toast.error('Anexe a arte antes de enviar para análise'); return; }
-    // Pause timer if running
+    if (!task.attachment_url) { toast.error('Anexe a arte antes'); return; }
     let totalSeconds = task.time_spent_seconds || 0;
     if (task.timer_running && task.timer_started_at) {
-      const additional = Math.floor((Date.now() - new Date(task.timer_started_at).getTime()) / 1000);
-      totalSeconds += additional;
+      totalSeconds += Math.floor((Date.now() - new Date(task.timer_started_at).getTime()) / 1000);
     }
+    // Show rocket celebration for sending
+    setShowRocket(true);
+    setTimeout(() => setShowRocket(false), 3000);
     await updateTask.mutateAsync({
-      id: task.id,
-      kanban_column: 'em_analise',
-      timer_running: false,
-      timer_started_at: null,
-      time_spent_seconds: totalSeconds,
+      id: task.id, kanban_column: 'em_analise', timer_running: false, timer_started_at: null, time_spent_seconds: totalSeconds,
     } as any);
     await addHistory.mutateAsync({ task_id: task.id, action: 'Enviado para análise', user_id: user?.id });
-    toast.success('Enviado para análise! ✅');
+    toast.success('Enviado para análise! 🚀');
   };
 
   const p = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.media;
@@ -182,213 +180,295 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
   const isExecuting = task.kanban_column === 'executando';
   const isAdjustment = task.kanban_column === 'ajustes';
   const hasArt = !!task.attachment_url;
+  const colInfo = COL_LABELS[task.kanban_column] || { label: task.kanban_column, emoji: '📋' };
 
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 10 }}
-      transition={{ delay: index * 0.02 }}
-      className={`rounded-xl border transition-all ${
-        deadlineStatus.variant === 'destructive'
-          ? 'border-destructive/40 bg-destructive/5'
-          : isAdjustment
-            ? 'border-orange-400/30 bg-orange-500/5'
-            : isExecuting
-              ? 'border-primary/30 bg-primary/5'
-              : 'border-border bg-card'
-      }`}
+      initial={{ opacity: 0, y: 20, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -20, scale: 0.95 }}
+      transition={{ delay: index * 0.04, type: 'spring', stiffness: 300, damping: 30 }}
+      className="relative overflow-hidden"
     >
-      {/* Main row - clickable to open detail */}
-      <div
-        onClick={() => onOpenDetail(task.id)}
-        className="flex items-center gap-3 p-3 cursor-pointer group hover:shadow-md transition-all"
-      >
-        {/* Color bar */}
-        <div className="w-1 h-14 rounded-full shrink-0" style={{ backgroundColor: `hsl(${color})` }} />
+      {/* Rocket celebration overlay */}
+      <AnimatePresence>
+        {showRocket && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-50 flex items-center justify-center rounded-2xl pointer-events-none"
+            style={{ background: 'radial-gradient(circle, rgba(236,72,153,0.15) 0%, transparent 70%)' }}
+          >
+            <motion.img
+              src={rocketGirlsImg}
+              alt="Foguete"
+              width={120}
+              height={120}
+              initial={{ y: 100, opacity: 0, scale: 0.5, rotate: -10 }}
+              animate={{ y: -200, opacity: [0, 1, 1, 0], scale: [0.5, 1.2, 1, 0.8], rotate: [−10, 5, 0, 10] }}
+              transition={{ duration: 2.5, ease: 'easeOut' }}
+              className="drop-shadow-2xl"
+            />
+            {/* Sparkle particles */}
+            {Array.from({ length: 8 }).map((_, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, scale: 0 }}
+                animate={{
+                  opacity: [0, 1, 0],
+                  scale: [0, 1.5, 0],
+                  x: (Math.random() - 0.5) * 200,
+                  y: (Math.random() - 0.5) * 200,
+                }}
+                transition={{ duration: 1.5, delay: 0.2 + i * 0.1 }}
+                className="absolute w-2 h-2 rounded-full"
+                style={{ background: ['#ec4899', '#a855f7', '#f59e0b', '#10b981'][i % 4] }}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-        {/* Client logo */}
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div>
-                <ClientLogo
-                  client={{ companyName: task.clients?.company_name || '', color, logoUrl: task.clients?.logo_url }}
-                  size="md"
+      <div className={`rounded-2xl border-2 transition-all duration-300 backdrop-blur-sm ${
+        deadlineStatus.variant === 'destructive'
+          ? 'border-rose-300/60 bg-gradient-to-r from-rose-50/80 to-pink-50/40 dark:from-rose-950/30 dark:to-pink-950/20'
+          : isAdjustment
+            ? 'border-amber-300/50 bg-gradient-to-r from-amber-50/60 to-orange-50/30 dark:from-amber-950/20 dark:to-orange-950/10'
+            : isExecuting
+              ? 'border-violet-300/50 bg-gradient-to-r from-violet-50/60 to-fuchsia-50/30 dark:from-violet-950/20 dark:to-fuchsia-950/10'
+              : 'border-pink-200/40 bg-gradient-to-r from-card to-pink-50/20 dark:to-pink-950/10 hover:border-pink-300/60'
+      } hover:shadow-lg hover:shadow-pink-200/20 dark:hover:shadow-pink-900/10`}>
+
+        {/* Main row */}
+        <div
+          onClick={() => onOpenDetail(task.id)}
+          className="flex items-center gap-3 p-4 cursor-pointer group"
+        >
+          {/* Color accent */}
+          <div className="w-1.5 h-16 rounded-full shrink-0 transition-all group-hover:h-20" style={{ background: `linear-gradient(180deg, hsl(${color}), hsl(${color} / 0.4))` }} />
+
+          {/* Logo */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="relative">
+                  <ClientLogo client={{ companyName: task.clients?.company_name || '', color, logoUrl: task.clients?.logo_url }} size="md" />
+                  {task.timer_running && (
+                    <motion.div
+                      animate={{ scale: [1, 1.4, 1], opacity: [0.6, 0, 0.6] }}
+                      transition={{ duration: 1.5, repeat: Infinity }}
+                      className="absolute -inset-1 rounded-full border-2 border-violet-400"
+                    />
+                  )}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent><p className="text-xs">{task.clients?.company_name}</p></TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          {/* Info */}
+          <div className="flex-1 min-w-0 space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              {isAdjustment && <RotateCcw size={13} className="text-amber-500 shrink-0" />}
+              {isExecuting && task.timer_running && (
+                <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 0.8, repeat: Infinity }}>
+                  <Sparkles size={13} className="text-violet-500 shrink-0" />
+                </motion.div>
+              )}
+              {task.priority === 'urgente' && <Flame size={13} className="text-rose-500 shrink-0 animate-pulse" />}
+              <span className="font-semibold text-sm truncate group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
+                {task.title}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <span className="truncate">{task.clients?.company_name}</span>
+              <span className="text-pink-300">•</span>
+              <span>{FORMAT_LABELS[task.format_type] || task.format_type}</span>
+              {task.version > 1 && (
+                <>
+                  <span className="text-pink-300">•</span>
+                  <span className="text-violet-500 font-medium">v{task.version}</span>
+                </>
+              )}
+            </div>
+            {/* Deadline */}
+            <div className="flex items-center gap-2">
+              <div className="flex-1 max-w-[180px]">
+                <Progress
+                  value={deadlineStatus.progress}
+                  className={`h-1.5 rounded-full ${
+                    deadlineStatus.variant === 'destructive' ? '[&>div]:bg-gradient-to-r [&>div]:from-rose-500 [&>div]:to-red-500' :
+                    deadlineStatus.variant === 'warning' ? '[&>div]:bg-gradient-to-r [&>div]:from-amber-400 [&>div]:to-orange-500' :
+                    '[&>div]:bg-gradient-to-r [&>div]:from-emerald-400 [&>div]:to-teal-500'
+                  }`}
                 />
               </div>
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              <p className="text-xs font-medium">{task.clients?.company_name}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-
-        {/* Task info */}
-        <div className="flex-1 min-w-0 space-y-1">
-          <div className="flex items-center gap-1.5">
-            {isAdjustment && <RotateCcw size={12} className="text-orange-500 shrink-0" />}
-            {isExecuting && task.timer_running && <Play size={12} className="text-primary shrink-0 animate-pulse" />}
-            {task.priority === 'urgente' && <Flame size={12} className="text-destructive shrink-0 animate-pulse" />}
-            <span className="font-medium text-sm truncate group-hover:text-primary transition-colors">{task.title}</span>
-          </div>
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            <span className="truncate">{task.clients?.company_name}</span>
-            <span className="text-muted-foreground/40">•</span>
-            <span>{FORMAT_LABELS[task.format_type] || task.format_type}</span>
-            {task.version > 1 && (
-              <>
-                <span className="text-muted-foreground/40">•</span>
-                <span>v{task.version}</span>
-              </>
-            )}
-          </div>
-          {/* Deadline bar */}
-          <div className="flex items-center gap-2">
-            <div className="flex-1 max-w-[200px]">
-              <Progress
-                value={deadlineStatus.progress}
-                className={`h-1.5 ${
-                  deadlineStatus.variant === 'destructive' ? '[&>div]:bg-destructive' :
-                  deadlineStatus.variant === 'warning' ? '[&>div]:bg-orange-500' :
-                  '[&>div]:bg-emerald-500'
-                }`}
-              />
+              <span className={`text-[10px] font-medium flex items-center gap-1 ${
+                deadlineStatus.variant === 'destructive' ? 'text-rose-500' :
+                deadlineStatus.variant === 'warning' ? 'text-amber-500' :
+                'text-muted-foreground'
+              }`}>
+                <Clock size={10} />
+                {deadlineStatus.label}
+              </span>
             </div>
-            <span className={`text-[10px] font-medium flex items-center gap-1 ${
-              deadlineStatus.variant === 'destructive' ? 'text-destructive' :
-              deadlineStatus.variant === 'warning' ? 'text-orange-500' :
-              'text-muted-foreground'
-            }`}>
-              <Clock size={10} />
-              {deadlineStatus.label}
-            </span>
-          </div>
-        </div>
-
-        {/* Timer display */}
-        {(isExecuting || elapsed > 0) && (
-          <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold shrink-0 ${
-            task.timer_running 
-              ? 'bg-primary/15 text-primary border border-primary/30 animate-pulse' 
-              : 'bg-muted text-muted-foreground'
-          }`}>
-            <Clock size={12} />
-            {formatTime(elapsed)}
-          </div>
-        )}
-
-        {/* Right side badges */}
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          <Badge className={`text-[9px] ${p.color}`}>{p.label}</Badge>
-          <Badge variant="outline" className="text-[9px]">{COL_LABELS[task.kanban_column] || task.kanban_column}</Badge>
-          {hasArt && (
-            <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 text-[9px]">
-              <CheckCircle size={8} className="mr-0.5" /> Arte
-            </Badge>
-          )}
-        </div>
-
-        <ArrowRight size={14} className="text-muted-foreground/30 shrink-0 group-hover:text-primary/60 transition-colors" />
-      </div>
-
-      {/* Action bar - always visible for actionable tasks */}
-      {(isNew || isExecuting || isAdjustment) && (
-        <div className="px-3 pb-3 pt-0">
-          <div className="flex items-center gap-2 flex-wrap border-t border-border/50 pt-2.5">
-            {/* START button for new tasks */}
-            {isNew && (
-              <Button size="sm" className="h-8 text-xs gap-1.5 bg-primary hover:bg-primary/90" onClick={handleStart}>
-                <Play size={12} /> Iniciar Execução
-              </Button>
-            )}
-
-            {/* Timer controls for executing/adjustments */}
-            {(isExecuting || isAdjustment) && (
-              <>
-                {task.timer_running ? (
-                  <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5 border-orange-400/50 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20" onClick={handlePause}>
-                    <Pause size={12} /> Pausar
-                  </Button>
-                ) : (
-                  <Button size="sm" className="h-8 text-xs gap-1.5 bg-primary hover:bg-primary/90" onClick={isNew ? handleStart : handleResume}>
-                    <Play size={12} /> {elapsed > 0 ? 'Retomar' : 'Iniciar'}
-                  </Button>
-                )}
-              </>
-            )}
-
-            {/* Art attachment */}
-            {(isExecuting || isAdjustment) && (
-              <>
-                {hasArt ? (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <a href={task.attachment_url!} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
-                          <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5 border-emerald-400/50 text-emerald-600">
-                            <Eye size={12} /> Ver Arte
-                          </Button>
-                        </a>
-                      </TooltipTrigger>
-                      <TooltipContent>Arte já anexada</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ) : (
-                  <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={(e) => { e.stopPropagation(); setShowArtInput(!showArtInput); }}>
-                    <Image size={12} /> Anexar Arte
-                  </Button>
-                )}
-
-                {/* Send for review */}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 text-xs gap-1.5 border-purple-400/50 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 ml-auto"
-                  onClick={handleSendForReview}
-                  disabled={!hasArt}
-                >
-                  <Send size={12} /> Enviar p/ Análise
-                </Button>
-              </>
-            )}
           </div>
 
-          {/* Art input row */}
-          {showArtInput && !hasArt && (
+          {/* Timer */}
+          {(isExecuting || elapsed > 0) && (
             <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="mt-2 flex items-center gap-2"
-              onClick={e => e.stopPropagation()}
+              animate={task.timer_running ? { boxShadow: ['0 0 0px rgba(139,92,246,0)', '0 0 15px rgba(139,92,246,0.4)', '0 0 0px rgba(139,92,246,0)'] } : {}}
+              transition={{ duration: 2, repeat: Infinity }}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-mono font-bold shrink-0 ${
+                task.timer_running
+                  ? 'bg-gradient-to-r from-violet-500/20 to-fuchsia-500/20 text-violet-600 dark:text-violet-400 border border-violet-300/50'
+                  : 'bg-muted/60 text-muted-foreground'
+              }`}
             >
-              <Input
-                value={artLink}
-                onChange={e => setArtLink(e.target.value)}
-                placeholder="Cole o link da arte..."
-                className="h-8 text-xs flex-1"
-              />
-              <Button size="sm" variant="secondary" className="h-8 text-xs gap-1" onClick={handleSaveLink}>
-                <Link2 size={11} /> Salvar
-              </Button>
-              <span className="text-muted-foreground/40 text-xs">ou</span>
-              <input ref={fileRef} type="file" accept="image/*,.pdf,.ai,.psd,.svg,.eps" className="hidden" onChange={handleUploadFile} />
-              <Button
-                size="sm"
-                variant="secondary"
-                className="h-8 text-xs gap-1"
-                disabled={uploading}
-                onClick={() => fileRef.current?.click()}
-              >
-                {uploading ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
-                {uploading ? 'Enviando...' : 'Upload'}
-              </Button>
+              <Clock size={12} />
+              {formatTime(elapsed)}
             </motion.div>
           )}
+
+          {/* Badges */}
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
+            <Badge className={`text-[9px] rounded-full px-2 ${p.color}`}>{p.label}</Badge>
+            <Badge variant="outline" className="text-[9px] rounded-full px-2 border-pink-200/60">
+              {colInfo.emoji} {colInfo.label}
+            </Badge>
+            {hasArt && (
+              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200/50 text-[9px] rounded-full px-2">
+                <CheckCircle size={8} className="mr-0.5" /> Arte ✓
+              </Badge>
+            )}
+          </div>
         </div>
-      )}
+
+        {/* Action bar */}
+        {(isNew || isExecuting || isAdjustment) && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className="px-4 pb-4 pt-0"
+          >
+            <div className="flex items-center gap-2 flex-wrap border-t border-pink-200/30 dark:border-pink-800/20 pt-3">
+              {/* START - feminine glowing button */}
+              {isNew && (
+                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                  <Button
+                    size="sm"
+                    className="h-9 text-xs gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white shadow-lg shadow-violet-300/40 dark:shadow-violet-900/40 font-semibold"
+                    onClick={handleStart}
+                  >
+                    <Play size={13} fill="currentColor" /> Aceitar & Iniciar ✨
+                  </Button>
+                </motion.div>
+              )}
+
+              {/* Timer controls */}
+              {(isExecuting || isAdjustment) && (
+                <>
+                  {task.timer_running ? (
+                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 text-xs gap-2 rounded-xl border-amber-300/60 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 font-semibold"
+                        onClick={handlePause}
+                      >
+                        <Pause size={13} /> Pausar ☕
+                      </Button>
+                    </motion.div>
+                  ) : (
+                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                      <Button
+                        size="sm"
+                        className="h-9 text-xs gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white shadow-lg shadow-violet-300/40 font-semibold"
+                        onClick={handleResume}
+                      >
+                        <Play size={13} fill="currentColor" /> {elapsed > 0 ? 'Retomar 💜' : 'Iniciar ✨'}
+                      </Button>
+                    </motion.div>
+                  )}
+                </>
+              )}
+
+              {/* Art attachment */}
+              {(isExecuting || isAdjustment) && (
+                <>
+                  {hasArt ? (
+                    <a href={task.attachment_url!} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+                      <Button size="sm" variant="outline" className="h-9 text-xs gap-2 rounded-xl border-emerald-300/60 text-emerald-600 font-semibold">
+                        <Eye size={13} /> Ver Arte 🎨
+                      </Button>
+                    </a>
+                  ) : (
+                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 text-xs gap-2 rounded-xl border-pink-300/60 text-pink-600 hover:bg-pink-50 dark:hover:bg-pink-900/20 font-semibold"
+                        onClick={(e) => { e.stopPropagation(); setShowArtInput(!showArtInput); }}
+                      >
+                        <Image size={13} /> Anexar Arte
+                      </Button>
+                    </motion.div>
+                  )}
+
+                  {/* Send for review */}
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="ml-auto">
+                    <Button
+                      size="sm"
+                      className="h-9 text-xs gap-2 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white shadow-lg shadow-pink-300/40 font-semibold disabled:opacity-40"
+                      onClick={handleSendForReview}
+                      disabled={!hasArt}
+                    >
+                      <Send size={13} /> Enviar p/ Análise 🚀
+                    </Button>
+                  </motion.div>
+                </>
+              )}
+            </div>
+
+            {/* Art input */}
+            <AnimatePresence>
+              {showArtInput && !hasArt && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="mt-3 flex items-center gap-2"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <Input
+                    value={artLink}
+                    onChange={e => setArtLink(e.target.value)}
+                    placeholder="Cole o link da arte aqui... 🔗"
+                    className="h-9 text-xs flex-1 rounded-xl border-pink-200/50 focus:border-violet-400"
+                  />
+                  <Button size="sm" variant="secondary" className="h-9 text-xs gap-1.5 rounded-xl" onClick={handleSaveLink}>
+                    <Link2 size={12} /> Salvar
+                  </Button>
+                  <span className="text-pink-300 text-xs">ou</span>
+                  <input ref={fileRef} type="file" accept="image/*,.pdf,.ai,.psd,.svg,.eps" className="hidden" onChange={handleUploadFile} />
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-9 text-xs gap-1.5 rounded-xl"
+                    disabled={uploading}
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                    {uploading ? 'Enviando...' : 'Upload'}
+                  </Button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        )}
+      </div>
     </motion.div>
   );
 }

@@ -4602,18 +4602,38 @@ app.get('/api/tv-dashboard', async (req, res) => {
       ORDER BY r.start_time ASC
     `, [today]);
 
-    // 7. Get today's event recordings
-    const { rows: events } = await pool.query(`
-      SELECT er.id, er.title, er.start_time, er.end_time, er.address, er.status,
-             er.client_id, er.videomaker_id,
-             c.company_name AS client_name,
-             p.name AS videomaker_name, p.avatar_url AS videomaker_avatar
-      FROM event_recordings er
-      LEFT JOIN clients c ON c.id = er.client_id
-      LEFT JOIN profiles p ON p.id = er.videomaker_id
-      WHERE er.date::date = $1::date
-      ORDER BY er.start_time ASC
-    `, [today]);
+    // 7. Get today's event recordings (optional; should not break the whole dashboard)
+    let eventItems = [];
+    try {
+      const { rows: events } = await pool.query(`
+        SELECT er.id, er.title, er.start_time, er.end_time, er.address, er.status,
+               er.client_id, er.videomaker_id,
+               c.company_name AS client_name,
+               p.name AS videomaker_name, p.avatar_url AS videomaker_avatar
+        FROM event_recordings er
+        LEFT JOIN clients c ON c.id = er.client_id
+        LEFT JOIN profiles p ON p.id = er.videomaker_id
+        WHERE er.date::date = $1::date
+        ORDER BY er.start_time ASC
+      `, [today]);
+
+      eventItems = events.map(e => ({
+        id: e.id,
+        type: 'event',
+        clientName: e.client_name || e.title,
+        clientLogo: null,
+        clientColor: null,
+        videomakerName: e.videomaker_name || null,
+        videomakerAvatar: e.videomaker_avatar || null,
+        startTime: e.start_time,
+        endTime: e.end_time,
+        title: e.title,
+        address: e.address,
+        status: e.status,
+      }));
+    } catch (error) {
+      console.warn('[tv-dashboard] Failed to load event_recordings:', error?.message || error);
+    }
 
     const schedule = recordings.map(r => ({
       id: r.id,
@@ -4627,21 +4647,6 @@ app.get('/api/tv-dashboard', async (req, res) => {
       recordingType: r.type,
       status: r.status,
       confirmationStatus: r.confirmation_status,
-    }));
-
-    const eventItems = events.map(e => ({
-      id: e.id,
-      type: 'event',
-      clientName: e.client_name || e.title,
-      clientLogo: null,
-      clientColor: null,
-      videomakerName: e.videomaker_name || null,
-      videomakerAvatar: e.videomaker_avatar || null,
-      startTime: e.start_time,
-      endTime: e.end_time,
-      title: e.title,
-      address: e.address,
-      status: e.status,
     }));
 
     const todaySchedule = [...schedule, ...eventItems].sort((a, b) => a.startTime.localeCompare(b.startTime));
@@ -4688,28 +4693,44 @@ app.get('/api/tv-dashboard', async (req, res) => {
       };
     });
 
-    // 9. Get today's scheduled posts (social media deliveries)
-    const { rows: scheduledPosts } = await pool.query(`
-      SELECT smd.id, smd.title, smd.content_type, smd.platform, smd.status,
-             smd.scheduled_time, smd.delivered_at, smd.posted_at,
-             c.company_name AS client_name, c.logo_url AS client_logo, c.color AS client_color
-      FROM social_media_deliveries smd
-      LEFT JOIN clients c ON c.id = smd.client_id
-      WHERE (smd.delivered_at::date = $1::date OR smd.scheduled_time::date = $1::date OR smd.posted_at::date = $1::date)
-      ORDER BY COALESCE(smd.scheduled_time, smd.delivered_at) ASC
-    `, [today]);
+    // 9. Get today's scheduled posts (optional; tolerate legacy scheduled_time formats)
+    let todayPosts = [];
+    try {
+      const { rows: scheduledPosts } = await pool.query(`
+        SELECT smd.id, smd.title, smd.content_type, smd.platform, smd.status,
+               smd.scheduled_time, smd.delivered_at, smd.posted_at,
+               c.company_name AS client_name, c.logo_url AS client_logo, c.color AS client_color
+        FROM social_media_deliveries smd
+        LEFT JOIN clients c ON c.id = smd.client_id
+        WHERE smd.delivered_at = $1::date
+           OR smd.posted_at = $1::date
+           OR (
+             smd.scheduled_time IS NOT NULL
+             AND smd.scheduled_time ~ '^\\d{4}-\\d{2}-\\d{2}'
+             AND split_part(replace(smd.scheduled_time, 'T', ' '), ' ', 1)::date = $1::date
+           )
+        ORDER BY CASE
+          WHEN smd.scheduled_time ~ '^\\d{2}:\\d{2}' THEN smd.scheduled_time
+          WHEN smd.scheduled_time ~ '^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}' THEN substring(replace(smd.scheduled_time, 'T', ' ') from 12 for 5)
+          ELSE '23:59'
+        END ASC,
+        smd.created_at ASC
+      `, [today]);
 
-    const todayPosts = scheduledPosts.map(p => ({
-      id: p.id,
-      title: p.title || 'Sem título',
-      contentType: p.content_type,
-      platform: p.platform,
-      status: p.status,
-      scheduledTime: p.scheduled_time || p.delivered_at,
-      clientName: p.client_name || 'Cliente',
-      clientLogo: p.client_logo || null,
-      clientColor: p.client_color || null,
-    }));
+      todayPosts = scheduledPosts.map(p => ({
+        id: p.id,
+        title: p.title || 'Sem título',
+        contentType: p.content_type,
+        platform: p.platform,
+        status: p.status,
+        scheduledTime: p.scheduled_time || p.delivered_at,
+        clientName: p.client_name || 'Cliente',
+        clientLogo: p.client_logo || null,
+        clientColor: p.client_color || null,
+      }));
+    } catch (error) {
+      console.warn('[tv-dashboard] Failed to load social_media_deliveries:', error?.message || error);
+    }
 
     res.json({ members, todaySchedule, editingPipeline, todayPosts, updatedAt: new Date().toISOString() });
   } catch (err) {

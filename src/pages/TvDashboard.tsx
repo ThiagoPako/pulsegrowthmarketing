@@ -3,8 +3,10 @@ import { motion, AnimatePresence, useMotionValue, useTransform, animate } from '
 import {
   Monitor, Clock, Coffee, Camera, Film, Palette, Megaphone, Image, Users,
   Wifi, WifiOff, Activity, CalendarDays, MapPin, CheckCircle2, Circle,
-  XCircle, Rocket, Zap, TrendingUp, Music, Settings, Link as LinkIcon
+  XCircle, Rocket, Zap, TrendingUp, Music, Settings, Link as LinkIcon,
+  Flame, Sparkles, AlertTriangle, Gift, Star
 } from 'lucide-react';
+import { fetchAISeasonalAlerts, AISeasonalAlert, NICHE_OPTIONS } from '@/lib/seasonalDates';
 
 const VPS = 'https://agenciapulse.tech/api';
 
@@ -549,6 +551,185 @@ function PlaylistEditor({ url, onSave }: { url: string; onSave: (url: string) =>
   );
 }
 
+/* ─── Seasonal Dates Banner Slider ──────────────────────── */
+interface SeasonalSlide {
+  label: string;
+  date: string;
+  daysUntil: number;
+  urgency: 'high' | 'medium' | 'low';
+  suggestion: string;
+  clients: { name: string; niche: string }[];
+}
+
+function SeasonalBanner({ slides }: { slides: SeasonalSlide[] }) {
+  const [current, setCurrent] = useState(0);
+
+  useEffect(() => {
+    if (slides.length <= 1) return;
+    const iv = setInterval(() => setCurrent(p => (p + 1) % slides.length), 8000);
+    return () => clearInterval(iv);
+  }, [slides.length]);
+
+  if (!slides.length) return null;
+
+  const urgencyConfig = {
+    high: { color: '#ef4444', bg: 'rgba(239,68,68,0.12)', icon: Flame, label: 'URGENTE', glow: 'rgba(239,68,68,0.3)' },
+    medium: { color: PULSE_ORANGE, bg: `${PULSE_ORANGE}18`, icon: AlertTriangle, label: 'EM BREVE', glow: `${PULSE_ORANGE}33` },
+    low: { color: '#22c55e', bg: 'rgba(34,197,94,0.12)', icon: Gift, label: 'PLANEJE-SE', glow: 'rgba(34,197,94,0.2)' },
+  };
+
+  return (
+    <motion.div
+      className="mb-8 relative overflow-hidden rounded-2xl"
+      style={{
+        background: `linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01))`,
+        border: '1px solid rgba(255,255,255,0.08)',
+      }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.35, duration: 0.5 }}
+    >
+      {/* Shimmer accent */}
+      <motion.div
+        className="absolute top-0 left-0 right-0 h-[2px]"
+        style={{ background: `linear-gradient(90deg, transparent, ${PULSE_ORANGE}, transparent)` }}
+        animate={{ opacity: [0.3, 0.8, 0.3] }}
+        transition={{ duration: 4, repeat: Infinity }}
+      />
+
+      {/* Section header */}
+      <div className="flex items-center gap-3 px-5 pt-4 pb-2">
+        <motion.div
+          animate={{ rotate: [0, 15, -15, 0] }}
+          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          <Sparkles className="w-4 h-4" style={{ color: PULSE_ORANGE }} />
+        </motion.div>
+        <h2 className="text-xs font-bold text-white/50 uppercase tracking-[0.2em]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+          Datas Sazonais
+        </h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent" />
+        {/* Slide indicators */}
+        <div className="flex gap-1.5">
+          {slides.map((_, i) => (
+            <motion.div
+              key={i}
+              className="rounded-full cursor-pointer"
+              style={{
+                width: current === i ? 16 : 6,
+                height: 6,
+                backgroundColor: current === i ? PULSE_ORANGE : 'rgba(255,255,255,0.15)',
+              }}
+              animate={{ width: current === i ? 16 : 6 }}
+              transition={{ duration: 0.3 }}
+              onClick={() => setCurrent(i)}
+            />
+          ))}
+        </div>
+        <span className="text-xs font-mono text-white/20">{current + 1}/{slides.length}</span>
+      </div>
+
+      {/* Slides */}
+      <div className="relative h-[140px] px-5 pb-4">
+        <AnimatePresence mode="wait">
+          {slides.map((slide, i) => {
+            if (i !== current) return null;
+            const urg = urgencyConfig[slide.urgency];
+            const UrgIcon = urg.icon;
+
+            return (
+              <motion.div
+                key={`${slide.label}-${i}`}
+                className="absolute inset-x-5 top-0 bottom-4 flex gap-5"
+                initial={{ opacity: 0, x: 60 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -60 }}
+                transition={{ duration: 0.5, ease: 'easeInOut' }}
+              >
+                {/* Countdown block */}
+                <motion.div
+                  className="flex-shrink-0 w-[130px] rounded-xl flex flex-col items-center justify-center relative overflow-hidden"
+                  style={{
+                    background: urg.bg,
+                    border: `1px solid ${urg.color}33`,
+                    boxShadow: `0 0 30px ${urg.glow}`,
+                  }}
+                  animate={{
+                    boxShadow: [`0 0 20px ${urg.glow}`, `0 0 40px ${urg.glow}`, `0 0 20px ${urg.glow}`],
+                  }}
+                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  <motion.div
+                    animate={slide.urgency === 'high' ? { scale: [1, 1.1, 1] } : {}}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
+                    <span className="text-4xl font-black tabular-nums" style={{ color: urg.color, fontFamily: "'Space Grotesk', sans-serif" }}>
+                      {slide.daysUntil}
+                    </span>
+                  </motion.div>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.15em] mt-0.5" style={{ color: `${urg.color}cc` }}>
+                    {slide.daysUntil === 1 ? 'dia' : 'dias'}
+                  </span>
+                  <div className="flex items-center gap-1 mt-2 px-2 py-0.5 rounded-full" style={{ backgroundColor: `${urg.color}22` }}>
+                    <UrgIcon className="w-3 h-3" style={{ color: urg.color }} />
+                    <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: urg.color }}>{urg.label}</span>
+                  </div>
+                </motion.div>
+
+                {/* Info block */}
+                <div className="flex-1 flex flex-col justify-center min-w-0">
+                  <h3 className="text-xl font-bold text-white truncate" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                    {slide.label}
+                  </h3>
+                  <p className="text-xs text-white/40 mt-0.5 font-mono">
+                    📅 {new Date(slide.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                  </p>
+                  {slide.suggestion && (
+                    <motion.p
+                      className="text-xs text-white/50 mt-2 line-clamp-2 leading-relaxed"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.3 }}
+                    >
+                      💡 {slide.suggestion}
+                    </motion.p>
+                  )}
+                </div>
+
+                {/* Clients badges */}
+                <div className="flex-shrink-0 flex flex-col justify-center gap-1.5 max-w-[280px]">
+                  <span className="text-[9px] uppercase tracking-[0.15em] font-bold text-white/25 mb-1">Clientes do nicho</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {slide.clients.slice(0, 6).map((c, ci) => (
+                      <motion.div
+                        key={ci}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg"
+                        style={{
+                          background: `${urg.color}11`,
+                          border: `1px solid ${urg.color}22`,
+                        }}
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.2 + ci * 0.08 }}
+                      >
+                        <Star className="w-2.5 h-2.5" style={{ color: `${urg.color}88` }} />
+                        <span className="text-[11px] font-semibold text-white/70 truncate max-w-[100px]">{c.name}</span>
+                      </motion.div>
+                    ))}
+                    {slide.clients.length > 6 && (
+                      <span className="text-[10px] text-white/25 px-2 py-1">+{slide.clients.length - 6}</span>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+    </motion.div>
+  );
+}
+
 /* ─── Main TV Dashboard ─────────────────────────────────── */
 export default function TvDashboard() {
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -556,6 +737,7 @@ export default function TvDashboard() {
   const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());
   const [playlistUrl, setPlaylistUrl] = useState('');
+  const [seasonalSlides, setSeasonalSlides] = useState<SeasonalSlide[]>([]);
   const timerRef = useRef<number>();
   const isFirstLoad = useRef(true);
 
@@ -595,12 +777,46 @@ export default function TvDashboard() {
     } catch {}
   }, []);
 
+  // Fetch seasonal alerts
+  const fetchSeasonal = useCallback(async () => {
+    try {
+      const alerts = await fetchAISeasonalAlerts();
+      if (!alerts.length) return;
+      // Group dates across clients, merge by label+date
+      const dateMap = new Map<string, SeasonalSlide>();
+      for (const alert of alerts) {
+        for (const d of alert.dates) {
+          const key = `${d.label}|${d.date}`;
+          if (!dateMap.has(key)) {
+            dateMap.set(key, {
+              label: d.label,
+              date: d.date,
+              daysUntil: d.days_until,
+              urgency: d.urgency,
+              suggestion: d.suggestion,
+              clients: [],
+            });
+          }
+          const entry = dateMap.get(key)!;
+          if (!entry.clients.find(c => c.name === alert.clientName)) {
+            entry.clients.push({ name: alert.clientName, niche: alert.niche || '' });
+          }
+        }
+      }
+      const sorted = Array.from(dateMap.values()).sort((a, b) => a.daysUntil - b.daysUntil).slice(0, 15);
+      setSeasonalSlides(sorted);
+    } catch (e) {
+      console.error('Seasonal fetch error:', e);
+    }
+  }, []);
+
   useEffect(() => {
     fetchData();
     fetchPlaylist();
+    fetchSeasonal();
     const iv = setInterval(fetchData, 10_000);
     return () => clearInterval(iv);
-  }, [fetchData, fetchPlaylist]);
+  }, [fetchData, fetchPlaylist, fetchSeasonal]);
 
   // Clock tick
   useEffect(() => {
@@ -713,6 +929,9 @@ export default function TvDashboard() {
             </div>
           </div>
         </motion.div>
+
+        {/* ─── Seasonal Dates Banner ────────────────────── */}
+        {seasonalSlides.length > 0 && <SeasonalBanner slides={seasonalSlides} />}
 
         {/* ─── Online Members ────────────────────────────── */}
         {onlineMembers.length > 0 && (

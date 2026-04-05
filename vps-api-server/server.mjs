@@ -4740,7 +4740,61 @@ app.get('/api/tv-dashboard', async (req, res) => {
   }
 });
 
-const presenceState = new Map(); // userId -> { userId, heartbeatAt, connectedAt }
+// ─── Seasonal Alerts proxy (calls Supabase edge function) ───
+app.post('/api/seasonal-alerts', async (req, res) => {
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL || 'https://zqpplhbzhetabjopdzcn.supabase.co';
+    const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || '';
+    
+    const response = await fetch(`${supabaseUrl}/functions/v1/seasonal-alerts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify(req.body || {}),
+    });
+    
+    if (!response.ok) {
+      return res.status(response.status).json({ alerts: [], error: 'Edge function error' });
+    }
+    
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    console.error('[seasonal-alerts] proxy error:', err?.message);
+    res.json({ alerts: [] });
+  }
+});
+
+// Also support GET for simpler calls
+app.get('/api/seasonal-alerts', async (req, res) => {
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL || 'https://zqpplhbzhetabjopdzcn.supabase.co';
+    const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || '';
+    
+    const response = await fetch(`${supabaseUrl}/functions/v1/seasonal-alerts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({}),
+    });
+    
+    if (!response.ok) {
+      return res.status(response.status).json({ alerts: [], error: 'Edge function error' });
+    }
+    
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    console.error('[seasonal-alerts] proxy error:', err?.message);
+    res.json({ alerts: [] });
+  }
+});
+
+
 
 app.get('/api/presence', (req, res) => {
   const now = Date.now();

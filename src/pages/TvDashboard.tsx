@@ -737,6 +737,7 @@ export default function TvDashboard() {
   const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());
   const [playlistUrl, setPlaylistUrl] = useState('');
+  const [seasonalSlides, setSeasonalSlides] = useState<SeasonalSlide[]>([]);
   const timerRef = useRef<number>();
   const isFirstLoad = useRef(true);
 

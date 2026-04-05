@@ -4433,8 +4433,18 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Dat
 // ─── TV Dashboard endpoint ──────────────────────────────────
 app.get('/api/tv-dashboard', async (req, res) => {
   try {
+    const safeQuery = async (label, sql, params = []) => {
+      try {
+        const { rows } = await pool.query(sql, params);
+        return rows;
+      } catch (error) {
+        console.warn(`[tv-dashboard] Failed to load ${label}:`, error?.message || error);
+        return [];
+      }
+    };
+
     // 1. Get all team profiles
-    const { rows: profiles } = await pool.query(`
+    const profiles = await safeQuery('profiles', `
       SELECT p.id, p.name, p.role, p.avatar_url
       FROM profiles p
       WHERE p.role IS NOT NULL
@@ -4452,7 +4462,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
     }
 
     // 3. Get active content tasks (editing/reviewing/altering)
-    const { rows: contentTasks } = await pool.query(`
+    const contentTasks = await safeQuery('content_tasks', `
       SELECT ct.id, ct.title, ct.kanban_column, ct.assigned_to, ct.editing_started_at,
              ct.editing_paused_at, ct.editing_paused_seconds, ct.reviewing_by,
              ct.reviewing_at, ct.client_id, ct.edited_by,
@@ -4464,7 +4474,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
     `);
 
     // 4. Get active design tasks
-    const { rows: designTasks } = await pool.query(`
+    const designTasks = await safeQuery('design_tasks', `
       SELECT dt.id, dt.title, dt.kanban_column, dt.assigned_to, dt.timer_running,
              dt.timer_started_at, dt.time_spent_seconds,
              c.company_name AS client_name
@@ -4475,7 +4485,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
     `);
 
     // 5. Get active recordings
-    const { rows: activeRecs } = await pool.query(`
+    const activeRecs = await safeQuery('active_recordings', `
       SELECT ar.videomaker_id, ar.started_at, c.company_name AS client_name
       FROM active_recordings ar
       LEFT JOIN clients c ON c.id = ar.client_id
@@ -4488,10 +4498,10 @@ app.get('/api/tv-dashboard', async (req, res) => {
     for (const t of contentTasks) {
       const userId = t.edited_by || t.assigned_to || t.reviewing_by;
       if (!userId) continue;
-      
+
       let activity = 'editing';
       let timeOnTask = 0;
-      
+
       if (t.kanban_column === 'revisao') {
         activity = 'reviewing';
         if (t.reviewing_at) {
@@ -4506,7 +4516,6 @@ app.get('/api/tv-dashboard', async (req, res) => {
       } else if (t.kanban_column === 'gravacao') {
         activity = 'recording';
       } else {
-        // edicao
         if (t.editing_started_at && !t.editing_paused_at) {
           const elapsed = Math.floor((Date.now() - new Date(t.editing_started_at).getTime()) / 1000);
           timeOnTask = elapsed - (t.editing_paused_seconds || 0);
@@ -4516,7 +4525,6 @@ app.get('/api/tv-dashboard', async (req, res) => {
         }
       }
 
-      // Only override if not already set or this has active timer
       if (!activityMap.has(userId) || (timeOnTask > 0 && !activityMap.get(userId).timeOnTask)) {
         activityMap.set(userId, {
           activity,
@@ -4590,7 +4598,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
 
     // 6. Get today's recordings schedule
     const today = new Date().toISOString().split('T')[0];
-    const { rows: recordings } = await pool.query(`
+    const recordings = await safeQuery('recordings', `
       SELECT r.id, r.client_id, r.videomaker_id, r.start_time, r.type, r.status,
              r.confirmation_status,
              c.company_name AS client_name, c.logo_url AS client_logo, c.color AS client_color,

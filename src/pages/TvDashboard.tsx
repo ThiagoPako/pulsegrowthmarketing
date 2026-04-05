@@ -675,7 +675,10 @@ export default function TvDashboard() {
       setTodayPosts(data.todayPosts || []);
       setConnected(true);
       isFirstLoad.current = false;
-    } catch { setConnected(false); }
+    } catch {
+      isFirstLoad.current = false;
+      setConnected(false);
+    }
   }, []);
 
   const fetchPlaylist = useCallback(async () => {

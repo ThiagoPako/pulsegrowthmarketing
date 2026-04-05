@@ -675,7 +675,10 @@ export default function TvDashboard() {
       setTodayPosts(data.todayPosts || []);
       setConnected(true);
       isFirstLoad.current = false;
-    } catch { setConnected(false); }
+    } catch {
+      isFirstLoad.current = false;
+      setConnected(false);
+    }
   }, []);
 
   const fetchPlaylist = useCallback(async () => {
@@ -729,6 +732,7 @@ export default function TvDashboard() {
 
   const onlineMembers = members.filter(m => m.isOnline);
   const offlineMembers = members.filter(m => !m.isOnline);
+  const hasAnyData = members.length > 0 || schedule.length > 0 || editingPipeline.length > 0 || todayPosts.length > 0;
   const timeStr = clock.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const dateStr = clock.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 
@@ -904,17 +908,30 @@ export default function TvDashboard() {
         </div>
 
         {/* ─── Empty state ──────────────────────────────── */}
-        {members.length === 0 && (
+        {!hasAnyData && (
           <motion.div className="flex flex-col items-center justify-center h-[60vh] gap-5"
             initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6 }}>
-            <motion.div animate={{ rotate: [0, 10, -10, 0], y: [0, -8, 0] }} transition={{ duration: 3, repeat: Infinity }}>
-              <Rocket className="w-14 h-14" style={{ color: `${PULSE_ORANGE}40` }} />
+            <motion.div
+              animate={connected || isFirstLoad.current ? { rotate: [0, 10, -10, 0], y: [0, -8, 0] } : { opacity: [0.6, 1, 0.6] }}
+              transition={{ duration: 3, repeat: Infinity }}
+            >
+              {connected || isFirstLoad.current ? (
+                <Rocket className="w-14 h-14" style={{ color: `${PULSE_ORANGE}40` }} />
+              ) : (
+                <WifiOff className="w-14 h-14 text-red-400/70" />
+              )}
             </motion.div>
-            <p className="text-white/20 text-base font-medium" style={{ fontFamily: SPACE }}>Carregando equipe...</p>
-            <motion.div className="w-28 h-1 rounded-full overflow-hidden bg-white/5">
-              <motion.div className="h-full rounded-full" style={{ backgroundColor: PULSE_ORANGE }}
-                animate={{ x: ['-100%', '100%'] }} transition={{ duration: 1.5, repeat: Infinity }} />
-            </motion.div>
+            <p className="text-white/20 text-base font-medium" style={{ fontFamily: SPACE }}>
+              {isFirstLoad.current ? 'Carregando painel operacional...' : connected ? 'Nenhuma atividade no momento.' : 'Não foi possível carregar o painel operacional.'}
+            </p>
+            {isFirstLoad.current ? (
+              <motion.div className="w-28 h-1 rounded-full overflow-hidden bg-white/5">
+                <motion.div className="h-full rounded-full" style={{ backgroundColor: PULSE_ORANGE }}
+                  animate={{ x: ['-100%', '100%'] }} transition={{ duration: 1.5, repeat: Infinity }} />
+              </motion.div>
+            ) : (
+              <p className="text-[11px] text-white/30">{connected ? 'Aguardando novos dados da operação.' : 'Verifique a API da VPS e recarregue a tela.'}</p>
+            )}
           </motion.div>
         )}
       </div>

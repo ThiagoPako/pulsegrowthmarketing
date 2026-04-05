@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.generate-caption]
 verify_jwt = false
+
+[functions.pulse-ai-chat]
+verify_jwt = false

@@ -4660,7 +4660,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
     const todaySchedule = [...schedule, ...eventItems].sort((a, b) => a.startTime.localeCompare(b.startTime));
 
     // 8. Get editing tasks (active editing pipeline)
-    const { rows: editingTasks } = await pool.query(`
+    const editingTasks = await safeQuery('editing_pipeline', `
       SELECT ct.id, ct.title, ct.kanban_column, ct.content_type, ct.editing_started_at,
              ct.editing_paused_at, ct.editing_paused_seconds, ct.edited_by,
              ct.reviewing_by, ct.reviewing_by_name, ct.reviewing_at,

@@ -732,6 +732,7 @@ export default function TvDashboard() {
 
   const onlineMembers = members.filter(m => m.isOnline);
   const offlineMembers = members.filter(m => !m.isOnline);
+  const hasAnyData = members.length > 0 || schedule.length > 0 || editingPipeline.length > 0 || todayPosts.length > 0;
   const timeStr = clock.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const dateStr = clock.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 

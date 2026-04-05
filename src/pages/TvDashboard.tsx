@@ -58,6 +58,19 @@ interface EditingTask {
   isPaused: boolean;
 }
 
+interface DesignActivityTask {
+  id: string;
+  title: string;
+  column: string;
+  clientName: string;
+  clientLogo?: string | null;
+  clientColor?: string | null;
+  designerName?: string | null;
+  designerAvatar?: string | null;
+  timeOnTask: number;
+  isPaused: boolean;
+}
+
 interface ScheduledPost {
   id: string;
   title: string;
@@ -76,7 +89,7 @@ interface SeasonalSlide {
   daysUntil: number;
   urgency: 'high' | 'medium' | 'low';
   suggestion: string;
-  clients: { name: string; niche: string }[];
+  clients: { name: string; niche: string; logoUrl?: string | null; color?: string | null }[];
 }
 
 /* ─── Brand ─────────────────────────────────────────────── */
@@ -112,9 +125,25 @@ const COLUMN_CONFIG: Record<string, { label: string; color: string; icon: any }>
   alteracao: { label: 'Alteração', color: '#ef4444', icon: FileVideo },
 };
 
+const DESIGN_COLUMN_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
+  executando: { label: 'Criando', color: 'hsl(330 85% 62%)', icon: Palette },
+  em_analise: { label: 'Em análise', color: 'hsl(32 95% 58%)', icon: Eye },
+  ajustes: { label: 'Ajustes', color: 'hsl(356 84% 62%)', icon: Sparkles },
+  em_andamento: { label: 'Criando', color: 'hsl(330 85% 62%)', icon: Palette },
+  revisao_interna: { label: 'Em análise', color: 'hsl(32 95% 58%)', icon: Eye },
+};
+
 /* ─── Utils ─────────────────────────────────────────────── */
 function getInitials(name: string) {
   return name.split(' ').map(n => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+}
+
+function formatElapsedTime(seconds: number) {
+  const safeSeconds = Math.max(0, Math.floor(seconds || 0));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  if (hours > 0) return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+  return `${minutes}m`;
 }
 
 function SectionHeader({ icon: Icon, iconColor, title, badge, children }: {
@@ -439,6 +468,72 @@ function EditingCard({ task }: { task: EditingTask }) {
   );
 }
 
+function DesignActivityCard({ task }: { task: DesignActivityTask }) {
+  const col = DESIGN_COLUMN_CONFIG[task.column] || DESIGN_COLUMN_CONFIG.executando;
+  const ColIcon = col.icon;
+
+  return (
+    <motion.div
+      className="rounded-xl overflow-hidden border"
+      style={{
+        borderColor: `${col.color}33`,
+        background: `linear-gradient(135deg, ${col.color}12, transparent 72%)`,
+      }}
+      layout
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      transition={{ duration: 0.35 }}
+    >
+      <div className="p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full" style={{ backgroundColor: `${col.color}18` }}>
+            <ColIcon className="w-3 h-3" style={{ color: col.color }} />
+            <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: col.color }}>{col.label}</span>
+          </div>
+          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/5 text-white/35">
+            {task.isPaused ? <Pause className="w-2.5 h-2.5" /> : <Play className="w-2.5 h-2.5" style={{ color: col.color }} />}
+            <span className="text-[8px] font-bold uppercase">{formatElapsedTime(task.timeOnTask)}</span>
+          </div>
+        </div>
+
+        <p className="text-sm font-semibold text-white truncate">{task.title}</p>
+
+        <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            {task.clientLogo ? (
+              <img src={task.clientLogo} alt={task.clientName} className="w-6 h-6 rounded object-contain" />
+            ) : (
+              <div className="w-6 h-6 rounded flex items-center justify-center text-[8px] font-bold"
+                style={{ backgroundColor: task.clientColor ? `hsl(${task.clientColor} / 0.14)` : 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.45)' }}>
+                {getInitials(task.clientName)}
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-[11px] text-white/75 truncate">{task.clientName}</p>
+              <p className="text-[9px] text-white/30 uppercase tracking-wider">Atividade da designer</p>
+            </div>
+          </div>
+
+          {task.designerName && (
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className="w-7 h-7 rounded-full overflow-hidden border flex items-center justify-center"
+                style={{ borderColor: `${col.color}30`, backgroundColor: `${col.color}12` }}>
+                {task.designerAvatar ? (
+                  <img src={task.designerAvatar} alt={task.designerName} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-[8px] font-bold" style={{ color: col.color }}>{getInitials(task.designerName)}</span>
+                )}
+              </div>
+              <span className="text-[10px] text-white/45">{task.designerName.split(' ')[0]}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 /* ─── Scheduled Post Card ───────────────────────────────── */
 function PostCard({ post }: { post: ScheduledPost }) {
   const statusConfig: Record<string, { color: string; label: string }> = {
@@ -595,7 +690,7 @@ function SeasonalBanner({ slides }: { slides: SeasonalSlide[] }) {
         </div>
       </div>
 
-      <div className="relative h-[120px] px-5 pb-3">
+      <div className="relative h-[142px] px-5 pb-3">
         <AnimatePresence mode="wait">
           {slides.map((slide, i) => {
             if (i !== current) return null;
@@ -637,19 +732,33 @@ function SeasonalBanner({ slides }: { slides: SeasonalSlide[] }) {
                 </div>
 
                 {/* Clients */}
-                <div className="flex-shrink-0 flex flex-col justify-center gap-1 max-w-[250px]">
-                  <span className="text-[8px] uppercase tracking-wider font-bold text-white/20 mb-0.5">Clientes</span>
-                  <div className="flex flex-wrap gap-1">
-                    {slide.clients.slice(0, 5).map((c, ci) => (
-                      <motion.div key={ci} className="px-2 py-0.5 rounded-md text-[10px] font-medium text-white/60"
+                <div className="flex-shrink-0 flex flex-col justify-center gap-1.5 w-[340px]">
+                  <span className="text-[8px] uppercase tracking-wider font-bold text-white/20 mb-0.5">Clientes do nicho</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    {slide.clients.slice(0, 4).map((c, ci) => (
+                      <motion.div key={`${c.name}-${ci}`} className="rounded-xl px-2.5 py-2 flex items-center gap-2"
                         style={{ background: `${urg.color}0c`, border: `1px solid ${urg.color}1a` }}
-                        initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+                        initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: 0.15 + ci * 0.06 }}>
-                        {c.name}
+                        {c.logoUrl ? (
+                          <div className="w-8 h-8 rounded-lg overflow-hidden border flex items-center justify-center"
+                            style={{ borderColor: c.color ? `hsl(${c.color} / 0.26)` : `${urg.color}33`, backgroundColor: c.color ? `hsl(${c.color} / 0.12)` : `${urg.color}14` }}>
+                            <img src={c.logoUrl} alt={c.name} className="w-full h-full object-contain p-1" />
+                          </div>
+                        ) : (
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[9px] font-bold"
+                            style={{ backgroundColor: c.color ? `hsl(${c.color} / 0.14)` : `${urg.color}14`, color: 'rgba(255,255,255,0.6)' }}>
+                            {getInitials(c.name)}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-semibold text-white/70 truncate">{c.name}</p>
+                          <p className="text-[8px] uppercase tracking-wider text-white/30 truncate">{c.niche.replace(/_/g, ' ')}</p>
+                        </div>
                       </motion.div>
                     ))}
-                    {slide.clients.length > 5 && <span className="text-[9px] text-white/20 px-1">+{slide.clients.length - 5}</span>}
                   </div>
+                  {slide.clients.length > 4 && <span className="text-[9px] text-white/20 px-1">+{slide.clients.length - 4} clientes relacionados</span>}
                 </div>
               </motion.div>
             );
@@ -667,6 +776,7 @@ export default function TvDashboard() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
   const [editingPipeline, setEditingPipeline] = useState<EditingTask[]>([]);
+  const [designPipeline, setDesignPipeline] = useState<DesignActivityTask[]>([]);
   const [todayPosts, setTodayPosts] = useState<ScheduledPost[]>([]);
   const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());
@@ -682,7 +792,11 @@ export default function TvDashboard() {
       setMembers(data.members || []);
       setSchedule(data.todaySchedule || []);
       setEditingPipeline(data.editingPipeline || []);
+      setDesignPipeline(data.designPipeline || []);
       setTodayPosts(data.todayPosts || []);
+      if (Array.isArray(data.seasonalSlides) && data.seasonalSlides.length > 0) {
+        setSeasonalSlides(data.seasonalSlides);
+      }
       setConnected(true);
       isFirstLoad.current = false;
     } catch {
@@ -734,7 +848,7 @@ export default function TvDashboard() {
           }
           const entry = dateMap.get(key)!;
           if (!entry.clients.find(c => c.name === alert.clientName)) {
-            entry.clients.push({ name: alert.clientName, niche: alert.niche || '' });
+            entry.clients.push({ name: alert.clientName, niche: alert.niche || '', logoUrl: alert.clientLogo || null, color: alert.clientColor || null });
           }
         }
       }
@@ -755,7 +869,8 @@ export default function TvDashboard() {
 
   const onlineMembers = members.filter(m => m.isOnline);
   const offlineMembers = members.filter(m => !m.isOnline);
-  const hasAnyData = members.length > 0 || schedule.length > 0 || editingPipeline.length > 0 || todayPosts.length > 0;
+  const designerMembers = members.filter(m => m.role === 'designer');
+  const hasAnyData = members.length > 0 || schedule.length > 0 || editingPipeline.length > 0 || designPipeline.length > 0 || todayPosts.length > 0 || seasonalSlides.length > 0;
   const timeStr = clock.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const dateStr = clock.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 
@@ -814,8 +929,8 @@ export default function TvDashboard() {
 
         {/* ─── Main Grid: 3 columns ────────────────────── */}
         <div className="grid grid-cols-12 gap-5">
-          {/* LEFT COLUMN: Team Online + Offline (4 cols) */}
-          <div className="col-span-4 space-y-5">
+          {/* LEFT COLUMN: Team Online + Offline */}
+          <div className="col-span-3 space-y-5">
             {/* Online */}
             <div>
               <SectionHeader icon={() => (
@@ -873,8 +988,8 @@ export default function TvDashboard() {
             )}
           </div>
 
-          {/* CENTER COLUMN: Schedule + Posts (4 cols) */}
-          <div className="col-span-4 space-y-5">
+          {/* CENTER COLUMN: Schedule + Posts */}
+          <div className="col-span-5 space-y-5">
             {/* Schedule */}
             <div>
               <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${schedule.length} gravações`} />
@@ -910,8 +1025,28 @@ export default function TvDashboard() {
             </div>
           </div>
 
-          {/* RIGHT COLUMN: Editing Pipeline (4 cols) */}
+          {/* RIGHT COLUMN: Designer + Editing */}
           <div className="col-span-4 space-y-5">
+            <div>
+              <SectionHeader icon={Palette} iconColor="hsl(330 85% 62%)" title="Designer" badge={designPipeline.length > 0 ? `${designPipeline.length} artes` : `${designerMembers.length} designers`} />
+              {designPipeline.length > 0 ? (
+                <div className="space-y-2.5">
+                  <AnimatePresence>
+                    {designPipeline.map(task => <DesignActivityCard key={task.id} task={task} />)}
+                  </AnimatePresence>
+                </div>
+              ) : designerMembers.length > 0 ? (
+                <div className="space-y-2.5">
+                  {designerMembers.map(member => <MemberCard key={member.id} member={member} />)}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-white/8 p-6 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                  <Palette className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                  <p className="text-[10px] text-white/20">Nenhuma designer em atividade agora</p>
+                </div>
+              )}
+            </div>
+
             <div>
               <SectionHeader icon={Film} iconColor="#8b5cf6" title="Pós-Produção" badge={`${editingPipeline.length} vídeos`} />
               {editingPipeline.length > 0 ? (

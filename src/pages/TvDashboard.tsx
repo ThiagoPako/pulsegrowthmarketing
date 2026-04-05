@@ -700,7 +700,20 @@ export default function TvDashboard() {
 
   const fetchSeasonal = useCallback(async () => {
     try {
-      const alerts = await fetchAISeasonalAlerts();
+      // Try edge function first, then fallback
+      let alerts = await fetchAISeasonalAlerts();
+      
+      // If edge function returned nothing, try VPS endpoint
+      if (!alerts.length) {
+        try {
+          const res = await fetch(`${VPS}/seasonal-alerts`);
+          if (res.ok) {
+            const data = await res.json();
+            alerts = data.alerts || [];
+          }
+        } catch {}
+      }
+
       if (!alerts.length) return;
       const dateMap = new Map<string, SeasonalSlide>();
       for (const alert of alerts) {

@@ -930,6 +930,9 @@ export default function TvDashboard() {
           </div>
         </motion.div>
 
+        {/* ─── Seasonal Dates Banner ────────────────────── */}
+        {seasonalSlides.length > 0 && <SeasonalBanner slides={seasonalSlides} />}
+
         {/* ─── Online Members ────────────────────────────── */}
         {onlineMembers.length > 0 && (
           <motion.div

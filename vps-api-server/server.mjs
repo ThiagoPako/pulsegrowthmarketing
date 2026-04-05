@@ -4594,7 +4594,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
       SELECT r.id, r.client_id, r.videomaker_id, r.start_time, r.type, r.status,
              r.confirmation_status,
              c.company_name AS client_name, c.logo_url AS client_logo, c.color AS client_color,
-             p.name AS videomaker_name
+             p.name AS videomaker_name, p.avatar_url AS videomaker_avatar
       FROM recordings r
       LEFT JOIN clients c ON c.id = r.client_id
       LEFT JOIN profiles p ON p.id = r.videomaker_id
@@ -4607,7 +4607,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
       SELECT er.id, er.title, er.start_time, er.end_time, er.address, er.status,
              er.client_id, er.videomaker_id,
              c.company_name AS client_name,
-             p.name AS videomaker_name
+             p.name AS videomaker_name, p.avatar_url AS videomaker_avatar
       FROM event_recordings er
       LEFT JOIN clients c ON c.id = er.client_id
       LEFT JOIN profiles p ON p.id = er.videomaker_id
@@ -4622,6 +4622,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
       clientLogo: r.client_logo || null,
       clientColor: r.client_color || null,
       videomakerName: r.videomaker_name || null,
+      videomakerAvatar: r.videomaker_avatar || null,
       startTime: r.start_time,
       recordingType: r.type,
       status: r.status,

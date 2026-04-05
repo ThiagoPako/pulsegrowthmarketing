@@ -480,14 +480,16 @@ function PostCard({ post }: { post: ScheduledPost }) {
 
 /* ─── YouTube Player ────────────────────────────────────── */
 function YouTubePlayer({ url }: { url: string }) {
+  const [unmuted, setUnmuted] = useState(false);
   const embedUrl = useMemo(() => {
     if (!url) return '';
+    const mute = unmuted ? 0 : 1;
     const listMatch = url.match(/[?&]list=([^&]+)/);
-    if (listMatch) return `https://www.youtube.com/embed/videoseries?list=${listMatch[1]}&autoplay=1&mute=1&loop=1&controls=0&showinfo=0&rel=0`;
+    if (listMatch) return `https://www.youtube.com/embed/videoseries?list=${listMatch[1]}&autoplay=1&mute=${mute}&loop=1&controls=1&showinfo=0&rel=0`;
     const videoMatch = url.match(/(?:watch\?v=|youtu\.be\/|embed\/)([^&?]+)/);
-    if (videoMatch) return `https://www.youtube.com/embed/${videoMatch[1]}?autoplay=1&mute=1&loop=1&controls=0&showinfo=0&rel=0&playlist=${videoMatch[1]}`;
+    if (videoMatch) return `https://www.youtube.com/embed/${videoMatch[1]}?autoplay=1&mute=${mute}&loop=1&controls=1&showinfo=0&rel=0&playlist=${videoMatch[1]}`;
     return '';
-  }, [url]);
+  }, [url, unmuted]);
 
   if (!embedUrl) return null;
   return (
@@ -503,9 +505,17 @@ function YouTubePlayer({ url }: { url: string }) {
               transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.12 }} />
           ))}
         </motion.div>
+        <div className="flex-1" />
+        {!unmuted && (
+          <button onClick={() => setUnmuted(true)}
+            className="flex items-center gap-1 text-[9px] font-bold uppercase px-2 py-0.5 rounded-full transition-all hover:scale-105"
+            style={{ backgroundColor: `${PULSE_ORANGE}1a`, color: PULSE_ORANGE, border: `1px solid ${PULSE_ORANGE}33` }}>
+            🔇 Ativar Som
+          </button>
+        )}
       </div>
       <div className="aspect-video">
-        <iframe src={embedUrl} className="w-full h-full" allow="autoplay; encrypted-media" allowFullScreen style={{ border: 0 }} />
+        <iframe key={unmuted ? 'unmuted' : 'muted'} src={embedUrl} className="w-full h-full" allow="autoplay; encrypted-media" allowFullScreen style={{ border: 0 }} />
       </div>
     </motion.div>
   );

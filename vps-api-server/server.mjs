@@ -4665,6 +4665,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
       LEFT JOIN profiles pe ON pe.id = ct.edited_by
       LEFT JOIN profiles pr ON pr.id = ct.reviewing_by
       WHERE ct.kanban_column IN ('edicao', 'revisao', 'alteracao')
+        AND (ct.edited_by IS NOT NULL OR ct.reviewing_by IS NOT NULL)
       ORDER BY ct.updated_at DESC
     `);
 

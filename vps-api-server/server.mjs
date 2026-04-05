@@ -4430,6 +4430,176 @@ app.patch('/api/discount-campaigns/:id', async (req, res) => {
 // ─── Health check ───────────────────────────────────────────
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
+const TV_DAY_MS = 24 * 60 * 60 * 1000;
+
+function normalizeTvNiche(value = '') {
+  return String(value || 'outro').trim().toLowerCase();
+}
+
+function startOfTvDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function tvDaysUntil(baseDate, targetDate) {
+  return Math.round((startOfTvDay(targetDate).getTime() - startOfTvDay(baseDate).getTime()) / TV_DAY_MS);
+}
+
+function formatTvDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getTvNthWeekdayOfMonth(year, month, weekday, nth) {
+  const date = new Date(year, month - 1, 1);
+  let count = 0;
+
+  while (date.getMonth() === month - 1) {
+    if (date.getDay() === weekday) {
+      count += 1;
+      if (count === nth) return new Date(date);
+    }
+    date.setDate(date.getDate() + 1);
+  }
+
+  return new Date(year, month - 1, 1);
+}
+
+function getTvLastWeekdayOfMonth(year, month, weekday) {
+  const date = new Date(year, month, 0);
+  while (date.getDay() !== weekday) date.setDate(date.getDate() - 1);
+  return new Date(date);
+}
+
+function getTvUrgency(days) {
+  if (days <= 7) return 'high';
+  if (days <= 20) return 'medium';
+  return 'low';
+}
+
+const tvHealthNiches = ['saude', 'farmacia', 'odontologia', 'beleza', 'barbearia', 'emagrecimento', 'clinica_veterinaria'];
+const tvRetailNiches = ['varejo', 'mercado', 'moda', 'moveis', 'infantil', 'joalheria', 'otica', 'construcao', 'grafica', 'outro'];
+const tvFoodNiches = ['alimentacao', 'confeitaria', 'mercado'];
+
+const tvSeasonalTemplates = [
+  {
+    label: 'Dia Mundial da Saúde',
+    month: 4,
+    day: 7,
+    niches: tvHealthNiches,
+    suggestion: 'Ative conteúdo educativo com dica prática, autoridade e CTA direto para atendimento.',
+  },
+  {
+    label: 'Dia do Trabalhador',
+    month: 5,
+    day: 1,
+    suggestion: 'Mostre bastidores, equipe e ofertas com linguagem humana para aproximar a marca.',
+  },
+  {
+    label: 'Dia das Mães',
+    computeDate: (year) => getTvNthWeekdayOfMonth(year, 5, 0, 2),
+    niches: [...tvRetailNiches, ...tvFoodNiches, 'farmacia', 'saude', 'beleza', 'barbearia', 'turismo', 'pet'],
+    suggestion: 'Antecipe kits, combos e uma campanha emocional com CTA forte no WhatsApp.',
+  },
+  {
+    label: 'Dia dos Namorados',
+    month: 6,
+    day: 12,
+    niches: [...tvRetailNiches, ...tvFoodNiches, 'turismo', 'beleza', 'barbearia', 'otica'],
+    suggestion: 'Trabalhe desejo, presenteável e urgência com boa vitrine e oferta especial.',
+  },
+  {
+    label: 'Dia do Cliente',
+    month: 9,
+    day: 15,
+    suggestion: 'Reforce relacionamento com condição especial, prova social e reativação.',
+  },
+  {
+    label: 'Black Friday',
+    computeDate: (year) => getTvLastWeekdayOfMonth(year, 11, 5),
+    suggestion: 'Planeje aquecimento, lista de espera e comunicação de oportunidade real.',
+  },
+  {
+    label: 'Natal',
+    month: 12,
+    day: 25,
+    suggestion: 'Use emoção, kits, presentes e fechamento de ano com forte apelo visual.',
+  },
+];
+
+function resolveTvSeasonalDate(template, today) {
+  let resolved = template.computeDate
+    ? template.computeDate(today.getFullYear())
+    : new Date(today.getFullYear(), (template.month || 1) - 1, template.day || 1);
+
+  if (tvDaysUntil(today, resolved) < 0) {
+    resolved = template.computeDate
+      ? template.computeDate(today.getFullYear() + 1)
+      : new Date(today.getFullYear() + 1, (template.month || 1) - 1, template.day || 1);
+  }
+
+  return resolved;
+}
+
+function buildTvSeasonalSlides(clients = [], referenceDate = new Date()) {
+  const slideMap = new Map();
+
+  for (const client of clients) {
+    const niche = normalizeTvNiche(client?.niche);
+    const candidateEvents = tvSeasonalTemplates
+      .map((template) => {
+        const targetDate = resolveTvSeasonalDate(template, referenceDate);
+        const daysUntil = tvDaysUntil(referenceDate, targetDate);
+        return { template, targetDate, daysUntil };
+      })
+      .filter(({ template, daysUntil }) => {
+        if (daysUntil < 0 || daysUntil > 60) return false;
+        return !template.niches?.length || template.niches.includes(niche);
+      })
+      .sort((a, b) => a.daysUntil - b.daysUntil)
+      .slice(0, 4);
+
+    const fallbackEvents = tvSeasonalTemplates
+      .map((template) => {
+        const targetDate = resolveTvSeasonalDate(template, referenceDate);
+        const daysUntil = tvDaysUntil(referenceDate, targetDate);
+        return { template, targetDate, daysUntil };
+      })
+      .filter(({ daysUntil }) => daysUntil >= 0 && daysUntil <= 60)
+      .sort((a, b) => a.daysUntil - b.daysUntil)
+      .slice(0, 2);
+
+    for (const event of (candidateEvents.length ? candidateEvents : fallbackEvents)) {
+      const key = `${event.template.label}|${formatTvDate(event.targetDate)}`;
+      if (!slideMap.has(key)) {
+        slideMap.set(key, {
+          label: event.template.label,
+          date: formatTvDate(event.targetDate),
+          daysUntil: event.daysUntil,
+          urgency: getTvUrgency(event.daysUntil),
+          suggestion: event.template.suggestion,
+          clients: [],
+        });
+      }
+
+      const currentSlide = slideMap.get(key);
+      if (!currentSlide.clients.find((entry) => entry.name === client?.company_name)) {
+        currentSlide.clients.push({
+          name: client?.company_name || 'Cliente',
+          niche,
+          logoUrl: client?.logo_url || null,
+          color: client?.color || null,
+        });
+      }
+    }
+  }
+
+  return Array.from(slideMap.values())
+    .sort((a, b) => a.daysUntil - b.daysUntil)
+    .slice(0, 12);
+}
+
 // ─── TV Dashboard endpoint ──────────────────────────────────
 app.get('/api/tv-dashboard', async (req, res) => {
   let stage = 'init';
@@ -4481,11 +4651,14 @@ app.get('/api/tv-dashboard', async (req, res) => {
     const designTasks = await safeQuery('design_tasks', `
       SELECT dt.id, dt.title, dt.kanban_column, dt.assigned_to, dt.timer_running,
              dt.timer_started_at, dt.time_spent_seconds,
-             c.company_name AS client_name
+             c.company_name AS client_name, c.logo_url AS client_logo, c.color AS client_color,
+             p.name AS designer_name, p.avatar_url AS designer_avatar
       FROM design_tasks dt
       LEFT JOIN clients c ON c.id = dt.client_id
-      WHERE dt.kanban_column IN ('em_andamento', 'revisao_interna')
+      LEFT JOIN profiles p ON p.id = dt.assigned_to
+      WHERE dt.kanban_column IN ('executando', 'em_analise', 'ajustes', 'em_andamento', 'revisao_interna')
         AND dt.assigned_to IS NOT NULL
+      ORDER BY dt.updated_at DESC
     `);
 
     // 5. Get active recordings
@@ -4673,6 +4846,29 @@ app.get('/api/tv-dashboard', async (req, res) => {
 
     const todaySchedule = [...schedule, ...eventItems].sort((a, b) => String(a?.startTime || '').localeCompare(String(b?.startTime || '')));
 
+    const designPipeline = (designTasks || []).map((t) => {
+      let timeOnTask = t?.time_spent_seconds || 0;
+      if (t?.timer_running && t?.timer_started_at) {
+        const startedAt = new Date(t.timer_started_at).getTime();
+        if (Number.isFinite(startedAt)) {
+          timeOnTask += Math.floor((Date.now() - startedAt) / 1000);
+        }
+      }
+
+      return {
+        id: t?.id || crypto.randomUUID(),
+        title: t?.title || 'Sem título',
+        column: t?.kanban_column || 'executando',
+        clientName: t?.client_name || 'Cliente',
+        clientLogo: t?.client_logo || null,
+        clientColor: t?.client_color || null,
+        designerName: t?.designer_name || null,
+        designerAvatar: t?.designer_avatar || null,
+        timeOnTask: Math.max(0, timeOnTask),
+        isPaused: !t?.timer_running,
+      };
+    });
+
     // 8. Get editing tasks (active editing pipeline)
     const editingTasks = await safeQuery('editing_pipeline', `
       SELECT ct.id, ct.title, ct.kanban_column, ct.content_type, ct.editing_started_at,
@@ -4757,10 +4953,20 @@ app.get('/api/tv-dashboard', async (req, res) => {
       console.warn('[tv-dashboard] Failed to load social_media_deliveries:', error?.message || error);
     }
 
-    res.json({ members, todaySchedule, editingPipeline, todayPosts, updatedAt: new Date().toISOString() });
+    const seasonalClients = await safeQuery('seasonal_clients', `
+      SELECT id, company_name, niche, logo_url, color
+      FROM clients
+      WHERE niche IS NOT NULL
+        AND btrim(niche) <> ''
+      ORDER BY company_name ASC
+    `);
+
+    const seasonalSlides = buildTvSeasonalSlides(seasonalClients, new Date());
+
+    res.json({ members, todaySchedule, editingPipeline, designPipeline, todayPosts, seasonalSlides, updatedAt: new Date().toISOString() });
   } catch (err) {
     console.error('[tv-dashboard] Error at stage:', stage, err);
-    res.json({ members: [], todaySchedule: [], editingPipeline: [], todayPosts: [], updatedAt: new Date().toISOString(), error: 'fallback' });
+    res.json({ members: [], todaySchedule: [], editingPipeline: [], designPipeline: [], todayPosts: [], seasonalSlides: [], updatedAt: new Date().toISOString(), error: 'fallback' });
   }
 });
 

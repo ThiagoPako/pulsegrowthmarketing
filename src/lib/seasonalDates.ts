@@ -45,6 +45,8 @@ export interface AISeasonalAlert {
   clientId: string;
   clientName: string;
   niche: string;
+  clientLogo?: string | null;
+  clientColor?: string | null;
   dates: {
     label: string;
     date: string;
@@ -60,6 +62,7 @@ interface CachedAlerts {
 }
 
 export function getCachedAlerts(): AISeasonalAlert[] | null {
+  if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(SEASONAL_CACHE_KEY);
     if (!raw) return null;
@@ -75,6 +78,7 @@ export function getCachedAlerts(): AISeasonalAlert[] | null {
 }
 
 export function setCachedAlerts(alerts: AISeasonalAlert[]) {
+  if (typeof window === 'undefined' || alerts.length === 0) return;
   try {
     const cached: CachedAlerts = { timestamp: Date.now(), alerts };
     localStorage.setItem(SEASONAL_CACHE_KEY, JSON.stringify(cached));
@@ -123,6 +127,7 @@ export async function fetchAISeasonalAlerts(
  * Force refresh cached alerts
  */
 export function clearSeasonalCache() {
+  if (typeof window === 'undefined') return;
   localStorage.removeItem(SEASONAL_CACHE_KEY);
 }
 

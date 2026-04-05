@@ -4456,7 +4456,8 @@ app.get('/api/tv-dashboard', async (req, res) => {
     const ONLINE_MS = 120_000;
     const onlineIds = new Set();
     for (const [uid, info] of presenceState) {
-      if (now - new Date(info.heartbeatAt).getTime() < ONLINE_MS) {
+      const heartbeatAt = info?.heartbeatAt ? new Date(info.heartbeatAt).getTime() : 0;
+      if (uid && Number.isFinite(heartbeatAt) && now - heartbeatAt < ONLINE_MS) {
         onlineIds.add(uid);
       }
     }
@@ -4496,40 +4497,43 @@ app.get('/api/tv-dashboard', async (req, res) => {
 
     // Content tasks
     for (const t of contentTasks) {
-      const userId = t.edited_by || t.assigned_to || t.reviewing_by;
+      const userId = t?.edited_by || t?.assigned_to || t?.reviewing_by;
       if (!userId) continue;
 
       let activity = 'editing';
       let timeOnTask = 0;
 
-      if (t.kanban_column === 'revisao') {
+      if (t?.kanban_column === 'revisao') {
         activity = 'reviewing';
-        if (t.reviewing_at) {
-          timeOnTask = Math.floor((Date.now() - new Date(t.reviewing_at).getTime()) / 1000);
+        if (t?.reviewing_at) {
+          const reviewedAt = new Date(t.reviewing_at).getTime();
+          timeOnTask = Number.isFinite(reviewedAt) ? Math.floor((Date.now() - reviewedAt) / 1000) : 0;
         }
-      } else if (t.kanban_column === 'alteracao') {
+      } else if (t?.kanban_column === 'alteracao') {
         activity = 'editing';
-        if (t.editing_started_at && !t.editing_paused_at) {
-          const elapsed = Math.floor((Date.now() - new Date(t.editing_started_at).getTime()) / 1000);
-          timeOnTask = elapsed - (t.editing_paused_seconds || 0);
+        if (t?.editing_started_at && !t?.editing_paused_at) {
+          const startedAt = new Date(t.editing_started_at).getTime();
+          const elapsed = Number.isFinite(startedAt) ? Math.floor((Date.now() - startedAt) / 1000) : 0;
+          timeOnTask = elapsed - (t?.editing_paused_seconds || 0);
         }
-      } else if (t.kanban_column === 'gravacao') {
+      } else if (t?.kanban_column === 'gravacao') {
         activity = 'recording';
       } else {
-        if (t.editing_started_at && !t.editing_paused_at) {
-          const elapsed = Math.floor((Date.now() - new Date(t.editing_started_at).getTime()) / 1000);
-          timeOnTask = elapsed - (t.editing_paused_seconds || 0);
-        } else if (t.editing_paused_at) {
+        if (t?.editing_started_at && !t?.editing_paused_at) {
+          const startedAt = new Date(t.editing_started_at).getTime();
+          const elapsed = Number.isFinite(startedAt) ? Math.floor((Date.now() - startedAt) / 1000) : 0;
+          timeOnTask = elapsed - (t?.editing_paused_seconds || 0);
+        } else if (t?.editing_paused_at) {
           activity = 'paused';
-          timeOnTask = t.editing_paused_seconds || 0;
+          timeOnTask = t?.editing_paused_seconds || 0;
         }
       }
 
-      if (!activityMap.has(userId) || (timeOnTask > 0 && !activityMap.get(userId).timeOnTask)) {
+      if (!activityMap.has(userId) || (timeOnTask > 0 && !activityMap.get(userId)?.timeOnTask)) {
         activityMap.set(userId, {
           activity,
-          taskTitle: t.title,
-          clientName: t.client_name,
+          taskTitle: t?.title || 'Sem título',
+          clientName: t?.client_name || 'Cliente',
           timeOnTask: Math.max(0, timeOnTask),
         });
       }
@@ -4537,27 +4541,31 @@ app.get('/api/tv-dashboard', async (req, res) => {
 
     // Design tasks
     for (const t of designTasks) {
-      if (!t.assigned_to || activityMap.has(t.assigned_to)) continue;
-      let timeOnTask = t.time_spent_seconds || 0;
-      if (t.timer_running && t.timer_started_at) {
-        timeOnTask += Math.floor((Date.now() - new Date(t.timer_started_at).getTime()) / 1000);
+      if (!t?.assigned_to || activityMap.has(t.assigned_to)) continue;
+      let timeOnTask = t?.time_spent_seconds || 0;
+      if (t?.timer_running && t?.timer_started_at) {
+        const startedAt = new Date(t.timer_started_at).getTime();
+        if (Number.isFinite(startedAt)) {
+          timeOnTask += Math.floor((Date.now() - startedAt) / 1000);
+        }
       }
       activityMap.set(t.assigned_to, {
         activity: 'designing',
-        taskTitle: t.title,
-        clientName: t.client_name,
+        taskTitle: t?.title || 'Sem título',
+        clientName: t?.client_name || 'Cliente',
         timeOnTask,
       });
     }
 
     // Active recordings
     for (const r of activeRecs) {
-      if (!r.videomaker_id || activityMap.has(r.videomaker_id)) continue;
-      const timeOnTask = r.started_at ? Math.floor((Date.now() - new Date(r.started_at).getTime()) / 1000) : 0;
+      if (!r?.videomaker_id || activityMap.has(r.videomaker_id)) continue;
+      const startedAt = r?.started_at ? new Date(r.started_at).getTime() : 0;
+      const timeOnTask = Number.isFinite(startedAt) && startedAt > 0 ? Math.floor((Date.now() - startedAt) / 1000) : 0;
       activityMap.set(r.videomaker_id, {
         activity: 'recording',
         taskTitle: 'Gravação ativa',
-        clientName: r.client_name,
+        clientName: r?.client_name || 'Cliente',
         timeOnTask,
       });
     }
@@ -4566,22 +4574,25 @@ app.get('/api/tv-dashboard', async (req, res) => {
     const managementRoles = new Set(['admin', 'social_media']);
 
     // Build response
-    const members = profiles.map(p => {
-      const isOnline = onlineIds.has(p.id);
-      const taskInfo = activityMap.get(p.id);
+    const members = (profiles || []).map((p) => {
+      const safeId = p?.id || crypto.randomUUID();
+      const safeName = p?.name || 'Sem nome';
+      const safeRole = p?.role || 'admin';
+      const isOnline = onlineIds.has(safeId);
+      const taskInfo = activityMap.get(safeId);
 
       let activity = 'idle';
       if (taskInfo) {
         activity = taskInfo.activity;
-      } else if (isOnline && managementRoles.has(p.role)) {
+      } else if (isOnline && managementRoles.has(safeRole)) {
         activity = 'management';
       }
 
       return {
-        id: p.id,
-        name: p.name,
-        role: p.role,
-        avatarUrl: p.avatar_url || null,
+        id: safeId,
+        name: safeName,
+        role: safeRole,
+        avatarUrl: p?.avatar_url || null,
         isOnline,
         activity,
         clientName: taskInfo?.clientName || null,
@@ -4593,7 +4604,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
     // Sort: online first, then by role
     members.sort((a, b) => {
       if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
-      return a.name.localeCompare(b.name);
+      return String(a.name || '').localeCompare(String(b.name || ''));
     });
 
     // 6. Get today's recordings schedule
@@ -4625,39 +4636,39 @@ app.get('/api/tv-dashboard', async (req, res) => {
         ORDER BY er.start_time ASC
       `, [today]);
 
-      eventItems = events.map(e => ({
-        id: e.id,
+      eventItems = (events || []).map((e) => ({
+        id: e?.id || crypto.randomUUID(),
         type: 'event',
-        clientName: e.client_name || e.title,
+        clientName: e?.client_name || e?.title || 'Evento',
         clientLogo: null,
         clientColor: null,
-        videomakerName: e.videomaker_name || null,
-        videomakerAvatar: e.videomaker_avatar || null,
-        startTime: e.start_time,
-        endTime: e.end_time,
-        title: e.title,
-        address: e.address,
-        status: e.status,
+        videomakerName: e?.videomaker_name || null,
+        videomakerAvatar: e?.videomaker_avatar || null,
+        startTime: e?.start_time || '23:59',
+        endTime: e?.end_time || null,
+        title: e?.title || 'Evento',
+        address: e?.address || null,
+        status: e?.status || 'agendada',
       }));
     } catch (error) {
       console.warn('[tv-dashboard] Failed to load event_recordings:', error?.message || error);
     }
 
-    const schedule = recordings.map(r => ({
-      id: r.id,
+    const schedule = (recordings || []).map((r) => ({
+      id: r?.id || crypto.randomUUID(),
       type: 'recording',
-      clientName: r.client_name || 'Cliente',
-      clientLogo: r.client_logo || null,
-      clientColor: r.client_color || null,
-      videomakerName: r.videomaker_name || null,
-      videomakerAvatar: r.videomaker_avatar || null,
-      startTime: r.start_time,
-      recordingType: r.type,
-      status: r.status,
-      confirmationStatus: r.confirmation_status,
+      clientName: r?.client_name || 'Cliente',
+      clientLogo: r?.client_logo || null,
+      clientColor: r?.client_color || null,
+      videomakerName: r?.videomaker_name || null,
+      videomakerAvatar: r?.videomaker_avatar || null,
+      startTime: r?.start_time || '23:59',
+      recordingType: r?.type || null,
+      status: r?.status || 'agendada',
+      confirmationStatus: r?.confirmation_status || null,
     }));
 
-    const todaySchedule = [...schedule, ...eventItems].sort((a, b) => a.startTime.localeCompare(b.startTime));
+    const todaySchedule = [...schedule, ...eventItems].sort((a, b) => String(a?.startTime || '').localeCompare(String(b?.startTime || '')));
 
     // 8. Get editing tasks (active editing pipeline)
     const editingTasks = await safeQuery('editing_pipeline', `
@@ -4677,28 +4688,30 @@ app.get('/api/tv-dashboard', async (req, res) => {
       ORDER BY ct.updated_at DESC
     `);
 
-    const editingPipeline = editingTasks.map(t => {
+    const editingPipeline = (editingTasks || []).map((t) => {
       let timeOnTask = 0;
-      if (t.kanban_column === 'revisao' && t.reviewing_at) {
-        timeOnTask = Math.floor((Date.now() - new Date(t.reviewing_at).getTime()) / 1000);
-      } else if (t.editing_started_at && !t.editing_paused_at) {
-        const elapsed = Math.floor((Date.now() - new Date(t.editing_started_at).getTime()) / 1000);
-        timeOnTask = elapsed - (t.editing_paused_seconds || 0);
+      if (t?.kanban_column === 'revisao' && t?.reviewing_at) {
+        const reviewingAt = new Date(t.reviewing_at).getTime();
+        timeOnTask = Number.isFinite(reviewingAt) ? Math.floor((Date.now() - reviewingAt) / 1000) : 0;
+      } else if (t?.editing_started_at && !t?.editing_paused_at) {
+        const editingAt = new Date(t.editing_started_at).getTime();
+        const elapsed = Number.isFinite(editingAt) ? Math.floor((Date.now() - editingAt) / 1000) : 0;
+        timeOnTask = elapsed - (t?.editing_paused_seconds || 0);
       }
       return {
-        id: t.id,
-        title: t.title,
-        column: t.kanban_column,
-        contentType: t.content_type,
-        clientName: t.client_name || 'Cliente',
-        clientLogo: t.client_logo || null,
-        clientColor: t.client_color || null,
-        editorName: t.editor_name || null,
-        editorAvatar: t.editor_avatar || null,
-        reviewerName: t.reviewer_name || t.reviewing_by_name || null,
-        reviewerAvatar: t.reviewer_avatar || null,
+        id: t?.id || crypto.randomUUID(),
+        title: t?.title || 'Sem título',
+        column: t?.kanban_column || 'edicao',
+        contentType: t?.content_type || 'conteúdo',
+        clientName: t?.client_name || 'Cliente',
+        clientLogo: t?.client_logo || null,
+        clientColor: t?.client_color || null,
+        editorName: t?.editor_name || null,
+        editorAvatar: t?.editor_avatar || null,
+        reviewerName: t?.reviewer_name || t?.reviewing_by_name || null,
+        reviewerAvatar: t?.reviewer_avatar || null,
         timeOnTask: Math.max(0, timeOnTask),
-        isPaused: !!t.editing_paused_at,
+        isPaused: !!t?.editing_paused_at,
       };
     });
 
@@ -4726,16 +4739,16 @@ app.get('/api/tv-dashboard', async (req, res) => {
         smd.created_at ASC
       `, [today]);
 
-      todayPosts = scheduledPosts.map(p => ({
-        id: p.id,
-        title: p.title || 'Sem título',
-        contentType: p.content_type,
-        platform: p.platform,
-        status: p.status,
-        scheduledTime: p.scheduled_time || p.delivered_at,
-        clientName: p.client_name || 'Cliente',
-        clientLogo: p.client_logo || null,
-        clientColor: p.client_color || null,
+      todayPosts = (scheduledPosts || []).map((p) => ({
+        id: p?.id || crypto.randomUUID(),
+        title: p?.title || 'Sem título',
+        contentType: p?.content_type || 'conteúdo',
+        platform: p?.platform || null,
+        status: p?.status || 'pendente',
+        scheduledTime: p?.scheduled_time || p?.delivered_at || null,
+        clientName: p?.client_name || 'Cliente',
+        clientLogo: p?.client_logo || null,
+        clientColor: p?.client_color || null,
       }));
     } catch (error) {
       console.warn('[tv-dashboard] Failed to load social_media_deliveries:', error?.message || error);

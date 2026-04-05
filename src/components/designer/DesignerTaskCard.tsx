@@ -207,7 +207,7 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
               width={120}
               height={120}
               initial={{ y: 100, opacity: 0, scale: 0.5, rotate: -10 }}
-              animate={{ y: -200, opacity: [0, 1, 1, 0], scale: [0.5, 1.2, 1, 0.8], rotate: [−10, 5, 0, 10] }}
+              animate={{ y: -200, opacity: [0, 1, 1, 0], scale: [0.5, 1.2, 1, 0.8], rotate: [-10, 5, 0, 10] }}
               transition={{ duration: 2.5, ease: 'easeOut' }}
               className="drop-shadow-2xl"
             />

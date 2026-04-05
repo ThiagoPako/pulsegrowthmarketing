@@ -4759,8 +4759,8 @@ app.get('/api/tv-dashboard', async (req, res) => {
 
     res.json({ members, todaySchedule, editingPipeline, todayPosts, updatedAt: new Date().toISOString() });
   } catch (err) {
-    console.error('[tv-dashboard] Error:', err);
-    res.status(500).json({ error: 'Internal error' });
+    console.error('[tv-dashboard] Error at stage:', stage, err);
+    res.json({ members: [], todaySchedule: [], editingPipeline: [], todayPosts: [], updatedAt: new Date().toISOString(), error: 'fallback' });
   }
 });
 

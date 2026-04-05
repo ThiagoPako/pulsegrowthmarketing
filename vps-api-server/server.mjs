@@ -37,6 +37,39 @@ const pool = new Pool({
   ...(typeof pgPassword === 'string' && pgPassword.length > 0 ? { password: pgPassword } : {}),
 });
 
+const ONLINE_PRESENCE_MS = 120_000;
+const presenceState = new Map();
+
+function getPresenceHeartbeatTime(info) {
+  if (!info?.heartbeatAt) return 0;
+  const heartbeatAt = new Date(info.heartbeatAt).getTime();
+  return Number.isFinite(heartbeatAt) ? heartbeatAt : 0;
+}
+
+function collectOnlinePresenceUsers() {
+  const now = Date.now();
+  const online = [];
+
+  for (const [uid, info] of presenceState) {
+    const heartbeatAt = getPresenceHeartbeatTime(info);
+    if (uid && heartbeatAt > 0 && now - heartbeatAt < ONLINE_PRESENCE_MS) {
+      online.push(info);
+    } else {
+      presenceState.delete(uid);
+    }
+  }
+
+  return online;
+}
+
+function collectOnlinePresenceIds() {
+  return new Set(
+    collectOnlinePresenceUsers()
+      .map((info) => info?.userId)
+      .filter(Boolean)
+  );
+}
+
 const CLIENT_PORTAL_BASE_FIELDS = [
   'id',
   'company_name',
@@ -4542,10 +4575,8 @@ function resolveTvSeasonalDate(template, today) {
   return resolved;
 }
 
-function buildTvSeasonalSlides(clients = [], referenceDate = new Date()) {
-  const slideMap = new Map();
-
-  for (const client of clients) {
+function buildSeasonalAlertItems(clients = [], referenceDate = new Date()) {
+  return (clients || []).map((client) => {
     const niche = normalizeTvNiche(client?.niche);
     const candidateEvents = tvSeasonalTemplates
       .map((template) => {
@@ -4558,7 +4589,14 @@ function buildTvSeasonalSlides(clients = [], referenceDate = new Date()) {
         return !template.niches?.length || template.niches.includes(niche);
       })
       .sort((a, b) => a.daysUntil - b.daysUntil)
-      .slice(0, 4);
+      .slice(0, 4)
+      .map(({ template, targetDate, daysUntil }) => ({
+        label: template.label,
+        date: formatTvDate(targetDate),
+        days_until: daysUntil,
+        urgency: getTvUrgency(daysUntil),
+        suggestion: template.suggestion,
+      }));
 
     const fallbackEvents = tvSeasonalTemplates
       .map((template) => {
@@ -4568,28 +4606,56 @@ function buildTvSeasonalSlides(clients = [], referenceDate = new Date()) {
       })
       .filter(({ daysUntil }) => daysUntil >= 0 && daysUntil <= 60)
       .sort((a, b) => a.daysUntil - b.daysUntil)
-      .slice(0, 2);
+      .slice(0, 2)
+      .map(({ template, targetDate, daysUntil }) => ({
+        label: template.label,
+        date: formatTvDate(targetDate),
+        days_until: daysUntil,
+        urgency: getTvUrgency(daysUntil),
+        suggestion: template.suggestion,
+      }));
 
-    for (const event of (candidateEvents.length ? candidateEvents : fallbackEvents)) {
-      const key = `${event.template.label}|${formatTvDate(event.targetDate)}`;
+    const dates = candidateEvents.length ? candidateEvents : fallbackEvents;
+
+    return {
+      clientId: client?.id || crypto.randomUUID(),
+      clientName: client?.company_name || 'Cliente',
+      niche,
+      clientLogo: client?.logo_url || null,
+      clientColor: client?.color || null,
+      dates,
+    };
+  }).filter((alert) => alert.dates.length > 0);
+}
+
+function buildTvSeasonalSlidesFromAlerts(alerts = []) {
+  const slideMap = new Map();
+
+  for (const alert of alerts || []) {
+    for (const dateItem of alert?.dates || []) {
+      const safeLabel = String(dateItem?.label || '').trim();
+      const safeDate = String(dateItem?.date || '').trim();
+      if (!safeLabel || !safeDate) continue;
+
+      const key = `${safeLabel}|${safeDate}`;
       if (!slideMap.has(key)) {
         slideMap.set(key, {
-          label: event.template.label,
-          date: formatTvDate(event.targetDate),
-          daysUntil: event.daysUntil,
-          urgency: getTvUrgency(event.daysUntil),
-          suggestion: event.template.suggestion,
+          label: safeLabel,
+          date: safeDate,
+          daysUntil: Math.max(0, Number(dateItem?.days_until || 0)),
+          urgency: dateItem?.urgency || getTvUrgency(Number(dateItem?.days_until || 0)),
+          suggestion: dateItem?.suggestion || '',
           clients: [],
         });
       }
 
       const currentSlide = slideMap.get(key);
-      if (!currentSlide.clients.find((entry) => entry.name === client?.company_name)) {
+      if (!currentSlide.clients.find((entry) => entry.name === alert?.clientName)) {
         currentSlide.clients.push({
-          name: client?.company_name || 'Cliente',
-          niche,
-          logoUrl: client?.logo_url || null,
-          color: client?.color || null,
+          name: alert?.clientName || 'Cliente',
+          niche: normalizeTvNiche(alert?.niche),
+          logoUrl: alert?.clientLogo || null,
+          color: alert?.clientColor || null,
         });
       }
     }
@@ -4598,6 +4664,70 @@ function buildTvSeasonalSlides(clients = [], referenceDate = new Date()) {
   return Array.from(slideMap.values())
     .sort((a, b) => a.daysUntil - b.daysUntil)
     .slice(0, 12);
+}
+
+function buildTvSeasonalSlides(clients = [], referenceDate = new Date()) {
+  return buildTvSeasonalSlidesFromAlerts(buildSeasonalAlertItems(clients, referenceDate));
+}
+
+async function loadSeasonalClients(clientIds = []) {
+  const params = [];
+  const conditions = ["niche IS NOT NULL", "btrim(niche) <> ''"];
+
+  if (Array.isArray(clientIds) && clientIds.length > 0) {
+    params.push(clientIds);
+    conditions.push(`id = ANY($${params.length}::uuid[])`);
+  }
+
+  const { rows } = await pool.query(
+    `
+      SELECT id, company_name, niche, logo_url, color
+      FROM clients
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY company_name ASC
+    `,
+    params
+  );
+
+  return rows || [];
+}
+
+async function fetchSystemSeasonalAlerts({ clientIds = [], fallbackClients = null } = {}) {
+  const referenceDate = new Date();
+  const clients = Array.isArray(fallbackClients) ? fallbackClients : await loadSeasonalClients(clientIds);
+  const fallbackAlerts = buildSeasonalAlertItems(clients, referenceDate);
+
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+  if (!supabaseUrl || !supabaseKey) return fallbackAlerts;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4000);
+
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/seasonal-alerts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({ clientIds }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      console.warn('[seasonal-alerts] Falling back after edge error:', response.status);
+      return fallbackAlerts;
+    }
+
+    const data = await response.json();
+    return Array.isArray(data?.alerts) && data.alerts.length > 0 ? data.alerts : fallbackAlerts;
+  } catch (error) {
+    console.warn('[seasonal-alerts] Falling back to local seasonal mapping:', error?.message || error);
+    return fallbackAlerts;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // ─── TV Dashboard endpoint ──────────────────────────────────
@@ -4625,15 +4755,8 @@ app.get('/api/tv-dashboard', async (req, res) => {
     `);
 
     // 2. Get online user IDs from presence
-    const now = Date.now();
-    const ONLINE_MS = 120_000;
-    const onlineIds = new Set();
-    for (const [uid, info] of presenceState) {
-      const heartbeatAt = info?.heartbeatAt ? new Date(info.heartbeatAt).getTime() : 0;
-      if (uid && Number.isFinite(heartbeatAt) && now - heartbeatAt < ONLINE_MS) {
-        onlineIds.add(uid);
-      }
-    }
+    stage = 'presence';
+    const onlineIds = collectOnlinePresenceIds();
 
     // 3. Get active content tasks (editing/reviewing/altering)
     const contentTasks = await safeQuery('content_tasks', `
@@ -4953,15 +5076,10 @@ app.get('/api/tv-dashboard', async (req, res) => {
       console.warn('[tv-dashboard] Failed to load social_media_deliveries:', error?.message || error);
     }
 
-    const seasonalClients = await safeQuery('seasonal_clients', `
-      SELECT id, company_name, niche, logo_url, color
-      FROM clients
-      WHERE niche IS NOT NULL
-        AND btrim(niche) <> ''
-      ORDER BY company_name ASC
-    `);
-
-    const seasonalSlides = buildTvSeasonalSlides(seasonalClients, new Date());
+    stage = 'seasonal_slides';
+    const seasonalClients = await loadSeasonalClients();
+    const seasonalAlerts = await fetchSystemSeasonalAlerts({ fallbackClients: seasonalClients });
+    const seasonalSlides = buildTvSeasonalSlidesFromAlerts(seasonalAlerts);
 
     res.json({ members, todaySchedule, editingPipeline, designPipeline, todayPosts, seasonalSlides, updatedAt: new Date().toISOString() });
   } catch (err) {
@@ -4973,24 +5091,10 @@ app.get('/api/tv-dashboard', async (req, res) => {
 // ─── Seasonal Alerts proxy (calls Supabase edge function) ───
 app.post('/api/seasonal-alerts', async (req, res) => {
   try {
-    const supabaseUrl = process.env.SUPABASE_URL || 'https://zqpplhbzhetabjopdzcn.supabase.co';
-    const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || '';
-    
-    const response = await fetch(`${supabaseUrl}/functions/v1/seasonal-alerts`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseKey}`,
-      },
-      body: JSON.stringify(req.body || {}),
-    });
-    
-    if (!response.ok) {
-      return res.status(response.status).json({ alerts: [], error: 'Edge function error' });
-    }
-    
-    const data = await response.json();
-    res.json(data);
+    const clientIds = Array.isArray(req.body?.clientIds) ? req.body.clientIds : [];
+    const seasonalClients = await loadSeasonalClients(clientIds);
+    const alerts = await fetchSystemSeasonalAlerts({ clientIds, fallbackClients: seasonalClients });
+    res.json({ alerts });
   } catch (err) {
     console.error('[seasonal-alerts] proxy error:', err?.message);
     res.json({ alerts: [] });
@@ -5000,24 +5104,9 @@ app.post('/api/seasonal-alerts', async (req, res) => {
 // Also support GET for simpler calls
 app.get('/api/seasonal-alerts', async (req, res) => {
   try {
-    const supabaseUrl = process.env.SUPABASE_URL || 'https://zqpplhbzhetabjopdzcn.supabase.co';
-    const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || '';
-    
-    const response = await fetch(`${supabaseUrl}/functions/v1/seasonal-alerts`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseKey}`,
-      },
-      body: JSON.stringify({}),
-    });
-    
-    if (!response.ok) {
-      return res.status(response.status).json({ alerts: [], error: 'Edge function error' });
-    }
-    
-    const data = await response.json();
-    res.json(data);
+    const seasonalClients = await loadSeasonalClients();
+    const alerts = await fetchSystemSeasonalAlerts({ fallbackClients: seasonalClients });
+    res.json({ alerts });
   } catch (err) {
     console.error('[seasonal-alerts] proxy error:', err?.message);
     res.json({ alerts: [] });
@@ -5027,17 +5116,7 @@ app.get('/api/seasonal-alerts', async (req, res) => {
 
 
 app.get('/api/presence', (req, res) => {
-  const now = Date.now();
-  const ONLINE_MS = 120_000;
-  const online = [];
-  for (const [uid, info] of presenceState) {
-    if (now - new Date(info.heartbeatAt).getTime() < ONLINE_MS) {
-      online.push(info);
-    } else {
-      presenceState.delete(uid);
-    }
-  }
-  res.json({ users: online });
+  res.json({ users: collectOnlinePresenceUsers() });
 });
 
 app.post('/api/presence/heartbeat', (req, res) => {
@@ -5090,14 +5169,7 @@ const wss = new WebSocketServer({ server, path: '/ws/office' });
 const wsClients = new Set();
 
 function broadcastPresence() {
-  const now = Date.now();
-  const ONLINE_MS = 120_000;
-  const online = [];
-  for (const [uid, info] of presenceState) {
-    if (now - new Date(info.heartbeatAt).getTime() < ONLINE_MS) {
-      online.push(info);
-    }
-  }
+  const online = collectOnlinePresenceUsers();
   const msg = JSON.stringify({ type: 'presence_sync', users: online });
   for (const ws of wsClients) {
     try { if (ws.readyState === 1) ws.send(msg); } catch { /* ignore */ }
@@ -5115,14 +5187,7 @@ wss.on('connection', (ws) => {
   wsClients.add(ws);
 
   // Send current presence immediately
-  const now = Date.now();
-  const ONLINE_MS = 120_000;
-  const online = [];
-  for (const [uid, info] of presenceState) {
-    if (now - new Date(info.heartbeatAt).getTime() < ONLINE_MS) {
-      online.push(info);
-    }
-  }
+  const online = collectOnlinePresenceUsers();
   ws.send(JSON.stringify({ type: 'presence_sync', users: online }));
 
   ws.on('message', (raw) => {
@@ -5151,15 +5216,9 @@ wss.on('connection', (ws) => {
 
 // Clean stale presence every 30s
 setInterval(() => {
-  const now = Date.now();
-  const ONLINE_MS = 120_000;
-  let changed = false;
-  for (const [uid, info] of presenceState) {
-    if (now - new Date(info.heartbeatAt).getTime() >= ONLINE_MS) {
-      presenceState.delete(uid);
-      changed = true;
-    }
-  }
+  const before = presenceState.size;
+  collectOnlinePresenceUsers();
+  const changed = presenceState.size !== before;
   if (changed) broadcastPresence();
 }, 30_000);
 

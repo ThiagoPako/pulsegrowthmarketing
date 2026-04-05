@@ -777,12 +777,46 @@ export default function TvDashboard() {
     } catch {}
   }, []);
 
+  // Fetch seasonal alerts
+  const fetchSeasonal = useCallback(async () => {
+    try {
+      const alerts = await fetchAISeasonalAlerts();
+      if (!alerts.length) return;
+      // Group dates across clients, merge by label+date
+      const dateMap = new Map<string, SeasonalSlide>();
+      for (const alert of alerts) {
+        for (const d of alert.dates) {
+          const key = `${d.label}|${d.date}`;
+          if (!dateMap.has(key)) {
+            dateMap.set(key, {
+              label: d.label,
+              date: d.date,
+              daysUntil: d.days_until,
+              urgency: d.urgency,
+              suggestion: d.suggestion,
+              clients: [],
+            });
+          }
+          const entry = dateMap.get(key)!;
+          if (!entry.clients.find(c => c.name === alert.clientName)) {
+            entry.clients.push({ name: alert.clientName, niche: alert.niche || '' });
+          }
+        }
+      }
+      const sorted = Array.from(dateMap.values()).sort((a, b) => a.daysUntil - b.daysUntil).slice(0, 15);
+      setSeasonalSlides(sorted);
+    } catch (e) {
+      console.error('Seasonal fetch error:', e);
+    }
+  }, []);
+
   useEffect(() => {
     fetchData();
     fetchPlaylist();
+    fetchSeasonal();
     const iv = setInterval(fetchData, 10_000);
     return () => clearInterval(iv);
-  }, [fetchData, fetchPlaylist]);
+  }, [fetchData, fetchPlaylist, fetchSeasonal]);
 
   // Clock tick
   useEffect(() => {

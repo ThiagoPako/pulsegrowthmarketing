@@ -4636,6 +4636,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
       clientLogo: null,
       clientColor: null,
       videomakerName: e.videomaker_name || null,
+      videomakerAvatar: e.videomaker_avatar || null,
       startTime: e.start_time,
       endTime: e.end_time,
       title: e.title,

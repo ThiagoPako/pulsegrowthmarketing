@@ -4432,6 +4432,7 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Dat
 
 // ─── TV Dashboard endpoint ──────────────────────────────────
 app.get('/api/tv-dashboard', async (req, res) => {
+  let stage = 'init';
   try {
     const safeQuery = async (label, sql, params = []) => {
       try {
@@ -4442,6 +4443,8 @@ app.get('/api/tv-dashboard', async (req, res) => {
         return [];
       }
     };
+
+    stage = 'profiles';
 
     // 1. Get all team profiles
     const profiles = await safeQuery('profiles', `
@@ -4756,8 +4759,8 @@ app.get('/api/tv-dashboard', async (req, res) => {
 
     res.json({ members, todaySchedule, editingPipeline, todayPosts, updatedAt: new Date().toISOString() });
   } catch (err) {
-    console.error('[tv-dashboard] Error:', err);
-    res.status(500).json({ error: 'Internal error' });
+    console.error('[tv-dashboard] Error at stage:', stage, err);
+    res.json({ members: [], todaySchedule: [], editingPipeline: [], todayPosts: [], updatedAt: new Date().toISOString(), error: 'fallback' });
   }
 });
 

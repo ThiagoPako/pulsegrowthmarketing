@@ -575,7 +575,7 @@ function PostCard({ post }: { post: ScheduledPost }) {
 
 /* ─── YouTube Player ────────────────────────────────────── */
 function YouTubePlayer({ url }: { url: string }) {
-  const [unmuted, setUnmuted] = useState(false);
+  const [unmuted, setUnmuted] = useState(true);
   const embedUrl = useMemo(() => {
     if (!url) return '';
     const mute = unmuted ? 0 : 1;

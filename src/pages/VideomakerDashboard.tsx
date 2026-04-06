@@ -922,16 +922,11 @@ export default function VideomakerDashboard() {
             <p className="text-muted-foreground text-xs sm:text-sm">{format(today, "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
           </div>
         </div>
-        {!activeRecordingId && (
-          <FieldworkButton videomakerId={vmId} clients={clients} />
-        )}
       </div>
 
-      {/* Fieldwork active banner (shown below header when active) */}
-      {activeRecordingId ? null : (
-        <div className="empty:hidden">
-          <FieldworkButton videomakerId={vmId} clients={clients} key="fieldwork-banner" />
-        </div>
+      {/* Fieldwork activity (external production) */}
+      {!activeRecordingId && (
+        <FieldworkButton videomakerId={vmId} clients={clients} />
       )}
 
       {/* ── Live Recording Card ── */}

@@ -150,7 +150,7 @@ function SectionHeader({ icon: Icon, iconColor, title, badge, children }: {
   icon: any; iconColor?: string; title: string; badge?: string | number; children?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3 mb-4">
+    <div className="flex items-center gap-3 mb-2">
       <Icon className="w-4 h-4" style={{ color: iconColor || PULSE_ORANGE }} />
       <h2 className="text-xs font-bold text-white/50 uppercase tracking-[0.2em]" style={{ fontFamily: SPACE }}>
         {title}
@@ -246,7 +246,7 @@ function MemberCard({ member }: { member: TeamMember }) {
         />
       )}
 
-      <div className="p-3 flex items-center gap-3">
+      <div className="p-2 flex items-center gap-2.5">
         <div className="relative flex-shrink-0">
           {member.avatarUrl ? (
             <img src={member.avatarUrl} alt={member.name}
@@ -323,7 +323,7 @@ function ScheduleCard({ item }: { item: ScheduleItem }) {
         />
       )}
 
-      <div className="p-3 flex items-center gap-3">
+      <div className="p-2.5 flex items-center gap-2.5">
         {/* Client Logo */}
         <div className="flex-shrink-0 w-10 h-10 rounded-lg overflow-hidden border flex items-center justify-center"
           style={{
@@ -404,7 +404,7 @@ function EditingCard({ task }: { task: EditingTask }) {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.4 }}
     >
-      <div className="p-3">
+      <div className="p-2.5">
         <div className="flex items-center gap-2 mb-2">
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full" style={{ backgroundColor: `${col.color}18` }}>
             <ColIcon className="w-3 h-3" style={{ color: col.color }} />
@@ -693,7 +693,7 @@ function SeasonalBanner({ slides }: { slides: SeasonalSlide[] }) {
         </div>
       </div>
 
-      <div className="relative h-[142px] px-5 pb-3">
+      <div className="relative h-[120px] px-4 pb-2">
         <AnimatePresence mode="wait">
           {slides.map((slide, i) => {
             if (i !== current) return null;
@@ -888,13 +888,13 @@ export default function TvDashboard() {
   const dateStr = clock.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 
   return (
-    <div className="min-h-screen text-white overflow-hidden relative" style={{ fontFamily: `${SPACE}, 'Inter', sans-serif`, backgroundColor: PULSE_DARK }}>
+    <div className="h-screen text-white overflow-hidden relative flex flex-col" style={{ fontFamily: `${SPACE}, 'Inter', sans-serif`, backgroundColor: PULSE_DARK }}>
       <FloatingParticles />
       <div className="fixed inset-0 pointer-events-none z-0" style={{ background: `radial-gradient(ellipse 80% 50% at 50% -10%, ${PULSE_ORANGE}06, transparent 70%)` }} />
 
-      <div className="relative z-10 p-5">
+      <div className="relative z-10 px-4 py-3 flex flex-col flex-1 min-h-0">
         {/* ─── Header ───────────────────────────────────── */}
-        <motion.div className="flex items-center justify-between mb-5"
+        <motion.div className="flex items-center justify-between mb-3 flex-shrink-0"
           initial={{ opacity: 0, y: -15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
@@ -935,22 +935,22 @@ export default function TvDashboard() {
 
         {/* ─── Seasonal Banner ──────────────────────────── */}
         {seasonalSlides.length > 0 && (
-          <div className="mb-5">
+          <div className="mb-3 flex-shrink-0">
             <SeasonalBanner slides={seasonalSlides} />
           </div>
         )}
 
         {/* ─── Main Grid: 3 columns ────────────────────── */}
-        <div className="grid grid-cols-12 gap-5">
+        <div className="grid grid-cols-12 gap-4 flex-1 min-h-0 overflow-hidden">
           {/* LEFT COLUMN: Team Online + Offline */}
-          <div className="col-span-3 space-y-5">
+          <div className="col-span-3 space-y-3 overflow-y-auto scrollbar-hide pr-1">
             {/* Online */}
             <div>
               <SectionHeader icon={() => (
                 <motion.div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#22c55e' }}
                   animate={{ scale: [1, 1.3, 1], opacity: [1, 0.5, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
               )} title="Equipe Online" badge={`${onlineMembers.length} membros`} />
-              <div className="grid grid-cols-1 gap-2.5">
+              <div className="grid grid-cols-1 gap-2">
                 <AnimatePresence>
                   {onlineMembers.map(m => <MemberCard key={m.id} member={m} />)}
                 </AnimatePresence>
@@ -965,7 +965,7 @@ export default function TvDashboard() {
               {playlistUrl ? (
                 <YouTubePlayer url={playlistUrl} />
               ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-6 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
                   <Music className="w-6 h-6 mx-auto mb-1.5" style={{ color: `${PULSE_ORANGE}28` }} />
                   <p className="text-[10px] text-white/20">Adicione um link acima</p>
                 </div>
@@ -1002,18 +1002,18 @@ export default function TvDashboard() {
           </div>
 
           {/* CENTER COLUMN: Schedule + Posts */}
-          <div className="col-span-5 space-y-5">
+          <div className="col-span-5 space-y-3 overflow-y-auto scrollbar-hide px-1">
             {/* Schedule */}
             <div>
               <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${schedule.length} gravações`} />
               {schedule.length > 0 ? (
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   <AnimatePresence>
                     {schedule.map(item => <ScheduleCard key={item.id} item={item} />)}
                   </AnimatePresence>
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-6 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
                   <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
                   <p className="text-[10px] text-white/20">Nenhuma gravação hoje</p>
                 </div>
@@ -1030,7 +1030,7 @@ export default function TvDashboard() {
                   </AnimatePresence>
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-6 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
                   <Send className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
                   <p className="text-[10px] text-white/20">Nenhum post agendado hoje</p>
                 </div>
@@ -1039,21 +1039,21 @@ export default function TvDashboard() {
           </div>
 
           {/* RIGHT COLUMN: Designer + Editing */}
-          <div className="col-span-4 space-y-5">
+          <div className="col-span-4 space-y-3 overflow-y-auto scrollbar-hide pl-1">
             <div>
               <SectionHeader icon={Palette} iconColor="hsl(330 85% 62%)" title="Designer" badge={designPipeline.length > 0 ? `${designPipeline.length} artes` : `${designerMembers.length} designers`} />
               {designPipeline.length > 0 ? (
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   <AnimatePresence>
                     {designPipeline.map(task => <DesignActivityCard key={task.id} task={task} />)}
                   </AnimatePresence>
                 </div>
               ) : designerMembers.length > 0 ? (
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   {designerMembers.map(member => <MemberCard key={member.id} member={member} />)}
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-6 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
                   <Palette className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
                   <p className="text-[10px] text-white/20">Nenhuma designer em atividade agora</p>
                 </div>
@@ -1063,13 +1063,13 @@ export default function TvDashboard() {
             <div>
               <SectionHeader icon={Film} iconColor="#8b5cf6" title="Pós-Produção" badge={`${editingPipeline.length} vídeos`} />
               {editingPipeline.length > 0 ? (
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   <AnimatePresence>
                     {editingPipeline.map(task => <EditingCard key={task.id} task={task} />)}
                   </AnimatePresence>
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-6 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
                   <Film className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
                   <p className="text-[10px] text-white/20">Nenhum vídeo em edição</p>
                 </div>

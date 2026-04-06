@@ -4869,6 +4869,38 @@ app.get('/api/tv-dashboard', async (req, res) => {
       });
     }
 
+    // Fieldwork activities (external production without agenda)
+    const fieldworkActivities = await safeQuery('fieldwork_activities', `
+      SELECT fa.videomaker_id, fa.activity_type, fa.started_at, fa.notes,
+             c.company_name AS client_name
+      FROM fieldwork_activities fa
+      LEFT JOIN clients c ON c.id = fa.client_id
+      WHERE fa.ended_at IS NULL
+    `);
+
+    const FIELDWORK_LABELS = {
+      taker: '📹 Coletando Taker',
+      story: '📱 Gravando Story',
+      produtos: '🛍️ Fotos Produtos',
+      fotos: '📷 Fotos Gerais',
+      evento: '🎪 Cobertura Evento',
+      entrega: '📦 Entrega Material',
+      outro: '🔧 Atividade Externa',
+    };
+
+    for (const fw of fieldworkActivities) {
+      if (!fw?.videomaker_id || activityMap.has(fw.videomaker_id)) continue;
+      const startedAt = fw?.started_at ? new Date(fw.started_at).getTime() : 0;
+      const timeOnTask = Number.isFinite(startedAt) && startedAt > 0 ? Math.floor((Date.now() - startedAt) / 1000) : 0;
+      activityMap.set(fw.videomaker_id, {
+        activity: 'fieldwork',
+        taskTitle: FIELDWORK_LABELS[fw.activity_type] || '📍 Em campo',
+        clientName: fw?.client_name || 'Cliente',
+        timeOnTask,
+        taskType: fw.activity_type,
+      });
+    }
+
     // Admin/social_media are always "management" when online
     const managementRoles = new Set(['admin', 'social_media']);
 

@@ -575,7 +575,7 @@ function PostCard({ post }: { post: ScheduledPost }) {
 
 /* ─── YouTube Player ────────────────────────────────────── */
 function YouTubePlayer({ url }: { url: string }) {
-  const [unmuted, setUnmuted] = useState(false);
+  const [unmuted, setUnmuted] = useState(true);
   const embedUrl = useMemo(() => {
     if (!url) return '';
     const mute = unmuted ? 0 : 1;
@@ -601,13 +601,11 @@ function YouTubePlayer({ url }: { url: string }) {
           ))}
         </motion.div>
         <div className="flex-1" />
-        {!unmuted && (
-          <button onClick={() => setUnmuted(true)}
-            className="flex items-center gap-1 text-[9px] font-bold uppercase px-2 py-0.5 rounded-full transition-all hover:scale-105"
-            style={{ backgroundColor: `${PULSE_ORANGE}1a`, color: PULSE_ORANGE, border: `1px solid ${PULSE_ORANGE}33` }}>
-            🔇 Ativar Som
-          </button>
-        )}
+        <button onClick={() => setUnmuted(prev => !prev)}
+          className="flex items-center gap-1 text-[9px] font-bold uppercase px-2 py-0.5 rounded-full transition-all hover:scale-105"
+          style={{ backgroundColor: `${PULSE_ORANGE}1a`, color: PULSE_ORANGE, border: `1px solid ${PULSE_ORANGE}33` }}>
+          {unmuted ? '🔊 Mudo' : '🔇 Ativar Som'}
+        </button>
       </div>
       <div className="aspect-video">
         <iframe key={unmuted ? 'unmuted' : 'muted'} src={embedUrl} className="w-full h-full" allow="autoplay; encrypted-media" allowFullScreen style={{ border: 0 }} />

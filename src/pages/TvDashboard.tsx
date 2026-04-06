@@ -693,7 +693,7 @@ function SeasonalBanner({ slides }: { slides: SeasonalSlide[] }) {
         </div>
       </div>
 
-      <div className="relative h-[142px] px-5 pb-3">
+      <div className="relative h-[120px] px-4 pb-2">
         <AnimatePresence mode="wait">
           {slides.map((slide, i) => {
             if (i !== current) return null;

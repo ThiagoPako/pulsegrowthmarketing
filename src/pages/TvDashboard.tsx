@@ -404,7 +404,7 @@ function EditingCard({ task }: { task: EditingTask }) {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.4 }}
     >
-      <div className="p-3">
+      <div className="p-2.5">
         <div className="flex items-center gap-2 mb-2">
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full" style={{ backgroundColor: `${col.color}18` }}>
             <ColIcon className="w-3 h-3" style={{ color: col.color }} />

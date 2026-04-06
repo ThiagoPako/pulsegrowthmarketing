@@ -1156,3 +1156,15 @@ CREATE TABLE IF NOT EXISTS recording_wait_logs (
   wait_duration_seconds INTEGER,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Table: fieldwork_activities
+CREATE TABLE IF NOT EXISTS fieldwork_activities (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  videomaker_id UUID NOT NULL,
+  client_id UUID NOT NULL,
+  activity_type TEXT NOT NULL DEFAULT 'taker',
+  notes TEXT,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  ended_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

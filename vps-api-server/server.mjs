@@ -4929,6 +4929,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
         clientName: taskInfo?.clientName || null,
         taskTitle: taskInfo?.taskTitle || null,
         timeOnTask: taskInfo?.timeOnTask || 0,
+        taskType: taskInfo?.taskType || null,
       };
     });
 

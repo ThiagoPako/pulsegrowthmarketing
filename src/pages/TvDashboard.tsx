@@ -114,6 +114,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   editing: '🎞️ Editando',
   reviewing: '🔍 Revisando',
   designing: '🎨 Criando Arte',
+  fieldwork: '📍 Em Campo',
   idle: '☕ Disponível',
   paused: '⏸️ Pausado',
   management: '📋 Gestão',

@@ -246,7 +246,7 @@ function MemberCard({ member }: { member: TeamMember }) {
         />
       )}
 
-      <div className="p-3 flex items-center gap-3">
+      <div className="p-2 flex items-center gap-2.5">
         <div className="relative flex-shrink-0">
           {member.avatarUrl ? (
             <img src={member.avatarUrl} alt={member.name}

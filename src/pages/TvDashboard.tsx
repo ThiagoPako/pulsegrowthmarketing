@@ -1039,7 +1039,7 @@ export default function TvDashboard() {
           </div>
 
           {/* RIGHT COLUMN: Designer + Editing */}
-          <div className="col-span-4 space-y-5">
+          <div className="col-span-4 space-y-3 overflow-y-auto scrollbar-hide pl-1">
             <div>
               <SectionHeader icon={Palette} iconColor="hsl(330 85% 62%)" title="Designer" badge={designPipeline.length > 0 ? `${designPipeline.length} artes` : `${designerMembers.length} designers`} />
               {designPipeline.length > 0 ? (

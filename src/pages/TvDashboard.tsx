@@ -150,7 +150,7 @@ function SectionHeader({ icon: Icon, iconColor, title, badge, children }: {
   icon: any; iconColor?: string; title: string; badge?: string | number; children?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3 mb-4">
+    <div className="flex items-center gap-3 mb-2">
       <Icon className="w-4 h-4" style={{ color: iconColor || PULSE_ORANGE }} />
       <h2 className="text-xs font-bold text-white/50 uppercase tracking-[0.2em]" style={{ fontFamily: SPACE }}>
         {title}

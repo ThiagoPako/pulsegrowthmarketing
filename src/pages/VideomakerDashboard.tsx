@@ -19,6 +19,7 @@ import {
   ThumbsDown, Pencil, MessageCircle, Send, UserCheck, Rocket, Hourglass, RefreshCw, Upload, Camera
 } from 'lucide-react';
 import LiveRecordingCard from '@/components/videomaker/LiveRecordingCard';
+import FieldworkButton from '@/components/videomaker/FieldworkButton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';

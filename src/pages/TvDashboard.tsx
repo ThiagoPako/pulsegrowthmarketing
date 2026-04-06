@@ -935,13 +935,13 @@ export default function TvDashboard() {
 
         {/* ─── Seasonal Banner ──────────────────────────── */}
         {seasonalSlides.length > 0 && (
-          <div className="mb-5">
+          <div className="mb-3 flex-shrink-0">
             <SeasonalBanner slides={seasonalSlides} />
           </div>
         )}
 
         {/* ─── Main Grid: 3 columns ────────────────────── */}
-        <div className="grid grid-cols-12 gap-5">
+        <div className="grid grid-cols-12 gap-4 flex-1 min-h-0 overflow-hidden">
           {/* LEFT COLUMN: Team Online + Offline */}
           <div className="col-span-3 space-y-5">
             {/* Online */}

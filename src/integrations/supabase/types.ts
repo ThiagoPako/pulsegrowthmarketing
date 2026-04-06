@@ -1944,6 +1944,39 @@ export type Database = {
           },
         ]
       }
+      fieldwork_activities: {
+        Row: {
+          activity_type: string
+          client_id: string
+          created_at: string
+          ended_at: string | null
+          id: string
+          notes: string | null
+          started_at: string
+          videomaker_id: string
+        }
+        Insert: {
+          activity_type?: string
+          client_id: string
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          notes?: string | null
+          started_at?: string
+          videomaker_id: string
+        }
+        Update: {
+          activity_type?: string
+          client_id?: string
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          notes?: string | null
+          started_at?: string
+          videomaker_id?: string
+        }
+        Relationships: []
+      }
       financial_activity_log: {
         Row: {
           action_type: string

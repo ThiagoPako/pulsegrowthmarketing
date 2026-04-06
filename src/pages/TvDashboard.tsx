@@ -950,7 +950,7 @@ export default function TvDashboard() {
                 <motion.div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#22c55e' }}
                   animate={{ scale: [1, 1.3, 1], opacity: [1, 0.5, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
               )} title="Equipe Online" badge={`${onlineMembers.length} membros`} />
-              <div className="grid grid-cols-1 gap-2.5">
+              <div className="grid grid-cols-1 gap-2">
                 <AnimatePresence>
                   {onlineMembers.map(m => <MemberCard key={m.id} member={m} />)}
                 </AnimatePresence>

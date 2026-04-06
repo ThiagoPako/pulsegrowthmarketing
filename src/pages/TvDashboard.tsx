@@ -323,7 +323,7 @@ function ScheduleCard({ item }: { item: ScheduleItem }) {
         />
       )}
 
-      <div className="p-3 flex items-center gap-3">
+      <div className="p-2.5 flex items-center gap-2.5">
         {/* Client Logo */}
         <div className="flex-shrink-0 w-10 h-10 rounded-lg overflow-hidden border flex items-center justify-center"
           style={{

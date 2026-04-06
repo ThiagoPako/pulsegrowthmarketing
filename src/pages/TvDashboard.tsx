@@ -640,8 +640,13 @@ function PlaylistEditor({ url, onSave }: { url: string; onSave: (url: string) =>
         autoFocus
         onKeyDown={e => { if (e.key === 'Enter') { onSave(draft); setEditing(false); } if (e.key === 'Escape') setEditing(false); }}
       />
-      <button onClick={() => { onSave(draft); setEditing(false); }}
-        className="text-[9px] font-bold uppercase px-2 py-1 rounded-md" style={{ backgroundColor: `${PULSE_ORANGE}20`, color: PULSE_ORANGE }}>Salvar</button>
+      <motion.button onClick={() => { onSave(draft); setEditing(false); }}
+        whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+        className="flex items-center gap-1 text-[9px] font-bold uppercase px-3 py-1.5 rounded-lg transition-all"
+        style={{ background: `linear-gradient(135deg, ${PULSE_ORANGE}, ${PULSE_ORANGE}cc)`, color: '#fff', boxShadow: `0 2px 8px ${PULSE_ORANGE}40` }}>
+        <Save className="w-3 h-3" />
+        Salvar como padrão
+      </motion.button>
       <button onClick={() => setEditing(false)} className="text-[10px] text-white/30 hover:text-white/60">✕</button>
     </motion.div>
   );

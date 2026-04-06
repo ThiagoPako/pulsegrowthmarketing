@@ -5,7 +5,7 @@ import {
   Wifi, WifiOff, Activity, CalendarDays, MapPin, CheckCircle2, Circle,
   XCircle, Rocket, Zap, TrendingUp, Music, Settings, Link as LinkIcon,
   Flame, Sparkles, AlertTriangle, Gift, Star, Send, Play, Pause,
-  Eye, Scissors, FileVideo, Instagram, Facebook, Youtube, Globe
+  Eye, Scissors, FileVideo, Instagram, Facebook, Youtube, Globe, Save
 } from 'lucide-react';
 import { fetchAISeasonalAlerts, AISeasonalAlert } from '@/lib/seasonalDates';
 

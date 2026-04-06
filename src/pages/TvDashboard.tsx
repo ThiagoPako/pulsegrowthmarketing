@@ -224,7 +224,10 @@ function StatusSummary({ members }: { members: TeamMember[] }) {
 function MemberCard({ member }: { member: TeamMember }) {
   const config = ROLE_CONFIG[member.role] || ROLE_CONFIG.admin;
   const isWorking = member.activity && member.activity !== 'idle' && member.activity !== 'paused';
-  const activityLabel = member.activity ? (ACTIVITY_LABELS[member.activity] || member.activity) : '☕ Disponível';
+  const isFieldwork = member.activity === 'fieldwork';
+  const activityLabel = isFieldwork && member.taskTitle
+    ? member.taskTitle
+    : member.activity ? (ACTIVITY_LABELS[member.activity] || member.activity) : '☕ Disponível';
 
   return (
     <motion.div

@@ -965,7 +965,7 @@ export default function TvDashboard() {
               {playlistUrl ? (
                 <YouTubePlayer url={playlistUrl} />
               ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-6 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
                   <Music className="w-6 h-6 mx-auto mb-1.5" style={{ color: `${PULSE_ORANGE}28` }} />
                   <p className="text-[10px] text-white/20">Adicione um link acima</p>
                 </div>
@@ -1013,7 +1013,7 @@ export default function TvDashboard() {
                   </AnimatePresence>
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-6 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
                   <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
                   <p className="text-[10px] text-white/20">Nenhuma gravação hoje</p>
                 </div>
@@ -1030,7 +1030,7 @@ export default function TvDashboard() {
                   </AnimatePresence>
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-6 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
                   <Send className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
                   <p className="text-[10px] text-white/20">Nenhum post agendado hoje</p>
                 </div>
@@ -1053,7 +1053,7 @@ export default function TvDashboard() {
                   {designerMembers.map(member => <MemberCard key={member.id} member={member} />)}
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-6 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
                   <Palette className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
                   <p className="text-[10px] text-white/20">Nenhuma designer em atividade agora</p>
                 </div>
@@ -1069,7 +1069,7 @@ export default function TvDashboard() {
                   </AnimatePresence>
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-6 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
                   <Film className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
                   <p className="text-[10px] text-white/20">Nenhum vídeo em edição</p>
                 </div>

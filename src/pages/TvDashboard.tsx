@@ -1007,7 +1007,7 @@ export default function TvDashboard() {
             <div>
               <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${schedule.length} gravações`} />
               {schedule.length > 0 ? (
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   <AnimatePresence>
                     {schedule.map(item => <ScheduleCard key={item.id} item={item} />)}
                   </AnimatePresence>

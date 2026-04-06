@@ -806,14 +806,24 @@ export default function TvDashboard() {
   }, []);
 
   const fetchPlaylist = useCallback(async () => {
+    // Always load from localStorage first for instant playback
+    const saved = localStorage.getItem('pulse_radio_url');
+    if (saved) setPlaylistUrl(saved);
     try {
       const res = await fetch(`${VPS}/data/tv_settings?key=eq.youtube_playlist_url`);
-      if (res.ok) { const rows = await res.json(); if (rows.length > 0 && rows[0].value) setPlaylistUrl(rows[0].value); }
+      if (res.ok) {
+        const rows = await res.json();
+        if (rows.length > 0 && rows[0].value) {
+          setPlaylistUrl(rows[0].value);
+          localStorage.setItem('pulse_radio_url', rows[0].value);
+        }
+      }
     } catch {}
   }, []);
 
   const savePlaylist = useCallback(async (url: string) => {
     setPlaylistUrl(url);
+    localStorage.setItem('pulse_radio_url', url);
     try {
       await fetch(`${VPS}/data/tv_settings?key=eq.youtube_playlist_url`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },

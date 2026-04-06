@@ -1043,13 +1043,13 @@ export default function TvDashboard() {
             <div>
               <SectionHeader icon={Palette} iconColor="hsl(330 85% 62%)" title="Designer" badge={designPipeline.length > 0 ? `${designPipeline.length} artes` : `${designerMembers.length} designers`} />
               {designPipeline.length > 0 ? (
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   <AnimatePresence>
                     {designPipeline.map(task => <DesignActivityCard key={task.id} task={task} />)}
                   </AnimatePresence>
                 </div>
               ) : designerMembers.length > 0 ? (
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   {designerMembers.map(member => <MemberCard key={member.id} member={member} />)}
                 </div>
               ) : (
@@ -1063,7 +1063,7 @@ export default function TvDashboard() {
             <div>
               <SectionHeader icon={Film} iconColor="#8b5cf6" title="Pós-Produção" badge={`${editingPipeline.length} vídeos`} />
               {editingPipeline.length > 0 ? (
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   <AnimatePresence>
                     {editingPipeline.map(task => <EditingCard key={task.id} task={task} />)}
                   </AnimatePresence>

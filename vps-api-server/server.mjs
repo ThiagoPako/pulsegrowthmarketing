@@ -4766,7 +4766,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
              c.company_name AS client_name
       FROM content_tasks ct
       LEFT JOIN clients c ON c.id = ct.client_id
-      WHERE ct.kanban_column IN ('edicao', 'revisao', 'alteracao', 'gravacao')
+      WHERE ct.kanban_column IN ('edicao', 'revisao', 'alteracao')
         AND (ct.assigned_to IS NOT NULL OR ct.reviewing_by IS NOT NULL OR ct.edited_by IS NOT NULL)
     `);
 

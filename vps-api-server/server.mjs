@@ -4766,7 +4766,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
              c.company_name AS client_name
       FROM content_tasks ct
       LEFT JOIN clients c ON c.id = ct.client_id
-      WHERE ct.kanban_column IN ('edicao', 'revisao', 'alteracao', 'gravacao')
+      WHERE ct.kanban_column IN ('edicao', 'revisao', 'alteracao')
         AND (ct.assigned_to IS NOT NULL OR ct.reviewing_by IS NOT NULL OR ct.edited_by IS NOT NULL)
     `);
 
@@ -4815,8 +4815,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
           const elapsed = Number.isFinite(startedAt) ? Math.floor((Date.now() - startedAt) / 1000) : 0;
           timeOnTask = elapsed - (t?.editing_paused_seconds || 0);
         }
-      } else if (t?.kanban_column === 'gravacao') {
-        activity = 'recording';
+      } else {
       } else {
         if (t?.editing_started_at && !t?.editing_paused_at) {
           const startedAt = new Date(t.editing_started_at).getTime();

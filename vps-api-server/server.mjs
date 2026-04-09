@@ -4816,7 +4816,6 @@ app.get('/api/tv-dashboard', async (req, res) => {
           timeOnTask = elapsed - (t?.editing_paused_seconds || 0);
         }
       } else {
-      } else {
         if (t?.editing_started_at && !t?.editing_paused_at) {
           const startedAt = new Date(t.editing_started_at).getTime();
           const elapsed = Number.isFinite(startedAt) ? Math.floor((Date.now() - startedAt) / 1000) : 0;

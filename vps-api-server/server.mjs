@@ -4815,7 +4815,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
           const elapsed = Number.isFinite(startedAt) ? Math.floor((Date.now() - startedAt) / 1000) : 0;
           timeOnTask = elapsed - (t?.editing_paused_seconds || 0);
         }
-      } else if (t?.kanban_column === 'edicao') {
+      } else {
       } else {
         if (t?.editing_started_at && !t?.editing_paused_at) {
           const startedAt = new Date(t.editing_started_at).getTime();

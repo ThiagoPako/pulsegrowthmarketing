@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, ArrowUpCircle, ArrowDownCircle, Pencil, Trash2, Search, Filter, DollarSign, TrendingUp, TrendingDown, Wallet, Users, FileSpreadsheet } from 'lucide-react';
+import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import { useNavigate } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -294,6 +295,7 @@ export default function FinancialMovements() {
 
   return (
     <div className="space-y-6 p-6">
+      <FinancialQuickNav />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

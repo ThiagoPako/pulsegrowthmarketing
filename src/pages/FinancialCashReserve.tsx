@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import { useFinancialData, normalizeDate } from '@/hooks/useFinancialData';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -104,6 +105,7 @@ export default function FinancialCashReserve() {
 
   return (
     <div className="space-y-6 p-6">
+      <FinancialQuickNav />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Caixa (Reserva)</h1>

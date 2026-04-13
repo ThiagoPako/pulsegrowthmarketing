@@ -14,6 +14,7 @@ import {
   Settings, Plus, Plug, PlugZap, Trash2, RefreshCw, Eye, EyeOff, Clock, AlertCircle,
   CheckCircle, XCircle, Loader2, History, Zap, Info
 } from 'lucide-react';
+import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 
@@ -442,6 +443,7 @@ export default function FinancialApiSettings() {
 
   return (
     <div className="space-y-4">
+      <FinancialQuickNav />
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-display font-bold flex items-center gap-2">

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft, Download, FileText } from 'lucide-react';
+import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import { useNavigate } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -148,6 +149,7 @@ export default function FinancialReports() {
 
   return (
     <div className="space-y-5">
+      <FinancialQuickNav />
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro')}><ArrowLeft size={18} /></Button>
         <div className="flex-1">

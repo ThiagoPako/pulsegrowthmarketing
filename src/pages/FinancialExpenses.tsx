@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { Plus, Pencil, Trash2, ArrowLeft, TrendingDown, Users, Wallet, CheckCircle, Undo2, Gift } from 'lucide-react';
+import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { format, subMonths, addMonths } from 'date-fns';
@@ -396,7 +397,7 @@ export default function FinancialExpenses() {
           />
         )}
       </AnimatePresence>
-
+      <FinancialQuickNav />
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro')} className="hover:bg-primary/10"><ArrowLeft size={18} /></Button>
         <div className="flex-1">

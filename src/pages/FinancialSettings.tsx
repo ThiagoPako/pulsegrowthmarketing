@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, Save, Info, Eye, Pencil, Smartphone } from 'lucide-react';
+import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { generateDeliveryReport } from '@/lib/billingReport';
@@ -180,6 +181,7 @@ export default function FinancialSettings() {
 
   return (
     <div className="space-y-5">
+      <FinancialQuickNav />
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro')}><ArrowLeft size={18} /></Button>
         <h1 className="text-xl font-bold">Configuração Financeira</h1>

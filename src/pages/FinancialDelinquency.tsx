@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft, AlertTriangle } from 'lucide-react';
+import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import { useNavigate } from 'react-router-dom';
 import { differenceInDays } from 'date-fns';
 
@@ -41,6 +42,7 @@ export default function FinancialDelinquency() {
 
   return (
     <div className="space-y-5">
+      <FinancialQuickNav />
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro')}><ArrowLeft size={18} /></Button>
         <div className="flex-1">

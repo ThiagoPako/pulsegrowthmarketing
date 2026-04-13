@@ -200,10 +200,17 @@ export default function FinancialRevenues() {
   };
 
   const [animatingPaid, setAnimatingPaid] = useState<string | null>(null);
+  const [confirmPaidId, setConfirmPaidId] = useState<string | null>(null);
+  const [paidDate, setPaidDate] = useState('');
 
-  const handleMarkPaid = async (id: string) => {
+  const handleMarkPaid = async () => {
+    if (!confirmPaidId) return;
+    const id = confirmPaidId;
+    const dateToUse = paidDate || new Date().toISOString().split('T')[0];
+    setConfirmPaidId(null);
+    setPaidDate('');
     setAnimatingPaid(id);
-    const ok = await updateRevenue(id, { status: 'recebida', paid_at: new Date().toISOString().split('T')[0] });
+    const ok = await updateRevenue(id, { status: 'recebida', paid_at: dateToUse });
     setTimeout(() => setAnimatingPaid(null), 1200);
     if (ok) toast.success('Marcada como recebida');
     else toast.error('Não foi possível marcar como recebida');

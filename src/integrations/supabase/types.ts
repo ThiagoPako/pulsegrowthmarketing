@@ -406,6 +406,91 @@ export type Database = {
           },
         ]
       }
+      client_events: {
+        Row: {
+          banner_url: string | null
+          client_id: string
+          color: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          event_date: string
+          event_end_time: string | null
+          event_time: string
+          id: string
+          linked_campaign_id: string | null
+          location: string | null
+          max_registrations: number | null
+          send_coupons_to_participants: boolean
+          status: string
+          title: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          banner_url?: string | null
+          client_id: string
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          event_date: string
+          event_end_time?: string | null
+          event_time?: string
+          id?: string
+          linked_campaign_id?: string | null
+          location?: string | null
+          max_registrations?: number | null
+          send_coupons_to_participants?: boolean
+          status?: string
+          title?: string
+          token?: string
+          updated_at?: string
+        }
+        Update: {
+          banner_url?: string | null
+          client_id?: string
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          event_date?: string
+          event_end_time?: string | null
+          event_time?: string
+          id?: string
+          linked_campaign_id?: string | null
+          location?: string | null
+          max_registrations?: number | null
+          send_coupons_to_participants?: boolean
+          status?: string
+          title?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_public_logos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_events_linked_campaign_id_fkey"
+            columns: ["linked_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "discount_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_portal_comments: {
         Row: {
           author_id: string | null
@@ -1887,6 +1972,60 @@ export type Database = {
             columns: ["videomaker_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_registrations: {
+        Row: {
+          age: number
+          coupon_id: string | null
+          coupon_sent: boolean
+          created_at: string
+          event_id: string
+          id: string
+          lgpd_accepted: boolean
+          name: string
+          registration_code: string
+          whatsapp: string
+        }
+        Insert: {
+          age?: number
+          coupon_id?: string | null
+          coupon_sent?: boolean
+          created_at?: string
+          event_id: string
+          id?: string
+          lgpd_accepted?: boolean
+          name?: string
+          registration_code?: string
+          whatsapp?: string
+        }
+        Update: {
+          age?: number
+          coupon_id?: string | null
+          coupon_sent?: boolean
+          created_at?: string
+          event_id?: string
+          id?: string
+          lgpd_accepted?: boolean
+          name?: string
+          registration_code?: string
+          whatsapp?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_registrations_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "discount_coupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_registrations_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "client_events"
             referencedColumns: ["id"]
           },
         ]

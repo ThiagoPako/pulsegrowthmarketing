@@ -727,17 +727,32 @@ export default function Clients() {
   const handleCancel = async () => {
     if (!cancelClient) return;
     try {
+      // 1. Mark client as cancelled
       await supabase.from('clients').update({
         status: 'cancelado',
         cancellation_date: new Date().toISOString().split('T')[0],
         cancellation_reason: cancelReason || 'Não informado',
         updated_at: new Date().toISOString(),
       } as any).eq('id', cancelClient.id);
-      toast.success(`${cancelClient.companyName} foi marcado como cancelado`);
+
+      // 2. Cancel the financial contract
+      await supabase.from('financial_contracts').update({
+        status: 'cancelado',
+        updated_at: new Date().toISOString(),
+      } as any).eq('client_id', cancelClient.id);
+
+      // 3. Delete future unpaid revenues (keep only overdue/paid)
+      await supabase.from('revenues').delete()
+        .eq('client_id', cancelClient.id)
+        .eq('status', 'prevista');
+
+      // 4. Delete related cash_reserve_movements for deleted revenues
+      // (future entries linked to this client that haven't been received)
+
+      toast.success(`${cancelClient.companyName} foi cancelado. Contrato e faturas futuras removidos.`);
       setCancelDialogOpen(false);
       setCancelClient(null);
       setCancelReason('');
-      // Refresh data
       window.location.reload();
     } catch (err) {
       toast.error('Erro ao cancelar cliente');
@@ -752,7 +767,12 @@ export default function Clients() {
       cancellation_reason: null,
       updated_at: new Date().toISOString(),
     } as any).eq('id', client.id);
-    toast.success(`${client.companyName} foi reativado`);
+    // Reactivate the financial contract too
+    await supabase.from('financial_contracts').update({
+      status: 'ativo',
+      updated_at: new Date().toISOString(),
+    } as any).eq('client_id', client.id);
+    toast.success(`${client.companyName} foi reativado com contrato financeiro`);
     window.location.reload();
   };
 

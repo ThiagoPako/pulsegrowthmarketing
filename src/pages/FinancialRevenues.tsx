@@ -206,11 +206,13 @@ export default function FinancialRevenues() {
   const handleMarkPaid = async () => {
     if (!confirmPaidId) return;
     const id = confirmPaidId;
+    const rev = revenues.find(r => r.id === id);
+    const cl = clients.find(c => c.id === rev?.client_id);
     const dateToUse = paidDate || new Date().toISOString().split('T')[0];
     setConfirmPaidId(null);
     setPaidDate('');
     setAnimatingPaid(id);
-    const ok = await updateRevenue(id, { status: 'recebida', paid_at: dateToUse });
+    const ok = await updateRevenue(id, { status: 'recebida', paid_at: dateToUse }, cl?.companyName);
     setTimeout(() => setAnimatingPaid(null), 1200);
     if (ok) toast.success('Marcada como recebida');
     else toast.error('Não foi possível marcar como recebida');

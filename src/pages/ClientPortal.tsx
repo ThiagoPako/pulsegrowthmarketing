@@ -24,6 +24,7 @@ import PortalWelcomeOverlay from '@/components/portal/PortalWelcomeOverlay';
 import { PortalVideoButtons } from '@/components/portal/PortalWelcomeOverlay';
 import PortalDiscountClub from '@/components/portal/PortalDiscountClub';
 import ProposalChecklist from '@/components/ProposalChecklist';
+import PortalRendimentoBovino from '@/components/portal/PortalRendimentoBovino';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
   reel: 'Reel', criativo: 'Criativo', institucional: 'Institucional', anuncio: 'Anúncio', arte: 'Arte',

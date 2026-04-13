@@ -492,7 +492,42 @@ export default function FinancialRevenues() {
         {showRocket && <RocketOverlay onComplete={() => setShowRocket(false)} />}
       </AnimatePresence>
 
-      {/* KPI Summary Cards */}
+      {/* Dialog Confirmar Pagamento */}
+      <Dialog open={!!confirmPaidId} onOpenChange={(o) => { if (!o) { setConfirmPaidId(null); setPaidDate(''); } }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">✅ Confirmar Pagamento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {(() => {
+              const rev = filtered.find(r => r.id === confirmPaidId);
+              const cl = clients.find(c => c.id === rev?.client_id);
+              return (
+                <div className="text-sm text-muted-foreground">
+                  <p><strong>{cl?.companyName || 'Cliente'}</strong> — {fmt(Number(rev?.amount || 0))}</p>
+                </div>
+              );
+            })()}
+            <div className="space-y-2">
+              <Label>Data do Pagamento</Label>
+              <Input
+                type="date"
+                value={paidDate}
+                onChange={e => setPaidDate(e.target.value)}
+                placeholder="Deixe em branco para usar hoje"
+              />
+              <p className="text-xs text-muted-foreground">Deixe em branco para usar a data de hoje</p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setConfirmPaidId(null); setPaidDate(''); }}>Cancelar</Button>
+              <Button onClick={handleMarkPaid} className="bg-gradient-to-r from-emerald-500 to-green-600 text-white">
+                <CheckCircle size={14} className="mr-1" /> Confirmar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.3 }} className="grid grid-cols-3 gap-3">
         <Card className="border-emerald-200/50 overflow-hidden">
           <CardContent className="pt-3 pb-3 bg-gradient-to-br from-emerald-500/10 to-green-500/10">

@@ -293,7 +293,7 @@ export function useFinancialData() {
     return !error;
   };
 
-  const updateRevenue = async (id: string, updates: Partial<Revenue>) => {
+  const updateRevenue = async (id: string, updates: Partial<Revenue>, clientName?: string) => {
     try {
       const previousRevenue = revenues.find(r => r.id === id);
       const { error } = await supabase.from('revenues').update(updates as any).eq('id', id);
@@ -308,11 +308,18 @@ export function useFinancialData() {
 
       // Sync with account balance (cash_reserve_movements)
       if (updates.status === 'recebida' && previousRevenue?.status !== 'recebida') {
+        // Resolve client name for description
+        let companyLabel = clientName || '';
+        if (!companyLabel && previousRevenue?.client_id) {
+          const { data: cl } = await supabase.from('clients').select('company_name').eq('id', previousRevenue.client_id).maybeSingle();
+          companyLabel = (cl as any)?.company_name || '';
+        }
+        const descLabel = companyLabel ? `${companyLabel} - ${revenueAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : `Receita avulsa - ${revenueAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
         // Revenue received → add entrada to account balance
         await supabase.from('cash_reserve_movements').insert({
           amount: revenueAmount,
           type: 'entrada',
-          description: `[Receita] ${previousRevenue?.client_id ? 'Recebimento de cliente' : 'Receita avulsa'} - ID: ${id}`,
+          description: `[Receita] ${descLabel} - ID: ${id}`,
           date: updates.paid_at || new Date().toISOString().split('T')[0],
           is_reserve: false,
         } as any);

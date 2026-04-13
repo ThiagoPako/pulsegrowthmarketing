@@ -2167,6 +2167,11 @@ export default function Clients() {
                       generateClientCardPdf(c, vmName);
                     }}><Printer size={15} /></Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => handleOpen(c)}><Pencil size={15} /></Button>
+                    {(c as any).status === 'cancelado' ? (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-500" title="Reativar" onClick={() => handleReactivate(c)}><RefreshCw size={15} /></Button>
+                    ) : (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-500" title="Cancelar Cliente" onClick={() => { setCancelClient(c); setCancelDialogOpen(true); }}><UserMinus size={15} /></Button>
+                    )}
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Excluir" onClick={() => handleDelete(c.id)}><Trash2 size={15} /></Button>
                   </>
                 )}

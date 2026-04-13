@@ -822,6 +822,10 @@ export default function ClientPortal() {
           <motion.div key="rendimento" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
             <PortalRendimentoBovino clientColor={clientColor} />
           </motion.div>
+        ) : activeTab === 'eventos' ? (
+          <motion.div key="eventos" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+            <PortalEvents clientId={client.id} clientColor={clientColor} isTeamMember={isTeamMember} />
+          </motion.div>
         ) : (
           /* ── METRICS TAB ── */
           <motion.div key="metrics" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8 pb-20 space-y-8">

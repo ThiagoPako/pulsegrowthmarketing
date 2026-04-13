@@ -1479,6 +1479,18 @@ app.post('/api/portal-actions', async (req, res) => {
       return res.json({ success: true });
     }
 
+    // ── Create event ──
+    if (action === 'create_event') {
+      const { title, description, event_date, event_time, event_end_time, location, max_registrations, color } = req.body;
+      if (!client_id || !title || !event_date) return res.status(400).json({ error: 'client_id, title, event_date required' });
+      const { rows: [event] } = await pool.query(
+        `INSERT INTO client_events (client_id, title, description, event_date, event_time, event_end_time, location, max_registrations, color)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+        [client_id, title, description || '', event_date, event_time || '08:00', event_end_time || '18:00', location || '', max_registrations || null, color || '217 91% 60%']
+      );
+      return res.json({ event });
+    }
+
     // ── Comments ──
     if (action === 'get_comments') {
       if (!content_id) return res.status(400).json({ error: 'content_id required' });

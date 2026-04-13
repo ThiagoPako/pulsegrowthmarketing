@@ -85,6 +85,8 @@ export default function TvPanelControl() {
         saveSetting('show_banners', String(showBanners)),
         saveSetting('show_team', String(showTeam)),
       ]);
+      // Also save to localStorage so TV picks it up instantly
+      localStorage.setItem('pulse_radio_url', radioUrl);
       toast.success('Configurações do painel TV salvas com sucesso!');
       fetchSettings();
     } catch (err) {
@@ -92,6 +94,18 @@ export default function TvPanelControl() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSync = async () => {
+    // Save first, then signal TV to reload
+    await handleSaveAll();
+    // Use BroadcastChannel to notify TV Dashboard
+    try {
+      const bc = new BroadcastChannel('pulse_tv_sync');
+      bc.postMessage({ action: 'reload', playlistUrl: radioUrl, timestamp: Date.now() });
+      bc.close();
+    } catch {}
+    toast.success('Sincronização enviada! O painel TV será recarregado com a música tocando.');
   };
 
   const extractYoutubeId = (url: string) => {
@@ -204,10 +218,13 @@ export default function TvPanelControl() {
         </Card>
       </div>
 
-      {/* Save button */}
-      <div className="flex gap-3">
+      {/* Save & Sync buttons */}
+      <div className="flex gap-3 flex-wrap">
         <Button onClick={handleSaveAll} disabled={saving} className="gap-2">
           <Save size={16} /> {saving ? 'Salvando...' : 'Salvar Configurações'}
+        </Button>
+        <Button onClick={handleSync} disabled={saving} variant="default" className="gap-2 bg-orange-600 hover:bg-orange-700">
+          <Radio size={16} /> Sincronizar com TV
         </Button>
         <Button variant="outline" onClick={() => window.open('/tv', '_blank')} className="gap-2">
           <Eye size={16} /> Abrir Painel TV

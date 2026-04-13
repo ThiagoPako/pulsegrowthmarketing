@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { useFinancialData, normalizeDate } from '@/hooks/useFinancialData';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -122,7 +123,7 @@ export default function FinancialRevenues() {
   const [sendingAll, setSendingAll] = useState(false);
   const [showRocket, setShowRocket] = useState(false);
   const [showNewDialog, setShowNewDialog] = useState(false);
-  const [newRev, setNewRev] = useState({ client_id: '', amount: '', due_date: '', description: '', category: '', is_recurring: false });
+  const [newRev, setNewRev] = useState({ client_id: '', amount: '', due_date: '', description: '', category: '', is_recurring: false, mark_paid: false });
 
   const revenueCategories = [
     { value: 'contrato', label: '📋 Contrato Mensal' },
@@ -179,21 +180,39 @@ export default function FinancialRevenues() {
       newRev.description,
     ].filter(Boolean).join(' - ');
 
+    const clientName = newRev.client_id ? clients.find(c => c.id === newRev.client_id)?.companyName || '' : '';
+
     const payload: any = {
       amount: Number(newRev.amount),
       due_date: newRev.due_date,
       reference_month: refMonth,
-      status: 'prevista',
+      status: newRev.mark_paid ? 'recebida' : 'prevista',
     };
+    if (newRev.mark_paid) {
+      payload.paid_at = newRev.due_date;
+    }
     if (newRev.client_id) payload.client_id = newRev.client_id;
-    // Store category + description in a combined field if needed
     if (desc) payload.description = desc;
 
     const ok = await addRevenue(payload);
     if (ok) {
+      // If marked as paid, also create the cash movement
+      if (newRev.mark_paid) {
+        const amountNum = Number(newRev.amount);
+        const descLabel = clientName
+          ? `${clientName} - ${amountNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+          : `Receita avulsa - ${amountNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+        await supabase.from('cash_reserve_movements').insert({
+          amount: amountNum,
+          type: 'entrada',
+          description: `[Receita] ${descLabel}`,
+          date: newRev.due_date,
+          is_reserve: false,
+        } as any);
+      }
       toast.success('Receita cadastrada com sucesso!');
       setShowNewDialog(false);
-      setNewRev({ client_id: '', amount: '', due_date: '', description: '', category: '', is_recurring: false });
+      setNewRev({ client_id: '', amount: '', due_date: '', description: '', category: '', is_recurring: false, mark_paid: false });
     } else {
       toast.error('Erro ao cadastrar receita');
     }
@@ -383,10 +402,11 @@ export default function FinancialRevenues() {
             </div>
             <div className="space-y-2">
               <Label>Cliente (opcional)</Label>
-              <Select value={newRev.client_id} onValueChange={v => setNewRev(p => ({ ...p, client_id: v }))}>
+              <Select value={newRev.client_id || '__none__'} onValueChange={v => setNewRev(p => ({ ...p, client_id: v === '__none__' ? '' : v }))}>
                 <SelectTrigger><SelectValue placeholder="Sem cliente vinculado" /></SelectTrigger>
                 <SelectContent>
-                  {clients.sort((a, b) => a.companyName.localeCompare(b.companyName)).map(c => (
+                  <SelectItem value="__none__">— Sem cliente vinculado —</SelectItem>
+                  {clients.filter(c => c.status === 'ativo').sort((a, b) => a.companyName.localeCompare(b.companyName)).map(c => (
                     <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
                   ))}
                 </SelectContent>
@@ -419,6 +439,13 @@ export default function FinancialRevenues() {
                 <p className="text-xs text-muted-foreground">Repete todo mês automaticamente</p>
               </div>
               <Switch checked={newRev.is_recurring} onCheckedChange={v => setNewRev(p => ({ ...p, is_recurring: v }))} />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/30 p-3">
+              <div>
+                <Label className="text-sm font-medium">Já foi paga</Label>
+                <p className="text-xs text-muted-foreground">Cria receita como recebida e gera movimentação</p>
+              </div>
+              <Switch checked={newRev.mark_paid} onCheckedChange={v => setNewRev(p => ({ ...p, mark_paid: v }))} />
             </div>
             <div className="space-y-2">
               <Label>Descrição (opcional)</Label>

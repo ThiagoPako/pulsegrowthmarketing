@@ -131,7 +131,7 @@ export default function FinancialMovements() {
           id: m.id,
           date: cashDate,
           type: m.type === 'entrada' ? 'caixa_entrada' : 'caixa_saida',
-          description: m.description,
+          description: m.description.replace(/\s*-\s*ID:\s*[a-f0-9-]+/gi, ''),
           amount: Number(m.amount),
           sourceType: 'caixa',
           original: m,

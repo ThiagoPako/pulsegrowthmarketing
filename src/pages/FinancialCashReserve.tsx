@@ -208,7 +208,7 @@ export default function FinancialCashReserve() {
                         {m.type === 'entrada' ? 'Entrada' : 'Saída'}
                       </Badge>
                     </TableCell>
-                    <TableCell>{m.description}</TableCell>
+                    <TableCell>{m.description.replace(/\s*-\s*ID:\s*[a-f0-9-]+/gi, '')}</TableCell>
                     <TableCell className={`text-right font-medium ${m.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>
                       {m.type === 'entrada' ? '+' : '-'}{fmt(Number(m.amount))}
                     </TableCell>

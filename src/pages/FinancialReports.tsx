@@ -149,6 +149,7 @@ export default function FinancialReports() {
 
   return (
     <div className="space-y-5">
+      <FinancialQuickNav />
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro')}><ArrowLeft size={18} /></Button>
         <div className="flex-1">

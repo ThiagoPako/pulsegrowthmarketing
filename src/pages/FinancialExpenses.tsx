@@ -397,7 +397,7 @@ export default function FinancialExpenses() {
           />
         )}
       </AnimatePresence>
-
+      <FinancialQuickNav />
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro')} className="hover:bg-primary/10"><ArrowLeft size={18} /></Button>
         <div className="flex-1">

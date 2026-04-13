@@ -402,10 +402,11 @@ export default function FinancialRevenues() {
             </div>
             <div className="space-y-2">
               <Label>Cliente (opcional)</Label>
-              <Select value={newRev.client_id} onValueChange={v => setNewRev(p => ({ ...p, client_id: v }))}>
+              <Select value={newRev.client_id || '__none__'} onValueChange={v => setNewRev(p => ({ ...p, client_id: v === '__none__' ? '' : v }))}>
                 <SelectTrigger><SelectValue placeholder="Sem cliente vinculado" /></SelectTrigger>
                 <SelectContent>
-                  {clients.sort((a, b) => a.companyName.localeCompare(b.companyName)).map(c => (
+                  <SelectItem value="__none__">— Sem cliente vinculado —</SelectItem>
+                  {clients.filter(c => c.status === 'ativo').sort((a, b) => a.companyName.localeCompare(b.companyName)).map(c => (
                     <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
                   ))}
                 </SelectContent>

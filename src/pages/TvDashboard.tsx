@@ -873,6 +873,25 @@ export default function TvDashboard() {
     } catch (e) { console.error('Seasonal fetch error:', e); }
   }, []);
 
+  // Listen for sync broadcasts from TvPanelControl
+  useEffect(() => {
+    try {
+      const bc = new BroadcastChannel('pulse_tv_sync');
+      bc.onmessage = (event) => {
+        if (event.data?.action === 'reload') {
+          // Update playlist URL instantly and reload page for autoplay
+          if (event.data.playlistUrl) {
+            localStorage.setItem('pulse_radio_url', event.data.playlistUrl);
+          }
+          window.location.reload();
+        }
+      };
+      return () => bc.close();
+    } catch {
+      return undefined;
+    }
+  }, []);
+
   useEffect(() => {
     fetchData(); fetchPlaylist(); fetchSeasonal();
     const iv = setInterval(fetchData, 10_000);

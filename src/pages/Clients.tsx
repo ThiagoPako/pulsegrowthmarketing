@@ -767,7 +767,12 @@ export default function Clients() {
       cancellation_reason: null,
       updated_at: new Date().toISOString(),
     } as any).eq('id', client.id);
-    toast.success(`${client.companyName} foi reativado`);
+    // Reactivate the financial contract too
+    await supabase.from('financial_contracts').update({
+      status: 'ativo',
+      updated_at: new Date().toISOString(),
+    } as any).eq('client_id', client.id);
+    toast.success(`${client.companyName} foi reativado com contrato financeiro`);
     window.location.reload();
   };
 

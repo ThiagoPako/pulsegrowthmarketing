@@ -13,6 +13,7 @@ import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfWeek, en
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
+import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 
 /** Safely format a date string — returns fallback on invalid input */
 const safeFormatDate = (dateStr: string | null | undefined, pattern: string, options?: any): string => {
@@ -483,6 +484,7 @@ export default function FinancialDashboard() {
 
   return (
     <div className="space-y-6">
+      <FinancialQuickNav />
       {/* Celebration Overlay */}
       {showCelebration && (
         <motion.div

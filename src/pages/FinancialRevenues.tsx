@@ -440,6 +440,13 @@ export default function FinancialRevenues() {
               </div>
               <Switch checked={newRev.is_recurring} onCheckedChange={v => setNewRev(p => ({ ...p, is_recurring: v }))} />
             </div>
+            <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/30 p-3">
+              <div>
+                <Label className="text-sm font-medium">Já foi paga</Label>
+                <p className="text-xs text-muted-foreground">Cria receita como recebida e gera movimentação</p>
+              </div>
+              <Switch checked={newRev.mark_paid} onCheckedChange={v => setNewRev(p => ({ ...p, mark_paid: v }))} />
+            </div>
             <div className="space-y-2">
               <Label>Descrição (opcional)</Label>
               <Input

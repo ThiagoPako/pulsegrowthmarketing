@@ -724,6 +724,38 @@ export default function Clients() {
     toast.success('Cliente e todos os dados relacionados foram removidos');
   };
 
+  const handleCancel = async () => {
+    if (!cancelClient) return;
+    try {
+      await supabase.from('clients').update({
+        status: 'cancelado',
+        cancellation_date: new Date().toISOString().split('T')[0],
+        cancellation_reason: cancelReason || 'Não informado',
+        updated_at: new Date().toISOString(),
+      } as any).eq('id', cancelClient.id);
+      toast.success(`${cancelClient.companyName} foi marcado como cancelado`);
+      setCancelDialogOpen(false);
+      setCancelClient(null);
+      setCancelReason('');
+      // Refresh data
+      window.location.reload();
+    } catch (err) {
+      toast.error('Erro ao cancelar cliente');
+    }
+  };
+
+  const handleReactivate = async (client: Client) => {
+    if (!confirm(`Reativar ${client.companyName}?`)) return;
+    await supabase.from('clients').update({
+      status: 'ativo',
+      cancellation_date: null,
+      cancellation_reason: null,
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', client.id);
+    toast.success(`${client.companyName} foi reativado`);
+    window.location.reload();
+  };
+
   const toggleContentType = (ct: ContentType) => {
     const types = form.extraContentTypes || [];
     setForm({ ...form, extraContentTypes: types.includes(ct) ? types.filter(t => t !== ct) : [...types, ct] });

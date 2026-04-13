@@ -666,7 +666,11 @@ export default function ClientPortal() {
         <button onClick={() => setActiveTab('descontos')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'descontos' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'descontos' ? { borderColor: `hsl(${clientColor})` } : {}}>
           🎟️ Descontos
         </button>
-      </div>
+        {client.company_name?.toLowerCase().includes('super brasil') && (
+          <button onClick={() => setActiveTab('rendimento')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'rendimento' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'rendimento' ? { borderColor: `hsl(${clientColor})` } : {}}>
+            🥩 Rendimento
+          </button>
+        )}
 
       <AnimatePresence mode="wait">
         {activeTab === 'library' ? (

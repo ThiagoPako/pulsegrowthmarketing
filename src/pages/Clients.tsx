@@ -2274,6 +2274,47 @@ export default function Clients() {
           {briefingClient && <ClientBriefingView client={briefingClient} />}
         </DialogContent>
       </Dialog>
+
+      {/* Cancel Client Dialog */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserMinus size={18} className="text-amber-500" />
+              Cancelar Cliente
+            </DialogTitle>
+          </DialogHeader>
+          {cancelClient && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-secondary/50">
+                <p className="font-medium text-sm">{cancelClient.companyName}</p>
+                <p className="text-xs text-muted-foreground">{cancelClient.responsiblePerson}</p>
+              </div>
+              <div className="space-y-1">
+                <Label>Motivo do Cancelamento</Label>
+                <Select value={cancelReason} onValueChange={setCancelReason}>
+                  <SelectTrigger><SelectValue placeholder="Selecione o motivo..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="insatisfacao">Insatisfação com o serviço</SelectItem>
+                    <SelectItem value="financeiro">Problemas financeiros</SelectItem>
+                    <SelectItem value="concorrencia">Migrou para concorrente</SelectItem>
+                    <SelectItem value="encerramento">Encerrou as atividades</SelectItem>
+                    <SelectItem value="mudanca_foco">Mudança de foco/estratégia</SelectItem>
+                    <SelectItem value="sazonalidade">Sazonalidade do negócio</SelectItem>
+                    <SelectItem value="outro">Outro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" onClick={() => setCancelDialogOpen(false)} className="flex-1">Voltar</Button>
+                <Button variant="destructive" onClick={handleCancel} className="flex-1 gap-2">
+                  <UserMinus size={16} /> Confirmar Cancelamento
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -93,26 +93,34 @@ export default function PortalEvents({ clientId, clientColor, isTeamMember }: Pr
     if (!title.trim() || !eventDate) return;
     setCreating(true);
 
-    const result = await portalAction({
-      action: 'create_event',
-      client_id: clientId,
-      title: title.trim().slice(0, 100),
-      description: description.trim().slice(0, 500),
-      event_date: eventDate,
-      event_time: eventTime,
-      event_end_time: eventEndTime,
-      location: location.trim().slice(0, 200),
-      max_registrations: maxRegs ? parseInt(maxRegs) : null,
-      color: clientColor,
-    });
+    try {
+      const { data, error } = await supabase
+        .from('client_events')
+        .insert({
+          client_id: clientId,
+          title: title.trim().slice(0, 100),
+          description: description.trim().slice(0, 500),
+          event_date: eventDate,
+          event_time: eventTime,
+          event_end_time: eventEndTime,
+          location: location.trim().slice(0, 200),
+          max_registrations: maxRegs ? parseInt(maxRegs) : null,
+          color: clientColor,
+        })
+        .select()
+        .single();
 
-    if (result?.event || !result?.error) {
-      toast.success('Evento criado com sucesso!');
-      setShowCreate(false);
-      resetForm();
-      loadEvents();
-    } else {
-      toast.error(result?.error || 'Erro ao criar evento');
+      if (error) {
+        console.error('Error creating event:', error);
+        toast.error('Erro ao criar evento: ' + error.message);
+      } else {
+        toast.success('Evento criado com sucesso!');
+        setShowCreate(false);
+        resetForm();
+        loadEvents();
+      }
+    } catch (err: any) {
+      toast.error('Erro ao criar evento');
     }
     setCreating(false);
   };

@@ -2076,7 +2076,7 @@ export default function Clients() {
       </div>
 
       {/* Client Goal Rocket Widget */}
-      <ClientGoalRocket currentClients={clients.length} />
+      <ClientGoalRocket currentClients={clients.filter(c => c.status === 'ativo').length} />
 
       {/* Search filter */}
       <div className="w-full max-w-sm">

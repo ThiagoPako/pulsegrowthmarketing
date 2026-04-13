@@ -107,6 +107,8 @@ export interface Client {
   artRequestsLimit?: number | null; // monthly art request limit (null = unlimited)
   clientType?: string; // 'novo' | 'existente' | 'sem_contrato' (Pacotes de Serviços)
   proposalId?: string | null; // linked commercial proposal
+  status?: string; // 'ativo' | 'cancelado'
+  cancellationDate?: string | null;
 }
 
 export interface SocialAccount {

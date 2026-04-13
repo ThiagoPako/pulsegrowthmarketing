@@ -572,6 +572,14 @@ export default function ClientPortal() {
               >
                 🎟️ Descontos
               </button>
+              {client.company_name?.toLowerCase().includes('super brasil') && (
+                <button
+                  onClick={() => setActiveTab('rendimento')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'rendimento' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+                >
+                  🥩 Rendimento
+                </button>
+              )}
             </div>
             <PortalVideoButtons hasNews={portalVideoState.hasNews} hasWelcome={portalVideoState.hasWelcome} isNewClient={portalVideoState.isNewClient} />
             <PortalNotifications

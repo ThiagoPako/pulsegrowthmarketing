@@ -122,7 +122,7 @@ export default function FinancialRevenues() {
   const [sendingAll, setSendingAll] = useState(false);
   const [showRocket, setShowRocket] = useState(false);
   const [showNewDialog, setShowNewDialog] = useState(false);
-  const [newRev, setNewRev] = useState({ client_id: '', amount: '', due_date: '', description: '', category: '', is_recurring: false });
+  const [newRev, setNewRev] = useState({ client_id: '', amount: '', due_date: '', description: '', category: '', is_recurring: false, mark_paid: false });
 
   const revenueCategories = [
     { value: 'contrato', label: '📋 Contrato Mensal' },

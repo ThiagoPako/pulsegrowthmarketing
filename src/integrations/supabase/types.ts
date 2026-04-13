@@ -637,6 +637,8 @@ export type Database = {
           backup_day: string
           backup_time: string
           briefing_data: Json | null
+          cancellation_date: string | null
+          cancellation_reason: string | null
           city: string
           client_login: string | null
           client_password_hash: string | null
@@ -674,6 +676,7 @@ export type Database = {
           responsible_person: string
           selected_weeks: number[]
           show_metrics: boolean
+          status: string
           updated_at: string
           videomaker_id: string | null
           weekly_creatives: number
@@ -691,6 +694,8 @@ export type Database = {
           backup_day?: string
           backup_time?: string
           briefing_data?: Json | null
+          cancellation_date?: string | null
+          cancellation_reason?: string | null
           city?: string
           client_login?: string | null
           client_password_hash?: string | null
@@ -728,6 +733,7 @@ export type Database = {
           responsible_person?: string
           selected_weeks?: number[]
           show_metrics?: boolean
+          status?: string
           updated_at?: string
           videomaker_id?: string | null
           weekly_creatives?: number
@@ -745,6 +751,8 @@ export type Database = {
           backup_day?: string
           backup_time?: string
           briefing_data?: Json | null
+          cancellation_date?: string | null
+          cancellation_reason?: string | null
           city?: string
           client_login?: string | null
           client_password_hash?: string | null
@@ -782,6 +790,7 @@ export type Database = {
           responsible_person?: string
           selected_weeks?: number[]
           show_metrics?: boolean
+          status?: string
           updated_at?: string
           videomaker_id?: string | null
           weekly_creatives?: number

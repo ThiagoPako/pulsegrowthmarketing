@@ -74,6 +74,8 @@ const DiscountClub = lazy(() => import("@/pages/DiscountClub"));
 const DiscountClubHome = lazy(() => import("@/pages/DiscountClubHome"));
 const DiscountAdmin = lazy(() => import("@/pages/DiscountAdmin"));
 const TvDashboard = lazy(() => import("@/pages/TvDashboard"));
+const TvPanelControl = lazy(() => import("@/pages/TvPanelControl"));
+const CancellationReports = lazy(() => import("@/pages/CancellationReports"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -186,6 +188,8 @@ function AppRoutes() {
         <Route path="/clube" element={<DiscountClubHome />} />
         <Route path="/clube/:clientId" element={<DiscountClub />} />
         <Route path="/clube-descontos" element={<ProtectedRoute><DiscountAdmin /></ProtectedRoute>} />
+        <Route path="/painel-tv" element={<ProtectedRoute><TvPanelControl /></ProtectedRoute>} />
+        <Route path="/cancelamentos" element={<ProtectedRoute><CancellationReports /></ProtectedRoute>} />
         <Route path="/tv" element={<Suspense fallback={<PageLoader />}><TvDashboard /></Suspense>} />
         <Route path="*" element={<NotFound />} />
       </Routes>

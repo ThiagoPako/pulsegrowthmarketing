@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink, Database, FileText as FileTextIcon, MonitorPlay, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink, Database, FileText as FileTextIcon, MonitorPlay, Loader2, UserMinus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/vpsDb';
 import { uploadFileToVps } from '@/services/vpsApi';
@@ -95,6 +95,9 @@ export default function Clients() {
   const { createOnboardingForClient } = useOnboarding();
   const isDesignerOnly = currentUser?.role === 'designer' || currentUser?.role === 'fotografo';
   const [briefingClient, setBriefingClient] = useState<Client | null>(null);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelClient, setCancelClient] = useState<Client | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
   const [form, setForm] = useState<Partial<Client> & { clientType?: string }>(emptyClient());
@@ -719,6 +722,38 @@ export default function Clients() {
     if (!confirm('Tem certeza? Todos os dados deste cliente serão removidos permanentemente.')) return;
     await deleteClient(id);
     toast.success('Cliente e todos os dados relacionados foram removidos');
+  };
+
+  const handleCancel = async () => {
+    if (!cancelClient) return;
+    try {
+      await supabase.from('clients').update({
+        status: 'cancelado',
+        cancellation_date: new Date().toISOString().split('T')[0],
+        cancellation_reason: cancelReason || 'Não informado',
+        updated_at: new Date().toISOString(),
+      } as any).eq('id', cancelClient.id);
+      toast.success(`${cancelClient.companyName} foi marcado como cancelado`);
+      setCancelDialogOpen(false);
+      setCancelClient(null);
+      setCancelReason('');
+      // Refresh data
+      window.location.reload();
+    } catch (err) {
+      toast.error('Erro ao cancelar cliente');
+    }
+  };
+
+  const handleReactivate = async (client: Client) => {
+    if (!confirm(`Reativar ${client.companyName}?`)) return;
+    await supabase.from('clients').update({
+      status: 'ativo',
+      cancellation_date: null,
+      cancellation_reason: null,
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', client.id);
+    toast.success(`${client.companyName} foi reativado`);
+    window.location.reload();
   };
 
   const toggleContentType = (ct: ContentType) => {
@@ -2066,6 +2101,9 @@ export default function Clients() {
                     </p>
                   )}
                   <div className="flex gap-1.5 mt-2 flex-wrap">
+                    {(c as any).status === 'cancelado' && (
+                      <Badge className="text-[10px] px-1.5 py-0.5 bg-destructive/20 text-destructive border-destructive/30">❌ Cancelado</Badge>
+                    )}
                    {(c as any).clientType === 'sem_contrato' && (
                       <Badge className="text-[10px] px-1.5 py-0.5 bg-blue-500/20 text-blue-600 border-blue-500/30">📦 Pacotes de Serviços</Badge>
                     )}
@@ -2129,6 +2167,11 @@ export default function Clients() {
                       generateClientCardPdf(c, vmName);
                     }}><Printer size={15} /></Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => handleOpen(c)}><Pencil size={15} /></Button>
+                    {(c as any).status === 'cancelado' ? (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-500" title="Reativar" onClick={() => handleReactivate(c)}><RefreshCw size={15} /></Button>
+                    ) : (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-500" title="Cancelar Cliente" onClick={() => { setCancelClient(c); setCancelDialogOpen(true); }}><UserMinus size={15} /></Button>
+                    )}
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Excluir" onClick={() => handleDelete(c.id)}><Trash2 size={15} /></Button>
                   </>
                 )}
@@ -2229,6 +2272,47 @@ export default function Clients() {
             </DialogTitle>
           </DialogHeader>
           {briefingClient && <ClientBriefingView client={briefingClient} />}
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Client Dialog */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserMinus size={18} className="text-amber-500" />
+              Cancelar Cliente
+            </DialogTitle>
+          </DialogHeader>
+          {cancelClient && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-secondary/50">
+                <p className="font-medium text-sm">{cancelClient.companyName}</p>
+                <p className="text-xs text-muted-foreground">{cancelClient.responsiblePerson}</p>
+              </div>
+              <div className="space-y-1">
+                <Label>Motivo do Cancelamento</Label>
+                <Select value={cancelReason} onValueChange={setCancelReason}>
+                  <SelectTrigger><SelectValue placeholder="Selecione o motivo..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="insatisfacao">Insatisfação com o serviço</SelectItem>
+                    <SelectItem value="financeiro">Problemas financeiros</SelectItem>
+                    <SelectItem value="concorrencia">Migrou para concorrente</SelectItem>
+                    <SelectItem value="encerramento">Encerrou as atividades</SelectItem>
+                    <SelectItem value="mudanca_foco">Mudança de foco/estratégia</SelectItem>
+                    <SelectItem value="sazonalidade">Sazonalidade do negócio</SelectItem>
+                    <SelectItem value="outro">Outro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" onClick={() => setCancelDialogOpen(false)} className="flex-1">Voltar</Button>
+                <Button variant="destructive" onClick={handleCancel} className="flex-1 gap-2">
+                  <UserMinus size={16} /> Confirmar Cancelamento
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

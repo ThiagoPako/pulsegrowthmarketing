@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { Send, Trash2, Loader2, TrendingUp, DollarSign, Users, BarChart3, Download, Calendar, Video, FileText, Palette } from 'lucide-react';
+import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import ReactMarkdown from 'react-markdown';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -144,6 +145,7 @@ export default function FinancialChat() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-7rem)]">
+      <FinancialQuickNav />
       {/* Header */}
       <div className="flex items-center justify-between pb-4">
         <div className="flex items-center gap-3">

@@ -671,6 +671,7 @@ export default function ClientPortal() {
             🥩 Rendimento
           </button>
         )}
+      </div>
 
       <AnimatePresence mode="wait">
         {activeTab === 'library' ? (

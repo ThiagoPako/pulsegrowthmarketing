@@ -46,7 +46,11 @@ function rowToClient(r: any): Client {
     artRequestsLimit: r.art_requests_limit ?? null,
     clientType: r.client_type || 'novo',
     proposalId: r.proposal_id || null,
-  };
+    status: r.status || 'ativo',
+    cancellationDate: r.cancellation_date || null,
+    cancellationReason: r.cancellation_reason || null,
+    briefingData: r.briefing_data || {},
+  } as Client & { status: string; cancellationDate: string | null; cancellationReason: string | null; briefingData: any };
 }
 
 function clientToRow(c: Client) {

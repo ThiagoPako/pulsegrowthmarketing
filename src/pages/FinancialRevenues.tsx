@@ -179,21 +179,39 @@ export default function FinancialRevenues() {
       newRev.description,
     ].filter(Boolean).join(' - ');
 
+    const clientName = newRev.client_id ? clients.find(c => c.id === newRev.client_id)?.companyName || '' : '';
+
     const payload: any = {
       amount: Number(newRev.amount),
       due_date: newRev.due_date,
       reference_month: refMonth,
-      status: 'prevista',
+      status: newRev.mark_paid ? 'recebida' : 'prevista',
     };
+    if (newRev.mark_paid) {
+      payload.paid_at = newRev.due_date;
+    }
     if (newRev.client_id) payload.client_id = newRev.client_id;
-    // Store category + description in a combined field if needed
     if (desc) payload.description = desc;
 
     const ok = await addRevenue(payload);
     if (ok) {
+      // If marked as paid, also create the cash movement
+      if (newRev.mark_paid) {
+        const amountNum = Number(newRev.amount);
+        const descLabel = clientName
+          ? `${clientName} - ${amountNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+          : `Receita avulsa - ${amountNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+        await supabase.from('cash_reserve_movements').insert({
+          amount: amountNum,
+          type: 'entrada',
+          description: `[Receita] ${descLabel}`,
+          date: newRev.due_date,
+          is_reserve: false,
+        } as any);
+      }
       toast.success('Receita cadastrada com sucesso!');
       setShowNewDialog(false);
-      setNewRev({ client_id: '', amount: '', due_date: '', description: '', category: '', is_recurring: false });
+      setNewRev({ client_id: '', amount: '', due_date: '', description: '', category: '', is_recurring: false, mark_paid: false });
     } else {
       toast.error('Erro ao cadastrar receita');
     }

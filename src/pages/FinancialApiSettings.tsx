@@ -15,7 +15,6 @@ import {
   CheckCircle, XCircle, Loader2, History, Zap, Info
 } from 'lucide-react';
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
-} from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 

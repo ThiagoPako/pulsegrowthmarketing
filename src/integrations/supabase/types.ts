@@ -3022,9 +3022,10 @@ export type Database = {
       revenues: {
         Row: {
           amount: number
-          client_id: string
-          contract_id: string
+          client_id: string | null
+          contract_id: string | null
           created_at: string
+          description: string | null
           due_date: string
           id: string
           paid_at: string | null
@@ -3034,9 +3035,10 @@ export type Database = {
         }
         Insert: {
           amount?: number
-          client_id: string
-          contract_id: string
+          client_id?: string | null
+          contract_id?: string | null
           created_at?: string
+          description?: string | null
           due_date: string
           id?: string
           paid_at?: string | null
@@ -3046,9 +3048,10 @@ export type Database = {
         }
         Update: {
           amount?: number
-          client_id?: string
-          contract_id?: string
+          client_id?: string | null
+          contract_id?: string | null
           created_at?: string
+          description?: string | null
           due_date?: string
           id?: string
           paid_at?: string | null

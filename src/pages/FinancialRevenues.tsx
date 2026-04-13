@@ -599,12 +599,11 @@ export default function FinancialRevenues() {
                             >
                               {/* Recebida button with glow */}
                               <motion.button
-                                onClick={() => handleMarkPaid(r.id)}
+                                onClick={() => { setConfirmPaidId(r.id); setPaidDate(''); }}
                                 className="relative group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-emerald-500 to-green-600 shadow-md overflow-hidden"
                                 whileHover={{ scale: 1.08, boxShadow: '0 0 20px rgba(16,185,129,0.5)' }}
                                 whileTap={{ scale: 0.92 }}
                               >
-                                {/* Glow border animation */}
                                 <motion.div
                                   className="absolute inset-0 rounded-lg"
                                   style={{ border: '2px solid rgba(52,211,153,0.6)' }}

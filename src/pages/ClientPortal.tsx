@@ -24,6 +24,7 @@ import PortalWelcomeOverlay from '@/components/portal/PortalWelcomeOverlay';
 import { PortalVideoButtons } from '@/components/portal/PortalWelcomeOverlay';
 import PortalDiscountClub from '@/components/portal/PortalDiscountClub';
 import ProposalChecklist from '@/components/ProposalChecklist';
+import PortalRendimentoBovino from '@/components/portal/PortalRendimentoBovino';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
   reel: 'Reel', criativo: 'Criativo', institucional: 'Institucional', anuncio: 'Anúncio', arte: 'Arte',
@@ -62,7 +63,7 @@ interface ClientData {
   client_type?: string;
 }
 
-type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem' | 'designer' | 'descontos' | 'entregas';
+type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem' | 'designer' | 'descontos' | 'entregas' | 'rendimento';
 
 const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
@@ -571,6 +572,14 @@ export default function ClientPortal() {
               >
                 🎟️ Descontos
               </button>
+              {client.company_name?.toLowerCase().includes('super brasil') && (
+                <button
+                  onClick={() => setActiveTab('rendimento')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'rendimento' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+                >
+                  🥩 Rendimento
+                </button>
+              )}
             </div>
             <PortalVideoButtons hasNews={portalVideoState.hasNews} hasWelcome={portalVideoState.hasWelcome} isNewClient={portalVideoState.isNewClient} />
             <PortalNotifications
@@ -657,6 +666,11 @@ export default function ClientPortal() {
         <button onClick={() => setActiveTab('descontos')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'descontos' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'descontos' ? { borderColor: `hsl(${clientColor})` } : {}}>
           🎟️ Descontos
         </button>
+        {client.company_name?.toLowerCase().includes('super brasil') && (
+          <button onClick={() => setActiveTab('rendimento')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'rendimento' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'rendimento' ? { borderColor: `hsl(${clientColor})` } : {}}>
+            🥩 Rendimento
+          </button>
+        )}
       </div>
 
       <AnimatePresence mode="wait">
@@ -793,6 +807,10 @@ export default function ClientPortal() {
           <motion.div key="entregas" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[800px] mx-auto px-4 sm:px-8 py-8 pb-20">
             <h2 className="text-lg font-semibold text-white mb-4">📋 Checklist de Entregas</h2>
             <ProposalChecklist clientId={client.id} editable={false} />
+          </motion.div>
+        ) : activeTab === 'rendimento' ? (
+          <motion.div key="rendimento" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+            <PortalRendimentoBovino clientColor={clientColor} />
           </motion.div>
         ) : (
           /* ── METRICS TAB ── */

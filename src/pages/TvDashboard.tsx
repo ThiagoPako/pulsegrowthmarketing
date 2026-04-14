@@ -785,6 +785,7 @@ export default function TvDashboard() {
   const [editingPipeline, setEditingPipeline] = useState<EditingTask[]>([]);
   const [designPipeline, setDesignPipeline] = useState<DesignActivityTask[]>([]);
   const [todayPosts, setTodayPosts] = useState<ScheduledPost[]>([]);
+  const [activeRecordingIds, setActiveRecordingIds] = useState<string[]>([]);
   const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());
   const [playlistUrl, setPlaylistUrl] = useState('');
@@ -800,6 +801,7 @@ export default function TvDashboard() {
       setSchedule(data.todaySchedule || []);
       setEditingPipeline(data.editingPipeline || []);
       setDesignPipeline(data.designPipeline || []);
+      setActiveRecordingIds(data.activeRecordingIds || []);
       setTodayPosts(data.todayPosts || []);
       if (Array.isArray(data.seasonalSlides) && data.seasonalSlides.length > 0) {
         setSeasonalSlides(data.seasonalSlides);

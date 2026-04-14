@@ -69,23 +69,7 @@ export default function TrainingManager() {
   const [pastedContent, setPastedContent] = useState('');
   const [generating, setGenerating] = useState(false);
 
-  useEffect(() => { loadClients(); }, []);
   useEffect(() => { if (selectedClientId) loadPresentations(); }, [selectedClientId]);
-
-  const loadClients = async () => {
-    const { data, error } = await supabase
-      .from('clients_public_logos' as any)
-      .select('id, company_name, color')
-      .order('company_name');
-
-    if (error) {
-      toast.error('Erro ao carregar clientes');
-      setClients([]);
-      return;
-    }
-
-    setClients((data as unknown as Client[]) || []);
-  };
 
   const loadPresentations = async () => {
     setLoading(true);
@@ -246,7 +230,7 @@ export default function TrainingManager() {
                 <label className="text-sm text-muted-foreground mb-1 block">Cliente</label>
                 <select value={selectedClientId} onChange={e => setSelectedClientId(e.target.value)} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
                   <option value="">Selecione um cliente</option>
-                  {clients.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+                  {appClients.map(c => <option key={c.id} value={c.id}>{c.companyName}</option>)}
                 </select>
               </div>
               {selectedClientId && (

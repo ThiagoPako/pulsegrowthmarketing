@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/integrations/supabase/client';
 
 import { Button } from '@/components/ui/button';
@@ -51,7 +52,7 @@ const LAYOUT_OPTIONS = [
 
 export default function TrainingManager() {
   const { user } = useAuth();
-  const [clients, setClients] = useState<Client[]>([]);
+  const { clients: appClients } = useApp();
   const [selectedClientId, setSelectedClientId] = useState('');
   const [presentations, setPresentations] = useState<PresentationData[]>([]);
   const [selectedPres, setSelectedPres] = useState<PresentationData | null>(null);
@@ -68,13 +69,7 @@ export default function TrainingManager() {
   const [pastedContent, setPastedContent] = useState('');
   const [generating, setGenerating] = useState(false);
 
-  useEffect(() => { loadClients(); }, []);
   useEffect(() => { if (selectedClientId) loadPresentations(); }, [selectedClientId]);
-
-  const loadClients = async () => {
-    const { data } = await supabase.from('clients').select('id, company_name, color').eq('status', 'ativo').order('company_name');
-    setClients((data as any[]) || []);
-  };
 
   const loadPresentations = async () => {
     setLoading(true);
@@ -235,7 +230,7 @@ export default function TrainingManager() {
                 <label className="text-sm text-muted-foreground mb-1 block">Cliente</label>
                 <select value={selectedClientId} onChange={e => setSelectedClientId(e.target.value)} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
                   <option value="">Selecione um cliente</option>
-                  {clients.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+                  {appClients.map(c => <option key={c.id} value={c.id}>{c.companyName}</option>)}
                 </select>
               </div>
               {selectedClientId && (

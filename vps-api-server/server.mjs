@@ -5124,10 +5124,13 @@ app.get('/api/tv-dashboard', async (req, res) => {
     const seasonalAlerts = await fetchSystemSeasonalAlerts({ fallbackClients: seasonalClients });
     const seasonalSlides = buildTvSeasonalSlidesFromAlerts(seasonalAlerts);
 
-    res.json({ members, todaySchedule, editingPipeline, designPipeline, todayPosts, seasonalSlides, updatedAt: new Date().toISOString() });
+    // Build list of recording IDs that are actively being recorded
+    const activeRecordingIds = (activeRecs || []).map(r => r?.recording_id).filter(Boolean);
+
+    res.json({ members, todaySchedule, editingPipeline, designPipeline, todayPosts, seasonalSlides, activeRecordingIds, updatedAt: new Date().toISOString() });
   } catch (err) {
     console.error('[tv-dashboard] Error at stage:', stage, err);
-    res.json({ members: [], todaySchedule: [], editingPipeline: [], designPipeline: [], todayPosts: [], seasonalSlides: [], updatedAt: new Date().toISOString(), error: 'fallback' });
+    res.json({ members: [], todaySchedule: [], editingPipeline: [], designPipeline: [], todayPosts: [], seasonalSlides: [], activeRecordingIds: [], updatedAt: new Date().toISOString(), error: 'fallback' });
   }
 });
 

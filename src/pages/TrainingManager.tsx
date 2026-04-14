@@ -435,6 +435,5 @@ export default function TrainingManager() {
           </DialogContent>
         </Dialog>
       </div>
-    </Layout>
   );
 }

@@ -683,6 +683,8 @@ export default function ClientPortal() {
         <button onClick={() => setActiveTab('eventos')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'eventos' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'eventos' ? { borderColor: `hsl(${clientColor})` } : {}}>
           🎪 Eventos
         </button>
+        <button onClick={() => setActiveTab('treinamento')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'treinamento' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'treinamento' ? { borderColor: `hsl(${clientColor})` } : {}}>
+          📚 Treinamento
         {client.company_name?.toLowerCase().includes('super brasil') && (
           <button onClick={() => setActiveTab('rendimento')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'rendimento' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'rendimento' ? { borderColor: `hsl(${clientColor})` } : {}}>
             🥩 Rendimento
@@ -832,6 +834,10 @@ export default function ClientPortal() {
         ) : activeTab === 'eventos' ? (
           <motion.div key="eventos" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
             <PortalEvents clientId={client.id} clientColor={clientColor} isTeamMember={isTeamMember} />
+          </motion.div>
+        ) : activeTab === 'treinamento' ? (
+          <motion.div key="treinamento" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+            <PortalTraining clientId={client.id} clientColor={clientColor} isTeamMember={isTeamMember} />
           </motion.div>
         ) : (
           /* ── METRICS TAB ── */

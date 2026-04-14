@@ -52,7 +52,7 @@ const LAYOUT_OPTIONS = [
 
 export default function TrainingManager() {
   const { user } = useAuth();
-  const [clients, setClients] = useState<Client[]>([]);
+  const { clients: appClients } = useApp();
   const [selectedClientId, setSelectedClientId] = useState('');
   const [presentations, setPresentations] = useState<PresentationData[]>([]);
   const [selectedPres, setSelectedPres] = useState<PresentationData | null>(null);

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useApp } from '@/contexts/AppContext';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
+import { invokeCloudFunction } from '@/services/vpsEdgeFunctions';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';

@@ -97,8 +97,8 @@ export default function TrainingManager() {
       if (presErr || !pres) throw new Error('Erro ao criar apresentação');
 
       // 2. Call AI to generate slides
-      const { data: aiData, error: aiErr } = await supabase.functions.invoke('generate-slides', {
-        body: { content: pastedContent, title: newTitle },
+      const { data: aiData, error: aiErr } = await invokeCloudFunction('generate-slides', {
+        content: pastedContent, title: newTitle,
       });
 
       if (aiErr || !aiData?.slides) {

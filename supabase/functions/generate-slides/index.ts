@@ -83,7 +83,7 @@ Responda APENAS com JSON válido:
     }
 
     const aiData = await aiRes.json();
-    const aiContent = aiData.choices?.[0]?.message?.content || "";
+    const aiContent = aiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
     const cleaned = aiContent.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
     const parsed = JSON.parse(cleaned);
 

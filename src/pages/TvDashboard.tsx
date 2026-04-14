@@ -297,11 +297,11 @@ function MemberCard({ member }: { member: TeamMember }) {
 }
 
 /* ─── Schedule Card (enhanced with logo + avatar) ───────── */
-function ScheduleCard({ item }: { item: ScheduleItem }) {
+function ScheduleCard({ item, isLive }: { item: ScheduleItem; isLive: boolean }) {
   const now = new Date();
   const [h, m] = item.startTime.split(':').map(Number);
   const startDate = new Date(); startDate.setHours(h, m, 0, 0);
-  const isNow = item.status === 'em_andamento' || (item.status === 'agendada' && now >= startDate && now <= new Date(startDate.getTime() + 90 * 60000));
+  const isNow = isLive;
   const isDone = item.status === 'concluida';
   const isCancelled = item.status === 'cancelada';
 
@@ -785,6 +785,7 @@ export default function TvDashboard() {
   const [editingPipeline, setEditingPipeline] = useState<EditingTask[]>([]);
   const [designPipeline, setDesignPipeline] = useState<DesignActivityTask[]>([]);
   const [todayPosts, setTodayPosts] = useState<ScheduledPost[]>([]);
+  const [activeRecordingIds, setActiveRecordingIds] = useState<string[]>([]);
   const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());
   const [playlistUrl, setPlaylistUrl] = useState('');
@@ -800,6 +801,7 @@ export default function TvDashboard() {
       setSchedule(data.todaySchedule || []);
       setEditingPipeline(data.editingPipeline || []);
       setDesignPipeline(data.designPipeline || []);
+      setActiveRecordingIds(data.activeRecordingIds || []);
       setTodayPosts(data.todayPosts || []);
       if (Array.isArray(data.seasonalSlides) && data.seasonalSlides.length > 0) {
         setSeasonalSlides(data.seasonalSlides);
@@ -1032,7 +1034,7 @@ export default function TvDashboard() {
               {schedule.length > 0 ? (
                 <div className="space-y-2">
                   <AnimatePresence>
-                    {schedule.map(item => <ScheduleCard key={item.id} item={item} />)}
+                    {schedule.map(item => <ScheduleCard key={item.id} item={item} isLive={activeRecordingIds.includes(item.id)} />)}
                   </AnimatePresence>
                 </div>
               ) : (

@@ -4798,7 +4798,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
 
     // 5. Get active recordings
     const activeRecs = await safeQuery('active_recordings', `
-      SELECT ar.videomaker_id, ar.started_at, c.company_name AS client_name
+      SELECT ar.videomaker_id, ar.started_at, ar.recording_id, c.company_name AS client_name
       FROM active_recordings ar
       LEFT JOIN clients c ON c.id = ar.client_id
     `);
@@ -5124,10 +5124,13 @@ app.get('/api/tv-dashboard', async (req, res) => {
     const seasonalAlerts = await fetchSystemSeasonalAlerts({ fallbackClients: seasonalClients });
     const seasonalSlides = buildTvSeasonalSlidesFromAlerts(seasonalAlerts);
 
-    res.json({ members, todaySchedule, editingPipeline, designPipeline, todayPosts, seasonalSlides, updatedAt: new Date().toISOString() });
+    // Build list of recording IDs that are actively being recorded
+    const activeRecordingIds = (activeRecs || []).map(r => r?.recording_id).filter(Boolean);
+
+    res.json({ members, todaySchedule, editingPipeline, designPipeline, todayPosts, seasonalSlides, activeRecordingIds, updatedAt: new Date().toISOString() });
   } catch (err) {
     console.error('[tv-dashboard] Error at stage:', stage, err);
-    res.json({ members: [], todaySchedule: [], editingPipeline: [], designPipeline: [], todayPosts: [], seasonalSlides: [], updatedAt: new Date().toISOString(), error: 'fallback' });
+    res.json({ members: [], todaySchedule: [], editingPipeline: [], designPipeline: [], todayPosts: [], seasonalSlides: [], activeRecordingIds: [], updatedAt: new Date().toISOString(), error: 'fallback' });
   }
 });
 

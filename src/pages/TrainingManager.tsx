@@ -438,6 +438,89 @@ export default function TrainingManager() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Fullscreen Presentation Mode */}
+        {presenting && slides.length > 0 && (
+          <div className="fixed inset-0 z-50 bg-black" 
+            onClick={(e) => {
+              const rect = (e.target as HTMLElement).getBoundingClientRect();
+              const clickX = e.clientX - rect.left;
+              if (clickX > rect.width / 2) {
+                setCurrentSlideIndex(i => Math.min(i + 1, slides.length - 1));
+              } else {
+                setCurrentSlideIndex(i => Math.max(i - 1, 0));
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowRight' || e.key === ' ') setCurrentSlideIndex(i => Math.min(i + 1, slides.length - 1));
+              if (e.key === 'ArrowLeft') setCurrentSlideIndex(i => Math.max(i - 1, 0));
+              if (e.key === 'Escape') setPresenting(false);
+            }}
+            tabIndex={0}
+            ref={(el) => el?.focus()}
+          >
+            {(() => {
+              const slide = slides[currentSlideIndex];
+              if (!slide) return null;
+              const bg = slide.background_color || '217 91% 60%';
+              const txt = slide.text_color || '0 0% 100%';
+              return (
+                <div className="w-full h-full flex flex-col justify-center items-center relative"
+                  style={{ background: `linear-gradient(135deg, hsl(${bg}), hsl(${bg} / 0.7))` }}>
+                  
+                  {/* Close button */}
+                  <button onClick={(e) => { e.stopPropagation(); setPresenting(false); }}
+                    className="absolute top-4 right-4 p-2 rounded-full bg-black/30 hover:bg-black/50 text-white transition-colors z-10">
+                    <X size={20} />
+                  </button>
+
+                  {/* Slide content */}
+                  <div className="max-w-4xl w-full px-12 text-center">
+                    <motion.h1 key={`t-${currentSlideIndex}`} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                      className="text-4xl md:text-6xl font-bold mb-4" style={{ color: `hsl(${txt})` }}>
+                      {slide.title}
+                    </motion.h1>
+                    {slide.subtitle && (
+                      <motion.p key={`s-${currentSlideIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+                        className="text-xl md:text-2xl opacity-70 mb-6" style={{ color: `hsl(${txt})` }}>
+                        {slide.subtitle}
+                      </motion.p>
+                    )}
+                    {slide.content && (
+                      <motion.div key={`c-${currentSlideIndex}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+                        className="text-lg md:text-xl text-left mx-auto max-w-2xl space-y-2" style={{ color: `hsl(${txt})` }}>
+                        {slide.content.split('\n').map((line, i) => (
+                          <p key={i} className="opacity-80">{line}</p>
+                        ))}
+                      </motion.div>
+                    )}
+                    {slide.image_url && (
+                      <motion.img key={`i-${currentSlideIndex}`} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }}
+                        src={slide.image_url} alt="" className="mt-6 mx-auto max-h-[40vh] rounded-xl object-contain" />
+                    )}
+                  </div>
+
+                  {/* Navigation indicators */}
+                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3">
+                    <button onClick={(e) => { e.stopPropagation(); setCurrentSlideIndex(i => Math.max(i - 1, 0)); }}
+                      disabled={currentSlideIndex === 0}
+                      className="p-2 rounded-full bg-white/20 hover:bg-white/30 text-white disabled:opacity-30 transition-colors">
+                      <ChevronLeft size={18} />
+                    </button>
+                    <span className="text-white/70 text-sm font-medium min-w-[60px] text-center">
+                      {currentSlideIndex + 1} / {slides.length}
+                    </span>
+                    <button onClick={(e) => { e.stopPropagation(); setCurrentSlideIndex(i => Math.min(i + 1, slides.length - 1)); }}
+                      disabled={currentSlideIndex === slides.length - 1}
+                      className="p-2 rounded-full bg-white/20 hover:bg-white/30 text-white disabled:opacity-30 transition-colors">
+                      <ChevronRight size={18} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
       </div>
   );
 }

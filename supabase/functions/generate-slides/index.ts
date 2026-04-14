@@ -19,25 +19,49 @@ serve(async (req) => {
       });
     }
 
-    const prompt = `Você é um designer de apresentações profissionais. Analise o conteúdo abaixo e crie slides para uma apresentação de treinamento comercial.
+    const prompt = `Você é um designer sênior de apresentações corporativas premium. Crie uma apresentação de treinamento seguindo rigorosamente a identidade visual da agência Pulse Growth Marketing.
+
+## IDENTIDADE VISUAL PULSE (OBRIGATÓRIO)
+- Cor primária: Laranja vibrante HSL "16 82% 51%" — use em títulos, destaques e CTAs
+- Fundo escuro principal: "220 15% 10%" (preto azulado elegante)
+- Fundo escuro secundário: "220 13% 15%" (cinza escuro sofisticado)  
+- Fundo claro: "0 0% 97%" (branco suave)
+- Texto claro: "0 0% 100%" (branco) sobre fundos escuros
+- Texto escuro: "220 10% 20%" sobre fundos claros
+- Accent secundário: "200 80% 55%" (azul vibrante para informações)
+- Sucesso/Destaque: "142 71% 45%" (verde para métricas positivas)
+- Tipografia: Space Grotesk para títulos (bold), Inter para corpo
+
+## ESTRUTURA DA APRESENTAÇÃO
+- Slide 1: CAPA — fundo escuro "220 15% 10%" com título em laranja "16 82% 51%", subtítulo em branco
+- Slides intermediários: Alternar entre fundo escuro e fundo claro para criar ritmo visual
+- Use slides de "section_divider" (layout "title_only") com fundo laranja "16 82% 51%" para separar seções
+- Slide final: ENCERRAMENTO com fundo escuro, mensagem de impacto
+
+## REGRAS DE CONTEÚDO
+- Analise profundamente o texto e extraia os pontos-chave
+- Transforme parágrafos longos em bullet points concisos e impactantes (use •)
+- Adicione emojis estratégicos (🚀 📈 🎯 💡 ⚡ 🔥 ✅ 💰) para dinamismo
+- Crie títulos curtos e memoráveis (máx 6 palavras)
+- Subtítulos complementam com contexto (máx 12 palavras)
+- Máximo 5 bullet points por slide
+- Cada bullet point com no máximo 15 palavras
+- Crie entre 5 e 20 slides dependendo da densidade do conteúdo
+
+## LAYOUTS DISPONÍVEIS
+- "title_only": Capas, divisões de seção, frases de impacto (título grande, centralizado)
+- "title_content": Título + bullets/texto (mais usado, informativo)
+- "quote": Citação ou frase de destaque (título = frase, subtitle = autor/fonte)
+- "metrics": Para dados e números (content com métricas formatadas)
+- "closing": Slide final com CTA ou mensagem de encerramento
 
 Título da apresentação: ${title || "Treinamento"}
 
 Conteúdo para transformar em slides:
-${content.substring(0, 8000)}
+${content.substring(0, 12000)}
 
-REGRAS:
-- Crie entre 3 e 15 slides dependendo da quantidade de conteúdo
-- O primeiro slide deve ser a capa com o título principal
-- Cada slide deve ter conteúdo conciso e impactante
-- Use bullet points (com •) para listas no campo content
-- Escolha o layout mais adequado para cada slide
-- Layouts disponíveis: "title_only" (capas/divisões), "title_content" (título + texto), "image_left", "image_right", "image_full"
-- Sugira cores de fundo variadas usando valores HSL no formato "H S% L%" (ex: "217 91% 60%", "142 71% 45%", "262 83% 58%")
-- text_color deve ser "0 0% 100%" (branco) para fundos escuros ou "0 0% 15%" (escuro) para fundos claros
-
-Responda APENAS com JSON válido no formato:
-{"slides":[{"title":"...","subtitle":"...","content":"...","layout_type":"...","background_color":"...","text_color":"..."}]}`;
+Responda APENAS com JSON válido:
+{"slides":[{"title":"...","subtitle":"...","content":"...","layout_type":"title_content","background_color":"220 15% 10%","text_color":"0 0% 100%"}]}`;
 
     const aiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useApp } from '@/contexts/AppContext';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
+import { invokeCloudFunction } from '@/services/vpsEdgeFunctions';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -96,8 +97,8 @@ export default function TrainingManager() {
       if (presErr || !pres) throw new Error('Erro ao criar apresentação');
 
       // 2. Call AI to generate slides
-      const { data: aiData, error: aiErr } = await supabase.functions.invoke('generate-slides', {
-        body: { content: pastedContent, title: newTitle },
+      const { data: aiData, error: aiErr } = await invokeCloudFunction('generate-slides', {
+        content: pastedContent, title: newTitle,
       });
 
       if (aiErr || !aiData?.slides) {

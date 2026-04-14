@@ -26,6 +26,7 @@ import PortalDiscountClub from '@/components/portal/PortalDiscountClub';
 import ProposalChecklist from '@/components/ProposalChecklist';
 import PortalRendimentoBovino from '@/components/portal/PortalRendimentoBovino';
 import PortalEvents from '@/components/portal/PortalEvents';
+import PortalTraining from '@/components/portal/PortalTraining';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
   reel: 'Reel', criativo: 'Criativo', institucional: 'Institucional', anuncio: 'Anúncio', arte: 'Arte',
@@ -64,7 +65,7 @@ interface ClientData {
   client_type?: string;
 }
 
-type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem' | 'designer' | 'descontos' | 'entregas' | 'rendimento' | 'eventos';
+type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem' | 'designer' | 'descontos' | 'entregas' | 'rendimento' | 'eventos' | 'treinamento';
 
 const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
@@ -579,6 +580,12 @@ export default function ClientPortal() {
               >
                 🎪 Eventos
               </button>
+              <button
+                onClick={() => setActiveTab('treinamento')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'treinamento' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+              >
+                📚 Treinamento
+              </button>
               {client.company_name?.toLowerCase().includes('super brasil') && (
                 <button
                   onClick={() => setActiveTab('rendimento')}
@@ -675,6 +682,9 @@ export default function ClientPortal() {
         </button>
         <button onClick={() => setActiveTab('eventos')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'eventos' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'eventos' ? { borderColor: `hsl(${clientColor})` } : {}}>
           🎪 Eventos
+        </button>
+        <button onClick={() => setActiveTab('treinamento')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'treinamento' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'treinamento' ? { borderColor: `hsl(${clientColor})` } : {}}>
+          📚 Treinamento
         </button>
         {client.company_name?.toLowerCase().includes('super brasil') && (
           <button onClick={() => setActiveTab('rendimento')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'rendimento' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'rendimento' ? { borderColor: `hsl(${clientColor})` } : {}}>
@@ -825,6 +835,10 @@ export default function ClientPortal() {
         ) : activeTab === 'eventos' ? (
           <motion.div key="eventos" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
             <PortalEvents clientId={client.id} clientColor={clientColor} isTeamMember={isTeamMember} />
+          </motion.div>
+        ) : activeTab === 'treinamento' ? (
+          <motion.div key="treinamento" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+            <PortalTraining clientId={client.id} clientColor={clientColor} isTeamMember={isTeamMember} />
           </motion.div>
         ) : (
           /* ── METRICS TAB ── */

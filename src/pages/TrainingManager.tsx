@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { toast } from 'sonner';
 import {
   Plus, Trash2, Save, BookOpen, Eye, ArrowUp, ArrowDown,
-  Loader2, Presentation, ChevronLeft, Sparkles, Wand2
+  Loader2, Presentation, ChevronLeft, Sparkles, Wand2,
+  Play, ChevronRight, X
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { CLIENT_COLORS } from '@/types';

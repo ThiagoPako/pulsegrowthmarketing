@@ -217,6 +217,11 @@ export default function TrainingManager() {
           </div>
           {selectedPres && (
             <div className="flex gap-2">
+              {slides.length > 0 && (
+                <Button variant="default" size="sm" onClick={() => { setCurrentSlideIndex(0); setPresenting(true); }}>
+                  <Play size={14} className="mr-1" /> Apresentar
+                </Button>
+              )}
               <Button variant={selectedPres.status === 'publicado' ? 'secondary' : 'default'} size="sm" onClick={togglePublish}>
                 <Eye size={14} className="mr-1" />
                 {selectedPres.status === 'publicado' ? 'Despublicar' : 'Publicar'}

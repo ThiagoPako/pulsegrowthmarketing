@@ -3236,6 +3236,7 @@ const ALLOWED_TABLES = [
   'recording_wait_logs','portal_videos','portal_video_views','commercial_proposals','proposal_comments',
   'event_recordings','client_testimonials','proposal_checklist_items','holidays',
   'tv_settings','fieldwork_activities',
+  'training_presentations','training_slides',
 ];
 
 function sanitizeIdentifier(name) {

@@ -83,7 +83,7 @@ export default function TrainingManager() {
       return;
     }
 
-    setClients((data as Client[]) || []);
+    setClients((data as unknown as Client[]) || []);
   };
 
   const loadPresentations = async () => {

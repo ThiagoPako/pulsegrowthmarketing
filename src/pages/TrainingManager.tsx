@@ -72,8 +72,18 @@ export default function TrainingManager() {
   useEffect(() => { if (selectedClientId) loadPresentations(); }, [selectedClientId]);
 
   const loadClients = async () => {
-    const { data } = await supabase.from('clients').select('id, company_name, color').eq('status', 'ativo').order('company_name');
-    setClients((data as any[]) || []);
+    const { data, error } = await supabase
+      .from('clients_public_logos' as any)
+      .select('id, company_name, color')
+      .order('company_name');
+
+    if (error) {
+      toast.error('Erro ao carregar clientes');
+      setClients([]);
+      return;
+    }
+
+    setClients((data as Client[]) || []);
   };
 
   const loadPresentations = async () => {

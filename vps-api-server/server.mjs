@@ -4798,7 +4798,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
 
     // 5. Get active recordings
     const activeRecs = await safeQuery('active_recordings', `
-      SELECT ar.videomaker_id, ar.started_at, c.company_name AS client_name
+      SELECT ar.videomaker_id, ar.started_at, ar.recording_id, c.company_name AS client_name
       FROM active_recordings ar
       LEFT JOIN clients c ON c.id = ar.client_id
     `);

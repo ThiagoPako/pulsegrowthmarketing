@@ -63,6 +63,8 @@ export default function TrainingManager() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [presenting, setPresenting] = useState(false);
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
 
   // Create form
   const [newTitle, setNewTitle] = useState('');

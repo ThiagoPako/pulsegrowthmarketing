@@ -36,19 +36,8 @@ REGRAS:
 - Sugira cores de fundo variadas usando valores HSL no formato "H S% L%" (ex: "217 91% 60%", "142 71% 45%", "262 83% 58%")
 - text_color deve ser "0 0% 100%" (branco) para fundos escuros ou "0 0% 15%" (escuro) para fundos claros
 
-Responda APENAS com JSON válido:
-{
-  "slides": [
-    {
-      "title": "Título do slide",
-      "subtitle": "Subtítulo opcional",
-      "content": "• Ponto 1\\n• Ponto 2\\n• Ponto 3",
-      "layout_type": "title_content",
-      "background_color": "217 91% 60%",
-      "text_color": "0 0% 100%"
-    }
-  ]
-}`;
+Responda APENAS com JSON válido no formato:
+{"slides":[{"title":"...","subtitle":"...","content":"...","layout_type":"...","background_color":"...","text_color":"..."}]}`;
 
     const aiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
@@ -59,11 +48,12 @@ Responda APENAS com JSON válido:
           contents: [
             {
               role: "user",
-              parts: [{ text: "Você é um especialista em apresentações corporativas. Responda APENAS com JSON válido.\n\n" + prompt }],
+              parts: [{ text: prompt }],
             },
           ],
           generationConfig: {
             responseMimeType: "application/json",
+            maxOutputTokens: 8192,
           },
         }),
       }
@@ -71,19 +61,25 @@ Responda APENAS com JSON válido:
 
     if (!aiRes.ok) {
       const errText = await aiRes.text();
-      console.error("AI slides error:", aiRes.status, errText);
-      if (aiRes.status === 429) {
-        return new Response(JSON.stringify({ error: "Limite de requisições excedido. Tente novamente." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      return new Response(JSON.stringify({ error: "Erro ao gerar slides" }), {
+      console.error("Gemini API error:", aiRes.status, errText);
+      return new Response(JSON.stringify({ error: "Erro na API Gemini: " + aiRes.status }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const aiData = await aiRes.json();
+    const finishReason = aiData.candidates?.[0]?.finishReason;
     const aiContent = aiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    
+    console.log("Gemini finishReason:", finishReason, "content length:", aiContent.length);
+
+    if (!aiContent) {
+      console.error("Empty Gemini response. Full response:", JSON.stringify(aiData));
+      return new Response(JSON.stringify({ error: "Resposta vazia da IA" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const cleaned = aiContent.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
     const parsed = JSON.parse(cleaned);
 

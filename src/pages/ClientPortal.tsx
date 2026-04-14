@@ -580,6 +580,12 @@ export default function ClientPortal() {
               >
                 🎪 Eventos
               </button>
+              <button
+                onClick={() => setActiveTab('treinamento')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'treinamento' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+              >
+                📚 Treinamento
+              </button>
               {client.company_name?.toLowerCase().includes('super brasil') && (
                 <button
                   onClick={() => setActiveTab('rendimento')}

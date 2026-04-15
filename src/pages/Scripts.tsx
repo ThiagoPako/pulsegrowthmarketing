@@ -233,11 +233,12 @@ export default function Scripts() {
           isAvulso: !!script.recordingId || !script.clientId,
           recordingId: script.recordingId || '',
           prospectName: script.recordingId ? (recordings.find(r => r.id === script.recordingId)?.prospectName || '') : '',
+          materialLink: '',
         });
       });
     } else {
       setEditing(null);
-      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: isEditorRole ? true : false, isAvulso: false, recordingId: '', prospectName: '' });
+      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: isEditorRole ? true : false, isAvulso: false, recordingId: '', prospectName: '', materialLink: '' });
     }
     setOpen(true);
   };

@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw } from 'lucide-react';
+import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DesignTaskCreateDialog from '@/components/designer/DesignTaskCreateDialog';
 import DesignTaskDetailSheet from '@/components/designer/DesignTaskDetailSheet';
@@ -76,7 +76,7 @@ function DragScrollContainer({ children, className }: { children: React.ReactNod
 }
 
 export default function DesignerKanban() {
-  const { tasksQuery, updateTask, addHistory } = useDesignTasks();
+  const { tasksQuery, updateTask, addHistory, deleteTask } = useDesignTasks();
   const { currentUser } = useApp();
   const { user } = useAuth();
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
@@ -253,6 +253,13 @@ export default function DesignerKanban() {
                             task={task}
                             isDragging={draggingTaskId === task.id}
                             onClick={() => setSelectedTaskId(task.id)}
+                            onEdit={() => setSelectedTaskId(task.id)}
+                            onDelete={async () => {
+                              if (window.confirm(`Excluir "${task.title}"? Esta ação não pode ser desfeita.`)) {
+                                await deleteTask.mutateAsync(task.id);
+                              }
+                            }}
+                            canDelete={currentUser?.role === 'admin' || currentUser?.role === 'designer'}
                             onDragStart={e => handleDragStart(e, task)}
                             onDragEnd={handleDragEnd}
                           />
@@ -324,11 +331,14 @@ interface TaskCardProps {
   task: DesignTask;
   isDragging: boolean;
   onClick: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  canDelete: boolean;
   onDragStart: (e: DragEvent<HTMLDivElement>) => void;
   onDragEnd: () => void;
 }
 
-function TaskCard({ task, isDragging, onClick, onDragStart, onDragEnd }: TaskCardProps) {
+function TaskCard({ task, isDragging, onClick, onEdit, onDelete, canDelete, onDragStart, onDragEnd }: TaskCardProps) {
   const priorityCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.media;
   return (
     <div
@@ -336,10 +346,30 @@ function TaskCard({ task, isDragging, onClick, onDragStart, onDragEnd }: TaskCar
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onClick}
-      className={`bg-card border border-border/60 rounded-xl p-3 cursor-grab active:cursor-grabbing hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200 space-y-2.5 group ${
+      className={`relative bg-card border border-border/60 rounded-xl p-3 cursor-grab active:cursor-grabbing hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200 space-y-2.5 group ${
         isDragging ? 'opacity-40 scale-95 ring-2 ring-primary/40' : ''
       }`}
     >
+      {/* Quick action buttons */}
+      <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        <button
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          className="w-6 h-6 flex items-center justify-center rounded-md bg-muted/80 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+          title="Editar"
+        >
+          <Pencil size={12} />
+        </button>
+        {canDelete && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="w-6 h-6 flex items-center justify-center rounded-md bg-muted/80 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+            title="Excluir"
+          >
+            <Trash2 size={12} />
+          </button>
+        )}
+      </div>
+
       <div className="flex items-center gap-2">
         <GripVertical size={12} className="text-muted-foreground/30 shrink-0 group-hover:text-muted-foreground/60 transition-colors" />
         <ClientLogo client={{ companyName: task.clients?.company_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="sm" />

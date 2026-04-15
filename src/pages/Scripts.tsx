@@ -1226,7 +1226,17 @@ export default function Scripts() {
               </div>
             )}
 
-            <Button onClick={handleSave} className="w-full">{editing ? 'Salvar Alterações' : 'Criar Roteiro'}</Button>
+            {form.directToEditing && !editing ? (
+              <Button 
+                onClick={handleSave} 
+                className="w-full gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-lg"
+                disabled={!form.clientId || !form.title}
+              >
+                <Video size={16} /> Enviar para Fila de Edição
+              </Button>
+            ) : (
+              <Button onClick={handleSave} className="w-full">{editing ? 'Salvar Alterações' : 'Criar Roteiro'}</Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

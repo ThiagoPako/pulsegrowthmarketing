@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { NICHE_OPTIONS } from '@/lib/seasonalDates';
 import { highlightQuotes, highlightQuotesForPdf, cleanHtml } from '@/lib/highlightQuotes';
+import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 import { supabase } from '@/lib/vpsDb';
 import { useApp } from '@/contexts/AppContext';
 import type { Recording } from '@/types';
@@ -368,7 +369,9 @@ export default function Scripts() {
 
       // Only create content_task for non-avulso scripts (avulso has no client_id)
       if (form.clientId) {
+        const contentTaskId = crypto.randomUUID();
         const { error } = await supabase.from('content_tasks').insert({
+          id: contentTaskId,
           client_id: form.clientId,
           title: form.title,
           content_type: form.contentFormat || 'reels',
@@ -380,9 +383,29 @@ export default function Scripts() {
           drive_link: form.directToEditing && form.materialLink ? form.materialLink : null,
         } as any);
         if (error) console.error('Auto content_task creation error:', error);
+
+        // Trigger full sync for directToEditing so it behaves like a recorded task entering edicao
+        if (form.directToEditing && kanbanColumn === 'edicao' && !error) {
+          const client = clients.find(c => c.id === form.clientId);
+          const ctx = buildSyncContext(
+            {
+              id: contentTaskId,
+              client_id: form.clientId,
+              title: form.title,
+              content_type: form.contentFormat || 'reels',
+              description: 'Material pronto do cliente — direto para edição',
+              script_id: scriptId,
+              recording_id: null,
+              assigned_to: assignedTo,
+              edited_video_link: null,
+            },
+            { userId: user?.id, clientName: client?.companyName, clientWhatsapp: client?.whatsapp }
+          );
+          await syncContentTaskColumnChange('edicao', ctx);
+        }
       }
       
-      toast.success('Roteiro criado');
+      toast.success(form.directToEditing ? 'Enviado para fila de edição!' : 'Roteiro criado');
     }
     setOpen(false);
   };
@@ -1226,7 +1249,17 @@ export default function Scripts() {
               </div>
             )}
 
-            <Button onClick={handleSave} className="w-full">{editing ? 'Salvar Alterações' : 'Criar Roteiro'}</Button>
+            {form.directToEditing && !editing ? (
+              <Button 
+                onClick={handleSave} 
+                className="w-full gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-lg"
+                disabled={!form.clientId || !form.title}
+              >
+                <Video size={16} /> Enviar para Fila de Edição
+              </Button>
+            ) : (
+              <Button onClick={handleSave} className="w-full">{editing ? 'Salvar Alterações' : 'Criar Roteiro'}</Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

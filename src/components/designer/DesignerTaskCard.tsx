@@ -242,26 +242,33 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
       } hover:shadow-lg hover:shadow-pink-200/20 dark:hover:shadow-pink-900/10`}>
 
         {/* Quick action buttons */}
-        <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity z-10">
-          <button
-            onClick={(e) => { e.stopPropagation(); onOpenDetail(task.id); }}
-            className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/80 dark:bg-background/80 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors shadow-sm border border-border/40"
+        <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 pointer-events-none group-hover/card:opacity-100 group-hover/card:pointer-events-auto transition-opacity z-20">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onOpenDetail(task.id); }}
+            className="w-7 h-7 rounded-lg bg-white/90 dark:bg-background/90 hover:bg-primary/10 text-muted-foreground hover:text-primary shadow-sm border border-border/40"
             title="Editar"
           >
             <Pencil size={13} />
-          </button>
-          <button
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
             onClick={async (e) => {
+              e.preventDefault();
               e.stopPropagation();
               if (window.confirm(`Excluir "${task.title}"? Esta ação não pode ser desfeita.`)) {
                 await deleteTask.mutateAsync(task.id);
               }
             }}
-            className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/80 dark:bg-background/80 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors shadow-sm border border-border/40"
+            className="w-7 h-7 rounded-lg bg-white/90 dark:bg-background/90 hover:bg-destructive/10 text-muted-foreground hover:text-destructive shadow-sm border border-border/40"
             title="Excluir"
           >
             <Trash2 size={13} />
-          </button>
+          </Button>
         </div>
 
         {/* Main row */}

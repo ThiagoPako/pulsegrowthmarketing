@@ -184,6 +184,7 @@ export default function Scripts() {
     isAvulso: false,
     recordingId: '' as string,
     prospectName: '' as string,
+    materialLink: '' as string,
   });
 
   // Avulso recordings (type=avulso, with prospect_name)

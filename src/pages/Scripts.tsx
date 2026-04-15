@@ -377,6 +377,7 @@ export default function Scripts() {
           description: form.directToEditing ? 'Material pronto do cliente — direto para edição' : null,
           created_by: user?.id || null,
           assigned_to: assignedTo,
+          drive_link: form.directToEditing && form.materialLink ? form.materialLink : null,
         } as any);
         if (error) console.error('Auto content_task creation error:', error);
       }

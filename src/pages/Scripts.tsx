@@ -1169,7 +1169,7 @@ export default function Scripts() {
 
             {/* Direct to editing toggle */}
             <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-accent/30">
-              <Switch checked={form.directToEditing} onCheckedChange={v => setForm({ ...form, directToEditing: v })} disabled={isEditorRole} />
+              <Switch checked={form.directToEditing} onCheckedChange={v => setForm({ ...form, directToEditing: v, materialLink: v ? form.materialLink : '' })} disabled={isEditorRole} />
               <div>
                 <Label className="font-medium flex items-center gap-1.5">
                   🎬 Direto para Edição
@@ -1180,6 +1180,24 @@ export default function Scripts() {
                 </p>
               </div>
             </div>
+
+            {/* Material link field - shown when directToEditing is active */}
+            {form.directToEditing && (
+              <div className="space-y-1 p-3 rounded-xl border-2 border-blue-300/50 bg-blue-50/30 dark:bg-blue-950/10 dark:border-blue-700/30">
+                <Label className="font-medium flex items-center gap-1.5 text-blue-700 dark:text-blue-300">
+                  🔗 Link do Material para o Editor
+                </Label>
+                <Input
+                  value={form.materialLink}
+                  onChange={e => setForm({ ...form, materialLink: e.target.value })}
+                  placeholder="Cole o link do Drive, WeTransfer, ou pasta com os materiais..."
+                  className="border-blue-200/60 focus:border-blue-400"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  O editor terá acesso a este link para baixar os materiais brutos.
+                </p>
+              </div>
+            )}
 
             <div className="space-y-1">
               <Label>Título do Roteiro *</Label>

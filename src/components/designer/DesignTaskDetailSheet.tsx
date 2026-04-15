@@ -261,7 +261,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
               >
                 {currentCol?.label}
               </Badge>
-              {currentUser?.role === 'admin' && (
+              {(currentUser?.role === 'admin' || currentUser?.role === 'designer' || currentUser?.role === 'fotografo') && (
                 <Button
                   variant="destructive"
                   size="sm"

@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import rocketGirlsImg from '@/assets/rocket-girls.png';
 import {
   Play, Pause, Send, Clock, Upload, Link2, CheckCircle,
-  RotateCcw, Flame, Loader2, Eye, Image, Sparkles, Heart
+  RotateCcw, Flame, Loader2, Eye, Image, Sparkles, Heart, Pencil, Trash2
 } from 'lucide-react';
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string; dot: string; slaHours: number }> = {
@@ -59,7 +59,7 @@ function getDesignDeadlineStatus(task: DesignTask) {
 }
 
 export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
-  const { updateTask, addHistory } = useDesignTasks();
+  const { updateTask, addHistory, deleteTask } = useDesignTasks();
   const { user } = useAuth();
   const [elapsed, setElapsed] = useState(0);
   const [uploading, setUploading] = useState(false);
@@ -231,7 +231,7 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
         )}
       </AnimatePresence>
 
-      <div className={`rounded-2xl border-2 transition-all duration-300 backdrop-blur-sm ${
+      <div className={`rounded-2xl border-2 transition-all duration-300 backdrop-blur-sm relative group/card ${
         deadlineStatus.variant === 'destructive'
           ? 'border-rose-300/60 bg-gradient-to-r from-rose-50/80 to-pink-50/40 dark:from-rose-950/30 dark:to-pink-950/20'
           : isAdjustment
@@ -240,6 +240,29 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
               ? 'border-violet-300/50 bg-gradient-to-r from-violet-50/60 to-fuchsia-50/30 dark:from-violet-950/20 dark:to-fuchsia-950/10'
               : 'border-pink-200/40 bg-gradient-to-r from-card to-pink-50/20 dark:to-pink-950/10 hover:border-pink-300/60'
       } hover:shadow-lg hover:shadow-pink-200/20 dark:hover:shadow-pink-900/10`}>
+
+        {/* Quick action buttons */}
+        <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity z-10">
+          <button
+            onClick={(e) => { e.stopPropagation(); onOpenDetail(task.id); }}
+            className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/80 dark:bg-background/80 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors shadow-sm border border-border/40"
+            title="Editar"
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (window.confirm(`Excluir "${task.title}"? Esta ação não pode ser desfeita.`)) {
+                await deleteTask.mutateAsync(task.id);
+              }
+            }}
+            className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/80 dark:bg-background/80 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors shadow-sm border border-border/40"
+            title="Excluir"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
 
         {/* Main row */}
         <div

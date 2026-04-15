@@ -1089,7 +1089,38 @@ export default function Scripts() {
             </div>
             )}
 
-            {/* Client editorial context + Generate button */}
+            {/* Direct to editing toggle - positioned right after client selection for visibility */}
+            <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-accent/30">
+              <Switch checked={form.directToEditing} onCheckedChange={v => setForm({ ...form, directToEditing: v, materialLink: v ? form.materialLink : '' })} disabled={isEditorRole} />
+              <div>
+                <Label className="font-medium flex items-center gap-1.5">
+                  🎬 Direto para Edição
+                  {isEditorRole && <Badge className="text-[9px] bg-blue-500/20 text-blue-600 border-blue-500/30 ml-1">Obrigatório</Badge>}
+                </Label>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {isEditorRole ? 'Editores criam roteiros que vão direto para a fila de edição.' : 'Para materiais prontos do cliente. Fica em espera e sobe automaticamente para o editor com menos tarefas quando a fila esvaziar.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Material link field - shown when directToEditing is active */}
+            {form.directToEditing && (
+              <div className="space-y-1 p-3 rounded-xl border-2 border-blue-300/50 bg-blue-50/30 dark:bg-blue-950/10 dark:border-blue-700/30">
+                <Label className="font-medium flex items-center gap-1.5 text-blue-700 dark:text-blue-300">
+                  🔗 Link do Material para o Editor
+                </Label>
+                <Input
+                  value={form.materialLink}
+                  onChange={e => setForm({ ...form, materialLink: e.target.value })}
+                  placeholder="Cole o link do Drive, WeTransfer, ou pasta com os materiais..."
+                  className="border-blue-200/60 focus:border-blue-400"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  O editor terá acesso a este link para baixar os materiais brutos.
+                </p>
+              </div>
+            )}
+
             {form.clientId && (() => {
               const selectedClient = clients.find(c => c.id === form.clientId);
               if (!selectedClient) return null;
@@ -1168,37 +1199,6 @@ export default function Scripts() {
               </div>
             )}
 
-            {/* Direct to editing toggle */}
-            <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-accent/30">
-              <Switch checked={form.directToEditing} onCheckedChange={v => setForm({ ...form, directToEditing: v, materialLink: v ? form.materialLink : '' })} disabled={isEditorRole} />
-              <div>
-                <Label className="font-medium flex items-center gap-1.5">
-                  🎬 Direto para Edição
-                  {isEditorRole && <Badge className="text-[9px] bg-blue-500/20 text-blue-600 border-blue-500/30 ml-1">Obrigatório</Badge>}
-                </Label>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {isEditorRole ? 'Editores criam roteiros que vão direto para a fila de edição.' : 'Para materiais prontos do cliente. Fica em espera e sobe automaticamente para o editor com menos tarefas quando a fila esvaziar.'}
-                </p>
-              </div>
-            </div>
-
-            {/* Material link field - shown when directToEditing is active */}
-            {form.directToEditing && (
-              <div className="space-y-1 p-3 rounded-xl border-2 border-blue-300/50 bg-blue-50/30 dark:bg-blue-950/10 dark:border-blue-700/30">
-                <Label className="font-medium flex items-center gap-1.5 text-blue-700 dark:text-blue-300">
-                  🔗 Link do Material para o Editor
-                </Label>
-                <Input
-                  value={form.materialLink}
-                  onChange={e => setForm({ ...form, materialLink: e.target.value })}
-                  placeholder="Cole o link do Drive, WeTransfer, ou pasta com os materiais..."
-                  className="border-blue-200/60 focus:border-blue-400"
-                />
-                <p className="text-[10px] text-muted-foreground">
-                  O editor terá acesso a este link para baixar os materiais brutos.
-                </p>
-              </div>
-            )}
 
             <div className="space-y-1">
               <Label>Título do Roteiro *</Label>

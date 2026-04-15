@@ -184,6 +184,7 @@ export default function Scripts() {
     isAvulso: false,
     recordingId: '' as string,
     prospectName: '' as string,
+    materialLink: '' as string,
   });
 
   // Avulso recordings (type=avulso, with prospect_name)
@@ -232,11 +233,12 @@ export default function Scripts() {
           isAvulso: !!script.recordingId || !script.clientId,
           recordingId: script.recordingId || '',
           prospectName: script.recordingId ? (recordings.find(r => r.id === script.recordingId)?.prospectName || '') : '',
+          materialLink: '',
         });
       });
     } else {
       setEditing(null);
-      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: isEditorRole ? true : false, isAvulso: false, recordingId: '', prospectName: '' });
+      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: isEditorRole ? true : false, isAvulso: false, recordingId: '', prospectName: '', materialLink: '' });
     }
     setOpen(true);
   };
@@ -375,6 +377,7 @@ export default function Scripts() {
           description: form.directToEditing ? 'Material pronto do cliente — direto para edição' : null,
           created_by: user?.id || null,
           assigned_to: assignedTo,
+          drive_link: form.directToEditing && form.materialLink ? form.materialLink : null,
         } as any);
         if (error) console.error('Auto content_task creation error:', error);
       }
@@ -827,7 +830,7 @@ export default function Scripts() {
               <Button onClick={() => handleOpen()}><Plus size={16} className="mr-2" /> Novo Roteiro</Button>
               <Button variant="outline" className="gap-1.5 border-sky-500/40 text-sky-600 hover:bg-sky-500/10" onClick={() => {
                 setEditing(null);
-                setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: false, isAvulso: true, recordingId: '', prospectName: '' });
+                setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: false, isAvulso: true, recordingId: '', prospectName: '', materialLink: '' });
                 setOpen(true);
               }}>
                 <Video size={16} /> Roteiro Avulso
@@ -1167,7 +1170,7 @@ export default function Scripts() {
 
             {/* Direct to editing toggle */}
             <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-accent/30">
-              <Switch checked={form.directToEditing} onCheckedChange={v => setForm({ ...form, directToEditing: v })} disabled={isEditorRole} />
+              <Switch checked={form.directToEditing} onCheckedChange={v => setForm({ ...form, directToEditing: v, materialLink: v ? form.materialLink : '' })} disabled={isEditorRole} />
               <div>
                 <Label className="font-medium flex items-center gap-1.5">
                   🎬 Direto para Edição
@@ -1178,6 +1181,24 @@ export default function Scripts() {
                 </p>
               </div>
             </div>
+
+            {/* Material link field - shown when directToEditing is active */}
+            {form.directToEditing && (
+              <div className="space-y-1 p-3 rounded-xl border-2 border-blue-300/50 bg-blue-50/30 dark:bg-blue-950/10 dark:border-blue-700/30">
+                <Label className="font-medium flex items-center gap-1.5 text-blue-700 dark:text-blue-300">
+                  🔗 Link do Material para o Editor
+                </Label>
+                <Input
+                  value={form.materialLink}
+                  onChange={e => setForm({ ...form, materialLink: e.target.value })}
+                  placeholder="Cole o link do Drive, WeTransfer, ou pasta com os materiais..."
+                  className="border-blue-200/60 focus:border-blue-400"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  O editor terá acesso a este link para baixar os materiais brutos.
+                </p>
+              </div>
+            )}
 
             <div className="space-y-1">
               <Label>Título do Roteiro *</Label>

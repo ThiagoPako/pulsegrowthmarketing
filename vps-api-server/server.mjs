@@ -318,6 +318,113 @@ async function verifyAdmin(req) {
   return { user, userClient, admin: getAdminClient() };
 }
 
+let profilesPasswordHashColumnPromise;
+
+async function hasProfilesPasswordHashColumn() {
+  if (!profilesPasswordHashColumnPromise) {
+    profilesPasswordHashColumnPromise = pool.query(`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'profiles'
+          AND column_name = 'password_hash'
+      ) AS exists
+    `)
+      .then(({ rows }) => Boolean(rows[0]?.exists))
+      .catch((error) => {
+        profilesPasswordHashColumnPromise = null;
+        throw error;
+      });
+  }
+
+  return profilesPasswordHashColumnPromise;
+}
+
+async function getAuthProfileByEmail(email) {
+  const normalizedEmail = email.toLowerCase().trim();
+
+  if (await hasProfilesPasswordHashColumn()) {
+    const { rows } = await pool.query(
+      'SELECT id, name, email, role, avatar_url, display_name, job_title, password_hash FROM profiles WHERE email = $1 LIMIT 1',
+      [normalizedEmail]
+    );
+    return rows[0] || null;
+  }
+
+  const { rows } = await pool.query(
+    `SELECT p.id, p.name, p.email, p.role, p.avatar_url, p.display_name, p.job_title, au.password_hash
+     FROM profiles p
+     LEFT JOIN auth_users au
+       ON au.id = p.id OR lower(au.email) = lower(p.email)
+     WHERE lower(p.email) = lower($1)
+     LIMIT 1`,
+    [normalizedEmail]
+  );
+
+  return rows[0] || null;
+}
+
+async function getAuthProfileById(userId) {
+  if (await hasProfilesPasswordHashColumn()) {
+    const { rows } = await pool.query(
+      'SELECT id, name, email, role, avatar_url, display_name, job_title, password_hash FROM profiles WHERE id = $1 LIMIT 1',
+      [userId]
+    );
+    return rows[0] || null;
+  }
+
+  const { rows } = await pool.query(
+    `SELECT p.id, p.name, p.email, p.role, p.avatar_url, p.display_name, p.job_title, au.password_hash
+     FROM profiles p
+     LEFT JOIN auth_users au
+       ON au.id = p.id OR lower(au.email) = lower(p.email)
+     WHERE p.id = $1
+     LIMIT 1`,
+    [userId]
+  );
+
+  return rows[0] || null;
+}
+
+async function storeUserPassword(userId, rawPassword) {
+  const hash = await bcrypt.hash(rawPassword, 12);
+
+  if (await hasProfilesPasswordHashColumn()) {
+    await pool.query(
+      'UPDATE profiles SET password_hash = $1, updated_at = NOW() WHERE id = $2',
+      [hash, userId]
+    );
+    return;
+  }
+
+  const { rows } = await pool.query(
+    'SELECT id, email FROM profiles WHERE id = $1 LIMIT 1',
+    [userId]
+  );
+  const profile = rows[0];
+  if (!profile) throw new Error('Perfil não encontrado');
+
+  const normalizedEmail = profile.email.toLowerCase().trim();
+  const { rows: existingAuthUsers } = await pool.query(
+    'SELECT id FROM auth_users WHERE lower(email) = lower($1) LIMIT 1',
+    [normalizedEmail]
+  );
+
+  if (existingAuthUsers.length > 0) {
+    await pool.query(
+      'UPDATE auth_users SET password_hash = $1, updated_at = NOW() WHERE lower(email) = lower($2)',
+      [hash, normalizedEmail]
+    );
+    return;
+  }
+
+  await pool.query(
+    'INSERT INTO auth_users (id, email, password_hash) VALUES ($1, $2, $3)',
+    [profile.id, normalizedEmail, hash]
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════
 // AUTH ROUTES
 // ═══════════════════════════════════════════════════════════════
@@ -328,20 +435,13 @@ app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email e senha são obrigatórios' });
 
-    // Find profile by email
-    const { rows: profiles } = await pool.query(
-      'SELECT id, name, email, role, avatar_url, display_name, job_title, password_hash FROM profiles WHERE email = $1 LIMIT 1',
-      [email.toLowerCase().trim()]
-    );
-    if (profiles.length === 0) return res.status(401).json({ error: 'Email ou senha inválidos' });
-
-    const profile = profiles[0];
+    const profile = await getAuthProfileByEmail(email);
+    if (!profile) return res.status(401).json({ error: 'Email ou senha inválidos' });
     if (!profile.password_hash) return res.status(401).json({ error: 'Senha não configurada. Solicite ao administrador.' });
 
     const valid = await bcrypt.compare(password, profile.password_hash);
     if (!valid) return res.status(401).json({ error: 'Email ou senha inválidos' });
 
-    // Get role from user_roles table
     const { rows: roles } = await pool.query(
       'SELECT role FROM user_roles WHERE user_id = $1 LIMIT 1',
       [profile.id]
@@ -400,17 +500,15 @@ app.post('/api/auth/change-password', async (req, res) => {
     const { currentPassword, newPassword } = req.body;
     if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: 'Nova senha deve ter pelo menos 6 caracteres' });
 
-    const { rows } = await pool.query('SELECT password_hash FROM profiles WHERE id = $1', [user.id]);
-    if (rows.length === 0) return res.status(404).json({ error: 'Perfil não encontrado' });
+    const profile = await getAuthProfileById(user.id);
+    if (!profile) return res.status(404).json({ error: 'Perfil não encontrado' });
 
-    // If user already has a password, verify current one
-    if (rows[0].password_hash && currentPassword) {
-      const valid = await bcrypt.compare(currentPassword, rows[0].password_hash);
+    if (profile.password_hash && currentPassword) {
+      const valid = await bcrypt.compare(currentPassword, profile.password_hash);
       if (!valid) return res.status(401).json({ error: 'Senha atual incorreta' });
     }
 
-    const hash = await bcrypt.hash(newPassword, 12);
-    await pool.query('UPDATE profiles SET password_hash = $1, updated_at = NOW() WHERE id = $2', [hash, user.id]);
+    await storeUserPassword(user.id, newPassword);
 
     res.json({ success: true, message: 'Senha alterada com sucesso' });
   } catch (error) {
@@ -422,12 +520,11 @@ app.post('/api/auth/change-password', async (req, res) => {
 // ─── Admin: Set password for a team member ──────────────────
 app.post('/api/auth/set-password', async (req, res) => {
   try {
-    const { user } = await verifyAdmin(req);
+    await verifyAdmin(req);
     const { userId, password } = req.body;
     if (!userId || !password || password.length < 6) return res.status(400).json({ error: 'userId e senha (min 6 chars) obrigatórios' });
 
-    const hash = await bcrypt.hash(password, 12);
-    await pool.query('UPDATE profiles SET password_hash = $1, updated_at = NOW() WHERE id = $2', [hash, userId]);
+    await storeUserPassword(userId, password);
 
     res.json({ success: true, message: 'Senha definida com sucesso' });
   } catch (error) {
@@ -444,23 +541,38 @@ app.post('/api/auth/create-user', async (req, res) => {
     if (!name || !email || !password) return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
     if (password.length < 6) return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
 
-    const { rows: existing } = await pool.query('SELECT id FROM profiles WHERE email = $1', [email.toLowerCase().trim()]);
+    const normalizedEmail = email.toLowerCase().trim();
+    const { rows: existing } = await pool.query('SELECT id FROM profiles WHERE email = $1', [normalizedEmail]);
     if (existing.length > 0) return res.status(409).json({ error: 'Email já cadastrado no sistema' });
 
+    if (!(await hasProfilesPasswordHashColumn())) {
+      const { rows: existingAuth } = await pool.query('SELECT id FROM auth_users WHERE lower(email) = lower($1) LIMIT 1', [normalizedEmail]);
+      if (existingAuth.length > 0) return res.status(409).json({ error: 'Email já cadastrado no sistema' });
+    }
+
     const id = crypto.randomUUID();
-    const hash = await bcrypt.hash(password, 12);
     const userRole = role || 'editor';
 
+    if (await hasProfilesPasswordHashColumn()) {
+      const hash = await bcrypt.hash(password, 12);
+      await pool.query(
+        'INSERT INTO profiles (id, name, email, role, password_hash) VALUES ($1, $2, $3, $4, $5)',
+        [id, name, normalizedEmail, userRole, hash]
+      );
+    } else {
+      await pool.query(
+        'INSERT INTO profiles (id, name, email, role) VALUES ($1, $2, $3, $4)',
+        [id, name, normalizedEmail, userRole]
+      );
+      await storeUserPassword(id, password);
+    }
+
     await pool.query(
-      `INSERT INTO profiles (id, name, email, role, password_hash) VALUES ($1, $2, $3, $4, $5)`,
-      [id, name, email.toLowerCase().trim(), userRole, hash]
-    );
-    await pool.query(
-      `INSERT INTO user_roles (user_id, role) VALUES ($1, $2)`,
+      'INSERT INTO user_roles (user_id, role) VALUES ($1, $2)',
       [id, userRole]
     );
 
-    res.json({ success: true, user: { id, name, email: email.toLowerCase().trim(), role: userRole } });
+    res.json({ success: true, user: { id, name, email: normalizedEmail, role: userRole } });
   } catch (error) {
     console.error('Create user error:', error);
     res.status(500).json({ error: error.message });
@@ -474,8 +586,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
     const { userId, newPassword } = req.body;
     if (!userId || !newPassword || newPassword.length < 6) return res.status(400).json({ error: 'userId e nova senha (min 6 chars) obrigatórios' });
 
-    const hash = await bcrypt.hash(newPassword, 12);
-    await pool.query('UPDATE profiles SET password_hash = $1, updated_at = NOW() WHERE id = $2', [hash, userId]);
+    await storeUserPassword(userId, newPassword);
 
     res.json({ success: true, message: 'Senha redefinida com sucesso' });
   } catch (error) {

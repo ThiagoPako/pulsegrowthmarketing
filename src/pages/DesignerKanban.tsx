@@ -295,11 +295,12 @@ export default function DesignerKanban() {
                 <th className="text-left p-3">Prioridade</th>
                 <th className="text-left p-3">Etapa</th>
                 <th className="text-left p-3">Criado</th>
+                <th className="text-right p-3">Ações</th>
               </tr>
             </thead>
             <tbody>
               {tasks.map(task => (
-                <tr key={task.id} className="border-t hover:bg-muted/30 cursor-pointer" onClick={() => setSelectedTaskId(task.id)}>
+                <tr key={task.id} className="border-t hover:bg-muted/30 cursor-pointer group" onClick={() => setSelectedTaskId(task.id)}>
                   <td className="p-3">
                     <div className="flex items-center gap-2">
                       <ClientLogo client={{ companyName: task.clients?.company_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="sm" />
@@ -311,6 +312,33 @@ export default function DesignerKanban() {
                   <td className="p-3"><Badge className={`text-[10px] ${PRIORITY_CONFIG[task.priority]?.color}`}>{PRIORITY_CONFIG[task.priority]?.label}</Badge></td>
                   <td className="p-3"><Badge variant="secondary" className="text-[10px]">{DESIGN_COLUMNS.find(c => c.key === task.kanban_column)?.label}</Badge></td>
                   <td className="p-3 text-xs text-muted-foreground">{new Date(task.created_at).toLocaleDateString('pt-BR')}</td>
+                  <td className="p-3 text-right">
+                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0"
+                        onClick={(e) => { e.stopPropagation(); setSelectedTaskId(task.id); }}
+                      >
+                        <Pencil size={13} />
+                      </Button>
+                      {(currentUser?.role === 'admin' || currentUser?.role === 'designer') && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Excluir "${task.title}"?`)) {
+                              await deleteTask.mutateAsync(task.id);
+                            }
+                          }}
+                        >
+                          <Trash2 size={13} />
+                        </Button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

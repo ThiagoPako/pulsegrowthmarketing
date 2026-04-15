@@ -2167,13 +2167,21 @@ export default function Clients() {
                       }}>
                       <KeyRound size={15} />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Link de onboarding"
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Link de onboarding completo"
                       onClick={() => {
                         const link = `${window.location.origin}/onboarding/${c.id}`;
                         navigator.clipboard.writeText(link);
                         toast.success('Link de onboarding copiado!');
                       }}>
                       <Copy size={15} />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500" title="Link só do briefing"
+                      onClick={() => {
+                        const link = `${window.location.origin}/briefing/${c.id}`;
+                        navigator.clipboard.writeText(link);
+                        toast.success('Link do briefing copiado! Envie ao cliente para preenchimento.');
+                      }}>
+                      <FileTextIcon size={15} />
                     </Button>
                     {c.whatsapp && (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-success" title="WhatsApp" onClick={() => {

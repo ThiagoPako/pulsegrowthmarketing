@@ -814,6 +814,14 @@ export default function ContentKanban() {
             </SelectContent>
           </Select>
           <motion.div whileTap={{ scale: 0.95 }} whileHover={{ scale: 1.03 }}>
+            <Button size="sm" variant="outline" onClick={() => {
+              setTasks(prev => [...prev].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
+              toast.success('Cards organizados por última movimentação');
+            }} className="gap-1.5 rounded-xl h-9 px-3 font-medium border-border/60">
+              <ArrowDownUp size={14} /> Organizar
+            </Button>
+          </motion.div>
+          <motion.div whileTap={{ scale: 0.95 }} whileHover={{ scale: 1.03 }}>
             <Button size="sm" onClick={() => openNew()}
               className="gap-1.5 rounded-xl h-9 px-4 font-semibold shadow-md bg-gradient-to-r from-primary to-primary/80 hover:shadow-lg hover:shadow-primary/25 transition-shadow">
               <Rocket size={14} /> Novo Conteúdo

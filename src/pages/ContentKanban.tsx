@@ -295,6 +295,10 @@ export default function ContentKanban() {
       if (map[t.kanban_column]) map[t.kanban_column].push(t);
       else map['ideias'].push(t);
     });
+    // Order: most recently moved/updated cards on top of each column
+    Object.keys(map).forEach(colId => {
+      map[colId].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+    });
     return map;
   }, [filteredTasks]);
 

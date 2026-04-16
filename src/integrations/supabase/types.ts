@@ -2550,6 +2550,38 @@ export type Database = {
         }
         Relationships: []
       }
+      mural_desabafo: {
+        Row: {
+          author_id: string | null
+          author_name: string
+          created_at: string
+          id: string
+          message: string
+        }
+        Insert: {
+          author_id?: string | null
+          author_name?: string
+          created_at?: string
+          id?: string
+          message: string
+        }
+        Update: {
+          author_id?: string | null
+          author_name?: string
+          created_at?: string
+          id?: string
+          message?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mural_desabafo_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string

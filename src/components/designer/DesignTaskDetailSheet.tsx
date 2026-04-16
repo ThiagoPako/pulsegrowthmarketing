@@ -98,8 +98,9 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const showMockup = taskCategory === 'identidade_visual' || taskCategory === 'reformulacao';
   const history = historyQuery(task.id);
   const currentCol = DESIGN_COLUMNS.find(c => c.key === task.kanban_column);
-  const isDesigner = currentUser?.role === 'fotografo' || currentUser?.role === 'admin';
+  const isDesigner = currentUser?.role === 'fotografo' || currentUser?.role === 'designer' || currentUser?.role === 'admin';
   const isSocialMedia = currentUser?.role === 'social_media' || currentUser?.role === 'admin';
+  const canDelete = currentUser?.role === 'admin';
 
   useEffect(() => {
     if (!task.started_at) { setElapsedDisplay(''); return; }
@@ -153,13 +154,39 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   };
 
   const handleSendToClient = async () => {
+    const fileUrl = attachmentUrl || task.attachment_url;
+    
+    // Send art to client portal for approval (like videos)
+    if (fileUrl && task.client_id) {
+      try {
+        const now = new Date();
+        await supabase.from('client_portal_contents').insert({
+          client_id: task.client_id,
+          title: `Arte: ${task.title}`,
+          content_type: 'arte',
+          file_url: fileUrl,
+          thumbnail_url: /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(fileUrl) ? fileUrl : null,
+          status: 'pendente',
+          season_month: now.getMonth() + 1,
+          season_year: now.getFullYear(),
+          uploaded_by: user?.id,
+        } as any);
+        
+        // Notify client in portal
+        await supabase.from('client_portal_notifications').insert({
+          client_id: task.client_id,
+          title: 'Nova arte para aprovação',
+          message: `A arte "${task.title}" está pronta para sua aprovação.`,
+          type: 'design',
+        } as any);
+      } catch (err) { console.error('Portal insert error:', err); }
+    }
+
     try {
-      const fileUrl = attachmentUrl || task.attachment_url;
       const clientName = task.clients?.responsible_person || task.clients?.company_name;
-      const msg = `Olá, ${clientName}! 🎨\n\nSegue a arte criada para sua empresa. Pode nos confirmar se está aprovado?`;
+      const msg = `Olá, ${clientName}! 🎨\n\nSegue a arte criada para sua empresa. Pode nos confirmar se está aprovado?\n\nVocê também pode aprovar pelo Portal do Cliente.`;
 
       if (fileUrl && task.clients?.whatsapp) {
-        // Send as media attachment (image) via edge function
         const fileName = fileUrl.split('/').pop() || 'arte.png';
         const result = await sendWhatsAppMediaMessage({
           number: task.clients.whatsapp,
@@ -174,7 +201,6 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           toast.error('Erro ao enviar arte: ' + (result.error || 'erro desconhecido'));
         }
       } else if (task.clients?.whatsapp) {
-        // Fallback: text-only
         await sendWhatsAppMessage({
           number: task.clients.whatsapp,
           message: msg,
@@ -184,13 +210,27 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
       }
     } catch (err) { console.error('WhatsApp send error:', err); }
     await updateTask.mutateAsync({ id: task.id, sent_to_client_at: new Date().toISOString() } as any);
-    await addHistory.mutateAsync({ task_id: task.id, action: 'Enviado para cliente via WhatsApp', user_id: user?.id });
-    toast.success('Arte enviada ao cliente!');
+    await addHistory.mutateAsync({ task_id: task.id, action: 'Enviado para cliente via WhatsApp + Portal', user_id: user?.id });
+    toast.success('Arte enviada ao cliente e adicionada ao Portal!');
   };
 
   const handleClientApproval = async () => {
     await updateTask.mutateAsync({ id: task.id, kanban_column: 'aprovado', client_approved_at: new Date().toISOString(), completed_at: new Date().toISOString() } as any);
     await addHistory.mutateAsync({ task_id: task.id, action: 'Aprovado pelo cliente', user_id: user?.id });
+
+    // Update portal content status to approved
+    if (task.client_id) {
+      const { data: portalContents } = await supabase
+        .from('client_portal_contents')
+        .select('id')
+        .eq('client_id', task.client_id)
+        .ilike('title', `%${task.title}%`)
+        .eq('status', 'pendente')
+        .limit(1);
+      if (portalContents && portalContents.length > 0) {
+        await supabase.from('client_portal_contents').update({ status: 'aprovado', approved_at: new Date().toISOString() }).eq('id', portalContents[0].id);
+      }
+    }
 
     // Auto-fill client drive_identidade_visual when logomarca is approved
     if (task.format_type === 'logomarca' && task.client_id) {
@@ -261,7 +301,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
               >
                 {currentCol?.label}
               </Badge>
-              {(currentUser?.role === 'admin' || currentUser?.role === 'designer' || currentUser?.role === 'fotografo') && (
+              {canDelete && (
                 <Button
                   variant="destructive"
                   size="sm"
@@ -348,18 +388,31 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                     </div>
                   )}
 
-                  {/* References */}
+                  {/* References with image preview */}
                   {task.references_links?.length > 0 && (
                     <div className="rounded-lg border border-border p-3">
                       <Label className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-2">
                         <Link2 size={10} /> Referências
                       </Label>
-                      <div className="space-y-1.5">
-                        {task.references_links.map((link, i) => (
-                          <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1.5 hover:underline break-all">
-                            <ExternalLink size={11} className="shrink-0" /> {link}
-                          </a>
-                        ))}
+                      <div className="space-y-2">
+                        {task.references_links.map((link, i) => {
+                          const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(link);
+                          return (
+                            <div key={i}>
+                              <a href={link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1.5 hover:underline break-all">
+                                <ExternalLink size={11} className="shrink-0" /> {link}
+                              </a>
+                              {isImage && (
+                                <button onClick={() => setPreviewImage(link)} className="mt-1 relative group rounded-lg overflow-hidden border border-border w-full max-h-32 hover:ring-2 hover:ring-primary/50 transition-all">
+                                  <img src={link} alt={`Ref ${i + 1}`} className="w-full max-h-32 object-contain bg-muted/30" />
+                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                    <ZoomIn size={16} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                  </div>
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

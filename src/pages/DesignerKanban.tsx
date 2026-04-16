@@ -6,7 +6,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2 } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2, Play, Image as ImageIcon, Upload } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DesignTaskCreateDialog from '@/components/designer/DesignTaskCreateDialog';
 import DesignTaskDetailSheet from '@/components/designer/DesignTaskDetailSheet';
@@ -84,9 +85,11 @@ export default function DesignerKanban() {
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [copyPreviewTask, setCopyPreviewTask] = useState<DesignTask | null>(null);
 
   const tasks = tasksQuery.data || [];
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
+  const canDelete = currentUser?.role === 'admin';
 
   const tasksByColumn = useMemo(() => {
     const map: Record<string, DesignTask[]> = {};
@@ -166,6 +169,24 @@ export default function DesignerKanban() {
     setDragOverColumn(null);
   }, []);
 
+  const handleQuickStart = async (task: DesignTask) => {
+    try {
+      const now = new Date().toISOString();
+      await updateTask.mutateAsync({
+        id: task.id,
+        kanban_column: 'executando',
+        started_at: task.started_at || now,
+        assigned_to: user?.id || task.assigned_to,
+        timer_running: true,
+        timer_started_at: now,
+      } as any);
+      await addHistory.mutateAsync({ task_id: task.id, action: 'Iniciou execução', user_id: user?.id });
+      toast.success('Tarefa iniciada! 🎨');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao iniciar');
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -190,7 +211,7 @@ export default function DesignerKanban() {
 
       {view === 'kanban' ? (
         <DragScrollContainer className="pb-4">
-          <div className="flex gap-3 min-w-max">
+          <div className="flex gap-3 min-w-max" style={{ height: 'calc(100vh - 180px)' }}>
             {DESIGN_COLUMNS.map((col, colIdx) => {
               const cfg = COLUMN_CONFIG[col.key];
               const colTasks = tasksByColumn[col.key] || [];
@@ -200,7 +221,7 @@ export default function DesignerKanban() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: colIdx * 0.07, duration: 0.35 }}
-                  className={`min-w-[270px] w-[270px] flex-shrink-0 rounded-xl transition-all duration-200 ${
+                  className={`min-w-[270px] w-[270px] flex-shrink-0 rounded-xl transition-all duration-200 flex flex-col ${
                     dragOverColumn === col.key ? 'ring-2 ring-primary/40 bg-primary/5 scale-[1.01]' : ''
                   }`}
                   onDragOver={e => handleDragOver(e, col.key)}
@@ -209,11 +230,10 @@ export default function DesignerKanban() {
                 >
                   {/* Column header */}
                   <motion.div
-                    className={`relative overflow-hidden rounded-xl p-3 mb-3 bg-gradient-to-r ${cfg.gradient} border border-border/50`}
+                    className={`relative overflow-hidden rounded-xl p-3 mb-3 bg-gradient-to-r ${cfg.gradient} border border-border/50 shrink-0`}
                     whileHover={{ scale: 1.01 }}
                     transition={{ type: 'spring', stiffness: 400 }}
                   >
-                    {/* Shimmer */}
                     <div className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
                       <div className="absolute inset-0 -translate-x-full animate-[shimmer_3s_infinite] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
                     </div>
@@ -237,8 +257,8 @@ export default function DesignerKanban() {
                     </div>
                   </motion.div>
 
-                  {/* Cards */}
-                  <div className="space-y-2 min-h-[60px] px-1">
+                  {/* Cards - scrollable */}
+                  <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 space-y-2 min-h-[60px] px-1 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
                     <AnimatePresence mode="popLayout">
                       {colTasks.map((task, i) => (
                         <motion.div
@@ -252,14 +272,15 @@ export default function DesignerKanban() {
                           <TaskCard
                             task={task}
                             isDragging={draggingTaskId === task.id}
-                            onClick={() => setSelectedTaskId(task.id)}
-                            onEdit={() => setSelectedTaskId(task.id)}
+                            onClick={() => setCopyPreviewTask(task)}
+                            onOpenDetail={() => setSelectedTaskId(task.id)}
                             onDelete={async () => {
                               if (window.confirm(`Excluir "${task.title}"? Esta ação não pode ser desfeita.`)) {
                                 await deleteTask.mutateAsync(task.id);
                               }
                             }}
-                            canDelete={currentUser?.role === 'admin' || currentUser?.role === 'designer'}
+                            canDelete={canDelete}
+                            onQuickStart={col.key === 'nova_tarefa' ? () => handleQuickStart(task) : undefined}
                             onDragStart={e => handleDragStart(e, task)}
                             onDragEnd={handleDragEnd}
                           />
@@ -300,7 +321,7 @@ export default function DesignerKanban() {
             </thead>
             <tbody>
               {tasks.map(task => (
-                <tr key={task.id} className="border-t hover:bg-muted/30 cursor-pointer group" onClick={() => setSelectedTaskId(task.id)}>
+                <tr key={task.id} className="border-t hover:bg-muted/30 cursor-pointer group" onClick={() => setCopyPreviewTask(task)}>
                   <td className="p-3">
                     <div className="flex items-center gap-2">
                       <ClientLogo client={{ companyName: task.clients?.company_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="sm" />
@@ -322,7 +343,7 @@ export default function DesignerKanban() {
                       >
                         <Pencil size={13} />
                       </Button>
-                      {(currentUser?.role === 'admin' || currentUser?.role === 'designer') && (
+                      {canDelete && (
                         <Button
                           size="sm"
                           variant="ghost"
@@ -346,10 +367,118 @@ export default function DesignerKanban() {
         </div>
       )}
 
+      {/* Copy Preview Dialog */}
+      {copyPreviewTask && (
+        <CopyPreviewDialog
+          task={copyPreviewTask}
+          onClose={() => setCopyPreviewTask(null)}
+          onOpenFull={() => { setSelectedTaskId(copyPreviewTask.id); setCopyPreviewTask(null); }}
+        />
+      )}
+
       <DesignTaskCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
       {selectedTask && (
         <DesignTaskDetailSheet task={selectedTask} open={!!selectedTask} onOpenChange={o => !o && setSelectedTaskId(null)} />
       )}
+    </div>
+  );
+}
+
+/* ── Copy Preview Dialog ── */
+function CopyPreviewDialog({ task, onClose, onOpenFull }: { task: DesignTask; onClose: () => void; onOpenFull: () => void }) {
+  const color = task.clients?.color || '217 91% 60%';
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+        className="bg-card border border-border rounded-2xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="p-4 border-b border-border flex items-center gap-3">
+          <div className="w-1.5 h-10 rounded-full" style={{ background: `hsl(${color})` }} />
+          <ClientLogo client={{ companyName: task.clients?.company_name || '', color, logoUrl: task.clients?.logo_url }} size="md" />
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm truncate">{task.title}</p>
+            <p className="text-xs text-muted-foreground">{task.clients?.company_name} • {FORMAT_LABELS[task.format_type] || task.format_type}</p>
+          </div>
+          <Badge className={`text-[10px] ${PRIORITY_CONFIG[task.priority]?.color}`}>{PRIORITY_CONFIG[task.priority]?.label}</Badge>
+        </div>
+
+        {/* Copy text */}
+        <div className="p-4 space-y-3 max-h-[50vh] overflow-y-auto">
+          {task.copy_text ? (
+            <div className="rounded-lg bg-accent/30 border border-accent p-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1.5">📝 Copy da Arte</p>
+              <p className="text-sm whitespace-pre-line leading-relaxed">{task.copy_text}</p>
+            </div>
+          ) : (
+            <div className="rounded-lg bg-muted/30 border border-border p-3 text-center">
+              <p className="text-xs text-muted-foreground">Sem copy definida para esta arte</p>
+            </div>
+          )}
+
+          {task.description && (
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1.5">📋 Descrição</p>
+              <p className="text-sm whitespace-pre-line leading-relaxed">{task.description}</p>
+            </div>
+          )}
+
+          {/* Reference images preview */}
+          {task.reference_images?.length > 0 && (
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-2">🎨 Referências</p>
+              <div className="flex flex-wrap gap-2">
+                {task.reference_images.map((img, i) => {
+                  const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(img);
+                  return isImage ? (
+                    <a key={i} href={img} target="_blank" rel="noopener noreferrer" className="rounded-lg overflow-hidden border border-border w-20 h-20 hover:ring-2 hover:ring-primary/50">
+                      <img src={img} alt={`Ref ${i + 1}`} className="w-full h-full object-cover" />
+                    </a>
+                  ) : (
+                    <a key={i} href={img} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1 p-2 rounded-lg border border-border">
+                      <ImageIcon size={12} /> Ref {i + 1}
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Reference links with image preview */}
+          {task.references_links?.length > 0 && (
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-2">🔗 Links de Referência</p>
+              <div className="space-y-2">
+                {task.references_links.map((link, i) => {
+                  const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(link);
+                  return (
+                    <div key={i}>
+                      <a href={link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline break-all flex items-center gap-1">
+                        {isImage ? <ImageIcon size={11} /> : <Eye size={11} />} {link}
+                      </a>
+                      {isImage && (
+                        <img src={link} alt={`Ref link ${i + 1}`} className="mt-1 rounded-lg border border-border max-h-32 object-contain" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-border flex justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
+          <Button size="sm" onClick={onOpenFull} className="gap-1.5">
+            <Eye size={13} /> Ver Detalhes Completos
+          </Button>
+        </div>
+      </motion.div>
     </div>
   );
 }
@@ -359,14 +488,15 @@ interface TaskCardProps {
   task: DesignTask;
   isDragging: boolean;
   onClick: () => void;
-  onEdit: () => void;
+  onOpenDetail: () => void;
   onDelete: () => void;
   canDelete: boolean;
+  onQuickStart?: () => void;
   onDragStart: (e: DragEvent<HTMLDivElement>) => void;
   onDragEnd: () => void;
 }
 
-function TaskCard({ task, isDragging, onClick, onEdit, onDelete, canDelete, onDragStart, onDragEnd }: TaskCardProps) {
+function TaskCard({ task, isDragging, onClick, onOpenDetail, onDelete, canDelete, onQuickStart, onDragStart, onDragEnd }: TaskCardProps) {
   const priorityCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.media;
   return (
     <div
@@ -378,12 +508,12 @@ function TaskCard({ task, isDragging, onClick, onEdit, onDelete, canDelete, onDr
         isDragging ? 'opacity-40 scale-95 ring-2 ring-primary/40' : ''
       }`}
     >
-      {/* Quick action buttons */}
-      <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+      {/* Quick action buttons - positioned away from top-right close area */}
+      <div className="absolute top-2 left-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
         <button
-          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          onClick={(e) => { e.stopPropagation(); onOpenDetail(); }}
           className="w-6 h-6 flex items-center justify-center rounded-md bg-muted/80 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
-          title="Editar"
+          title="Detalhes"
         >
           <Pencil size={12} />
         </button>
@@ -404,13 +534,37 @@ function TaskCard({ task, isDragging, onClick, onEdit, onDelete, canDelete, onDr
         <span className="text-[11px] text-muted-foreground truncate">{task.clients?.company_name}</span>
       </div>
       <p className="text-sm font-medium line-clamp-2 group-hover:text-primary/90 transition-colors">{task.title}</p>
+      
+      {/* Copy preview snippet */}
+      {task.copy_text && (
+        <p className="text-[10px] text-muted-foreground line-clamp-2 italic bg-muted/30 rounded px-2 py-1">
+          📝 {task.copy_text}
+        </p>
+      )}
+
       <div className="flex items-center gap-1.5 flex-wrap">
         <Badge variant="outline" className="text-[10px]">{FORMAT_LABELS[task.format_type] || task.format_type}</Badge>
         <Badge className={`text-[10px] ${priorityCfg.color}`}>{priorityCfg.label}</Badge>
         {task.timer_running && (
           <Badge variant="secondary" className="text-[10px] gap-0.5 animate-pulse"><Clock size={10} /> Em andamento</Badge>
         )}
+        {task.attachment_url && (
+          <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+            <CheckCircle2 size={9} className="mr-0.5" /> Arte ✓
+          </Badge>
+        )}
       </div>
+
+      {/* Quick Start button for nova_tarefa */}
+      {onQuickStart && (
+        <Button
+          size="sm"
+          className="w-full h-8 text-xs gap-1.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white rounded-lg"
+          onClick={(e) => { e.stopPropagation(); onQuickStart(); }}
+        >
+          <Play size={12} fill="currentColor" /> Iniciar Tarefa
+        </Button>
+      )}
     </div>
   );
 }

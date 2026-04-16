@@ -371,16 +371,34 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                   </div>
 
                   {/* Copy */}
-                  {task.copy_text && (
+                   {(task.copy_text || isSocialMedia) && (
                     <div className="rounded-lg border border-accent bg-accent/20 p-3">
-                      <Label className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                        <Palette size={10} /> Copy
+                      <Label className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1 justify-between">
+                        <span className="flex items-center gap-1"><Palette size={10} /> Copy</span>
+                        {isSocialMedia && !editingCopy && (
+                          <Button variant="ghost" size="sm" className="h-5 px-1.5 text-[10px]" onClick={() => setEditingCopy(true)}>
+                            <Pencil size={10} className="mr-0.5" /> Editar
+                          </Button>
+                        )}
                       </Label>
-                      <p className="text-sm mt-1.5 whitespace-pre-line leading-relaxed">{task.copy_text}</p>
+                      {editingCopy ? (
+                        <div className="mt-1.5 space-y-2">
+                          <Textarea value={copyText} onChange={e => setCopyText(e.target.value)} className="text-sm min-h-[80px]" placeholder="Digite a copy..." />
+                          <div className="flex gap-2">
+                            <Button size="sm" className="h-7 text-xs" onClick={async () => {
+                              await updateTask(task.id, { copy_text: copyText } as any);
+                              await addHistory(task.id, 'Copy editada', user?.id || null, copyText.slice(0, 100));
+                              setEditingCopy(false);
+                              toast.success('Copy atualizada!');
+                            }}>Salvar</Button>
+                            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setCopyText(task.copy_text || ''); setEditingCopy(false); }}>Cancelar</Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm mt-1.5 whitespace-pre-line leading-relaxed">{task.copy_text || <span className="text-muted-foreground italic">Sem copy definida</span>}</p>
+                      )}
                     </div>
                   )}
-
-                  {/* Description */}
                   {task.description && (
                     <div className="rounded-lg border border-border p-3">
                       <Label className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1">

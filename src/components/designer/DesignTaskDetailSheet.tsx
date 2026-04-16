@@ -22,7 +22,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History,
   Upload, Image, FileText, Palette, Info, User, Calendar, ArrowRight, X,
-  ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip, ZoomIn, Loader2, Trash2
+  ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip, ZoomIn, Loader2, Trash2, Pencil
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -68,6 +68,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [uploadingArt, setUploadingArt] = useState(false);
   const [artInputMode, setArtInputMode] = useState<'link' | 'upload'>('link');
   const [showAdjustmentForm, setShowAdjustmentForm] = useState(false);
+  const [editingCopy, setEditingCopy] = useState(false);
+  const [copyText, setCopyText] = useState(task.copy_text || '');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [movingAction, setMovingAction] = useState<string | null>(null);
   const [stageAnimKey, setStageAnimKey] = useState(0);
@@ -100,7 +102,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const currentCol = DESIGN_COLUMNS.find(c => c.key === task.kanban_column);
   const isDesigner = currentUser?.role === 'fotografo' || currentUser?.role === 'designer' || currentUser?.role === 'admin';
   const isSocialMedia = currentUser?.role === 'social_media' || currentUser?.role === 'admin';
-  const canDelete = currentUser?.role === 'admin';
+  const canDelete = currentUser?.role === 'admin' || currentUser?.role === 'social_media';
 
   useEffect(() => {
     if (!task.started_at) { setElapsedDisplay(''); return; }
@@ -369,16 +371,34 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                   </div>
 
                   {/* Copy */}
-                  {task.copy_text && (
+                   {(task.copy_text || isSocialMedia) && (
                     <div className="rounded-lg border border-accent bg-accent/20 p-3">
-                      <Label className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                        <Palette size={10} /> Copy
+                      <Label className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1 justify-between">
+                        <span className="flex items-center gap-1"><Palette size={10} /> Copy</span>
+                        {isSocialMedia && !editingCopy && (
+                          <Button variant="ghost" size="sm" className="h-5 px-1.5 text-[10px]" onClick={() => setEditingCopy(true)}>
+                            <Pencil size={10} className="mr-0.5" /> Editar
+                          </Button>
+                        )}
                       </Label>
-                      <p className="text-sm mt-1.5 whitespace-pre-line leading-relaxed">{task.copy_text}</p>
+                      {editingCopy ? (
+                        <div className="mt-1.5 space-y-2">
+                          <Textarea value={copyText} onChange={e => setCopyText(e.target.value)} className="text-sm min-h-[80px]" placeholder="Digite a copy..." />
+                          <div className="flex gap-2">
+                            <Button size="sm" className="h-7 text-xs" onClick={async () => {
+                              await updateTask.mutateAsync({ id: task.id, copy_text: copyText } as any);
+                              await addHistory.mutateAsync({ task_id: task.id, action: 'Copy editada', user_id: user?.id || undefined, details: copyText.slice(0, 100) });
+                              setEditingCopy(false);
+                              toast.success('Copy atualizada!');
+                            }}>Salvar</Button>
+                            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setCopyText(task.copy_text || ''); setEditingCopy(false); }}>Cancelar</Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm mt-1.5 whitespace-pre-line leading-relaxed">{task.copy_text || <span className="text-muted-foreground italic">Sem copy definida</span>}</p>
+                      )}
                     </div>
                   )}
-
-                  {/* Description */}
                   {task.description && (
                     <div className="rounded-lg border border-border p-3">
                       <Label className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1">

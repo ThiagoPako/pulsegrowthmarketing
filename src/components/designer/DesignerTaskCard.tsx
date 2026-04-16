@@ -360,7 +360,7 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
             </Badge>
             {hasArt && (
               <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200/50 text-[9px] rounded-full px-2">
-                <CheckCircle size={8} className="mr-0.5" /> Arte ✓
+                <CheckCircle size={8} className="mr-0.5" /> {artCount > 1 ? `${artCount} Artes ✓` : 'Arte ✓'}
               </Badge>
             )}
           </div>

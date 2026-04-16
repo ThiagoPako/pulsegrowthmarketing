@@ -183,6 +183,7 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
   const deadlineStatus = getDesignDeadlineStatus(task);
   const isNew = task.kanban_column === 'nova_tarefa';
   const isExecuting = task.kanban_column === 'executando';
+  const isAdjustment = task.kanban_column === 'ajustes';
   const artCount = ((task as any).attachment_urls?.length || 0) + (task.attachment_url && !((task as any).attachment_urls || []).includes(task.attachment_url) ? 1 : 0);
   const hasArt = artCount > 0 || !!task.attachment_url;
   const colInfo = COL_LABELS[task.kanban_column] || { label: task.kanban_column, emoji: '📋' };

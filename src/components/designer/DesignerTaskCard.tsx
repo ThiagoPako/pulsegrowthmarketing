@@ -418,7 +418,7 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
               {/* Quick upload button directly on card */}
               {(isExecuting || isAdjustment) && !hasArt && (
                 <>
-                  <input ref={fileRef} type="file" accept="image/*,.pdf,.ai,.psd,.svg,.eps" className="hidden" onChange={handleUploadFile} />
+                  <input ref={fileRef} type="file" accept="image/*,.pdf,.ai,.psd,.svg,.eps" multiple className="hidden" onChange={handleUploadFile} />
                   <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                     <Button
                       size="sm"

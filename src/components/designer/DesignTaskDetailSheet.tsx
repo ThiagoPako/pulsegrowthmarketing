@@ -22,7 +22,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History,
   Upload, Image, FileText, Palette, Info, User, Calendar, ArrowRight, X,
-  ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip, ZoomIn, Loader2, Trash2
+  ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip, ZoomIn, Loader2, Trash2, Pencil
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -386,8 +386,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                           <Textarea value={copyText} onChange={e => setCopyText(e.target.value)} className="text-sm min-h-[80px]" placeholder="Digite a copy..." />
                           <div className="flex gap-2">
                             <Button size="sm" className="h-7 text-xs" onClick={async () => {
-                              await updateTask(task.id, { copy_text: copyText } as any);
-                              await addHistory(task.id, 'Copy editada', user?.id || null, copyText.slice(0, 100));
+                              await updateTask.mutateAsync({ id: task.id, copy_text: copyText } as any);
+                              await addHistory.mutateAsync({ task_id: task.id, action: 'Copy editada', user_id: user?.id || undefined, details: copyText.slice(0, 100) });
                               setEditingCopy(false);
                               toast.success('Copy atualizada!');
                             }}>Salvar</Button>

@@ -409,35 +409,47 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
                 </>
               )}
 
-              {/* Art attachment */}
-              {(isExecuting || isAdjustment) && (
+              {/* Quick upload button directly on card */}
+              {(isExecuting || isAdjustment) && !hasArt && (
                 <>
-                  {hasArt ? (
-                    <a href={task.attachment_url!} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
-                      <Button size="sm" variant="outline" className="h-9 text-xs gap-2 rounded-xl border-emerald-300/60 text-emerald-600 font-semibold">
-                        <Eye size={13} /> Ver Arte 🎨
-                      </Button>
-                    </a>
-                  ) : (
-                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-9 text-xs gap-2 rounded-xl border-pink-300/60 text-pink-600 hover:bg-pink-50 dark:hover:bg-pink-900/20 font-semibold"
-                        onClick={(e) => { e.stopPropagation(); setShowArtInput(!showArtInput); }}
-                      >
-                        <Image size={13} /> Anexar Arte
-                      </Button>
-                    </motion.div>
-                  )}
+                  <input ref={fileRef} type="file" accept="image/*,.pdf,.ai,.psd,.svg,.eps" className="hidden" onChange={handleUploadFile} />
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                    <Button
+                      size="sm"
+                      className="h-9 text-xs gap-2 rounded-xl bg-gradient-to-r from-pink-500 to-fuchsia-500 hover:from-pink-600 hover:to-fuchsia-600 text-white shadow-lg shadow-pink-300/40 font-semibold"
+                      disabled={uploading}
+                      onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
+                    >
+                      {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                      {uploading ? 'Enviando...' : 'Enviar Arte 🎨'}
+                    </Button>
+                  </motion.div>
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 text-xs gap-2 rounded-xl border-pink-300/60 text-pink-600 hover:bg-pink-50 dark:hover:bg-pink-900/20 font-semibold"
+                      onClick={(e) => { e.stopPropagation(); setShowArtInput(!showArtInput); }}
+                    >
+                      <Link2 size={13} /> Colar Link
+                    </Button>
+                  </motion.div>
+                </>
+              )}
 
-                  {/* Send for review */}
+              {/* View art + send for review */}
+              {(isExecuting || isAdjustment) && hasArt && (
+                <>
+                  <a href={task.attachment_url!} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+                    <Button size="sm" variant="outline" className="h-9 text-xs gap-2 rounded-xl border-emerald-300/60 text-emerald-600 font-semibold">
+                      <Eye size={13} /> Ver Arte 🎨
+                    </Button>
+                  </a>
                   <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="ml-auto">
                     <Button
                       size="sm"
-                      className="h-9 text-xs gap-2 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white shadow-lg shadow-pink-300/40 font-semibold disabled:opacity-40"
+                      className="h-9 text-xs gap-2 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white shadow-lg shadow-pink-300/40 font-semibold"
                       onClick={handleSendForReview}
-                      disabled={!hasArt}
                     >
                       <Send size={13} /> Enviar p/ Análise 🚀
                     </Button>

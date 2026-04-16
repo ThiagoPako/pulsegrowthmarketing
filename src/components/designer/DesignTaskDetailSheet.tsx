@@ -91,10 +91,11 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   useEffect(() => {
     setObservations(task.observations || '');
     setAttachmentUrl(task.attachment_url || '');
+    setAttachmentUrls((task as any).attachment_urls || []);
     setEditableFileUrl(task.editable_file_url || '');
     setMockupUrl((task as any).mockup_url || '');
     setChecklist((task as any).checklist || []);
-  }, [task.id, task.kanban_column, task.observations, task.attachment_url, task.editable_file_url, (task as any).mockup_url]);
+  }, [task.id, task.kanban_column, task.observations, task.attachment_url, task.editable_file_url, (task as any).mockup_url, (task as any).attachment_urls]);
 
   const taskCategory = getTaskCategory(task);
   const hasChecklist = taskCategory !== 'normal';

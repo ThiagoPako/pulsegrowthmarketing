@@ -905,7 +905,7 @@ export default function ContentKanban() {
                             isDragging={draggedTask?.id === task.id}
                             onDragStart={e => handleDragStart(e, task)}
                             onEdit={() => openEdit(task)}
-                            onDelete={profile?.role === 'admin' ? () => openDeleteConfirm(task) : undefined}
+                            onDelete={(profile?.role === 'admin' || profile?.role === 'social_media') ? () => openDeleteConfirm(task) : undefined}
                             onCardClick={() => { setDetailTask(task); setDetailOpen(true); }}
                             onConfirmPosted={task.kanban_column === 'acompanhamento' && !isRestricted ? () => handleConfirmPosted(task) : undefined}
                             onApprove={task.kanban_column === 'revisao' && (userRole === 'admin' || userRole === 'social_media') ? () => handleApproveTask(task) : undefined}

@@ -130,14 +130,19 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
 
   const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     e.stopPropagation();
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
     setUploading(true);
     try {
-      const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
-      await updateTask.mutateAsync({ id: task.id, attachment_url: publicUrl } as any);
-      await addHistory.mutateAsync({ task_id: task.id, action: 'Arte anexada', details: file.name, user_id: user?.id });
-      toast.success('Arte anexada! 🎉');
+      const existing: string[] = (task as any).attachment_urls || [];
+      const newUrls = [...existing];
+      for (const file of files) {
+        const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
+        newUrls.push(publicUrl);
+        await addHistory.mutateAsync({ task_id: task.id, action: 'Arte anexada', details: file.name, user_id: user?.id });
+      }
+      await updateTask.mutateAsync({ id: task.id, attachment_urls: newUrls, attachment_url: newUrls[0] || task.attachment_url } as any);
+      toast.success(`${files.length} arte(s) anexada(s)! 🎉`);
       setShowArtInput(false);
     } catch (err: any) {
       toast.error(err.message || 'Erro ao enviar arquivo');

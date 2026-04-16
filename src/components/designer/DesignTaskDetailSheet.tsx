@@ -766,7 +766,26 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                               <a href={attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">Ver</a>
                             </div>
                           )}
-                          <label className="mt-1 flex flex-col items-center justify-center gap-2 p-6 rounded-lg border-2 border-dashed border-border hover:border-primary/50 cursor-pointer transition-colors bg-muted/20 hover:bg-muted/40">
+                          <label
+                            className="mt-1 flex flex-col items-center justify-center gap-3 p-8 rounded-xl border-2 border-dashed border-violet-300/60 hover:border-violet-500 cursor-pointer transition-all bg-gradient-to-br from-violet-50/40 to-fuchsia-50/30 dark:from-violet-950/20 dark:to-fuchsia-950/10 hover:from-violet-50/80 hover:to-fuchsia-50/60 hover:shadow-lg hover:shadow-violet-200/20"
+                            onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-violet-500', 'bg-violet-100/50'); }}
+                            onDragLeave={(e) => { e.currentTarget.classList.remove('border-violet-500', 'bg-violet-100/50'); }}
+                            onDrop={async (e) => {
+                              e.preventDefault();
+                              e.currentTarget.classList.remove('border-violet-500', 'bg-violet-100/50');
+                              const file = e.dataTransfer.files?.[0];
+                              if (!file) return;
+                              setUploadingArt(true);
+                              try {
+                                const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
+                                setAttachmentUrl(publicUrl);
+                                await updateTask.mutateAsync({ id: task.id, attachment_url: publicUrl } as any);
+                                await addHistory.mutateAsync({ task_id: task.id, action: 'Arte enviada por upload', details: file.name, user_id: user?.id });
+                                toast.success('Arte enviada com sucesso! 🎉');
+                              } catch (err: any) { toast.error(err.message || 'Erro ao enviar arquivo'); }
+                              finally { setUploadingArt(false); }
+                            }}
+                          >
                             <input type="file" accept="image/*,.pdf,.ai,.psd,.svg,.eps" className="hidden" onChange={async (e) => {
                               const file = e.target.files?.[0];
                               if (!file) return;
@@ -776,18 +795,24 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                                 setAttachmentUrl(publicUrl);
                                 await updateTask.mutateAsync({ id: task.id, attachment_url: publicUrl } as any);
                                 await addHistory.mutateAsync({ task_id: task.id, action: 'Arte enviada por upload', details: file.name, user_id: user?.id });
-                                toast.success('Arte enviada com sucesso!');
+                                toast.success('Arte enviada com sucesso! 🎉');
                               } catch (err: any) { toast.error(err.message || 'Erro ao enviar arquivo'); }
                               finally { setUploadingArt(false); }
                             }} />
                             {uploadingArt ? (
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <Loader2 size={16} className="animate-spin" /> Enviando...
+                              <div className="flex flex-col items-center gap-2">
+                                <Loader2 size={28} className="animate-spin text-violet-500" />
+                                <p className="text-xs font-medium text-violet-600">Enviando arte...</p>
                               </div>
                             ) : (
                               <>
-                                <Upload size={20} className="text-muted-foreground/50" />
-                                <p className="text-xs text-muted-foreground">Clique para selecionar ou arraste o arquivo</p>
+                                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center">
+                                  <Upload size={24} className="text-violet-500" />
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-sm font-semibold text-violet-700 dark:text-violet-300">Arraste a arte aqui</p>
+                                  <p className="text-xs text-muted-foreground mt-1">ou clique para selecionar</p>
+                                </div>
                                 <p className="text-[10px] text-muted-foreground/60">JPG, PNG, SVG, PDF, AI, PSD, EPS</p>
                               </>
                             )}

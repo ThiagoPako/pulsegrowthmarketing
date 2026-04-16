@@ -100,7 +100,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const currentCol = DESIGN_COLUMNS.find(c => c.key === task.kanban_column);
   const isDesigner = currentUser?.role === 'fotografo' || currentUser?.role === 'designer' || currentUser?.role === 'admin';
   const isSocialMedia = currentUser?.role === 'social_media' || currentUser?.role === 'admin';
-  const canDelete = currentUser?.role === 'admin';
+  const canDelete = currentUser?.role === 'admin' || currentUser?.role === 'social_media';
 
   useEffect(() => {
     if (!task.started_at) { setElapsedDisplay(''); return; }

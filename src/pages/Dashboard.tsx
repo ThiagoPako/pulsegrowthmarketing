@@ -1295,6 +1295,9 @@ export default function Dashboard() {
             ))}
           </div>
         )}
+
+        {/* Mural do Desabafo */}
+        <MuralDesabafo />
       </div>
     </div>
   );

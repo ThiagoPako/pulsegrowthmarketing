@@ -130,14 +130,19 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
 
   const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     e.stopPropagation();
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
     setUploading(true);
     try {
-      const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
-      await updateTask.mutateAsync({ id: task.id, attachment_url: publicUrl } as any);
-      await addHistory.mutateAsync({ task_id: task.id, action: 'Arte anexada', details: file.name, user_id: user?.id });
-      toast.success('Arte anexada! 🎉');
+      const existing: string[] = (task as any).attachment_urls || [];
+      const newUrls = [...existing];
+      for (const file of files) {
+        const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
+        newUrls.push(publicUrl);
+        await addHistory.mutateAsync({ task_id: task.id, action: 'Arte anexada', details: file.name, user_id: user?.id });
+      }
+      await updateTask.mutateAsync({ id: task.id, attachment_urls: newUrls, attachment_url: newUrls[0] || task.attachment_url } as any);
+      toast.success(`${files.length} arte(s) anexada(s)! 🎉`);
       setShowArtInput(false);
     } catch (err: any) {
       toast.error(err.message || 'Erro ao enviar arquivo');
@@ -179,7 +184,8 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
   const isNew = task.kanban_column === 'nova_tarefa';
   const isExecuting = task.kanban_column === 'executando';
   const isAdjustment = task.kanban_column === 'ajustes';
-  const hasArt = !!task.attachment_url;
+  const artCount = ((task as any).attachment_urls?.length || 0) + (task.attachment_url && !((task as any).attachment_urls || []).includes(task.attachment_url) ? 1 : 0);
+  const hasArt = artCount > 0 || !!task.attachment_url;
   const colInfo = COL_LABELS[task.kanban_column] || { label: task.kanban_column, emoji: '📋' };
 
   return (
@@ -354,7 +360,7 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
             </Badge>
             {hasArt && (
               <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200/50 text-[9px] rounded-full px-2">
-                <CheckCircle size={8} className="mr-0.5" /> Arte ✓
+                <CheckCircle size={8} className="mr-0.5" /> {artCount > 1 ? `${artCount} Artes ✓` : 'Arte ✓'}
               </Badge>
             )}
           </div>
@@ -412,7 +418,7 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
               {/* Quick upload button directly on card */}
               {(isExecuting || isAdjustment) && !hasArt && (
                 <>
-                  <input ref={fileRef} type="file" accept="image/*,.pdf,.ai,.psd,.svg,.eps" className="hidden" onChange={handleUploadFile} />
+                  <input ref={fileRef} type="file" accept="image/*,.pdf,.ai,.psd,.svg,.eps" multiple className="hidden" onChange={handleUploadFile} />
                   <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                     <Button
                       size="sm"
@@ -442,9 +448,23 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
                 <>
                   <a href={task.attachment_url!} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
                     <Button size="sm" variant="outline" className="h-9 text-xs gap-2 rounded-xl border-emerald-300/60 text-emerald-600 font-semibold">
-                      <Eye size={13} /> Ver Arte 🎨
+                      <Eye size={13} /> Ver Arte{artCount > 1 ? `s (${artCount})` : ''} 🎨
                     </Button>
                   </a>
+                  {/* Allow adding more arts even when some exist */}
+                  <input ref={fileRef} type="file" accept="image/*,.pdf,.ai,.psd,.svg,.eps" multiple className="hidden" onChange={handleUploadFile} />
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 text-xs gap-2 rounded-xl border-violet-300/60 text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 font-semibold"
+                      disabled={uploading}
+                      onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
+                    >
+                      {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                      + Arte
+                    </Button>
+                  </motion.div>
                   <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="ml-auto">
                     <Button
                       size="sm"

@@ -59,6 +59,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const { user } = useAuth();
   const [observations, setObservations] = useState(task.observations || '');
   const [attachmentUrl, setAttachmentUrl] = useState(task.attachment_url || '');
+  const [attachmentUrls, setAttachmentUrls] = useState<string[]>((task as any).attachment_urls || []);
   const [editableFileUrl, setEditableFileUrl] = useState(task.editable_file_url || '');
   const [mockupUrl, setMockupUrl] = useState((task as any).mockup_url || '');
   const [adjustmentNotes, setAdjustmentNotes] = useState('');
@@ -90,10 +91,11 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   useEffect(() => {
     setObservations(task.observations || '');
     setAttachmentUrl(task.attachment_url || '');
+    setAttachmentUrls((task as any).attachment_urls || []);
     setEditableFileUrl(task.editable_file_url || '');
     setMockupUrl((task as any).mockup_url || '');
     setChecklist((task as any).checklist || []);
-  }, [task.id, task.kanban_column, task.observations, task.attachment_url, task.editable_file_url, (task as any).mockup_url]);
+  }, [task.id, task.kanban_column, task.observations, task.attachment_url, task.editable_file_url, (task as any).mockup_url, (task as any).attachment_urls]);
 
   const taskCategory = getTaskCategory(task);
   const hasChecklist = taskCategory !== 'normal';
@@ -778,60 +780,113 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                         </div>
                       ) : (
                         <div>
-                          <Label className="text-[10px] text-muted-foreground uppercase">Upload da arte</Label>
-                          {attachmentUrl && /\.(jpg|jpeg|png|gif|webp|svg|bmp|pdf)(\?|$)/i.test(attachmentUrl) && (
+                          <Label className="text-[10px] text-muted-foreground uppercase">Upload de artes (múltiplas)</Label>
+
+                          {/* Already uploaded arts gallery */}
+                          {attachmentUrls.length > 0 && (
+                            <div className="mt-2 mb-3 space-y-2">
+                              <p className="text-[10px] text-muted-foreground font-medium">{attachmentUrls.length} arte(s) enviada(s)</p>
+                              <div className="grid grid-cols-3 gap-2">
+                                {attachmentUrls.map((url, idx) => {
+                                  const isImg = /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(url);
+                                  return (
+                                    <div key={idx} className="relative group/art rounded-lg overflow-hidden border border-border">
+                                      {isImg ? (
+                                        <button onClick={() => setPreviewImage(url)} className="w-full">
+                                          <img src={url} alt={`Arte ${idx + 1}`} className="w-full h-20 object-cover bg-muted/30" />
+                                          <div className="absolute inset-0 bg-black/0 group-hover/art:bg-black/20 transition-colors flex items-center justify-center">
+                                            <ZoomIn size={14} className="text-white opacity-0 group-hover/art:opacity-100 transition-opacity" />
+                                          </div>
+                                        </button>
+                                      ) : (
+                                        <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center h-20 bg-muted/30 text-xs text-primary hover:underline">
+                                          <Eye size={12} className="mr-1" /> Arte {idx + 1}
+                                        </a>
+                                      )}
+                                      <button
+                                        onClick={async () => {
+                                          const updated = attachmentUrls.filter((_, i) => i !== idx);
+                                          setAttachmentUrls(updated);
+                                          await updateTask.mutateAsync({ id: task.id, attachment_urls: updated, attachment_url: updated[0] || null } as any);
+                                          await addHistory.mutateAsync({ task_id: task.id, action: `Arte ${idx + 1} removida`, user_id: user?.id });
+                                          toast.success('Arte removida');
+                                        }}
+                                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-destructive/90 text-white flex items-center justify-center opacity-0 group-hover/art:opacity-100 transition-opacity"
+                                      >
+                                        <X size={10} />
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Single attached art (legacy) */}
+                          {attachmentUrl && !attachmentUrls.includes(attachmentUrl) && /\.(jpg|jpeg|png|gif|webp|svg|bmp|pdf)(\?|$)/i.test(attachmentUrl) && (
                             <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 mt-1 mb-2">
                               <CheckCircle size={14} className="text-emerald-600 shrink-0" />
-                              <span className="text-xs text-muted-foreground truncate flex-1">Arquivo enviado</span>
+                              <span className="text-xs text-muted-foreground truncate flex-1">Arte principal</span>
                               <a href={attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">Ver</a>
                             </div>
                           )}
+
                           <label
-                            className="mt-1 flex flex-col items-center justify-center gap-3 p-8 rounded-xl border-2 border-dashed border-violet-300/60 hover:border-violet-500 cursor-pointer transition-all bg-gradient-to-br from-violet-50/40 to-fuchsia-50/30 dark:from-violet-950/20 dark:to-fuchsia-950/10 hover:from-violet-50/80 hover:to-fuchsia-50/60 hover:shadow-lg hover:shadow-violet-200/20"
+                            className="mt-1 flex flex-col items-center justify-center gap-3 p-6 rounded-xl border-2 border-dashed border-violet-300/60 hover:border-violet-500 cursor-pointer transition-all bg-gradient-to-br from-violet-50/40 to-fuchsia-50/30 dark:from-violet-950/20 dark:to-fuchsia-950/10 hover:from-violet-50/80 hover:to-fuchsia-50/60 hover:shadow-lg hover:shadow-violet-200/20"
                             onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-violet-500', 'bg-violet-100/50'); }}
                             onDragLeave={(e) => { e.currentTarget.classList.remove('border-violet-500', 'bg-violet-100/50'); }}
                             onDrop={async (e) => {
                               e.preventDefault();
                               e.currentTarget.classList.remove('border-violet-500', 'bg-violet-100/50');
-                              const file = e.dataTransfer.files?.[0];
-                              if (!file) return;
+                              const files = Array.from(e.dataTransfer.files);
+                              if (!files.length) return;
                               setUploadingArt(true);
                               try {
-                                const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
-                                setAttachmentUrl(publicUrl);
-                                await updateTask.mutateAsync({ id: task.id, attachment_url: publicUrl } as any);
-                                await addHistory.mutateAsync({ task_id: task.id, action: 'Arte enviada por upload', details: file.name, user_id: user?.id });
-                                toast.success('Arte enviada com sucesso! 🎉');
+                                const newUrls = [...attachmentUrls];
+                                for (const file of files) {
+                                  const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
+                                  newUrls.push(publicUrl);
+                                  await addHistory.mutateAsync({ task_id: task.id, action: 'Arte enviada por upload', details: file.name, user_id: user?.id });
+                                }
+                                setAttachmentUrls(newUrls);
+                                const primary = newUrls[0] || attachmentUrl;
+                                await updateTask.mutateAsync({ id: task.id, attachment_urls: newUrls, attachment_url: primary } as any);
+                                toast.success(`${files.length} arte(s) enviada(s) com sucesso! 🎉`);
                               } catch (err: any) { toast.error(err.message || 'Erro ao enviar arquivo'); }
                               finally { setUploadingArt(false); }
                             }}
                           >
-                            <input type="file" accept="image/*,.pdf,.ai,.psd,.svg,.eps" className="hidden" onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
+                            <input type="file" accept="image/*,.pdf,.ai,.psd,.svg,.eps" multiple className="hidden" onChange={async (e) => {
+                              const files = Array.from(e.target.files || []);
+                              if (!files.length) return;
                               setUploadingArt(true);
                               try {
-                                const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
-                                setAttachmentUrl(publicUrl);
-                                await updateTask.mutateAsync({ id: task.id, attachment_url: publicUrl } as any);
-                                await addHistory.mutateAsync({ task_id: task.id, action: 'Arte enviada por upload', details: file.name, user_id: user?.id });
-                                toast.success('Arte enviada com sucesso! 🎉');
+                                const newUrls = [...attachmentUrls];
+                                for (const file of files) {
+                                  const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
+                                  newUrls.push(publicUrl);
+                                  await addHistory.mutateAsync({ task_id: task.id, action: 'Arte enviada por upload', details: file.name, user_id: user?.id });
+                                }
+                                setAttachmentUrls(newUrls);
+                                const primary = newUrls[0] || attachmentUrl;
+                                await updateTask.mutateAsync({ id: task.id, attachment_urls: newUrls, attachment_url: primary } as any);
+                                toast.success(`${files.length} arte(s) enviada(s) com sucesso! 🎉`);
                               } catch (err: any) { toast.error(err.message || 'Erro ao enviar arquivo'); }
                               finally { setUploadingArt(false); }
                             }} />
                             {uploadingArt ? (
                               <div className="flex flex-col items-center gap-2">
                                 <Loader2 size={28} className="animate-spin text-violet-500" />
-                                <p className="text-xs font-medium text-violet-600">Enviando arte...</p>
+                                <p className="text-xs font-medium text-violet-600">Enviando arte(s)...</p>
                               </div>
                             ) : (
                               <>
-                                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center">
-                                  <Upload size={24} className="text-violet-500" />
+                                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center">
+                                  <Upload size={20} className="text-violet-500" />
                                 </div>
                                 <div className="text-center">
-                                  <p className="text-sm font-semibold text-violet-700 dark:text-violet-300">Arraste a arte aqui</p>
-                                  <p className="text-xs text-muted-foreground mt-1">ou clique para selecionar</p>
+                                  <p className="text-sm font-semibold text-violet-700 dark:text-violet-300">Arraste as artes aqui</p>
+                                  <p className="text-xs text-muted-foreground mt-1">ou clique para selecionar (múltiplos arquivos)</p>
                                 </div>
                                 <p className="text-[10px] text-muted-foreground/60">JPG, PNG, SVG, PDF, AI, PSD, EPS</p>
                               </>
@@ -849,19 +904,41 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                         <Textarea value={observations} onChange={e => setObservations(e.target.value)} rows={3} className="text-xs mt-1" />
                       </div>
                     </div>
-                  ) : task.attachment_url ? (
+                  ) : (task.attachment_url || ((task as any).attachment_urls?.length > 0)) ? (
                     <div className="space-y-2">
-                      {/\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(task.attachment_url) ? (
-                        <button onClick={() => setPreviewImage(task.attachment_url!)} className="relative group rounded-lg overflow-hidden border border-border w-full hover:ring-2 hover:ring-primary/50 transition-all">
-                          <img src={task.attachment_url} alt="Arte" className="w-full max-h-48 object-contain bg-muted/30" />
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                            <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </div>
-                        </button>
-                      ) : (
-                        <a href={task.attachment_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-sm text-primary">
-                          <Eye size={14} /> Ver arte anexada
-                        </a>
+                      {/* Show all arts gallery */}
+                      {((task as any).attachment_urls?.length > 0) ? (
+                        <div className="grid grid-cols-2 gap-2">
+                          {(task as any).attachment_urls.map((url: string, idx: number) => {
+                            const isImg = /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(url);
+                            return isImg ? (
+                              <button key={idx} onClick={() => setPreviewImage(url)} className="relative group rounded-lg overflow-hidden border border-border hover:ring-2 hover:ring-primary/50 transition-all">
+                                <img src={url} alt={`Arte ${idx + 1}`} className="w-full h-24 object-cover bg-muted/30" />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                  <ZoomIn size={16} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </div>
+                                <span className="absolute bottom-1 left-1 text-[9px] bg-black/60 text-white px-1.5 py-0.5 rounded">{idx + 1}</span>
+                              </button>
+                            ) : (
+                              <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-xs text-primary">
+                                <Eye size={14} /> Arte {idx + 1}
+                              </a>
+                            );
+                          })}
+                        </div>
+                      ) : task.attachment_url && (
+                        /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(task.attachment_url) ? (
+                          <button onClick={() => setPreviewImage(task.attachment_url!)} className="relative group rounded-lg overflow-hidden border border-border w-full hover:ring-2 hover:ring-primary/50 transition-all">
+                            <img src={task.attachment_url} alt="Arte" className="w-full max-h-48 object-contain bg-muted/30" />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                              <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                          </button>
+                        ) : (
+                          <a href={task.attachment_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-sm text-primary">
+                            <Eye size={14} /> Ver arte anexada
+                          </a>
+                        )
                       )}
                     </div>
                   ) : (

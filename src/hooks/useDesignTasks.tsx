@@ -25,6 +25,7 @@ export interface DesignTask {
   references_links: string[];
   reference_images: string[];
   attachment_url: string | null;
+  attachment_urls: string[];
   editable_file_url: string | null;
   observations: string | null;
   created_by: string | null;

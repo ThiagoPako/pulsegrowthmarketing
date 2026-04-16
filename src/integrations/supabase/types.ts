@@ -1348,6 +1348,7 @@ export type Database = {
         Row: {
           assigned_to: string | null
           attachment_url: string | null
+          attachment_urls: string[]
           auto_approved: boolean
           checklist: Json | null
           client_approved_at: string | null
@@ -1378,6 +1379,7 @@ export type Database = {
         Insert: {
           assigned_to?: string | null
           attachment_url?: string | null
+          attachment_urls?: string[]
           auto_approved?: boolean
           checklist?: Json | null
           client_approved_at?: string | null
@@ -1408,6 +1410,7 @@ export type Database = {
         Update: {
           assigned_to?: string | null
           attachment_url?: string | null
+          attachment_urls?: string[]
           auto_approved?: boolean
           checklist?: Json | null
           client_approved_at?: string | null

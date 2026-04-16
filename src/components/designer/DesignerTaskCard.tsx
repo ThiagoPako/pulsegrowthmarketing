@@ -458,7 +458,7 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
               )}
             </div>
 
-            {/* Art input */}
+            {/* Link input area */}
             <AnimatePresence>
               {showArtInput && !hasArt && (
                 <motion.div
@@ -476,18 +476,6 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
                   />
                   <Button size="sm" variant="secondary" className="h-9 text-xs gap-1.5 rounded-xl" onClick={handleSaveLink}>
                     <Link2 size={12} /> Salvar
-                  </Button>
-                  <span className="text-pink-300 text-xs">ou</span>
-                  <input ref={fileRef} type="file" accept="image/*,.pdf,.ai,.psd,.svg,.eps" className="hidden" onChange={handleUploadFile} />
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="h-9 text-xs gap-1.5 rounded-xl"
-                    disabled={uploading}
-                    onClick={() => fileRef.current?.click()}
-                  >
-                    {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                    {uploading ? 'Enviando...' : 'Upload'}
                   </Button>
                 </motion.div>
               )}

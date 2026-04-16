@@ -448,9 +448,23 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
                 <>
                   <a href={task.attachment_url!} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
                     <Button size="sm" variant="outline" className="h-9 text-xs gap-2 rounded-xl border-emerald-300/60 text-emerald-600 font-semibold">
-                      <Eye size={13} /> Ver Arte 🎨
+                      <Eye size={13} /> Ver Arte{artCount > 1 ? `s (${artCount})` : ''} 🎨
                     </Button>
                   </a>
+                  {/* Allow adding more arts even when some exist */}
+                  <input ref={fileRef} type="file" accept="image/*,.pdf,.ai,.psd,.svg,.eps" multiple className="hidden" onChange={handleUploadFile} />
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 text-xs gap-2 rounded-xl border-violet-300/60 text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 font-semibold"
+                      disabled={uploading}
+                      onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
+                    >
+                      {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                      + Arte
+                    </Button>
+                  </motion.div>
                   <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="ml-auto">
                     <Button
                       size="sm"

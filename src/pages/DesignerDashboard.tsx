@@ -345,15 +345,15 @@ export default function DesignerDashboard() {
             <p className="text-xs text-muted-foreground mt-1">Nenhuma tarefa pendente. Aproveite o momento ☕</p>
           </motion.div>
         ) : (
-          <ScrollArea className="max-h-[520px]">
-            <div className="space-y-3 pr-2">
+          <div className="max-h-[480px] overflow-y-auto pr-1 rounded-lg" style={{ scrollbarWidth: 'thin', scrollbarColor: 'hsl(var(--violet-500, 270 60% 50%) / 0.3) transparent' }}>
+            <div className="space-y-3">
               <AnimatePresence mode="popLayout">
                 {queueTasks.map((task, i) => (
                   <DesignerTaskCard key={task.id} task={task} index={i} onOpenDetail={setSelectedTaskId} />
                 ))}
               </AnimatePresence>
             </div>
-          </ScrollArea>
+          </div>
         )}
       </motion.div>
 

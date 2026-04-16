@@ -68,6 +68,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [uploadingArt, setUploadingArt] = useState(false);
   const [artInputMode, setArtInputMode] = useState<'link' | 'upload'>('link');
   const [showAdjustmentForm, setShowAdjustmentForm] = useState(false);
+  const [editingCopy, setEditingCopy] = useState(false);
+  const [copyText, setCopyText] = useState(task.copy_text || '');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [movingAction, setMovingAction] = useState<string | null>(null);
   const [stageAnimKey, setStageAnimKey] = useState(0);

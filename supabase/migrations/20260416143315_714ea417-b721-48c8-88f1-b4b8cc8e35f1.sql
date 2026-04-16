@@ -1,0 +1,1 @@
+ALTER TABLE public.design_tasks ADD COLUMN IF NOT EXISTS attachment_urls TEXT[] NOT NULL DEFAULT '{}';

@@ -388,18 +388,31 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                     </div>
                   )}
 
-                  {/* References */}
+                  {/* References with image preview */}
                   {task.references_links?.length > 0 && (
                     <div className="rounded-lg border border-border p-3">
                       <Label className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-2">
                         <Link2 size={10} /> Referências
                       </Label>
-                      <div className="space-y-1.5">
-                        {task.references_links.map((link, i) => (
-                          <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1.5 hover:underline break-all">
-                            <ExternalLink size={11} className="shrink-0" /> {link}
-                          </a>
-                        ))}
+                      <div className="space-y-2">
+                        {task.references_links.map((link, i) => {
+                          const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(link);
+                          return (
+                            <div key={i}>
+                              <a href={link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1.5 hover:underline break-all">
+                                <ExternalLink size={11} className="shrink-0" /> {link}
+                              </a>
+                              {isImage && (
+                                <button onClick={() => setPreviewImage(link)} className="mt-1 relative group rounded-lg overflow-hidden border border-border w-full max-h-32 hover:ring-2 hover:ring-primary/50 transition-all">
+                                  <img src={link} alt={`Ref ${i + 1}`} className="w-full max-h-32 object-contain bg-muted/30" />
+                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                    <ZoomIn size={16} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                  </div>
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

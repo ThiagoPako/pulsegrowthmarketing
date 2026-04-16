@@ -154,13 +154,39 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   };
 
   const handleSendToClient = async () => {
+    const fileUrl = attachmentUrl || task.attachment_url;
+    
+    // Send art to client portal for approval (like videos)
+    if (fileUrl && task.client_id) {
+      try {
+        const now = new Date();
+        await supabase.from('client_portal_contents').insert({
+          client_id: task.client_id,
+          title: `Arte: ${task.title}`,
+          content_type: 'arte',
+          file_url: fileUrl,
+          thumbnail_url: /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(fileUrl) ? fileUrl : null,
+          status: 'pendente',
+          season_month: now.getMonth() + 1,
+          season_year: now.getFullYear(),
+          uploaded_by: user?.id,
+        } as any);
+        
+        // Notify client in portal
+        await supabase.from('client_portal_notifications').insert({
+          client_id: task.client_id,
+          title: 'Nova arte para aprovação',
+          message: `A arte "${task.title}" está pronta para sua aprovação.`,
+          type: 'design',
+        } as any);
+      } catch (err) { console.error('Portal insert error:', err); }
+    }
+
     try {
-      const fileUrl = attachmentUrl || task.attachment_url;
       const clientName = task.clients?.responsible_person || task.clients?.company_name;
-      const msg = `Olá, ${clientName}! 🎨\n\nSegue a arte criada para sua empresa. Pode nos confirmar se está aprovado?`;
+      const msg = `Olá, ${clientName}! 🎨\n\nSegue a arte criada para sua empresa. Pode nos confirmar se está aprovado?\n\nVocê também pode aprovar pelo Portal do Cliente.`;
 
       if (fileUrl && task.clients?.whatsapp) {
-        // Send as media attachment (image) via edge function
         const fileName = fileUrl.split('/').pop() || 'arte.png';
         const result = await sendWhatsAppMediaMessage({
           number: task.clients.whatsapp,
@@ -175,7 +201,6 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           toast.error('Erro ao enviar arte: ' + (result.error || 'erro desconhecido'));
         }
       } else if (task.clients?.whatsapp) {
-        // Fallback: text-only
         await sendWhatsAppMessage({
           number: task.clients.whatsapp,
           message: msg,
@@ -185,13 +210,27 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
       }
     } catch (err) { console.error('WhatsApp send error:', err); }
     await updateTask.mutateAsync({ id: task.id, sent_to_client_at: new Date().toISOString() } as any);
-    await addHistory.mutateAsync({ task_id: task.id, action: 'Enviado para cliente via WhatsApp', user_id: user?.id });
-    toast.success('Arte enviada ao cliente!');
+    await addHistory.mutateAsync({ task_id: task.id, action: 'Enviado para cliente via WhatsApp + Portal', user_id: user?.id });
+    toast.success('Arte enviada ao cliente e adicionada ao Portal!');
   };
 
   const handleClientApproval = async () => {
     await updateTask.mutateAsync({ id: task.id, kanban_column: 'aprovado', client_approved_at: new Date().toISOString(), completed_at: new Date().toISOString() } as any);
     await addHistory.mutateAsync({ task_id: task.id, action: 'Aprovado pelo cliente', user_id: user?.id });
+
+    // Update portal content status to approved
+    if (task.client_id) {
+      const { data: portalContents } = await supabase
+        .from('client_portal_contents')
+        .select('id')
+        .eq('client_id', task.client_id)
+        .ilike('title', `%${task.title}%`)
+        .eq('status', 'pendente')
+        .limit(1);
+      if (portalContents && portalContents.length > 0) {
+        await supabase.from('client_portal_contents').update({ status: 'aprovado', approved_at: new Date().toISOString() }).eq('id', portalContents[0].id);
+      }
+    }
 
     // Auto-fill client drive_identidade_visual when logomarca is approved
     if (task.format_type === 'logomarca' && task.client_id) {

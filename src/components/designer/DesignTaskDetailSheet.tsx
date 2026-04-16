@@ -98,8 +98,9 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const showMockup = taskCategory === 'identidade_visual' || taskCategory === 'reformulacao';
   const history = historyQuery(task.id);
   const currentCol = DESIGN_COLUMNS.find(c => c.key === task.kanban_column);
-  const isDesigner = currentUser?.role === 'fotografo' || currentUser?.role === 'admin';
+  const isDesigner = currentUser?.role === 'fotografo' || currentUser?.role === 'designer' || currentUser?.role === 'admin';
   const isSocialMedia = currentUser?.role === 'social_media' || currentUser?.role === 'admin';
+  const canDelete = currentUser?.role === 'admin';
 
   useEffect(() => {
     if (!task.started_at) { setElapsedDisplay(''); return; }

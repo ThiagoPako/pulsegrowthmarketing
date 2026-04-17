@@ -51,11 +51,18 @@ export default function DiscountClub() {
   const [phone, setPhone] = useState('');
   const [claimedCoupon, setClaimedCoupon] = useState<ClaimedCoupon | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [, setTick] = useState(0);
 
   useEffect(() => {
     if (!clientId) return;
     loadCampaigns();
   }, [clientId]);
+
+  // Live countdown tick every second
+  useEffect(() => {
+    const i = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(i);
+  }, []);
 
   const loadCampaigns = async () => {
     try {

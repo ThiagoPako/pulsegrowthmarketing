@@ -20,6 +20,20 @@ interface Campaign {
   company_name: string;
   logo_url: string | null;
   color: string;
+  expires_at: string | null;
+}
+
+function getCountdown(expiresAt: string | null) {
+  if (!expiresAt) return null;
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  if (diff <= 0) return { expired: true, d: 0, h: 0, m: 0, s: 0 };
+  return {
+    expired: false,
+    d: Math.floor(diff / 86400000),
+    h: Math.floor((diff % 86400000) / 3600000),
+    m: Math.floor((diff % 3600000) / 60000),
+    s: Math.floor((diff % 60000) / 1000),
+  };
 }
 
 interface ClaimedCoupon {
@@ -37,11 +51,18 @@ export default function DiscountClub() {
   const [phone, setPhone] = useState('');
   const [claimedCoupon, setClaimedCoupon] = useState<ClaimedCoupon | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [, setTick] = useState(0);
 
   useEffect(() => {
     if (!clientId) return;
     loadCampaigns();
   }, [clientId]);
+
+  // Live countdown tick every second
+  useEffect(() => {
+    const i = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(i);
+  }, []);
 
   const loadCampaigns = async () => {
     try {
@@ -213,8 +234,40 @@ export default function DiscountClub() {
                   </span>
                 </div>
 
-                {/* Claim area */}
-                {camp.available_coupons > 0 && !isRegistering && (
+                {/* Countdown timer */}
+                {(() => {
+                  const cd = getCountdown(camp.expires_at);
+                  if (!cd) return null;
+                  if (cd.expired) {
+                    return (
+                      <div className="mt-4 py-2 px-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-center text-xs font-semibold text-rose-300">
+                        ⏱ Promoção encerrada
+                      </div>
+                    );
+                  }
+                  const Box = ({ v, l }: { v: number; l: string }) => (
+                    <div className="flex flex-col items-center bg-white/[0.06] border border-white/[0.08] rounded-lg px-2.5 py-1.5 min-w-[44px]">
+                      <span className="text-base font-bold tabular-nums" style={{ color: `hsl(${clientColor})` }}>
+                        {String(v).padStart(2, '0')}
+                      </span>
+                      <span className="text-[9px] uppercase tracking-wider text-white/40">{l}</span>
+                    </div>
+                  );
+                  return (
+                    <div className="mt-4">
+                      <p className="text-[10px] uppercase tracking-wider text-white/40 mb-2 text-center">⏱ Termina em</p>
+                      <div className="flex items-center justify-center gap-1.5">
+                        {cd.d > 0 && <Box v={cd.d} l="dias" />}
+                        <Box v={cd.h} l="hrs" />
+                        <Box v={cd.m} l="min" />
+                        <Box v={cd.s} l="seg" />
+                      </div>
+                    </div>
+                  );
+                })()}
+
+
+                {camp.available_coupons > 0 && !isRegistering && !getCountdown(camp.expires_at)?.expired && (
                   <button
                     onClick={() => { setShowRegister(camp.id); setName(''); setPhone(''); }}
                     className="w-full mt-4 py-3 rounded-xl font-semibold text-sm text-white transition-all hover:scale-[1.02] active:scale-[0.98]"

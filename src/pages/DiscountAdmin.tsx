@@ -29,6 +29,19 @@ interface Campaign {
   coupons_claimed: number;
   is_active: boolean;
   created_at: string;
+  expires_at: string | null;
+}
+
+function formatCountdown(expiresAt: string | null): { label: string; expired: boolean } {
+  if (!expiresAt) return { label: 'Sem prazo', expired: false };
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  if (diff <= 0) return { label: 'Expirado', expired: true };
+  const days = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff % 86400000) / 3600000);
+  const mins = Math.floor((diff % 3600000) / 60000);
+  if (days > 0) return { label: `${days}d ${hours}h restantes`, expired: false };
+  if (hours > 0) return { label: `${hours}h ${mins}m restantes`, expired: false };
+  return { label: `${mins}m restantes`, expired: false };
 }
 
 export default function DiscountAdmin() {
@@ -47,6 +60,14 @@ export default function DiscountAdmin() {
   const [discountValue, setDiscountValue] = useState('');
   const [minPurchase, setMinPurchase] = useState('');
   const [totalCoupons, setTotalCoupons] = useState('10');
+  const [durationDays, setDurationDays] = useState('7');
+  const [, setTick] = useState(0);
+
+  // Re-render every 60s to update countdowns
+  useEffect(() => {
+    const i = setInterval(() => setTick(t => t + 1), 60000);
+    return () => clearInterval(i);
+  }, []);
 
   useEffect(() => {
     if (authLoading) return;
@@ -102,6 +123,8 @@ export default function DiscountAdmin() {
     }
     setCreating(true);
     try {
+      const days = durationDays ? parseInt(durationDays) : 0;
+      const expiresAt = days > 0 ? new Date(Date.now() + days * 86400000).toISOString() : null;
       const res = await fetch(`${VPS_API}/discount-campaigns`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -113,6 +136,7 @@ export default function DiscountAdmin() {
           discount_value: parseFloat(discountValue),
           min_purchase_value: minPurchase ? parseFloat(minPurchase) : 0,
           total_coupons: parseInt(totalCoupons),
+          expires_at: expiresAt,
           created_by: user?.id,
         }),
       });
@@ -151,6 +175,7 @@ export default function DiscountAdmin() {
     setDiscountValue('');
     setMinPurchase('');
     setTotalCoupons('10');
+    setDurationDays('7');
   };
 
   const copyLink = (clientId: string) => {
@@ -276,6 +301,14 @@ export default function DiscountAdmin() {
                       <p className="text-xs text-muted-foreground">
                         {client?.company_name} • {discountLabel} • {camp.coupons_claimed}/{camp.total_coupons} resgatados
                       </p>
+                      {(() => {
+                        const c = formatCountdown(camp.expires_at);
+                        return (
+                          <p className={`text-[11px] mt-0.5 font-medium ${c.expired ? 'text-rose-500' : camp.expires_at ? 'text-amber-500' : 'text-muted-foreground/60'}`}>
+                            ⏱ {c.label}
+                          </p>
+                        );
+                      })()}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

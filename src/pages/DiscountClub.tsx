@@ -267,7 +267,7 @@ export default function DiscountClub() {
                 })()}
 
 
-                {camp.available_coupons > 0 && !isRegistering && (
+                {camp.available_coupons > 0 && !isRegistering && !getCountdown(camp.expires_at)?.expired && (
                   <button
                     onClick={() => { setShowRegister(camp.id); setName(''); setPhone(''); }}
                     className="w-full mt-4 py-3 rounded-xl font-semibold text-sm text-white transition-all hover:scale-[1.02] active:scale-[0.98]"

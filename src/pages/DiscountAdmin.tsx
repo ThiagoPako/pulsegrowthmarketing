@@ -259,6 +259,21 @@ export default function DiscountAdmin() {
                   <Input type="number" value={totalCoupons} onChange={e => setTotalCoupons(e.target.value)} placeholder="10" />
                 </div>
               </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block flex items-center gap-1">
+                  ⏱ Duração (dias)
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={durationDays}
+                  onChange={e => setDurationDays(e.target.value)}
+                  placeholder="7"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Tempo de validade da campanha. Use 0 para sem prazo.
+                </p>
+              </div>
               <Button onClick={handleCreate} disabled={creating} className="w-full gap-2">
                 {creating ? <Loader2 size={14} className="animate-spin" /> : <Gift size={14} />}
                 Criar Campanha

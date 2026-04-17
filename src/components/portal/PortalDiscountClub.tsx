@@ -64,10 +64,17 @@ export default function PortalDiscountClub({ clientId, clientColor }: Props) {
   const [verifying, setVerifying] = useState(false);
   const [saleValue, setSaleValue] = useState('');
   const [verifyResult, setVerifyResult] = useState<{ valid: boolean; coupon?: any; error?: string } | null>(null);
+  const [, setTick] = useState(0);
 
   useEffect(() => {
     loadStats();
   }, [clientId]);
+
+  // Live countdown update every minute
+  useEffect(() => {
+    const i = setInterval(() => setTick(t => t + 1), 60000);
+    return () => clearInterval(i);
+  }, []);
 
   const loadStats = async () => {
     try {

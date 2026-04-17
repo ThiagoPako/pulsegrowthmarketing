@@ -22,8 +22,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History,
   Upload, Image, FileText, Palette, Info, User, Calendar, ArrowRight, X,
-  ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip, ZoomIn, Loader2, Trash2, Pencil
+  ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip, ZoomIn, Loader2, Trash2, Pencil, Download, FileDown, MoreVertical
 } from 'lucide-react';
+import { downloadSingleArt, downloadArtsAsPdf } from '@/lib/designerDownload';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 
 interface Props {
@@ -305,20 +307,67 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
               >
                 {currentCol?.label}
               </Badge>
-              {canDelete && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="h-7 px-2 text-xs gap-1"
-                  onClick={() => {
-                    if (window.confirm('Tem certeza que deseja excluir esta tarefa? Esta ação não pode ser desfeita.')) {
-                      deleteTask.mutateAsync(task.id).then(() => onOpenChange(false));
-                    }
-                  }}
-                >
-                  <Trash2 size={13} /> Excluir
-                </Button>
-              )}
+              {(() => {
+                const downloadable = [
+                  task.attachment_url,
+                  ...((task as any).attachment_urls || []),
+                  (task as any).mockup_url,
+                ].filter(Boolean) as string[];
+                const unique = Array.from(new Set(downloadable));
+                if (unique.length === 0 && !canDelete) return null;
+                return (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Mais ações">
+                        <MoreVertical size={15} />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      {unique.length === 1 && (
+                        <DropdownMenuItem onClick={() => downloadSingleArt(unique[0], task.title)}>
+                          <Download size={14} className="mr-2" /> Baixar arte
+                        </DropdownMenuItem>
+                      )}
+                      {unique.length > 1 && (
+                        <>
+                          <DropdownMenuItem
+                            onClick={async () => {
+                              for (let i = 0; i < unique.length; i++) {
+                                await downloadSingleArt(unique[i], `${task.title}-${i + 1}`);
+                              }
+                            }}
+                          >
+                            <Download size={14} className="mr-2" /> Baixar todas ({unique.length})
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() =>
+                              downloadArtsAsPdf(
+                                unique.map((url, i) => ({ url, title: `${task.title} ${i + 1}` })),
+                                task.title
+                              )
+                            }
+                          >
+                            <FileDown size={14} className="mr-2" /> Agrupar em PDF
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                      {canDelete && unique.length > 0 && <DropdownMenuSeparator />}
+                      {canDelete && (
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => {
+                            if (window.confirm('Tem certeza que deseja excluir esta tarefa? Esta ação não pode ser desfeita.')) {
+                              deleteTask.mutateAsync(task.id).then(() => onOpenChange(false));
+                            }
+                          }}
+                        >
+                          <Trash2 size={14} className="mr-2" /> Excluir tarefa
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                );
+              })()}
             </div>
           </div>
         </div>

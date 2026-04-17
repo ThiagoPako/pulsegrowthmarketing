@@ -123,6 +123,8 @@ export default function DiscountAdmin() {
     }
     setCreating(true);
     try {
+      const days = durationDays ? parseInt(durationDays) : 0;
+      const expiresAt = days > 0 ? new Date(Date.now() + days * 86400000).toISOString() : null;
       const res = await fetch(`${VPS_API}/discount-campaigns`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -134,6 +136,7 @@ export default function DiscountAdmin() {
           discount_value: parseFloat(discountValue),
           min_purchase_value: minPurchase ? parseFloat(minPurchase) : 0,
           total_coupons: parseInt(totalCoupons),
+          expires_at: expiresAt,
           created_by: user?.id,
         }),
       });

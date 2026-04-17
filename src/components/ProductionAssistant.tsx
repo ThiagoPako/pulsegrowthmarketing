@@ -199,8 +199,8 @@ export default function ProductionAssistant() {
     if (!user) return;
     const enabled = localStorage.getItem(ASSISTANT_KEY) !== 'false';
     if (!enabled) return;
-    const timer = setTimeout(() => checkProduction(), 3000);
-    intervalRef.current = setInterval(() => checkProduction(), 15 * 60 * 1000);
+    const timer = setTimeout(() => checkProduction(), 30000);
+    intervalRef.current = setInterval(() => checkProduction(), 60 * 60 * 1000);
     return () => {
       clearTimeout(timer);
       if (intervalRef.current) clearInterval(intervalRef.current);

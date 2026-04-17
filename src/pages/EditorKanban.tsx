@@ -350,7 +350,7 @@ export default function EditorKanban() {
   }, [fetchTasks]);
 
   const { profile } = useAuth();
-  const isEditorRole = profile?.role === 'editor';
+  const isEditorRole = profile?.role === 'editor' || profile?.role === 'videomaker';
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {

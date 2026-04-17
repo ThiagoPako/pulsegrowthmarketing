@@ -216,7 +216,7 @@ export default function EditorDashboard() {
    const [saving, setSaving] = useState(false);
    const [oldVideoLink, setOldVideoLink] = useState<string | null>(null);
    const fileInputRef = useRef<HTMLInputElement>(null);
-   const isEditorRole = profile?.role === 'editor';
+   const isEditorRole = profile?.role === 'editor' || profile?.role === 'videomaker';
 
    // Story upload state
    const [storyClientId, setStoryClientId] = useState('');

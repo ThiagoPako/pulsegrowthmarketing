@@ -56,6 +56,7 @@ export default function DiscountAdmin() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Form state
   const [selectedClient, setSelectedClient] = useState('');
@@ -136,32 +137,73 @@ export default function DiscountAdmin() {
         d.setHours(hh, mm, 0, 0);
         expiresAt = d.toISOString();
       }
-      const res = await fetch(`${VPS_API}/discount-campaigns`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_id: selectedClient,
-          title,
-          description,
-          discount_type: discountType,
-          discount_value: parseFloat(discountValue),
-          min_purchase_value: minPurchase ? parseFloat(minPurchase) : 0,
-          total_coupons: parseInt(totalCoupons),
-          expires_at: expiresAt,
-          created_by: user?.id,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      toast.success(`Campanha criada com ${data.coupons_generated} cupons!`);
+
+      if (editingId) {
+        // Update existing campaign
+        const res = await fetch(`${VPS_API}/discount-campaigns/${editingId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title,
+            description,
+            discount_type: discountType,
+            discount_value: parseFloat(discountValue),
+            min_purchase_value: minPurchase ? parseFloat(minPurchase) : 0,
+            total_coupons: parseInt(totalCoupons),
+            expires_at: expiresAt,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Erro ao atualizar');
+        toast.success('Campanha atualizada!');
+      } else {
+        const res = await fetch(`${VPS_API}/discount-campaigns`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_id: selectedClient,
+            title,
+            description,
+            discount_type: discountType,
+            discount_value: parseFloat(discountValue),
+            min_purchase_value: minPurchase ? parseFloat(minPurchase) : 0,
+            total_coupons: parseInt(totalCoupons),
+            expires_at: expiresAt,
+            created_by: user?.id,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        toast.success(`Campanha criada com ${data.coupons_generated} cupons!`);
+      }
       setDialogOpen(false);
       resetForm();
       loadData();
     } catch (e: any) {
-      toast.error(e.message || 'Erro ao criar campanha');
+      toast.error(e.message || 'Erro ao salvar campanha');
     } finally {
       setCreating(false);
     }
+  };
+
+  const openEdit = (camp: Campaign) => {
+    setEditingId(camp.id);
+    setSelectedClient(camp.client_id);
+    setTitle(camp.title);
+    setDescription(camp.description || '');
+    setDiscountType(camp.discount_type);
+    setDiscountValue(String(camp.discount_value));
+    setMinPurchase(camp.min_purchase_value ? String(camp.min_purchase_value) : '');
+    setTotalCoupons(String(camp.total_coupons));
+    if (camp.expires_at) {
+      const d = new Date(camp.expires_at);
+      setExpiresDate(d);
+      setExpiresTime(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
+    } else {
+      setExpiresDate(undefined);
+      setExpiresTime('23:59');
+    }
+    setDialogOpen(true);
   };
 
   const toggleCampaign = async (campaignId: string, currentActive: boolean) => {
@@ -179,6 +221,7 @@ export default function DiscountAdmin() {
   };
 
   const resetForm = () => {
+    setEditingId(null);
     setSelectedClient('');
     setTitle('');
     setDescription('');

@@ -175,6 +175,7 @@ export default function DiscountAdmin() {
     setDiscountValue('');
     setMinPurchase('');
     setTotalCoupons('10');
+    setDurationDays('7');
   };
 
   const copyLink = (clientId: string) => {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Check, X, Ticket, DollarSign, TrendingUp, ShoppingBag, Loader2, Tag } from 'lucide-react';
+import { Search, Check, X, Ticket, DollarSign, TrendingUp, ShoppingBag, Loader2, Tag, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 
 const VPS_API = 'https://agenciapulse.tech/api';

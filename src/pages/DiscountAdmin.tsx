@@ -29,6 +29,19 @@ interface Campaign {
   coupons_claimed: number;
   is_active: boolean;
   created_at: string;
+  expires_at: string | null;
+}
+
+function formatCountdown(expiresAt: string | null): { label: string; expired: boolean } {
+  if (!expiresAt) return { label: 'Sem prazo', expired: false };
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  if (diff <= 0) return { label: 'Expirado', expired: true };
+  const days = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff % 86400000) / 3600000);
+  const mins = Math.floor((diff % 3600000) / 60000);
+  if (days > 0) return { label: `${days}d ${hours}h restantes`, expired: false };
+  if (hours > 0) return { label: `${hours}h ${mins}m restantes`, expired: false };
+  return { label: `${mins}m restantes`, expired: false };
 }
 
 export default function DiscountAdmin() {

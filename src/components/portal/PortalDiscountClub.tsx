@@ -186,6 +186,50 @@ export default function PortalDiscountClub({ clientId, clientColor }: Props) {
         </motion.div>
       </div>
 
+      {/* Active campaigns with countdown */}
+      {campaigns.filter(c => c.is_active).length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white/[0.04] border border-white/[0.06] rounded-2xl p-5"
+        >
+          <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+            <Clock size={16} style={{ color: `hsl(${clientColor})` }} />
+            Campanhas Ativas
+          </h3>
+          <div className="space-y-2">
+            {campaigns.filter(c => c.is_active).map(camp => {
+              const t = formatTimeLeft(camp.expires_at);
+              return (
+                <div key={camp.id} className="flex items-center justify-between py-2.5 px-4 rounded-xl bg-white/[0.03] border border-white/[0.04]">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">{camp.title}</p>
+                    <p className="text-[11px] text-white/40">
+                      {camp.discount_type === 'percentage' ? `${camp.discount_value}%` : `R$ ${Number(camp.discount_value).toFixed(2)}`}
+                      {' • '}{camp.coupons_claimed}/{camp.total_coupons} resgatados
+                    </p>
+                  </div>
+                  {t ? (
+                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold tabular-nums ${
+                      t.expired
+                        ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                        : t.soon
+                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                          : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    }`}>
+                      <Clock size={12} />
+                      {t.label}
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-white/30">sem prazo</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
+
       {/* Verify coupon */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}

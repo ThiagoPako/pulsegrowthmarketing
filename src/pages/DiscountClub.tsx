@@ -20,6 +20,20 @@ interface Campaign {
   company_name: string;
   logo_url: string | null;
   color: string;
+  expires_at: string | null;
+}
+
+function getCountdown(expiresAt: string | null) {
+  if (!expiresAt) return null;
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  if (diff <= 0) return { expired: true, d: 0, h: 0, m: 0, s: 0 };
+  return {
+    expired: false,
+    d: Math.floor(diff / 86400000),
+    h: Math.floor((diff % 86400000) / 3600000),
+    m: Math.floor((diff % 3600000) / 60000),
+    s: Math.floor((diff % 60000) / 1000),
+  };
 }
 
 interface ClaimedCoupon {

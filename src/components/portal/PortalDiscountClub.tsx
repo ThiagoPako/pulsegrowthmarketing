@@ -34,6 +34,20 @@ interface Campaign {
   total_coupons: number;
   coupons_claimed: number;
   is_active: boolean;
+  expires_at: string | null;
+}
+
+function formatTimeLeft(expiresAt: string | null): { label: string; expired: boolean; soon: boolean } | null {
+  if (!expiresAt) return null;
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  if (diff <= 0) return { label: 'Expirado', expired: true, soon: false };
+  const days = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff % 86400000) / 3600000);
+  const mins = Math.floor((diff % 3600000) / 60000);
+  const soon = diff < 86400000;
+  if (days > 0) return { label: `${days}d ${hours}h`, expired: false, soon };
+  if (hours > 0) return { label: `${hours}h ${mins}m`, expired: false, soon };
+  return { label: `${mins}m`, expired: false, soon };
 }
 
 interface Props {

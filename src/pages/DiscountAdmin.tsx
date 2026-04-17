@@ -60,6 +60,14 @@ export default function DiscountAdmin() {
   const [discountValue, setDiscountValue] = useState('');
   const [minPurchase, setMinPurchase] = useState('');
   const [totalCoupons, setTotalCoupons] = useState('10');
+  const [durationDays, setDurationDays] = useState('7');
+  const [, setTick] = useState(0);
+
+  // Re-render every 60s to update countdowns
+  useEffect(() => {
+    const i = setInterval(() => setTick(t => t + 1), 60000);
+    return () => clearInterval(i);
+  }, []);
 
   useEffect(() => {
     if (authLoading) return;

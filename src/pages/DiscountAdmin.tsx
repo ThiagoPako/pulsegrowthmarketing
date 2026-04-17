@@ -6,8 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Plus, Gift, Ticket, Copy, ExternalLink, Loader2, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Plus, Gift, Ticket, Copy, ExternalLink, Loader2, ToggleLeft, ToggleRight, CalendarIcon } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 const VPS_API = 'https://agenciapulse.tech/api';
 
@@ -60,7 +65,8 @@ export default function DiscountAdmin() {
   const [discountValue, setDiscountValue] = useState('');
   const [minPurchase, setMinPurchase] = useState('');
   const [totalCoupons, setTotalCoupons] = useState('10');
-  const [durationDays, setDurationDays] = useState('7');
+  const [expiresDate, setExpiresDate] = useState<Date | undefined>(() => { const d = new Date(); d.setDate(d.getDate() + 7); return d; });
+  const [expiresTime, setExpiresTime] = useState('23:59');
   const [, setTick] = useState(0);
 
   // Re-render every 60s to update countdowns
@@ -123,8 +129,13 @@ export default function DiscountAdmin() {
     }
     setCreating(true);
     try {
-      const days = durationDays ? parseInt(durationDays) : 0;
-      const expiresAt = days > 0 ? new Date(Date.now() + days * 86400000).toISOString() : null;
+      let expiresAt: string | null = null;
+      if (expiresDate) {
+        const [hh, mm] = (expiresTime || '23:59').split(':').map(n => parseInt(n) || 0);
+        const d = new Date(expiresDate);
+        d.setHours(hh, mm, 0, 0);
+        expiresAt = d.toISOString();
+      }
       const res = await fetch(`${VPS_API}/discount-campaigns`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -175,7 +186,9 @@ export default function DiscountAdmin() {
     setDiscountValue('');
     setMinPurchase('');
     setTotalCoupons('10');
-    setDurationDays('7');
+    const d = new Date(); d.setDate(d.getDate() + 7);
+    setExpiresDate(d);
+    setExpiresTime('23:59');
   };
 
   const copyLink = (clientId: string) => {
@@ -259,21 +272,57 @@ export default function DiscountAdmin() {
                   <Input type="number" value={totalCoupons} onChange={e => setTotalCoupons(e.target.value)} placeholder="10" />
                 </div>
               </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block flex items-center gap-1">
-                  ⏱ Duração (dias)
-                </label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={durationDays}
-                  onChange={e => setDurationDays(e.target.value)}
-                  placeholder="7"
-                />
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Tempo de validade da campanha. Use 0 para sem prazo.
-                </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium mb-1 block flex items-center gap-1">
+                    <CalendarIcon size={12} /> Data de expiração
+                  </label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !expiresDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {expiresDate ? format(expiresDate, "dd/MM/yyyy", { locale: ptBR }) : <span>Sem prazo</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={expiresDate}
+                        onSelect={setExpiresDate}
+                        disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                        initialFocus
+                        locale={ptBR}
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                      {expiresDate && (
+                        <div className="p-2 border-t">
+                          <Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => setExpiresDate(undefined)}>
+                            Limpar (sem prazo)
+                          </Button>
+                        </div>
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Hora limite</label>
+                  <Input
+                    type="time"
+                    value={expiresTime}
+                    onChange={e => setExpiresTime(e.target.value)}
+                    disabled={!expiresDate}
+                  />
+                </div>
               </div>
+              <p className="text-[11px] text-muted-foreground -mt-2">
+                A campanha será desativada automaticamente após esta data e hora. Deixe em branco para sem prazo.
+              </p>
               <Button onClick={handleCreate} disabled={creating} className="w-full gap-2">
                 {creating ? <Loader2 size={14} className="animate-spin" /> : <Gift size={14} />}
                 Criar Campanha

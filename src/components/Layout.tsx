@@ -21,6 +21,7 @@ import BirthdayOverlay from '@/components/BirthdayOverlay';
 import ProductionAssistant from '@/components/ProductionAssistant';
 import WelcomeRocket from '@/components/WelcomeRocket';
 import VirtualOffice from '@/components/VirtualOffice';
+import QuickShortcutsBar from '@/components/QuickShortcutsBar';
 
 type NavCategory = {
   label: string;
@@ -349,6 +350,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </header>
+
+        {/* Quick shortcuts bar */}
+        <QuickShortcutsBar />
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6">

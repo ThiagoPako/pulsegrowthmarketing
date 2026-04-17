@@ -253,8 +253,49 @@ export default function DesignerKanban() {
                         initial={{ scale: 1.4 }}
                         animate={{ scale: 1 }}
                         transition={{ type: 'spring', stiffness: 500 }}
+                        className="ml-auto flex items-center gap-1"
                       >
-                        <Badge variant="secondary" className="text-[10px] h-5 ml-auto">{colTasks.length}</Badge>
+                        <Badge variant="secondary" className="text-[10px] h-5">{colTasks.length}</Badge>
+                        {col.key === 'aprovado' && colTasks.some(t => t.attachment_url || (t as any).mockup_url) && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                className="ml-1 w-6 h-6 flex items-center justify-center rounded-md bg-background/70 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                                title="Baixar artes aprovadas"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Download size={12} />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-52">
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  const items = colTasks
+                                    .map(t => ({ url: (t.attachment_url || (t as any).mockup_url) as string, title: t.title }))
+                                    .filter(i => i.url);
+                                  if (items.length === 0) return toast.error('Nenhuma arte disponível');
+                                  toast.info(`Baixando ${items.length} arte${items.length > 1 ? 's' : ''}...`);
+                                  for (const it of items) await downloadSingleArt(it.url, it.title);
+                                }}
+                              >
+                                <Download size={14} className="mr-2" /> Baixar todas (individual)
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  const items = colTasks
+                                    .map(t => ({ url: (t.attachment_url || (t as any).mockup_url) as string, title: t.title }))
+                                    .filter(i => i.url);
+                                  if (items.length === 0) return toast.error('Nenhuma arte disponível');
+                                  toast.info(`Gerando PDF com ${items.length} arte${items.length > 1 ? 's' : ''}...`);
+                                  await downloadArtsAsPdf(items, `Artes-Aprovadas-${new Date().toISOString().slice(0, 10)}`);
+                                  toast.success('PDF gerado!');
+                                }}
+                              >
+                                <FileDown size={14} className="mr-2" /> Agrupar em PDF
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </motion.div>
                     </div>
                   </motion.div>

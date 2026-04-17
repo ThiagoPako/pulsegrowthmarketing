@@ -65,7 +65,8 @@ export default function DiscountAdmin() {
   const [discountValue, setDiscountValue] = useState('');
   const [minPurchase, setMinPurchase] = useState('');
   const [totalCoupons, setTotalCoupons] = useState('10');
-  const [durationDays, setDurationDays] = useState('7');
+  const [expiresDate, setExpiresDate] = useState<Date | undefined>(() => { const d = new Date(); d.setDate(d.getDate() + 7); return d; });
+  const [expiresTime, setExpiresTime] = useState('23:59');
   const [, setTick] = useState(0);
 
   // Re-render every 60s to update countdowns

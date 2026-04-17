@@ -6,8 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Plus, Gift, Ticket, Copy, ExternalLink, Loader2, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Plus, Gift, Ticket, Copy, ExternalLink, Loader2, ToggleLeft, ToggleRight, CalendarIcon } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 const VPS_API = 'https://agenciapulse.tech/api';
 

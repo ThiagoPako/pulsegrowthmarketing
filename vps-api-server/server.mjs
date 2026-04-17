@@ -4584,6 +4584,42 @@ app.patch('/api/discount-campaigns/:id', async (req, res) => {
   }
 });
 
+// Admin: delete campaign and its coupons
+app.delete('/api/discount-campaigns/:id', async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    await verifyAdmin(req);
+    const { id } = req.params;
+
+    await client.query('BEGIN');
+
+    const { rows: [campaign] } = await client.query(
+      'SELECT id, title FROM discount_campaigns WHERE id = $1',
+      [id]
+    );
+
+    if (!campaign) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Campanha não encontrada' });
+    }
+
+    await client.query('DELETE FROM discount_coupons WHERE campaign_id = $1', [id]);
+    await client.query('DELETE FROM discount_campaigns WHERE id = $1', [id]);
+
+    await client.query('COMMIT');
+    res.json({ success: true, deleted_campaign_id: id, title: campaign.title });
+  } catch (e) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {}
+    console.error('DELETE /api/discount-campaigns/:id error:', e);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 // ─── Health check ───────────────────────────────────────────
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 

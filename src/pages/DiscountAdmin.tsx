@@ -221,6 +221,20 @@ export default function DiscountAdmin() {
     }
   };
 
+  const deleteCampaign = async (campaignId: string) => {
+    try {
+      const res = await fetch(`${VPS_API}/discount-campaigns/${campaignId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Erro ao apagar');
+      }
+      toast.success('Campanha apagada');
+      loadData();
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao apagar campanha');
+    }
+  };
+
   const resetForm = () => {
     setEditingId(null);
     setSelectedClient('');

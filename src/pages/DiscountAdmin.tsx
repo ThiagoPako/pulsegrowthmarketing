@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Plus, Gift, Ticket, Copy, ExternalLink, Loader2, ToggleLeft, ToggleRight, CalendarIcon } from 'lucide-react';
+import { Plus, Gift, Ticket, Copy, ExternalLink, Loader2, ToggleLeft, ToggleRight, CalendarIcon, Pencil } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -56,6 +56,7 @@ export default function DiscountAdmin() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Form state
   const [selectedClient, setSelectedClient] = useState('');
@@ -136,32 +137,73 @@ export default function DiscountAdmin() {
         d.setHours(hh, mm, 0, 0);
         expiresAt = d.toISOString();
       }
-      const res = await fetch(`${VPS_API}/discount-campaigns`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_id: selectedClient,
-          title,
-          description,
-          discount_type: discountType,
-          discount_value: parseFloat(discountValue),
-          min_purchase_value: minPurchase ? parseFloat(minPurchase) : 0,
-          total_coupons: parseInt(totalCoupons),
-          expires_at: expiresAt,
-          created_by: user?.id,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      toast.success(`Campanha criada com ${data.coupons_generated} cupons!`);
+
+      if (editingId) {
+        // Update existing campaign
+        const res = await fetch(`${VPS_API}/discount-campaigns/${editingId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title,
+            description,
+            discount_type: discountType,
+            discount_value: parseFloat(discountValue),
+            min_purchase_value: minPurchase ? parseFloat(minPurchase) : 0,
+            total_coupons: parseInt(totalCoupons),
+            expires_at: expiresAt,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Erro ao atualizar');
+        toast.success('Campanha atualizada!');
+      } else {
+        const res = await fetch(`${VPS_API}/discount-campaigns`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_id: selectedClient,
+            title,
+            description,
+            discount_type: discountType,
+            discount_value: parseFloat(discountValue),
+            min_purchase_value: minPurchase ? parseFloat(minPurchase) : 0,
+            total_coupons: parseInt(totalCoupons),
+            expires_at: expiresAt,
+            created_by: user?.id,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        toast.success(`Campanha criada com ${data.coupons_generated} cupons!`);
+      }
       setDialogOpen(false);
       resetForm();
       loadData();
     } catch (e: any) {
-      toast.error(e.message || 'Erro ao criar campanha');
+      toast.error(e.message || 'Erro ao salvar campanha');
     } finally {
       setCreating(false);
     }
+  };
+
+  const openEdit = (camp: Campaign) => {
+    setEditingId(camp.id);
+    setSelectedClient(camp.client_id);
+    setTitle(camp.title);
+    setDescription(camp.description || '');
+    setDiscountType(camp.discount_type);
+    setDiscountValue(String(camp.discount_value));
+    setMinPurchase(camp.min_purchase_value ? String(camp.min_purchase_value) : '');
+    setTotalCoupons(String(camp.total_coupons));
+    if (camp.expires_at) {
+      const d = new Date(camp.expires_at);
+      setExpiresDate(d);
+      setExpiresTime(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
+    } else {
+      setExpiresDate(undefined);
+      setExpiresTime('23:59');
+    }
+    setDialogOpen(true);
   };
 
   const toggleCampaign = async (campaignId: string, currentActive: boolean) => {
@@ -179,6 +221,7 @@ export default function DiscountAdmin() {
   };
 
   const resetForm = () => {
+    setEditingId(null);
     setSelectedClient('');
     setTitle('');
     setDescription('');
@@ -215,21 +258,21 @@ export default function DiscountAdmin() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Gerencie campanhas de cupons para clientes parceiros</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm(); }}>
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button className="gap-2" onClick={() => resetForm()}>
               <Plus size={16} />
               Nova Campanha
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Criar Campanha de Cupons</DialogTitle>
+              <DialogTitle>{editingId ? 'Editar Campanha' : 'Criar Campanha de Cupons'}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div>
                 <label className="text-sm font-medium mb-1 block">Cliente</label>
-                <Select value={selectedClient} onValueChange={setSelectedClient}>
+                <Select value={selectedClient} onValueChange={setSelectedClient} disabled={!!editingId}>
                   <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
                   <SelectContent>
                     {clients.map(c => (
@@ -325,7 +368,7 @@ export default function DiscountAdmin() {
               </p>
               <Button onClick={handleCreate} disabled={creating} className="w-full gap-2">
                 {creating ? <Loader2 size={14} className="animate-spin" /> : <Gift size={14} />}
-                Criar Campanha
+                {editingId ? 'Salvar Alterações' : 'Criar Campanha'}
               </Button>
             </div>
           </DialogContent>
@@ -376,6 +419,14 @@ export default function DiscountAdmin() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => openEdit(camp)}
+                      title="Editar campanha"
+                    >
+                      <Pencil size={14} />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"

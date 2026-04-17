@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Plus, Gift, Ticket, Copy, ExternalLink, Loader2, ToggleLeft, ToggleRight, CalendarIcon, Pencil } from 'lucide-react';
+import { Plus, Gift, Ticket, Copy, ExternalLink, Loader2, ToggleLeft, ToggleRight, CalendarIcon, Pencil, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
@@ -220,6 +221,20 @@ export default function DiscountAdmin() {
     }
   };
 
+  const deleteCampaign = async (campaignId: string) => {
+    try {
+      const res = await fetch(`${VPS_API}/discount-campaigns/${campaignId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Erro ao apagar');
+      }
+      toast.success('Campanha apagada');
+      loadData();
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao apagar campanha');
+    }
+  };
+
   const resetForm = () => {
     setEditingId(null);
     setSelectedClient('');
@@ -427,6 +442,27 @@ export default function DiscountAdmin() {
                     >
                       <Pencil size={14} />
                     </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" title="Apagar campanha">
+                          <Trash2 size={14} className="text-destructive" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Apagar campanha?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Esta ação não pode ser desfeita. A campanha "{camp.title}" e todos os seus cupons serão removidos permanentemente.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => deleteCampaign(camp.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            Apagar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                     <Button
                       variant="ghost"
                       size="icon"

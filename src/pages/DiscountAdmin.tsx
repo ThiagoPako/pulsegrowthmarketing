@@ -16,6 +16,18 @@ import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 
 const VPS_API = 'https://agenciapulse.tech/api';
+const TOKEN_KEY = 'pulse_jwt';
+
+function getVpsAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const token = localStorage.getItem(TOKEN_KEY);
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  return headers;
+}
 
 interface Client {
   id: string;
@@ -140,10 +152,9 @@ export default function DiscountAdmin() {
       }
 
       if (editingId) {
-        // Update existing campaign
         const res = await fetch(`${VPS_API}/discount-campaigns/${editingId}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getVpsAuthHeaders(),
           body: JSON.stringify({
             title,
             description,
@@ -160,7 +171,7 @@ export default function DiscountAdmin() {
       } else {
         const res = await fetch(`${VPS_API}/discount-campaigns`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getVpsAuthHeaders(),
           body: JSON.stringify({
             client_id: selectedClient,
             title,
@@ -173,8 +184,8 @@ export default function DiscountAdmin() {
             created_by: user?.id,
           }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Erro ao criar campanha');
         toast.success(`Campanha criada com ${data.coupons_generated} cupons!`);
       }
       setDialogOpen(false);
@@ -209,21 +220,26 @@ export default function DiscountAdmin() {
 
   const toggleCampaign = async (campaignId: string, currentActive: boolean) => {
     try {
-      await fetch(`${VPS_API}/discount-campaigns/${campaignId}`, {
+      const res = await fetch(`${VPS_API}/discount-campaigns/${campaignId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getVpsAuthHeaders(),
         body: JSON.stringify({ is_active: !currentActive }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Erro ao atualizar campanha');
       toast.success(currentActive ? 'Campanha desativada' : 'Campanha ativada');
       loadData();
-    } catch (e) {
-      toast.error('Erro ao atualizar campanha');
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao atualizar campanha');
     }
   };
 
   const deleteCampaign = async (campaignId: string) => {
     try {
-      const res = await fetch(`${VPS_API}/discount-campaigns/${campaignId}`, { method: 'DELETE' });
+      const res = await fetch(`${VPS_API}/discount-campaigns/${campaignId}`, {
+        method: 'DELETE',
+        headers: getVpsAuthHeaders(),
+      });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || 'Erro ao apagar');

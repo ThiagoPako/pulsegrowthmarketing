@@ -697,7 +697,7 @@ app.post('/api/financial-chat', async (req, res) => {
     const { question, conversationHistory, aiModel, aiProvider } = req.body;
     if (!question) return res.status(400).json({ error: 'Question is required' });
 
-    const selectedModel = aiModel || 'gemini-2.5-flash';
+    const selectedModel = aiModel || 'gemini-2.5-flash-lite';
     const now = new Date();
     const SYSTEM_START = '2026-03-01'; // Sistema iniciou em março 2026
     const startOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
@@ -1224,7 +1224,7 @@ app.post('/api/generate-script', async (req, res) => {
     const admin = getAdminClient();
     const dbApiKey = await fetchDbApiKey(admin, aiProvider);
     const ai = getAiConfig(aiProvider, dbApiKey);
-    const selectedModel = aiModel || 'gemini-2.5-flash';
+    const selectedModel = aiModel || 'gemini-2.5-flash-lite';
     const structure = VIDEO_TYPE_STRUCTURES[videoType] || VIDEO_TYPE_STRUCTURES.vendas;
     const format = FORMAT_CONTEXT[contentFormat] || FORMAT_CONTEXT.reels;
 
@@ -1274,7 +1274,7 @@ app.post('/api/generate-caption', async (req, res) => {
     const admin = getAdminClient();
     const dbApiKey = await fetchDbApiKey(admin, aiProvider);
     const ai = getAiConfig(aiProvider, dbApiKey);
-    const model = aiModel || 'gemini-2.5-flash';
+    const model = aiModel || 'gemini-2.5-flash-lite';
 
     const prompt = `Você é um social media profissional brasileiro. Gere uma LEGENDA curta para Instagram.\nRegras: Máximo 200 chars, CTA, 1-3 emojis, sem hashtags.\n${clientName ? `CLIENTE: ${clientName}` : ''}\n${niche ? `NICHO: ${niche}` : ''}\nROTEIRO:\n${scriptContent}\n\nResponda APENAS com a legenda.`;
 
@@ -4048,7 +4048,7 @@ app.post('/api/production-assistant', async (req, res) => {
     const { context, aiModel, aiProvider } = req.body;
     if (!context) return res.status(400).json({ error: 'Context is required' });
 
-    const selectedModel = aiModel || 'gemini-2.5-flash';
+    const selectedModel = aiModel || 'gemini-2.5-flash-lite';
     const dbApiKey = await fetchDbApiKey(admin, aiProvider);
     const ai = getAiConfig(aiProvider, dbApiKey);
 

@@ -258,21 +258,21 @@ export default function DiscountAdmin() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Gerencie campanhas de cupons para clientes parceiros</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm(); }}>
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button className="gap-2" onClick={() => resetForm()}>
               <Plus size={16} />
               Nova Campanha
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Criar Campanha de Cupons</DialogTitle>
+              <DialogTitle>{editingId ? 'Editar Campanha' : 'Criar Campanha de Cupons'}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div>
                 <label className="text-sm font-medium mb-1 block">Cliente</label>
-                <Select value={selectedClient} onValueChange={setSelectedClient}>
+                <Select value={selectedClient} onValueChange={setSelectedClient} disabled={!!editingId}>
                   <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
                   <SelectContent>
                     {clients.map(c => (
@@ -368,7 +368,7 @@ export default function DiscountAdmin() {
               </p>
               <Button onClick={handleCreate} disabled={creating} className="w-full gap-2">
                 {creating ? <Loader2 size={14} className="animate-spin" /> : <Gift size={14} />}
-                Criar Campanha
+                {editingId ? 'Salvar Alterações' : 'Criar Campanha'}
               </Button>
             </div>
           </DialogContent>
@@ -419,6 +419,14 @@ export default function DiscountAdmin() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => openEdit(camp)}
+                      title="Editar campanha"
+                    >
+                      <Pencil size={14} />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"

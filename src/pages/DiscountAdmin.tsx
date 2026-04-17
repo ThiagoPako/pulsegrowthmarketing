@@ -129,8 +129,13 @@ export default function DiscountAdmin() {
     }
     setCreating(true);
     try {
-      const days = durationDays ? parseInt(durationDays) : 0;
-      const expiresAt = days > 0 ? new Date(Date.now() + days * 86400000).toISOString() : null;
+      let expiresAt: string | null = null;
+      if (expiresDate) {
+        const [hh, mm] = (expiresTime || '23:59').split(':').map(n => parseInt(n) || 0);
+        const d = new Date(expiresDate);
+        d.setHours(hh, mm, 0, 0);
+        expiresAt = d.toISOString();
+      }
       const res = await fetch(`${VPS_API}/discount-campaigns`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

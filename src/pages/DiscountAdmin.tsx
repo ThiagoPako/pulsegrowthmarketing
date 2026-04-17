@@ -301,6 +301,14 @@ export default function DiscountAdmin() {
                       <p className="text-xs text-muted-foreground">
                         {client?.company_name} • {discountLabel} • {camp.coupons_claimed}/{camp.total_coupons} resgatados
                       </p>
+                      {(() => {
+                        const c = formatCountdown(camp.expires_at);
+                        return (
+                          <p className={`text-[11px] mt-0.5 font-medium ${c.expired ? 'text-rose-500' : camp.expires_at ? 'text-amber-500' : 'text-muted-foreground/60'}`}>
+                            ⏱ {c.label}
+                          </p>
+                        );
+                      })()}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

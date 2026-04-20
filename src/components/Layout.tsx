@@ -327,7 +327,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               className="p-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-all hover:scale-110"
               title={theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}
             >
-              {theme === 'dark' ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} />}
+              {theme === 'dark' ? <Sun size={18} className="text-warning" /> : <Moon size={18} />}
             </button>
             {/* Font size control */}
             <Popover>

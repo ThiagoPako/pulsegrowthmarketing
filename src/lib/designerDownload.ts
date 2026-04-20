@@ -1,5 +1,7 @@
 import { jsPDF } from 'jspdf';
 import { toast } from 'sonner';
+import pulseHeader from '@/assets/pulse_header.png';
+import pulseLogo from '@/assets/pulse_logo.png';
 
 const isImage = (url: string) => /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(url);
 
@@ -23,15 +25,97 @@ function sanitize(name: string) {
   return name.replace(/[^\w\s.-]+/g, '_').slice(0, 80);
 }
 
+async function loadImageAsDataUrl(src: string): Promise<{ dataUrl: string; width: number; height: number } | null> {
+  try {
+    const res = await fetch(src);
+    const blob = await res.blob();
+    const dataUrl: string = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+    const img = new window.Image();
+    await new Promise((res2, rej) => {
+      img.onload = res2;
+      img.onerror = rej;
+      img.src = dataUrl;
+    });
+    return { dataUrl, width: img.width, height: img.height };
+  } catch {
+    return null;
+  }
+}
+
 export async function downloadSingleArt(url: string, filename: string) {
   try {
     const blob = await fetchAsBlob(url);
     const ext = url.split('.').pop()?.split('?')[0] || 'file';
     triggerBlobDownload(blob, `${sanitize(filename)}.${ext}`);
   } catch {
-    // Fallback: open in new tab
     window.open(url, '_blank');
   }
+}
+
+function drawPulseHeader(
+  pdf: jsPDF,
+  pageW: number,
+  logo: { dataUrl: string; width: number; height: number } | null,
+  pageNumber: number,
+  totalPages: number,
+  projectTitle: string,
+) {
+  // Background bar
+  pdf.setFillColor(15, 23, 42); // slate-900
+  pdf.rect(0, 0, pageW, 18, 'F');
+
+  // Accent line
+  pdf.setFillColor(236, 72, 153); // pink-500
+  pdf.rect(0, 18, pageW, 0.8, 'F');
+
+  // Logo
+  if (logo) {
+    const logoH = 10;
+    const logoW = (logo.width / logo.height) * logoH;
+    try {
+      pdf.addImage(logo.dataUrl, 'PNG', 8, 4, logoW, logoH);
+    } catch { /* ignore */ }
+  }
+
+  // Brand text
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(12);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('PULSE', 24, 9);
+  pdf.setFontSize(7);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setTextColor(236, 72, 153);
+  pdf.text('GROWTH MARKETING', 24, 13.5);
+
+  // Project title (right side)
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(9);
+  pdf.setFont('helvetica', 'normal');
+  const right = sanitize(projectTitle);
+  const truncated = right.length > 50 ? right.slice(0, 47) + '...' : right;
+  pdf.text(truncated, pageW - 8, 9, { align: 'right' });
+  pdf.setFontSize(7);
+  pdf.setTextColor(200, 200, 200);
+  pdf.text(`Página ${pageNumber} de ${totalPages}`, pageW - 8, 13.5, { align: 'right' });
+
+  // Reset
+  pdf.setTextColor(0, 0, 0);
+  pdf.setFont('helvetica', 'normal');
+}
+
+function drawPulseFooter(pdf: jsPDF, pageW: number, pageH: number) {
+  pdf.setDrawColor(230, 230, 230);
+  pdf.setLineWidth(0.2);
+  pdf.line(8, pageH - 10, pageW - 8, pageH - 10);
+  pdf.setFontSize(7);
+  pdf.setTextColor(120, 120, 120);
+  pdf.text('Pulse Growth Marketing • Minaçu-GO • pulsegrowthmarketing.com', pageW / 2, pageH - 6, { align: 'center' });
+  pdf.setTextColor(0, 0, 0);
 }
 
 export async function downloadArtsAsPdf(
@@ -50,8 +134,16 @@ export async function downloadArtsAsPdf(
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
   const margin = 10;
+  const headerH = 22;
+  const footerH = 12;
 
-  for (let i = 0; i < onlyImages.length; i++) {
+  // Try header logo (pulse_header) first, fallback to pulse_logo
+  let logo = await loadImageAsDataUrl(pulseHeader);
+  if (!logo) logo = await loadImageAsDataUrl(pulseLogo);
+
+  const total = onlyImages.length;
+
+  for (let i = 0; i < total; i++) {
     const art = onlyImages[i];
     try {
       const blob = await fetchAsBlob(art.url);
@@ -71,21 +163,28 @@ export async function downloadArtsAsPdf(
 
       if (i > 0) pdf.addPage();
 
-      // Title
-      pdf.setFontSize(11);
-      pdf.text(sanitize(art.title), margin, margin + 4);
+      drawPulseHeader(pdf, pageW, logo, i + 1, total, pdfName);
+
+      // Art title
+      pdf.setFontSize(10);
+      pdf.setTextColor(80, 80, 80);
+      pdf.text(sanitize(art.title), margin, headerH + 5);
+      pdf.setTextColor(0, 0, 0);
 
       // Fit image
+      const topY = headerH + 8;
       const maxW = pageW - margin * 2;
-      const maxH = pageH - margin * 2 - 10;
+      const maxH = pageH - topY - footerH;
       const ratio = Math.min(maxW / img.width, maxH / img.height);
       const w = img.width * ratio;
       const h = img.height * ratio;
       const x = (pageW - w) / 2;
-      const y = margin + 8;
+      const y = topY;
 
       const fmt = (art.url.toLowerCase().includes('.png') ? 'PNG' : 'JPEG') as 'PNG' | 'JPEG';
       pdf.addImage(dataUrl, fmt, x, y, w, h);
+
+      drawPulseFooter(pdf, pageW, pageH);
     } catch (err) {
       console.error('Erro ao adicionar arte ao PDF:', err);
     }

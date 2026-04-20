@@ -59,6 +59,8 @@ export function useDesignTasks() {
       if (error) throw error;
       return (data || []) as unknown as DesignTask[];
     },
+    refetchInterval: 8000,
+    refetchOnWindowFocus: true,
   });
 
   const historyQuery = (taskId: string) => useQuery({

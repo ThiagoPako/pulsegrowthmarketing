@@ -55,6 +55,52 @@
     --font-display: 'Space Grotesk', sans-serif;
     --font-body: 'Inter', sans-serif;
   }
+
+  .dark {
+    --background: 224 24% 7%;
+    --foreground: 220 15% 92%;
+
+    --card: 224 22% 10%;
+    --card-foreground: 220 15% 94%;
+
+    --popover: 224 22% 11%;
+    --popover-foreground: 220 15% 94%;
+
+    --primary: 16 90% 58%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 224 18% 15%;
+    --secondary-foreground: 220 15% 88%;
+
+    --muted: 224 18% 14%;
+    --muted-foreground: 220 10% 65%;
+
+    --accent: 16 60% 18%;
+    --accent-foreground: 16 90% 75%;
+
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 224 16% 18%;
+    --input: 224 16% 18%;
+    --ring: 16 90% 58%;
+
+    --sidebar-background: 224 26% 6%;
+    --sidebar-foreground: 220 12% 70%;
+    --sidebar-primary: 16 90% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 16 60% 16%;
+    --sidebar-accent-foreground: 16 90% 78%;
+    --sidebar-border: 224 18% 14%;
+    --sidebar-ring: 16 90% 58%;
+
+    --success: 152 55% 48%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 224 24% 7%;
+    --info: 217 91% 65%;
+    --info-foreground: 0 0% 100%;
+  }
 }
 
 @layer base {
@@ -137,14 +183,22 @@
   width: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: hsl(0 0% 97%);
+  background: hsl(var(--background));
 }
 ::-webkit-scrollbar-thumb {
-  background: hsl(220 13% 82%);
+  background: hsl(var(--border));
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(220 13% 70%);
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Smooth theme transitions */
+html {
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+body, .bg-background, .bg-card, .bg-sidebar, .bg-popover, .bg-secondary, .bg-muted {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
 }
 
 .scrollbar-hide {

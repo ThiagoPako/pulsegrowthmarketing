@@ -1038,6 +1038,89 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                           </a>
                         )
                       )}
+
+                      {/* Glowing download buttons under image */}
+                      {(() => {
+                        const downloadable = Array.from(new Set([
+                          task.attachment_url,
+                          ...((task as any).attachment_urls || []),
+                          (task as any).mockup_url,
+                        ].filter(Boolean) as string[]));
+                        if (downloadable.length === 0) return null;
+                        return (
+                          <motion.div
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.1 }}
+                            className="flex flex-wrap items-center justify-center gap-2 pt-3"
+                          >
+                            {downloadable.length > 1 && (
+                              <motion.button
+                                whileHover={{ scale: 1.05, y: -2 }}
+                                whileTap={{ scale: 0.97 }}
+                                animate={{
+                                  boxShadow: [
+                                    '0 0 0px rgba(16,185,129,0.4)',
+                                    '0 0 18px rgba(16,185,129,0.55)',
+                                    '0 0 0px rgba(16,185,129,0.4)',
+                                  ],
+                                }}
+                                transition={{ duration: 2.2, repeat: Infinity }}
+                                onClick={async () => {
+                                  for (let i = 0; i < downloadable.length; i++) {
+                                    await downloadSingleArt(downloadable[i], `${task.title}-${i + 1}`);
+                                  }
+                                  toast.success(`${downloadable.length} artes baixadas!`);
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-emerald-500 via-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 shadow-lg"
+                              >
+                                <Download size={14} /> Baixar todas ({downloadable.length})
+                              </motion.button>
+                            )}
+
+                            {downloadable.length > 1 && (
+                              <motion.button
+                                whileHover={{ scale: 1.05, y: -2 }}
+                                whileTap={{ scale: 0.97 }}
+                                animate={{
+                                  boxShadow: [
+                                    '0 0 0px rgba(236,72,153,0.4)',
+                                    '0 0 18px rgba(236,72,153,0.6)',
+                                    '0 0 0px rgba(236,72,153,0.4)',
+                                  ],
+                                }}
+                                transition={{ duration: 2.2, repeat: Infinity, delay: 0.4 }}
+                                onClick={() =>
+                                  downloadArtsAsPdf(
+                                    downloadable.map((url, i) => ({ url, title: `${task.title} ${i + 1}` })),
+                                    task.title
+                                  )
+                                }
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-pink-500 via-fuchsia-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 shadow-lg"
+                              >
+                                <FileDown size={14} /> Agrupar em PDF
+                              </motion.button>
+                            )}
+
+                            {/* Individual buttons */}
+                            <div className="w-full flex flex-wrap items-center justify-center gap-1.5 mt-1">
+                              {downloadable.map((url, i) => (
+                                <motion.button
+                                  key={url + i}
+                                  whileHover={{ scale: 1.08, y: -1 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  onClick={() => downloadSingleArt(url, `${task.title}-${i + 1}`)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-300 border border-violet-200/60 dark:border-violet-800/60 hover:bg-violet-100 dark:hover:bg-violet-900/60 hover:shadow-md hover:shadow-violet-300/40 transition-shadow"
+                                  title={`Baixar arte ${i + 1}`}
+                                >
+                                  <Download size={11} />
+                                  {downloadable.length === 1 ? 'Baixar arte' : `Arte ${i + 1}`}
+                                </motion.button>
+                              ))}
+                            </div>
+                          </motion.div>
+                        );
+                      })()}
                     </div>
                   ) : (
                     <div className="rounded-lg border border-dashed border-border p-6 text-center">

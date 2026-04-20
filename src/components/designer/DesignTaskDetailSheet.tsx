@@ -414,6 +414,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>
+                  </>
                 );
               })()}
             </div>

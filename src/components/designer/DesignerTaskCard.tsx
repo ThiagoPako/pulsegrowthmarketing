@@ -13,8 +13,10 @@ import { toast } from 'sonner';
 import rocketGirlsImg from '@/assets/rocket-girls.png';
 import {
   Play, Pause, Send, Clock, Upload, Link2, CheckCircle,
-  RotateCcw, Flame, Loader2, Eye, Image, Sparkles, Heart, Pencil, Trash2
+  RotateCcw, Flame, Loader2, Eye, Image, Sparkles, Heart, Pencil, Trash2, Download, FileDown
 } from 'lucide-react';
+import { downloadSingleArt, downloadArtsAsPdf } from '@/lib/designerDownload';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string; dot: string; slaHours: number }> = {
   baixa: { label: 'Baixa', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300', dot: 'bg-emerald-500', slaHours: 72 },

@@ -316,6 +316,54 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                 const unique = Array.from(new Set(downloadable));
                 if (unique.length === 0 && !canDelete) return null;
                 return (
+                  <>
+                    {/* Visible download button in header */}
+                    {unique.length > 0 && (
+                      unique.length === 1 ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1.5 text-xs border-emerald-300/60 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                          onClick={() => downloadSingleArt(unique[0], task.title)}
+                        >
+                          <Download size={13} /> Baixar
+                        </Button>
+                      ) : (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 gap-1.5 text-xs border-emerald-300/60 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                            >
+                              <Download size={13} /> Baixar ({unique.length})
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuItem
+                              onClick={async () => {
+                                for (let i = 0; i < unique.length; i++) {
+                                  await downloadSingleArt(unique[i], `${task.title}-${i + 1}`);
+                                }
+                              }}
+                            >
+                              <Download size={14} className="mr-2" /> Baixar todas ({unique.length})
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                downloadArtsAsPdf(
+                                  unique.map((url, i) => ({ url, title: `${task.title} ${i + 1}` })),
+                                  task.title
+                                )
+                              }
+                            >
+                              <FileDown size={14} className="mr-2" /> Agrupar em PDF
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )
+                    )}
+                return (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="Mais ações">

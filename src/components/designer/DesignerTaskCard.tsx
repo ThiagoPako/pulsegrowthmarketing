@@ -13,8 +13,10 @@ import { toast } from 'sonner';
 import rocketGirlsImg from '@/assets/rocket-girls.png';
 import {
   Play, Pause, Send, Clock, Upload, Link2, CheckCircle,
-  RotateCcw, Flame, Loader2, Eye, Image, Sparkles, Heart, Pencil, Trash2
+  RotateCcw, Flame, Loader2, Eye, Image, Sparkles, Heart, Pencil, Trash2, Download, FileDown
 } from 'lucide-react';
+import { downloadSingleArt, downloadArtsAsPdf } from '@/lib/designerDownload';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string; dot: string; slaHours: number }> = {
   baixa: { label: 'Baixa', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300', dot: 'bg-emerald-500', slaHours: 72 },
@@ -260,6 +262,70 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
             <Pencil size={13} />
           </Button>
         </div>
+
+        {/* Download button - always visible when art exists */}
+        {hasArt && (() => {
+          const downloadable = Array.from(new Set([
+            task.attachment_url,
+            ...((task as any).attachment_urls || []),
+            (task as any).mockup_url,
+          ].filter(Boolean) as string[]));
+          if (downloadable.length === 0) return null;
+          return (
+            <div className="absolute top-3 right-3 z-20" onClick={e => e.stopPropagation()}>
+              {downloadable.length === 1 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); downloadSingleArt(downloadable[0], task.title); }}
+                  className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400 shadow-sm border border-emerald-200/60"
+                  title="Baixar arte"
+                >
+                  <Download size={13} />
+                </Button>
+              ) : (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={e => e.stopPropagation()}
+                      className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400 shadow-sm border border-emerald-200/60"
+                      title={`Baixar ${downloadable.length} artes`}
+                    >
+                      <Download size={13} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuItem
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        for (let i = 0; i < downloadable.length; i++) {
+                          await downloadSingleArt(downloadable[i], `${task.title}-${i + 1}`);
+                        }
+                      }}
+                    >
+                      <Download size={14} className="mr-2" /> Baixar todas ({downloadable.length})
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        downloadArtsAsPdf(
+                          downloadable.map((url, i) => ({ url, title: `${task.title} ${i + 1}` })),
+                          task.title
+                        );
+                      }}
+                    >
+                      <FileDown size={14} className="mr-2" /> Agrupar em PDF
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Main row */}
         <div

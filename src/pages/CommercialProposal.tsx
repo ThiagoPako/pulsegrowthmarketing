@@ -474,8 +474,19 @@ export default function CommercialProposal() {
   const downloadPDF = useCallback(async () => {
     if (!proposalRef.current) return;
     toast.loading('Gerando PDF...');
+    const el = proposalRef.current;
+    // Verificação de segurança: oculta colunas Qtd/Unit/Subtotal durante a captura
+    // quando a proposta estiver em 'Valor total único', mesmo que o DOM esteja inconsistente.
+    const isTotalMode = proposalType === 'cronograma' && cronogramaPricingMode === 'total';
+    const hiddenNodes: HTMLElement[] = [];
+    if (isTotalMode) {
+      el.querySelectorAll<HTMLElement>('[data-pdf-unit-price]').forEach(node => {
+        hiddenNodes.push(node);
+        node.dataset.prevDisplay = node.style.display;
+        node.style.display = 'none';
+      });
+    }
     try {
-      const el = proposalRef.current;
       const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
       const imgData = canvas.toDataURL('image/png');
       const pdfWidthMM = 210;
@@ -489,8 +500,10 @@ export default function CommercialProposal() {
     } catch {
       toast.dismiss();
       toast.error('Erro ao gerar PDF');
+    } finally {
+      hiddenNodes.forEach(node => { node.style.display = node.dataset.prevDisplay || ''; });
     }
-  }, [clientCompany]);
+  }, [clientCompany, proposalType, cronogramaPricingMode]);
 
   const saveAndShareProposal = useCallback(async () => {
     if (!clientCompany) { toast.error('Preencha o nome da empresa'); return; }

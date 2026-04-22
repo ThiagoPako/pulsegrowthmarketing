@@ -962,7 +962,7 @@ export default function ContentKanban() {
               </span>
             </div>
             <button
-              onClick={() => setAutofixStats({ moved: 0, cancelled: 0, extras: 0, byVideomaker: {}, lastRunAt: null, lastScanned: 0 })}
+              onClick={() => setAutofixStats({ moved: 0, cancelled: 0, extras: 0, orphans: 0, byVideomaker: {}, lastRunAt: null, lastScanned: 0 })}
               className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
             >
               Limpar

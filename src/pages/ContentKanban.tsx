@@ -1105,17 +1105,15 @@ export default function ContentKanban() {
                             onConfirmPosted={task.kanban_column === 'acompanhamento' && !isRestricted ? () => handleConfirmPosted(task) : undefined}
                             onApprove={task.kanban_column === 'revisao' && (userRole === 'admin' || userRole === 'social_media') ? () => handleApproveTask(task) : undefined}
                             onRequestAdjustments={task.kanban_column === 'revisao' && (userRole === 'admin' || userRole === 'social_media') ? () => openAdjustmentDialog(task) : undefined}
-                            onAddDriveLink={(['captacao', 'aguardando_link', 'edicao'].includes(task.kanban_column)) && userRole !== 'videomaker' || (userRole === 'videomaker' && ['captacao', 'aguardando_link'].includes(task.kanban_column)) ? () => openLinkDialog(task, 'drive') : undefined}
+                            onAddDriveLink={(['captacao', 'edicao'].includes(task.kanban_column)) && userRole !== 'videomaker' || (userRole === 'videomaker' && task.kanban_column === 'captacao') ? () => openLinkDialog(task, 'drive') : undefined}
                             onAddVideoLink={(task.kanban_column === 'edicao' || task.kanban_column === 'alteracao') && userRole !== 'videomaker' ? () => openLinkDialog(task, 'video') : undefined}
                             onMoveToNext={
                               task.kanban_column === 'captacao' && task.drive_link && (userRole !== 'editor') ? () => handleMoveToNext(task, 'edicao') :
-                              task.kanban_column === 'aguardando_link' && task.drive_link && (userRole !== 'editor') ? () => handleMoveToNext(task, 'edicao') :
                               task.kanban_column === 'envio' && (userRole === 'admin' || userRole === 'social_media') ? () => handleMoveToNext(task, 'agendamentos') :
                               undefined
                             }
                             nextColumnLabel={
                               task.kanban_column === 'captacao' ? 'Edição' :
-                              task.kanban_column === 'aguardando_link' ? 'Edição' :
                               task.kanban_column === 'envio' ? 'Agendamentos' :
                               undefined
                             }

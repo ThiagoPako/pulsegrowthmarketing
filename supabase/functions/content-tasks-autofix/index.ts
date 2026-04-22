@@ -26,16 +26,23 @@ Deno.serve(async (req) => {
     // 1) Buscar tarefas candidatas (presas em captacao* com recording_id)
     const { data: stuckTasks, error: tasksErr } = await supabase
       .from("content_tasks")
-      .select("id, title, kanban_column, drive_link, recording_id")
+      .select("id, title, kanban_column, drive_link, recording_id, content_type")
       .in("kanban_column", ["captacao", "captacao_concluida"])
       .not("recording_id", "is", null);
 
     if (tasksErr) throw tasksErr;
 
+    const emptyStats = {
+      moved: 0,
+      cancelled: 0,
+      extras: 0,
+      byVideomaker: {} as Record<string, { name: string; moved: number; cancelled: number; extras: number }>,
+    };
+
     if (!stuckTasks || stuckTasks.length === 0) {
       console.log("[content-tasks-autofix] nada a fazer (0 candidatas)");
       return new Response(
-        JSON.stringify({ ok: true, scanned: 0, moved: 0, skipped: 0, results: [] }),
+        JSON.stringify({ ok: true, scanned: 0, moved: 0, skipped: 0, results: [], stats: emptyStats }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -44,22 +51,43 @@ Deno.serve(async (req) => {
       ...new Set(stuckTasks.map((t) => t.recording_id as string)),
     ];
 
-    // 2) Buscar status das gravações vinculadas
+    // 2) Buscar gravações vinculadas (status + videomaker)
     const { data: recs, error: recsErr } = await supabase
       .from("recordings")
-      .select("id, status")
+      .select("id, status, videomaker_id")
       .in("id", recordingIds);
 
     if (recsErr) throw recsErr;
 
-    const recStatus = new Map(
-      (recs ?? []).map((r) => [r.id as string, r.status as string]),
+    const recInfo = new Map(
+      (recs ?? []).map((r) => [
+        r.id as string,
+        { status: r.status as string, videomaker_id: (r as any).videomaker_id as string | null },
+      ]),
     );
 
-    // 3) Filtrar somente tarefas cuja gravação está concluída
-    const toFix = stuckTasks.filter(
-      (t) => recStatus.get(t.recording_id as string) === "concluida",
-    );
+    // 2.b) Resolver nomes dos videomakers
+    const vmIds = [
+      ...new Set(
+        (recs ?? [])
+          .map((r) => (r as any).videomaker_id as string | null)
+          .filter((v): v is string => !!v),
+      ),
+    ];
+    const vmNames = new Map<string, string>();
+    if (vmIds.length > 0) {
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id, name")
+        .in("id", vmIds);
+      for (const p of profs ?? []) vmNames.set(p.id as string, (p as any).name ?? "Videomaker");
+    }
+
+    // 3) Filtrar somente tarefas cuja gravação está concluída ou cancelada
+    const toFix = stuckTasks.filter((t) => {
+      const st = recInfo.get(t.recording_id as string)?.status;
+      return st === "concluida" || st === "cancelada";
+    });
 
     const results: Array<{
       id: string;

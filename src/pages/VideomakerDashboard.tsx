@@ -272,23 +272,52 @@ export default function VideomakerDashboard() {
     setEventDriveLink(evt.driveLink || '');
     setEventEditorId('__auto__');
     setEventNotes('');
+    setEventDriveLinkError(null);
     setEventFinishOpen(true);
+  };
+
+  const validateDriveLink = (raw: string): string | null => {
+    const value = raw.trim();
+    if (!value) return 'O link do Drive é obrigatório para enviar para edição.';
+    try {
+      const url = new URL(value);
+      if (!/^https?:$/.test(url.protocol)) {
+        return 'O link precisa começar com http:// ou https://';
+      }
+    } catch {
+      return 'Cole um link válido (ex: https://drive.google.com/...).';
+    }
+    return null;
   };
 
   const confirmFinishEvent = async () => {
     if (!eventFinishId) return;
     const evt = eventRecordings.find(e => e.id === eventFinishId);
     if (!evt) return;
-    if (!eventDriveLink.trim()) { toast.error('Informe o link do Drive com o material gravado'); return; }
+
+    const driveErr = validateDriveLink(eventDriveLink);
+    if (driveErr) {
+      setEventDriveLinkError(driveErr);
+      toast.error(driveErr);
+      return;
+    }
+    setEventDriveLinkError(null);
+    setEventFinishSubmitting(true);
 
     // 1) Mark event as concluded + save drive link
     const { error: updateErr } = await supabase
       .from('event_recordings')
       .update({ status: 'concluido', drive_link: eventDriveLink.trim() } as any)
       .eq('id', evt.id);
-    if (updateErr) { toast.error('Erro ao finalizar evento'); console.error(updateErr); return; }
+    if (updateErr) {
+      toast.error('Erro ao finalizar evento. Tente novamente.');
+      console.error(updateErr);
+      setEventFinishSubmitting(false);
+      return;
+    }
 
     // 2) Pick editor (auto = least loaded)
+{{KEEP_REST}}
     let assignedEditor: string | null = eventEditorId === '__auto__' ? null : eventEditorId;
     if (!assignedEditor) {
       const editorRoles = users.filter(u => u.role === 'editor');

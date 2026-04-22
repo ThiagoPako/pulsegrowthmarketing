@@ -1554,9 +1554,9 @@ function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, lin
         draggable={!viewOnly}
         onDragStart={viewOnly ? undefined : onDragStart}
         onClick={onCardClick}
-        className={`group relative rounded-xl transition-all duration-300 overflow-hidden border ${
+        className={`group relative rounded-xl transition-all duration-500 overflow-hidden border ${
           isAwaitingLink
-            ? 'bg-yellow-50 dark:bg-yellow-950/40 border-yellow-400/70 dark:border-yellow-500/60 shadow-yellow-400/30 ring-2 ring-yellow-400/40 animate-pulse'
+            ? 'bg-yellow-50/70 dark:bg-yellow-950/30 border-yellow-300/60 dark:border-yellow-500/40 ring-1 ring-yellow-300/50 animate-soft-pulse'
             : 'bg-card border-border/40'
         } ${
           viewOnly ? 'cursor-default opacity-80' : 'cursor-grab active:cursor-grabbing'

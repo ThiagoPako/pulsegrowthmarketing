@@ -196,6 +196,8 @@ export default function CommercialProposal() {
   const [cronogramaTotalDays, setCronogramaTotalDays] = useState('');
   const [cronogramaPaymentMethod, setCronogramaPaymentMethod] = useState('pix');
   const [cronogramaInstallments, setCronogramaInstallments] = useState('1');
+  const [cronogramaPricingMode, setCronogramaPricingMode] = useState<'individual' | 'total'>('individual');
+  const [cronogramaTotalCustomValue, setCronogramaTotalCustomValue] = useState('');
   const [generatingTimeline, setGeneratingTimeline] = useState(false);
 
   // ── Clear proposal ──
@@ -229,6 +231,7 @@ export default function CommercialProposal() {
     setCronogramaDesc(''); setCronogramaDeliverables([]); setCronogramaPhases([]);
     setCronogramaMethodology(''); setCronogramaProjectName('');
     setCronogramaTotalDays(''); setCronogramaPaymentMethod('pix'); setCronogramaInstallments('1');
+    setCronogramaPricingMode('individual'); setCronogramaTotalCustomValue('');
     localStorage.removeItem(DRAFT_KEY);
     toast.success('Proposta limpa com sucesso!');
   }, []);
@@ -288,6 +291,8 @@ export default function CommercialProposal() {
       if (d.cronogramaTotalDays) setCronogramaTotalDays(d.cronogramaTotalDays);
       if (d.cronogramaPaymentMethod) setCronogramaPaymentMethod(d.cronogramaPaymentMethod);
       if (d.cronogramaInstallments) setCronogramaInstallments(d.cronogramaInstallments);
+      if (d.cronogramaPricingMode) setCronogramaPricingMode(d.cronogramaPricingMode);
+      if (d.cronogramaTotalCustomValue) setCronogramaTotalCustomValue(d.cronogramaTotalCustomValue);
     } catch { /* ignore corrupt data */ }
   }, []);
 
@@ -300,13 +305,13 @@ export default function CommercialProposal() {
       systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline,
       endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription,
       customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings,
-      cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments,
+      cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, cronogramaPricingMode, cronogramaTotalCustomValue,
     };
     const timer = setTimeout(() => {
       try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* quota */ }
     }, 500);
     return () => clearTimeout(timer);
-  }, [proposalType, clientName, clientCompany, validityDate, bonusServices, teamMembers, customDiscount, observations, whatsappNumber, selectedPlanId, hasContract, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription, customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings, cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments]);
+  }, [proposalType, clientName, clientCompany, validityDate, bonusServices, teamMembers, customDiscount, observations, whatsappNumber, selectedPlanId, hasContract, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription, customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings, cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, cronogramaPricingMode, cronogramaTotalCustomValue]);
   const { data: plans = [] } = useQuery({
     queryKey: ['plans-proposal'],
     queryFn: async () => {
@@ -494,6 +499,7 @@ export default function CommercialProposal() {
     if (proposalType === 'endomarketing' && !endoMonthlyValue) { toast.error('Preencha o valor mensal'); return; }
     if (proposalType === 'personalizada' && !customMonthlyValue) { toast.error('Preencha o valor da proposta'); return; }
     if (proposalType === 'cronograma' && cronogramaDeliverables.length === 0) { toast.error('Gere ou adicione entregas ao cronograma'); return; }
+    if (proposalType === 'cronograma' && cronogramaPricingMode === 'total' && !cronogramaTotalCustomValue) { toast.error('Informe o valor total do serviço'); return; }
     setSavingProposal(true);
     try {
       const systemData = proposalType === 'sistema' ? {
@@ -529,6 +535,9 @@ export default function CommercialProposal() {
         recordings: parseInt(customRecordings) || 0,
       } : {};
 
+      const cronogramaSumValue = cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0);
+      const cronogramaTotalCustom = parseFloat(cronogramaTotalCustomValue) || 0;
+      const cronogramaResolvedTotal = cronogramaPricingMode === 'total' ? cronogramaTotalCustom : cronogramaSumValue;
       const cronogramaData = proposalType === 'cronograma' ? {
         projectName: cronogramaProjectName,
         methodology: cronogramaMethodology,
@@ -537,7 +546,8 @@ export default function CommercialProposal() {
         totalDays: parseInt(cronogramaTotalDays) || 60,
         paymentMethod: cronogramaPaymentMethod,
         installments: parseInt(cronogramaInstallments) || 1,
-        totalValue: cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0),
+        pricingMode: cronogramaPricingMode,
+        totalValue: cronogramaResolvedTotal,
       } : {};
 
       let saveSystemData: any = systemData;
@@ -1005,7 +1015,9 @@ export default function CommercialProposal() {
   };
 
   const renderCronogramaForm = () => {
-    const totalValue = cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0);
+    const sumValue = cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0);
+    const customTotal = parseFloat(cronogramaTotalCustomValue) || 0;
+    const totalValue = cronogramaPricingMode === 'total' ? customTotal : sumValue;
     const discountedVal = totalValue * (1 - customDiscount / 100);
     return (
       <>
@@ -1105,7 +1117,44 @@ export default function CommercialProposal() {
         </Card>
 
         <Card className="lg:col-span-2">
-          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Layers className="h-4 w-4 text-primary" /> Entregas e Valores Unitários</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2"><Layers className="h-4 w-4 text-primary" /> Entregas e Valores</CardTitle>
+            <div className="flex items-center gap-2 pt-2">
+              <Button
+                size="sm"
+                variant={cronogramaPricingMode === 'individual' ? 'default' : 'outline'}
+                className="h-7 text-xs"
+                onClick={() => setCronogramaPricingMode('individual')}
+              >
+                Valor por entrega
+              </Button>
+              <Button
+                size="sm"
+                variant={cronogramaPricingMode === 'total' ? 'default' : 'outline'}
+                className="h-7 text-xs"
+                onClick={() => setCronogramaPricingMode('total')}
+              >
+                Valor total único
+              </Button>
+            </div>
+            {cronogramaPricingMode === 'total' && (
+              <div className="pt-3 space-y-1">
+                <Label className="text-xs">Valor total do serviço (R$)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={cronogramaTotalCustomValue}
+                  onChange={e => setCronogramaTotalCustomValue(e.target.value)}
+                  placeholder="Ex: 12500"
+                  className="h-9"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  As entregas abaixo serão exibidas sem valores individuais — apenas o valor total será mostrado ao cliente.
+                </p>
+              </div>
+            )}
+          </CardHeader>
           <CardContent className="space-y-2">
             {cronogramaDeliverables.map((d, i) => {
               const CatIcon = CATEGORY_ICONS[d.category] || Layers;
@@ -1505,7 +1554,9 @@ export default function CommercialProposal() {
   };
 
   const renderCronogramaPreview = () => {
-    const totalValue = cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0);
+    const sumValue = cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0);
+    const customTotal = parseFloat(cronogramaTotalCustomValue) || 0;
+    const totalValue = cronogramaPricingMode === 'total' ? customTotal : sumValue;
     const discountedVal = totalValue * (1 - customDiscount / 100);
     const installs = parseInt(cronogramaInstallments) || 1;
     const installmentVal = discountedVal / installs;

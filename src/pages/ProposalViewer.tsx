@@ -541,7 +541,9 @@ export default function ProposalViewer() {
   // ===== CRONOGRAMA =====
   const renderCronogramaContent = () => {
     const cronoData = systemData;
-    const totalValue = (cronoData.deliverables || []).reduce((s: number, d: any) => s + ((d.unitPrice || 0) * (d.quantity || 1)), 0);
+    const sumValue = (cronoData.deliverables || []).reduce((s: number, d: any) => s + ((d.unitPrice || 0) * (d.quantity || 1)), 0);
+    const isTotalMode = cronoData.pricingMode === 'total';
+    const totalValue = isTotalMode ? (Number(cronoData.totalValue) || 0) : sumValue;
     const discountedVal = totalValue * (1 - discount / 100);
     const installs = cronoData.installments || 1;
     const installmentVal = discountedVal / installs;
@@ -586,8 +588,8 @@ export default function ProposalViewer() {
                   <tr className="text-left text-[10px] text-gray-500 uppercase tracking-wider" style={{ background: 'hsl(16 82% 96%)' }}>
                     <th className="p-3">Entrega</th>
                     <th className="p-3 text-center">Qtd</th>
-                    <th className="p-3 text-right">Unit.</th>
-                    <th className="p-3 text-right">Subtotal</th>
+                    {!isTotalMode && <th className="p-3 text-right">Unit.</th>}
+                    {!isTotalMode && <th className="p-3 text-right">Subtotal</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -599,14 +601,14 @@ export default function ProposalViewer() {
                         <p className="text-[10px] text-gray-500">{d.description}</p>
                       </td>
                       <td className="p-3 text-center text-xs font-medium">{d.quantity}</td>
-                      <td className="p-3 text-right text-xs text-gray-600">{fmt2(d.unitPrice)}</td>
-                      <td className="p-3 text-right text-xs font-bold" style={{ color: accentColor }}>{fmt2((d.unitPrice || 0) * (d.quantity || 1))}</td>
+                      {!isTotalMode && <td className="p-3 text-right text-xs text-gray-600">{fmt2(d.unitPrice)}</td>}
+                      {!isTotalMode && <td className="p-3 text-right text-xs font-bold" style={{ color: accentColor }}>{fmt2((d.unitPrice || 0) * (d.quantity || 1))}</td>}
                     </motion.tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 font-bold">
-                    <td colSpan={3} className="p-3 text-right text-xs text-gray-800">Total</td>
+                    <td colSpan={isTotalMode ? 2 : 3} className="p-3 text-right text-xs text-gray-800">Total</td>
                     <td className="p-3 text-right text-base" style={{ color: accentColor }}>{fmt2(totalValue)}</td>
                   </tr>
                 </tfoot>

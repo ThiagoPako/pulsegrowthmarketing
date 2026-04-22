@@ -223,14 +223,31 @@ export default function ContentKanban() {
   const [detailTask, setDetailTask] = useState<ContentTask | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   // ─── FETCH ─────────────────────────────────────────────────
+  // Retry com backoff exponencial para resistir a falhas transitórias de rede
+  // (ex.: PM2 restart, picos de latência). Não exibe erro ao usuário até esgotar.
   const fetchTasks = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('content_tasks')
-      .select('*')
-      .order('position', { ascending: true });
-    if (data) setTasks(data as ContentTask[]);
-    if (error) console.error('Error fetching content_tasks:', error);
-    setLoading(false);
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const { data, error } = await supabase
+          .from('content_tasks')
+          .select('*')
+          .order('position', { ascending: true });
+        if (error) throw error;
+        if (data) setTasks(data as ContentTask[]);
+        setLoading(false);
+        return;
+      } catch (err: any) {
+        const isLast = attempt === MAX_ATTEMPTS;
+        if (isLast) {
+          console.error('Error fetching content_tasks (after retries):', err?.message || err);
+          setLoading(false);
+          return;
+        }
+        // Backoff: 500ms, 1500ms
+        await new Promise(r => setTimeout(r, attempt * 500 + 500 * (attempt - 1)));
+      }
+    }
   }, []);
 
   // ─── AUTO-FIX agora roda no backend (edge function content-tasks-autofix via cron 1x/min) ──

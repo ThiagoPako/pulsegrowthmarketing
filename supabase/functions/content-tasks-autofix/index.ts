@@ -163,7 +163,7 @@ Deno.serve(async (req) => {
     const moved = results.filter((r) => r.ok && !r.skipped).length;
 
     console.log(
-      `[content-tasks-autofix] scanned=${stuckTasks.length} candidates=${toFix.length} moved=${moved} skipped=${skipped}`,
+      `[content-tasks-autofix] scanned=${stuckTasks.length} candidates=${toFix.length} moved=${moved} skipped=${skipped} warnings=${warnings}`,
     );
 
     return new Response(
@@ -173,6 +173,7 @@ Deno.serve(async (req) => {
         candidates: toFix.length,
         moved,
         skipped,
+        warnings,
         results,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },

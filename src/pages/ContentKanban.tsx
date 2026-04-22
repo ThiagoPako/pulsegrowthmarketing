@@ -944,6 +944,75 @@ export default function ContentKanban() {
         </div>
       </div>
 
+      {/* ─── Painel Admin: indicadores do autofix (atualiza só pelo retorno) ─── */}
+      {isAdmin && autofixStats.lastRunAt && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-3 rounded-xl border border-border/60 bg-card/50 backdrop-blur px-4 py-3"
+        >
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <RefreshCw size={14} className="text-primary" />
+              Auto-correção (acumulado da sessão)
+              <span className="text-xs font-normal text-muted-foreground">
+                · última {format(new Date(autofixStats.lastRunAt), 'HH:mm:ss', { locale: ptBR })} · {autofixStats.lastScanned} verificadas
+              </span>
+            </div>
+            <button
+              onClick={() => setAutofixStats({ moved: 0, cancelled: 0, extras: 0, byVideomaker: {}, lastRunAt: null, lastScanned: 0 })}
+              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Limpar
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+            <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-medium">Corrigidas</div>
+              <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{autofixStats.moved}</div>
+            </div>
+            <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-rose-600 dark:text-rose-400 font-medium">Canceladas</div>
+              <div className="text-xl font-bold text-rose-600 dark:text-rose-400">{autofixStats.cancelled}</div>
+            </div>
+            <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-400 font-medium">Extras</div>
+              <div className="text-xl font-bold text-amber-600 dark:text-amber-400">{autofixStats.extras}</div>
+            </div>
+            <div className="rounded-lg bg-primary/10 border border-primary/20 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-primary font-medium">Videomakers</div>
+              <div className="text-xl font-bold text-primary">{Object.keys(autofixStats.byVideomaker).length}</div>
+            </div>
+          </div>
+
+          {Object.keys(autofixStats.byVideomaker).length > 0 && (
+            <div className="space-y-1">
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium mb-1">Por videomaker</div>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(autofixStats.byVideomaker)
+                  .sort(([, a], [, b]) => b.moved - a.moved)
+                  .map(([vmId, s]) => (
+                    <div
+                      key={vmId}
+                      className="inline-flex items-center gap-2 rounded-full bg-secondary/60 border border-border/50 px-2.5 py-1 text-xs"
+                    >
+                      <span className="font-medium text-foreground">{s.name}</span>
+                      <span className="text-emerald-600 dark:text-emerald-400">✓ {s.moved}</span>
+                      {s.cancelled > 0 && (
+                        <span className="text-rose-600 dark:text-rose-400">⊘ {s.cancelled}</span>
+                      )}
+                      {s.extras > 0 && (
+                        <span className="text-amber-600 dark:text-amber-400">★ {s.extras}</span>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+        </motion.div>
+      )}
+
       {/* Kanban Board */}
       <DragScrollContainer className="flex-1">
         <div className="flex gap-3 h-full min-w-max pb-2">

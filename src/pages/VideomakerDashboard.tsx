@@ -4,7 +4,7 @@ import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { useApp } from '@/contexts/AppContext';
 import { highlightQuotes, highlightQuotesForPdf } from '@/lib/highlightQuotes';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
-import type { Recording, Script, RecordingStatus } from '@/types';
+import type { Recording, Script, RecordingStatus, EventRecording } from '@/types';
 import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -77,6 +77,14 @@ export default function VideomakerDashboard() {
   const [waitingStartedAt, setWaitingStartedAt] = useState<Date | null>(null);
   const [waitingElapsed, setWaitingElapsed] = useState(0);
   const [deliveredRecordingIds, setDeliveredRecordingIds] = useState<Set<string>>(new Set());
+
+  // ── Event recordings (Agenda → Eventos) ──
+  const [eventRecordings, setEventRecordings] = useState<EventRecording[]>([]);
+  const [eventFinishOpen, setEventFinishOpen] = useState(false);
+  const [eventFinishId, setEventFinishId] = useState<string | null>(null);
+  const [eventDriveLink, setEventDriveLink] = useState('');
+  const [eventEditorId, setEventEditorId] = useState<string>('__auto__');
+  const [eventNotes, setEventNotes] = useState('');
 
   // Timer for waiting elapsed
   useEffect(() => {
@@ -203,6 +211,138 @@ export default function VideomakerDashboard() {
   const getClientColor = (id: string, rec?: Recording) => {
     if (rec?.prospectName) return '200 80% 55%';
     return clients.find(c => c.id === id)?.color || '220 10% 50%';
+  };
+
+  // ── Fetch event recordings for this videomaker ──
+  const fetchMyEvents = useCallback(async () => {
+    if (!vmId) return;
+    const { data, error } = await supabase
+      .from('event_recordings')
+      .select('*')
+      .eq('videomaker_id', vmId)
+      .order('date', { ascending: true });
+    if (error) { console.error('[fetchMyEvents] error:', error); return; }
+    const mapped: EventRecording[] = (data || []).map((e: any) => ({
+      id: e.id,
+      clientId: e.client_id || '',
+      videomakerId: e.videomaker_id || '',
+      title: e.title || '',
+      date: (e.date || '').slice(0, 10),
+      startTime: e.start_time,
+      endTime: e.end_time,
+      address: e.address || '',
+      description: e.description || '',
+      status: e.status,
+      driveLink: e.drive_link || '',
+      createdAt: e.created_at,
+      updatedAt: e.updated_at,
+    }));
+    setEventRecordings(mapped);
+  }, [vmId]);
+
+  useEffect(() => { fetchMyEvents(); }, [fetchMyEvents]);
+
+  // Today's events (not concluded/cancelled stay visible)
+  const todayEvents = useMemo(() =>
+    eventRecordings.filter(e => e.date === todayStr && e.status !== 'concluido' && e.status !== 'cancelado')
+      .sort((a, b) => a.startTime.localeCompare(b.startTime)),
+    [eventRecordings, todayStr]
+  );
+
+  const getEventsForDay = (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return eventRecordings.filter(e => e.date === dateStr && e.status !== 'cancelado')
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+  };
+
+  const handleStartEvent = async (evt: EventRecording) => {
+    const { error } = await supabase
+      .from('event_recordings')
+      .update({ status: 'em_andamento' } as any)
+      .eq('id', evt.id);
+    if (error) { toast.error('Erro ao iniciar evento'); console.error(error); return; }
+    setEventRecordings(prev => prev.map(e => e.id === evt.id ? { ...e, status: 'em_andamento' } : e));
+    toast.success(`📹 Cobertura iniciada — ${evt.title}`);
+  };
+
+  const openFinishEvent = (evt: EventRecording) => {
+    setEventFinishId(evt.id);
+    setEventDriveLink(evt.driveLink || '');
+    setEventEditorId('__auto__');
+    setEventNotes('');
+    setEventFinishOpen(true);
+  };
+
+  const confirmFinishEvent = async () => {
+    if (!eventFinishId) return;
+    const evt = eventRecordings.find(e => e.id === eventFinishId);
+    if (!evt) return;
+    if (!eventDriveLink.trim()) { toast.error('Informe o link do Drive com o material gravado'); return; }
+
+    // 1) Mark event as concluded + save drive link
+    const { error: updateErr } = await supabase
+      .from('event_recordings')
+      .update({ status: 'concluido', drive_link: eventDriveLink.trim() } as any)
+      .eq('id', evt.id);
+    if (updateErr) { toast.error('Erro ao finalizar evento'); console.error(updateErr); return; }
+
+    // 2) Pick editor (auto = least loaded)
+    let assignedEditor: string | null = eventEditorId === '__auto__' ? null : eventEditorId;
+    if (!assignedEditor) {
+      const editorRoles = users.filter(u => u.role === 'editor');
+      if (editorRoles.length > 0) {
+        const counts: Record<string, number> = {};
+        for (const ed of editorRoles) {
+          const { data } = await supabase.from('content_tasks').select('id')
+            .eq('assigned_to', ed.id).in('kanban_column', ['edicao', 'revisao']);
+          counts[ed.id] = data?.length || 0;
+        }
+        assignedEditor = editorRoles.sort((a, b) => (counts[a.id] || 0) - (counts[b.id] || 0))[0]?.id || null;
+      }
+    }
+
+    // 3) Create content_task in 'edicao' column
+    const taskTitle = `🎪 Evento: ${evt.title}`;
+    const description = [
+      `Cobertura de evento gravada em ${evt.date} (${evt.startTime} - ${evt.endTime})`,
+      evt.address ? `Local: ${evt.address}` : '',
+      evt.description ? `Descrição: ${evt.description}` : '',
+      eventNotes.trim() ? `Observações da gravação: ${eventNotes.trim()}` : '',
+    ].filter(Boolean).join('\n');
+
+    const { data: insertedTask, error: insertErr } = await supabase.from('content_tasks').insert({
+      client_id: evt.clientId,
+      title: taskTitle,
+      content_type: 'reels',
+      kanban_column: 'edicao',
+      description,
+      assigned_to: assignedEditor,
+      created_by: vmId,
+      drive_link: eventDriveLink.trim(),
+    } as any).select('id').single();
+
+    if (insertErr) {
+      console.error('[event finish] content_task insert error:', insertErr);
+      toast.error(`Erro ao enviar para edição: ${insertErr.message}`);
+      return;
+    }
+
+    // 4) Trigger sync (deadlines, notifications)
+    if (insertedTask?.id) {
+      const client = clients.find(c => c.id === evt.clientId);
+      const ctx = buildSyncContext(
+        { id: insertedTask.id, client_id: evt.clientId, title: taskTitle, content_type: 'reels', description, script_id: null, recording_id: null, assigned_to: assignedEditor, edited_video_link: null },
+        { userId: vmId, clientName: client?.companyName, clientWhatsapp: client?.whatsapp }
+      );
+      await syncContentTaskColumnChange('edicao', ctx);
+    }
+
+    setEventRecordings(prev => prev.map(e => e.id === evt.id ? { ...e, status: 'concluido', driveLink: eventDriveLink.trim() } : e));
+    toast.success(`✅ Evento finalizado e enviado para edição!`);
+    setEventFinishOpen(false);
+    setEventFinishId(null);
+    setEventDriveLink('');
+    setEventNotes('');
   };
 
   const typeLabels: Record<string, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.', backup: 'Backup', endomarketing: 'Endo', avulso: 'Avulso' };
@@ -1004,10 +1144,10 @@ export default function VideomakerDashboard() {
               </motion.div>
               <h3 className="font-display font-semibold text-sm">Gravações de Hoje</h3>
             </div>
-            <Badge variant="outline" className="text-[10px]">{todayRecs.length} gravações</Badge>
+            <Badge variant="outline" className="text-[10px]">{todayRecs.length + todayEvents.length} agendamentos</Badge>
           </div>
 
-          {todayRecs.length === 0 ? (
+          {todayRecs.length === 0 && todayEvents.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground text-sm flex flex-col items-center gap-2">
               <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 3, repeat: Infinity }}>
                 <Rocket size={32} className="text-muted-foreground/30 -rotate-45" />
@@ -1170,6 +1310,60 @@ export default function VideomakerDashboard() {
                   </motion.div>
                 );
               })}
+
+              {/* Today's events (cobertura de eventos) */}
+              {todayEvents.map((evt, i) => {
+                const color = getClientColor(evt.clientId);
+                const isLive = evt.status === 'em_andamento';
+                return (
+                  <motion.div key={evt.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: (todayRecs.length + i) * 0.05 }}
+                    className={`rounded-xl border-2 transition-all ${isLive ? 'border-warning bg-warning/5 ring-1 ring-warning/30' : 'border-border bg-secondary/50'}`}>
+                    <div className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3">
+                      <div className="w-1.5 h-10 sm:h-12 rounded-full shrink-0" style={{ backgroundColor: `hsl(${color})` }} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium text-sm truncate max-w-[160px] sm:max-w-none">🎪 {evt.title}</span>
+                          <Badge variant="outline" className="text-[9px] sm:text-[10px] border-warning/40 text-warning">Evento</Badge>
+                          <Badge variant="outline" className="text-[9px] sm:text-[10px]">{getClientName(evt.clientId)}</Badge>
+                          {isLive && (
+                            <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                              <Badge className="bg-warning/20 text-warning border-warning/30 text-[9px] sm:text-[10px]">
+                                <Rocket size={9} className="-rotate-45 mr-0.5" /> Em cobertura
+                              </Badge>
+                            </motion.div>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          <Clock size={10} className="inline mr-1" />{evt.startTime} - {evt.endTime}
+                          {evt.address && <span className="ml-2 truncate">📍 {evt.address}</span>}
+                        </p>
+                      </div>
+                      <div className="hidden sm:flex gap-1.5 shrink-0">
+                        {!isLive ? (
+                          <Button size="sm" onClick={() => handleStartEvent(evt)} className="gap-1">
+                            <Play size={14} /> Iniciar
+                          </Button>
+                        ) : (
+                          <Button size="sm" onClick={() => openFinishEvent(evt)} className="gap-1 bg-success hover:bg-success/90 text-success-foreground">
+                            <Square size={14} /> Finalizar
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex sm:hidden gap-1.5 px-2.5 pb-2.5 pt-0">
+                      {!isLive ? (
+                        <Button size="sm" onClick={() => handleStartEvent(evt)} className="flex-1 gap-1 text-xs h-8">
+                          <Rocket size={12} className="-rotate-45" /> Iniciar
+                        </Button>
+                      ) : (
+                        <Button size="sm" onClick={() => openFinishEvent(evt)} className="flex-1 gap-1 text-xs bg-success hover:bg-success/90 text-success-foreground h-8">
+                          <Square size={12} /> Finalizar
+                        </Button>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1323,6 +1517,45 @@ export default function VideomakerDashboard() {
                         )}
                         {!isActive && !isDone && !isOrganizingWeek && isStartable && (
                           <div className="flex items-center gap-1 text-primary text-[9px]">
+                            <Play size={8} /> Toque para iniciar
+                          </div>
+                        )}
+                      </motion.div>
+                    );
+                  })}
+                  {getEventsForDay(day).map(evt => {
+                    const color = getClientColor(evt.clientId);
+                    const isLive = evt.status === 'em_andamento';
+                    const isDone = evt.status === 'concluido';
+                    return (
+                      <motion.div key={evt.id}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => {
+                          if (isDone) return;
+                          if (isLive) openFinishEvent(evt);
+                          else handleStartEvent(evt);
+                        }}
+                        className={`rounded-lg border-2 p-2 text-xs space-y-0.5 cursor-pointer transition-all active:shadow-md ${
+                          isLive ? 'border-warning bg-warning/5 ring-1 ring-warning/30' :
+                          isDone ? 'border-success/30 bg-success/5 cursor-default' :
+                          'border-border bg-card hover:border-warning/40'
+                        }`}
+                        style={{ borderLeftWidth: 3, borderLeftColor: `hsl(${color})` }}
+                      >
+                        <p className="font-medium truncate text-[11px]">🎪 {evt.title}</p>
+                        <p className="text-muted-foreground text-[10px]">{evt.startTime}</p>
+                        {isLive && (
+                          <Badge className="bg-warning/20 text-warning border-warning/30 text-[9px]">
+                            <Rocket size={8} className="-rotate-45 mr-0.5" /> Em cobertura
+                          </Badge>
+                        )}
+                        {isDone && (
+                          <Badge className="bg-success/20 text-success border-success/30 text-[9px]">
+                            <Check size={8} className="mr-0.5" /> Finalizado
+                          </Badge>
+                        )}
+                        {!isLive && !isDone && (
+                          <div className="flex items-center gap-1 text-warning text-[9px]">
                             <Play size={8} /> Toque para iniciar
                           </div>
                         )}
@@ -2051,6 +2284,55 @@ export default function VideomakerDashboard() {
               })()}
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Finish Event Dialog */}
+      <Dialog open={eventFinishOpen} onOpenChange={setEventFinishOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              🎪 Finalizar cobertura de evento
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-xs font-medium mb-1 block">Link do Drive com o material *</label>
+              <Input
+                placeholder="https://drive.google.com/..."
+                value={eventDriveLink}
+                onChange={(e) => setEventDriveLink(e.target.value)}
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">Cole o link da pasta com vídeos/fotos da cobertura.</p>
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">Atribuir a editor (opcional)</label>
+              <Select value={eventEditorId} onValueChange={setEventEditorId}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__auto__">🎯 Automático (menor fila)</SelectItem>
+                  {users.filter(u => u.role === 'editor').map(ed => (
+                    <SelectItem key={ed.id} value={ed.id}>{ed.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">Observações para o editor (opcional)</label>
+              <Textarea
+                placeholder="Ex: priorizar destaques do palco, cliente quer reels de até 30s..."
+                value={eventNotes}
+                onChange={(e) => setEventNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => setEventFinishOpen(false)}>Cancelar</Button>
+              <Button onClick={confirmFinishEvent} className="bg-success hover:bg-success/90 text-success-foreground gap-1">
+                <Send size={14} /> Enviar para edição
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

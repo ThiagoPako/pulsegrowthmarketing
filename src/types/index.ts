@@ -149,7 +149,8 @@ export interface EventRecording {
   endTime: string; // HH:mm
   address: string;
   description?: string;
-  status: 'agendado' | 'concluido' | 'cancelado';
+  status: 'agendado' | 'em_andamento' | 'concluido' | 'cancelado';
+  driveLink?: string;
   createdBy?: string;
   createdAt?: string;
   updatedAt?: string;

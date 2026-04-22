@@ -1,0 +1,1 @@
+ALTER TABLE public.event_recordings ADD COLUMN IF NOT EXISTS drive_link text;

@@ -795,7 +795,7 @@ export default function FinancialRevenues() {
                   </motion.tr>
                 );
               })}
-              {filtered.length === 0 && (
+              {displayed.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-12">
                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">

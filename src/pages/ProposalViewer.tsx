@@ -542,7 +542,7 @@ export default function ProposalViewer() {
   const renderCronogramaContent = () => {
     const cronoData = systemData;
     const sumValue = (cronoData.deliverables || []).reduce((s: number, d: any) => s + ((d.unitPrice || 0) * (d.quantity || 1)), 0);
-    const isTotalMode = true;
+    // Modo público: sempre exibir apenas escopo + total único, sem valores individuais
     const totalValue = cronoData.pricingMode === 'total'
       ? (Number(cronoData.totalValue) || 0)
       : (Number(cronoData.totalValue) || sumValue);

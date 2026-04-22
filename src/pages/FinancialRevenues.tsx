@@ -611,6 +611,42 @@ export default function FinancialRevenues() {
         </Card>
       </motion.div>
 
+      <FinancialFilters
+        value={filters}
+        onChange={setFilters}
+        resultCount={displayed.length}
+        searchPlaceholder="Buscar por cliente, valor, status…"
+        advancedFields={[
+          {
+            key: 'status',
+            label: 'Status',
+            options: [
+              { value: 'recebida', label: 'Recebida' },
+              { value: 'prevista', label: 'Prevista' },
+              { value: 'em_atraso', label: 'Em atraso' },
+            ],
+          },
+          {
+            key: 'client',
+            label: 'Cliente',
+            options: clients
+              .filter(c => c.status === 'ativo')
+              .sort((a, b) => a.companyName.localeCompare(b.companyName))
+              .map(c => ({ value: c.id, label: c.companyName })),
+          },
+        ]}
+        exportRows={displayed}
+        exportColumns={[
+          { header: 'Cliente', accessor: r => clients.find(c => c.id === r.client_id)?.companyName || '—' },
+          { header: 'Valor (R$)', accessor: r => Number(r.amount).toFixed(2) },
+          { header: 'Vencimento', accessor: r => r.due_date ? format(new Date(normalizeDate(r.due_date) + 'T12:00:00'), 'dd/MM/yyyy') : '—' },
+          { header: 'Status', accessor: r => r.status },
+          { header: 'Pago em', accessor: r => r.paid_at ? format(new Date(normalizeDate(r.paid_at) + 'T12:00:00'), 'dd/MM/yyyy') : '—' },
+        ]}
+        exportFileName="receitas"
+        exportTitle="Receitas"
+      />
+
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.3 }}>
       <Card className="shadow-sm">
         <CardContent className="p-0">

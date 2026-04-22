@@ -1432,6 +1432,59 @@ app.post('/api/client-portal-auth', async (req, res) => {
 });
 
 // ─── 5b. Portal Actions (no JWT required — client-facing) ───
+// ── PUBLIC PROPOSAL VIEWER (token-gated, no JWT required) ──
+app.post('/api/public-proposal', async (req, res) => {
+  try {
+    await ensureProposalTables();
+    const { action, token, proposal_id, author_name, message, status, response_note } = req.body;
+
+    if (action === 'get_proposal') {
+      if (!token) return res.status(400).json({ error: 'token required' });
+      const { rows } = await pool.query('SELECT * FROM commercial_proposals WHERE token = $1 LIMIT 1', [token]);
+      return res.json({ proposal: rows[0] || null });
+    }
+
+    if (action === 'get_clients') {
+      const { rows } = await pool.query('SELECT id, company_name, logo_url, color FROM clients WHERE status = $1 ORDER BY company_name', ['ativo']);
+      return res.json({ clients: rows });
+    }
+
+    if (action === 'get_comments') {
+      if (!token) return res.status(400).json({ error: 'token required' });
+      const { rows: propRows } = await pool.query('SELECT id FROM commercial_proposals WHERE token = $1 LIMIT 1', [token]);
+      if (propRows.length === 0) return res.json({ comments: [] });
+      const { rows } = await pool.query('SELECT * FROM proposal_comments WHERE proposal_id = $1 ORDER BY created_at ASC', [propRows[0].id]);
+      return res.json({ comments: rows });
+    }
+
+    if (action === 'add_comment') {
+      if (!token || !author_name || !message) return res.status(400).json({ error: 'token, author_name, message required' });
+      const { rows: propRows } = await pool.query('SELECT id FROM commercial_proposals WHERE token = $1 LIMIT 1', [token]);
+      if (propRows.length === 0) return res.status(404).json({ error: 'Proposta não encontrada' });
+      await pool.query(
+        'INSERT INTO proposal_comments (proposal_id, author_name, message) VALUES ($1, $2, $3)',
+        [propRows[0].id, author_name, message]
+      );
+      return res.json({ ok: true });
+    }
+
+    if (action === 'respond') {
+      if (!token || !status) return res.status(400).json({ error: 'token, status required' });
+      if (status !== 'aceita' && status !== 'recusada') return res.status(400).json({ error: 'invalid status' });
+      await pool.query(
+        'UPDATE commercial_proposals SET status = $1, client_response_at = NOW(), client_response_note = $2 WHERE token = $3',
+        [status, response_note || null, token]
+      );
+      return res.json({ ok: true });
+    }
+
+    return res.status(400).json({ error: 'Unknown action' });
+  } catch (error) {
+    console.error('[public-proposal] error:', error);
+    return res.status(500).json({ error: error.message || 'Internal error' });
+  }
+});
+
 app.post('/api/portal-actions', async (req, res) => {
   try {
     const { action, client_id, content_id, author_name, author_type, author_id, message } = req.body;

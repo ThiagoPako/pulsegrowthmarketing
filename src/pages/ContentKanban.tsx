@@ -119,6 +119,7 @@ function DragScrollContainer({ children, className }: { children: React.ReactNod
 const KANBAN_COLUMNS = [
   { id: 'ideias', label: 'Zona de Ideias', lucideIcon: 'lightbulb', gradient: 'from-violet-500 to-purple-600', glow: 'shadow-violet-500/20' },
   { id: 'captacao', label: 'Captação', lucideIcon: 'video', gradient: 'from-orange-400 to-orange-600', glow: 'shadow-orange-500/20' },
+  { id: 'aguardando_link', label: 'Aguardando Link', lucideIcon: 'link', gradient: 'from-yellow-400 to-amber-500', glow: 'shadow-yellow-500/20' },
   { id: 'edicao', label: 'Edição de Vídeo', lucideIcon: 'film', gradient: 'from-blue-400 to-blue-600', glow: 'shadow-blue-500/20' },
   { id: 'revisao', label: 'Revisão', lucideIcon: 'eye', gradient: 'from-teal-400 to-emerald-600', glow: 'shadow-teal-500/20' },
   { id: 'alteracao', label: 'Alteração', lucideIcon: 'edit', gradient: 'from-amber-400 to-yellow-500', glow: 'shadow-amber-500/20' },
@@ -232,14 +233,14 @@ export default function ContentKanban() {
     setLoading(false);
   }, []);
 
-  // ─── AUTO-FIX: tasks presas em "captacao" cuja gravação já está concluída ──
+  // ─── AUTO-FIX: tasks presas em "captacao"/"captacao_concluida" cuja gravação já está concluída ──
   // Regra: gravação concluída + drive_link → mover para "edicao"
-  //        gravação concluída + sem drive_link → mover de volta para "ideias"
-  //        (videomaker não marcou o script como gravado durante a finalização)
+  //        gravação concluída + sem drive_link → mover para "aguardando_link"
   useEffect(() => {
     if (loading || tasks.length === 0 || recordings.length === 0) return;
     const stuckTasks = tasks.filter(t => {
-      if (t.kanban_column !== 'captacao') return false;
+      // Inclui a coluna legado "captacao_concluida" para migração
+      if (!['captacao', 'captacao_concluida'].includes(t.kanban_column)) return false;
       if (!t.recording_id) return false;
       const rec = recordings.find(r => r.id === t.recording_id);
       return rec?.status === 'concluida';
@@ -248,23 +249,17 @@ export default function ContentKanban() {
 
     (async () => {
       for (const task of stuckTasks) {
-        const targetColumn = task.drive_link ? 'edicao' : 'ideias';
-        const updates: any = { kanban_column: targetColumn };
-        if (targetColumn === 'ideias') {
-          // Desliga vínculo de gravação para que possa ser planejada novamente
-          updates.recording_id = null;
-        }
+        const targetColumn = task.drive_link ? 'edicao' : 'aguardando_link';
         const { error: updErr } = await supabase
           .from('content_tasks')
-          .update(updates)
+          .update({ kanban_column: targetColumn })
           .eq('id', task.id);
         if (updErr) {
           console.error(`[ContentKanban auto-fix] Falha ao mover task ${task.id}:`, updErr);
         } else {
-          console.log(`[ContentKanban auto-fix] Task "${task.title}" movida de captacao → ${targetColumn}`);
+          console.log(`[ContentKanban auto-fix] Task "${task.title}" movida de ${task.kanban_column} → ${targetColumn}`);
         }
       }
-      // Recarrega para refletir mudanças
       fetchTasks();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -528,7 +523,7 @@ export default function ContentKanban() {
   // ─── ROLE-BASED COLUMN PERMISSIONS ────────────────────────
   const ROLE_ALLOWED_COLUMNS: Record<string, string[]> = {
     editor: ['edicao', 'alteracao', 'revisao'], // editor can move to edicao/alteracao/revisao only
-    videomaker: ['ideias', 'captacao'], // videomaker only works in ideias and captacao
+    videomaker: ['ideias', 'captacao', 'aguardando_link'], // videomaker can preencher link mesmo após gravação
   };
 
   const userRole = profile?.role || '';
@@ -540,7 +535,7 @@ export default function ContentKanban() {
   // Columns where user can interact (drag, add, execute actions)
   const interactiveColumns = useMemo(() => {
     if (userRole === 'editor') return ['edicao', 'revisao', 'alteracao'];
-    if (userRole === 'videomaker') return ['ideias', 'captacao'];
+    if (userRole === 'videomaker') return ['ideias', 'captacao', 'aguardando_link'];
     return KANBAN_COLUMNS.map(c => c.id) as string[];
   }, [userRole]);
 
@@ -560,16 +555,16 @@ export default function ContentKanban() {
         return 'Editores só podem mover cards que estejam em Edição ou Alteração.';
       }
       // Videomaker can only move FROM their allowed columns
-      if (userRole === 'videomaker' && !['ideias', 'captacao'].includes(task.kanban_column)) {
-        return 'Videomakers só podem mover cards que estejam em Ideias ou Captação.';
+      if (userRole === 'videomaker' && !['ideias', 'captacao', 'aguardando_link'].includes(task.kanban_column)) {
+        return 'Videomakers só podem mover cards que estejam em Ideias, Captação ou Aguardando Link.';
       }
     }
     // Rule: tasks in execution columns MUST have a responsible person
     if (EXECUTION_COLUMNS.includes(targetColumn) && !task.assigned_to) {
       return 'Esta tarefa precisa ter um responsável atribuído antes de entrar em execução. Edite o card e selecione o responsável.';
     }
-    // captacao → edicao: needs drive_link (materiais brutos)
-    if (targetColumn === 'edicao' && task.kanban_column === 'captacao' && !task.drive_link) {
+    // captacao/aguardando_link → edicao: needs drive_link (materiais brutos)
+    if (targetColumn === 'edicao' && ['captacao', 'aguardando_link'].includes(task.kanban_column) && !task.drive_link) {
       return 'O card precisa ter o link dos materiais brutos (Drive) para ir para edição';
     }
     // edicao → revisao: needs edited_video_link
@@ -915,6 +910,13 @@ export default function ContentKanban() {
                   />
                 </motion.div>
 
+                {/* Motivo / explicação da coluna */}
+                {col.id === 'aguardando_link' && (
+                  <div className="px-3 py-2 bg-yellow-500/10 border-b border-yellow-500/20 text-[10.5px] text-yellow-700 dark:text-yellow-300 leading-snug">
+                    📦 Gravação concluída, mas o videomaker ainda não enviou o <strong>link do Drive</strong> com os materiais brutos. Adicione o link para liberar a edição.
+                  </div>
+                )}
+
                 {/* Cards */}
                 <div className="flex-1 px-2 py-2 overflow-y-auto max-h-[calc(100vh-18rem)]">
                   <AnimatePresence mode="popLayout">
@@ -948,15 +950,17 @@ export default function ContentKanban() {
                             onConfirmPosted={task.kanban_column === 'acompanhamento' && !isRestricted ? () => handleConfirmPosted(task) : undefined}
                             onApprove={task.kanban_column === 'revisao' && (userRole === 'admin' || userRole === 'social_media') ? () => handleApproveTask(task) : undefined}
                             onRequestAdjustments={task.kanban_column === 'revisao' && (userRole === 'admin' || userRole === 'social_media') ? () => openAdjustmentDialog(task) : undefined}
-                            onAddDriveLink={(task.kanban_column === 'captacao' || task.kanban_column === 'edicao') && userRole !== 'videomaker' || (userRole === 'videomaker' && task.kanban_column === 'captacao') ? () => openLinkDialog(task, 'drive') : undefined}
+                            onAddDriveLink={(['captacao', 'aguardando_link', 'edicao'].includes(task.kanban_column)) && userRole !== 'videomaker' || (userRole === 'videomaker' && ['captacao', 'aguardando_link'].includes(task.kanban_column)) ? () => openLinkDialog(task, 'drive') : undefined}
                             onAddVideoLink={(task.kanban_column === 'edicao' || task.kanban_column === 'alteracao') && userRole !== 'videomaker' ? () => openLinkDialog(task, 'video') : undefined}
                             onMoveToNext={
                               task.kanban_column === 'captacao' && task.drive_link && (userRole !== 'editor') ? () => handleMoveToNext(task, 'edicao') :
+                              task.kanban_column === 'aguardando_link' && task.drive_link && (userRole !== 'editor') ? () => handleMoveToNext(task, 'edicao') :
                               task.kanban_column === 'envio' && (userRole === 'admin' || userRole === 'social_media') ? () => handleMoveToNext(task, 'agendamentos') :
                               undefined
                             }
                             nextColumnLabel={
                               task.kanban_column === 'captacao' ? 'Edição' :
+                              task.kanban_column === 'aguardando_link' ? 'Edição' :
                               task.kanban_column === 'envio' ? 'Agendamentos' :
                               undefined
                             }

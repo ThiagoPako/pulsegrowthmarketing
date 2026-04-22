@@ -523,7 +523,7 @@ export default function ContentKanban() {
   // ─── ROLE-BASED COLUMN PERMISSIONS ────────────────────────
   const ROLE_ALLOWED_COLUMNS: Record<string, string[]> = {
     editor: ['edicao', 'alteracao', 'revisao'], // editor can move to edicao/alteracao/revisao only
-    videomaker: ['ideias', 'captacao'], // videomaker only works in ideias and captacao
+    videomaker: ['ideias', 'captacao', 'aguardando_link'], // videomaker can preencher link mesmo após gravação
   };
 
   const userRole = profile?.role || '';
@@ -535,7 +535,7 @@ export default function ContentKanban() {
   // Columns where user can interact (drag, add, execute actions)
   const interactiveColumns = useMemo(() => {
     if (userRole === 'editor') return ['edicao', 'revisao', 'alteracao'];
-    if (userRole === 'videomaker') return ['ideias', 'captacao'];
+    if (userRole === 'videomaker') return ['ideias', 'captacao', 'aguardando_link'];
     return KANBAN_COLUMNS.map(c => c.id) as string[];
   }, [userRole]);
 
@@ -555,16 +555,16 @@ export default function ContentKanban() {
         return 'Editores só podem mover cards que estejam em Edição ou Alteração.';
       }
       // Videomaker can only move FROM their allowed columns
-      if (userRole === 'videomaker' && !['ideias', 'captacao'].includes(task.kanban_column)) {
-        return 'Videomakers só podem mover cards que estejam em Ideias ou Captação.';
+      if (userRole === 'videomaker' && !['ideias', 'captacao', 'aguardando_link'].includes(task.kanban_column)) {
+        return 'Videomakers só podem mover cards que estejam em Ideias, Captação ou Aguardando Link.';
       }
     }
     // Rule: tasks in execution columns MUST have a responsible person
     if (EXECUTION_COLUMNS.includes(targetColumn) && !task.assigned_to) {
       return 'Esta tarefa precisa ter um responsável atribuído antes de entrar em execução. Edite o card e selecione o responsável.';
     }
-    // captacao → edicao: needs drive_link (materiais brutos)
-    if (targetColumn === 'edicao' && task.kanban_column === 'captacao' && !task.drive_link) {
+    // captacao/aguardando_link → edicao: needs drive_link (materiais brutos)
+    if (targetColumn === 'edicao' && ['captacao', 'aguardando_link'].includes(task.kanban_column) && !task.drive_link) {
       return 'O card precisa ter o link dos materiais brutos (Drive) para ir para edição';
     }
     // edicao → revisao: needs edited_video_link

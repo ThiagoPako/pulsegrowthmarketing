@@ -298,26 +298,26 @@ export default function ContentKanban() {
 
       // ─── Atualiza indicadores admin acumulados (apenas com base no retorno) ──
       const stats = data?.stats as
-        | { moved: number; cancelled: number; extras: number; byVideomaker: Record<string, AutofixVmStat> }
+        | { moved: number; cancelled: number; extras: number; orphans?: number; byVideomaker: Record<string, Partial<AutofixVmStat> & { name: string }> }
         | undefined;
       if (stats) {
         setAutofixStats(prev => {
           const mergedVm: Record<string, AutofixVmStat> = { ...prev.byVideomaker };
           for (const [vmId, s] of Object.entries(stats.byVideomaker ?? {})) {
             const existing = mergedVm[vmId];
-            mergedVm[vmId] = existing
-              ? {
-                  name: s.name || existing.name,
-                  moved: existing.moved + (s.moved ?? 0),
-                  cancelled: existing.cancelled + (s.cancelled ?? 0),
-                  extras: existing.extras + (s.extras ?? 0),
-                }
-              : { ...s };
+            mergedVm[vmId] = {
+              name: s.name || existing?.name || 'Sem videomaker',
+              moved: (existing?.moved ?? 0) + (s.moved ?? 0),
+              cancelled: (existing?.cancelled ?? 0) + (s.cancelled ?? 0),
+              extras: (existing?.extras ?? 0) + (s.extras ?? 0),
+              orphans: (existing?.orphans ?? 0) + (s.orphans ?? 0),
+            };
           }
           return {
             moved: prev.moved + (stats.moved ?? 0),
             cancelled: prev.cancelled + (stats.cancelled ?? 0),
             extras: prev.extras + (stats.extras ?? 0),
+            orphans: prev.orphans + (stats.orphans ?? 0),
             byVideomaker: mergedVm,
             lastRunAt: new Date().toISOString(),
             lastScanned: scanned,

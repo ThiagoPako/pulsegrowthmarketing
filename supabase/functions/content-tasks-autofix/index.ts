@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
     const { data: stuckTasks, error: tasksErr } = await supabase
       .from("content_tasks")
       .select("id, title, kanban_column, drive_link, recording_id, content_type, script_id, updated_at")
-      .in("kanban_column", ["captacao", "captacao_concluida"]);
+      .in("kanban_column", ["captacao", "captacao_concluida", "aguardando_link"]);
 
     if (tasksErr) throw tasksErr;
 

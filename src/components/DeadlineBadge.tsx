@@ -120,38 +120,30 @@ export function getDeadlineProgress(startedAt: string | null | undefined, deadli
   const end = new Date(deadline).getTime();
   const now = Date.now();
 
-  if (totalHours && totalHours > 0) {
-    // The deadline IS the end. Start = deadline - totalHours (in real hours).
-    // Progress = how much of the totalHours window has elapsed (in business time).
-    const totalMs = totalHours * 60 * 60 * 1000;
-    const start = end - totalMs;
-
-    if (now <= start) return 0;
-    if (now >= end) return 100;
-
-    const rawElapsed = now - start;
-    const weekendElapsed = getWeekendMsBetween(new Date(start), new Date(now));
-    const businessElapsed = Math.max(0, rawElapsed - weekendElapsed);
-
-    const weekendInTotal = getWeekendMsBetween(new Date(start), new Date(end));
-    const businessTotal = Math.max(1, totalMs - weekendInTotal);
-
-    return Math.min(100, Math.max(0, Math.round((businessElapsed / businessTotal) * 100)));
+  // Prefer the real start timestamp when available — it reflects the true beginning of the stage.
+  // `totalHours` is only used as a fallback when we have no `startedAt`.
+  let start: number;
+  if (startedAt) {
+    start = new Date(startedAt).getTime();
+  } else if (totalHours && totalHours > 0) {
+    start = end - totalHours * 60 * 60 * 1000;
+  } else {
+    return 0;
   }
 
-  if (!startedAt) return 0;
-  const start = new Date(startedAt).getTime();
+  if (now <= start) return 0;
+  if (now >= end) return 100;
+
   const total = end - start;
   if (total <= 0) return 100;
 
   const rawElapsed = now - start;
   const weekendElapsed = getWeekendMsBetween(new Date(start), new Date(now));
-  const businessElapsed = rawElapsed - weekendElapsed;
+  const businessElapsed = Math.max(0, rawElapsed - weekendElapsed);
 
   const weekendInTotal = getWeekendMsBetween(new Date(start), new Date(end));
-  const businessTotal = total - weekendInTotal;
+  const businessTotal = Math.max(1, total - weekendInTotal);
 
-  if (businessTotal <= 0) return 100;
   return Math.min(100, Math.max(0, Math.round((businessElapsed / businessTotal) * 100)));
 }
 

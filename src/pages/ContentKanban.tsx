@@ -234,23 +234,36 @@ export default function ContentKanban() {
   }, []);
 
   // ─── AUTO-FIX agora roda no backend (edge function content-tasks-autofix via cron 1x/min) ──
-  // Mantemos apenas um disparo opcional ao montar para acelerar a primeira correção visível.
-  useEffect(() => {
-    if (loading) return;
-    supabase.functions.invoke('content-tasks-autofix').then(({ data, error }) => {
+  // Mantemos um disparo silencioso ao montar para acelerar a primeira correção visível.
+  const [autofixRunning, setAutofixRunning] = useState(false);
+
+  const runAutofix = useCallback(async (manual = false) => {
+    setAutofixRunning(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('content-tasks-autofix');
       if (error) {
+        if (manual) toast.error('Falha ao reprocessar: ' + error.message);
         console.warn('[ContentKanban] autofix invoke falhou:', error.message);
         return;
       }
-      if (data?.moved > 0) {
-        console.log(`[ContentKanban] autofix moveu ${data.moved} tarefa(s)`);
-        fetchTasks();
+      const moved = data?.moved ?? 0;
+      const scanned = data?.scanned ?? 0;
+      if (moved > 0) {
+        await fetchTasks();
+        if (manual) toast.success(`✅ ${moved} tarefa(s) corrigida(s)`);
+      } else if (manual) {
+        toast.info(`Nenhuma tarefa presa encontrada (${scanned} verificadas)`);
       }
-    });
+    } finally {
+      setAutofixRunning(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    runAutofix(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
-
-  // (rotina antiga removida — agora roda no backend via cron a cada 1 min)
 
   useEffect(() => {
     fetchTasks();

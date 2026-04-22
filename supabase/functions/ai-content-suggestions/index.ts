@@ -116,50 +116,20 @@ Responda APENAS com JSON válido:
 
 Gere entre 5 e 15 entregas relevantes organizadas em 2-4 fases. Os preços devem ser realistas para o mercado brasileiro de marketing digital. Cada entrega deve ter um valor unitário baseado na complexidade. Seja específico e profissional.`;
 
-      const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: "Você é um gestor de projetos de marketing digital. Responda APENAS com JSON válido." },
-            { role: "user", content: timelinePrompt },
-          ],
-        }),
-      });
-
-      if (!aiRes.ok) {
-        const errText = await aiRes.text();
-        console.error("AI timeline error:", aiRes.status, errText);
-        if (aiRes.status === 429) {
-          return new Response(JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos." }), {
-            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        if (aiRes.status === 402) {
-          return new Response(JSON.stringify({ error: "Créditos de IA insuficientes. Adicione créditos no painel." }), {
-            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        return new Response(JSON.stringify({ error: "Erro ao gerar cronograma" }), {
-          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      const aiData = await aiRes.json();
-      const aiContent = aiData.choices?.[0]?.message?.content || "";
       try {
+        const aiContent = await callGemini(
+          "Você é um gestor de projetos de marketing digital. Responda APENAS com JSON válido.",
+          timelinePrompt
+        );
         const cleaned = aiContent.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
         const parsed = JSON.parse(cleaned);
         return new Response(JSON.stringify(parsed), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
-      } catch {
-        return new Response(JSON.stringify({ deliverables: [], error: "Falha ao interpretar resposta da IA" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+      } catch (err: any) {
+        console.error("proposal_timeline error:", err);
+        return new Response(JSON.stringify({ deliverables: [], error: err.message || "Falha ao gerar cronograma" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     }

@@ -277,6 +277,10 @@ export default function VideomakerDashboard() {
     setEventEditorId('__auto__');
     setEventNotes('');
     setEventDriveLinkError(null);
+    setDrivePreviewStatus('idle');
+    setDrivePreviewKind(null);
+    setDrivePreviewId(null);
+    setDrivePreviewConfirmed(false);
     setEventFinishOpen(true);
   };
 
@@ -293,6 +297,71 @@ export default function VideomakerDashboard() {
     }
     return null;
   };
+
+  // Extract Drive file/folder ID from common URL patterns.
+  const parseDriveLink = (raw: string): { kind: 'file' | 'folder'; id: string } | null => {
+    try {
+      const url = new URL(raw.trim());
+      if (!url.hostname.endsWith('google.com')) return null;
+      const fileMatch = url.pathname.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (fileMatch) return { kind: 'file', id: fileMatch[1] };
+      const folderMatch = url.pathname.match(/\/drive\/folders\/([a-zA-Z0-9_-]+)/);
+      if (folderMatch) return { kind: 'folder', id: folderMatch[1] };
+      const idParam = url.searchParams.get('id');
+      if (idParam) return { kind: 'file', id: idParam };
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Validate Drive link accessibility by probing the public thumbnail.
+  // Image() probe avoids CORS limits: onload = publicly accessible, onerror = private/not found.
+  useEffect(() => {
+    if (!eventFinishOpen) return;
+    const raw = eventDriveLink.trim();
+    if (!raw) { setDrivePreviewStatus('idle'); setDrivePreviewKind(null); setDrivePreviewId(null); return; }
+    if (validateDriveLink(raw)) { setDrivePreviewStatus('idle'); setDrivePreviewKind(null); setDrivePreviewId(null); return; }
+    const parsed = parseDriveLink(raw);
+    if (!parsed) {
+      setDrivePreviewStatus('unknown');
+      setDrivePreviewKind(null);
+      setDrivePreviewId(null);
+      return;
+    }
+    setDrivePreviewKind(parsed.kind);
+    setDrivePreviewId(parsed.id);
+    setDrivePreviewStatus('checking');
+    setDrivePreviewConfirmed(false);
+
+    let cancelled = false;
+    const img = new Image();
+    const timeoutId = window.setTimeout(() => {
+      if (cancelled) return;
+      cancelled = true;
+      img.src = '';
+      setDrivePreviewStatus('unknown');
+    }, 6000);
+
+    img.onload = () => {
+      if (cancelled) return;
+      window.clearTimeout(timeoutId);
+      setDrivePreviewStatus('ok');
+    };
+    img.onerror = () => {
+      if (cancelled) return;
+      window.clearTimeout(timeoutId);
+      setDrivePreviewStatus('private');
+    };
+    img.referrerPolicy = 'no-referrer';
+    img.src = `https://drive.google.com/thumbnail?id=${parsed.id}&sz=w320`;
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+      img.src = '';
+    };
+  }, [eventDriveLink, eventFinishOpen]);
 
   const confirmFinishEvent = async () => {
     if (!eventFinishId) return;

@@ -78,6 +78,14 @@ export default function VideomakerDashboard() {
   const [waitingElapsed, setWaitingElapsed] = useState(0);
   const [deliveredRecordingIds, setDeliveredRecordingIds] = useState<Set<string>>(new Set());
 
+  // ── Event recordings (Agenda → Eventos) ──
+  const [eventRecordings, setEventRecordings] = useState<EventRecording[]>([]);
+  const [eventFinishOpen, setEventFinishOpen] = useState(false);
+  const [eventFinishId, setEventFinishId] = useState<string | null>(null);
+  const [eventDriveLink, setEventDriveLink] = useState('');
+  const [eventEditorId, setEventEditorId] = useState<string>('__auto__');
+  const [eventNotes, setEventNotes] = useState('');
+
   // Timer for waiting elapsed
   useEffect(() => {
     if (!waitingStartedAt) return;

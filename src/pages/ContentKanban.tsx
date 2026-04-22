@@ -1493,6 +1493,7 @@ interface TaskCardProps {
   client?: Client;
   assignedUser?: { id?: string; name: string; avatarUrl?: string } | null;
   videomaker?: { id?: string; name: string; avatarUrl?: string } | null;
+  recordingStatus?: string | null;
   linkedScript?: Script;
   isDragging: boolean;
   viewOnly?: boolean;

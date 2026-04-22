@@ -246,11 +246,21 @@ export default function ContentKanban() {
         console.warn('[ContentKanban] autofix invoke falhou:', error.message);
         return;
       }
-      const moved = data?.moved ?? 0;
       const scanned = data?.scanned ?? 0;
-      if (moved > 0) {
-        await fetchTasks();
-        if (manual) toast.success(`✅ ${moved} tarefa(s) corrigida(s)`);
+      const results: Array<{ id: string; to: string; ok: boolean; skipped?: boolean }> =
+        data?.results ?? [];
+      const movedResults = results.filter(r => r.ok && !r.skipped);
+
+      if (movedResults.length > 0) {
+        // Patch local: atualiza somente as tarefas afetadas, sem refazer o fetch
+        const nowIso = new Date().toISOString();
+        setTasks(prev =>
+          prev.map(t => {
+            const hit = movedResults.find(r => r.id === t.id);
+            return hit ? { ...t, kanban_column: hit.to, updated_at: nowIso } : t;
+          }),
+        );
+        if (manual) toast.success(`✅ ${movedResults.length} tarefa(s) corrigida(s)`);
       } else if (manual) {
         toast.info(`Nenhuma tarefa presa encontrada (${scanned} verificadas)`);
       }

@@ -233,7 +233,25 @@ export default function ContentKanban() {
     setLoading(false);
   }, []);
 
-  // ─── AUTO-FIX: tasks presas em "captacao"/"captacao_concluida" cuja gravação já está concluída ──
+  // ─── AUTO-FIX agora roda no backend (edge function content-tasks-autofix via cron 1x/min) ──
+  // Mantemos apenas um disparo opcional ao montar para acelerar a primeira correção visível.
+  useEffect(() => {
+    if (loading) return;
+    supabase.functions.invoke('content-tasks-autofix').then(({ data, error }) => {
+      if (error) {
+        console.warn('[ContentKanban] autofix invoke falhou:', error.message);
+        return;
+      }
+      if (data?.moved > 0) {
+        console.log(`[ContentKanban] autofix moveu ${data.moved} tarefa(s)`);
+        fetchTasks();
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  // (rotina antiga removida — agora é backend)
+  // ─── AUTO-FIX legado (substituído) ──
   // Regra: gravação concluída + drive_link → mover para "edicao"
   //        gravação concluída + sem drive_link → mover para "aguardando_link"
   useEffect(() => {

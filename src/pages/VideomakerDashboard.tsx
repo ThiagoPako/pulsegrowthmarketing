@@ -4,7 +4,7 @@ import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { useApp } from '@/contexts/AppContext';
 import { highlightQuotes, highlightQuotesForPdf } from '@/lib/highlightQuotes';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
-import type { Recording, Script, RecordingStatus } from '@/types';
+import type { Recording, Script, RecordingStatus, EventRecording } from '@/types';
 import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

@@ -119,7 +119,6 @@ function DragScrollContainer({ children, className }: { children: React.ReactNod
 const KANBAN_COLUMNS = [
   { id: 'ideias', label: 'Zona de Ideias', lucideIcon: 'lightbulb', gradient: 'from-violet-500 to-purple-600', glow: 'shadow-violet-500/20' },
   { id: 'captacao', label: 'Captação', lucideIcon: 'video', gradient: 'from-orange-400 to-orange-600', glow: 'shadow-orange-500/20' },
-  { id: 'aguardando_link', label: 'Aguardando Link', lucideIcon: 'link', gradient: 'from-yellow-400 to-amber-500', glow: 'shadow-yellow-500/20' },
   { id: 'edicao', label: 'Edição de Vídeo', lucideIcon: 'film', gradient: 'from-blue-400 to-blue-600', glow: 'shadow-blue-500/20' },
   { id: 'revisao', label: 'Revisão', lucideIcon: 'eye', gradient: 'from-teal-400 to-emerald-600', glow: 'shadow-teal-500/20' },
   { id: 'alteracao', label: 'Alteração', lucideIcon: 'edit', gradient: 'from-amber-400 to-yellow-500', glow: 'shadow-amber-500/20' },
@@ -593,7 +592,7 @@ export default function ContentKanban() {
   // ─── ROLE-BASED COLUMN PERMISSIONS ────────────────────────
   const ROLE_ALLOWED_COLUMNS: Record<string, string[]> = {
     editor: ['edicao', 'alteracao', 'revisao'], // editor can move to edicao/alteracao/revisao only
-    videomaker: ['ideias', 'captacao', 'aguardando_link'], // videomaker can preencher link mesmo após gravação
+    videomaker: ['ideias', 'captacao'], // videomaker preenche o link enquanto está em Captação
   };
 
   const userRole = profile?.role || '';
@@ -605,7 +604,7 @@ export default function ContentKanban() {
   // Columns where user can interact (drag, add, execute actions)
   const interactiveColumns = useMemo(() => {
     if (userRole === 'editor') return ['edicao', 'revisao', 'alteracao'];
-    if (userRole === 'videomaker') return ['ideias', 'captacao', 'aguardando_link'];
+    if (userRole === 'videomaker') return ['ideias', 'captacao'];
     return KANBAN_COLUMNS.map(c => c.id) as string[];
   }, [userRole]);
 
@@ -625,16 +624,16 @@ export default function ContentKanban() {
         return 'Editores só podem mover cards que estejam em Edição ou Alteração.';
       }
       // Videomaker can only move FROM their allowed columns
-      if (userRole === 'videomaker' && !['ideias', 'captacao', 'aguardando_link'].includes(task.kanban_column)) {
-        return 'Videomakers só podem mover cards que estejam em Ideias, Captação ou Aguardando Link.';
+      if (userRole === 'videomaker' && !['ideias', 'captacao'].includes(task.kanban_column)) {
+        return 'Videomakers só podem mover cards que estejam em Ideias ou Captação.';
       }
     }
     // Rule: tasks in execution columns MUST have a responsible person
     if (EXECUTION_COLUMNS.includes(targetColumn) && !task.assigned_to) {
       return 'Esta tarefa precisa ter um responsável atribuído antes de entrar em execução. Edite o card e selecione o responsável.';
     }
-    // captacao/aguardando_link → edicao: needs drive_link (materiais brutos)
-    if (targetColumn === 'edicao' && ['captacao', 'aguardando_link'].includes(task.kanban_column) && !task.drive_link) {
+    // captacao → edicao: needs drive_link (materiais brutos)
+    if (targetColumn === 'edicao' && task.kanban_column === 'captacao' && !task.drive_link) {
       return 'O card precisa ter o link dos materiais brutos (Drive) para ir para edição';
     }
     // edicao → revisao: needs edited_video_link
@@ -1067,9 +1066,9 @@ export default function ContentKanban() {
                 </motion.div>
 
                 {/* Motivo / explicação da coluna */}
-                {col.id === 'aguardando_link' && (
-                  <div className="px-3 py-2 bg-yellow-500/10 border-b border-yellow-500/20 text-[10.5px] text-yellow-700 dark:text-yellow-300 leading-snug">
-                    📦 Gravação concluída, mas o videomaker ainda não enviou o <strong>link do Drive</strong> com os materiais brutos. Adicione o link para liberar a edição.
+                {col.id === 'captacao' && (
+                  <div className="px-3 py-2 bg-orange-500/10 border-b border-orange-500/20 text-[10.5px] text-orange-700 dark:text-orange-300 leading-snug">
+                    🎬 Cards em gravação. Quando concluída sem o link do Drive, o cartão fica destacado em <strong>amarelo pulsante</strong> aguardando o upload.
                   </div>
                 )}
 
@@ -1097,6 +1096,12 @@ export default function ContentKanban() {
                                 ? (task.edited_by || task.assigned_to)
                                 : task.assigned_to
                             )}
+                            videomaker={(() => {
+                              if (task.kanban_column !== 'captacao') return null;
+                              const rec = task.recording_id ? recordings.find(r => r.id === task.recording_id) : null;
+                              const vmId = rec?.videomakerId || task.assigned_to;
+                              return getUser(vmId);
+                            })()}
                             linkedScript={task.script_id ? scripts.find(s => s.id === task.script_id) : undefined}
                             isDragging={draggedTask?.id === task.id}
                             onDragStart={e => handleDragStart(e, task)}
@@ -1106,17 +1111,15 @@ export default function ContentKanban() {
                             onConfirmPosted={task.kanban_column === 'acompanhamento' && !isRestricted ? () => handleConfirmPosted(task) : undefined}
                             onApprove={task.kanban_column === 'revisao' && (userRole === 'admin' || userRole === 'social_media') ? () => handleApproveTask(task) : undefined}
                             onRequestAdjustments={task.kanban_column === 'revisao' && (userRole === 'admin' || userRole === 'social_media') ? () => openAdjustmentDialog(task) : undefined}
-                            onAddDriveLink={(['captacao', 'aguardando_link', 'edicao'].includes(task.kanban_column)) && userRole !== 'videomaker' || (userRole === 'videomaker' && ['captacao', 'aguardando_link'].includes(task.kanban_column)) ? () => openLinkDialog(task, 'drive') : undefined}
+                            onAddDriveLink={(['captacao', 'edicao'].includes(task.kanban_column)) && userRole !== 'videomaker' || (userRole === 'videomaker' && task.kanban_column === 'captacao') ? () => openLinkDialog(task, 'drive') : undefined}
                             onAddVideoLink={(task.kanban_column === 'edicao' || task.kanban_column === 'alteracao') && userRole !== 'videomaker' ? () => openLinkDialog(task, 'video') : undefined}
                             onMoveToNext={
                               task.kanban_column === 'captacao' && task.drive_link && (userRole !== 'editor') ? () => handleMoveToNext(task, 'edicao') :
-                              task.kanban_column === 'aguardando_link' && task.drive_link && (userRole !== 'editor') ? () => handleMoveToNext(task, 'edicao') :
                               task.kanban_column === 'envio' && (userRole === 'admin' || userRole === 'social_media') ? () => handleMoveToNext(task, 'agendamentos') :
                               undefined
                             }
                             nextColumnLabel={
                               task.kanban_column === 'captacao' ? 'Edição' :
-                              task.kanban_column === 'aguardando_link' ? 'Edição' :
                               task.kanban_column === 'envio' ? 'Agendamentos' :
                               undefined
                             }
@@ -1484,6 +1487,7 @@ interface TaskCardProps {
   task: ContentTask;
   client?: Client;
   assignedUser?: { id?: string; name: string; avatarUrl?: string } | null;
+  videomaker?: { id?: string; name: string; avatarUrl?: string } | null;
   linkedScript?: Script;
   isDragging: boolean;
   viewOnly?: boolean;
@@ -1506,13 +1510,15 @@ interface TaskCardProps {
   backwardLabel?: string;
 }
 
-function TaskCard({ task, client, assignedUser, linkedScript, isDragging, viewOnly, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit, onMoveForward, onMoveBackward, forwardLabel, backwardLabel }: TaskCardProps) {
+function TaskCard({ task, client, assignedUser, videomaker, linkedScript, isDragging, viewOnly, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit, onMoveForward, onMoveBackward, forwardLabel, backwardLabel }: TaskCardProps) {
   const [scriptPreviewOpen, setScriptPreviewOpen] = useState(false);
   const typeConfig = CONTENT_TYPES.find(t => t.value === task.content_type) || CONTENT_TYPES[0];
   const TypeIcon = typeConfig.icon;
   const clientColor = client?.color || '217 91% 60%';
 
   const isCaptacao = task.kanban_column === 'captacao';
+  // Aguardando link: card em Captação com gravação concluída (recording_id) mas SEM drive_link
+  const isAwaitingLink = isCaptacao && Boolean(task.recording_id) && !task.drive_link;
   const isRevisao = task.kanban_column === 'revisao' || task.kanban_column === 'alteracao';
   const isAcompanhamento = task.kanban_column === 'acompanhamento';
   const scheduledRecordingDate = normalizeDateValue(task.scheduled_recording_date);
@@ -1537,14 +1543,18 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, viewOn
         draggable={!viewOnly}
         onDragStart={viewOnly ? undefined : onDragStart}
         onClick={onCardClick}
-        className={`group relative bg-card rounded-xl transition-all duration-300 overflow-hidden border border-border/40 ${
+        className={`group relative rounded-xl transition-all duration-300 overflow-hidden border ${
+          isAwaitingLink
+            ? 'bg-yellow-50 dark:bg-yellow-950/40 border-yellow-400/70 dark:border-yellow-500/60 shadow-yellow-400/30 ring-2 ring-yellow-400/40 animate-pulse'
+            : 'bg-card border-border/40'
+        } ${
           viewOnly ? 'cursor-default opacity-80' : 'cursor-grab active:cursor-grabbing'
         } ${
           isDragging ? 'opacity-40 scale-95 shadow-none' : 'shadow-sm hover:shadow-lg'
         } ${isOverdue ? 'ring-1 ring-destructive/40' : ''} hover:-translate-y-0.5`}
       >
         {/* Status tag banner (top) */}
-        {isCaptacao && (
+        {isCaptacao && !isAwaitingLink && (
           <div className="flex items-center gap-2 px-3 py-1 bg-orange-500">
             <span className="relative flex h-1.5 w-1.5 shrink-0">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
@@ -1552,6 +1562,21 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, viewOn
             </span>
             <span className="text-[9px] font-bold text-white uppercase tracking-widest">Gravando</span>
           </div>
+        )}
+        {isAwaitingLink && (
+          <motion.div
+            className="flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-yellow-400 to-amber-500"
+            animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            style={{ backgroundSize: '200% 100%' }}
+          >
+            <Link2 size={10} className="text-white shrink-0 animate-pulse" />
+            <span className="text-[9px] font-bold text-white uppercase tracking-widest">Aguardando Link</span>
+            <span className="ml-auto relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+            </span>
+          </motion.div>
         )}
         {isOverdue && (
           <div className="flex items-center gap-1.5 px-3 py-1 bg-destructive">
@@ -1700,6 +1725,24 @@ function TaskCard({ task, client, assignedUser, linkedScript, isDragging, viewOn
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500 border border-card"></span>
                 </span>
+              </div>
+              <span className="text-[10px] text-muted-foreground truncate">{assignedUser.name}</span>
+            </div>
+          )}
+
+          {/* Videomaker badge (em Captação) */}
+          {isCaptacao && videomaker && (
+            <div className="flex items-center gap-2 pt-0.5 px-2 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/25">
+              <div className="relative shrink-0">
+                <UserAvatar user={{ name: videomaker.name, avatarUrl: videomaker.avatarUrl }} size="sm" />
+                <span className="absolute -bottom-0.5 -right-0.5 flex h-2 w-2">
+                  <span className={`absolute inline-flex h-full w-full rounded-full ${isAwaitingLink ? 'bg-yellow-400' : 'bg-orange-400 animate-ping'} opacity-75`}></span>
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${isAwaitingLink ? 'bg-yellow-500' : 'bg-orange-500'} border border-card`}></span>
+                </span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="text-[8.5px] font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400 block leading-none">Videomaker</span>
+                <span className="text-[10.5px] text-foreground/85 leading-snug block truncate font-medium">{videomaker.name}</span>
               </div>
             </div>
           )}

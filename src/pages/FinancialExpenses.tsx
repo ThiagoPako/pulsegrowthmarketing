@@ -481,7 +481,7 @@ export default function FinancialExpenses() {
       />
 
       {/* Tabs: Despesas / Salários */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setFilters(buildEmptyFilters()); }} className="w-full">
         <TabsList className="grid grid-cols-2 w-full max-w-md">
           <TabsTrigger value="despesas" className="gap-1.5">
             <Wallet size={14} /> Despesas
@@ -492,6 +492,20 @@ export default function FinancialExpenses() {
             <Badge variant="secondary" className="ml-1 text-[10px]">{fmt(salaryTotal)}</Badge>
           </TabsTrigger>
         </TabsList>
+
+        <div className="mt-3">
+          <FinancialFilters
+            value={filters}
+            onChange={setFilters}
+            resultCount={filtered.length}
+            advancedFields={advancedFields}
+            exportRows={filtered}
+            exportColumns={exportColumns}
+            exportFileName={activeTab === 'salarios' ? 'salarios' : 'despesas'}
+            exportTitle={activeTab === 'salarios' ? 'Salários' : 'Despesas'}
+            searchPlaceholder={activeTab === 'salarios' ? 'Buscar colaborador, cargo…' : 'Buscar descrição, categoria, responsável…'}
+          />
+        </div>
 
         {/* ── Despesas Tab ── */}
         <TabsContent value="despesas" className="space-y-4 mt-4">

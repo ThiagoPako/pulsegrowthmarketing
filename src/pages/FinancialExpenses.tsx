@@ -245,7 +245,7 @@ export default function FinancialExpenses() {
   // Find salary category
   const salaryCategory = useMemo(() => categories.find(c => c.name.toLowerCase() === 'salários'), [categories]);
 
-  const filtered = useMemo(() => {
+  const baseFiltered = useMemo(() => {
     const ym = selectedMonth;
     return expenses.filter(e => {
       const dateStr = normalizeDate(e.date);
@@ -255,6 +255,46 @@ export default function FinancialExpenses() {
       return !salaryCategory || e.category_id !== salaryCategory.id;
     });
   }, [expenses, selectedMonth, activeTab, salaryCategory]);
+
+  const filtered = useMemo(() => {
+    return applyFinancialFilters(baseFiltered, filters, {
+      getDate: (e) => normalizeDate(e.date),
+      getSearchableText: (e) => {
+        const cat = categories.find(c => c.id === e.category_id);
+        return [e.description, e.responsible, cat?.name, e.expense_type].filter(Boolean).join(' ');
+      },
+      matchAdvanced: (e, adv) => {
+        if (adv.category && adv.category !== 'all' && e.category_id !== adv.category) return false;
+        if (adv.type && adv.type !== 'all' && e.expense_type !== adv.type) return false;
+        if (activeTab === 'salarios' && adv.status && adv.status !== 'all') {
+          const paid = e.description?.endsWith(' - PAGO');
+          if (adv.status === 'pago' && !paid) return false;
+          if (adv.status === 'pendente' && paid) return false;
+        }
+        return true;
+      },
+    });
+  }, [baseFiltered, filters, categories, activeTab]);
+
+  const advancedFields = useMemo(() => {
+    const fields: any[] = [
+      { key: 'category', label: 'Categoria', options: categories.map(c => ({ value: c.id, label: c.name })) },
+      { key: 'type', label: 'Tipo', options: [{ value: 'fixa', label: 'Fixa' }, { value: 'variavel', label: 'Variável' }] },
+    ];
+    if (activeTab === 'salarios') {
+      fields.push({ key: 'status', label: 'Status', options: [{ value: 'pago', label: 'Pago' }, { value: 'pendente', label: 'Pendente' }] });
+    }
+    return fields;
+  }, [categories, activeTab]);
+
+  const exportColumns = useMemo(() => [
+    { header: 'Data', accessor: (e: Expense) => { const d = normalizeDate(e.date); const [y,m,day]=d.split('-'); return `${day}/${m}/${y}`; } },
+    { header: 'Categoria', accessor: (e: Expense) => categories.find(c => c.id === e.category_id)?.name || '—' },
+    { header: 'Descrição', accessor: (e: Expense) => e.description || '—' },
+    { header: 'Tipo', accessor: (e: Expense) => e.expense_type || '—' },
+    { header: 'Responsável', accessor: (e: Expense) => e.responsible || '—' },
+    { header: 'Valor (R$)', accessor: (e: Expense) => Number(e.amount).toFixed(2) },
+  ], [categories]);
 
   const total = filtered.reduce((s, e) => s + Number(e.amount), 0);
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });

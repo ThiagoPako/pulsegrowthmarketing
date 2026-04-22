@@ -1726,6 +1726,24 @@ function TaskCard({ task, client, assignedUser, videomaker, linkedScript, isDrag
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500 border border-card"></span>
                 </span>
               </div>
+              <span className="text-[10px] text-muted-foreground truncate">{assignedUser.name}</span>
+            </div>
+          )}
+
+          {/* Videomaker badge (em Captação) */}
+          {isCaptacao && videomaker && (
+            <div className="flex items-center gap-2 pt-0.5 px-2 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/25">
+              <div className="relative shrink-0">
+                <UserAvatar user={{ name: videomaker.name, avatarUrl: videomaker.avatarUrl }} size="sm" />
+                <span className="absolute -bottom-0.5 -right-0.5 flex h-2 w-2">
+                  <span className={`absolute inline-flex h-full w-full rounded-full ${isAwaitingLink ? 'bg-yellow-400' : 'bg-orange-400 animate-ping'} opacity-75`}></span>
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${isAwaitingLink ? 'bg-yellow-500' : 'bg-orange-500'} border border-card`}></span>
+                </span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="text-[8.5px] font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400 block leading-none">Videomaker</span>
+                <span className="text-[10.5px] text-foreground/85 leading-snug block truncate font-medium">{videomaker.name}</span>
+              </div>
             </div>
           )}
 

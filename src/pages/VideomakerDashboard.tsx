@@ -1144,10 +1144,10 @@ export default function VideomakerDashboard() {
               </motion.div>
               <h3 className="font-display font-semibold text-sm">Gravações de Hoje</h3>
             </div>
-            <Badge variant="outline" className="text-[10px]">{todayRecs.length} gravações</Badge>
+            <Badge variant="outline" className="text-[10px]">{todayRecs.length + todayEvents.length} agendamentos</Badge>
           </div>
 
-          {todayRecs.length === 0 ? (
+          {todayRecs.length === 0 && todayEvents.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground text-sm flex flex-col items-center gap-2">
               <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 3, repeat: Infinity }}>
                 <Rocket size={32} className="text-muted-foreground/30 -rotate-45" />

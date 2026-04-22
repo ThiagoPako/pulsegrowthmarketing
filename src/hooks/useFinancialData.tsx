@@ -273,24 +273,14 @@ export function useFinancialData() {
 
   // Revenue CRUD
   const addRevenue = async (r: Partial<Revenue>) => {
-    // Prevent duplicate only when client_id AND reference_month are provided
-    if (r.client_id && r.reference_month) {
-      const normalized = normalizeDate(r.reference_month);
-      const { data: dupCheck } = await supabase
-        .from('revenues')
-        .select('id')
-        .eq('client_id', r.client_id)
-        .eq('reference_month', normalized);
-      if ((dupCheck as any[] || []).length > 0) {
-        return false; // Already exists
-      }
-    }
     const { error } = await supabase.from('revenues').insert(r as any);
-    if (!error) {
-      await logActivity('criação', 'receita', `Registrou receita - R$ ${Number(r.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, undefined, r);
-      await fetchAll();
+    if (error) {
+      console.error('[useFinancialData] addRevenue error:', error);
+      return false;
     }
-    return !error;
+    await logActivity('criação', 'receita', `Registrou receita - R$ ${Number(r.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, undefined, r);
+    await fetchAll();
+    return true;
   };
 
   const updateRevenue = async (id: string, updates: Partial<Revenue>, clientName?: string) => {

@@ -211,6 +211,7 @@ export default function FinancialRevenues() {
     if (newRev.client_id) payload.client_id = newRev.client_id;
     if (desc) payload.description = desc;
 
+    console.log('[FinancialRevenues] Creating revenue with payload:', payload);
     const ok = await addRevenue(payload);
     if (ok) {
       // If marked as paid, also create the cash movement

@@ -1917,6 +1917,7 @@ export type Database = {
           created_by: string | null
           date: string
           description: string | null
+          drive_link: string | null
           end_time: string
           id: string
           start_time: string
@@ -1932,6 +1933,7 @@ export type Database = {
           created_by?: string | null
           date: string
           description?: string | null
+          drive_link?: string | null
           end_time?: string
           id?: string
           start_time?: string
@@ -1947,6 +1949,7 @@ export type Database = {
           created_by?: string | null
           date?: string
           description?: string | null
+          drive_link?: string | null
           end_time?: string
           id?: string
           start_time?: string

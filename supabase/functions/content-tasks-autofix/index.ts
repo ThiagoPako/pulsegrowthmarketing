@@ -23,12 +23,16 @@ Deno.serve(async (req) => {
       auth: { persistSession: false },
     });
 
-    // 1) Buscar tarefas candidatas (presas em captacao* com recording_id)
+    // 1) Buscar TODAS as tarefas em captacao*/captacao_concluida (com ou sem recording)
+    //    para detectar 3 cenários:
+    //    a) recording concluída → mover p/ edicao ou aguardando_link
+    //    b) recording cancelada → mover p/ ideias (script volta) ou cancelado
+    //    c) órfã: sem recording_id ou recording inexistente/agendada sem active_recording
+    //       → devolver para "ideias" para o videomaker re-selecionar
     const { data: stuckTasks, error: tasksErr } = await supabase
       .from("content_tasks")
-      .select("id, title, kanban_column, drive_link, recording_id, content_type")
-      .in("kanban_column", ["captacao", "captacao_concluida"])
-      .not("recording_id", "is", null);
+      .select("id, title, kanban_column, drive_link, recording_id, content_type, script_id, updated_at")
+      .in("kanban_column", ["captacao", "captacao_concluida"]);
 
     if (tasksErr) throw tasksErr;
 
@@ -36,7 +40,8 @@ Deno.serve(async (req) => {
       moved: 0,
       cancelled: 0,
       extras: 0,
-      byVideomaker: {} as Record<string, { name: string; moved: number; cancelled: number; extras: number }>,
+      orphans: 0,
+      byVideomaker: {} as Record<string, { name: string; moved: number; cancelled: number; extras: number; orphans: number }>,
     };
 
     if (!stuckTasks || stuckTasks.length === 0) {
@@ -48,16 +53,20 @@ Deno.serve(async (req) => {
     }
 
     const recordingIds = [
-      ...new Set(stuckTasks.map((t) => t.recording_id as string)),
+      ...new Set(
+        stuckTasks
+          .map((t) => t.recording_id as string | null)
+          .filter((v): v is string => !!v),
+      ),
     ];
 
-    // 2) Buscar gravações vinculadas (status + videomaker)
-    const { data: recs, error: recsErr } = await supabase
-      .from("recordings")
-      .select("id, status, videomaker_id")
-      .in("id", recordingIds);
-
-    if (recsErr) throw recsErr;
+    // 2) Buscar gravações vinculadas
+    const { data: recs } = recordingIds.length > 0
+      ? await supabase
+          .from("recordings")
+          .select("id, status, videomaker_id")
+          .in("id", recordingIds)
+      : { data: [] as Array<{ id: string; status: string; videomaker_id: string | null }> };
 
     const recInfo = new Map(
       (recs ?? []).map((r) => [
@@ -65,6 +74,17 @@ Deno.serve(async (req) => {
         { status: r.status as string, videomaker_id: (r as any).videomaker_id as string | null },
       ]),
     );
+
+    // 2.a) Buscar active_recordings para detectar gravações ATUALMENTE em curso
+    //      Tasks cuja recording está "agendada" mas tem active_recording → captação real, não mexer.
+    //      Tasks cuja recording está "agendada" SEM active_recording → órfã (limpar).
+    const { data: activeRecs } = recordingIds.length > 0
+      ? await supabase
+          .from("active_recordings")
+          .select("recording_id")
+          .in("recording_id", recordingIds)
+      : { data: [] as Array<{ recording_id: string }> };
+    const activeRecIds = new Set((activeRecs ?? []).map((a) => a.recording_id as string));
 
     // 2.b) Resolver nomes dos videomakers
     const vmIds = [
@@ -83,11 +103,32 @@ Deno.serve(async (req) => {
       for (const p of profs ?? []) vmNames.set(p.id as string, (p as any).name ?? "Videomaker");
     }
 
-    // 3) Filtrar somente tarefas cuja gravação está concluída ou cancelada
-    const toFix = stuckTasks.filter((t) => {
-      const st = recInfo.get(t.recording_id as string)?.status;
-      return st === "concluida" || st === "cancelada";
-    });
+    // 3) Classificar cada task em uma ação:
+    //    - "concluida"  → drive_link decide (edicao | aguardando_link)
+    //    - "cancelada"  → ideias (cancelada explicitamente)
+    //    - "órfã"       → ideias (sem recording, sem active_recording, ou recording inexistente)
+    type Action = "concluida" | "cancelada" | "orfa";
+    const toFix: Array<{ task: typeof stuckTasks[number]; action: Action; vmId: string | null; vmName: string | null; recStatus: string }> = [];
+    for (const t of stuckTasks) {
+      const recId = t.recording_id as string | null;
+      const meta = recId ? recInfo.get(recId) : undefined;
+      const recStatus = meta?.status ?? "";
+      const vmId = meta?.videomaker_id ?? null;
+      const vmName = vmId ? (vmNames.get(vmId) ?? "Videomaker") : null;
+
+      if (meta?.status === "concluida") {
+        toFix.push({ task: t, action: "concluida", vmId, vmName, recStatus });
+      } else if (meta?.status === "cancelada") {
+        toFix.push({ task: t, action: "cancelada", vmId, vmName, recStatus });
+      } else if (!recId || !meta) {
+        // Sem recording_id OU recording deletado → órfã
+        toFix.push({ task: t, action: "orfa", vmId: null, vmName: null, recStatus: "" });
+      } else if (meta.status === "agendada" && !activeRecIds.has(recId)) {
+        // Recording agendada mas ninguém gravando agora → captação interrompida/órfã
+        toFix.push({ task: t, action: "orfa", vmId, vmName, recStatus });
+      }
+      // demais casos (agendada com active_recording, organizando_material) → captação real, não mexer
+    }
 
     const results: Array<{
       id: string;

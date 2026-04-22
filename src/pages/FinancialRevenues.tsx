@@ -157,7 +157,7 @@ export default function FinancialRevenues() {
     getDate: r => normalizeDate(r.due_date),
     getSearchableText: r => {
       const client = clients.find(c => c.id === r.client_id);
-      return [client?.companyName, r.description, r.status, String(r.amount)].filter(Boolean).join(' ');
+      return [client?.companyName, (r as any).description, r.status, String(r.amount)].filter(Boolean).join(' ');
     },
     matchAdvanced: (r, adv) => {
       if (adv.status && adv.status !== 'all' && r.status !== adv.status) return false;

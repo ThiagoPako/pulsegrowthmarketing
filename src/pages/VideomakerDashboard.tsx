@@ -2286,6 +2286,55 @@ export default function VideomakerDashboard() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Finish Event Dialog */}
+      <Dialog open={eventFinishOpen} onOpenChange={setEventFinishOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              🎪 Finalizar cobertura de evento
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-xs font-medium mb-1 block">Link do Drive com o material *</label>
+              <Input
+                placeholder="https://drive.google.com/..."
+                value={eventDriveLink}
+                onChange={(e) => setEventDriveLink(e.target.value)}
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">Cole o link da pasta com vídeos/fotos da cobertura.</p>
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">Atribuir a editor (opcional)</label>
+              <Select value={eventEditorId} onValueChange={setEventEditorId}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__auto__">🎯 Automático (menor fila)</SelectItem>
+                  {users.filter(u => u.role === 'editor').map(ed => (
+                    <SelectItem key={ed.id} value={ed.id}>{ed.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">Observações para o editor (opcional)</label>
+              <Textarea
+                placeholder="Ex: priorizar destaques do palco, cliente quer reels de até 30s..."
+                value={eventNotes}
+                onChange={(e) => setEventNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => setEventFinishOpen(false)}>Cancelar</Button>
+              <Button onClick={confirmFinishEvent} className="bg-success hover:bg-success/90 text-success-foreground gap-1">
+                <Send size={14} /> Enviar para edição
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

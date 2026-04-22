@@ -48,7 +48,8 @@ export default function FinancialMovements() {
 
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
   const [filterType, setFilterType] = useState<MovementType>('all');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState<FinancialFiltersValue>(buildEmptyFilters);
+  const searchTerm = filters.search;
   const [deleteTarget, setDeleteTarget] = useState<UnifiedMovement | null>(null);
   const [editTarget, setEditTarget] = useState<UnifiedMovement | null>(null);
   const [showReconciliation, setShowReconciliation] = useState(false);

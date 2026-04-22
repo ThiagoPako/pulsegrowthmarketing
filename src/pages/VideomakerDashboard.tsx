@@ -434,19 +434,25 @@ export default function VideomakerDashboard() {
 
     if (insertErr) {
       console.error('[event finish] content_task insert error:', insertErr);
-      toast.error(`Erro ao enviar para edição: ${insertErr.message}`);
+      const detail = insertErr.message || insertErr.details || insertErr.hint || JSON.stringify(insertErr);
+      toast.error(`Erro ao enviar para edição: ${detail}`);
       setEventFinishSubmitting(false);
       return;
     }
 
-    // 4) Trigger sync (deadlines, notifications)
+    // 4) Trigger sync (deadlines, notifications) — non-blocking; task already created
     if (insertedTask?.id) {
-      const client = clients.find(c => c.id === evt.clientId);
-      const ctx = buildSyncContext(
-        { id: insertedTask.id, client_id: evt.clientId, title: taskTitle, content_type: 'reels', description, script_id: null, recording_id: null, assigned_to: assignedEditor, edited_video_link: null },
-        { userId: vmId, clientName: client?.companyName, clientWhatsapp: client?.whatsapp }
-      );
-      await syncContentTaskColumnChange('edicao', ctx);
+      try {
+        const client = clients.find(c => c.id === evt.clientId);
+        const ctx = buildSyncContext(
+          { id: insertedTask.id, client_id: evt.clientId, title: taskTitle, content_type: 'reels', description, script_id: null, recording_id: null, assigned_to: assignedEditor, edited_video_link: null },
+          { userId: vmId, clientName: client?.companyName, clientWhatsapp: client?.whatsapp }
+        );
+        await syncContentTaskColumnChange('edicao', ctx);
+      } catch (syncErr: any) {
+        console.error('[event finish] sync warning (task was created):', syncErr);
+        toast.warning('Tarefa criada, mas houve um aviso na sincronização: ' + (syncErr?.message || 'erro desconhecido'));
+      }
     }
 
     setEventRecordings(prev => prev.map(e => e.id === evt.id ? { ...e, status: 'concluido', driveLink: eventDriveLink.trim() } : e));

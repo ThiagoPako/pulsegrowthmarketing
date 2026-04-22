@@ -1487,6 +1487,7 @@ interface TaskCardProps {
   task: ContentTask;
   client?: Client;
   assignedUser?: { id?: string; name: string; avatarUrl?: string } | null;
+  videomaker?: { id?: string; name: string; avatarUrl?: string } | null;
   linkedScript?: Script;
   isDragging: boolean;
   viewOnly?: boolean;
@@ -1509,13 +1510,15 @@ interface TaskCardProps {
   backwardLabel?: string;
 }
 
-function TaskCard({ task, client, assignedUser, linkedScript, isDragging, viewOnly, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit, onMoveForward, onMoveBackward, forwardLabel, backwardLabel }: TaskCardProps) {
+function TaskCard({ task, client, assignedUser, videomaker, linkedScript, isDragging, viewOnly, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit, onMoveForward, onMoveBackward, forwardLabel, backwardLabel }: TaskCardProps) {
   const [scriptPreviewOpen, setScriptPreviewOpen] = useState(false);
   const typeConfig = CONTENT_TYPES.find(t => t.value === task.content_type) || CONTENT_TYPES[0];
   const TypeIcon = typeConfig.icon;
   const clientColor = client?.color || '217 91% 60%';
 
   const isCaptacao = task.kanban_column === 'captacao';
+  // Aguardando link: card em Captação com gravação concluída (recording_id) mas SEM drive_link
+  const isAwaitingLink = isCaptacao && Boolean(task.recording_id) && !task.drive_link;
   const isRevisao = task.kanban_column === 'revisao' || task.kanban_column === 'alteracao';
   const isAcompanhamento = task.kanban_column === 'acompanhamento';
   const scheduledRecordingDate = normalizeDateValue(task.scheduled_recording_date);

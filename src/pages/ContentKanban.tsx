@@ -1102,6 +1102,11 @@ export default function ContentKanban() {
                               const vmId = rec?.videomakerId || task.assigned_to;
                               return getUser(vmId);
                             })()}
+                            recordingStatus={(() => {
+                              if (task.kanban_column !== 'captacao' || !task.recording_id) return null;
+                              const rec = recordings.find(r => r.id === task.recording_id);
+                              return rec?.status ?? null;
+                            })()}
                             linkedScript={task.script_id ? scripts.find(s => s.id === task.script_id) : undefined}
                             isDragging={draggedTask?.id === task.id}
                             onDragStart={e => handleDragStart(e, task)}
@@ -1488,6 +1493,7 @@ interface TaskCardProps {
   client?: Client;
   assignedUser?: { id?: string; name: string; avatarUrl?: string } | null;
   videomaker?: { id?: string; name: string; avatarUrl?: string } | null;
+  recordingStatus?: string | null;
   linkedScript?: Script;
   isDragging: boolean;
   viewOnly?: boolean;
@@ -1510,15 +1516,20 @@ interface TaskCardProps {
   backwardLabel?: string;
 }
 
-function TaskCard({ task, client, assignedUser, videomaker, linkedScript, isDragging, viewOnly, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit, onMoveForward, onMoveBackward, forwardLabel, backwardLabel }: TaskCardProps) {
+function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, linkedScript, isDragging, viewOnly, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit, onMoveForward, onMoveBackward, forwardLabel, backwardLabel }: TaskCardProps) {
   const [scriptPreviewOpen, setScriptPreviewOpen] = useState(false);
   const typeConfig = CONTENT_TYPES.find(t => t.value === task.content_type) || CONTENT_TYPES[0];
   const TypeIcon = typeConfig.icon;
   const clientColor = client?.color || '217 91% 60%';
 
   const isCaptacao = task.kanban_column === 'captacao';
-  // Aguardando link: card em Captação com gravação concluída (recording_id) mas SEM drive_link
-  const isAwaitingLink = isCaptacao && Boolean(task.recording_id) && !task.drive_link;
+  // Aguardando link: SOMENTE quando o videomaker já finalizou a gravação
+  // (recording está em "organizando_material" ou "concluida") mas ainda não anexou o drive_link.
+  const isAwaitingLink =
+    isCaptacao &&
+    Boolean(task.recording_id) &&
+    !task.drive_link &&
+    (recordingStatus === 'organizando_material' || recordingStatus === 'concluida');
   const isRevisao = task.kanban_column === 'revisao' || task.kanban_column === 'alteracao';
   const isAcompanhamento = task.kanban_column === 'acompanhamento';
   const scheduledRecordingDate = normalizeDateValue(task.scheduled_recording_date);
@@ -1543,9 +1554,9 @@ function TaskCard({ task, client, assignedUser, videomaker, linkedScript, isDrag
         draggable={!viewOnly}
         onDragStart={viewOnly ? undefined : onDragStart}
         onClick={onCardClick}
-        className={`group relative rounded-xl transition-all duration-300 overflow-hidden border ${
+        className={`group relative rounded-xl transition-all duration-500 overflow-hidden border ${
           isAwaitingLink
-            ? 'bg-yellow-50 dark:bg-yellow-950/40 border-yellow-400/70 dark:border-yellow-500/60 shadow-yellow-400/30 ring-2 ring-yellow-400/40 animate-pulse'
+            ? 'bg-yellow-50/70 dark:bg-yellow-950/30 border-yellow-300/60 dark:border-yellow-500/40 ring-1 ring-yellow-300/50 animate-soft-pulse'
             : 'bg-card border-border/40'
         } ${
           viewOnly ? 'cursor-default opacity-80' : 'cursor-grab active:cursor-grabbing'
@@ -1565,15 +1576,15 @@ function TaskCard({ task, client, assignedUser, videomaker, linkedScript, isDrag
         )}
         {isAwaitingLink && (
           <motion.div
-            className="flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-yellow-400 to-amber-500"
+            className="flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-300"
             animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
-            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
             style={{ backgroundSize: '200% 100%' }}
           >
-            <Link2 size={10} className="text-white shrink-0 animate-pulse" />
-            <span className="text-[9px] font-bold text-white uppercase tracking-widest">Aguardando Link</span>
+            <Link2 size={10} className="text-white shrink-0 animate-soft-glow" />
+            <span className="text-[9px] font-bold text-white uppercase tracking-widest">Aguardando Material</span>
             <span className="ml-auto relative flex h-2 w-2 shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+              <span className="absolute inline-flex h-full w-full rounded-full bg-white/70 opacity-60 animate-soft-glow"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
             </span>
           </motion.div>
@@ -1736,7 +1747,7 @@ function TaskCard({ task, client, assignedUser, videomaker, linkedScript, isDrag
               <div className="relative shrink-0">
                 <UserAvatar user={{ name: videomaker.name, avatarUrl: videomaker.avatarUrl }} size="sm" />
                 <span className="absolute -bottom-0.5 -right-0.5 flex h-2 w-2">
-                  <span className={`absolute inline-flex h-full w-full rounded-full ${isAwaitingLink ? 'bg-yellow-400' : 'bg-orange-400 animate-ping'} opacity-75`}></span>
+                  <span className={`absolute inline-flex h-full w-full rounded-full ${isAwaitingLink ? 'bg-yellow-400 animate-soft-glow' : 'bg-orange-400 animate-ping'} opacity-75`}></span>
                   <span className={`relative inline-flex rounded-full h-2 w-2 ${isAwaitingLink ? 'bg-yellow-500' : 'bg-orange-500'} border border-card`}></span>
                 </span>
               </div>

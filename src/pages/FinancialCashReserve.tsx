@@ -44,6 +44,25 @@ export default function FinancialCashReserve() {
     [cashMovements]
   );
 
+  const displayed = useMemo(() =>
+    applyFinancialFilters(cashMovements, filters, {
+      getDate: (m) => normalizeDate(m.date),
+      getSearchableText: (m) => [m.description, m.type].filter(Boolean).join(' '),
+      matchAdvanced: (m, adv) => {
+        if (adv.type && adv.type !== 'all' && m.type !== adv.type) return false;
+        return true;
+      },
+    }),
+    [cashMovements, filters]
+  );
+
+  const exportColumns = useMemo(() => [
+    { header: 'Data', accessor: (m: any) => { const d = normalizeDate(m.date); const [y, mo, day] = d.split('-'); return `${day}/${mo}/${y}`; } },
+    { header: 'Tipo', accessor: (m: any) => m.type === 'entrada' ? 'Entrada' : 'Saída' },
+    { header: 'Descrição', accessor: (m: any) => (m.description || '').replace(/\s*-\s*ID:\s*[a-f0-9-]+/gi, '') },
+    { header: 'Valor (R$)', accessor: (m: any) => (m.type === 'entrada' ? '+' : '-') + Number(m.amount).toFixed(2) },
+  ], []);
+
   const resetForm = () => {
     setAmount('');
     setDescription('');

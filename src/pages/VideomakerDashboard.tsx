@@ -87,6 +87,10 @@ export default function VideomakerDashboard() {
   const [eventNotes, setEventNotes] = useState('');
   const [eventDriveLinkError, setEventDriveLinkError] = useState<string | null>(null);
   const [eventFinishSubmitting, setEventFinishSubmitting] = useState(false);
+  const [drivePreviewStatus, setDrivePreviewStatus] = useState<'idle' | 'checking' | 'ok' | 'private' | 'notfound' | 'unknown'>('idle');
+  const [drivePreviewKind, setDrivePreviewKind] = useState<'file' | 'folder' | null>(null);
+  const [drivePreviewId, setDrivePreviewId] = useState<string | null>(null);
+  const [drivePreviewConfirmed, setDrivePreviewConfirmed] = useState(false);
 
   // Timer for waiting elapsed
   useEffect(() => {

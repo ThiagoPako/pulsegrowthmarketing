@@ -627,7 +627,7 @@ export default function FinancialRevenues() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((r, i) => {
+              {displayed.map((r, i) => {
                 const client = clients.find(c => c.id === r.client_id);
                 const st = STATUS_MAP[r.status] || { label: r.status, variant: 'secondary' as const };
                 const isPaid = r.status === 'recebida';

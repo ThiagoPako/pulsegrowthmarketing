@@ -197,7 +197,7 @@ Deno.serve(async (req) => {
       const isExtra = contentType === "extra" || contentType === "extras";
 
       // Decide alvo + motivo + payload extra
-      let target: "edicao" | "aguardando_link" | "cancelado" | "ideias";
+      let target: "edicao" | "captacao" | "cancelado" | "ideias";
       let reason: string;
       let warning: string | undefined;
       const updatePayload: Record<string, unknown> = {};
@@ -216,16 +216,17 @@ Deno.serve(async (req) => {
         target = "edicao";
         reason = "drive_link válido → liberar para edição";
       } else {
-        target = "aguardando_link";
+        // Mantém em captação (UI sinaliza visualmente como "Aguardando Link")
+        target = "captacao";
         if (rawLink && rawLink.trim().length > 0) {
           warning = `drive_link inconsistente (não é URL válida): "${String(rawLink).slice(0, 80)}"`;
-          reason = "drive_link inválido → manter aguardando link correto";
+          reason = "drive_link inválido → manter em Captação aguardando link correto";
           warnings++;
           console.warn(
             `[content-tasks-autofix] task=${task.id} título="${task.title}" ${warning}`,
           );
         } else {
-          reason = "sem drive_link → aguardando upload do videomaker";
+          reason = "sem drive_link → manter em Captação aguardando upload do videomaker";
         }
       }
 

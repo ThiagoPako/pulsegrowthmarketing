@@ -317,7 +317,6 @@ export default function VideomakerDashboard() {
     }
 
     // 2) Pick editor (auto = least loaded)
-{{KEEP_REST}}
     let assignedEditor: string | null = eventEditorId === '__auto__' ? null : eventEditorId;
     if (!assignedEditor) {
       const editorRoles = users.filter(u => u.role === 'editor');
@@ -355,6 +354,7 @@ export default function VideomakerDashboard() {
     if (insertErr) {
       console.error('[event finish] content_task insert error:', insertErr);
       toast.error(`Erro ao enviar para edição: ${insertErr.message}`);
+      setEventFinishSubmitting(false);
       return;
     }
 
@@ -374,6 +374,8 @@ export default function VideomakerDashboard() {
     setEventFinishId(null);
     setEventDriveLink('');
     setEventNotes('');
+    setEventDriveLinkError(null);
+    setEventFinishSubmitting(false);
   };
 
   const typeLabels: Record<string, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.', backup: 'Backup', endomarketing: 'Endo', avulso: 'Avulso' };

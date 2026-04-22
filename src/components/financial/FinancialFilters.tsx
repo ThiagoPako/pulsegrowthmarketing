@@ -111,8 +111,47 @@ const FinancialFilters = <T,>({
   exportColumns,
   exportFileName = 'financeiro',
   exportTitle = 'Relatório Financeiro',
+  exportStorageKey,
 }: Props<T>) => {
   const [open, setOpen] = useState(false);
+  const [colsOpen, setColsOpen] = useState(false);
+
+  const colKey = (c: ExportColumn<T>) => c.key || c.header;
+  const storageKey = exportStorageKey ? `pulse:exportCols:${exportStorageKey}` : null;
+
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() => {
+    const initial = new Set<string>();
+    if (exportColumns) {
+      exportColumns.forEach(c => { if (c.defaultVisible === false && !c.required) initial.add(colKey(c)); });
+    }
+    if (storageKey && typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage.getItem(storageKey);
+        if (raw) return new Set<string>(JSON.parse(raw));
+      } catch { /* noop */ }
+    }
+    return initial;
+  });
+
+  useEffect(() => {
+    if (!storageKey || typeof window === 'undefined') return;
+    try { window.localStorage.setItem(storageKey, JSON.stringify(Array.from(hiddenCols))); } catch { /* noop */ }
+  }, [hiddenCols, storageKey]);
+
+  const visibleColumns = useMemo(
+    () => (exportColumns || []).filter(c => c.required || !hiddenCols.has(colKey(c))),
+    [exportColumns, hiddenCols]
+  );
+
+  const toggleCol = (c: ExportColumn<T>) => {
+    if (c.required) return;
+    const k = colKey(c);
+    setHiddenCols(prev => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+  };
 
   const activeAdvancedCount = useMemo(
     () => Object.values(value.advanced).filter(v => v && v !== 'all').length,

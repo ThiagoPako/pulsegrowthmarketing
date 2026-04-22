@@ -200,10 +200,10 @@ const FinancialFilters = <T,>({
   };
 
   const handleExportCSV = () => {
-    if (!exportRows || !exportColumns || exportRows.length === 0) return;
-    const header = exportColumns.map(c => csvEscape(c.header)).join(',');
+    if (!exportRows || !exportColumns || exportRows.length === 0 || visibleColumns.length === 0) return;
+    const header = visibleColumns.map(c => csvEscape(c.header)).join(',');
     const lines = exportRows.map(row =>
-      exportColumns.map(c => csvEscape(c.accessor(row))).join(',')
+      visibleColumns.map(c => csvEscape(c.accessor(row))).join(',')
     );
     const csv = [header, ...lines].join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
@@ -218,7 +218,7 @@ const FinancialFilters = <T,>({
   };
 
   const handleExportPDF = () => {
-    if (!exportRows || !exportColumns || exportRows.length === 0) return;
+    if (!exportRows || !exportColumns || exportRows.length === 0 || visibleColumns.length === 0) return;
     const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const pageW = pdf.internal.pageSize.getWidth();
 
@@ -259,7 +259,7 @@ const FinancialFilters = <T,>({
     cursorY += 6;
 
     // Table
-    const cols = exportColumns;
+    const cols = visibleColumns;
     const usableW = pageW - 20;
     const colW = usableW / cols.length;
 

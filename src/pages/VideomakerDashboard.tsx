@@ -87,6 +87,10 @@ export default function VideomakerDashboard() {
   const [eventNotes, setEventNotes] = useState('');
   const [eventDriveLinkError, setEventDriveLinkError] = useState<string | null>(null);
   const [eventFinishSubmitting, setEventFinishSubmitting] = useState(false);
+  const [drivePreviewStatus, setDrivePreviewStatus] = useState<'idle' | 'checking' | 'ok' | 'private' | 'notfound' | 'unknown'>('idle');
+  const [drivePreviewKind, setDrivePreviewKind] = useState<'file' | 'folder' | null>(null);
+  const [drivePreviewId, setDrivePreviewId] = useState<string | null>(null);
+  const [drivePreviewConfirmed, setDrivePreviewConfirmed] = useState(false);
 
   // Timer for waiting elapsed
   useEffect(() => {
@@ -273,6 +277,10 @@ export default function VideomakerDashboard() {
     setEventEditorId('__auto__');
     setEventNotes('');
     setEventDriveLinkError(null);
+    setDrivePreviewStatus('idle');
+    setDrivePreviewKind(null);
+    setDrivePreviewId(null);
+    setDrivePreviewConfirmed(false);
     setEventFinishOpen(true);
   };
 
@@ -290,6 +298,71 @@ export default function VideomakerDashboard() {
     return null;
   };
 
+  // Extract Drive file/folder ID from common URL patterns.
+  const parseDriveLink = (raw: string): { kind: 'file' | 'folder'; id: string } | null => {
+    try {
+      const url = new URL(raw.trim());
+      if (!url.hostname.endsWith('google.com')) return null;
+      const fileMatch = url.pathname.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (fileMatch) return { kind: 'file', id: fileMatch[1] };
+      const folderMatch = url.pathname.match(/\/drive\/folders\/([a-zA-Z0-9_-]+)/);
+      if (folderMatch) return { kind: 'folder', id: folderMatch[1] };
+      const idParam = url.searchParams.get('id');
+      if (idParam) return { kind: 'file', id: idParam };
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Validate Drive link accessibility by probing the public thumbnail.
+  // Image() probe avoids CORS limits: onload = publicly accessible, onerror = private/not found.
+  useEffect(() => {
+    if (!eventFinishOpen) return;
+    const raw = eventDriveLink.trim();
+    if (!raw) { setDrivePreviewStatus('idle'); setDrivePreviewKind(null); setDrivePreviewId(null); return; }
+    if (validateDriveLink(raw)) { setDrivePreviewStatus('idle'); setDrivePreviewKind(null); setDrivePreviewId(null); return; }
+    const parsed = parseDriveLink(raw);
+    if (!parsed) {
+      setDrivePreviewStatus('unknown');
+      setDrivePreviewKind(null);
+      setDrivePreviewId(null);
+      return;
+    }
+    setDrivePreviewKind(parsed.kind);
+    setDrivePreviewId(parsed.id);
+    setDrivePreviewStatus('checking');
+    setDrivePreviewConfirmed(false);
+
+    let cancelled = false;
+    const img = new Image();
+    const timeoutId = window.setTimeout(() => {
+      if (cancelled) return;
+      cancelled = true;
+      img.src = '';
+      setDrivePreviewStatus('unknown');
+    }, 6000);
+
+    img.onload = () => {
+      if (cancelled) return;
+      window.clearTimeout(timeoutId);
+      setDrivePreviewStatus('ok');
+    };
+    img.onerror = () => {
+      if (cancelled) return;
+      window.clearTimeout(timeoutId);
+      setDrivePreviewStatus('private');
+    };
+    img.referrerPolicy = 'no-referrer';
+    img.src = `https://drive.google.com/thumbnail?id=${parsed.id}&sz=w320`;
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+      img.src = '';
+    };
+  }, [eventDriveLink, eventFinishOpen]);
+
   const confirmFinishEvent = async () => {
     if (!eventFinishId) return;
     const evt = eventRecordings.find(e => e.id === eventFinishId);
@@ -299,6 +372,14 @@ export default function VideomakerDashboard() {
     if (driveErr) {
       setEventDriveLinkError(driveErr);
       toast.error(driveErr);
+      return;
+    }
+    if (drivePreviewStatus === 'checking') {
+      toast.info('Aguarde — verificando acesso ao link do Drive…');
+      return;
+    }
+    if ((drivePreviewStatus === 'private' || drivePreviewStatus === 'unknown') && !drivePreviewConfirmed) {
+      toast.error('Confirme que o link está compartilhado com a equipe antes de enviar.');
       return;
     }
     setEventDriveLinkError(null);
@@ -2371,6 +2452,89 @@ export default function VideomakerDashboard() {
               ) : (
                 <p className="text-[10px] text-muted-foreground mt-1">Cole o link da pasta com vídeos/fotos da cobertura.</p>
               )}
+
+              {/* Drive preview / access check */}
+              {eventDriveLink.trim() && !eventDriveLinkError && (
+                <div className="mt-2 rounded-md border bg-muted/30 p-2.5 text-[11px] space-y-2">
+                  {drivePreviewStatus === 'checking' && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <RefreshCw size={12} className="animate-spin" /> Verificando acesso ao link…
+                    </div>
+                  )}
+
+                  {drivePreviewStatus === 'ok' && (
+                    <>
+                      <div className="flex items-center gap-2 text-success">
+                        <Check size={12} /> Link acessível ({drivePreviewKind === 'folder' ? 'pasta' : 'arquivo'} público).
+                      </div>
+                      {drivePreviewKind === 'file' && drivePreviewId && (
+                        <a
+                          href={`https://drive.google.com/file/d/${drivePreviewId}/view`}
+                          target="_blank" rel="noreferrer"
+                          className="block overflow-hidden rounded border bg-background"
+                        >
+                          <img
+                            src={`https://drive.google.com/thumbnail?id=${drivePreviewId}&sz=w480`}
+                            alt="Pré-visualização do arquivo do Drive"
+                            className="w-full max-h-40 object-contain bg-black/5"
+                            referrerPolicy="no-referrer"
+                          />
+                        </a>
+                      )}
+                      {drivePreviewKind === 'folder' && drivePreviewId && (
+                        <a
+                          href={`https://drive.google.com/drive/folders/${drivePreviewId}`}
+                          target="_blank" rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-primary hover:underline"
+                        >
+                          <Link size={11} /> Abrir pasta no Drive
+                        </a>
+                      )}
+                    </>
+                  )}
+
+                  {drivePreviewStatus === 'private' && (
+                    <>
+                      <div className="flex items-start gap-2 text-warning">
+                        <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                        <span>
+                          Link privado ou restrito. O editor pode não conseguir abrir.
+                          Garanta que esteja compartilhado como <strong>"Qualquer pessoa com o link"</strong>.
+                        </span>
+                      </div>
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <Checkbox
+                          checked={drivePreviewConfirmed}
+                          onCheckedChange={(v) => setDrivePreviewConfirmed(v === true)}
+                          className="mt-0.5"
+                        />
+                        <span className="text-muted-foreground">
+                          Confirmo que o link está compartilhado com a equipe de edição.
+                        </span>
+                      </label>
+                    </>
+                  )}
+
+                  {drivePreviewStatus === 'unknown' && (
+                    <>
+                      <div className="flex items-start gap-2 text-warning">
+                        <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                        <span>Não consegui validar este link automaticamente. Verifique manualmente.</span>
+                      </div>
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <Checkbox
+                          checked={drivePreviewConfirmed}
+                          onCheckedChange={(v) => setDrivePreviewConfirmed(v === true)}
+                          className="mt-0.5"
+                        />
+                        <span className="text-muted-foreground">
+                          Confirmo que o link foi testado e está acessível pela equipe.
+                        </span>
+                      </label>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
             <div>
               <label className="text-xs font-medium mb-1 block">Atribuir a editor (opcional)</label>
@@ -2397,10 +2561,21 @@ export default function VideomakerDashboard() {
               <Button variant="outline" onClick={() => setEventFinishOpen(false)} disabled={eventFinishSubmitting}>Cancelar</Button>
               <Button
                 onClick={confirmFinishEvent}
-                disabled={eventFinishSubmitting || !eventDriveLink.trim() || !!eventDriveLinkError}
+                disabled={
+                  eventFinishSubmitting ||
+                  !eventDriveLink.trim() ||
+                  !!eventDriveLinkError ||
+                  drivePreviewStatus === 'checking' ||
+                  ((drivePreviewStatus === 'private' || drivePreviewStatus === 'unknown') && !drivePreviewConfirmed)
+                }
                 className="bg-success hover:bg-success/90 text-success-foreground gap-1"
               >
-                <Send size={14} /> {eventFinishSubmitting ? 'Enviando...' : 'Enviar para edição'}
+                <Send size={14} />
+                {eventFinishSubmitting
+                  ? 'Enviando...'
+                  : drivePreviewStatus === 'checking'
+                    ? 'Verificando…'
+                    : 'Enviar para edição'}
               </Button>
             </div>
           </div>

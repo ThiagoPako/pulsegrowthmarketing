@@ -1066,9 +1066,9 @@ export default function ContentKanban() {
                 </motion.div>
 
                 {/* Motivo / explicação da coluna */}
-                {col.id === 'aguardando_link' && (
-                  <div className="px-3 py-2 bg-yellow-500/10 border-b border-yellow-500/20 text-[10.5px] text-yellow-700 dark:text-yellow-300 leading-snug">
-                    📦 Gravação concluída, mas o videomaker ainda não enviou o <strong>link do Drive</strong> com os materiais brutos. Adicione o link para liberar a edição.
+                {col.id === 'captacao' && (
+                  <div className="px-3 py-2 bg-orange-500/10 border-b border-orange-500/20 text-[10.5px] text-orange-700 dark:text-orange-300 leading-snug">
+                    🎬 Cards em gravação. Quando concluída sem o link do Drive, o cartão fica destacado em <strong>amarelo pulsante</strong> aguardando o upload.
                   </div>
                 )}
 

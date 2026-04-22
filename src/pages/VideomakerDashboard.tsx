@@ -1523,6 +1523,45 @@ export default function VideomakerDashboard() {
                       </motion.div>
                     );
                   })}
+                  {getEventsForDay(day).map(evt => {
+                    const color = getClientColor(evt.clientId);
+                    const isLive = evt.status === 'em_andamento';
+                    const isDone = evt.status === 'concluido';
+                    return (
+                      <motion.div key={evt.id}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => {
+                          if (isDone) return;
+                          if (isLive) openFinishEvent(evt);
+                          else handleStartEvent(evt);
+                        }}
+                        className={`rounded-lg border-2 p-2 text-xs space-y-0.5 cursor-pointer transition-all active:shadow-md ${
+                          isLive ? 'border-warning bg-warning/5 ring-1 ring-warning/30' :
+                          isDone ? 'border-success/30 bg-success/5 cursor-default' :
+                          'border-border bg-card hover:border-warning/40'
+                        }`}
+                        style={{ borderLeftWidth: 3, borderLeftColor: `hsl(${color})` }}
+                      >
+                        <p className="font-medium truncate text-[11px]">🎪 {evt.title}</p>
+                        <p className="text-muted-foreground text-[10px]">{evt.startTime}</p>
+                        {isLive && (
+                          <Badge className="bg-warning/20 text-warning border-warning/30 text-[9px]">
+                            <Rocket size={8} className="-rotate-45 mr-0.5" /> Em cobertura
+                          </Badge>
+                        )}
+                        {isDone && (
+                          <Badge className="bg-success/20 text-success border-success/30 text-[9px]">
+                            <Check size={8} className="mr-0.5" /> Finalizado
+                          </Badge>
+                        )}
+                        {!isLive && !isDone && (
+                          <div className="flex items-center gap-1 text-warning text-[9px]">
+                            <Play size={8} /> Toque para iniciar
+                          </div>
+                        )}
+                      </motion.div>
+                    );
+                  })}
                 </div>
               </motion.div>
             );

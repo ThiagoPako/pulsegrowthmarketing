@@ -233,14 +233,14 @@ export default function ContentKanban() {
     setLoading(false);
   }, []);
 
-  // ─── AUTO-FIX: tasks presas em "captacao" cuja gravação já está concluída ──
+  // ─── AUTO-FIX: tasks presas em "captacao"/"captacao_concluida" cuja gravação já está concluída ──
   // Regra: gravação concluída + drive_link → mover para "edicao"
-  //        gravação concluída + sem drive_link → mover de volta para "ideias"
-  //        (videomaker não marcou o script como gravado durante a finalização)
+  //        gravação concluída + sem drive_link → mover para "aguardando_link"
   useEffect(() => {
     if (loading || tasks.length === 0 || recordings.length === 0) return;
     const stuckTasks = tasks.filter(t => {
-      if (t.kanban_column !== 'captacao') return false;
+      // Inclui a coluna legado "captacao_concluida" para migração
+      if (!['captacao', 'captacao_concluida'].includes(t.kanban_column)) return false;
       if (!t.recording_id) return false;
       const rec = recordings.find(r => r.id === t.recording_id);
       return rec?.status === 'concluida';
@@ -249,23 +249,17 @@ export default function ContentKanban() {
 
     (async () => {
       for (const task of stuckTasks) {
-        const targetColumn = task.drive_link ? 'edicao' : 'ideias';
-        const updates: any = { kanban_column: targetColumn };
-        if (targetColumn === 'ideias') {
-          // Desliga vínculo de gravação para que possa ser planejada novamente
-          updates.recording_id = null;
-        }
+        const targetColumn = task.drive_link ? 'edicao' : 'aguardando_link';
         const { error: updErr } = await supabase
           .from('content_tasks')
-          .update(updates)
+          .update({ kanban_column: targetColumn })
           .eq('id', task.id);
         if (updErr) {
           console.error(`[ContentKanban auto-fix] Falha ao mover task ${task.id}:`, updErr);
         } else {
-          console.log(`[ContentKanban auto-fix] Task "${task.title}" movida de captacao → ${targetColumn}`);
+          console.log(`[ContentKanban auto-fix] Task "${task.title}" movida de ${task.kanban_column} → ${targetColumn}`);
         }
       }
-      // Recarrega para refletir mudanças
       fetchTasks();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps

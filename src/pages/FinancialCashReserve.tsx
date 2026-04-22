@@ -214,6 +214,7 @@ export default function FinancialCashReserve() {
         exportColumns={exportColumns}
         exportFileName="caixa-reserva"
         exportTitle="Caixa (Reserva)"
+        exportStorageKey="cash-reserve"
       />
 
       {/* Movements Table */}

@@ -503,6 +503,7 @@ export default function FinancialExpenses() {
             exportColumns={exportColumns}
             exportFileName={activeTab === 'salarios' ? 'salarios' : 'despesas'}
             exportTitle={activeTab === 'salarios' ? 'Salários' : 'Despesas'}
+            exportStorageKey={activeTab === 'salarios' ? 'salaries' : 'expenses'}
             searchPlaceholder={activeTab === 'salarios' ? 'Buscar colaborador, cargo…' : 'Buscar descrição, categoria, responsável…'}
           />
         </div>

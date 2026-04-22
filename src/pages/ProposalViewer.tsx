@@ -581,39 +581,66 @@ export default function ProposalViewer() {
         )}
         {cronoData.deliverables?.length > 0 && (
           <AnimatedSection className="px-6 md:px-10 pb-6">
-            <h2 className="text-lg font-bold text-gray-800 mb-3">Entregas e Investimento</h2>
-            <div className="border rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[10px] text-gray-500 uppercase tracking-wider" style={{ background: 'hsl(16 82% 96%)' }}>
-                    <th className="p-3">Entrega</th>
-                    <th className="p-3 text-center">Qtd</th>
-                    {!isTotalMode && <th className="p-3 text-right">Unit.</th>}
-                    {!isTotalMode && <th className="p-3 text-right">Subtotal</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {cronoData.deliverables.map((d: any, i: number) => (
-                    <motion.tr key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.05 * i }}
-                      className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="p-3">
-                        <p className="font-medium text-xs text-gray-800">{d.name}</p>
-                        <p className="text-[10px] text-gray-500">{d.description}</p>
-                      </td>
-                      <td className="p-3 text-center text-xs font-medium">{d.quantity}</td>
-                      {!isTotalMode && <td className="p-3 text-right text-xs text-gray-600">{fmt2(d.unitPrice)}</td>}
-                      {!isTotalMode && <td className="p-3 text-right text-xs font-bold" style={{ color: accentColor }}>{fmt2((d.unitPrice || 0) * (d.quantity || 1))}</td>}
-                    </motion.tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 font-bold">
-                    <td colSpan={isTotalMode ? 2 : 3} className="p-3 text-right text-xs text-gray-800">Total</td>
-                    <td className="p-3 text-right text-base" style={{ color: accentColor }}>{fmt2(totalValue)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+            <h2 className="text-lg font-bold text-gray-800 mb-3">
+              {isTotalMode ? 'Escopo dos Serviços' : 'Entregas e Investimento'}
+            </h2>
+            {isTotalMode ? (
+              <div className="space-y-2">
+                {cronoData.deliverables.map((d: any, i: number) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.05 * i }}
+                    className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 hover:shadow-md transition-all bg-white"
+                  >
+                    <div
+                      className="rounded-full w-7 h-7 flex items-center justify-center text-xs font-bold text-white shrink-0"
+                      style={{ background: accentColor }}
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm text-gray-800">{d.name}</p>
+                      {d.description && <p className="text-xs text-gray-500 mt-0.5">{d.description}</p>}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              <div className="border rounded-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[10px] text-gray-500 uppercase tracking-wider" style={{ background: 'hsl(16 82% 96%)' }}>
+                      <th className="p-3">Entrega</th>
+                      <th className="p-3 text-center">Qtd</th>
+                      <th className="p-3 text-right">Unit.</th>
+                      <th className="p-3 text-right">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cronoData.deliverables.map((d: any, i: number) => (
+                      <motion.tr key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.05 * i }}
+                        className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="p-3">
+                          <p className="font-medium text-xs text-gray-800">{d.name}</p>
+                          <p className="text-[10px] text-gray-500">{d.description}</p>
+                        </td>
+                        <td className="p-3 text-center text-xs font-medium">{d.quantity}</td>
+                        <td className="p-3 text-right text-xs text-gray-600">{fmt2(d.unitPrice)}</td>
+                        <td className="p-3 text-right text-xs font-bold" style={{ color: accentColor }}>{fmt2((d.unitPrice || 0) * (d.quantity || 1))}</td>
+                      </motion.tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 font-bold">
+                      <td colSpan={3} className="p-3 text-right text-xs text-gray-800">Total</td>
+                      <td className="p-3 text-right text-base" style={{ color: accentColor }}>{fmt2(totalValue)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
           </AnimatedSection>
         )}
         <AnimatedSection className="px-6 md:px-10 pb-8">

@@ -1516,15 +1516,20 @@ interface TaskCardProps {
   backwardLabel?: string;
 }
 
-function TaskCard({ task, client, assignedUser, videomaker, linkedScript, isDragging, viewOnly, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit, onMoveForward, onMoveBackward, forwardLabel, backwardLabel }: TaskCardProps) {
+function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, linkedScript, isDragging, viewOnly, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit, onMoveForward, onMoveBackward, forwardLabel, backwardLabel }: TaskCardProps) {
   const [scriptPreviewOpen, setScriptPreviewOpen] = useState(false);
   const typeConfig = CONTENT_TYPES.find(t => t.value === task.content_type) || CONTENT_TYPES[0];
   const TypeIcon = typeConfig.icon;
   const clientColor = client?.color || '217 91% 60%';
 
   const isCaptacao = task.kanban_column === 'captacao';
-  // Aguardando link: card em Captação com gravação concluída (recording_id) mas SEM drive_link
-  const isAwaitingLink = isCaptacao && Boolean(task.recording_id) && !task.drive_link;
+  // Aguardando link: SOMENTE quando o videomaker já finalizou a gravação
+  // (recording está em "organizando_material" ou "concluida") mas ainda não anexou o drive_link.
+  const isAwaitingLink =
+    isCaptacao &&
+    Boolean(task.recording_id) &&
+    !task.drive_link &&
+    (recordingStatus === 'organizando_material' || recordingStatus === 'concluida');
   const isRevisao = task.kanban_column === 'revisao' || task.kanban_column === 'alteracao';
   const isAcompanhamento = task.kanban_column === 'acompanhamento';
   const scheduledRecordingDate = normalizeDateValue(task.scheduled_recording_date);

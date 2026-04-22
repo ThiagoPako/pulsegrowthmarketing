@@ -23,6 +23,7 @@ import { getWhatsAppConfig, sendWhatsAppMessage } from '@/services/whatsappServi
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 import ContentTaskDetailSheet from '@/components/content/ContentTaskDetailSheet';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const normalizeDateValue = (value?: string | null) => {
   if (!value) return null;

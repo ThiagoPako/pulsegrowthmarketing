@@ -1310,6 +1310,60 @@ export default function VideomakerDashboard() {
                   </motion.div>
                 );
               })}
+
+              {/* Today's events (cobertura de eventos) */}
+              {todayEvents.map((evt, i) => {
+                const color = getClientColor(evt.clientId);
+                const isLive = evt.status === 'em_andamento';
+                return (
+                  <motion.div key={evt.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: (todayRecs.length + i) * 0.05 }}
+                    className={`rounded-xl border-2 transition-all ${isLive ? 'border-warning bg-warning/5 ring-1 ring-warning/30' : 'border-border bg-secondary/50'}`}>
+                    <div className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3">
+                      <div className="w-1.5 h-10 sm:h-12 rounded-full shrink-0" style={{ backgroundColor: `hsl(${color})` }} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium text-sm truncate max-w-[160px] sm:max-w-none">🎪 {evt.title}</span>
+                          <Badge variant="outline" className="text-[9px] sm:text-[10px] border-warning/40 text-warning">Evento</Badge>
+                          <Badge variant="outline" className="text-[9px] sm:text-[10px]">{getClientName(evt.clientId)}</Badge>
+                          {isLive && (
+                            <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                              <Badge className="bg-warning/20 text-warning border-warning/30 text-[9px] sm:text-[10px]">
+                                <Rocket size={9} className="-rotate-45 mr-0.5" /> Em cobertura
+                              </Badge>
+                            </motion.div>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          <Clock size={10} className="inline mr-1" />{evt.startTime} - {evt.endTime}
+                          {evt.address && <span className="ml-2 truncate">📍 {evt.address}</span>}
+                        </p>
+                      </div>
+                      <div className="hidden sm:flex gap-1.5 shrink-0">
+                        {!isLive ? (
+                          <Button size="sm" onClick={() => handleStartEvent(evt)} className="gap-1">
+                            <Play size={14} /> Iniciar
+                          </Button>
+                        ) : (
+                          <Button size="sm" onClick={() => openFinishEvent(evt)} className="gap-1 bg-success hover:bg-success/90 text-success-foreground">
+                            <Square size={14} /> Finalizar
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex sm:hidden gap-1.5 px-2.5 pb-2.5 pt-0">
+                      {!isLive ? (
+                        <Button size="sm" onClick={() => handleStartEvent(evt)} className="flex-1 gap-1 text-xs h-8">
+                          <Rocket size={12} className="-rotate-45" /> Iniciar
+                        </Button>
+                      ) : (
+                        <Button size="sm" onClick={() => openFinishEvent(evt)} className="flex-1 gap-1 text-xs bg-success hover:bg-success/90 text-success-foreground h-8">
+                          <Square size={12} /> Finalizar
+                        </Button>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
             </div>
           )}
         </div>

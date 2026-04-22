@@ -1576,15 +1576,15 @@ function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, lin
         )}
         {isAwaitingLink && (
           <motion.div
-            className="flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-yellow-400 to-amber-500"
+            className="flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-300"
             animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
-            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
             style={{ backgroundSize: '200% 100%' }}
           >
-            <Link2 size={10} className="text-white shrink-0 animate-pulse" />
-            <span className="text-[9px] font-bold text-white uppercase tracking-widest">Aguardando Link</span>
+            <Link2 size={10} className="text-white shrink-0 animate-soft-glow" />
+            <span className="text-[9px] font-bold text-white uppercase tracking-widest">Aguardando Material</span>
             <span className="ml-auto relative flex h-2 w-2 shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+              <span className="absolute inline-flex h-full w-full rounded-full bg-white/70 opacity-60 animate-soft-glow"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
             </span>
           </motion.div>

@@ -1455,6 +1455,9 @@ export default function VideomakerDashboard() {
             const dateStr = format(day, 'yyyy-MM-dd');
             const isToday = isSameDay(day, today);
             const dayRecs = getRecsForDay(day);
+            const dayEvents = getEventsForDay(day);
+            const eventsLive = dayEvents.filter(e => e.status === 'em_andamento').length;
+            const eventsDone = dayEvents.filter(e => e.status === 'concluido').length;
 
             return (
               <motion.div

@@ -534,6 +534,9 @@ export default function CommercialProposal() {
         recordings: parseInt(customRecordings) || 0,
       } : {};
 
+      const cronogramaSumValue = cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0);
+      const cronogramaTotalCustom = parseFloat(cronogramaTotalCustomValue) || 0;
+      const cronogramaResolvedTotal = cronogramaPricingMode === 'total' ? cronogramaTotalCustom : cronogramaSumValue;
       const cronogramaData = proposalType === 'cronograma' ? {
         projectName: cronogramaProjectName,
         methodology: cronogramaMethodology,
@@ -542,7 +545,8 @@ export default function CommercialProposal() {
         totalDays: parseInt(cronogramaTotalDays) || 60,
         paymentMethod: cronogramaPaymentMethod,
         installments: parseInt(cronogramaInstallments) || 1,
-        totalValue: cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0),
+        pricingMode: cronogramaPricingMode,
+        totalValue: cronogramaResolvedTotal,
       } : {};
 
       let saveSystemData: any = systemData;

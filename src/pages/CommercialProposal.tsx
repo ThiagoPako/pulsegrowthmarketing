@@ -291,6 +291,8 @@ export default function CommercialProposal() {
       if (d.cronogramaTotalDays) setCronogramaTotalDays(d.cronogramaTotalDays);
       if (d.cronogramaPaymentMethod) setCronogramaPaymentMethod(d.cronogramaPaymentMethod);
       if (d.cronogramaInstallments) setCronogramaInstallments(d.cronogramaInstallments);
+      if (d.cronogramaPricingMode) setCronogramaPricingMode(d.cronogramaPricingMode);
+      if (d.cronogramaTotalCustomValue) setCronogramaTotalCustomValue(d.cronogramaTotalCustomValue);
     } catch { /* ignore corrupt data */ }
   }, []);
 

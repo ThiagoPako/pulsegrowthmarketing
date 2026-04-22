@@ -1116,7 +1116,44 @@ export default function CommercialProposal() {
         </Card>
 
         <Card className="lg:col-span-2">
-          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Layers className="h-4 w-4 text-primary" /> Entregas e Valores Unitários</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2"><Layers className="h-4 w-4 text-primary" /> Entregas e Valores</CardTitle>
+            <div className="flex items-center gap-2 pt-2">
+              <Button
+                size="sm"
+                variant={cronogramaPricingMode === 'individual' ? 'default' : 'outline'}
+                className="h-7 text-xs"
+                onClick={() => setCronogramaPricingMode('individual')}
+              >
+                Valor por entrega
+              </Button>
+              <Button
+                size="sm"
+                variant={cronogramaPricingMode === 'total' ? 'default' : 'outline'}
+                className="h-7 text-xs"
+                onClick={() => setCronogramaPricingMode('total')}
+              >
+                Valor total único
+              </Button>
+            </div>
+            {cronogramaPricingMode === 'total' && (
+              <div className="pt-3 space-y-1">
+                <Label className="text-xs">Valor total do serviço (R$)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={cronogramaTotalCustomValue}
+                  onChange={e => setCronogramaTotalCustomValue(e.target.value)}
+                  placeholder="Ex: 12500"
+                  className="h-9"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  As entregas abaixo serão exibidas sem valores individuais — apenas o valor total será mostrado ao cliente.
+                </p>
+              </div>
+            )}
+          </CardHeader>
           <CardContent className="space-y-2">
             {cronogramaDeliverables.map((d, i) => {
               const CatIcon = CATEGORY_ICONS[d.category] || Layers;

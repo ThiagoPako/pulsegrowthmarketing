@@ -57,10 +57,10 @@ export default function FinancialCashReserve() {
   );
 
   const exportColumns = useMemo(() => [
-    { header: 'Data', accessor: (m: any) => { const d = normalizeDate(m.date); const [y, mo, day] = d.split('-'); return `${day}/${mo}/${y}`; } },
-    { header: 'Tipo', accessor: (m: any) => m.type === 'entrada' ? 'Entrada' : 'Saída' },
-    { header: 'Descrição', accessor: (m: any) => (m.description || '').replace(/\s*-\s*ID:\s*[a-f0-9-]+/gi, '') },
-    { header: 'Valor (R$)', accessor: (m: any) => (m.type === 'entrada' ? '+' : '-') + Number(m.amount).toFixed(2) },
+    { key: 'date', header: 'Data', required: true, accessor: (m: any) => { const d = normalizeDate(m.date); const [y, mo, day] = d.split('-'); return `${day}/${mo}/${y}`; } },
+    { key: 'type', header: 'Tipo', accessor: (m: any) => m.type === 'entrada' ? 'Entrada' : 'Saída' },
+    { key: 'description', header: 'Descrição', accessor: (m: any) => (m.description || '').replace(/\s*-\s*ID:\s*[a-f0-9-]+/gi, '') },
+    { key: 'amount', header: 'Valor (R$)', required: true, accessor: (m: any) => (m.type === 'entrada' ? '+' : '-') + Number(m.amount).toFixed(2) },
   ], []);
 
   const resetForm = () => {

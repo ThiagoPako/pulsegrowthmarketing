@@ -54,11 +54,21 @@ export default {
           "0%": { transform: "scale(0.95)", opacity: "1" },
           "100%": { transform: "scale(1.3)", opacity: "0" },
         },
+        "soft-pulse": {
+          "0%, 100%": { opacity: "1", boxShadow: "0 0 0 0 hsl(45 95% 55% / 0.35)" },
+          "50%": { opacity: "0.92", boxShadow: "0 0 0 8px hsl(45 95% 55% / 0)" },
+        },
+        "soft-glow": {
+          "0%, 100%": { opacity: "0.85" },
+          "50%": { opacity: "1" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "pulse-ring": "pulse-ring 1.5s ease-out infinite",
+        "soft-pulse": "soft-pulse 3s ease-in-out infinite",
+        "soft-glow": "soft-glow 2.5s ease-in-out infinite",
       },
     },
   },

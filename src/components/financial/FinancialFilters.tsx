@@ -1,12 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Filter, X, Download, FileText, Calendar as CalendarIcon, ChevronDown } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { Search, Filter, X, Download, FileText, Calendar as CalendarIcon, ChevronDown, Columns3 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays } from 'date-fns';
 import jsPDF from 'jspdf';
 
@@ -36,6 +38,12 @@ export interface FinancialFiltersValue {
 export interface ExportColumn<T> {
   header: string;
   accessor: (row: T) => string | number;
+  /** Optional stable key. Defaults to header. Used to persist user column choices. */
+  key?: string;
+  /** If true, this column cannot be hidden by the user. */
+  required?: boolean;
+  /** If false, the column is hidden by default (user can still enable it). */
+  defaultVisible?: boolean;
 }
 
 interface Props<T = any> {
@@ -54,6 +62,8 @@ interface Props<T = any> {
   exportFileName?: string;
   /** Title shown on the PDF export */
   exportTitle?: string;
+  /** Stable id used to persist column visibility per page in localStorage. */
+  exportStorageKey?: string;
 }
 
 const todayISO = () => format(new Date(), 'yyyy-MM-dd');

@@ -233,37 +233,24 @@ export default function ContentKanban() {
     setLoading(false);
   }, []);
 
-  // ─── AUTO-FIX: tasks presas em "captacao"/"captacao_concluida" cuja gravação já está concluída ──
-  // Regra: gravação concluída + drive_link → mover para "edicao"
-  //        gravação concluída + sem drive_link → mover para "aguardando_link"
+  // ─── AUTO-FIX agora roda no backend (edge function content-tasks-autofix via cron 1x/min) ──
+  // Mantemos apenas um disparo opcional ao montar para acelerar a primeira correção visível.
   useEffect(() => {
-    if (loading || tasks.length === 0 || recordings.length === 0) return;
-    const stuckTasks = tasks.filter(t => {
-      // Inclui a coluna legado "captacao_concluida" para migração
-      if (!['captacao', 'captacao_concluida'].includes(t.kanban_column)) return false;
-      if (!t.recording_id) return false;
-      const rec = recordings.find(r => r.id === t.recording_id);
-      return rec?.status === 'concluida';
-    });
-    if (stuckTasks.length === 0) return;
-
-    (async () => {
-      for (const task of stuckTasks) {
-        const targetColumn = task.drive_link ? 'edicao' : 'aguardando_link';
-        const { error: updErr } = await supabase
-          .from('content_tasks')
-          .update({ kanban_column: targetColumn })
-          .eq('id', task.id);
-        if (updErr) {
-          console.error(`[ContentKanban auto-fix] Falha ao mover task ${task.id}:`, updErr);
-        } else {
-          console.log(`[ContentKanban auto-fix] Task "${task.title}" movida de ${task.kanban_column} → ${targetColumn}`);
-        }
+    if (loading) return;
+    supabase.functions.invoke('content-tasks-autofix').then(({ data, error }) => {
+      if (error) {
+        console.warn('[ContentKanban] autofix invoke falhou:', error.message);
+        return;
       }
-      fetchTasks();
-    })();
+      if (data?.moved > 0) {
+        console.log(`[ContentKanban] autofix moveu ${data.moved} tarefa(s)`);
+        fetchTasks();
+      }
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, tasks, recordings]);
+  }, [loading]);
+
+  // (rotina antiga removida — agora roda no backend via cron a cada 1 min)
 
   useEffect(() => {
     fetchTasks();

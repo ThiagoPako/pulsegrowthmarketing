@@ -374,6 +374,14 @@ export default function VideomakerDashboard() {
       toast.error(driveErr);
       return;
     }
+    if (drivePreviewStatus === 'checking') {
+      toast.info('Aguarde — verificando acesso ao link do Drive…');
+      return;
+    }
+    if ((drivePreviewStatus === 'private' || drivePreviewStatus === 'unknown') && !drivePreviewConfirmed) {
+      toast.error('Confirme que o link está compartilhado com a equipe antes de enviar.');
+      return;
+    }
     setEventDriveLinkError(null);
     setEventFinishSubmitting(true);
 

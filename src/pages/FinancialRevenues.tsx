@@ -121,6 +121,7 @@ export default function FinancialRevenues() {
   const { revenues, contracts, updateRevenue, deleteRevenue, addRevenue, generateMonthlyRevenues, paymentConfig, loading } = useFinancialData();
   const { clients } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
+  const [filters, setFilters] = useState<FinancialFiltersValue>(buildEmptyFilters);
   const [sendingBilling, setSendingBilling] = useState<string | null>(null);
   const [sendingAll, setSendingAll] = useState(false);
   const [showRocket, setShowRocket] = useState(false);

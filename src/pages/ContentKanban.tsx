@@ -237,6 +237,27 @@ export default function ContentKanban() {
   // Mantemos um disparo silencioso ao montar para acelerar a primeira correção visível.
   const [autofixRunning, setAutofixRunning] = useState(false);
 
+  // Indicadores admin acumulados a partir do retorno da edge function (sem refetch global)
+  type AutofixVmStat = { name: string; moved: number; cancelled: number; extras: number };
+  type AutofixStats = {
+    moved: number;
+    cancelled: number;
+    extras: number;
+    byVideomaker: Record<string, AutofixVmStat>;
+    lastRunAt: string | null;
+    lastScanned: number;
+  };
+  const [autofixStats, setAutofixStats] = useState<AutofixStats>({
+    moved: 0,
+    cancelled: 0,
+    extras: 0,
+    byVideomaker: {},
+    lastRunAt: null,
+    lastScanned: 0,
+  });
+
+  const isAdmin = profile?.role === 'admin';
+
   const runAutofix = useCallback(async (manual = false) => {
     setAutofixRunning(true);
     try {
@@ -247,8 +268,16 @@ export default function ContentKanban() {
         return;
       }
       const scanned = data?.scanned ?? 0;
-      const results: Array<{ id: string; to: string; ok: boolean; skipped?: boolean }> =
-        data?.results ?? [];
+      const results: Array<{
+        id: string;
+        to: string;
+        ok: boolean;
+        skipped?: boolean;
+        videomaker_id?: string | null;
+        videomaker_name?: string | null;
+        recording_status?: string;
+        is_extra?: boolean;
+      }> = data?.results ?? [];
       const movedResults = results.filter(r => r.ok && !r.skipped);
 
       if (movedResults.length > 0) {
@@ -263,6 +292,35 @@ export default function ContentKanban() {
         if (manual) toast.success(`✅ ${movedResults.length} tarefa(s) corrigida(s)`);
       } else if (manual) {
         toast.info(`Nenhuma tarefa presa encontrada (${scanned} verificadas)`);
+      }
+
+      // ─── Atualiza indicadores admin acumulados (apenas com base no retorno) ──
+      const stats = data?.stats as
+        | { moved: number; cancelled: number; extras: number; byVideomaker: Record<string, AutofixVmStat> }
+        | undefined;
+      if (stats) {
+        setAutofixStats(prev => {
+          const mergedVm: Record<string, AutofixVmStat> = { ...prev.byVideomaker };
+          for (const [vmId, s] of Object.entries(stats.byVideomaker ?? {})) {
+            const existing = mergedVm[vmId];
+            mergedVm[vmId] = existing
+              ? {
+                  name: s.name || existing.name,
+                  moved: existing.moved + (s.moved ?? 0),
+                  cancelled: existing.cancelled + (s.cancelled ?? 0),
+                  extras: existing.extras + (s.extras ?? 0),
+                }
+              : { ...s };
+          }
+          return {
+            moved: prev.moved + (stats.moved ?? 0),
+            cancelled: prev.cancelled + (stats.cancelled ?? 0),
+            extras: prev.extras + (stats.extras ?? 0),
+            byVideomaker: mergedVm,
+            lastRunAt: new Date().toISOString(),
+            lastScanned: scanned,
+          };
+        });
       }
     } finally {
       setAutofixRunning(false);

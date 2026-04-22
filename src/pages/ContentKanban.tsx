@@ -238,11 +238,12 @@ export default function ContentKanban() {
   const [autofixRunning, setAutofixRunning] = useState(false);
 
   // Indicadores admin acumulados a partir do retorno da edge function (sem refetch global)
-  type AutofixVmStat = { name: string; moved: number; cancelled: number; extras: number };
+  type AutofixVmStat = { name: string; moved: number; cancelled: number; extras: number; orphans: number };
   type AutofixStats = {
     moved: number;
     cancelled: number;
     extras: number;
+    orphans: number;
     byVideomaker: Record<string, AutofixVmStat>;
     lastRunAt: string | null;
     lastScanned: number;
@@ -251,6 +252,7 @@ export default function ContentKanban() {
     moved: 0,
     cancelled: 0,
     extras: 0,
+    orphans: 0,
     byVideomaker: {},
     lastRunAt: null,
     lastScanned: 0,

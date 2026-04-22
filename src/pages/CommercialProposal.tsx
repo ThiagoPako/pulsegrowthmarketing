@@ -1188,7 +1188,7 @@ export default function CommercialProposal() {
                     updated[i] = { ...updated[i], description: e.target.value };
                     setCronogramaDeliverables(updated);
                   }} className="text-xs min-h-[36px] pl-6" rows={1} placeholder="Descrição da entrega..." />
-                  <div className="grid grid-cols-4 gap-2 pl-6">
+                  <div className={`grid gap-2 pl-6 ${cronogramaPricingMode === 'total' ? 'grid-cols-2' : 'grid-cols-4'}`}>
                     <div>
                       <Label className="text-[10px]">Qtd</Label>
                       <Input type="number" value={d.quantity} onChange={e => {
@@ -1197,18 +1197,22 @@ export default function CommercialProposal() {
                         setCronogramaDeliverables(updated);
                       }} className="h-7 text-xs" min={1} />
                     </div>
-                    <div>
-                      <Label className="text-[10px]">Valor Unit. (R$)</Label>
-                      <Input type="number" value={d.unitPrice} onChange={e => {
-                        const updated = [...cronogramaDeliverables];
-                        updated[i] = { ...updated[i], unitPrice: parseFloat(e.target.value) || 0 };
-                        setCronogramaDeliverables(updated);
-                      }} className="h-7 text-xs" />
-                    </div>
-                    <div>
-                      <Label className="text-[10px]">Subtotal</Label>
-                      <p className="text-sm font-bold text-primary mt-1">{fmt(d.unitPrice * d.quantity)}</p>
-                    </div>
+                    {cronogramaPricingMode === 'individual' && (
+                      <>
+                        <div>
+                          <Label className="text-[10px]">Valor Unit. (R$)</Label>
+                          <Input type="number" value={d.unitPrice} onChange={e => {
+                            const updated = [...cronogramaDeliverables];
+                            updated[i] = { ...updated[i], unitPrice: parseFloat(e.target.value) || 0 };
+                            setCronogramaDeliverables(updated);
+                          }} className="h-7 text-xs" />
+                        </div>
+                        <div>
+                          <Label className="text-[10px]">Subtotal</Label>
+                          <p className="text-sm font-bold text-primary mt-1">{fmt(d.unitPrice * d.quantity)}</p>
+                        </div>
+                      </>
+                    )}
                     <div>
                       <Label className="text-[10px]">Prazo (dias)</Label>
                       <Input type="number" value={d.estimatedDays} onChange={e => {

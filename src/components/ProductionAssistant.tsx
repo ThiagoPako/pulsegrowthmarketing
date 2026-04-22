@@ -159,21 +159,12 @@ export default function ProductionAssistant() {
         totalPending: (tasks || []).length + (designTasks || []).length,
       };
 
-      // Call AI via VPS
-      const { data: aiIntegration } = await supabase
-        .from('api_integrations')
-        .select('config')
-        .in('provider', ['ai_gemini', 'ai_openai', 'lovable_ai'])
-        .eq('status', 'ativo')
-        .limit(1)
-        .single();
-
-      const aiModel = (aiIntegration as any)?.config?.ai_model || undefined;
-      const aiProvider = (aiIntegration as any)?.config?.ai_provider || undefined;
-
-      const { data: aiResponse } = await invokeVpsFunction('production-assistant', {
-        body: { context, aiModel, aiProvider },
+      // Call Lovable AI Gateway via Supabase Edge Function
+      const { supabase: sb } = await import('@/integrations/supabase/client');
+      const { data: aiResponse, error: aiError } = await sb.functions.invoke('production-assistant', {
+        body: { context },
       });
+      if (aiError) console.error('production-assistant invoke error:', aiError);
 
       if (aiResponse?.message) {
         const msg: AssistantMessage = {

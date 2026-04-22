@@ -125,28 +125,26 @@ export default function ProposalViewer() {
   }, [token]);
 
   const loadClients = async () => {
-    const { data } = await supabase.from('clients_public_logos').select('*');
-    setClients(data || []);
+    const res = await publicProposalAction({ action: 'get_clients' });
+    setClients(res.clients || []);
   };
 
   const loadProposal = async () => {
-    const { data } = await supabase.from('commercial_proposals').select('*').eq('token', token).single();
-    setProposal(data);
+    const res = await publicProposalAction({ action: 'get_proposal', token });
+    setProposal(res.proposal || null);
     setLoading(false);
   };
 
   const loadComments = async () => {
     if (!token) return;
-    const { data: prop } = await supabase.from('commercial_proposals').select('id').eq('token', token).single();
-    if (!prop) return;
-    const { data } = await supabase.from('proposal_comments').select('*').eq('proposal_id', prop.id).order('created_at', { ascending: true });
-    setComments(data || []);
+    const res = await publicProposalAction({ action: 'get_comments', token });
+    setComments(res.comments || []);
   };
 
   const sendComment = async () => {
     if (!commentMsg.trim() || !commentName.trim() || !proposal) return;
     setSending(true);
-    await supabase.from('proposal_comments').insert({ proposal_id: proposal.id, author_name: commentName, message: commentMsg });
+    await publicProposalAction({ action: 'add_comment', token, author_name: commentName, message: commentMsg });
     setCommentMsg('');
     await loadComments();
     setSending(false);
@@ -156,7 +154,7 @@ export default function ProposalViewer() {
   const respondProposal = async (status: 'aceita' | 'recusada') => {
     if (!proposal) return;
     setResponding(true);
-    await supabase.from('commercial_proposals').update({ status, client_response_at: new Date().toISOString(), client_response_note: responseNote || null }).eq('id', proposal.id);
+    await publicProposalAction({ action: 'respond', token, status, response_note: responseNote || null });
     await loadProposal();
     setResponding(false);
     toast.success(status === 'aceita' ? '🎉 Proposta aceita com sucesso!' : 'Proposta recusada.');

@@ -1,6 +1,25 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { supabase } from '@/lib/vpsDb';
+
+// Public, token-gated proposal API (no JWT required)
+async function publicProposalAction(body: Record<string, any>): Promise<any> {
+  try {
+    const response = await fetch('https://agenciapulse.tech/api/public-proposal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      console.error('[publicProposal] error:', data);
+      return { error: data.error || `HTTP ${response.status}` };
+    }
+    return data;
+  } catch (error: any) {
+    console.error('[publicProposal] network error:', error);
+    return { error: error.message || 'Network error' };
+  }
+}
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import pulseLogo from '@/assets/pulse_logo.png';

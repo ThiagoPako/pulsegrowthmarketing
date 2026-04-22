@@ -126,6 +126,7 @@ Deno.serve(async (req) => {
         scanned: stuckTasks.length,
         candidates: toFix.length,
         moved,
+        skipped,
         results,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },

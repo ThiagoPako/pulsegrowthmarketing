@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { Plus, Pencil, Trash2, ArrowLeft, TrendingDown, Users, Wallet, CheckCircle, Undo2, Gift } from 'lucide-react';
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
+import FinancialFilters, { applyFinancialFilters, buildEmptyFilters, type FinancialFiltersValue } from '@/components/financial/FinancialFilters';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { format, subMonths, addMonths } from 'date-fns';

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
+import FinancialFilters, { applyFinancialFilters, buildEmptyFilters, type FinancialFiltersValue } from '@/components/financial/FinancialFilters';
 import { useFinancialData, normalizeDate } from '@/hooks/useFinancialData';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

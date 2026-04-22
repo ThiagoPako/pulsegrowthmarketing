@@ -23,6 +23,7 @@ import { getWhatsAppConfig, sendWhatsAppMessage } from '@/services/whatsappServi
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 import ContentTaskDetailSheet from '@/components/content/ContentTaskDetailSheet';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const normalizeDateValue = (value?: string | null) => {
   if (!value) return null;
@@ -1575,19 +1576,44 @@ function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, lin
           </div>
         )}
         {isAwaitingLink && (
-          <motion.div
-            className="flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-300"
-            animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
-            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-            style={{ backgroundSize: '200% 100%' }}
-          >
-            <Link2 size={10} className="text-white shrink-0 animate-soft-glow" />
-            <span className="text-[9px] font-bold text-white uppercase tracking-widest">Aguardando Material</span>
-            <span className="ml-auto relative flex h-2 w-2 shrink-0">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-white/70 opacity-60 animate-soft-glow"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
-            </span>
-          </motion.div>
+          <TooltipProvider delayDuration={150}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <motion.div
+                  className="flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-300 cursor-help"
+                  animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+                  transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{ backgroundSize: '200% 100%' }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Link2 size={10} className="text-white shrink-0 animate-soft-glow" />
+                  <span className="text-[9px] font-bold text-white uppercase tracking-widest">Aguardando Material</span>
+                  <span className="ml-auto relative flex h-2 w-2 shrink-0">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-white/70 opacity-60 animate-soft-glow"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+                  </span>
+                </motion.div>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs space-y-1.5 p-3">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold">
+                  <span className="text-foreground">Status da gravação:</span>
+                  <code className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 font-mono text-[10px]">
+                    {recordingStatus ?? 'desconhecido'}
+                  </code>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  {recordingStatus === 'organizando_material'
+                    ? 'O videomaker finalizou a captação e está organizando o material. Falta anexar o link do Drive para mover automaticamente para Edição.'
+                    : recordingStatus === 'concluida'
+                    ? 'A gravação está marcada como concluída, mas o link do Drive ainda não foi adicionado. Assim que o link for anexado, o card avança para Edição.'
+                    : 'Aguardando o videomaker enviar o material desta gravação. Adicione o link do Drive para liberar a etapa de Edição.'}
+                </p>
+                <p className="text-[10px] text-muted-foreground/80 italic pt-1 border-t border-border/40">
+                  Próximo passo: anexar <strong>link do Drive</strong> → card vai para <strong>Edição</strong>.
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
         {isOverdue && (
           <div className="flex items-center gap-1.5 px-3 py-1 bg-destructive">

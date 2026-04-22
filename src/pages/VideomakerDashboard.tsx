@@ -391,10 +391,26 @@ export default function VideomakerDashboard() {
       .update({ status: 'concluido', drive_link: eventDriveLink.trim() } as any)
       .eq('id', evt.id);
     if (updateErr) {
-      toast.error('Erro ao finalizar evento. Tente novamente.');
-      console.error(updateErr);
-      setEventFinishSubmitting(false);
-      return;
+      console.error('[event finish] event_recordings update error:', updateErr);
+      const detail = updateErr.message || updateErr.details || updateErr.hint || JSON.stringify(updateErr);
+      // Fallback: try updating without drive_link in case the column doesn't exist on this DB
+      if (/drive_link/i.test(detail) && /column|does not exist|unknown/i.test(detail)) {
+        const { error: retryErr } = await supabase
+          .from('event_recordings')
+          .update({ status: 'concluido' } as any)
+          .eq('id', evt.id);
+        if (retryErr) {
+          const d2 = retryErr.message || retryErr.details || retryErr.hint || JSON.stringify(retryErr);
+          toast.error(`Erro ao finalizar evento: ${d2}`);
+          setEventFinishSubmitting(false);
+          return;
+        }
+        toast.warning('Evento finalizado (link do Drive não foi salvo no evento — coluna ausente). A tarefa de edição manterá o link.');
+      } else {
+        toast.error(`Erro ao finalizar evento: ${detail}`);
+        setEventFinishSubmitting(false);
+        return;
+      }
     }
 
     // 2) Pick editor (auto = least loaded)

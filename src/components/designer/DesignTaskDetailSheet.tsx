@@ -65,6 +65,10 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [editableFileUrl, setEditableFileUrl] = useState(task.editable_file_url || '');
   const [mockupUrl, setMockupUrl] = useState((task as any).mockup_url || '');
   const [adjustmentNotes, setAdjustmentNotes] = useState('');
+  const [adjustmentRefLinks, setAdjustmentRefLinks] = useState<string[]>([]);
+  const [adjustmentRefLinkInput, setAdjustmentRefLinkInput] = useState('');
+  const [adjustmentRefImages, setAdjustmentRefImages] = useState<string[]>([]);
+  const [uploadingAdjustmentRef, setUploadingAdjustmentRef] = useState(false);
   const [elapsedDisplay, setElapsedDisplay] = useState('');
   const [checklist, setChecklist] = useState<ChecklistItem[]>((task as any).checklist || []);
   const [uploadingMockup, setUploadingMockup] = useState(false);
@@ -152,11 +156,73 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
   const handleRequestAdjustments = async () => {
     if (!adjustmentNotes.trim()) { toast.error('Descreva os ajustes necessários'); return; }
-    await updateTask.mutateAsync({ id: task.id, kanban_column: 'ajustes', observations: adjustmentNotes } as any);
-    await addHistory.mutateAsync({ task_id: task.id, action: 'Ajustes solicitados', details: adjustmentNotes, user_id: user?.id });
+    const allRefs = [...adjustmentRefLinks, ...adjustmentRefImages];
+    let fullObservations = adjustmentNotes.trim();
+    if (allRefs.length > 0) {
+      fullObservations += '\n\n📎 Referências:\n' + allRefs.map(r => `• ${r}`).join('\n');
+    }
+    await updateTask.mutateAsync({
+      id: task.id,
+      kanban_column: 'ajustes',
+      observations: fullObservations,
+      reference_images: [...(task.reference_images || []), ...adjustmentRefImages],
+      references_links: [...(task.references_links || []), ...adjustmentRefLinks],
+    } as any);
+    await addHistory.mutateAsync({
+      task_id: task.id,
+      action: 'Ajustes solicitados',
+      details: fullObservations,
+      attachment_url: adjustmentRefImages[0] || adjustmentRefLinks[0] || undefined,
+      user_id: user?.id,
+    });
     toast.success('Ajustes solicitados!');
     setAdjustmentNotes('');
+    setAdjustmentRefLinks([]);
+    setAdjustmentRefLinkInput('');
+    setAdjustmentRefImages([]);
     setShowAdjustmentForm(false);
+  };
+
+  const handleAddAdjustmentRefLink = () => {
+    const link = adjustmentRefLinkInput.trim();
+    if (!link) return;
+    try {
+      // basic URL validation
+      new URL(link);
+    } catch {
+      toast.error('Link inválido');
+      return;
+    }
+    if (adjustmentRefLinks.includes(link)) {
+      toast.error('Link já adicionado');
+      return;
+    }
+    setAdjustmentRefLinks([...adjustmentRefLinks, link]);
+    setAdjustmentRefLinkInput('');
+  };
+
+  const handleUploadAdjustmentRef = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploadingAdjustmentRef(true);
+    try {
+      const uploaded: string[] = [];
+      for (const file of Array.from(files)) {
+        if (file.size > 10 * 1024 * 1024) {
+          toast.error(`${file.name}: máximo 10MB`);
+          continue;
+        }
+        const url = await uploadFileToVps(file, 'design-files');
+        if (url) uploaded.push(url);
+      }
+      if (uploaded.length > 0) {
+        setAdjustmentRefImages([...adjustmentRefImages, ...uploaded]);
+        toast.success(`${uploaded.length} imagem(ns) anexada(s)`);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao fazer upload');
+    } finally {
+      setUploadingAdjustmentRef(false);
+    }
   };
 
   const handleSendToClient = async () => {
@@ -1222,17 +1288,109 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                       placeholder="Ex: Alterar a cor do fundo para azul, aumentar a fonte do título, trocar a imagem central..."
                       autoFocus
                     />
-                    <div className="flex gap-2">
+
+                    {/* Reference links */}
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                        <Link2 size={10} /> Links de referência (opcional)
+                      </Label>
+                      <div className="flex gap-1.5">
+                        <Input
+                          value={adjustmentRefLinkInput}
+                          onChange={e => setAdjustmentRefLinkInput(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddAdjustmentRefLink(); } }}
+                          placeholder="https://..."
+                          className="text-xs h-8"
+                        />
+                        <Button type="button" size="sm" variant="outline" className="h-8 text-xs shrink-0" onClick={handleAddAdjustmentRefLink}>
+                          Adicionar
+                        </Button>
+                      </div>
+                      {adjustmentRefLinks.length > 0 && (
+                        <div className="space-y-1 mt-1">
+                          {adjustmentRefLinks.map((link, i) => (
+                            <div key={i} className="flex items-center gap-1.5 text-[11px] bg-background/60 rounded px-2 py-1 border border-border">
+                              <ExternalLink size={10} className="shrink-0 text-muted-foreground" />
+                              <a href={link} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-primary hover:underline">{link}</a>
+                              <button
+                                type="button"
+                                onClick={() => setAdjustmentRefLinks(adjustmentRefLinks.filter((_, idx) => idx !== i))}
+                                className="text-muted-foreground hover:text-destructive shrink-0"
+                                aria-label="Remover"
+                              >
+                                <X size={11} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Reference image upload */}
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                        <Image size={10} /> Imagens de referência (opcional)
+                      </Label>
+                      <label className={`flex items-center justify-center gap-1.5 h-8 rounded-md border border-dashed border-border cursor-pointer text-[11px] hover:bg-muted/40 transition-colors ${uploadingAdjustmentRef ? 'opacity-60 pointer-events-none' : ''}`}>
+                        {uploadingAdjustmentRef ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                        <span>{uploadingAdjustmentRef ? 'Enviando...' : 'Anexar imagens (PNG, JPG, até 10MB)'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          className="hidden"
+                          onChange={e => { handleUploadAdjustmentRef(e.target.files); e.target.value = ''; }}
+                        />
+                      </label>
+                      {adjustmentRefImages.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {adjustmentRefImages.map((img, i) => (
+                            <div key={i} className="relative group">
+                              <button
+                                type="button"
+                                onClick={() => setPreviewImage(img)}
+                                className="block w-14 h-14 rounded-md overflow-hidden border border-border hover:ring-2 hover:ring-primary/50 transition-all"
+                              >
+                                <img src={img} alt={`Ref ${i + 1}`} className="w-full h-full object-cover" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setAdjustmentRefImages(adjustmentRefImages.filter((_, idx) => idx !== i))}
+                                className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                aria-label="Remover"
+                              >
+                                <X size={9} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2 pt-1">
                       <Button
                         size="sm"
                         variant="destructive"
                         className="flex-1 h-9 text-xs"
-                        disabled={!adjustmentNotes.trim() || updateTask.isPending}
+                        disabled={!adjustmentNotes.trim() || updateTask.isPending || uploadingAdjustmentRef}
                         onClick={handleRequestAdjustments}
                       >
                         <RotateCcw size={12} className="mr-1" /> Enviar para Designer
                       </Button>
-                      <Button size="sm" variant="ghost" className="h-9 text-xs" onClick={() => { setAdjustmentNotes(''); setShowAdjustmentForm(false); }}>Cancelar</Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-9 text-xs"
+                        onClick={() => {
+                          setAdjustmentNotes('');
+                          setAdjustmentRefLinks([]);
+                          setAdjustmentRefLinkInput('');
+                          setAdjustmentRefImages([]);
+                          setShowAdjustmentForm(false);
+                        }}
+                      >
+                        Cancelar
+                      </Button>
                     </div>
                   </div>
                 )}

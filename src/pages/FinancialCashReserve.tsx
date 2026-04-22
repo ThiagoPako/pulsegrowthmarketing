@@ -202,14 +202,30 @@ export default function FinancialCashReserve() {
         </Card>
       </div>
 
+      <FinancialFilters
+        value={filters}
+        onChange={setFilters}
+        resultCount={displayed.length}
+        searchPlaceholder="Buscar descrição, tipo…"
+        advancedFields={[
+          { key: 'type', label: 'Tipo', options: [{ value: 'entrada', label: 'Entrada' }, { value: 'saida', label: 'Saída' }] },
+        ]}
+        exportRows={displayed}
+        exportColumns={exportColumns}
+        exportFileName="caixa-reserva"
+        exportTitle="Caixa (Reserva)"
+      />
+
       {/* Movements Table */}
       <Card>
         <CardHeader>
           <CardTitle>Histórico de Movimentações</CardTitle>
         </CardHeader>
         <CardContent>
-          {cashMovements.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">Nenhuma movimentação registrada ainda.</p>
+          {displayed.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              {cashMovements.length === 0 ? 'Nenhuma movimentação registrada ainda.' : 'Nenhum resultado para os filtros selecionados.'}
+            </p>
           ) : (
             <Table>
               <TableHeader>
@@ -222,7 +238,7 @@ export default function FinancialCashReserve() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {cashMovements.map(m => (
+                {displayed.map(m => (
                   <TableRow key={m.id}>
                     <TableCell>{(() => { const d = normalizeDate(m.date); const [y,mo,day] = d.split('-'); return `${day}/${mo}/${y}`; })()}</TableCell>
                     <TableCell>

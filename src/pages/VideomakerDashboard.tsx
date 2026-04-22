@@ -1482,6 +1482,20 @@ export default function VideomakerDashboard() {
                       className="w-1.5 h-1.5 rounded-full bg-primary mx-auto mt-1"
                     />
                   )}
+                  {(eventsLive > 0 || eventsDone > 0) && (
+                    <div className="flex items-center justify-center gap-1 mt-1.5 flex-wrap">
+                      {eventsLive > 0 && (
+                        <Badge className="bg-warning/20 text-warning border-warning/30 text-[9px] px-1.5 py-0 h-4">
+                          🎪 {eventsLive} ao vivo
+                        </Badge>
+                      )}
+                      {eventsDone > 0 && (
+                        <Badge className="bg-success/20 text-success border-success/30 text-[9px] px-1.5 py-0 h-4">
+                          ✓ {eventsDone}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1.5 sm:space-y-2">
                   {dayRecs.length === 0 && (

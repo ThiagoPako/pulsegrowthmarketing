@@ -1,12 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Filter, X, Download, FileText, Calendar as CalendarIcon, ChevronDown } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { Search, Filter, X, Download, FileText, Calendar as CalendarIcon, ChevronDown, Columns3 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays } from 'date-fns';
 import jsPDF from 'jspdf';
 
@@ -36,6 +38,12 @@ export interface FinancialFiltersValue {
 export interface ExportColumn<T> {
   header: string;
   accessor: (row: T) => string | number;
+  /** Optional stable key. Defaults to header. Used to persist user column choices. */
+  key?: string;
+  /** If true, this column cannot be hidden by the user. */
+  required?: boolean;
+  /** If false, the column is hidden by default (user can still enable it). */
+  defaultVisible?: boolean;
 }
 
 interface Props<T = any> {
@@ -54,6 +62,8 @@ interface Props<T = any> {
   exportFileName?: string;
   /** Title shown on the PDF export */
   exportTitle?: string;
+  /** Stable id used to persist column visibility per page in localStorage. */
+  exportStorageKey?: string;
 }
 
 const todayISO = () => format(new Date(), 'yyyy-MM-dd');
@@ -101,8 +111,47 @@ const FinancialFilters = <T,>({
   exportColumns,
   exportFileName = 'financeiro',
   exportTitle = 'Relatório Financeiro',
+  exportStorageKey,
 }: Props<T>) => {
   const [open, setOpen] = useState(false);
+  const [colsOpen, setColsOpen] = useState(false);
+
+  const colKey = (c: ExportColumn<T>) => c.key || c.header;
+  const storageKey = exportStorageKey ? `pulse:exportCols:${exportStorageKey}` : null;
+
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() => {
+    const initial = new Set<string>();
+    if (exportColumns) {
+      exportColumns.forEach(c => { if (c.defaultVisible === false && !c.required) initial.add(colKey(c)); });
+    }
+    if (storageKey && typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage.getItem(storageKey);
+        if (raw) return new Set<string>(JSON.parse(raw));
+      } catch { /* noop */ }
+    }
+    return initial;
+  });
+
+  useEffect(() => {
+    if (!storageKey || typeof window === 'undefined') return;
+    try { window.localStorage.setItem(storageKey, JSON.stringify(Array.from(hiddenCols))); } catch { /* noop */ }
+  }, [hiddenCols, storageKey]);
+
+  const visibleColumns = useMemo(
+    () => (exportColumns || []).filter(c => c.required || !hiddenCols.has(colKey(c))),
+    [exportColumns, hiddenCols]
+  );
+
+  const toggleCol = (c: ExportColumn<T>) => {
+    if (c.required) return;
+    const k = colKey(c);
+    setHiddenCols(prev => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+  };
 
   const activeAdvancedCount = useMemo(
     () => Object.values(value.advanced).filter(v => v && v !== 'all').length,
@@ -151,10 +200,10 @@ const FinancialFilters = <T,>({
   };
 
   const handleExportCSV = () => {
-    if (!exportRows || !exportColumns || exportRows.length === 0) return;
-    const header = exportColumns.map(c => csvEscape(c.header)).join(',');
+    if (!exportRows || !exportColumns || exportRows.length === 0 || visibleColumns.length === 0) return;
+    const header = visibleColumns.map(c => csvEscape(c.header)).join(',');
     const lines = exportRows.map(row =>
-      exportColumns.map(c => csvEscape(c.accessor(row))).join(',')
+      visibleColumns.map(c => csvEscape(c.accessor(row))).join(',')
     );
     const csv = [header, ...lines].join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
@@ -169,7 +218,7 @@ const FinancialFilters = <T,>({
   };
 
   const handleExportPDF = () => {
-    if (!exportRows || !exportColumns || exportRows.length === 0) return;
+    if (!exportRows || !exportColumns || exportRows.length === 0 || visibleColumns.length === 0) return;
     const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const pageW = pdf.internal.pageSize.getWidth();
 
@@ -210,7 +259,7 @@ const FinancialFilters = <T,>({
     cursorY += 6;
 
     // Table
-    const cols = exportColumns;
+    const cols = visibleColumns;
     const usableW = pageW - 20;
     const colW = usableW / cols.length;
 
@@ -357,10 +406,74 @@ const FinancialFilters = <T,>({
           {/* Export */}
           {canExport && (
             <div className="flex items-center gap-1">
-              <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleExportCSV} title="Exportar CSV">
+              <Popover open={colsOpen} onOpenChange={setColsOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 gap-1.5" title="Configurar colunas exportadas">
+                    <Columns3 size={14} />
+                    <span className="hidden sm:inline">Colunas</span>
+                    <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                      {visibleColumns.length}/{exportColumns!.length}
+                    </Badge>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-64 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-xs font-semibold">Colunas exportadas</Label>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-[10px]"
+                      onClick={() => setHiddenCols(new Set())}
+                    >
+                      Tudo
+                    </Button>
+                  </div>
+                  <Separator className="mb-2" />
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                    {exportColumns!.map(c => {
+                      const k = colKey(c);
+                      const checked = c.required || !hiddenCols.has(k);
+                      return (
+                        <label
+                          key={k}
+                          className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors ${
+                            c.required ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-muted'
+                          }`}
+                        >
+                          <Checkbox
+                            checked={checked}
+                            disabled={c.required}
+                            onCheckedChange={() => toggleCol(c)}
+                          />
+                          <span className="flex-1">{c.header}</span>
+                          {c.required && <span className="text-[9px] text-muted-foreground">obrig.</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-2 pt-2 border-t">
+                    Suas escolhas ficam salvas neste navegador.
+                  </p>
+                </PopoverContent>
+              </Popover>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5"
+                onClick={handleExportCSV}
+                disabled={visibleColumns.length === 0}
+                title="Exportar CSV"
+              >
                 <Download size={14} /> CSV
               </Button>
-              <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleExportPDF} title="Exportar PDF">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5"
+                onClick={handleExportPDF}
+                disabled={visibleColumns.length === 0}
+                title="Exportar PDF"
+              >
                 <FileText size={14} /> PDF
               </Button>
             </div>

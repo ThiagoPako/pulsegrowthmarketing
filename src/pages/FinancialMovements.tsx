@@ -376,16 +376,17 @@ export default function FinancialMovements() {
             }]}
             exportRows={filtered}
             exportColumns={[
-              { header: 'Data', accessor: m => format(new Date(m.date + 'T12:00:00'), 'dd/MM/yyyy') },
-              { header: 'Tipo', accessor: m => m.type },
-              { header: 'Descrição', accessor: m => m.description },
-              { header: 'Categoria', accessor: m => m.category || '' },
-              { header: 'Cliente', accessor: m => m.clientName || '' },
-              { header: 'Status', accessor: m => m.status || '' },
-              { header: 'Valor (R$)', accessor: m => m.amount.toFixed(2) },
+              { key: 'date', header: 'Data', required: true, accessor: m => format(new Date(m.date + 'T12:00:00'), 'dd/MM/yyyy') },
+              { key: 'type', header: 'Tipo', accessor: m => m.type },
+              { key: 'description', header: 'Descrição', accessor: m => m.description },
+              { key: 'category', header: 'Categoria', defaultVisible: false, accessor: m => m.category || '' },
+              { key: 'client', header: 'Cliente', accessor: m => m.clientName || '' },
+              { key: 'status', header: 'Status', accessor: m => m.status || '' },
+              { key: 'amount', header: 'Valor (R$)', required: true, accessor: m => m.amount.toFixed(2) },
             ]}
             exportFileName="movimentacoes"
             exportTitle="Movimentações Financeiras"
+            exportStorageKey="movements"
           />
         </div>
       </div>

@@ -288,12 +288,12 @@ export default function FinancialExpenses() {
   }, [categories, activeTab]);
 
   const exportColumns = useMemo(() => [
-    { header: 'Data', accessor: (e: Expense) => { const d = normalizeDate(e.date); const [y,m,day]=d.split('-'); return `${day}/${m}/${y}`; } },
-    { header: 'Categoria', accessor: (e: Expense) => categories.find(c => c.id === e.category_id)?.name || '—' },
-    { header: 'Descrição', accessor: (e: Expense) => e.description || '—' },
-    { header: 'Tipo', accessor: (e: Expense) => e.expense_type || '—' },
-    { header: 'Responsável', accessor: (e: Expense) => e.responsible || '—' },
-    { header: 'Valor (R$)', accessor: (e: Expense) => Number(e.amount).toFixed(2) },
+    { key: 'date', header: 'Data', required: true, accessor: (e: Expense) => { const d = normalizeDate(e.date); const [y,m,day]=d.split('-'); return `${day}/${m}/${y}`; } },
+    { key: 'category', header: 'Categoria', accessor: (e: Expense) => categories.find(c => c.id === e.category_id)?.name || '—' },
+    { key: 'description', header: 'Descrição', accessor: (e: Expense) => e.description || '—' },
+    { key: 'type', header: 'Tipo', accessor: (e: Expense) => e.expense_type || '—' },
+    { key: 'responsible', header: 'Responsável', accessor: (e: Expense) => e.responsible || '—' },
+    { key: 'amount', header: 'Valor (R$)', required: true, accessor: (e: Expense) => Number(e.amount).toFixed(2) },
   ], [categories]);
 
   const total = filtered.reduce((s, e) => s + Number(e.amount), 0);
@@ -503,6 +503,7 @@ export default function FinancialExpenses() {
             exportColumns={exportColumns}
             exportFileName={activeTab === 'salarios' ? 'salarios' : 'despesas'}
             exportTitle={activeTab === 'salarios' ? 'Salários' : 'Despesas'}
+            exportStorageKey={activeTab === 'salarios' ? 'salaries' : 'expenses'}
             searchPlaceholder={activeTab === 'salarios' ? 'Buscar colaborador, cargo…' : 'Buscar descrição, categoria, responsável…'}
           />
         </div>

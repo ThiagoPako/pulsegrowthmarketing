@@ -57,7 +57,7 @@ const safeFormatDate = (value?: string | null, pattern = "dd/MM/yyyy") => {
 const KANBAN_COLUMNS = [
   { id: 'ideias', label: 'Zona de Ideias', icon: '💡' },
   { id: 'captacao', label: 'Captação', icon: '📹' },
-  { id: 'aguardando_link', label: 'Aguardando Link', icon: '🔗' },
+  
   { id: 'edicao', label: 'Edição de Vídeo', icon: '🎬' },
   { id: 'revisao', label: 'Revisão', icon: '👁' },
   { id: 'alteracao', label: 'Alteração', icon: '✏️' },

@@ -261,8 +261,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
       actions.push({ key: 'em_analise', label: 'ENVIAR P/ ANÁLISE', color: 'hsl(262 83% 58%)', icon: Send, onClick: handleSendForReview });
     }
     if (task.kanban_column === 'em_analise' && isSocialMedia) {
-      actions.push({ key: 'enviar_cliente', label: 'APROVAR', color: 'hsl(142 71% 45%)', icon: CheckCircle, onClick: handleApprove });
-      actions.push({ key: 'ajustes', label: 'SOLICITAR AJUSTES', color: 'hsl(0 72% 51%)', icon: RotateCcw, onClick: () => setShowAdjustmentForm(true) });
+      actions.push({ key: 'enviar_cliente', label: 'APROVAR ARTE', color: 'hsl(142 71% 45%)', icon: CheckCircle, onClick: handleApprove });
+      actions.push({ key: 'ajustes', label: 'ENVIAR PARA REVISÃO', color: 'hsl(0 72% 51%)', icon: RotateCcw, onClick: () => setShowAdjustmentForm(true) });
     }
     if (task.kanban_column === 'enviar_cliente' && isSocialMedia) {
       actions.push({ key: 'enviar_cliente', label: 'ENVIAR VIA WHATSAPP', color: 'hsl(142 71% 45%)', icon: Send, onClick: handleSendToClient });
@@ -1208,11 +1208,31 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                 </>)}
                 {showAdjustmentForm && (
                   <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-                    <Label className="text-xs font-semibold text-destructive">Descreva os ajustes</Label>
-                    <Textarea value={adjustmentNotes} onChange={e => setAdjustmentNotes(e.target.value)} rows={3} className="text-xs" placeholder="O que precisa ser corrigido..." />
+                    <Label className="text-xs font-semibold text-destructive flex items-center gap-1.5">
+                      <RotateCcw size={12} /> Enviar para Revisão do Designer
+                    </Label>
+                    <p className="text-[11px] text-muted-foreground -mt-1">
+                      Descreva claramente o que precisa ser alterado. O designer receberá estas observações.
+                    </p>
+                    <Textarea
+                      value={adjustmentNotes}
+                      onChange={e => setAdjustmentNotes(e.target.value)}
+                      rows={4}
+                      className="text-xs"
+                      placeholder="Ex: Alterar a cor do fundo para azul, aumentar a fonte do título, trocar a imagem central..."
+                      autoFocus
+                    />
                     <div className="flex gap-2">
-                      <Button size="sm" variant="destructive" className="flex-1 h-9 text-xs" onClick={handleRequestAdjustments}>Solicitar</Button>
-                      <Button size="sm" variant="ghost" className="h-9 text-xs" onClick={() => setShowAdjustmentForm(false)}>Cancelar</Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="flex-1 h-9 text-xs"
+                        disabled={!adjustmentNotes.trim() || updateTask.isPending}
+                        onClick={handleRequestAdjustments}
+                      >
+                        <RotateCcw size={12} className="mr-1" /> Enviar para Designer
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-9 text-xs" onClick={() => { setAdjustmentNotes(''); setShowAdjustmentForm(false); }}>Cancelar</Button>
                     </div>
                   </div>
                 )}

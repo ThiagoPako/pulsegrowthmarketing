@@ -235,6 +235,7 @@ export default function FinancialExpenses() {
   const [newCat, setNewCat] = useState('');
   const [catOpen, setCatOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('despesas');
+  const [filters, setFilters] = useState<FinancialFiltersValue>(buildEmptyFilters);
   const [rocketName, setRocketName] = useState('');
   const [showRocket, setShowRocket] = useState(false);
   const [bonusDialogOpen, setBonusDialogOpen] = useState(false);

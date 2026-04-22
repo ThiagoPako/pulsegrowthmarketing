@@ -65,6 +65,10 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [editableFileUrl, setEditableFileUrl] = useState(task.editable_file_url || '');
   const [mockupUrl, setMockupUrl] = useState((task as any).mockup_url || '');
   const [adjustmentNotes, setAdjustmentNotes] = useState('');
+  const [adjustmentRefLinks, setAdjustmentRefLinks] = useState<string[]>([]);
+  const [adjustmentRefLinkInput, setAdjustmentRefLinkInput] = useState('');
+  const [adjustmentRefImages, setAdjustmentRefImages] = useState<string[]>([]);
+  const [uploadingAdjustmentRef, setUploadingAdjustmentRef] = useState(false);
   const [elapsedDisplay, setElapsedDisplay] = useState('');
   const [checklist, setChecklist] = useState<ChecklistItem[]>((task as any).checklist || []);
   const [uploadingMockup, setUploadingMockup] = useState(false);
@@ -152,11 +156,73 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
   const handleRequestAdjustments = async () => {
     if (!adjustmentNotes.trim()) { toast.error('Descreva os ajustes necessários'); return; }
-    await updateTask.mutateAsync({ id: task.id, kanban_column: 'ajustes', observations: adjustmentNotes } as any);
-    await addHistory.mutateAsync({ task_id: task.id, action: 'Ajustes solicitados', details: adjustmentNotes, user_id: user?.id });
+    const allRefs = [...adjustmentRefLinks, ...adjustmentRefImages];
+    let fullObservations = adjustmentNotes.trim();
+    if (allRefs.length > 0) {
+      fullObservations += '\n\n📎 Referências:\n' + allRefs.map(r => `• ${r}`).join('\n');
+    }
+    await updateTask.mutateAsync({
+      id: task.id,
+      kanban_column: 'ajustes',
+      observations: fullObservations,
+      reference_images: [...(task.reference_images || []), ...adjustmentRefImages],
+      references_links: [...(task.references_links || []), ...adjustmentRefLinks],
+    } as any);
+    await addHistory.mutateAsync({
+      task_id: task.id,
+      action: 'Ajustes solicitados',
+      details: fullObservations,
+      attachment_url: adjustmentRefImages[0] || adjustmentRefLinks[0] || undefined,
+      user_id: user?.id,
+    });
     toast.success('Ajustes solicitados!');
     setAdjustmentNotes('');
+    setAdjustmentRefLinks([]);
+    setAdjustmentRefLinkInput('');
+    setAdjustmentRefImages([]);
     setShowAdjustmentForm(false);
+  };
+
+  const handleAddAdjustmentRefLink = () => {
+    const link = adjustmentRefLinkInput.trim();
+    if (!link) return;
+    try {
+      // basic URL validation
+      new URL(link);
+    } catch {
+      toast.error('Link inválido');
+      return;
+    }
+    if (adjustmentRefLinks.includes(link)) {
+      toast.error('Link já adicionado');
+      return;
+    }
+    setAdjustmentRefLinks([...adjustmentRefLinks, link]);
+    setAdjustmentRefLinkInput('');
+  };
+
+  const handleUploadAdjustmentRef = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploadingAdjustmentRef(true);
+    try {
+      const uploaded: string[] = [];
+      for (const file of Array.from(files)) {
+        if (file.size > 10 * 1024 * 1024) {
+          toast.error(`${file.name}: máximo 10MB`);
+          continue;
+        }
+        const url = await uploadFileToVps(file, 'design-files');
+        if (url) uploaded.push(url);
+      }
+      if (uploaded.length > 0) {
+        setAdjustmentRefImages([...adjustmentRefImages, ...uploaded]);
+        toast.success(`${uploaded.length} imagem(ns) anexada(s)`);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao fazer upload');
+    } finally {
+      setUploadingAdjustmentRef(false);
+    }
   };
 
   const handleSendToClient = async () => {

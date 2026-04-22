@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ArrowLeft, RefreshCw, CheckCircle, MessageCircle, Loader2, TrendingUp, AlertTriangle, Undo2, Plus, Trash2 } from 'lucide-react';
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
+import FinancialFilters, { applyFinancialFilters, buildEmptyFilters, type FinancialFiltersValue } from '@/components/financial/FinancialFilters';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { format, subMonths, addMonths } from 'date-fns';
@@ -120,6 +121,7 @@ export default function FinancialRevenues() {
   const { revenues, contracts, updateRevenue, deleteRevenue, addRevenue, generateMonthlyRevenues, paymentConfig, loading } = useFinancialData();
   const { clients } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
+  const [filters, setFilters] = useState<FinancialFiltersValue>(buildEmptyFilters);
   const [sendingBilling, setSendingBilling] = useState<string | null>(null);
   const [sendingAll, setSendingAll] = useState(false);
   const [showRocket, setShowRocket] = useState(false);
@@ -149,6 +151,20 @@ export default function FinancialRevenues() {
   const refMonth = `${selectedMonth}-01`;
   const filtered = revenues.filter(r => normalizeDate(r.reference_month) === refMonth);
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  // Apply search/date/advanced filters on top of the monthly list
+  const displayed = useMemo(() => applyFinancialFilters(filtered, filters, {
+    getDate: r => normalizeDate(r.due_date),
+    getSearchableText: r => {
+      const client = clients.find(c => c.id === r.client_id);
+      return [client?.companyName, (r as any).description, r.status, String(r.amount)].filter(Boolean).join(' ');
+    },
+    matchAdvanced: (r, adv) => {
+      if (adv.status && adv.status !== 'all' && r.status !== adv.status) return false;
+      if (adv.client && adv.client !== 'all' && r.client_id !== adv.client) return false;
+      return true;
+    },
+  }), [filtered, filters, clients]);
 
   // Auto-generate revenues when month has none and data is loaded (only from April 2026)
   const autoGenRef = useRef<string | null>(null);
@@ -595,6 +611,42 @@ export default function FinancialRevenues() {
         </Card>
       </motion.div>
 
+      <FinancialFilters
+        value={filters}
+        onChange={setFilters}
+        resultCount={displayed.length}
+        searchPlaceholder="Buscar por cliente, valor, status…"
+        advancedFields={[
+          {
+            key: 'status',
+            label: 'Status',
+            options: [
+              { value: 'recebida', label: 'Recebida' },
+              { value: 'prevista', label: 'Prevista' },
+              { value: 'em_atraso', label: 'Em atraso' },
+            ],
+          },
+          {
+            key: 'client',
+            label: 'Cliente',
+            options: clients
+              .filter(c => c.status === 'ativo')
+              .sort((a, b) => a.companyName.localeCompare(b.companyName))
+              .map(c => ({ value: c.id, label: c.companyName })),
+          },
+        ]}
+        exportRows={displayed}
+        exportColumns={[
+          { header: 'Cliente', accessor: r => clients.find(c => c.id === r.client_id)?.companyName || '—' },
+          { header: 'Valor (R$)', accessor: r => Number(r.amount).toFixed(2) },
+          { header: 'Vencimento', accessor: r => r.due_date ? format(new Date(normalizeDate(r.due_date) + 'T12:00:00'), 'dd/MM/yyyy') : '—' },
+          { header: 'Status', accessor: r => r.status },
+          { header: 'Pago em', accessor: r => r.paid_at ? format(new Date(normalizeDate(r.paid_at) + 'T12:00:00'), 'dd/MM/yyyy') : '—' },
+        ]}
+        exportFileName="receitas"
+        exportTitle="Receitas"
+      />
+
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.3 }}>
       <Card className="shadow-sm">
         <CardContent className="p-0">
@@ -611,7 +663,7 @@ export default function FinancialRevenues() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((r, i) => {
+              {displayed.map((r, i) => {
                 const client = clients.find(c => c.id === r.client_id);
                 const st = STATUS_MAP[r.status] || { label: r.status, variant: 'secondary' as const };
                 const isPaid = r.status === 'recebida';
@@ -779,7 +831,7 @@ export default function FinancialRevenues() {
                   </motion.tr>
                 );
               })}
-              {filtered.length === 0 && (
+              {displayed.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-12">
                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">

@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, ArrowUpCircle, ArrowDownCircle, Pencil, Trash2, Search, Filter, DollarSign, TrendingUp, TrendingDown, Wallet, Users, FileSpreadsheet } from 'lucide-react';
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
+import FinancialFilters, { applyFinancialFilters, buildEmptyFilters, type FinancialFiltersValue } from '@/components/financial/FinancialFilters';
 import { useNavigate } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -47,7 +48,8 @@ export default function FinancialMovements() {
 
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
   const [filterType, setFilterType] = useState<MovementType>('all');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState<FinancialFiltersValue>(buildEmptyFilters);
+  const searchTerm = filters.search;
   const [deleteTarget, setDeleteTarget] = useState<UnifiedMovement | null>(null);
   const [editTarget, setEditTarget] = useState<UnifiedMovement | null>(null);
   const [showReconciliation, setShowReconciliation] = useState(false);
@@ -152,16 +154,15 @@ export default function FinancialMovements() {
     } else if (filterType !== 'all') {
       result = result.filter(m => m.sourceType === filterType && !m.isSalary);
     }
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      result = result.filter(m =>
-        m.description.toLowerCase().includes(term) ||
-        (m.clientName && m.clientName.toLowerCase().includes(term)) ||
-        (m.category && m.category.toLowerCase().includes(term))
-      );
-    }
-    return result;
-  }, [unified, filterType, searchTerm]);
+    return applyFinancialFilters(result, filters, {
+      getDate: m => m.date,
+      getSearchableText: m => [m.description, m.clientName, m.category, m.status].filter(Boolean).join(' '),
+      matchAdvanced: (m, adv) => {
+        if (adv.status && adv.status !== 'all' && m.status !== adv.status) return false;
+        return true;
+      },
+    });
+  }, [unified, filterType, filters]);
 
   // Totals
   const totals = useMemo(() => {
@@ -348,31 +349,46 @@ export default function FinancialMovements() {
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardContent className="pt-4">
-          <div className="flex flex-wrap gap-3 items-center">
-            <div className="flex items-center gap-2">
-              <Filter size={14} className="text-muted-foreground" />
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {monthOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="relative flex-1 min-w-[200px]">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por descrição, cliente ou categoria..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <Badge variant="outline" className="text-xs">{filtered.length} movimentações</Badge>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="flex items-center gap-2">
+          <Filter size={14} className="text-muted-foreground" />
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {monthOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex-1 min-w-[280px]">
+          <FinancialFilters
+            value={filters}
+            onChange={setFilters}
+            resultCount={filtered.length}
+            searchPlaceholder="Buscar por descrição, cliente, categoria ou status…"
+            advancedFields={[{
+              key: 'status',
+              label: 'Status da receita',
+              options: [
+                { value: 'recebida', label: 'Recebida' },
+                { value: 'prevista', label: 'Prevista' },
+                { value: 'em_atraso', label: 'Em atraso' },
+              ],
+            }]}
+            exportRows={filtered}
+            exportColumns={[
+              { header: 'Data', accessor: m => format(new Date(m.date + 'T12:00:00'), 'dd/MM/yyyy') },
+              { header: 'Tipo', accessor: m => m.type },
+              { header: 'Descrição', accessor: m => m.description },
+              { header: 'Categoria', accessor: m => m.category || '' },
+              { header: 'Cliente', accessor: m => m.clientName || '' },
+              { header: 'Status', accessor: m => m.status || '' },
+              { header: 'Valor (R$)', accessor: m => m.amount.toFixed(2) },
+            ]}
+            exportFileName="movimentacoes"
+            exportTitle="Movimentações Financeiras"
+          />
+        </div>
+      </div>
 
       {/* Table */}
       <Card>

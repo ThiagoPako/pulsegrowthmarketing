@@ -1629,7 +1629,7 @@ export default function CommercialProposal() {
                 ))}
               </div>
             ) : (
-              <div className="border rounded-xl overflow-hidden">
+              <div className="border rounded-xl overflow-hidden" data-pdf-unit-price="table">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-xs text-gray-500" style={{ background: 'hsl(16 82% 96%)' }}>

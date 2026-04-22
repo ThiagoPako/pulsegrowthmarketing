@@ -154,16 +154,15 @@ export default function FinancialMovements() {
     } else if (filterType !== 'all') {
       result = result.filter(m => m.sourceType === filterType && !m.isSalary);
     }
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      result = result.filter(m =>
-        m.description.toLowerCase().includes(term) ||
-        (m.clientName && m.clientName.toLowerCase().includes(term)) ||
-        (m.category && m.category.toLowerCase().includes(term))
-      );
-    }
-    return result;
-  }, [unified, filterType, searchTerm]);
+    return applyFinancialFilters(result, filters, {
+      getDate: m => m.date,
+      getSearchableText: m => [m.description, m.clientName, m.category, m.status].filter(Boolean).join(' '),
+      matchAdvanced: (m, adv) => {
+        if (adv.status && adv.status !== 'all' && m.status !== adv.status) return false;
+        return true;
+      },
+    });
+  }, [unified, filterType, filters]);
 
   // Totals
   const totals = useMemo(() => {

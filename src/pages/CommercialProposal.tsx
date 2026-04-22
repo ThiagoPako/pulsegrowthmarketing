@@ -1014,7 +1014,9 @@ export default function CommercialProposal() {
   };
 
   const renderCronogramaForm = () => {
-    const totalValue = cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0);
+    const sumValue = cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0);
+    const customTotal = parseFloat(cronogramaTotalCustomValue) || 0;
+    const totalValue = cronogramaPricingMode === 'total' ? customTotal : sumValue;
     const discountedVal = totalValue * (1 - customDiscount / 100);
     return (
       <>

@@ -910,6 +910,13 @@ export default function ContentKanban() {
                   />
                 </motion.div>
 
+                {/* Motivo / explicação da coluna */}
+                {col.id === 'aguardando_link' && (
+                  <div className="px-3 py-2 bg-yellow-500/10 border-b border-yellow-500/20 text-[10.5px] text-yellow-700 dark:text-yellow-300 leading-snug">
+                    📦 Gravação concluída, mas o videomaker ainda não enviou o <strong>link do Drive</strong> com os materiais brutos. Adicione o link para liberar a edição.
+                  </div>
+                )}
+
                 {/* Cards */}
                 <div className="flex-1 px-2 py-2 overflow-y-auto max-h-[calc(100vh-18rem)]">
                   <AnimatePresence mode="popLayout">

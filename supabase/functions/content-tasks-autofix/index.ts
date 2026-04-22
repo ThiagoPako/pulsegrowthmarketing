@@ -26,16 +26,23 @@ Deno.serve(async (req) => {
     // 1) Buscar tarefas candidatas (presas em captacao* com recording_id)
     const { data: stuckTasks, error: tasksErr } = await supabase
       .from("content_tasks")
-      .select("id, title, kanban_column, drive_link, recording_id")
+      .select("id, title, kanban_column, drive_link, recording_id, content_type")
       .in("kanban_column", ["captacao", "captacao_concluida"])
       .not("recording_id", "is", null);
 
     if (tasksErr) throw tasksErr;
 
+    const emptyStats = {
+      moved: 0,
+      cancelled: 0,
+      extras: 0,
+      byVideomaker: {} as Record<string, { name: string; moved: number; cancelled: number; extras: number }>,
+    };
+
     if (!stuckTasks || stuckTasks.length === 0) {
       console.log("[content-tasks-autofix] nada a fazer (0 candidatas)");
       return new Response(
-        JSON.stringify({ ok: true, scanned: 0, moved: 0, skipped: 0, results: [] }),
+        JSON.stringify({ ok: true, scanned: 0, moved: 0, skipped: 0, results: [], stats: emptyStats }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -44,22 +51,43 @@ Deno.serve(async (req) => {
       ...new Set(stuckTasks.map((t) => t.recording_id as string)),
     ];
 
-    // 2) Buscar status das gravações vinculadas
+    // 2) Buscar gravações vinculadas (status + videomaker)
     const { data: recs, error: recsErr } = await supabase
       .from("recordings")
-      .select("id, status")
+      .select("id, status, videomaker_id")
       .in("id", recordingIds);
 
     if (recsErr) throw recsErr;
 
-    const recStatus = new Map(
-      (recs ?? []).map((r) => [r.id as string, r.status as string]),
+    const recInfo = new Map(
+      (recs ?? []).map((r) => [
+        r.id as string,
+        { status: r.status as string, videomaker_id: (r as any).videomaker_id as string | null },
+      ]),
     );
 
-    // 3) Filtrar somente tarefas cuja gravação está concluída
-    const toFix = stuckTasks.filter(
-      (t) => recStatus.get(t.recording_id as string) === "concluida",
-    );
+    // 2.b) Resolver nomes dos videomakers
+    const vmIds = [
+      ...new Set(
+        (recs ?? [])
+          .map((r) => (r as any).videomaker_id as string | null)
+          .filter((v): v is string => !!v),
+      ),
+    ];
+    const vmNames = new Map<string, string>();
+    if (vmIds.length > 0) {
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id, name")
+        .in("id", vmIds);
+      for (const p of profs ?? []) vmNames.set(p.id as string, (p as any).name ?? "Videomaker");
+    }
+
+    // 3) Filtrar somente tarefas cuja gravação está concluída ou cancelada
+    const toFix = stuckTasks.filter((t) => {
+      const st = recInfo.get(t.recording_id as string)?.status;
+      return st === "concluida" || st === "cancelada";
+    });
 
     const results: Array<{
       id: string;
@@ -71,18 +99,39 @@ Deno.serve(async (req) => {
       reason?: string;
       warning?: string;
       error?: string;
+      videomaker_id?: string | null;
+      videomaker_name?: string | null;
+      recording_status?: string;
+      is_extra?: boolean;
     }> = [];
 
     let skipped = 0;
     let warnings = 0;
 
+    // Stats por videomaker (apenas tarefas efetivamente alteradas)
+    const byVideomaker: Record<
+      string,
+      { name: string; moved: number; cancelled: number; extras: number }
+    > = {};
+    let cancelledTotal = 0;
+    let extrasTotal = 0;
+
+    const bumpVm = (
+      vmId: string | null,
+      vmName: string | null,
+      key: "moved" | "cancelled" | "extras",
+    ) => {
+      const id = vmId ?? "__unknown__";
+      const name = vmName ?? "Sem videomaker";
+      if (!byVideomaker[id]) byVideomaker[id] = { name, moved: 0, cancelled: 0, extras: 0 };
+      byVideomaker[id][key]++;
+    };
+
     // ─── Validação de drive_link ───────────────────────────────────────
-    // Aceita http(s) ou URLs do Google Drive sem protocolo (drive.google.com/...)
     const isValidDriveLink = (raw: unknown): boolean => {
       if (typeof raw !== "string") return false;
       const v = raw.trim();
       if (v.length < 8) return false;
-      // tenta parsear como URL completa
       try {
         const u = new URL(v.startsWith("http") ? v : `https://${v}`);
         return !!u.hostname && u.hostname.includes(".");
@@ -95,19 +144,29 @@ Deno.serve(async (req) => {
       const currentColumn = task.kanban_column as string;
       const rawLink = task.drive_link as string | null;
       const linkOk = isValidDriveLink(rawLink);
+      const recordingId = task.recording_id as string;
+      const recMeta = recInfo.get(recordingId);
+      const recStatusVal = recMeta?.status ?? "";
+      const vmId = recMeta?.videomaker_id ?? null;
+      const vmName = vmId ? (vmNames.get(vmId) ?? "Videomaker") : null;
+      const isCancelled = recStatusVal === "cancelada";
+      const contentType = (task as any).content_type as string | undefined;
+      const isExtra = contentType === "extra" || contentType === "extras";
 
       // Decide alvo + motivo
-      let target: "edicao" | "aguardando_link";
+      let target: "edicao" | "aguardando_link" | "cancelado";
       let reason: string;
       let warning: string | undefined;
 
-      if (linkOk) {
+      if (isCancelled) {
+        target = "cancelado";
+        reason = "gravação cancelada → mover para coluna cancelado";
+      } else if (linkOk) {
         target = "edicao";
         reason = "drive_link válido → liberar para edição";
       } else {
         target = "aguardando_link";
         if (rawLink && rawLink.trim().length > 0) {
-          // Link existe mas é inconsistente (ex: texto solto, URL malformada)
           warning = `drive_link inconsistente (não é URL válida): "${String(rawLink).slice(0, 80)}"`;
           reason = "drive_link inválido → manter aguardando link correto";
           warnings++;
@@ -119,7 +178,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      // ─── IDEMPOTÊNCIA: se a tarefa já está na coluna alvo, não faz nada ───
+      // ─── IDEMPOTÊNCIA ───
       if (currentColumn === target) {
         skipped++;
         results.push({
@@ -131,12 +190,14 @@ Deno.serve(async (req) => {
           skipped: true,
           reason,
           warning,
+          videomaker_id: vmId,
+          videomaker_name: vmName,
+          recording_status: recStatusVal,
+          is_extra: isExtra,
         });
         continue;
       }
 
-      // UPDATE condicional: só altera se a coluna no banco AINDA for a antiga
-      // (evita race condition se outro processo já moveu o card)
       const { data: updated, error: updErr } = await supabase
         .from("content_tasks")
         .update({ kanban_column: target })
@@ -146,6 +207,18 @@ Deno.serve(async (req) => {
 
       const wasUpdated = !updErr && (updated?.length ?? 0) > 0;
       if (!wasUpdated && !updErr) skipped++;
+
+      if (wasUpdated) {
+        bumpVm(vmId, vmName, "moved");
+        if (isCancelled) {
+          cancelledTotal++;
+          bumpVm(vmId, vmName, "cancelled");
+        }
+        if (isExtra) {
+          extrasTotal++;
+          bumpVm(vmId, vmName, "extras");
+        }
+      }
 
       results.push({
         id: task.id as string,
@@ -157,13 +230,17 @@ Deno.serve(async (req) => {
         reason,
         warning,
         error: updErr?.message,
+        videomaker_id: vmId,
+        videomaker_name: vmName,
+        recording_status: recStatusVal,
+        is_extra: isExtra,
       });
     }
 
     const moved = results.filter((r) => r.ok && !r.skipped).length;
 
     console.log(
-      `[content-tasks-autofix] scanned=${stuckTasks.length} candidates=${toFix.length} moved=${moved} skipped=${skipped} warnings=${warnings}`,
+      `[content-tasks-autofix] scanned=${stuckTasks.length} candidates=${toFix.length} moved=${moved} cancelled=${cancelledTotal} extras=${extrasTotal} skipped=${skipped} warnings=${warnings}`,
     );
 
     return new Response(
@@ -175,6 +252,12 @@ Deno.serve(async (req) => {
         skipped,
         warnings,
         results,
+        stats: {
+          moved,
+          cancelled: cancelledTotal,
+          extras: extrasTotal,
+          byVideomaker,
+        },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );

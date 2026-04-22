@@ -152,6 +152,20 @@ export default function FinancialRevenues() {
   const filtered = revenues.filter(r => normalizeDate(r.reference_month) === refMonth);
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+  // Apply search/date/advanced filters on top of the monthly list
+  const displayed = useMemo(() => applyFinancialFilters(filtered, filters, {
+    getDate: r => normalizeDate(r.due_date),
+    getSearchableText: r => {
+      const client = clients.find(c => c.id === r.client_id);
+      return [client?.companyName, r.description, r.status, String(r.amount)].filter(Boolean).join(' ');
+    },
+    matchAdvanced: (r, adv) => {
+      if (adv.status && adv.status !== 'all' && r.status !== adv.status) return false;
+      if (adv.client && adv.client !== 'all' && r.client_id !== adv.client) return false;
+      return true;
+    },
+  }), [filtered, filters, clients]);
+
   // Auto-generate revenues when month has none and data is loaded (only from April 2026)
   const autoGenRef = useRef<string | null>(null);
   useEffect(() => {

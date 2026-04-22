@@ -406,10 +406,74 @@ const FinancialFilters = <T,>({
           {/* Export */}
           {canExport && (
             <div className="flex items-center gap-1">
-              <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleExportCSV} title="Exportar CSV">
+              <Popover open={colsOpen} onOpenChange={setColsOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 gap-1.5" title="Configurar colunas exportadas">
+                    <Columns3 size={14} />
+                    <span className="hidden sm:inline">Colunas</span>
+                    <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                      {visibleColumns.length}/{exportColumns!.length}
+                    </Badge>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-64 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-xs font-semibold">Colunas exportadas</Label>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-[10px]"
+                      onClick={() => setHiddenCols(new Set())}
+                    >
+                      Tudo
+                    </Button>
+                  </div>
+                  <Separator className="mb-2" />
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                    {exportColumns!.map(c => {
+                      const k = colKey(c);
+                      const checked = c.required || !hiddenCols.has(k);
+                      return (
+                        <label
+                          key={k}
+                          className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors ${
+                            c.required ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-muted'
+                          }`}
+                        >
+                          <Checkbox
+                            checked={checked}
+                            disabled={c.required}
+                            onCheckedChange={() => toggleCol(c)}
+                          />
+                          <span className="flex-1">{c.header}</span>
+                          {c.required && <span className="text-[9px] text-muted-foreground">obrig.</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-2 pt-2 border-t">
+                    Suas escolhas ficam salvas neste navegador.
+                  </p>
+                </PopoverContent>
+              </Popover>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5"
+                onClick={handleExportCSV}
+                disabled={visibleColumns.length === 0}
+                title="Exportar CSV"
+              >
                 <Download size={14} /> CSV
               </Button>
-              <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleExportPDF} title="Exportar PDF">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5"
+                onClick={handleExportPDF}
+                disabled={visibleColumns.length === 0}
+                title="Exportar PDF"
+              >
                 <FileText size={14} /> PDF
               </Button>
             </div>

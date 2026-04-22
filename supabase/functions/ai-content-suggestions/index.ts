@@ -11,7 +11,7 @@ serve(async (req) => {
 
   try {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const GEMINI_KEY = Deno.env.get("GOOGLE_GEMINI_API_KEY");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -19,6 +19,29 @@ serve(async (req) => {
 
     const body = await req.json();
     const { clientId, type, description } = body;
+
+    // Helper: call Gemini directly (free tier) for proposal generation
+    async function callGemini(systemPrompt: string, userPrompt: string): Promise<string> {
+      if (!GEMINI_KEY) throw new Error("GOOGLE_GEMINI_API_KEY is not configured");
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
+            generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192 },
+          }),
+        }
+      );
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("Gemini error:", res.status, errText);
+        throw new Error(`Gemini API ${res.status}: ${errText}`);
+      }
+      const data = await res.json();
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    }
 
     // ===== System Modules Generation =====
     if (type === "system_modules" && description) {
@@ -39,50 +62,20 @@ Responda APENAS com JSON válido:
 
 Gere entre 4 e 10 módulos relevantes e 3-6 entregas. Seja específico e profissional.`;
 
-      const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: "Você é um arquiteto de software. Responda APENAS com JSON válido." },
-            { role: "user", content: modulePrompt },
-          ],
-        }),
-      });
-
-      if (!aiRes.ok) {
-        const errText = await aiRes.text();
-        console.error("AI modules error:", aiRes.status, errText);
-        if (aiRes.status === 429) {
-          return new Response(JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos." }), {
-            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        if (aiRes.status === 402) {
-          return new Response(JSON.stringify({ error: "Créditos de IA insuficientes. Adicione créditos no painel." }), {
-            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        return new Response(JSON.stringify({ error: "Erro ao gerar módulos" }), {
-          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      const aiData = await aiRes.json();
-      const aiContent = aiData.choices?.[0]?.message?.content || "";
       try {
+        const aiContent = await callGemini(
+          "Você é um arquiteto de software. Responda APENAS com JSON válido.",
+          modulePrompt
+        );
         const cleaned = aiContent.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
         const parsed = JSON.parse(cleaned);
         return new Response(JSON.stringify(parsed), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
-      } catch {
-        return new Response(JSON.stringify({ modules: [], error: "Falha ao interpretar resposta da IA" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+      } catch (err: any) {
+        console.error("system_modules error:", err);
+        return new Response(JSON.stringify({ modules: [], error: err.message || "Falha ao gerar módulos" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     }
@@ -123,50 +116,20 @@ Responda APENAS com JSON válido:
 
 Gere entre 5 e 15 entregas relevantes organizadas em 2-4 fases. Os preços devem ser realistas para o mercado brasileiro de marketing digital. Cada entrega deve ter um valor unitário baseado na complexidade. Seja específico e profissional.`;
 
-      const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: "Você é um gestor de projetos de marketing digital. Responda APENAS com JSON válido." },
-            { role: "user", content: timelinePrompt },
-          ],
-        }),
-      });
-
-      if (!aiRes.ok) {
-        const errText = await aiRes.text();
-        console.error("AI timeline error:", aiRes.status, errText);
-        if (aiRes.status === 429) {
-          return new Response(JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos." }), {
-            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        if (aiRes.status === 402) {
-          return new Response(JSON.stringify({ error: "Créditos de IA insuficientes. Adicione créditos no painel." }), {
-            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        return new Response(JSON.stringify({ error: "Erro ao gerar cronograma" }), {
-          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      const aiData = await aiRes.json();
-      const aiContent = aiData.choices?.[0]?.message?.content || "";
       try {
+        const aiContent = await callGemini(
+          "Você é um gestor de projetos de marketing digital. Responda APENAS com JSON válido.",
+          timelinePrompt
+        );
         const cleaned = aiContent.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
         const parsed = JSON.parse(cleaned);
         return new Response(JSON.stringify(parsed), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
-      } catch {
-        return new Response(JSON.stringify({ deliverables: [], error: "Falha ao interpretar resposta da IA" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+      } catch (err: any) {
+        console.error("proposal_timeline error:", err);
+        return new Response(JSON.stringify({ deliverables: [], error: err.message || "Falha ao gerar cronograma" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     }

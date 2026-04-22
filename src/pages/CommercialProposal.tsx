@@ -231,6 +231,7 @@ export default function CommercialProposal() {
     setCronogramaDesc(''); setCronogramaDeliverables([]); setCronogramaPhases([]);
     setCronogramaMethodology(''); setCronogramaProjectName('');
     setCronogramaTotalDays(''); setCronogramaPaymentMethod('pix'); setCronogramaInstallments('1');
+    setCronogramaPricingMode('individual'); setCronogramaTotalCustomValue('');
     localStorage.removeItem(DRAFT_KEY);
     toast.success('Proposta limpa com sucesso!');
   }, []);

@@ -1256,9 +1256,11 @@ export default function CommercialProposal() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className={`grid gap-2 ${cronogramaPricingMode === 'total' ? 'grid-cols-2' : 'grid-cols-3'}`}>
                 <Input type="number" placeholder="Qtd" id="new-deliv-qty" className="h-8 text-xs" defaultValue={1} min={1} />
-                <Input type="number" placeholder="Valor unit." id="new-deliv-price" className="h-8 text-xs" defaultValue={0} />
+                {cronogramaPricingMode === 'individual' && (
+                  <Input type="number" placeholder="Valor unit." id="new-deliv-price" className="h-8 text-xs" defaultValue={0} />
+                )}
                 <Input type="number" placeholder="Prazo (dias)" id="new-deliv-days" className="h-8 text-xs" defaultValue={7} />
               </div>
               <Button size="sm" className="h-8" onClick={() => {

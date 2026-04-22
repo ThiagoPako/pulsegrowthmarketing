@@ -1543,14 +1543,18 @@ function TaskCard({ task, client, assignedUser, videomaker, linkedScript, isDrag
         draggable={!viewOnly}
         onDragStart={viewOnly ? undefined : onDragStart}
         onClick={onCardClick}
-        className={`group relative bg-card rounded-xl transition-all duration-300 overflow-hidden border border-border/40 ${
+        className={`group relative rounded-xl transition-all duration-300 overflow-hidden border ${
+          isAwaitingLink
+            ? 'bg-yellow-50 dark:bg-yellow-950/40 border-yellow-400/70 dark:border-yellow-500/60 shadow-yellow-400/30 ring-2 ring-yellow-400/40 animate-pulse'
+            : 'bg-card border-border/40'
+        } ${
           viewOnly ? 'cursor-default opacity-80' : 'cursor-grab active:cursor-grabbing'
         } ${
           isDragging ? 'opacity-40 scale-95 shadow-none' : 'shadow-sm hover:shadow-lg'
         } ${isOverdue ? 'ring-1 ring-destructive/40' : ''} hover:-translate-y-0.5`}
       >
         {/* Status tag banner (top) */}
-        {isCaptacao && (
+        {isCaptacao && !isAwaitingLink && (
           <div className="flex items-center gap-2 px-3 py-1 bg-orange-500">
             <span className="relative flex h-1.5 w-1.5 shrink-0">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
@@ -1558,6 +1562,21 @@ function TaskCard({ task, client, assignedUser, videomaker, linkedScript, isDrag
             </span>
             <span className="text-[9px] font-bold text-white uppercase tracking-widest">Gravando</span>
           </div>
+        )}
+        {isAwaitingLink && (
+          <motion.div
+            className="flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-yellow-400 to-amber-500"
+            animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            style={{ backgroundSize: '200% 100%' }}
+          >
+            <Link2 size={10} className="text-white shrink-0 animate-pulse" />
+            <span className="text-[9px] font-bold text-white uppercase tracking-widest">Aguardando Link</span>
+            <span className="ml-auto relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+            </span>
+          </motion.div>
         )}
         {isOverdue && (
           <div className="flex items-center gap-1.5 px-3 py-1 bg-destructive">

@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, ArrowLeft, Send, Eye, Maximize2, Rocket, Download, ChevronLeft, ChevronRight, ArrowDownUp } from 'lucide-react';
+import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, ArrowLeft, Send, Eye, Maximize2, Rocket, Download, ChevronLeft, ChevronRight, ArrowDownUp, RefreshCw } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
@@ -234,23 +234,36 @@ export default function ContentKanban() {
   }, []);
 
   // ─── AUTO-FIX agora roda no backend (edge function content-tasks-autofix via cron 1x/min) ──
-  // Mantemos apenas um disparo opcional ao montar para acelerar a primeira correção visível.
-  useEffect(() => {
-    if (loading) return;
-    supabase.functions.invoke('content-tasks-autofix').then(({ data, error }) => {
+  // Mantemos um disparo silencioso ao montar para acelerar a primeira correção visível.
+  const [autofixRunning, setAutofixRunning] = useState(false);
+
+  const runAutofix = useCallback(async (manual = false) => {
+    setAutofixRunning(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('content-tasks-autofix');
       if (error) {
+        if (manual) toast.error('Falha ao reprocessar: ' + error.message);
         console.warn('[ContentKanban] autofix invoke falhou:', error.message);
         return;
       }
-      if (data?.moved > 0) {
-        console.log(`[ContentKanban] autofix moveu ${data.moved} tarefa(s)`);
-        fetchTasks();
+      const moved = data?.moved ?? 0;
+      const scanned = data?.scanned ?? 0;
+      if (moved > 0) {
+        await fetchTasks();
+        if (manual) toast.success(`✅ ${moved} tarefa(s) corrigida(s)`);
+      } else if (manual) {
+        toast.info(`Nenhuma tarefa presa encontrada (${scanned} verificadas)`);
       }
-    });
+    } finally {
+      setAutofixRunning(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    runAutofix(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
-
-  // (rotina antiga removida — agora roda no backend via cron a cada 1 min)
 
   useEffect(() => {
     fetchTasks();
@@ -833,6 +846,19 @@ export default function ContentKanban() {
               ))}
             </SelectContent>
           </Select>
+          <motion.div whileTap={{ scale: 0.95 }} whileHover={{ scale: 1.03 }}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => runAutofix(true)}
+              disabled={autofixRunning}
+              title="Reprocessa tarefas presas em Captação cuja gravação já foi finalizada"
+              className="gap-1.5 rounded-xl h-9 px-3 font-medium border-border/60"
+            >
+              <RefreshCw size={14} className={autofixRunning ? 'animate-spin' : ''} />
+              {autofixRunning ? 'Reprocessando...' : 'Reprocessar presas'}
+            </Button>
+          </motion.div>
           <motion.div whileTap={{ scale: 0.95 }} whileHover={{ scale: 1.03 }}>
             <Button size="sm" variant="outline" onClick={() => {
               setTasks(prev => [...prev].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));

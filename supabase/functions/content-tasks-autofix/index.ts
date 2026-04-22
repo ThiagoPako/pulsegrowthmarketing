@@ -144,15 +144,17 @@ Deno.serve(async (req) => {
       videomaker_name?: string | null;
       recording_status?: string;
       is_extra?: boolean;
+      action?: "concluida" | "cancelada" | "orfa";
     }> = [];
 
     let skipped = 0;
     let warnings = 0;
+    let orphansTotal = 0;
 
     // Stats por videomaker (apenas tarefas efetivamente alteradas)
     const byVideomaker: Record<
       string,
-      { name: string; moved: number; cancelled: number; extras: number }
+      { name: string; moved: number; cancelled: number; extras: number; orphans: number }
     > = {};
     let cancelledTotal = 0;
     let extrasTotal = 0;
@@ -160,11 +162,11 @@ Deno.serve(async (req) => {
     const bumpVm = (
       vmId: string | null,
       vmName: string | null,
-      key: "moved" | "cancelled" | "extras",
+      key: "moved" | "cancelled" | "extras" | "orphans",
     ) => {
       const id = vmId ?? "__unknown__";
       const name = vmName ?? "Sem videomaker";
-      if (!byVideomaker[id]) byVideomaker[id] = { name, moved: 0, cancelled: 0, extras: 0 };
+      if (!byVideomaker[id]) byVideomaker[id] = { name, moved: 0, cancelled: 0, extras: 0, orphans: 0 };
       byVideomaker[id][key]++;
     };
 
@@ -181,27 +183,35 @@ Deno.serve(async (req) => {
       }
     };
 
-    for (const task of toFix) {
+    for (const item of toFix) {
+      const task = item.task;
+      const action = item.action;
+      const vmId = item.vmId;
+      const vmName = item.vmName;
+      const recStatusVal = item.recStatus;
+
       const currentColumn = task.kanban_column as string;
       const rawLink = task.drive_link as string | null;
       const linkOk = isValidDriveLink(rawLink);
-      const recordingId = task.recording_id as string;
-      const recMeta = recInfo.get(recordingId);
-      const recStatusVal = recMeta?.status ?? "";
-      const vmId = recMeta?.videomaker_id ?? null;
-      const vmName = vmId ? (vmNames.get(vmId) ?? "Videomaker") : null;
-      const isCancelled = recStatusVal === "cancelada";
       const contentType = (task as any).content_type as string | undefined;
       const isExtra = contentType === "extra" || contentType === "extras";
 
-      // Decide alvo + motivo
-      let target: "edicao" | "aguardando_link" | "cancelado";
+      // Decide alvo + motivo + payload extra
+      let target: "edicao" | "aguardando_link" | "cancelado" | "ideias";
       let reason: string;
       let warning: string | undefined;
+      const updatePayload: Record<string, unknown> = {};
 
-      if (isCancelled) {
+      if (action === "cancelada") {
         target = "cancelado";
         reason = "gravação cancelada → mover para coluna cancelado";
+      } else if (action === "orfa") {
+        // Volta pro pool de ideias e desliga recording_id (script disponível para nova captação)
+        target = "ideias";
+        reason = task.recording_id
+          ? "captação interrompida (sem active_recording / recording inexistente) → devolvendo para Ideias"
+          : "task em captação sem recording_id → devolvendo para Ideias";
+        updatePayload["recording_id"] = null;
       } else if (linkOk) {
         target = "edicao";
         reason = "drive_link válido → liberar para edição";
@@ -235,13 +245,16 @@ Deno.serve(async (req) => {
           videomaker_name: vmName,
           recording_status: recStatusVal,
           is_extra: isExtra,
+          action,
         });
         continue;
       }
 
+      updatePayload["kanban_column"] = target;
+
       const { data: updated, error: updErr } = await supabase
         .from("content_tasks")
-        .update({ kanban_column: target })
+        .update(updatePayload)
         .eq("id", task.id)
         .eq("kanban_column", currentColumn)
         .select("id");
@@ -251,9 +264,13 @@ Deno.serve(async (req) => {
 
       if (wasUpdated) {
         bumpVm(vmId, vmName, "moved");
-        if (isCancelled) {
+        if (action === "cancelada") {
           cancelledTotal++;
           bumpVm(vmId, vmName, "cancelled");
+        }
+        if (action === "orfa") {
+          orphansTotal++;
+          bumpVm(vmId, vmName, "orphans");
         }
         if (isExtra) {
           extrasTotal++;
@@ -275,13 +292,14 @@ Deno.serve(async (req) => {
         videomaker_name: vmName,
         recording_status: recStatusVal,
         is_extra: isExtra,
+        action,
       });
     }
 
     const moved = results.filter((r) => r.ok && !r.skipped).length;
 
     console.log(
-      `[content-tasks-autofix] scanned=${stuckTasks.length} candidates=${toFix.length} moved=${moved} cancelled=${cancelledTotal} extras=${extrasTotal} skipped=${skipped} warnings=${warnings}`,
+      `[content-tasks-autofix] scanned=${stuckTasks.length} candidates=${toFix.length} moved=${moved} cancelled=${cancelledTotal} orphans=${orphansTotal} extras=${extrasTotal} skipped=${skipped} warnings=${warnings}`,
     );
 
     return new Response(
@@ -297,6 +315,7 @@ Deno.serve(async (req) => {
           moved,
           cancelled: cancelledTotal,
           extras: extrasTotal,
+          orphans: orphansTotal,
           byVideomaker,
         },
       }),

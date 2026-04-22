@@ -637,14 +637,15 @@ export default function FinancialRevenues() {
         ]}
         exportRows={displayed}
         exportColumns={[
-          { header: 'Cliente', accessor: r => clients.find(c => c.id === r.client_id)?.companyName || '—' },
-          { header: 'Valor (R$)', accessor: r => Number(r.amount).toFixed(2) },
-          { header: 'Vencimento', accessor: r => r.due_date ? format(new Date(normalizeDate(r.due_date) + 'T12:00:00'), 'dd/MM/yyyy') : '—' },
-          { header: 'Status', accessor: r => r.status },
-          { header: 'Pago em', accessor: r => r.paid_at ? format(new Date(normalizeDate(r.paid_at) + 'T12:00:00'), 'dd/MM/yyyy') : '—' },
+          { key: 'client', header: 'Cliente', required: true, accessor: r => clients.find(c => c.id === r.client_id)?.companyName || '—' },
+          { key: 'amount', header: 'Valor (R$)', required: true, accessor: r => Number(r.amount).toFixed(2) },
+          { key: 'due', header: 'Vencimento', accessor: r => r.due_date ? format(new Date(normalizeDate(r.due_date) + 'T12:00:00'), 'dd/MM/yyyy') : '—' },
+          { key: 'status', header: 'Status', accessor: r => r.status },
+          { key: 'paid_at', header: 'Pago em', accessor: r => r.paid_at ? format(new Date(normalizeDate(r.paid_at) + 'T12:00:00'), 'dd/MM/yyyy') : '—' },
         ]}
         exportFileName="receitas"
         exportTitle="Receitas"
+        exportStorageKey="revenues"
       />
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.3 }}>

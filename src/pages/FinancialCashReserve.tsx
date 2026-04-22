@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
+import FinancialFilters, { applyFinancialFilters, buildEmptyFilters, type FinancialFiltersValue } from '@/components/financial/FinancialFilters';
 import { useFinancialData, normalizeDate } from '@/hooks/useFinancialData';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,7 @@ import { toast } from 'sonner';
 export default function FinancialCashReserve() {
   const { cashMovements, addCashMovement, updateCashMovement, deleteCashMovement, loading } = useFinancialData();
   const [open, setOpen] = useState(false);
+  const [filters, setFilters] = useState<FinancialFiltersValue>(buildEmptyFilters);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
@@ -41,6 +43,25 @@ export default function FinancialCashReserve() {
     cashMovements.filter(m => m.type === 'saida').reduce((acc, m) => acc + Number(m.amount), 0),
     [cashMovements]
   );
+
+  const displayed = useMemo(() =>
+    applyFinancialFilters(cashMovements, filters, {
+      getDate: (m) => normalizeDate(m.date),
+      getSearchableText: (m) => [m.description, m.type].filter(Boolean).join(' '),
+      matchAdvanced: (m, adv) => {
+        if (adv.type && adv.type !== 'all' && m.type !== adv.type) return false;
+        return true;
+      },
+    }),
+    [cashMovements, filters]
+  );
+
+  const exportColumns = useMemo(() => [
+    { header: 'Data', accessor: (m: any) => { const d = normalizeDate(m.date); const [y, mo, day] = d.split('-'); return `${day}/${mo}/${y}`; } },
+    { header: 'Tipo', accessor: (m: any) => m.type === 'entrada' ? 'Entrada' : 'Saída' },
+    { header: 'Descrição', accessor: (m: any) => (m.description || '').replace(/\s*-\s*ID:\s*[a-f0-9-]+/gi, '') },
+    { header: 'Valor (R$)', accessor: (m: any) => (m.type === 'entrada' ? '+' : '-') + Number(m.amount).toFixed(2) },
+  ], []);
 
   const resetForm = () => {
     setAmount('');
@@ -181,14 +202,30 @@ export default function FinancialCashReserve() {
         </Card>
       </div>
 
+      <FinancialFilters
+        value={filters}
+        onChange={setFilters}
+        resultCount={displayed.length}
+        searchPlaceholder="Buscar descrição, tipo…"
+        advancedFields={[
+          { key: 'type', label: 'Tipo', options: [{ value: 'entrada', label: 'Entrada' }, { value: 'saida', label: 'Saída' }] },
+        ]}
+        exportRows={displayed}
+        exportColumns={exportColumns}
+        exportFileName="caixa-reserva"
+        exportTitle="Caixa (Reserva)"
+      />
+
       {/* Movements Table */}
       <Card>
         <CardHeader>
           <CardTitle>Histórico de Movimentações</CardTitle>
         </CardHeader>
         <CardContent>
-          {cashMovements.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">Nenhuma movimentação registrada ainda.</p>
+          {displayed.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              {cashMovements.length === 0 ? 'Nenhuma movimentação registrada ainda.' : 'Nenhum resultado para os filtros selecionados.'}
+            </p>
           ) : (
             <Table>
               <TableHeader>
@@ -201,7 +238,7 @@ export default function FinancialCashReserve() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {cashMovements.map(m => (
+                {displayed.map(m => (
                   <TableRow key={m.id}>
                     <TableCell>{(() => { const d = normalizeDate(m.date); const [y,mo,day] = d.split('-'); return `${day}/${mo}/${y}`; })()}</TableCell>
                     <TableCell>

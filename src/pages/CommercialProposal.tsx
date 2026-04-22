@@ -196,6 +196,8 @@ export default function CommercialProposal() {
   const [cronogramaTotalDays, setCronogramaTotalDays] = useState('');
   const [cronogramaPaymentMethod, setCronogramaPaymentMethod] = useState('pix');
   const [cronogramaInstallments, setCronogramaInstallments] = useState('1');
+  const [cronogramaPricingMode, setCronogramaPricingMode] = useState<'individual' | 'total'>('individual');
+  const [cronogramaTotalCustomValue, setCronogramaTotalCustomValue] = useState('');
   const [generatingTimeline, setGeneratingTimeline] = useState(false);
 
   // ── Clear proposal ──

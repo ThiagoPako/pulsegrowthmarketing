@@ -1598,38 +1598,56 @@ export default function CommercialProposal() {
         )}
         {cronogramaDeliverables.length > 0 && (
           <div data-pdf-section className="px-8 md:px-12 pb-6">
-            <h2 className="text-lg font-bold text-gray-800 mb-3">Entregas e Investimento</h2>
-            <div className="border rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-gray-500" style={{ background: 'hsl(16 82% 96%)' }}>
-                    <th className="p-3">Entrega</th>
-                    <th className="p-3 text-center">Qtd</th>
-                    <th className="p-3 text-right">Valor Unit.</th>
-                    <th className="p-3 text-right">Subtotal</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cronogramaDeliverables.map((d, i) => (
-                    <tr key={d.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="p-3">
-                        <p className="font-medium text-gray-800">{d.name}</p>
-                        <p className="text-[10px] text-gray-500">{d.description}</p>
-                      </td>
-                      <td className="p-3 text-center font-medium">{d.quantity}</td>
-                      <td className="p-3 text-right text-gray-600">{fmt(d.unitPrice)}</td>
-                      <td className="p-3 text-right font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(d.unitPrice * d.quantity)}</td>
+            <h2 className="text-lg font-bold text-gray-800 mb-3">
+              {cronogramaPricingMode === 'total' ? 'Escopo dos Serviços' : 'Entregas e Investimento'}
+            </h2>
+            {cronogramaPricingMode === 'total' ? (
+              <div className="space-y-2">
+                {cronogramaDeliverables.map((d) => (
+                  <div key={d.id} className="flex items-start gap-3 p-3 rounded-lg border bg-white" style={{ borderColor: 'hsl(16 82% 80%)' }}>
+                    <div className="rounded-full w-7 h-7 flex items-center justify-center shrink-0" style={{ background: 'hsl(16 82% 51%)' }}>
+                      <CheckCircle2 className="h-4 w-4 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm text-gray-800">{d.name}</p>
+                      {d.description && <p className="text-xs text-gray-500 mt-0.5">{d.description}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="border rounded-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-gray-500" style={{ background: 'hsl(16 82% 96%)' }}>
+                      <th className="p-3">Entrega</th>
+                      <th className="p-3 text-center">Qtd</th>
+                      <th className="p-3 text-right">Valor Unit.</th>
+                      <th className="p-3 text-right">Subtotal</th>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 font-bold">
-                    <td colSpan={3} className="p-3 text-right text-gray-800">Total</td>
-                    <td className="p-3 text-right text-lg" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(totalValue)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {cronogramaDeliverables.map((d, i) => (
+                      <tr key={d.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="p-3">
+                          <p className="font-medium text-gray-800">{d.name}</p>
+                          <p className="text-[10px] text-gray-500">{d.description}</p>
+                        </td>
+                        <td className="p-3 text-center font-medium">{d.quantity}</td>
+                        <td className="p-3 text-right text-gray-600">{fmt(d.unitPrice)}</td>
+                        <td className="p-3 text-right font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(d.unitPrice * d.quantity)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 font-bold">
+                      <td colSpan={3} className="p-3 text-right text-gray-800">Total</td>
+                      <td className="p-3 text-right text-lg" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(totalValue)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
           </div>
         )}
         <div data-pdf-section className="px-8 md:px-12 pb-8">

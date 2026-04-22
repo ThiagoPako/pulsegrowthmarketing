@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, ArrowUpCircle, ArrowDownCircle, Pencil, Trash2, Search, Filter, DollarSign, TrendingUp, TrendingDown, Wallet, Users, FileSpreadsheet } from 'lucide-react';
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
+import FinancialFilters, { applyFinancialFilters, buildEmptyFilters, type FinancialFiltersValue } from '@/components/financial/FinancialFilters';
 import { useNavigate } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';

@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 export default function FinancialCashReserve() {
   const { cashMovements, addCashMovement, updateCashMovement, deleteCashMovement, loading } = useFinancialData();
   const [open, setOpen] = useState(false);
+  const [filters, setFilters] = useState<FinancialFiltersValue>(buildEmptyFilters);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [amount, setAmount] = useState('');

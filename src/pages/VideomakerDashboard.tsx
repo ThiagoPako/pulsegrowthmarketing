@@ -85,6 +85,8 @@ export default function VideomakerDashboard() {
   const [eventDriveLink, setEventDriveLink] = useState('');
   const [eventEditorId, setEventEditorId] = useState<string>('__auto__');
   const [eventNotes, setEventNotes] = useState('');
+  const [eventDriveLinkError, setEventDriveLinkError] = useState<string | null>(null);
+  const [eventFinishSubmitting, setEventFinishSubmitting] = useState(false);
 
   // Timer for waiting elapsed
   useEffect(() => {

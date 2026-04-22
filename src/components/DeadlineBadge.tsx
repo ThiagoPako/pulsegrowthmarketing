@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Clock, Flame } from 'lucide-react';
+import { Clock, Flame, Info } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface DeadlineBadgeProps {
   deadline: string;
@@ -16,31 +17,24 @@ interface DeadlineBadgeProps {
 function getWeekendMsBetween(from: Date, to: Date): number {
   if (from >= to) return 0;
 
-  const WEEKEND_MS = 48 * 60 * 60 * 1000; // 48h
-  const FRIDAY_PAUSE_MINUTE = 23 * 60 + 59; // 23:59 in minutes
-  const SUNDAY_RESUME_MINUTE = 23 * 60 + 59; // 23:59 in minutes
-
   let weekendMs = 0;
   const start = new Date(from);
   const end = new Date(to);
 
-  // Walk through each day between from and to
   const current = new Date(start);
   current.setHours(0, 0, 0, 0);
 
   while (current <= end) {
-    const dayOfWeek = current.getDay(); // 0=Sun, 5=Fri, 6=Sat
+    const dayOfWeek = current.getDay();
 
     if (dayOfWeek === 5) {
-      // Friday — weekend starts at 23:59
       const weekendStart = new Date(current);
       weekendStart.setHours(23, 59, 0, 0);
 
       const weekendEnd = new Date(current);
-      weekendEnd.setDate(weekendEnd.getDate() + 2); // Sunday
+      weekendEnd.setDate(weekendEnd.getDate() + 2);
       weekendEnd.setHours(23, 59, 0, 0);
 
-      // Clamp to [from, to]
       const effectiveStart = weekendStart < start ? start : weekendStart;
       const effectiveEnd = weekendEnd > end ? end : weekendEnd;
 
@@ -55,18 +49,12 @@ function getWeekendMsBetween(from: Date, to: Date): number {
   return weekendMs;
 }
 
-/** Check if we're currently in a weekend pause period (Fri 23:59 → Sun 23:59) */
 function isInWeekendPause(date: Date): boolean {
   const day = date.getDay();
   const minutes = date.getHours() * 60 + date.getMinutes();
-
-  // Saturday all day
   if (day === 6) return true;
-  // Sunday before 23:59
   if (day === 0 && minutes < 23 * 60 + 59) return true;
-  // Friday after 23:59
   if (day === 5 && minutes >= 23 * 60 + 59) return true;
-
   return false;
 }
 
@@ -75,10 +63,7 @@ export function getDeadlineInfo(deadline: string | null) {
   const now = new Date();
   const dl = new Date(deadline);
 
-  // If currently in weekend pause, deadline countdown is frozen
   const paused = isInWeekendPause(now);
-
-  // Calculate raw diff minus weekend time
   const rawDiffMs = dl.getTime() - now.getTime();
   const weekendMs = rawDiffMs > 0
     ? getWeekendMsBetween(now, dl)
@@ -86,7 +71,7 @@ export function getDeadlineInfo(deadline: string | null) {
 
   const businessDiffMs = rawDiffMs > 0
     ? rawDiffMs - weekendMs
-    : rawDiffMs + weekendMs; // negative means expired, add back weekend time
+    : rawDiffMs + weekendMs;
 
   const isExpired = paused ? false : businessDiffMs <= 0;
   const absDiff = Math.abs(businessDiffMs);
@@ -95,7 +80,6 @@ export function getDeadlineInfo(deadline: string | null) {
 
   let timeStr: string;
   if (paused) {
-    // Show remaining time frozen
     const remainMs = Math.max(0, rawDiffMs - weekendMs);
     const rH = Math.floor(remainMs / (1000 * 60 * 60));
     const rM = Math.floor((remainMs % (1000 * 60 * 60)) / (1000 * 60));
@@ -120,8 +104,6 @@ export function getDeadlineProgress(startedAt: string | null | undefined, deadli
   const end = new Date(deadline).getTime();
   const now = Date.now();
 
-  // Prefer the real start timestamp when available — it reflects the true beginning of the stage.
-  // `totalHours` is only used as a fallback when we have no `startedAt`.
   let start: number;
   if (startedAt) {
     start = new Date(startedAt).getTime();
@@ -147,6 +129,63 @@ export function getDeadlineProgress(startedAt: string | null | undefined, deadli
   return Math.min(100, Math.max(0, Math.round((businessElapsed / businessTotal) * 100)));
 }
 
+/**
+ * Returns a detailed audit object with every input and intermediate value
+ * used in the deadline calculation. Used by the audit popover UI.
+ */
+export function getDeadlineAudit(startedAt: string | null | undefined, deadline: string | null, totalHours?: number) {
+  if (!deadline) return null;
+  const end = new Date(deadline);
+  const now = new Date();
+
+  let start: Date | null = null;
+  let startSource: 'startedAt' | 'totalHours-fallback' | 'none' = 'none';
+  if (startedAt) {
+    start = new Date(startedAt);
+    startSource = 'startedAt';
+  } else if (totalHours && totalHours > 0) {
+    start = new Date(end.getTime() - totalHours * 60 * 60 * 1000);
+    startSource = 'totalHours-fallback';
+  }
+
+  const fmt = (d: Date | null) => d ? d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+  const fmtMs = (ms: number) => {
+    const abs = Math.abs(ms);
+    const h = Math.floor(abs / 3_600_000);
+    const m = Math.floor((abs % 3_600_000) / 60_000);
+    return `${ms < 0 ? '-' : ''}${h}h${m}m`;
+  };
+
+  const rawTotalMs = start ? end.getTime() - start.getTime() : 0;
+  const rawElapsedMs = start ? now.getTime() - start.getTime() : 0;
+  const weekendInTotalMs = start ? getWeekendMsBetween(start, end) : 0;
+  const weekendElapsedMs = start ? getWeekendMsBetween(start, now) : 0;
+  const businessTotalMs = Math.max(0, rawTotalMs - weekendInTotalMs);
+  const businessElapsedMs = Math.max(0, rawElapsedMs - weekendElapsedMs);
+  const businessRemainingMs = Math.max(0, businessTotalMs - businessElapsedMs);
+  const progress = getDeadlineProgress(startedAt, deadline, totalHours);
+  const paused = isInWeekendPause(now);
+
+  return {
+    startedAtRaw: startedAt ?? null,
+    deadlineRaw: deadline,
+    totalHoursParam: totalHours ?? null,
+    startSource,
+    startFormatted: fmt(start),
+    endFormatted: fmt(end),
+    nowFormatted: fmt(now),
+    rawTotalStr: fmtMs(rawTotalMs),
+    rawElapsedStr: fmtMs(rawElapsedMs),
+    weekendInTotalStr: fmtMs(weekendInTotalMs),
+    weekendElapsedStr: fmtMs(weekendElapsedMs),
+    businessTotalStr: fmtMs(businessTotalMs),
+    businessElapsedStr: fmtMs(businessElapsedMs),
+    businessRemainingStr: fmtMs(businessRemainingMs),
+    progress,
+    paused,
+  };
+}
+
 export default function DeadlineBadge({ deadline, label, startedAt, totalHours }: DeadlineBadgeProps) {
   const [tick, setTick] = useState(0);
 
@@ -155,13 +194,13 @@ export default function DeadlineBadge({ deadline, label, startedAt, totalHours }
     return () => clearInterval(interval);
   }, []);
 
-  // Force recalculation every tick
   void tick;
 
   const info = getDeadlineInfo(deadline);
   if (!info) return null;
 
   const progress = getDeadlineProgress(startedAt, deadline, totalHours);
+  const audit = getDeadlineAudit(startedAt, deadline, totalHours);
 
   const barColor = info.variant === 'expired'
     ? '[&>div]:bg-red-500'
@@ -171,22 +210,93 @@ export default function DeadlineBadge({ deadline, label, startedAt, totalHours }
 
   return (
     <div className={`w-full space-y-0.5 ${info.isExpired ? 'animate-pulse' : ''}`}>
-      <span className={`inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-md ${
-        info.variant === 'expired'
-          ? 'bg-red-100 text-red-800 border border-red-300 dark:bg-red-900/40 dark:text-red-300'
-          : info.variant === 'warning'
-            ? 'bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400'
-            : 'bg-muted text-muted-foreground border border-border'
-      }`}>
-        {info.isExpired ? <Flame size={10} className="text-red-600 animate-bounce" /> : <Clock size={9} />}
-        {label && <span>{label}:</span>}
-        {info.timeStr}
-        {progress > 0 && <span className="ml-0.5">({progress}%)</span>}
-        {info.isExpired && <Flame size={10} className="text-orange-500 animate-bounce" />}
-      </span>
+      <div className="flex items-center gap-1">
+        <span className={`inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-md ${
+          info.variant === 'expired'
+            ? 'bg-red-100 text-red-800 border border-red-300 dark:bg-red-900/40 dark:text-red-300'
+            : info.variant === 'warning'
+              ? 'bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-400'
+              : 'bg-muted text-muted-foreground border border-border'
+        }`}>
+          {info.isExpired ? <Flame size={10} className="text-red-600 animate-bounce" /> : <Clock size={9} />}
+          {label && <span>{label}:</span>}
+          {info.timeStr}
+          {progress > 0 && <span className="ml-0.5">({progress}%)</span>}
+          {info.isExpired && <Flame size={10} className="text-orange-500 animate-bounce" />}
+        </span>
+        {audit && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                aria-label="Auditoria do prazo"
+                title="Ver detalhes do cálculo de prazo"
+              >
+                <Info size={10} />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              side="top"
+              className="w-80 p-3 text-[11px] space-y-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="font-semibold text-xs flex items-center gap-1.5 pb-1.5 border-b border-border">
+                <Info size={12} /> Auditoria do prazo
+              </div>
+
+              <div className="space-y-1">
+                <div className="font-medium text-muted-foreground uppercase text-[9px] tracking-wider">Entradas</div>
+                <Row k="startedAt" v={audit.startedAtRaw ?? '— (ausente)'} mono />
+                <Row k="deadline" v={audit.deadlineRaw} mono />
+                <Row k="totalHours" v={audit.totalHoursParam !== null ? `${audit.totalHoursParam}h` : '—'} />
+                <Row k="origem do início" v={
+                  audit.startSource === 'startedAt' ? '✅ startedAt real'
+                  : audit.startSource === 'totalHours-fallback' ? '⚠️ fallback (deadline − totalHours)'
+                  : '❌ nenhum'
+                } />
+              </div>
+
+              <div className="space-y-1">
+                <div className="font-medium text-muted-foreground uppercase text-[9px] tracking-wider">Datas calculadas</div>
+                <Row k="início" v={audit.startFormatted} />
+                <Row k="agora" v={audit.nowFormatted} />
+                <Row k="fim (deadline)" v={audit.endFormatted} />
+              </div>
+
+              <div className="space-y-1">
+                <div className="font-medium text-muted-foreground uppercase text-[9px] tracking-wider">Horas comerciais</div>
+                <Row k="total bruto" v={audit.rawTotalStr} />
+                <Row k="− fins de semana (total)" v={audit.weekendInTotalStr} />
+                <Row k="= total comercial" v={audit.businessTotalStr} highlight />
+                <Row k="decorrido bruto" v={audit.rawElapsedStr} />
+                <Row k="− fins de semana (decorrido)" v={audit.weekendElapsedStr} />
+                <Row k="= decorrido comercial" v={audit.businessElapsedStr} highlight />
+                <Row k="restante comercial" v={audit.businessRemainingStr} highlight />
+              </div>
+
+              <div className="space-y-1 pt-1.5 border-t border-border">
+                <Row k="Progresso" v={`${audit.progress}%`} highlight />
+                {audit.paused && <div className="text-[10px] text-orange-500">⏸ Cronômetro pausado (fim de semana)</div>}
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
+      </div>
       {progress > 0 && (
         <Progress value={progress} className={`h-1.5 w-full bg-muted/50 ${barColor}`} />
       )}
+    </div>
+  );
+}
+
+function Row({ k, v, mono, highlight }: { k: string; v: string; mono?: boolean; highlight?: boolean }) {
+  return (
+    <div className={`flex justify-between gap-2 ${highlight ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+      <span className="shrink-0">{k}</span>
+      <span className={`text-right truncate ${mono ? 'font-mono text-[10px]' : ''} ${highlight ? 'text-foreground' : 'text-foreground/80'}`} title={v}>{v}</span>
     </div>
   );
 }

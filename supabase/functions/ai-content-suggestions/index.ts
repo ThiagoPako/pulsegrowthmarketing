@@ -11,7 +11,7 @@ serve(async (req) => {
 
   try {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const GEMINI_KEY = Deno.env.get("GOOGLE_GEMINI_API_KEY");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -19,6 +19,29 @@ serve(async (req) => {
 
     const body = await req.json();
     const { clientId, type, description } = body;
+
+    // Helper: call Gemini directly (free tier) for proposal generation
+    async function callGemini(systemPrompt: string, userPrompt: string): Promise<string> {
+      if (!GEMINI_KEY) throw new Error("GOOGLE_GEMINI_API_KEY is not configured");
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
+            generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192 },
+          }),
+        }
+      );
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("Gemini error:", res.status, errText);
+        throw new Error(`Gemini API ${res.status}: ${errText}`);
+      }
+      const data = await res.json();
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    }
 
     // ===== System Modules Generation =====
     if (type === "system_modules" && description) {

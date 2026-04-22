@@ -1747,7 +1747,7 @@ function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, lin
               <div className="relative shrink-0">
                 <UserAvatar user={{ name: videomaker.name, avatarUrl: videomaker.avatarUrl }} size="sm" />
                 <span className="absolute -bottom-0.5 -right-0.5 flex h-2 w-2">
-                  <span className={`absolute inline-flex h-full w-full rounded-full ${isAwaitingLink ? 'bg-yellow-400' : 'bg-orange-400 animate-ping'} opacity-75`}></span>
+                  <span className={`absolute inline-flex h-full w-full rounded-full ${isAwaitingLink ? 'bg-yellow-400 animate-soft-glow' : 'bg-orange-400 animate-ping'} opacity-75`}></span>
                   <span className={`relative inline-flex rounded-full h-2 w-2 ${isAwaitingLink ? 'bg-yellow-500' : 'bg-orange-500'} border border-card`}></span>
                 </span>
               </div>

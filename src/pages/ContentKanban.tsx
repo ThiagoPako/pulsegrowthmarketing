@@ -1102,6 +1102,11 @@ export default function ContentKanban() {
                               const vmId = rec?.videomakerId || task.assigned_to;
                               return getUser(vmId);
                             })()}
+                            recordingStatus={(() => {
+                              if (task.kanban_column !== 'captacao' || !task.recording_id) return null;
+                              const rec = recordings.find(r => r.id === task.recording_id);
+                              return rec?.status ?? null;
+                            })()}
                             linkedScript={task.script_id ? scripts.find(s => s.id === task.script_id) : undefined}
                             isDragging={draggedTask?.id === task.id}
                             onDragStart={e => handleDragStart(e, task)}

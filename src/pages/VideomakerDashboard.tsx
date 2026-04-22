@@ -660,10 +660,10 @@ export default function VideomakerDashboard() {
       }
     }
 
-    // Move content_tasks back to "ideias"
+    // Move content_tasks back to "ideias" (qualquer coluna intermediária do fluxo de captação)
     for (const scriptId of planned) {
       await supabase.from('content_tasks').update({ kanban_column: 'ideias', recording_id: null } as any)
-        .eq('script_id', scriptId).in('kanban_column', ['captacao']);
+        .eq('script_id', scriptId).in('kanban_column', ['captacao', 'captacao_concluida', 'aguardando_link']);
     }
 
     // Delete active recording record via dedicated VPS route
@@ -879,7 +879,7 @@ export default function VideomakerDashboard() {
     // Move unfinished scripts' content_tasks back to "ideias" (not rejected ones)
     for (const scriptId of returnedIds) {
       await supabase.from('content_tasks').update({ kanban_column: 'ideias', recording_id: null } as any)
-        .eq('script_id', scriptId).in('kanban_column', ['captacao']);
+        .eq('script_id', scriptId).in('kanban_column', ['captacao', 'captacao_concluida', 'aguardando_link']);
     }
 
     // Check remaining scripts for this client and notify if low (only for regular clients)

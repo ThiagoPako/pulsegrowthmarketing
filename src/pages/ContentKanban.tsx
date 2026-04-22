@@ -238,11 +238,12 @@ export default function ContentKanban() {
   const [autofixRunning, setAutofixRunning] = useState(false);
 
   // Indicadores admin acumulados a partir do retorno da edge function (sem refetch global)
-  type AutofixVmStat = { name: string; moved: number; cancelled: number; extras: number };
+  type AutofixVmStat = { name: string; moved: number; cancelled: number; extras: number; orphans: number };
   type AutofixStats = {
     moved: number;
     cancelled: number;
     extras: number;
+    orphans: number;
     byVideomaker: Record<string, AutofixVmStat>;
     lastRunAt: string | null;
     lastScanned: number;
@@ -251,6 +252,7 @@ export default function ContentKanban() {
     moved: 0,
     cancelled: 0,
     extras: 0,
+    orphans: 0,
     byVideomaker: {},
     lastRunAt: null,
     lastScanned: 0,
@@ -296,26 +298,26 @@ export default function ContentKanban() {
 
       // ─── Atualiza indicadores admin acumulados (apenas com base no retorno) ──
       const stats = data?.stats as
-        | { moved: number; cancelled: number; extras: number; byVideomaker: Record<string, AutofixVmStat> }
+        | { moved: number; cancelled: number; extras: number; orphans?: number; byVideomaker: Record<string, Partial<AutofixVmStat> & { name: string }> }
         | undefined;
       if (stats) {
         setAutofixStats(prev => {
           const mergedVm: Record<string, AutofixVmStat> = { ...prev.byVideomaker };
           for (const [vmId, s] of Object.entries(stats.byVideomaker ?? {})) {
             const existing = mergedVm[vmId];
-            mergedVm[vmId] = existing
-              ? {
-                  name: s.name || existing.name,
-                  moved: existing.moved + (s.moved ?? 0),
-                  cancelled: existing.cancelled + (s.cancelled ?? 0),
-                  extras: existing.extras + (s.extras ?? 0),
-                }
-              : { ...s };
+            mergedVm[vmId] = {
+              name: s.name || existing?.name || 'Sem videomaker',
+              moved: (existing?.moved ?? 0) + (s.moved ?? 0),
+              cancelled: (existing?.cancelled ?? 0) + (s.cancelled ?? 0),
+              extras: (existing?.extras ?? 0) + (s.extras ?? 0),
+              orphans: (existing?.orphans ?? 0) + (s.orphans ?? 0),
+            };
           }
           return {
             moved: prev.moved + (stats.moved ?? 0),
             cancelled: prev.cancelled + (stats.cancelled ?? 0),
             extras: prev.extras + (stats.extras ?? 0),
+            orphans: prev.orphans + (stats.orphans ?? 0),
             byVideomaker: mergedVm,
             lastRunAt: new Date().toISOString(),
             lastScanned: scanned,
@@ -960,14 +962,14 @@ export default function ContentKanban() {
               </span>
             </div>
             <button
-              onClick={() => setAutofixStats({ moved: 0, cancelled: 0, extras: 0, byVideomaker: {}, lastRunAt: null, lastScanned: 0 })}
+              onClick={() => setAutofixStats({ moved: 0, cancelled: 0, extras: 0, orphans: 0, byVideomaker: {}, lastRunAt: null, lastScanned: 0 })}
               className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
             >
               Limpar
             </button>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
             <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2">
               <div className="text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-medium">Corrigidas</div>
               <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{autofixStats.moved}</div>
@@ -975,6 +977,10 @@ export default function ContentKanban() {
             <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2">
               <div className="text-[10px] uppercase tracking-wider text-rose-600 dark:text-rose-400 font-medium">Canceladas</div>
               <div className="text-xl font-bold text-rose-600 dark:text-rose-400">{autofixStats.cancelled}</div>
+            </div>
+            <div className="rounded-lg bg-violet-500/10 border border-violet-500/20 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-violet-600 dark:text-violet-400 font-medium">Órfãs → Ideias</div>
+              <div className="text-xl font-bold text-violet-600 dark:text-violet-400">{autofixStats.orphans}</div>
             </div>
             <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
               <div className="text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-400 font-medium">Extras</div>

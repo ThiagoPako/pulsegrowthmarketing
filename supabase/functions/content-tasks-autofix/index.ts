@@ -68,14 +68,56 @@ Deno.serve(async (req) => {
       to: string;
       ok: boolean;
       skipped?: boolean;
+      reason?: string;
+      warning?: string;
       error?: string;
     }> = [];
 
     let skipped = 0;
+    let warnings = 0;
+
+    // ─── Validação de drive_link ───────────────────────────────────────
+    // Aceita http(s) ou URLs do Google Drive sem protocolo (drive.google.com/...)
+    const isValidDriveLink = (raw: unknown): boolean => {
+      if (typeof raw !== "string") return false;
+      const v = raw.trim();
+      if (v.length < 8) return false;
+      // tenta parsear como URL completa
+      try {
+        const u = new URL(v.startsWith("http") ? v : `https://${v}`);
+        return !!u.hostname && u.hostname.includes(".");
+      } catch {
+        return false;
+      }
+    };
 
     for (const task of toFix) {
       const currentColumn = task.kanban_column as string;
-      const target = task.drive_link ? "edicao" : "aguardando_link";
+      const rawLink = task.drive_link as string | null;
+      const linkOk = isValidDriveLink(rawLink);
+
+      // Decide alvo + motivo
+      let target: "edicao" | "aguardando_link";
+      let reason: string;
+      let warning: string | undefined;
+
+      if (linkOk) {
+        target = "edicao";
+        reason = "drive_link válido → liberar para edição";
+      } else {
+        target = "aguardando_link";
+        if (rawLink && rawLink.trim().length > 0) {
+          // Link existe mas é inconsistente (ex: texto solto, URL malformada)
+          warning = `drive_link inconsistente (não é URL válida): "${String(rawLink).slice(0, 80)}"`;
+          reason = "drive_link inválido → manter aguardando link correto";
+          warnings++;
+          console.warn(
+            `[content-tasks-autofix] task=${task.id} título="${task.title}" ${warning}`,
+          );
+        } else {
+          reason = "sem drive_link → aguardando upload do videomaker";
+        }
+      }
 
       // ─── IDEMPOTÊNCIA: se a tarefa já está na coluna alvo, não faz nada ───
       if (currentColumn === target) {
@@ -87,6 +129,8 @@ Deno.serve(async (req) => {
           to: target,
           ok: true,
           skipped: true,
+          reason,
+          warning,
         });
         continue;
       }
@@ -110,6 +154,8 @@ Deno.serve(async (req) => {
         to: target,
         ok: !updErr,
         skipped: !wasUpdated && !updErr,
+        reason,
+        warning,
         error: updErr?.message,
       });
     }

@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ArrowLeft, RefreshCw, CheckCircle, MessageCircle, Loader2, TrendingUp, AlertTriangle, Undo2, Plus, Trash2 } from 'lucide-react';
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
+import FinancialFilters, { applyFinancialFilters, buildEmptyFilters, type FinancialFiltersValue } from '@/components/financial/FinancialFilters';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { format, subMonths, addMonths } from 'date-fns';

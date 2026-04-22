@@ -847,6 +847,19 @@ export default function ContentKanban() {
             </SelectContent>
           </Select>
           <motion.div whileTap={{ scale: 0.95 }} whileHover={{ scale: 1.03 }}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => runAutofix(true)}
+              disabled={autofixRunning}
+              title="Reprocessa tarefas presas em Captação cuja gravação já foi finalizada"
+              className="gap-1.5 rounded-xl h-9 px-3 font-medium border-border/60"
+            >
+              <RefreshCw size={14} className={autofixRunning ? 'animate-spin' : ''} />
+              {autofixRunning ? 'Reprocessando...' : 'Reprocessar presas'}
+            </Button>
+          </motion.div>
+          <motion.div whileTap={{ scale: 0.95 }} whileHover={{ scale: 1.03 }}>
             <Button size="sm" variant="outline" onClick={() => {
               setTasks(prev => [...prev].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
               toast.success('Cards organizados por última movimentação');

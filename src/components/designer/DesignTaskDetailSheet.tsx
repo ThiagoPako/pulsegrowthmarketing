@@ -530,6 +530,61 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                     </div>
                   </div>
 
+                  {/* Histórico de Ajustes Solicitados */}
+                  {(() => {
+                    const adjustments = (history.data || []).filter((h: any) => h.action === 'Ajustes solicitados');
+                    if (adjustments.length === 0) return null;
+                    return (
+                      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-2">
+                        <Label className="text-[10px] text-destructive uppercase tracking-wider flex items-center gap-1.5 font-semibold">
+                          <RotateCcw size={11} /> Histórico de Ajustes ({adjustments.length} {adjustments.length === 1 ? 'versão' : 'versões'})
+                        </Label>
+                        <div className="space-y-2">
+                          {adjustments.map((h: any, i: number) => {
+                            const profile = h.profiles;
+                            const userName = profile?.display_name || profile?.name || 'Sistema';
+                            const versionNumber = adjustments.length - i;
+                            const date = new Date(h.created_at);
+                            const dateStr = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+                            const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                            return (
+                              <div key={h.id} className="rounded-md border border-border bg-background/60 p-2.5 space-y-1.5">
+                                <div className="flex items-center justify-between gap-2 text-[11px]">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <span className="inline-flex items-center justify-center h-4 px-1.5 rounded bg-destructive/15 text-destructive text-[10px] font-bold shrink-0">
+                                      v{versionNumber}
+                                    </span>
+                                    <User size={10} className="text-muted-foreground shrink-0" />
+                                    <span className="font-medium truncate">{userName}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1 text-muted-foreground shrink-0">
+                                    <Calendar size={10} />
+                                    <span>{dateStr} • {timeStr}</span>
+                                  </div>
+                                </div>
+                                {h.details && (
+                                  <p className="text-xs whitespace-pre-wrap text-foreground/90 leading-relaxed border-l-2 border-destructive/40 pl-2">
+                                    {h.details}
+                                  </p>
+                                )}
+                                {h.attachment_url && (
+                                  <a
+                                    href={h.attachment_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline"
+                                  >
+                                    <Paperclip size={9} /> Ver anexo de referência
+                                  </a>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* Title */}
                   <div className="rounded-lg border border-border p-3">
                     <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Título</Label>

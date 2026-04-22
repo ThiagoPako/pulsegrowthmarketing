@@ -33,8 +33,9 @@ Deno.serve(async (req) => {
     if (tasksErr) throw tasksErr;
 
     if (!stuckTasks || stuckTasks.length === 0) {
+      console.log("[content-tasks-autofix] nada a fazer (0 candidatas)");
       return new Response(
-        JSON.stringify({ ok: true, scanned: 0, moved: 0, results: [] }),
+        JSON.stringify({ ok: true, scanned: 0, moved: 0, skipped: 0, results: [] }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -66,30 +67,57 @@ Deno.serve(async (req) => {
       from: string;
       to: string;
       ok: boolean;
+      skipped?: boolean;
       error?: string;
     }> = [];
 
+    let skipped = 0;
+
     for (const task of toFix) {
+      const currentColumn = task.kanban_column as string;
       const target = task.drive_link ? "edicao" : "aguardando_link";
-      const { error: updErr } = await supabase
+
+      // ─── IDEMPOTÊNCIA: se a tarefa já está na coluna alvo, não faz nada ───
+      if (currentColumn === target) {
+        skipped++;
+        results.push({
+          id: task.id as string,
+          title: task.title as string,
+          from: currentColumn,
+          to: target,
+          ok: true,
+          skipped: true,
+        });
+        continue;
+      }
+
+      // UPDATE condicional: só altera se a coluna no banco AINDA for a antiga
+      // (evita race condition se outro processo já moveu o card)
+      const { data: updated, error: updErr } = await supabase
         .from("content_tasks")
         .update({ kanban_column: target })
-        .eq("id", task.id);
+        .eq("id", task.id)
+        .eq("kanban_column", currentColumn)
+        .select("id");
+
+      const wasUpdated = !updErr && (updated?.length ?? 0) > 0;
+      if (!wasUpdated && !updErr) skipped++;
 
       results.push({
         id: task.id as string,
         title: task.title as string,
-        from: task.kanban_column as string,
+        from: currentColumn,
         to: target,
         ok: !updErr,
+        skipped: !wasUpdated && !updErr,
         error: updErr?.message,
       });
     }
 
-    const moved = results.filter((r) => r.ok).length;
+    const moved = results.filter((r) => r.ok && !r.skipped).length;
 
     console.log(
-      `[content-tasks-autofix] scanned=${stuckTasks.length} candidates=${toFix.length} moved=${moved}`,
+      `[content-tasks-autofix] scanned=${stuckTasks.length} candidates=${toFix.length} moved=${moved} skipped=${skipped}`,
     );
 
     return new Response(
@@ -98,6 +126,7 @@ Deno.serve(async (req) => {
         scanned: stuckTasks.length,
         candidates: toFix.length,
         moved,
+        skipped,
         results,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },

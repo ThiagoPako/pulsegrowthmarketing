@@ -541,7 +541,9 @@ export default function ProposalViewer() {
   // ===== CRONOGRAMA =====
   const renderCronogramaContent = () => {
     const cronoData = systemData;
-    const totalValue = (cronoData.deliverables || []).reduce((s: number, d: any) => s + ((d.unitPrice || 0) * (d.quantity || 1)), 0);
+    const sumValue = (cronoData.deliverables || []).reduce((s: number, d: any) => s + ((d.unitPrice || 0) * (d.quantity || 1)), 0);
+    const isTotalMode = cronoData.pricingMode === 'total';
+    const totalValue = isTotalMode ? (Number(cronoData.totalValue) || 0) : sumValue;
     const discountedVal = totalValue * (1 - discount / 100);
     const installs = cronoData.installments || 1;
     const installmentVal = discountedVal / installs;

@@ -2334,9 +2334,26 @@ export default function VideomakerDashboard() {
               <Input
                 placeholder="https://drive.google.com/..."
                 value={eventDriveLink}
-                onChange={(e) => setEventDriveLink(e.target.value)}
+                onChange={(e) => {
+                  setEventDriveLink(e.target.value);
+                  if (eventDriveLinkError) setEventDriveLinkError(null);
+                }}
+                onBlur={() => {
+                  if (eventDriveLink.trim()) {
+                    setEventDriveLinkError(validateDriveLink(eventDriveLink));
+                  }
+                }}
+                aria-invalid={!!eventDriveLinkError}
+                aria-describedby="event-drive-link-error"
+                className={eventDriveLinkError ? 'border-destructive focus-visible:ring-destructive' : ''}
               />
-              <p className="text-[10px] text-muted-foreground mt-1">Cole o link da pasta com vídeos/fotos da cobertura.</p>
+              {eventDriveLinkError ? (
+                <p id="event-drive-link-error" className="text-[11px] text-destructive mt-1">
+                  {eventDriveLinkError}
+                </p>
+              ) : (
+                <p className="text-[10px] text-muted-foreground mt-1">Cole o link da pasta com vídeos/fotos da cobertura.</p>
+              )}
             </div>
             <div>
               <label className="text-xs font-medium mb-1 block">Atribuir a editor (opcional)</label>
@@ -2360,9 +2377,13 @@ export default function VideomakerDashboard() {
               />
             </div>
             <div className="flex gap-2 justify-end pt-2">
-              <Button variant="outline" onClick={() => setEventFinishOpen(false)}>Cancelar</Button>
-              <Button onClick={confirmFinishEvent} className="bg-success hover:bg-success/90 text-success-foreground gap-1">
-                <Send size={14} /> Enviar para edição
+              <Button variant="outline" onClick={() => setEventFinishOpen(false)} disabled={eventFinishSubmitting}>Cancelar</Button>
+              <Button
+                onClick={confirmFinishEvent}
+                disabled={eventFinishSubmitting || !eventDriveLink.trim() || !!eventDriveLinkError}
+                className="bg-success hover:bg-success/90 text-success-foreground gap-1"
+              >
+                <Send size={14} /> {eventFinishSubmitting ? 'Enviando...' : 'Enviar para edição'}
               </Button>
             </div>
           </div>

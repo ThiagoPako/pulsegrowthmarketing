@@ -213,6 +213,138 @@ export default function VideomakerDashboard() {
     return clients.find(c => c.id === id)?.color || '220 10% 50%';
   };
 
+  // ── Fetch event recordings for this videomaker ──
+  const fetchMyEvents = useCallback(async () => {
+    if (!vmId) return;
+    const { data, error } = await supabase
+      .from('event_recordings')
+      .select('*')
+      .eq('videomaker_id', vmId)
+      .order('date', { ascending: true });
+    if (error) { console.error('[fetchMyEvents] error:', error); return; }
+    const mapped: EventRecording[] = (data || []).map((e: any) => ({
+      id: e.id,
+      clientId: e.client_id || '',
+      videomakerId: e.videomaker_id || '',
+      title: e.title || '',
+      date: (e.date || '').slice(0, 10),
+      startTime: e.start_time,
+      endTime: e.end_time,
+      address: e.address || '',
+      description: e.description || '',
+      status: e.status,
+      driveLink: e.drive_link || '',
+      createdAt: e.created_at,
+      updatedAt: e.updated_at,
+    }));
+    setEventRecordings(mapped);
+  }, [vmId]);
+
+  useEffect(() => { fetchMyEvents(); }, [fetchMyEvents]);
+
+  // Today's events (not concluded/cancelled stay visible)
+  const todayEvents = useMemo(() =>
+    eventRecordings.filter(e => e.date === todayStr && e.status !== 'concluido' && e.status !== 'cancelado')
+      .sort((a, b) => a.startTime.localeCompare(b.startTime)),
+    [eventRecordings, todayStr]
+  );
+
+  const getEventsForDay = (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return eventRecordings.filter(e => e.date === dateStr && e.status !== 'cancelado')
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+  };
+
+  const handleStartEvent = async (evt: EventRecording) => {
+    const { error } = await supabase
+      .from('event_recordings')
+      .update({ status: 'em_andamento' } as any)
+      .eq('id', evt.id);
+    if (error) { toast.error('Erro ao iniciar evento'); console.error(error); return; }
+    setEventRecordings(prev => prev.map(e => e.id === evt.id ? { ...e, status: 'em_andamento' } : e));
+    toast.success(`📹 Cobertura iniciada — ${evt.title}`);
+  };
+
+  const openFinishEvent = (evt: EventRecording) => {
+    setEventFinishId(evt.id);
+    setEventDriveLink(evt.driveLink || '');
+    setEventEditorId('__auto__');
+    setEventNotes('');
+    setEventFinishOpen(true);
+  };
+
+  const confirmFinishEvent = async () => {
+    if (!eventFinishId) return;
+    const evt = eventRecordings.find(e => e.id === eventFinishId);
+    if (!evt) return;
+    if (!eventDriveLink.trim()) { toast.error('Informe o link do Drive com o material gravado'); return; }
+
+    // 1) Mark event as concluded + save drive link
+    const { error: updateErr } = await supabase
+      .from('event_recordings')
+      .update({ status: 'concluido', drive_link: eventDriveLink.trim() } as any)
+      .eq('id', evt.id);
+    if (updateErr) { toast.error('Erro ao finalizar evento'); console.error(updateErr); return; }
+
+    // 2) Pick editor (auto = least loaded)
+    let assignedEditor: string | null = eventEditorId === '__auto__' ? null : eventEditorId;
+    if (!assignedEditor) {
+      const editorRoles = users.filter(u => u.role === 'editor');
+      if (editorRoles.length > 0) {
+        const counts: Record<string, number> = {};
+        for (const ed of editorRoles) {
+          const { data } = await supabase.from('content_tasks').select('id')
+            .eq('assigned_to', ed.id).in('kanban_column', ['edicao', 'revisao']);
+          counts[ed.id] = data?.length || 0;
+        }
+        assignedEditor = editorRoles.sort((a, b) => (counts[a.id] || 0) - (counts[b.id] || 0))[0]?.id || null;
+      }
+    }
+
+    // 3) Create content_task in 'edicao' column
+    const taskTitle = `🎪 Evento: ${evt.title}`;
+    const description = [
+      `Cobertura de evento gravada em ${evt.date} (${evt.startTime} - ${evt.endTime})`,
+      evt.address ? `Local: ${evt.address}` : '',
+      evt.description ? `Descrição: ${evt.description}` : '',
+      eventNotes.trim() ? `Observações da gravação: ${eventNotes.trim()}` : '',
+    ].filter(Boolean).join('\n');
+
+    const { data: insertedTask, error: insertErr } = await supabase.from('content_tasks').insert({
+      client_id: evt.clientId,
+      title: taskTitle,
+      content_type: 'reels',
+      kanban_column: 'edicao',
+      description,
+      assigned_to: assignedEditor,
+      created_by: vmId,
+      drive_link: eventDriveLink.trim(),
+    } as any).select('id').single();
+
+    if (insertErr) {
+      console.error('[event finish] content_task insert error:', insertErr);
+      toast.error(`Erro ao enviar para edição: ${insertErr.message}`);
+      return;
+    }
+
+    // 4) Trigger sync (deadlines, notifications)
+    if (insertedTask?.id) {
+      const client = clients.find(c => c.id === evt.clientId);
+      const ctx = buildSyncContext(
+        { id: insertedTask.id, client_id: evt.clientId, title: taskTitle, content_type: 'reels', description, script_id: null, recording_id: null, assigned_to: assignedEditor, edited_video_link: null },
+        { userId: vmId, clientName: client?.companyName, clientWhatsapp: client?.whatsapp }
+      );
+      await syncContentTaskColumnChange('edicao', ctx);
+    }
+
+    setEventRecordings(prev => prev.map(e => e.id === evt.id ? { ...e, status: 'concluido', driveLink: eventDriveLink.trim() } : e));
+    toast.success(`✅ Evento finalizado e enviado para edição!`);
+    setEventFinishOpen(false);
+    setEventFinishId(null);
+    setEventDriveLink('');
+    setEventNotes('');
+  };
+
   const typeLabels: Record<string, string> = { fixa: 'Fixa', extra: 'Extra', secundaria: 'Sec.', backup: 'Backup', endomarketing: 'Endo', avulso: 'Avulso' };
   const timeToMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 

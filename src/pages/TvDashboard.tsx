@@ -8,6 +8,7 @@ import {
   Eye, Scissors, FileVideo, Instagram, Facebook, Youtube, Globe, Save
 } from 'lucide-react';
 import { fetchAISeasonalAlerts, AISeasonalAlert } from '@/lib/seasonalDates';
+import { fetchLatestCommand, fetchTvSettings, TvRemoteCommand, VISIBILITY_KEYS, VisibilityKey } from '@/lib/tvRemote';
 
 const VPS = 'https://agenciapulse.tech/api';
 

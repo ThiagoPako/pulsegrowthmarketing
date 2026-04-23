@@ -1543,8 +1543,8 @@ app.all('/api/client-briefing', async (req, res) => {
             `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
             [
               u.user_id,
-              '📋 Briefing finalizado',
-              `${companyName} concluiu o briefing. PDF disponível para download.`,
+              `📋 Briefing ${nextVersion > 1 ? `atualizado (v${nextVersion})` : 'finalizado'}`,
+              `${companyName} ${nextVersion > 1 ? 'atualizou' : 'concluiu'} o briefing. PDF disponível para download.`,
               'briefing',
               `/clientes?clientId=${clientId}&tab=briefing`
             ]

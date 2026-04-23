@@ -2574,6 +2574,16 @@ function ClientBriefingView({ client }: { client: Client }) {
   return (
     <ScrollArea className="max-h-[65vh]">
       <div className="space-y-4 pr-2">
+        {/* Action bar */}
+        <div className="flex items-center justify-between gap-2 pb-1">
+          <p className="text-xs text-muted-foreground">
+            {briefingDataFields.length > 0 ? `${briefingDataFields.length} respostas registradas` : 'Briefing ainda não preenchido'}
+          </p>
+          <Button size="sm" variant="outline" onClick={handleDownloadPdf} className="gap-1.5">
+            <Printer size={14} /> Baixar PDF
+          </Button>
+        </div>
+
         {/* Basic info */}
         <div className="grid grid-cols-2 gap-3">
           {briefingFields.map(f => (

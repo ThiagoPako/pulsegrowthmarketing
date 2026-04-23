@@ -1432,6 +1432,65 @@ app.post('/api/client-portal-auth', async (req, res) => {
 });
 
 // ─── 5b. Portal Actions (no JWT required — client-facing) ───
+
+// ── PUBLIC CLIENT BRIEFING (no JWT required — accessed via direct link by the client) ──
+app.all('/api/client-briefing', async (req, res) => {
+  try {
+    if (req.method === 'GET') {
+      const clientId = req.query.clientId;
+      if (!clientId) return res.status(400).json({ error: 'Missing clientId' });
+      const { rows } = await pool.query(
+        `SELECT id, company_name, responsible_person, color, logo_url, briefing_data
+         FROM clients WHERE id = $1 LIMIT 1`, [clientId]
+      );
+      const client = rows[0];
+      if (!client) return res.status(404).json({ error: 'Client not found' });
+
+      let briefingCompleted = false;
+      try {
+        const { rows: tasks } = await pool.query(
+          `SELECT briefing_completed FROM onboarding_tasks WHERE client_id = $1 AND stage = 'briefing' LIMIT 1`,
+          [clientId]
+        );
+        if (tasks[0]?.briefing_completed) briefingCompleted = true;
+      } catch (_) { /* table may not exist */ }
+
+      return res.json({ client, briefingCompleted });
+    }
+
+    if (req.method === 'POST') {
+      const { clientId, briefing_data, editorial, use_real_photos } = req.body || {};
+      if (!clientId) return res.status(400).json({ error: 'Missing clientId' });
+
+      await pool.query(
+        `UPDATE clients SET briefing_data = $1, editorial = $2, updated_at = now() WHERE id = $3`,
+        [JSON.stringify(briefing_data || {}), editorial || '', clientId]
+      );
+
+      try {
+        const { rows: tasks } = await pool.query(
+          `SELECT id FROM onboarding_tasks WHERE client_id = $1 AND stage = 'briefing' LIMIT 1`, [clientId]
+        );
+        if (tasks[0]?.id) {
+          await pool.query(
+            `UPDATE onboarding_tasks SET briefing_data = $1, briefing_completed = true,
+             use_real_photos = $2, status = 'concluido', completed_at = now(), updated_at = now()
+             WHERE id = $3`,
+            [JSON.stringify(briefing_data || {}), !!use_real_photos, tasks[0].id]
+          );
+        }
+      } catch (_) { /* optional */ }
+
+      return res.json({ success: true });
+    }
+
+    return res.status(405).json({ error: 'Method not allowed' });
+  } catch (err) {
+    console.error('Client briefing error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── PUBLIC PROPOSAL VIEWER (token-gated, no JWT required) ──
 app.post('/api/public-proposal', async (req, res) => {
   try {

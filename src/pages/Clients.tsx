@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { generateClientCardPdf } from '@/lib/clientCardPdf';
+import { generateBriefingPdf } from '@/lib/briefingPdf';
 import { NICHE_OPTIONS, getSeasonalAlerts } from '@/lib/seasonalDates';
 import { DAY_LABELS, CONTENT_TYPE_LABELS, CLIENT_COLORS } from '@/types';
 import type { Client, DayOfWeek, ContentType } from '@/types';
@@ -2481,10 +2482,11 @@ function ClientBriefingView({ client }: { client: Client }) {
     { label: 'Cidade', value: (client as any).city || '—' },
   ];
 
-  // Extract briefing_data fields
+  // Extract briefing_data fields (suporta tanto snake_case legado quanto camelCase do form atual)
   const briefingDataFields: { label: string; value: string }[] = [];
   if (briefing && typeof briefing === 'object') {
     const fieldMap: Record<string, string> = {
+      // legado snake_case
       business_description: 'Descrição do Negócio',
       target_audience: 'Público-Alvo',
       differentials: 'Diferenciais',
@@ -2497,25 +2499,91 @@ function ClientBriefingView({ client }: { client: Client }) {
       additional_notes: 'Observações',
       products_services: 'Produtos/Serviços',
       social_media_links: 'Redes Sociais',
+      // camelCase do formulário atual (ClientBriefing.tsx)
+      ownerName: 'Responsável',
+      niche: 'Nicho',
+      mainDifferential: 'Principal Diferencial',
+      productsServices: 'Produtos / Serviços',
+      businessGoals: 'Objetivos do Negócio',
+      attendanceType: 'Forma de Atendimento',
+      targetCities: 'Cidades-alvo',
+      hasVisualIdentity: 'Possui Identidade Visual?',
+      hasSite: 'Site',
+      digitalReferences: 'Referências Digitais',
+      nicheReferences: 'Referências do Nicho',
+      dislikedCommunication: 'Comunicação que Não Gosta',
+      socialObjectives: 'Objetivos nas Redes',
+      digitalDifficulty: 'Dificuldade no Digital',
+      socialLinks: 'Links das Redes',
+      importantTopics: 'Assuntos Importantes',
+      comfortOnCamera: 'Conforto na Câmera',
+      focusProducts: 'Produtos em Foco',
+      businessDifficulty: 'Dificuldade no Negócio',
+      desiredRecognition: 'Reconhecimento Desejado',
+      undesiredRecognition: 'Reconhecimento Indesejado',
+      contentReferences: 'Referências de Conteúdo',
+      keywords: 'Palavras-chave',
+      ageRangesTarget: 'Faixa Etária do Público',
+      ageRangesBuyer: 'Faixa Etária de Quem Compra',
+      isAuthority: 'É Autoridade?',
+      educationLevel: 'Escolaridade',
+      socialClass: 'Classe Social',
+      clientUsesSocial: 'Cliente Usa Redes?',
+      idealClient: 'Cliente Ideal',
+      finalNotes: 'Considerações Finais',
+      useRealPhotos: 'Usar Fotos Reais?',
+    };
+    const fmt = (v: any): string => {
+      if (Array.isArray(v)) return v.join(', ');
+      if (typeof v === 'boolean') return v ? 'Sim' : 'Não';
+      return String(v);
     };
     for (const [key, label] of Object.entries(fieldMap)) {
-      if (briefing[key]) {
-        briefingDataFields.push({ label, value: String(briefing[key]) });
+      const v = briefing[key];
+      if (v != null && v !== '' && !(Array.isArray(v) && v.length === 0)) {
+        briefingDataFields.push({ label, value: fmt(v) });
       }
     }
     // Also capture any other keys not in the map
     for (const [key, val] of Object.entries(briefing)) {
-      if (!fieldMap[key] && val && typeof val === 'string' && val.trim()) {
-        briefingDataFields.push({ label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), value: val });
+      if (key.startsWith('_')) continue;
+      if (!fieldMap[key] && val && (typeof val === 'string' ? val.trim() : true)) {
+        briefingDataFields.push({ label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), value: fmt(val) });
       }
     }
   }
+
+  const handleDownloadPdf = async () => {
+    try {
+      await generateBriefingPdf({
+        companyName: client.companyName,
+        responsiblePerson: client.responsiblePerson,
+        niche: nicheLabel,
+        city: (client as any).city,
+        briefingData: briefing,
+        editorial,
+        submittedAt: briefing?._submittedAt,
+      });
+    } catch (e) {
+      toast.error('Erro ao gerar PDF do briefing');
+    }
+  };
 
   const driveIV = (client as any).driveIdentidadeVisual;
 
   return (
     <ScrollArea className="max-h-[65vh]">
       <div className="space-y-4 pr-2">
+        {/* Action bar */}
+        <div className="flex items-center justify-between gap-2 pb-1">
+          <p className="text-xs text-muted-foreground">
+            {briefingDataFields.length > 0 ? `${briefingDataFields.length} respostas registradas` : 'Briefing ainda não preenchido'}
+          </p>
+          <Button size="sm" variant="outline" onClick={handleDownloadPdf} className="gap-1.5">
+            <Printer size={14} /> Baixar PDF
+          </Button>
+        </div>
+
         {/* Basic info */}
         <div className="grid grid-cols-2 gap-3">
           {briefingFields.map(f => (

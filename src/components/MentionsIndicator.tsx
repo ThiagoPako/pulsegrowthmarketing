@@ -52,11 +52,25 @@ export default function MentionsIndicator() {
     if (!user?.id) return;
     fetchMentions();
     const interval = setInterval(fetchMentions, 8000);
-    return () => clearInterval(interval);
+    // Listen for cross-component "mention read" events to refresh instantly
+    const onMentionRead = (e: Event) => {
+      const id = (e as CustomEvent).detail?.id as string | undefined;
+      if (id) {
+        setMentions((prev) => prev.filter((m) => m.id !== id));
+      } else {
+        fetchMentions();
+      }
+    };
+    window.addEventListener('mentions:read', onMentionRead);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('mentions:read', onMentionRead);
+    };
   }, [user?.id, fetchMentions]);
 
   const markRead = async (id: string) => {
     setMentions((prev) => prev.filter((m) => m.id !== id));
+    window.dispatchEvent(new CustomEvent('mentions:read', { detail: { id } }));
     try {
       await supabase.from('notifications').update({ read: true } as any).eq('id', id);
     } catch {}
@@ -66,6 +80,9 @@ export default function MentionsIndicator() {
     const ids = mentions.map((m) => m.id);
     setMentions([]);
     setOpen(false);
+    ids.forEach((id) =>
+      window.dispatchEvent(new CustomEvent('mentions:read', { detail: { id } }))
+    );
     try {
       for (const id of ids) {
         await supabase.from('notifications').update({ read: true } as any).eq('id', id);

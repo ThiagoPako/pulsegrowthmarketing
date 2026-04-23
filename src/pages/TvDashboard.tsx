@@ -8,6 +8,7 @@ import {
   Eye, Scissors, FileVideo, Instagram, Facebook, Youtube, Globe, Save
 } from 'lucide-react';
 import { fetchAISeasonalAlerts, AISeasonalAlert } from '@/lib/seasonalDates';
+import { fetchLatestCommand, fetchTvSettings, TvRemoteCommand, VISIBILITY_KEYS, VisibilityKey } from '@/lib/tvRemote';
 
 const VPS = 'https://agenciapulse.tech/api';
 
@@ -577,18 +578,37 @@ function PostCard({ post }: { post: ScheduledPost }) {
   );
 }
 
-/* ─── YouTube Player ────────────────────────────────────── */
-function YouTubePlayer({ url }: { url: string }) {
+/* ─── YouTube Player (com controle remoto via postMessage) ────────────── */
+function YouTubePlayer({ url, command }: { url: string; command: TvRemoteCommand | null }) {
   const [unmuted, setUnmuted] = useState(true);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const embedUrl = useMemo(() => {
     if (!url) return '';
     const mute = unmuted ? 0 : 1;
     const listMatch = url.match(/[?&]list=([^&]+)/);
-    if (listMatch) return `https://www.youtube.com/embed/videoseries?list=${listMatch[1]}&autoplay=1&mute=${mute}&loop=1&controls=1&showinfo=0&rel=0`;
+    if (listMatch) return `https://www.youtube.com/embed/videoseries?list=${listMatch[1]}&autoplay=1&mute=${mute}&loop=1&controls=1&showinfo=0&rel=0&enablejsapi=1`;
     const videoMatch = url.match(/(?:watch\?v=|youtu\.be\/|embed\/)([^&?]+)/);
-    if (videoMatch) return `https://www.youtube.com/embed/${videoMatch[1]}?autoplay=1&mute=${mute}&loop=1&controls=1&showinfo=0&rel=0&playlist=${videoMatch[1]}`;
+    if (videoMatch) return `https://www.youtube.com/embed/${videoMatch[1]}?autoplay=1&mute=${mute}&loop=1&controls=1&showinfo=0&rel=0&enablejsapi=1&playlist=${videoMatch[1]}`;
     return '';
   }, [url, unmuted]);
+
+  const sendYTCommand = useCallback((func: string, args: any[] = []) => {
+    const win = iframeRef.current?.contentWindow;
+    if (!win) return;
+    win.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
+  }, []);
+
+  // Handle remote commands
+  useEffect(() => {
+    if (!command) return;
+    switch (command.action) {
+      case 'play': sendYTCommand('playVideo'); break;
+      case 'pause': sendYTCommand('pauseVideo'); break;
+      case 'next': sendYTCommand('nextVideo'); break;
+      case 'mute': sendYTCommand('mute'); setUnmuted(false); break;
+      case 'unmute': sendYTCommand('unMute'); setUnmuted(true); break;
+    }
+  }, [command, sendYTCommand]);
 
   if (!embedUrl) return null;
   return (
@@ -612,7 +632,7 @@ function YouTubePlayer({ url }: { url: string }) {
         </button>
       </div>
       <div className="aspect-video">
-        <iframe key={unmuted ? 'unmuted' : 'muted'} src={embedUrl} className="w-full h-full" allow="autoplay; encrypted-media" allowFullScreen style={{ border: 0 }} />
+        <iframe ref={iframeRef} key={unmuted ? 'unmuted' : 'muted'} src={embedUrl} className="w-full h-full" allow="autoplay; encrypted-media" allowFullScreen style={{ border: 0 }} />
       </div>
     </motion.div>
   );
@@ -790,6 +810,13 @@ export default function TvDashboard() {
   const [clock, setClock] = useState(new Date());
   const [playlistUrl, setPlaylistUrl] = useState('');
   const [seasonalSlides, setSeasonalSlides] = useState<SeasonalSlide[]>([]);
+  const [visibility, setVisibility] = useState<Record<VisibilityKey, boolean>>({
+    show_radio: true, show_schedule: true, show_pipeline: true,
+    show_banners: true, show_team: true, show_posts: true,
+  });
+  const [latestCommand, setLatestCommand] = useState<TvRemoteCommand | null>(null);
+  const [alert, setAlert] = useState<{ message: string; tone: string } | null>(null);
+  const lastCommandIdRef = useRef<number>(0);
   const isFirstLoad = useRef(true);
 
   const fetchData = useCallback(async () => {
@@ -875,30 +902,81 @@ export default function TvDashboard() {
     } catch (e) { console.error('Seasonal fetch error:', e); }
   }, []);
 
-  // Listen for sync broadcasts from TvPanelControl
+  // Apply visibility settings + load latest command
+  const applySettings = useCallback((settings: Record<string, string>) => {
+    setVisibility(prev => {
+      const next = { ...prev };
+      for (const k of VISIBILITY_KEYS) {
+        if (settings[k] !== undefined) next[k] = settings[k] !== 'false';
+      }
+      return next;
+    });
+    if (settings.youtube_playlist_url) {
+      setPlaylistUrl(settings.youtube_playlist_url);
+      localStorage.setItem('pulse_radio_url', settings.youtube_playlist_url);
+    }
+  }, []);
+
+  // Execute remote command
+  const executeCommand = useCallback((cmd: TvRemoteCommand) => {
+    if (cmd.id <= lastCommandIdRef.current) return;
+    lastCommandIdRef.current = cmd.id;
+    setLatestCommand(cmd);
+    if (cmd.action === 'set_playlist' && cmd.payload?.url) {
+      setPlaylistUrl(cmd.payload.url);
+      localStorage.setItem('pulse_radio_url', cmd.payload.url);
+    } else if (cmd.action === 'set_visibility' && cmd.payload?.key) {
+      setVisibility(prev => ({ ...prev, [cmd.payload!.key]: !!cmd.payload!.visible }));
+    } else if (cmd.action === 'show_alert' && cmd.payload?.message) {
+      setAlert({ message: cmd.payload.message, tone: cmd.payload.tone || 'info' });
+      const dur = cmd.payload.durationMs || 15000;
+      window.setTimeout(() => setAlert(null), dur);
+    } else if (cmd.action === 'clear_alert') {
+      setAlert(null);
+    } else if (cmd.action === 'reload') {
+      window.location.reload();
+    }
+  }, []);
+
+  // Poll commands + settings
+  const pollRemote = useCallback(async () => {
+    const [settings, cmd] = await Promise.all([fetchTvSettings(), fetchLatestCommand()]);
+    applySettings(settings);
+    if (cmd) executeCommand(cmd);
+  }, [applySettings, executeCommand]);
+
+  // Listen for sync broadcasts (same browser, instant)
   useEffect(() => {
+    let bc1: BroadcastChannel | null = null;
+    let bc2: BroadcastChannel | null = null;
     try {
-      const bc = new BroadcastChannel('pulse_tv_sync');
-      bc.onmessage = (event) => {
+      bc1 = new BroadcastChannel('pulse_tv_sync');
+      bc1.onmessage = (event) => {
         if (event.data?.action === 'reload') {
-          // Update playlist URL instantly and reload page for autoplay
           if (event.data.playlistUrl) {
             localStorage.setItem('pulse_radio_url', event.data.playlistUrl);
           }
           window.location.reload();
         }
       };
-      return () => bc.close();
+      bc2 = new BroadcastChannel('pulse_tv_remote');
+      bc2.onmessage = (event) => {
+        if (event.data && typeof event.data === 'object') {
+          executeCommand(event.data as TvRemoteCommand);
+        }
+      };
     } catch {
-      return undefined;
+      // ignore
     }
-  }, []);
+    return () => { try { bc1?.close(); bc2?.close(); } catch {} };
+  }, [executeCommand]);
 
   useEffect(() => {
-    fetchData(); fetchPlaylist(); fetchSeasonal();
+    fetchData(); fetchPlaylist(); fetchSeasonal(); pollRemote();
     const iv = setInterval(fetchData, 10_000);
-    return () => clearInterval(iv);
-  }, [fetchData, fetchPlaylist, fetchSeasonal]);
+    const ivCmd = setInterval(pollRemote, 2_500);
+    return () => { clearInterval(iv); clearInterval(ivCmd); };
+  }, [fetchData, fetchPlaylist, fetchSeasonal, pollRemote]);
 
   useEffect(() => {
     const iv = window.setInterval(() => setClock(new Date()), 1000);
@@ -958,8 +1036,39 @@ export default function TvDashboard() {
           </div>
         </motion.div>
 
+        {/* ─── Remote Alert Banner ──────────────────────── */}
+        <AnimatePresence>
+          {alert && (
+            <motion.div
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              className="mb-3 flex-shrink-0 relative overflow-hidden rounded-2xl border-2"
+              style={{
+                borderColor: alert.tone === 'warning' ? '#ef4444' : alert.tone === 'success' ? '#22c55e' : PULSE_ORANGE,
+                background: `linear-gradient(135deg, ${alert.tone === 'warning' ? 'rgba(239,68,68,0.18)' : alert.tone === 'success' ? 'rgba(34,197,94,0.18)' : `${PULSE_ORANGE}30`}, transparent 80%)`,
+                boxShadow: `0 0 50px ${alert.tone === 'warning' ? 'rgba(239,68,68,0.4)' : alert.tone === 'success' ? 'rgba(34,197,94,0.4)' : `${PULSE_ORANGE}55`}`,
+              }}
+            >
+              <motion.div
+                className="absolute inset-0 pointer-events-none"
+                animate={{ opacity: [0.3, 0.7, 0.3] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                style={{ background: `radial-gradient(circle at 50% 50%, ${alert.tone === 'warning' ? 'rgba(239,68,68,0.2)' : alert.tone === 'success' ? 'rgba(34,197,94,0.2)' : `${PULSE_ORANGE}30`}, transparent 70%)` }}
+              />
+              <div className="relative px-6 py-4 flex items-center gap-4">
+                <motion.div animate={{ scale: [1, 1.15, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                  <Megaphone className="w-7 h-7" style={{ color: alert.tone === 'warning' ? '#ef4444' : alert.tone === 'success' ? '#22c55e' : PULSE_ORANGE }} />
+                </motion.div>
+                <p className="text-lg font-bold text-white flex-1" style={{ fontFamily: SPACE }}>{alert.message}</p>
+                <span className="text-[10px] uppercase font-bold tracking-widest text-white/40">Mensagem ao vivo</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* ─── Seasonal Banner ──────────────────────────── */}
-        {seasonalSlides.length > 0 && (
+        {visibility.show_banners && seasonalSlides.length > 0 && (
           <div className="mb-3 flex-shrink-0">
             <SeasonalBanner slides={seasonalSlides} />
           </div>
@@ -970,35 +1079,38 @@ export default function TvDashboard() {
           {/* LEFT COLUMN: Team Online + Offline */}
           <div className="col-span-3 space-y-3 overflow-y-auto scrollbar-hide pr-1">
             {/* Online */}
-            <div>
-              <SectionHeader icon={() => (
-                <motion.div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#22c55e' }}
-                  animate={{ scale: [1, 1.3, 1], opacity: [1, 0.5, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
-              )} title="Equipe Online" badge={`${onlineMembers.length} membros`} />
-              <div className="grid grid-cols-1 gap-2">
-                <AnimatePresence>
-                  {onlineMembers.map(m => <MemberCard key={m.id} member={m} />)}
-                </AnimatePresence>
+            {visibility.show_team && (
+              <div>
+                <SectionHeader icon={() => (
+                  <motion.div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#22c55e' }}
+                    animate={{ scale: [1, 1.3, 1], opacity: [1, 0.5, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
+                )} title="Equipe Online" badge={`${onlineMembers.length} membros`} />
+                <div className="grid grid-cols-1 gap-2">
+                  <AnimatePresence>
+                    {onlineMembers.map(m => <MemberCard key={m.id} member={m} />)}
+                  </AnimatePresence>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Pulse Radio */}
-            <div>
-              <SectionHeader icon={Music} title="Pulse Radio">
-                <PlaylistEditor url={playlistUrl} onSave={savePlaylist} />
-              </SectionHeader>
-              {playlistUrl ? (
-                <YouTubePlayer url={playlistUrl} />
-              ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                  <Music className="w-6 h-6 mx-auto mb-1.5" style={{ color: `${PULSE_ORANGE}28` }} />
-                  <p className="text-[10px] text-white/20">Adicione um link acima</p>
-                </div>
-              )}
-            </div>
+            {visibility.show_radio && (
+              <div>
+                <SectionHeader icon={Music} title="Pulse Radio">
+                  <PlaylistEditor url={playlistUrl} onSave={savePlaylist} />
+                </SectionHeader>
+                {playlistUrl ? (
+                  <YouTubePlayer url={playlistUrl} command={latestCommand} />
+                ) : (
+                  <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                    <Music className="w-6 h-6 mx-auto mb-1.5" style={{ color: `${PULSE_ORANGE}28` }} />
+                    <p className="text-[10px] text-white/20">Adicione um link acima</p>
+                  </div>
+                )}
+              </div>
+            )}
 
-            {/* Offline */}
-            {offlineMembers.length > 0 && (
+            {visibility.show_team && offlineMembers.length > 0 && (
               <div>
                 <SectionHeader icon={() => <div className="w-2.5 h-2.5 rounded-full bg-white/12" />} title="Offline" iconColor="#6b7280" />
                 <div className="grid grid-cols-2 gap-2">
@@ -1029,77 +1141,85 @@ export default function TvDashboard() {
           {/* CENTER COLUMN: Schedule + Posts */}
           <div className="col-span-5 space-y-3 overflow-y-auto scrollbar-hide px-1">
             {/* Schedule */}
-            <div>
-              <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${schedule.length} gravações`} />
-              {schedule.length > 0 ? (
-                <div className="space-y-2">
-                  <AnimatePresence>
-                    {schedule.map(item => <ScheduleCard key={item.id} item={item} isLive={activeRecordingIds.includes(item.id)} />)}
-                  </AnimatePresence>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                  <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
-                  <p className="text-[10px] text-white/20">Nenhuma gravação hoje</p>
-                </div>
-              )}
-            </div>
+            {visibility.show_schedule && (
+              <div>
+                <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${schedule.length} gravações`} />
+                {schedule.length > 0 ? (
+                  <div className="space-y-2">
+                    <AnimatePresence>
+                      {schedule.map(item => <ScheduleCard key={item.id} item={item} isLive={activeRecordingIds.includes(item.id)} />)}
+                    </AnimatePresence>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                    <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                    <p className="text-[10px] text-white/20">Nenhuma gravação hoje</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Scheduled Posts */}
-            <div>
-              <SectionHeader icon={Send} iconColor="#3b82f6" title="Posts do Dia" badge={`${todayPosts.length} posts`} />
-              {todayPosts.length > 0 ? (
-                <div className="space-y-2">
-                  <AnimatePresence>
-                    {todayPosts.map(post => <PostCard key={post.id} post={post} />)}
-                  </AnimatePresence>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                  <Send className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
-                  <p className="text-[10px] text-white/20">Nenhum post agendado hoje</p>
-                </div>
-              )}
-            </div>
+            {visibility.show_posts && (
+              <div>
+                <SectionHeader icon={Send} iconColor="#3b82f6" title="Posts do Dia" badge={`${todayPosts.length} posts`} />
+                {todayPosts.length > 0 ? (
+                  <div className="space-y-2">
+                    <AnimatePresence>
+                      {todayPosts.map(post => <PostCard key={post.id} post={post} />)}
+                    </AnimatePresence>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                    <Send className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                    <p className="text-[10px] text-white/20">Nenhum post agendado hoje</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* RIGHT COLUMN: Designer + Editing */}
           <div className="col-span-4 space-y-3 overflow-y-auto scrollbar-hide pl-1">
-            <div>
-              <SectionHeader icon={Palette} iconColor="hsl(330 85% 62%)" title="Designer" badge={designPipeline.length > 0 ? `${designPipeline.length} artes` : `${designerMembers.length} designers`} />
-              {designPipeline.length > 0 ? (
-                <div className="space-y-2">
-                  <AnimatePresence>
-                    {designPipeline.map(task => <DesignActivityCard key={task.id} task={task} />)}
-                  </AnimatePresence>
+            {visibility.show_pipeline && (
+              <>
+                <div>
+                  <SectionHeader icon={Palette} iconColor="hsl(330 85% 62%)" title="Designer" badge={designPipeline.length > 0 ? `${designPipeline.length} artes` : `${designerMembers.length} designers`} />
+                  {designPipeline.length > 0 ? (
+                    <div className="space-y-2">
+                      <AnimatePresence>
+                        {designPipeline.map(task => <DesignActivityCard key={task.id} task={task} />)}
+                      </AnimatePresence>
+                    </div>
+                  ) : designerMembers.length > 0 ? (
+                    <div className="space-y-2">
+                      {designerMembers.map(member => <MemberCard key={member.id} member={member} />)}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                      <Palette className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                      <p className="text-[10px] text-white/20">Nenhuma designer em atividade agora</p>
+                    </div>
+                  )}
                 </div>
-              ) : designerMembers.length > 0 ? (
-                <div className="space-y-2">
-                  {designerMembers.map(member => <MemberCard key={member.id} member={member} />)}
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                  <Palette className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
-                  <p className="text-[10px] text-white/20">Nenhuma designer em atividade agora</p>
-                </div>
-              )}
-            </div>
 
-            <div>
-              <SectionHeader icon={Film} iconColor="#8b5cf6" title="Pós-Produção" badge={`${editingPipeline.length} vídeos`} />
-              {editingPipeline.length > 0 ? (
-                <div className="space-y-2">
-                  <AnimatePresence>
-                    {editingPipeline.map(task => <EditingCard key={task.id} task={task} />)}
-                  </AnimatePresence>
+                <div>
+                  <SectionHeader icon={Film} iconColor="#8b5cf6" title="Pós-Produção" badge={`${editingPipeline.length} vídeos`} />
+                  {editingPipeline.length > 0 ? (
+                    <div className="space-y-2">
+                      <AnimatePresence>
+                        {editingPipeline.map(task => <EditingCard key={task.id} task={task} />)}
+                      </AnimatePresence>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                      <Film className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                      <p className="text-[10px] text-white/20">Nenhum vídeo em edição</p>
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                  <Film className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
-                  <p className="text-[10px] text-white/20">Nenhum vídeo em edição</p>
-                </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
         </div>
 

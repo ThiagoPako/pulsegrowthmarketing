@@ -165,6 +165,10 @@ export default function ClientBriefing() {
   // Foto preferência
   const [useRealPhotos, setUseRealPhotos] = useState('');
 
+  // Anexos / Links adicionais
+  const [additionalAttachments, setAdditionalAttachments] = useState<{ label: string; url: string }[]>([]);
+  const [newAttachLabel, setNewAttachLabel] = useState('');
+  const [newAttachUrl, setNewAttachUrl] = useState('');
   useEffect(() => {
     if (!clientId) return;
     const fetchData = async () => {

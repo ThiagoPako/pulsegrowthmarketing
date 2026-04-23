@@ -1261,44 +1261,6 @@ export default function TvDashboard() {
             </div>
           </div>
 
-          {/* RIGHT COLUMN: Designer + Editing */}
-          <div className="col-span-4 space-y-3 overflow-y-auto scrollbar-hide pl-1">
-            <div>
-              <SectionHeader icon={Palette} iconColor="hsl(330 85% 62%)" title="Designer" badge={designPipeline.length > 0 ? `${designPipeline.length} artes` : `${designerMembers.length} designers`} />
-              {designPipeline.length > 0 ? (
-                <div className="space-y-2">
-                  <AnimatePresence>
-                    {designPipeline.map(task => <DesignActivityCard key={task.id} task={task} />)}
-                  </AnimatePresence>
-                </div>
-              ) : designerMembers.length > 0 ? (
-                <div className="space-y-2">
-                  {designerMembers.map(member => <MemberCard key={member.id} member={member} />)}
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                  <Palette className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
-                  <p className="text-[10px] text-white/20">Nenhuma designer em atividade agora</p>
-                </div>
-              )}
-            </div>
-
-            <div>
-              <SectionHeader icon={Film} iconColor="#8b5cf6" title="Pós-Produção" badge={`${editingPipeline.length} vídeos`} />
-              {editingPipeline.length > 0 ? (
-                <div className="space-y-2">
-                  <AnimatePresence>
-                    {editingPipeline.map(task => <EditingCard key={task.id} task={task} />)}
-                  </AnimatePresence>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                  <Film className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
-                  <p className="text-[10px] text-white/20">Nenhum vídeo em edição</p>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* ─── Empty state ──────────────────────────────── */}

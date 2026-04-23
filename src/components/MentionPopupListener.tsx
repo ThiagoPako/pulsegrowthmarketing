@@ -111,6 +111,8 @@ export default function MentionPopupListener() {
     if (!pending) return;
     const link = pending.link;
     markRead(pending.id);
+    // Notify other UI (MentionsIndicator badge) to refresh immediately
+    window.dispatchEvent(new CustomEvent('mentions:read', { detail: { id: pending.id } }));
     setPending(null);
     if (!link) return;
 

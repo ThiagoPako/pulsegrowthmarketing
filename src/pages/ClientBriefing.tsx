@@ -239,6 +239,7 @@ export default function ClientBriefing() {
           setFacebookPassword(d.facebookPassword || '');
           setOtherAccesses(d.otherAccesses || '');
           setUseRealPhotos(d.useRealPhotos || '');
+          setAdditionalAttachments(Array.isArray(d.additionalAttachments) ? d.additionalAttachments : []);
           if (d._completed) setCompleted(true);
         }
         if (data.briefingCompleted) setCompleted(true);

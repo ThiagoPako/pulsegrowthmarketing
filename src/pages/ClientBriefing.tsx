@@ -276,7 +276,9 @@ export default function ClientBriefing() {
         contentReferences, keywords, ageRangesTarget, ageRangesBuyer, isAuthority, educationLevel,
         socialClass, clientUsesSocial, idealClient, finalNotes,
         instagramLogin, instagramPassword, facebookLogin, facebookPassword, otherAccesses,
-        useRealPhotos, _completed: true, _submittedAt: new Date().toISOString(),
+        useRealPhotos,
+        additionalAttachments: additionalAttachments.filter(a => a.url && a.url.trim()),
+        _completed: true, _submittedAt: new Date().toISOString(),
         _clientId: lockedClientId, // 🔒 carimba o destino dentro do payload
       };
 

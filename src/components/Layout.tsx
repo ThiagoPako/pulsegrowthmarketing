@@ -18,6 +18,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import NotificationBell from '@/components/NotificationBell';
+import MentionPopupListener from '@/components/MentionPopupListener';
 import BirthdayOverlay from '@/components/BirthdayOverlay';
 import ProductionAssistant from '@/components/ProductionAssistant';
 import WelcomeRocket from '@/components/WelcomeRocket';
@@ -373,6 +374,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Production Assistant Mascot */}
       <ProductionAssistant />
       <WelcomeRocket />
+      <MentionPopupListener />
     </div>
   );
 }

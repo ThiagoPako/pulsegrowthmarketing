@@ -1036,8 +1036,39 @@ export default function TvDashboard() {
           </div>
         </motion.div>
 
+        {/* ─── Remote Alert Banner ──────────────────────── */}
+        <AnimatePresence>
+          {alert && (
+            <motion.div
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              className="mb-3 flex-shrink-0 relative overflow-hidden rounded-2xl border-2"
+              style={{
+                borderColor: alert.tone === 'warning' ? '#ef4444' : alert.tone === 'success' ? '#22c55e' : PULSE_ORANGE,
+                background: `linear-gradient(135deg, ${alert.tone === 'warning' ? 'rgba(239,68,68,0.18)' : alert.tone === 'success' ? 'rgba(34,197,94,0.18)' : `${PULSE_ORANGE}30`}, transparent 80%)`,
+                boxShadow: `0 0 50px ${alert.tone === 'warning' ? 'rgba(239,68,68,0.4)' : alert.tone === 'success' ? 'rgba(34,197,94,0.4)' : `${PULSE_ORANGE}55`}`,
+              }}
+            >
+              <motion.div
+                className="absolute inset-0 pointer-events-none"
+                animate={{ opacity: [0.3, 0.7, 0.3] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                style={{ background: `radial-gradient(circle at 50% 50%, ${alert.tone === 'warning' ? 'rgba(239,68,68,0.2)' : alert.tone === 'success' ? 'rgba(34,197,94,0.2)' : `${PULSE_ORANGE}30`}, transparent 70%)` }}
+              />
+              <div className="relative px-6 py-4 flex items-center gap-4">
+                <motion.div animate={{ scale: [1, 1.15, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                  <Megaphone className="w-7 h-7" style={{ color: alert.tone === 'warning' ? '#ef4444' : alert.tone === 'success' ? '#22c55e' : PULSE_ORANGE }} />
+                </motion.div>
+                <p className="text-lg font-bold text-white flex-1" style={{ fontFamily: SPACE }}>{alert.message}</p>
+                <span className="text-[10px] uppercase font-bold tracking-widest text-white/40">Mensagem ao vivo</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* ─── Seasonal Banner ──────────────────────────── */}
-        {seasonalSlides.length > 0 && (
+        {visibility.show_banners && seasonalSlides.length > 0 && (
           <div className="mb-3 flex-shrink-0">
             <SeasonalBanner slides={seasonalSlides} />
           </div>
@@ -1061,19 +1092,21 @@ export default function TvDashboard() {
             </div>
 
             {/* Pulse Radio */}
-            <div>
-              <SectionHeader icon={Music} title="Pulse Radio">
-                <PlaylistEditor url={playlistUrl} onSave={savePlaylist} />
-              </SectionHeader>
-              {playlistUrl ? (
-                <YouTubePlayer url={playlistUrl} />
-              ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                  <Music className="w-6 h-6 mx-auto mb-1.5" style={{ color: `${PULSE_ORANGE}28` }} />
-                  <p className="text-[10px] text-white/20">Adicione um link acima</p>
-                </div>
-              )}
-            </div>
+            {visibility.show_radio && (
+              <div>
+                <SectionHeader icon={Music} title="Pulse Radio">
+                  <PlaylistEditor url={playlistUrl} onSave={savePlaylist} />
+                </SectionHeader>
+                {playlistUrl ? (
+                  <YouTubePlayer url={playlistUrl} command={latestCommand} />
+                ) : (
+                  <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                    <Music className="w-6 h-6 mx-auto mb-1.5" style={{ color: `${PULSE_ORANGE}28` }} />
+                    <p className="text-[10px] text-white/20">Adicione um link acima</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Offline */}
             {offlineMembers.length > 0 && (

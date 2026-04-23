@@ -20,6 +20,7 @@ import { sendWhatsAppMessage } from '@/services/whatsappService';
 import { Textarea } from '@/components/ui/textarea';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import ClientArtDatabaseDialog from '@/components/ClientArtDatabaseDialog';
+import BriefingVersionsDialog from '@/components/BriefingVersionsDialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ClientGoalRocket from '@/components/ClientGoalRocket';
 import { syncFinancialContract } from '@/lib/financialContracts';
@@ -2473,6 +2474,8 @@ function ClientBriefingView({ client }: { client: Client }) {
   const briefing = (client as any).briefingData || {};
   const editorial = (client as any).editorial || '';
   const niche = client.niche;
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const currentVersion = briefing?._version;
   const nicheLabel = NICHE_OPTIONS.find(n => n.value === niche)?.label || niche || '—';
 
   const briefingFields: { label: string; value: string }[] = [
@@ -2577,12 +2580,26 @@ function ClientBriefingView({ client }: { client: Client }) {
         {/* Action bar */}
         <div className="flex items-center justify-between gap-2 pb-1">
           <p className="text-xs text-muted-foreground">
-            {briefingDataFields.length > 0 ? `${briefingDataFields.length} respostas registradas` : 'Briefing ainda não preenchido'}
+            {briefingDataFields.length > 0
+              ? `${briefingDataFields.length} respostas registradas${currentVersion ? ` · v${currentVersion}` : ''}`
+              : 'Briefing ainda não preenchido'}
           </p>
-          <Button size="sm" variant="outline" onClick={handleDownloadPdf} className="gap-1.5">
-            <Printer size={14} /> Baixar PDF
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setHistoryOpen(true)} className="gap-1.5">
+              <FileTextIcon size={14} /> Histórico
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleDownloadPdf} className="gap-1.5">
+              <Printer size={14} /> Baixar PDF
+            </Button>
+          </div>
         </div>
+
+        <BriefingVersionsDialog
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+          clientId={client.id}
+          companyName={client.companyName}
+        />
 
         {/* Basic info */}
         <div className="grid grid-cols-2 gap-3">

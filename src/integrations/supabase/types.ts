@@ -308,6 +308,51 @@ export type Database = {
           },
         ]
       }
+      briefing_versions: {
+        Row: {
+          briefing_data: Json
+          client_id: string
+          created_at: string
+          editorial: string | null
+          id: string
+          submitted_at: string
+          version: number
+        }
+        Insert: {
+          briefing_data?: Json
+          client_id: string
+          created_at?: string
+          editorial?: string | null
+          id?: string
+          submitted_at?: string
+          version: number
+        }
+        Update: {
+          briefing_data?: Json
+          client_id?: string
+          created_at?: string
+          editorial?: string | null
+          id?: string
+          submitted_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "briefing_versions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "briefing_versions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_public_logos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cash_reserve_movements: {
         Row: {
           amount: number

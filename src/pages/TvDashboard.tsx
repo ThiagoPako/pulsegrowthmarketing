@@ -578,18 +578,37 @@ function PostCard({ post }: { post: ScheduledPost }) {
   );
 }
 
-/* ─── YouTube Player ────────────────────────────────────── */
-function YouTubePlayer({ url }: { url: string }) {
+/* ─── YouTube Player (com controle remoto via postMessage) ────────────── */
+function YouTubePlayer({ url, command }: { url: string; command: TvRemoteCommand | null }) {
   const [unmuted, setUnmuted] = useState(true);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const embedUrl = useMemo(() => {
     if (!url) return '';
     const mute = unmuted ? 0 : 1;
     const listMatch = url.match(/[?&]list=([^&]+)/);
-    if (listMatch) return `https://www.youtube.com/embed/videoseries?list=${listMatch[1]}&autoplay=1&mute=${mute}&loop=1&controls=1&showinfo=0&rel=0`;
+    if (listMatch) return `https://www.youtube.com/embed/videoseries?list=${listMatch[1]}&autoplay=1&mute=${mute}&loop=1&controls=1&showinfo=0&rel=0&enablejsapi=1`;
     const videoMatch = url.match(/(?:watch\?v=|youtu\.be\/|embed\/)([^&?]+)/);
-    if (videoMatch) return `https://www.youtube.com/embed/${videoMatch[1]}?autoplay=1&mute=${mute}&loop=1&controls=1&showinfo=0&rel=0&playlist=${videoMatch[1]}`;
+    if (videoMatch) return `https://www.youtube.com/embed/${videoMatch[1]}?autoplay=1&mute=${mute}&loop=1&controls=1&showinfo=0&rel=0&enablejsapi=1&playlist=${videoMatch[1]}`;
     return '';
   }, [url, unmuted]);
+
+  const sendYTCommand = useCallback((func: string, args: any[] = []) => {
+    const win = iframeRef.current?.contentWindow;
+    if (!win) return;
+    win.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
+  }, []);
+
+  // Handle remote commands
+  useEffect(() => {
+    if (!command) return;
+    switch (command.action) {
+      case 'play': sendYTCommand('playVideo'); break;
+      case 'pause': sendYTCommand('pauseVideo'); break;
+      case 'next': sendYTCommand('nextVideo'); break;
+      case 'mute': sendYTCommand('mute'); setUnmuted(false); break;
+      case 'unmute': sendYTCommand('unMute'); setUnmuted(true); break;
+    }
+  }, [command, sendYTCommand]);
 
   if (!embedUrl) return null;
   return (
@@ -613,7 +632,7 @@ function YouTubePlayer({ url }: { url: string }) {
         </button>
       </div>
       <div className="aspect-video">
-        <iframe key={unmuted ? 'unmuted' : 'muted'} src={embedUrl} className="w-full h-full" allow="autoplay; encrypted-media" allowFullScreen style={{ border: 0 }} />
+        <iframe ref={iframeRef} key={unmuted ? 'unmuted' : 'muted'} src={embedUrl} className="w-full h-full" allow="autoplay; encrypted-media" allowFullScreen style={{ border: 0 }} />
       </div>
     </motion.div>
   );

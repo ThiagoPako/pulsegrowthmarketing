@@ -1507,6 +1507,29 @@ app.all('/api/client-briefing', async (req, res) => {
         }
       } catch (_) { /* optional */ }
 
+      // 📣 Notifica admin + social_media que o briefing foi finalizado e o PDF está pronto
+      try {
+        const { rows: [clientInfo] } = await pool.query(
+          'SELECT company_name FROM clients WHERE id = $1', [clientId]
+        );
+        const companyName = clientInfo?.company_name || 'Cliente';
+        const { rows: notifUsers } = await pool.query(
+          `SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`
+        );
+        for (const u of notifUsers) {
+          await pool.query(
+            `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
+            [
+              u.user_id,
+              '📋 Briefing finalizado',
+              `${companyName} concluiu o briefing. PDF disponível para download.`,
+              'briefing',
+              `/clientes?clientId=${clientId}&tab=briefing`
+            ]
+          );
+        }
+      } catch (e) { console.warn('briefing notify failed:', e?.message); }
+
       return res.json({ success: true });
     }
 

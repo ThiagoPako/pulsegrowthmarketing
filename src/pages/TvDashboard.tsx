@@ -1079,17 +1079,19 @@ export default function TvDashboard() {
           {/* LEFT COLUMN: Team Online + Offline */}
           <div className="col-span-3 space-y-3 overflow-y-auto scrollbar-hide pr-1">
             {/* Online */}
-            <div>
-              <SectionHeader icon={() => (
-                <motion.div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#22c55e' }}
-                  animate={{ scale: [1, 1.3, 1], opacity: [1, 0.5, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
-              )} title="Equipe Online" badge={`${onlineMembers.length} membros`} />
-              <div className="grid grid-cols-1 gap-2">
-                <AnimatePresence>
-                  {onlineMembers.map(m => <MemberCard key={m.id} member={m} />)}
-                </AnimatePresence>
+            {visibility.show_team && (
+              <div>
+                <SectionHeader icon={() => (
+                  <motion.div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#22c55e' }}
+                    animate={{ scale: [1, 1.3, 1], opacity: [1, 0.5, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
+                )} title="Equipe Online" badge={`${onlineMembers.length} membros`} />
+                <div className="grid grid-cols-1 gap-2">
+                  <AnimatePresence>
+                    {onlineMembers.map(m => <MemberCard key={m.id} member={m} />)}
+                  </AnimatePresence>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Pulse Radio */}
             {visibility.show_radio && (
@@ -1108,8 +1110,7 @@ export default function TvDashboard() {
               </div>
             )}
 
-            {/* Offline */}
-            {offlineMembers.length > 0 && (
+            {visibility.show_team && offlineMembers.length > 0 && (
               <div>
                 <SectionHeader icon={() => <div className="w-2.5 h-2.5 rounded-full bg-white/12" />} title="Offline" iconColor="#6b7280" />
                 <div className="grid grid-cols-2 gap-2">
@@ -1135,6 +1136,92 @@ export default function TvDashboard() {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* CENTER COLUMN: Schedule + Posts */}
+          <div className="col-span-5 space-y-3 overflow-y-auto scrollbar-hide px-1">
+            {/* Schedule */}
+            {visibility.show_schedule && (
+              <div>
+                <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${schedule.length} gravações`} />
+                {schedule.length > 0 ? (
+                  <div className="space-y-2">
+                    <AnimatePresence>
+                      {schedule.map(item => <ScheduleCard key={item.id} item={item} isLive={activeRecordingIds.includes(item.id)} />)}
+                    </AnimatePresence>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                    <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                    <p className="text-[10px] text-white/20">Nenhuma gravação hoje</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Scheduled Posts */}
+            {visibility.show_posts && (
+              <div>
+                <SectionHeader icon={Send} iconColor="#3b82f6" title="Posts do Dia" badge={`${todayPosts.length} posts`} />
+                {todayPosts.length > 0 ? (
+                  <div className="space-y-2">
+                    <AnimatePresence>
+                      {todayPosts.map(post => <PostCard key={post.id} post={post} />)}
+                    </AnimatePresence>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                    <Send className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                    <p className="text-[10px] text-white/20">Nenhum post agendado hoje</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT COLUMN: Designer + Editing */}
+          <div className="col-span-4 space-y-3 overflow-y-auto scrollbar-hide pl-1">
+            {visibility.show_pipeline && (
+              <>
+                <div>
+                  <SectionHeader icon={Palette} iconColor="hsl(330 85% 62%)" title="Designer" badge={designPipeline.length > 0 ? `${designPipeline.length} artes` : `${designerMembers.length} designers`} />
+                  {designPipeline.length > 0 ? (
+                    <div className="space-y-2">
+                      <AnimatePresence>
+                        {designPipeline.map(task => <DesignActivityCard key={task.id} task={task} />)}
+                      </AnimatePresence>
+                    </div>
+                  ) : designerMembers.length > 0 ? (
+                    <div className="space-y-2">
+                      {designerMembers.map(member => <MemberCard key={member.id} member={member} />)}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                      <Palette className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                      <p className="text-[10px] text-white/20">Nenhuma designer em atividade agora</p>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <SectionHeader icon={Film} iconColor="#8b5cf6" title="Pós-Produção" badge={`${editingPipeline.length} vídeos`} />
+                  {editingPipeline.length > 0 ? (
+                    <div className="space-y-2">
+                      <AnimatePresence>
+                        {editingPipeline.map(task => <EditingCard key={task.id} task={task} />)}
+                      </AnimatePresence>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                      <Film className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                      <p className="text-[10px] text-white/20">Nenhum vídeo em edição</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
           </div>
 
           {/* CENTER COLUMN: Schedule + Posts */}

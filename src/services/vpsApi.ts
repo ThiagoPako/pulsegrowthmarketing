@@ -269,10 +269,10 @@ export async function uploadFileToVps(
 export async function uploadBlobToVps(
   blob: Blob,
   filename: string,
-  folder?: string,
+  folderOrOptions?: string | UploadOptions,
 ): Promise<string> {
   const file = new File([blob], filename, { type: blob.type });
-  return uploadFileToVps(file, folder);
+  return uploadFileToVps(file, folderOrOptions);
 }
 
 /**

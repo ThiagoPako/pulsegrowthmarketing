@@ -19,6 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import NotificationBell from '@/components/NotificationBell';
 import MentionPopupListener from '@/components/MentionPopupListener';
+import MentionsIndicator from '@/components/MentionsIndicator';
 import BirthdayOverlay from '@/components/BirthdayOverlay';
 import ProductionAssistant from '@/components/ProductionAssistant';
 import WelcomeRocket from '@/components/WelcomeRocket';
@@ -375,6 +376,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <ProductionAssistant />
       <WelcomeRocket />
       <MentionPopupListener />
+      <MentionsIndicator />
     </div>
   );
 }

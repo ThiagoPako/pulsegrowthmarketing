@@ -810,6 +810,13 @@ export default function TvDashboard() {
   const [clock, setClock] = useState(new Date());
   const [playlistUrl, setPlaylistUrl] = useState('');
   const [seasonalSlides, setSeasonalSlides] = useState<SeasonalSlide[]>([]);
+  const [visibility, setVisibility] = useState<Record<VisibilityKey, boolean>>({
+    show_radio: true, show_schedule: true, show_pipeline: true,
+    show_banners: true, show_team: true, show_posts: true,
+  });
+  const [latestCommand, setLatestCommand] = useState<TvRemoteCommand | null>(null);
+  const [alert, setAlert] = useState<{ message: string; tone: string } | null>(null);
+  const lastCommandIdRef = useRef<number>(0);
   const isFirstLoad = useRef(true);
 
   const fetchData = useCallback(async () => {

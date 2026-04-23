@@ -1085,6 +1085,16 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                   </div>
                 )}
 
+                {/* ─── MENTION COLLABORATOR ─────────────── */}
+                <MentionCollaboratorBlock
+                  task={task}
+                  client={client}
+                  users={users}
+                  currentUserId={user?.id}
+                  currentUserName={profile?.name}
+                  onMentioned={onRefresh}
+                />
+
                 {/* Scheduled date */}
                 {task.scheduled_recording_date && (
                   <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted border border-border">

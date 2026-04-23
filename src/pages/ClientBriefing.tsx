@@ -169,6 +169,12 @@ export default function ClientBriefing() {
     if (!clientId) return;
     const fetchData = async () => {
       try {
+        // 🔒 valida formato UUID antes de bater no servidor
+        const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!UUID_RE.test(clientId)) {
+          setLoading(false);
+          return;
+        }
         const res = await fetch(`${BRIEFING_API}?clientId=${clientId}`);
         const data = await res.json();
         if (!res.ok || data.error || !data.client) {
@@ -176,10 +182,21 @@ export default function ClientBriefing() {
           return;
         }
         const clientData = data.client;
+        // 🔒 garante que o cliente devolvido pelo servidor é o MESMO da URL
+        if (clientData.id && clientData.id !== clientId) {
+          setLoading(false);
+          return;
+        }
         setClient(clientData);
+        setLockedClientId(clientData.id || clientId);
         const bd = clientData.briefing_data;
         if (bd) {
           const d = typeof bd === 'string' ? JSON.parse(bd) : bd;
+          // 🔒 se o JSON salvo carrega um _clientId diferente, trata como vazio (não popula campos cruzados)
+          if (d?._clientId && d._clientId !== clientId) {
+            setLoading(false);
+            return;
+          }
           setOwnerName(d.ownerName || '');
           setNiche(d.niche || '');
           setMainDifferential(d.mainDifferential || '');

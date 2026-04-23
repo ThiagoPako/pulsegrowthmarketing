@@ -20,6 +20,7 @@ import { sendWhatsAppMessage } from '@/services/whatsappService';
 import { Textarea } from '@/components/ui/textarea';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import ClientArtDatabaseDialog from '@/components/ClientArtDatabaseDialog';
+import BriefingVersionsDialog from '@/components/BriefingVersionsDialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ClientGoalRocket from '@/components/ClientGoalRocket';
 import { syncFinancialContract } from '@/lib/financialContracts';

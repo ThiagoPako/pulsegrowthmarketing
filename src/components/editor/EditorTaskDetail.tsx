@@ -168,7 +168,11 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   const [videoLink, setVideoLink] = useState(task.edited_video_link || '');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStats, setUploadStats] = useState<{ loaded: number; total: number; speedBps: number; etaSeconds: number } | null>(null);
+  const [uploadFileName, setUploadFileName] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+  const uploadAbortRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [videomakerName, setVideomakerName] = useState<string | null>(null);
   const [videomakerAvatar, setVideomakerAvatar] = useState<string | null>(null);

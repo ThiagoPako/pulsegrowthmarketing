@@ -902,22 +902,74 @@ export default function TvDashboard() {
     } catch (e) { console.error('Seasonal fetch error:', e); }
   }, []);
 
-  // Listen for sync broadcasts from TvPanelControl
+  // Apply visibility settings + load latest command
+  const applySettings = useCallback((settings: Record<string, string>) => {
+    setVisibility(prev => {
+      const next = { ...prev };
+      for (const k of VISIBILITY_KEYS) {
+        if (settings[k] !== undefined) next[k] = settings[k] !== 'false';
+      }
+      return next;
+    });
+    if (settings.youtube_playlist_url) {
+      setPlaylistUrl(settings.youtube_playlist_url);
+      localStorage.setItem('pulse_radio_url', settings.youtube_playlist_url);
+    }
+  }, []);
+
+  // Execute remote command
+  const executeCommand = useCallback((cmd: TvRemoteCommand) => {
+    if (cmd.id <= lastCommandIdRef.current) return;
+    lastCommandIdRef.current = cmd.id;
+    setLatestCommand(cmd);
+    if (cmd.action === 'set_playlist' && cmd.payload?.url) {
+      setPlaylistUrl(cmd.payload.url);
+      localStorage.setItem('pulse_radio_url', cmd.payload.url);
+    } else if (cmd.action === 'set_visibility' && cmd.payload?.key) {
+      setVisibility(prev => ({ ...prev, [cmd.payload!.key]: !!cmd.payload!.visible }));
+    } else if (cmd.action === 'show_alert' && cmd.payload?.message) {
+      setAlert({ message: cmd.payload.message, tone: cmd.payload.tone || 'info' });
+      const dur = cmd.payload.durationMs || 15000;
+      window.setTimeout(() => setAlert(null), dur);
+    } else if (cmd.action === 'clear_alert') {
+      setAlert(null);
+    } else if (cmd.action === 'reload') {
+      window.location.reload();
+    }
+  }, []);
+
+  // Poll commands + settings
+  const pollRemote = useCallback(async () => {
+    const [settings, cmd] = await Promise.all([fetchTvSettings(), fetchLatestCommand()]);
+    applySettings(settings);
+    if (cmd) executeCommand(cmd);
+  }, [applySettings, executeCommand]);
+
+  // Listen for sync broadcasts (same browser, instant)
   useEffect(() => {
+    let bc1: BroadcastChannel | null = null;
+    let bc2: BroadcastChannel | null = null;
     try {
-      const bc = new BroadcastChannel('pulse_tv_sync');
-      bc.onmessage = (event) => {
+      bc1 = new BroadcastChannel('pulse_tv_sync');
+      bc1.onmessage = (event) => {
         if (event.data?.action === 'reload') {
-          // Update playlist URL instantly and reload page for autoplay
           if (event.data.playlistUrl) {
             localStorage.setItem('pulse_radio_url', event.data.playlistUrl);
           }
           window.location.reload();
         }
       };
-      return () => bc.close();
+      bc2 = new BroadcastChannel('pulse_tv_remote');
+      bc2.onmessage = (event) => {
+        if (event.data && typeof event.data === 'object') {
+          executeCommand(event.data as TvRemoteCommand);
+        }
+      };
     } catch {
-      return undefined;
+      // ignore
+    }
+    return () => { try { bc1?.close(); bc2?.close(); } catch {} };
+  }, [executeCommand]);
     }
   }, []);
 

@@ -121,56 +121,146 @@ async function verifyUploadedFile(url: string, file: File): Promise<void> {
   }
 }
 
+export interface UploadProgress {
+  loaded: number;
+  total: number;
+  percent: number;
+  speedBps: number;
+  etaSeconds: number;
+}
+
+export interface UploadOptions {
+  folder?: string;
+  onProgress?: (progress: UploadProgress) => void;
+  signal?: AbortSignal;
+  /** Number of automatic retries on transient/network errors (default 2) */
+  retries?: number;
+}
+
+/** Internal: single XHR upload attempt with progress + abort support. */
+function uploadOnce(
+  file: File,
+  normalizedFolder: string | undefined,
+  onProgress?: (p: UploadProgress) => void,
+  signal?: AbortSignal,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    if (normalizedFolder) formData.append('folder', normalizedFolder);
+    formData.append('file', file);
+
+    const startedAt = Date.now();
+
+    const onAbort = () => {
+      try { xhr.abort(); } catch {}
+      reject(new DOMException('Upload cancelado', 'AbortError'));
+    };
+    if (signal) {
+      if (signal.aborted) return onAbort();
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+
+    xhr.upload.onprogress = (ev) => {
+      if (!onProgress || !ev.lengthComputable) return;
+      const elapsed = Math.max(0.001, (Date.now() - startedAt) / 1000);
+      const speedBps = ev.loaded / elapsed;
+      const remaining = Math.max(0, ev.total - ev.loaded);
+      const etaSeconds = speedBps > 0 ? remaining / speedBps : 0;
+      onProgress({
+        loaded: ev.loaded,
+        total: ev.total,
+        percent: Math.min(100, (ev.loaded / ev.total) * 100),
+        speedBps,
+        etaSeconds,
+      });
+    };
+
+    xhr.onerror = () => reject(new Error('NETWORK'));
+    xhr.ontimeout = () => reject(new Error('TIMEOUT'));
+    xhr.onload = () => {
+      if (signal) signal.removeEventListener('abort', onAbort);
+      const ct = xhr.getResponseHeader('content-type') || '';
+      if (xhr.status < 200 || xhr.status >= 300) {
+        if (!ct.includes('application/json')) {
+          return reject(new Error(`Servidor indisponível (HTTP ${xhr.status}).`));
+        }
+        return reject(new Error(`Falha no upload: ${xhr.responseText}`));
+      }
+      if (!ct.includes('application/json')) {
+        return reject(new Error('Resposta inesperada do servidor de upload.'));
+      }
+      try {
+        const data = JSON.parse(xhr.responseText);
+        resolve(resolveUploadUrl(data, normalizedFolder));
+      } catch (e: any) {
+        reject(new Error('Resposta inválida do servidor de upload.'));
+      }
+    };
+
+    xhr.open('POST', `${VPS_BASE_URL}/upload`);
+    // Long timeout for big videos (30 min)
+    xhr.timeout = 30 * 60 * 1000;
+    xhr.send(formData);
+  });
+}
+
 /**
- * Upload a file to the VPS
- * @param file - File object to upload
- * @param folder - Optional subfolder (e.g. 'logos', 'content', 'design')
- * @returns The public URL of the uploaded file
+ * Upload a file to the VPS with progress tracking, retries and abort support.
+ *
+ * Two call signatures are supported (backwards-compatible):
+ *   uploadFileToVps(file, 'folder')              // legacy
+ *   uploadFileToVps(file, { folder, onProgress, signal, retries })
  */
 export async function uploadFileToVps(
   file: File,
-  folder?: string,
+  folderOrOptions?: string | UploadOptions,
 ): Promise<string> {
-  const normalizedFolder = folder?.trim().replace(/^\/+|\/+$/g, '');
-  const formData = new FormData();
+  const opts: UploadOptions =
+    typeof folderOrOptions === 'string' || folderOrOptions == null
+      ? { folder: folderOrOptions as string | undefined }
+      : folderOrOptions;
 
-  // Multer resolve o destino do arquivo durante o parsing multipart.
-  // O campo `folder` precisa chegar antes do `file` para evitar fallback em `general`.
-  if (normalizedFolder) formData.append('folder', normalizedFolder);
-  formData.append('file', file);
+  const normalizedFolder = opts.folder?.trim().replace(/^\/+|\/+$/g, '');
+  const maxRetries = Math.max(0, opts.retries ?? 2);
 
-  let response: Response;
-  try {
-    response = await fetch(`${VPS_BASE_URL}/upload`, {
-      method: 'POST',
-      body: formData,
-    });
-  } catch (e: any) {
-    throw new Error('Servidor de upload indisponível. Verifique sua conexão ou tente novamente.');
-  }
+  let attempt = 0;
+  let lastError: any;
 
-  const contentType = response.headers.get('content-type') || '';
+  while (attempt <= maxRetries) {
+    try {
+      const publicUrl = await uploadOnce(file, normalizedFolder, opts.onProgress, opts.signal);
+      await verifyUploadedFile(publicUrl, file);
+      return publicUrl;
+    } catch (err: any) {
+      lastError = err;
+      // Don't retry user-initiated cancellation
+      if (err?.name === 'AbortError') throw err;
 
-  if (!response.ok) {
-    if (!contentType.includes('application/json')) {
-      // 502/503 from Nginx returns HTML — give friendly message
-      throw new Error(
-        `Servidor de upload indisponível (erro ${response.status}). Tente novamente em alguns instantes.`
-      );
+      const msg = String(err?.message || '');
+      const isTransient =
+        msg === 'NETWORK' ||
+        msg === 'TIMEOUT' ||
+        /Servidor indisponível|indisponível|HTTP 5\d\d|HTTP 429/i.test(msg);
+
+      if (!isTransient || attempt === maxRetries) {
+        // Translate technical messages into friendly ones on final failure
+        if (msg === 'NETWORK') {
+          throw new Error('Conexão instável. Verifique sua internet e tente novamente.');
+        }
+        if (msg === 'TIMEOUT') {
+          throw new Error('O envio demorou demais. Tente novamente com uma conexão mais estável.');
+        }
+        throw err;
+      }
+
+      // Exponential backoff: 1s, 2s, 4s...
+      await wait(1000 * Math.pow(2, attempt));
+      attempt += 1;
     }
-    const err = await response.text();
-    throw new Error(`Falha no upload: ${err}`);
   }
 
-  // Guard against Nginx returning HTML on 200 (unlikely but defensive)
-  if (!contentType.includes('application/json')) {
-    throw new Error('Resposta inesperada do servidor de upload. Tente novamente.');
-  }
-
-  const data = await response.json();
-  const publicUrl = resolveUploadUrl(data, normalizedFolder);
-  await verifyUploadedFile(publicUrl, file);
-  return publicUrl;
+  throw lastError ?? new Error('Falha no upload.');
 }
 
 /**

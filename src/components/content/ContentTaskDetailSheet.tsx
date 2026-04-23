@@ -463,6 +463,163 @@ function getHistoryColor(action: string): string {
   return 'bg-primary';
 }
 
+// ─── MENTION COLLABORATOR BLOCK ──────────────────────────
+interface MentionCollaboratorBlockProps {
+  task: ContentTask;
+  client: Client | undefined;
+  users: Array<{ id: string; name: string; avatarUrl?: string | null; role?: string }>;
+  currentUserId?: string;
+  currentUserName?: string;
+  onMentioned?: () => void;
+}
+
+function MentionCollaboratorBlock({ task, client, users, currentUserId, currentUserName, onMentioned }: MentionCollaboratorBlockProps) {
+  const [open, setOpen] = useState(false);
+  const [targetId, setTargetId] = useState<string>('');
+  const [note, setNote] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const colConfig = KANBAN_COLUMNS.find(c => c.id === task.kanban_column);
+  const mentionableUsers = users.filter(u => u.id !== currentUserId);
+
+  const handleSend = async () => {
+    if (!targetId) {
+      toast.error('Selecione um colaborador');
+      return;
+    }
+    setSending(true);
+    try {
+      const target = users.find(u => u.id === targetId);
+      const clientName = client?.companyName || 'Cliente';
+      const columnLabel = colConfig?.label || task.kanban_column;
+      const author = currentUserName || 'Alguém';
+
+      const title = `${author} mencionou você`;
+      const baseMsg = `Olha o card "${task.title}" (${clientName}) na coluna ${columnLabel} do Kanban de Conteúdo.`;
+      const message = note.trim() ? `${baseMsg}\n\n💬 "${note.trim()}"` : baseMsg;
+      const link = `/conteudo?highlight=${task.id}`;
+
+      const { error } = await supabase.from('notifications').insert({
+        user_id: targetId,
+        title,
+        message,
+        type: 'mention',
+        link,
+      } as any);
+
+      if (error) throw error;
+
+      // Register in task history
+      await supabase.from('task_history').insert({
+        task_id: task.id,
+        user_id: currentUserId || null,
+        action: `Mencionou ${target?.name || 'colaborador'}${note.trim() ? `: "${note.trim()}"` : ''}`,
+      } as any);
+
+      toast.success(`@${target?.name?.split(' ')[0] || 'colaborador'} foi notificado!`);
+      setTargetId('');
+      setNote('');
+      setOpen(false);
+      onMentioned?.();
+    } catch (e: any) {
+      toast.error(`Erro ao mencionar: ${e.message || 'tente novamente'}`);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-primary/15 bg-gradient-to-br from-primary/5 to-transparent overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-primary/5 transition-colors"
+      >
+        <div className="w-7 h-7 rounded-lg bg-primary/15 flex items-center justify-center">
+          <span className="text-primary font-bold text-sm">@</span>
+        </div>
+        <div className="flex-1 text-left">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-primary/70 block leading-tight">
+            Mencionar Colaborador
+          </span>
+          <span className="text-[11px] text-muted-foreground">
+            Envia um popup ao vivo + notificação
+          </span>
+        </div>
+        <ArrowRight size={14} className={`text-primary/60 transition-transform ${open ? 'rotate-90' : ''}`} />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-3 pb-3 pt-1 space-y-2">
+              <Select value={targetId} onValueChange={setTargetId}>
+                <SelectTrigger className="h-9 bg-card">
+                  <SelectValue placeholder="Quem você quer chamar?" />
+                </SelectTrigger>
+                <SelectContent className="z-[60]">
+                  {mentionableUsers.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-muted-foreground">Nenhum colaborador disponível</div>
+                  ) : (
+                    mentionableUsers.map(u => (
+                      <SelectItem key={u.id} value={u.id}>
+                        <div className="flex items-center gap-2">
+                          <UserAvatar user={{ name: u.name, avatarUrl: u.avatarUrl || undefined }} size="sm" />
+                          <span className="text-xs">{u.name}</span>
+                          {u.role && (
+                            <span className="text-[9px] uppercase tracking-wider text-muted-foreground/70 ml-1">
+                              {u.role}
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+
+              <Textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Mensagem (opcional) — ex: dá uma olhada nesse card por favor"
+                rows={2}
+                className="text-xs resize-none bg-card"
+                maxLength={280}
+              />
+
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] text-muted-foreground/70">{note.length}/280</span>
+                <Button
+                  size="sm"
+                  onClick={handleSend}
+                  disabled={sending || !targetId}
+                  className="h-8 gap-1.5"
+                >
+                  {sending ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" /> Enviando…
+                    </>
+                  ) : (
+                    <>
+                      <Send size={13} /> Mencionar
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRefresh }: Props) {
   const { clients, users, scripts, recordings } = useApp();
   const { user, profile } = useAuth();

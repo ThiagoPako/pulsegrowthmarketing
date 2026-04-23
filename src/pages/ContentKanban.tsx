@@ -222,6 +222,8 @@ export default function ContentKanban() {
   // Detail sheet
   const [detailTask, setDetailTask] = useState<ContentTask | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  // Tracks which highlight IDs have already been opened (avoids re-opening after close)
+  const handledHighlightRef = useRef<Set<string>>(new Set());
   // ─── FETCH ─────────────────────────────────────────────────
   // Retry com backoff exponencial para resistir a falhas transitórias de rede
   // (ex.: PM2 restart, picos de latência). Não exibe erro ao usuário até esgotar.
@@ -359,21 +361,61 @@ export default function ContentKanban() {
     return () => clearInterval(interval);
   }, [fetchTasks]);
 
-  // Deep-link highlight: open detail sheet of mentioned card and scroll to it
+  // Deep-link highlight: open detail sheet of mentioned card and scroll to it.
+  // Robust on page reload: waits tasks to load, falls back to direct DB fetch,
+  // and never re-opens after the user closes the sheet.
   useEffect(() => {
-    if (highlightId && tasks.length > 0) {
-      const task = tasks.find(t => t.id === highlightId);
-      if (task) {
-        setDetailTask(task);
-        setDetailOpen(true);
-        setSearchParams({}, { replace: true });
-        setTimeout(() => {
-          const el = document.getElementById(`task-card-${highlightId}`);
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 300);
-      }
+    if (!highlightId) return;
+    if (handledHighlightRef.current.has(highlightId)) return;
+    if (loading) return; // wait until first fetch completes
+
+    let cancelled = false;
+
+    const openCard = (task: ContentTask) => {
+      if (cancelled) return;
+      handledHighlightRef.current.add(highlightId);
+      setDetailTask(task);
+      setDetailOpen(true);
+      setSearchParams({}, { replace: true });
+      setTimeout(() => {
+        const el = document.getElementById(`task-card-${highlightId}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 350);
+    };
+
+    const local = tasks.find(t => t.id === highlightId);
+    if (local) {
+      openCard(local);
+      return;
     }
-  }, [highlightId, tasks]);
+
+    // Fallback: task not in current state (stale cache, recently created, etc.)
+    // Fetch directly from DB to guarantee the right card opens.
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('content_tasks')
+          .select('*')
+          .eq('id', highlightId)
+          .maybeSingle();
+        if (cancelled) return;
+        if (error || !data) {
+          handledHighlightRef.current.add(highlightId);
+          toast.error('Card não encontrado (pode ter sido removido)');
+          setSearchParams({}, { replace: true });
+          return;
+        }
+        openCard(data as ContentTask);
+      } catch {
+        if (!cancelled) {
+          handledHighlightRef.current.add(highlightId);
+          setSearchParams({}, { replace: true });
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [highlightId, tasks, loading, setSearchParams]);
 
   // ─── HELPERS ───────────────────────────────────────────────
   const getClient = (id: string) => clients.find(c => c.id === id);

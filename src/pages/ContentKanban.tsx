@@ -377,10 +377,29 @@ export default function ContentKanban() {
       setDetailTask(task);
       setDetailOpen(true);
       setSearchParams({}, { replace: true });
-      setTimeout(() => {
-        const el = document.getElementById(`task-card-${highlightId}`);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 350);
+      // Wait for the card to actually exist in the DOM before scrolling.
+      // Uses MutationObserver instead of a fixed timeout so it works regardless
+      // of render timing (lazy lists, animations, async children, etc.).
+      const cardSelector = `#task-card-${highlightId}`;
+      const scrollToCard = (el: Element) => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      };
+      const existing = document.querySelector(cardSelector);
+      if (existing) {
+        scrollToCard(existing);
+        return;
+      }
+      const observer = new MutationObserver(() => {
+        const el = document.querySelector(cardSelector);
+        if (el) {
+          scrollToCard(el);
+          observer.disconnect();
+          clearTimeout(failSafe);
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      // Safety net: stop observing after 5s to avoid leaks if card never renders
+      const failSafe = window.setTimeout(() => observer.disconnect(), 5000);
     };
 
     const local = tasks.find(t => t.id === highlightId);

@@ -560,6 +560,79 @@ export default function ClientBriefing() {
           <Textarea value={finalNotes} onChange={e => setFinalNotes(e.target.value)} rows={5} placeholder="Conte-nos tudo que achar relevante..." />
         </SectionCard>
 
+        {/* ========== ANEXOS / LINKS ADICIONAIS ========== */}
+        <SectionCard icon={Paperclip} title="Anexos e links adicionais (opcional)">
+          <p className="text-xs text-muted-foreground">
+            Compartilhe links de Drive, Dropbox, fotos, vídeos, materiais antigos, manual da marca, planilhas, posts de referência etc.
+            Eles serão incluídos no PDF do briefing entregue à equipe.
+          </p>
+
+          {additionalAttachments.length > 0 && (
+            <div className="space-y-2">
+              {additionalAttachments.map((att, i) => (
+                <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-background border border-border">
+                  <Link2 size={14} className="text-primary shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{att.label || 'Sem rótulo'}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{att.url}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 shrink-0"
+                    onClick={() => setAdditionalAttachments(prev => prev.filter((_, idx) => idx !== i))}
+                    aria-label="Remover anexo"
+                  >
+                    <X size={14} />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_2fr_auto] gap-2">
+            <Input
+              value={newAttachLabel}
+              onChange={e => setNewAttachLabel(e.target.value)}
+              placeholder="Rótulo (ex: Manual da marca)"
+              maxLength={80}
+            />
+            <Input
+              value={newAttachUrl}
+              onChange={e => setNewAttachUrl(e.target.value)}
+              placeholder="https://..."
+              type="url"
+              maxLength={500}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                const url = newAttachUrl.trim();
+                if (!url) {
+                  toast.error('Cole o link primeiro');
+                  return;
+                }
+                if (!/^https?:\/\//i.test(url)) {
+                  toast.error('O link deve começar com http:// ou https://');
+                  return;
+                }
+                if (additionalAttachments.length >= 20) {
+                  toast.error('Limite de 20 anexos atingido');
+                  return;
+                }
+                setAdditionalAttachments(prev => [...prev, { label: newAttachLabel.trim(), url }]);
+                setNewAttachLabel('');
+                setNewAttachUrl('');
+              }}
+              className="gap-1.5"
+            >
+              <Plus size={14} /> Adicionar
+            </Button>
+          </div>
+        </SectionCard>
+
         {/* ========== ACESSOS ========== */}
         <SectionHeader title="🔐 Informações de Acesso às Redes" subtitle="Essas informações são confidenciais e necessárias para a implementação de contas de anúncios e gerenciamento." />
 

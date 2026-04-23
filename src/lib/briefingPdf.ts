@@ -195,7 +195,7 @@ export async function generateBriefingPdf(opts: {
 
   // Quaisquer chaves não mapeadas
   const knownKeys = new Set(SECTIONS.flatMap(s => s.keys));
-  const extraKeys = Object.keys(data).filter(k => !knownKeys.has(k) && !k.startsWith('_'));
+  const extraKeys = Object.keys(data).filter(k => !knownKeys.has(k) && !k.startsWith('_') && k !== 'additionalAttachments');
   if (extraKeys.length) {
     writeSectionTitle('📎 Outros campos');
     for (const k of extraKeys) {

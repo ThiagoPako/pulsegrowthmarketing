@@ -2474,6 +2474,8 @@ function ClientBriefingView({ client }: { client: Client }) {
   const briefing = (client as any).briefingData || {};
   const editorial = (client as any).editorial || '';
   const niche = client.niche;
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const currentVersion = briefing?._version;
   const nicheLabel = NICHE_OPTIONS.find(n => n.value === niche)?.label || niche || '—';
 
   const briefingFields: { label: string; value: string }[] = [

@@ -1562,7 +1562,28 @@ app.all('/api/client-briefing', async (req, res) => {
   }
 });
 
-// ── PUBLIC PROPOSAL VIEWER (token-gated, no JWT required) ──
+// ── BRIEFING VERSIONS (admin/social_media) ──
+app.get('/api/briefing-versions', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { clientId } = req.query;
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!clientId || !UUID_RE.test(String(clientId))) {
+      return res.status(400).json({ error: 'Invalid clientId' });
+    }
+    const { rows } = await pool.query(
+      `SELECT id, version, briefing_data, editorial, submitted_at
+       FROM briefing_versions
+       WHERE client_id = $1
+       ORDER BY version DESC`,
+      [clientId]
+    );
+    return res.json({ versions: rows });
+  } catch (err) {
+    console.error('briefing-versions error:', err);
+    res.status(err?.status || 500).json({ error: err.message || 'Server error' });
+  }
+});
 app.post('/api/public-proposal', async (req, res) => {
   try {
     await ensureProposalTables();

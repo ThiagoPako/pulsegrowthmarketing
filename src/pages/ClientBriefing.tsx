@@ -166,11 +166,16 @@ export default function ClientBriefing() {
   useEffect(() => {
     if (!clientId) return;
     const fetchData = async () => {
-      const { data: clientData } = await supabase.from('clients').select('company_name, responsible_person, color, logo_url, briefing_data').eq('id', clientId).single();
-      if (clientData) {
+      try {
+        const res = await fetch(`${BRIEFING_API}?clientId=${clientId}`);
+        const data = await res.json();
+        if (!res.ok || data.error || !data.client) {
+          setLoading(false);
+          return;
+        }
+        const clientData = data.client;
         setClient(clientData);
-        // Restore existing briefing data
-        const bd = (clientData as any).briefing_data;
+        const bd = clientData.briefing_data;
         if (bd) {
           const d = typeof bd === 'string' ? JSON.parse(bd) : bd;
           setOwnerName(d.ownerName || '');
@@ -213,15 +218,12 @@ export default function ClientBriefing() {
           setUseRealPhotos(d.useRealPhotos || '');
           if (d._completed) setCompleted(true);
         }
+        if (data.briefingCompleted) setCompleted(true);
+      } catch (_) {
+        // network/error → keep client null so the friendly message shows
+      } finally {
+        setLoading(false);
       }
-
-      // Also check onboarding task
-      const { data: tasks } = await supabase.from('onboarding_tasks').select('*').eq('client_id', clientId).eq('stage', 'briefing');
-      if (tasks && tasks.length > 0) {
-        const t = tasks[0] as any;
-        if (t.briefing_completed) setCompleted(true);
-      }
-      setLoading(false);
     };
     fetchData();
   }, [clientId]);
@@ -265,23 +267,18 @@ export default function ClientBriefing() {
         comfortOnCamera && `**Conforto na câmera:** ${comfortOnCamera}`,
       ].filter(Boolean).join('\n');
 
-      await supabase.from('clients').update({
-        briefing_data: briefingData,
-        editorial,
-      } as any).eq('id', clientId);
-
-      // Update onboarding task if exists
-      const { data: tasks } = await supabase.from('onboarding_tasks').select('id').eq('client_id', clientId).eq('stage', 'briefing');
-      if (tasks && tasks.length > 0) {
-        await supabase.from('onboarding_tasks').update({
+      const res = await fetch(BRIEFING_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId,
           briefing_data: briefingData,
-          briefing_completed: true,
+          editorial,
           use_real_photos: useRealPhotos === 'real',
-          status: 'concluido',
-          completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        } as any).eq('id', (tasks[0] as any).id);
-      }
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok || result.error) throw new Error(result.error || 'Erro');
 
       setCompleted(true);
       toast.success('Briefing enviado com sucesso!');

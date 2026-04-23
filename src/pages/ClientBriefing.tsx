@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, Building2, Users, Star, MessageSquare, Camera, AlertTriangle, Shield, Globe, Target, Megaphone, Eye, Lock, Upload } from 'lucide-react';
+import { CheckCircle2, Building2, Users, Star, MessageSquare, Camera, AlertTriangle, Shield, Globe, Target, Megaphone, Eye, Lock, Upload, Link2, Plus, X, Paperclip } from 'lucide-react';
 import { toast } from 'sonner';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 

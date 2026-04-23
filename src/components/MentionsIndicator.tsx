@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/lib/vpsDb';
 import { useAuth } from '@/hooks/useAuth';
 import { AtSign, ArrowRight, CheckCheck, X } from 'lucide-react';
@@ -29,6 +29,7 @@ interface MentionItem {
 export default function MentionsIndicator() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [mentions, setMentions] = useState<MentionItem[]>([]);
   const [open, setOpen] = useState(false);
 
@@ -75,9 +76,16 @@ export default function MentionsIndicator() {
   const handleGo = (m: MentionItem) => {
     setOpen(false);
     markRead(m.id);
-    if (m.link) {
-      if (m.link.startsWith('/')) navigate(m.link);
-      else window.open(m.link, '_blank');
+    if (!m.link) return;
+    if (!m.link.startsWith('/')) {
+      window.open(m.link, '_blank');
+      return;
+    }
+    const [targetPath, targetQuery = ''] = m.link.split('?');
+    if (location.pathname === targetPath) {
+      navigate(`${targetPath}?${targetQuery}`, { replace: true });
+    } else {
+      navigate(m.link);
     }
   };
 

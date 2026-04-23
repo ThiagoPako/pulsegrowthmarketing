@@ -276,30 +276,86 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
     setSaving(false);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const startUpload = async (file: File) => {
     if (!file) return;
-    const maxSize = 500 * 1024 * 1024;
-    if (file.size > maxSize) { toast.error('Máximo: 500MB'); return; }
+    const maxSize = 2 * 1024 * 1024 * 1024; // 2GB
+    if (file.size > maxSize) { toast.error('Máximo: 2GB'); return; }
+    if (!file.type.startsWith('video/')) {
+      toast.error('Selecione um arquivo de vídeo válido');
+      return;
+    }
+
+    const controller = new AbortController();
+    uploadAbortRef.current = controller;
     setUploading(true);
-    setUploadProgress(`Enviando ${file.name}...`);
+    setUploadFileName(file.name);
+    setUploadProgress(0);
+    setUploadStats({ loaded: 0, total: file.size, speedBps: 0, etaSeconds: 0 });
+
     try {
       const folder = `content/${task.client_id}/${task.id}`;
-      const url = await uploadFileToVps(file, folder);
+      const url = await uploadFileToVps(file, {
+        folder,
+        signal: controller.signal,
+        retries: 3,
+        onProgress: (p) => {
+          setUploadProgress(p.percent);
+          setUploadStats({ loaded: p.loaded, total: p.total, speedBps: p.speedBps, etaSeconds: p.etaSeconds });
+        },
+      });
       await supabase.from('content_tasks').update({
         edited_video_link: url, edited_video_type: 'upload', updated_at: new Date().toISOString()
       }).eq('id', task.id);
       setVideoLink(url);
       await logAction('Vídeo editado enviado via upload', url);
-      toast.success('Vídeo enviado!');
+      toast.success('Vídeo enviado com sucesso! 🎬');
       onRefresh();
     } catch (err: any) {
-      toast.error(`Erro: ${err.message}`);
+      if (err?.name === 'AbortError') {
+        toast.info('Upload cancelado');
+      } else {
+        toast.error(err.message || 'Erro ao enviar vídeo');
+      }
     } finally {
+      uploadAbortRef.current = null;
       setUploading(false);
-      setUploadProgress('');
+      setUploadProgress(0);
+      setUploadStats(null);
+      setUploadFileName('');
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) startUpload(file);
+  };
+
+  const cancelUpload = () => {
+    uploadAbortRef.current?.abort();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (uploading) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) startUpload(file);
+  };
+
+  const formatBytes = (b: number) => {
+    if (b < 1024) return `${b} B`;
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+    if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
+    return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  };
+
+  const formatEta = (s: number) => {
+    if (!isFinite(s) || s <= 0) return '—';
+    if (s < 60) return `${Math.ceil(s)}s`;
+    const m = Math.floor(s / 60);
+    const sec = Math.ceil(s % 60);
+    return `${m}m ${sec}s`;
   };
 
   /* ─── Finalize & Send for Approval (with celebration) ───── */

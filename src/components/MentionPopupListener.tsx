@@ -136,7 +136,10 @@ export default function MentionPopupListener() {
   };
 
   const handleDismiss = () => {
-    if (pending) markRead(pending.id);
+    if (pending) {
+      markRead(pending.id);
+      window.dispatchEvent(new CustomEvent('mentions:read', { detail: { id: pending.id } }));
+    }
     setPending(null);
   };
 

@@ -112,6 +112,8 @@ export default function ClientBriefing() {
   const [saving, setSaving] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [client, setClient] = useState<any>(null);
+  // 🔒 trava o clientId carregado para impedir que troca de URL/aba sobrescreva outra tarefa
+  const [lockedClientId, setLockedClientId] = useState<string | null>(null);
 
   // Sobre o negócio
   const [ownerName, setOwnerName] = useState('');

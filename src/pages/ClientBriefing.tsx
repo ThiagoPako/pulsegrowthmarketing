@@ -112,6 +112,8 @@ export default function ClientBriefing() {
   const [saving, setSaving] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [client, setClient] = useState<any>(null);
+  // 🔒 trava o clientId carregado para impedir que troca de URL/aba sobrescreva outra tarefa
+  const [lockedClientId, setLockedClientId] = useState<string | null>(null);
 
   // Sobre o negócio
   const [ownerName, setOwnerName] = useState('');
@@ -167,6 +169,12 @@ export default function ClientBriefing() {
     if (!clientId) return;
     const fetchData = async () => {
       try {
+        // 🔒 valida formato UUID antes de bater no servidor
+        const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!UUID_RE.test(clientId)) {
+          setLoading(false);
+          return;
+        }
         const res = await fetch(`${BRIEFING_API}?clientId=${clientId}`);
         const data = await res.json();
         if (!res.ok || data.error || !data.client) {
@@ -174,10 +182,21 @@ export default function ClientBriefing() {
           return;
         }
         const clientData = data.client;
+        // 🔒 garante que o cliente devolvido pelo servidor é o MESMO da URL
+        if (clientData.id && clientData.id !== clientId) {
+          setLoading(false);
+          return;
+        }
         setClient(clientData);
+        setLockedClientId(clientData.id || clientId);
         const bd = clientData.briefing_data;
         if (bd) {
           const d = typeof bd === 'string' ? JSON.parse(bd) : bd;
+          // 🔒 se o JSON salvo carrega um _clientId diferente, trata como vazio (não popula campos cruzados)
+          if (d?._clientId && d._clientId !== clientId) {
+            setLoading(false);
+            return;
+          }
           setOwnerName(d.ownerName || '');
           setNiche(d.niche || '');
           setMainDifferential(d.mainDifferential || '');
@@ -233,6 +252,15 @@ export default function ClientBriefing() {
       toast.error('Preencha os campos obrigatórios (nome, nicho, diferencial)');
       return;
     }
+    // 🔒 só permite enviar para o MESMO cliente que foi carregado nesta sessão
+    if (!lockedClientId || lockedClientId !== clientId) {
+      toast.error('Sessão inválida. Recarregue a página com o link correto.');
+      return;
+    }
+    if (completed) {
+      toast.error('Este briefing já foi enviado e está bloqueado para edição.');
+      return;
+    }
     setSaving(true);
     try {
       const briefingData = {
@@ -244,6 +272,7 @@ export default function ClientBriefing() {
         socialClass, clientUsesSocial, idealClient, finalNotes,
         instagramLogin, instagramPassword, facebookLogin, facebookPassword, otherAccesses,
         useRealPhotos, _completed: true, _submittedAt: new Date().toISOString(),
+        _clientId: lockedClientId, // 🔒 carimba o destino dentro do payload
       };
 
       // Build editorial text
@@ -271,14 +300,22 @@ export default function ClientBriefing() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          clientId,
+          clientId: lockedClientId, // 🔒 envia o id travado, não o da URL atual
           briefing_data: briefingData,
           editorial,
           use_real_photos: useRealPhotos === 'real',
         }),
       });
       const result = await res.json();
-      if (!res.ok || result.error) throw new Error(result.error || 'Erro');
+      if (!res.ok || result.error) {
+        // trata bloqueio explícito do servidor (briefing já enviado)
+        if (result?.code === 'briefing_locked' || res.status === 409) {
+          setCompleted(true);
+          toast.error('Este briefing já foi enviado anteriormente.');
+          return;
+        }
+        throw new Error(result.error || 'Erro');
+      }
 
       setCompleted(true);
       toast.success('Briefing enviado com sucesso!');

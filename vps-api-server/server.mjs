@@ -1462,21 +1462,47 @@ app.all('/api/client-briefing', async (req, res) => {
       const { clientId, briefing_data, editorial, use_real_photos } = req.body || {};
       if (!clientId) return res.status(400).json({ error: 'Missing clientId' });
 
+      // 🔒 valida formato UUID — evita IDs forjados/colados de outros sistemas
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!UUID_RE.test(String(clientId))) {
+        return res.status(400).json({ error: 'Invalid clientId format' });
+      }
+
+      // 🔒 confirma que o cliente realmente existe antes de qualquer escrita
+      const { rows: existing } = await pool.query(
+        'SELECT id, briefing_data FROM clients WHERE id = $1 LIMIT 1',
+        [clientId]
+      );
+      if (existing.length === 0) {
+        return res.status(404).json({ error: 'Client not found' });
+      }
+
+      // 🔒 anti-sobrescrita: se o briefing já foi finalizado, bloqueia novo envio
+      const prev = existing[0].briefing_data;
+      const prevObj = typeof prev === 'string' ? (() => { try { return JSON.parse(prev); } catch { return null; } })() : prev;
+      if (prevObj && prevObj._completed) {
+        return res.status(409).json({ error: 'Briefing already submitted', code: 'briefing_locked' });
+      }
+
+      // Reforça que clientId/_completed dentro do payload batem com a URL
+      const safePayload = { ...(briefing_data || {}), _clientId: clientId, _completed: true, _submittedAt: new Date().toISOString() };
+
       await pool.query(
         `UPDATE clients SET briefing_data = $1, editorial = $2, updated_at = now() WHERE id = $3`,
-        [JSON.stringify(briefing_data || {}), editorial || '', clientId]
+        [JSON.stringify(safePayload), editorial || '', clientId]
       );
 
       try {
+        // 🔒 só atualiza onboarding_tasks que pertencem AO MESMO client_id (escopo já correto + guardrail extra)
         const { rows: tasks } = await pool.query(
-          `SELECT id FROM onboarding_tasks WHERE client_id = $1 AND stage = 'briefing' LIMIT 1`, [clientId]
+          `SELECT id, client_id FROM onboarding_tasks WHERE client_id = $1 AND stage = 'briefing' LIMIT 1`, [clientId]
         );
-        if (tasks[0]?.id) {
+        if (tasks[0]?.id && tasks[0].client_id === clientId) {
           await pool.query(
             `UPDATE onboarding_tasks SET briefing_data = $1, briefing_completed = true,
              use_real_photos = $2, status = 'concluido', completed_at = now(), updated_at = now()
-             WHERE id = $3`,
-            [JSON.stringify(briefing_data || {}), !!use_real_photos, tasks[0].id]
+             WHERE id = $3 AND client_id = $4`,
+            [JSON.stringify(safePayload), !!use_real_photos, tasks[0].id, clientId]
           );
         }
       } catch (_) { /* optional */ }

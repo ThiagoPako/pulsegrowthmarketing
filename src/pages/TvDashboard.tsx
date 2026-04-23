@@ -1222,46 +1222,6 @@ export default function TvDashboard() {
             )}
           </div>
         </div>
-          </div>
-
-          {/* CENTER COLUMN: Schedule + Posts */}
-          <div className="col-span-5 space-y-3 overflow-y-auto scrollbar-hide px-1">
-            {/* Schedule */}
-            <div>
-              <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${schedule.length} gravações`} />
-              {schedule.length > 0 ? (
-                <div className="space-y-2">
-                  <AnimatePresence>
-                    {schedule.map(item => <ScheduleCard key={item.id} item={item} isLive={activeRecordingIds.includes(item.id)} />)}
-                  </AnimatePresence>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                  <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
-                  <p className="text-[10px] text-white/20">Nenhuma gravação hoje</p>
-                </div>
-              )}
-            </div>
-
-            {/* Scheduled Posts */}
-            <div>
-              <SectionHeader icon={Send} iconColor="#3b82f6" title="Posts do Dia" badge={`${todayPosts.length} posts`} />
-              {todayPosts.length > 0 ? (
-                <div className="space-y-2">
-                  <AnimatePresence>
-                    {todayPosts.map(post => <PostCard key={post.id} post={post} />)}
-                  </AnimatePresence>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                  <Send className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
-                  <p className="text-[10px] text-white/20">Nenhum post agendado hoje</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-        </div>
 
         {/* ─── Empty state ──────────────────────────────── */}
         {!hasAnyData && (

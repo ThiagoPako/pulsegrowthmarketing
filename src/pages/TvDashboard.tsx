@@ -970,14 +970,13 @@ export default function TvDashboard() {
     }
     return () => { try { bc1?.close(); bc2?.close(); } catch {} };
   }, [executeCommand]);
-    }
-  }, []);
 
   useEffect(() => {
-    fetchData(); fetchPlaylist(); fetchSeasonal();
+    fetchData(); fetchPlaylist(); fetchSeasonal(); pollRemote();
     const iv = setInterval(fetchData, 10_000);
-    return () => clearInterval(iv);
-  }, [fetchData, fetchPlaylist, fetchSeasonal]);
+    const ivCmd = setInterval(pollRemote, 2_500);
+    return () => { clearInterval(iv); clearInterval(ivCmd); };
+  }, [fetchData, fetchPlaylist, fetchSeasonal, pollRemote]);
 
   useEffect(() => {
     const iv = window.setInterval(() => setClock(new Date()), 1000);

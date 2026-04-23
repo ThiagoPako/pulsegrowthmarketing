@@ -168,7 +168,11 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   const [videoLink, setVideoLink] = useState(task.edited_video_link || '');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStats, setUploadStats] = useState<{ loaded: number; total: number; speedBps: number; etaSeconds: number } | null>(null);
+  const [uploadFileName, setUploadFileName] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+  const uploadAbortRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [videomakerName, setVideomakerName] = useState<string | null>(null);
   const [videomakerAvatar, setVideomakerAvatar] = useState<string | null>(null);
@@ -272,30 +276,86 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
     setSaving(false);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const startUpload = async (file: File) => {
     if (!file) return;
-    const maxSize = 500 * 1024 * 1024;
-    if (file.size > maxSize) { toast.error('Máximo: 500MB'); return; }
+    const maxSize = 2 * 1024 * 1024 * 1024; // 2GB
+    if (file.size > maxSize) { toast.error('Máximo: 2GB'); return; }
+    if (!file.type.startsWith('video/')) {
+      toast.error('Selecione um arquivo de vídeo válido');
+      return;
+    }
+
+    const controller = new AbortController();
+    uploadAbortRef.current = controller;
     setUploading(true);
-    setUploadProgress(`Enviando ${file.name}...`);
+    setUploadFileName(file.name);
+    setUploadProgress(0);
+    setUploadStats({ loaded: 0, total: file.size, speedBps: 0, etaSeconds: 0 });
+
     try {
       const folder = `content/${task.client_id}/${task.id}`;
-      const url = await uploadFileToVps(file, folder);
+      const url = await uploadFileToVps(file, {
+        folder,
+        signal: controller.signal,
+        retries: 3,
+        onProgress: (p) => {
+          setUploadProgress(p.percent);
+          setUploadStats({ loaded: p.loaded, total: p.total, speedBps: p.speedBps, etaSeconds: p.etaSeconds });
+        },
+      });
       await supabase.from('content_tasks').update({
         edited_video_link: url, edited_video_type: 'upload', updated_at: new Date().toISOString()
       }).eq('id', task.id);
       setVideoLink(url);
       await logAction('Vídeo editado enviado via upload', url);
-      toast.success('Vídeo enviado!');
+      toast.success('Vídeo enviado com sucesso! 🎬');
       onRefresh();
     } catch (err: any) {
-      toast.error(`Erro: ${err.message}`);
+      if (err?.name === 'AbortError') {
+        toast.info('Upload cancelado');
+      } else {
+        toast.error(err.message || 'Erro ao enviar vídeo');
+      }
     } finally {
+      uploadAbortRef.current = null;
       setUploading(false);
-      setUploadProgress('');
+      setUploadProgress(0);
+      setUploadStats(null);
+      setUploadFileName('');
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) startUpload(file);
+  };
+
+  const cancelUpload = () => {
+    uploadAbortRef.current?.abort();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (uploading) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) startUpload(file);
+  };
+
+  const formatBytes = (b: number) => {
+    if (b < 1024) return `${b} B`;
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+    if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
+    return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  };
+
+  const formatEta = (s: number) => {
+    if (!isFinite(s) || s <= 0) return '—';
+    if (s < 60) return `${Math.ceil(s)}s`;
+    const m = Math.floor(s / 60);
+    const sec = Math.ceil(s % 60);
+    return `${m}m ${sec}s`;
   };
 
   /* ─── Finalize & Send for Approval (with celebration) ───── */
@@ -572,17 +632,49 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
                 <div className="space-y-4">
                   <div>
                     <p className="text-xs font-bold text-muted-foreground mb-2">ENVIAR ARQUIVO DE VÍDEO</p>
-                    <div className="border-2 border-dashed border-border rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
-                      <input ref={fileInputRef} type="file" accept="video/*" onChange={handleFileUpload} className="hidden" id="editor-video-upload-detail" />
-                      <label htmlFor="editor-video-upload-detail" className="cursor-pointer flex flex-col items-center gap-2">
-                        <Upload size={24} className="text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">{uploading ? uploadProgress : 'Clique para enviar'}</span>
-                        <span className="text-xs text-muted-foreground/60">MP4, MOV — até 500MB</span>
-                      </label>
-                      {uploading && (
-                        <div className="mt-3 flex items-center justify-center gap-2">
-                          <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                          <span className="text-xs text-primary font-medium">Enviando...</span>
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); if (!uploading) setIsDragging(true); }}
+                      onDragLeave={() => setIsDragging(false)}
+                      onDrop={handleDrop}
+                      className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
+                        isDragging
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border hover:border-primary/50'
+                      } ${uploading ? 'pointer-events-none opacity-90' : ''}`}
+                    >
+                      <input ref={fileInputRef} type="file" accept="video/*" onChange={handleFileUpload} className="hidden" id="editor-video-upload-detail" disabled={uploading} />
+                      {!uploading ? (
+                        <label htmlFor="editor-video-upload-detail" className="cursor-pointer flex flex-col items-center gap-2">
+                          <Upload size={24} className="text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">
+                            {isDragging ? 'Solte o vídeo aqui' : 'Clique ou arraste o vídeo'}
+                          </span>
+                          <span className="text-xs text-muted-foreground/60">MP4, MOV, MKV — até 2GB · upload retomado em caso de falha</span>
+                        </label>
+                      ) : (
+                        <div className="space-y-3 text-left">
+                          <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin shrink-0" />
+                            <p className="text-xs font-medium text-foreground truncate flex-1" title={uploadFileName}>
+                              {uploadFileName || 'Enviando...'}
+                            </p>
+                            <span className="text-xs font-bold text-primary tabular-nums">{Math.round(uploadProgress)}%</span>
+                          </div>
+                          <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-primary to-primary/70 transition-all duration-200"
+                              style={{ width: `${uploadProgress}%` }}
+                            />
+                          </div>
+                          {uploadStats && (
+                            <div className="flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
+                              <span>{formatBytes(uploadStats.loaded)} / {formatBytes(uploadStats.total)}</span>
+                              <span>{formatBytes(uploadStats.speedBps)}/s · ETA {formatEta(uploadStats.etaSeconds)}</span>
+                            </div>
+                          )}
+                          <Button type="button" size="sm" variant="outline" className="w-full h-7 text-xs" onClick={cancelUpload}>
+                            Cancelar envio
+                          </Button>
                         </div>
                       )}
                     </div>

@@ -35,6 +35,50 @@ export default function MentionPopupListener() {
   useEffect(() => {
     if (!user?.id) return;
 
+    let cancelled = false;
+
+    const checkForMentions = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('notifications')
+          .select('id,title,message,link,type,read,created_at')
+          .eq('user_id', user.id)
+          .eq('type', 'mention')
+          .eq('read', false)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        if (cancelled || error || !data || data.length === 0) return;
+
+        // Pick the newest unseen mention created after session start
+        const fresh = (data as any[]).find((n) => {
+          if (seenIdsRef.current.has(n.id)) return false;
+          const ts = new Date(n.created_at).getTime();
+          return ts >= startedAtRef.current - 5000;
+        });
+        if (!fresh) return;
+
+        seenIdsRef.current.add(fresh.id);
+        setPending({
+          id: fresh.id,
+          title: fresh.title || 'Você foi mencionado',
+          message: fresh.message || 'Abra o Kanban para ver o card.',
+          link: fresh.link || null,
+        });
+        try {
+          const audio = new Audio(
+            'data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
+          );
+          audio.volume = 0.4;
+          audio.play().catch(() => {});
+        } catch {}
+      } catch {}
+    };
+
+    // Initial check + polling every 5s
+    checkForMentions();
+    const interval = setInterval(checkForMentions, 5000);
+
+    // Also try realtime as bonus (works on Supabase, no-op on VPS)
     const channel = supabase
       .channel(`mentions_rt_${user.id}`)
       .on(
@@ -45,33 +89,13 @@ export default function MentionPopupListener() {
           table: 'notifications',
           filter: `user_id=eq.${user.id}`,
         },
-        (payload: any) => {
-          const n = payload.new;
-          if (!n || n.type !== 'mention') return;
-          if (seenIdsRef.current.has(n.id)) return;
-          // Ignore mentions older than session start (avoid stale popups on reload)
-          const ts = new Date(n.created_at).getTime();
-          if (ts < startedAtRef.current - 5000) return;
-          seenIdsRef.current.add(n.id);
-          setPending({
-            id: n.id,
-            title: n.title || 'Você foi mencionado',
-            message: n.message || 'Abra o Kanban para ver o card.',
-            link: n.link || null,
-          });
-          // Soft sound
-          try {
-            const audio = new Audio(
-              'data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
-            );
-            audio.volume = 0.4;
-            audio.play().catch(() => {});
-          } catch {}
-        }
+        () => checkForMentions()
       )
       .subscribe();
 
     return () => {
+      cancelled = true;
+      clearInterval(interval);
       supabase.removeChannel(channel);
     };
   }, [user?.id]);

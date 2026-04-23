@@ -359,13 +359,13 @@ export default function ContentKanban() {
     return () => clearInterval(interval);
   }, [fetchTasks]);
 
-  // Deep-link highlight: scroll to card and open detail
+  // Deep-link highlight: open detail sheet of mentioned card and scroll to it
   useEffect(() => {
     if (highlightId && tasks.length > 0) {
       const task = tasks.find(t => t.id === highlightId);
       if (task) {
-        setEditingTask(task);
-        setDialogOpen(true);
+        setDetailTask(task);
+        setDetailOpen(true);
         setSearchParams({}, { replace: true });
         setTimeout(() => {
           const el = document.getElementById(`task-card-${highlightId}`);

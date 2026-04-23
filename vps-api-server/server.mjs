@@ -1477,20 +1477,42 @@ app.all('/api/client-briefing', async (req, res) => {
         return res.status(404).json({ error: 'Client not found' });
       }
 
-      // 🔒 anti-sobrescrita: se o briefing já foi finalizado, bloqueia novo envio
+      // 📚 histórico de versões: permite reenvio (não bloqueia mais), grava snapshot
       const prev = existing[0].briefing_data;
       const prevObj = typeof prev === 'string' ? (() => { try { return JSON.parse(prev); } catch { return null; } })() : prev;
-      if (prevObj && prevObj._completed) {
-        return res.status(409).json({ error: 'Briefing already submitted', code: 'briefing_locked' });
-      }
 
-      // Reforça que clientId/_completed dentro do payload batem com a URL
-      const safePayload = { ...(briefing_data || {}), _clientId: clientId, _completed: true, _submittedAt: new Date().toISOString() };
+      // Calcula próxima versão a partir do histórico existente
+      let nextVersion = 1;
+      try {
+        const { rows: vRows } = await pool.query(
+          'SELECT COALESCE(MAX(version), 0) + 1 AS next FROM briefing_versions WHERE client_id = $1',
+          [clientId]
+        );
+        nextVersion = vRows[0]?.next || 1;
+      } catch (_) { /* tabela pode não existir ainda */ }
+
+      // Reforça que clientId/_completed dentro do payload batem com a URL + versão
+      const safePayload = {
+        ...(briefing_data || {}),
+        _clientId: clientId,
+        _completed: true,
+        _submittedAt: new Date().toISOString(),
+        _version: nextVersion,
+      };
 
       await pool.query(
         `UPDATE clients SET briefing_data = $1, editorial = $2, updated_at = now() WHERE id = $3`,
         [JSON.stringify(safePayload), editorial || '', clientId]
       );
+
+      // Snapshot da versão
+      try {
+        await pool.query(
+          `INSERT INTO briefing_versions (client_id, version, briefing_data, editorial, submitted_at)
+           VALUES ($1, $2, $3, $4, now())`,
+          [clientId, nextVersion, JSON.stringify(safePayload), editorial || '']
+        );
+      } catch (e) { console.warn('briefing version snapshot failed:', e?.message); }
 
       try {
         // 🔒 só atualiza onboarding_tasks que pertencem AO MESMO client_id (escopo já correto + guardrail extra)

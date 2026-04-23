@@ -195,7 +195,7 @@ export async function generateBriefingPdf(opts: {
 
   // Quaisquer chaves não mapeadas
   const knownKeys = new Set(SECTIONS.flatMap(s => s.keys));
-  const extraKeys = Object.keys(data).filter(k => !knownKeys.has(k) && !k.startsWith('_'));
+  const extraKeys = Object.keys(data).filter(k => !knownKeys.has(k) && !k.startsWith('_') && k !== 'additionalAttachments');
   if (extraKeys.length) {
     writeSectionTitle('📎 Outros campos');
     for (const k of extraKeys) {
@@ -203,6 +203,39 @@ export async function generateBriefingPdf(opts: {
       if (val === '—') continue;
       writeField(FIELD_LABELS[k] || k.replace(/_/g, ' '), val);
     }
+  }
+
+  // Anexos / Links adicionais (rótulo + URL clicável)
+  const attachments = Array.isArray(data.additionalAttachments) ? data.additionalAttachments : [];
+  if (attachments.length) {
+    writeSectionTitle('📎 Anexos e links adicionais');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    for (const att of attachments) {
+      const label = (att?.label || '').toString().trim() || 'Link';
+      const url = (att?.url || '').toString().trim();
+      if (!url) continue;
+
+      // Rótulo
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(60, 60, 60);
+      const labelLines = doc.splitTextToSize(`• ${label}`, contentWidth);
+      ensureSpace(labelLines.length * 4 + 4);
+      doc.text(labelLines, margin, y);
+      y += labelLines.length * 4 + 1;
+
+      // URL clicável (azul, sublinhado visual via cor)
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(40, 90, 200);
+      const urlLines = doc.splitTextToSize(url, contentWidth);
+      ensureSpace(urlLines.length * 4 + 3);
+      doc.textWithLink(urlLines.join('\n'), margin + 3, y, { url });
+      y += urlLines.length * 4 + 3;
+      doc.setTextColor(20, 20, 20);
+    }
+    y += 2;
   }
 
   // Linha editorial (texto livre)

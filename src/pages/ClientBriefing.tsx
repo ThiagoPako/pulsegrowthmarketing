@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, Building2, Users, Star, MessageSquare, Camera, AlertTriangle, Shield, Globe, Target, Megaphone, Eye, Lock, Upload } from 'lucide-react';
+import { CheckCircle2, Building2, Users, Star, MessageSquare, Camera, AlertTriangle, Shield, Globe, Target, Megaphone, Eye, Lock, Upload, Link2, Plus, X, Paperclip } from 'lucide-react';
 import { toast } from 'sonner';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 
@@ -165,6 +165,10 @@ export default function ClientBriefing() {
   // Foto preferência
   const [useRealPhotos, setUseRealPhotos] = useState('');
 
+  // Anexos / Links adicionais
+  const [additionalAttachments, setAdditionalAttachments] = useState<{ label: string; url: string }[]>([]);
+  const [newAttachLabel, setNewAttachLabel] = useState('');
+  const [newAttachUrl, setNewAttachUrl] = useState('');
   useEffect(() => {
     if (!clientId) return;
     const fetchData = async () => {
@@ -235,6 +239,7 @@ export default function ClientBriefing() {
           setFacebookPassword(d.facebookPassword || '');
           setOtherAccesses(d.otherAccesses || '');
           setUseRealPhotos(d.useRealPhotos || '');
+          setAdditionalAttachments(Array.isArray(d.additionalAttachments) ? d.additionalAttachments : []);
           if (d._completed) setCompleted(true);
         }
         if (data.briefingCompleted) setCompleted(true);
@@ -271,7 +276,9 @@ export default function ClientBriefing() {
         contentReferences, keywords, ageRangesTarget, ageRangesBuyer, isAuthority, educationLevel,
         socialClass, clientUsesSocial, idealClient, finalNotes,
         instagramLogin, instagramPassword, facebookLogin, facebookPassword, otherAccesses,
-        useRealPhotos, _completed: true, _submittedAt: new Date().toISOString(),
+        useRealPhotos,
+        additionalAttachments: additionalAttachments.filter(a => a.url && a.url.trim()),
+        _completed: true, _submittedAt: new Date().toISOString(),
         _clientId: lockedClientId, // 🔒 carimba o destino dentro do payload
       };
 
@@ -551,6 +558,79 @@ export default function ClientBriefing() {
         <SectionCard icon={MessageSquare} title="Informações adicionais sobre o seu projeto">
           <p className="text-xs text-muted-foreground">Fique à vontade para contar a história do seu negócio e mais informações relevantes. Quanto mais dados, melhor a estratégia!</p>
           <Textarea value={finalNotes} onChange={e => setFinalNotes(e.target.value)} rows={5} placeholder="Conte-nos tudo que achar relevante..." />
+        </SectionCard>
+
+        {/* ========== ANEXOS / LINKS ADICIONAIS ========== */}
+        <SectionCard icon={Paperclip} title="Anexos e links adicionais (opcional)">
+          <p className="text-xs text-muted-foreground">
+            Compartilhe links de Drive, Dropbox, fotos, vídeos, materiais antigos, manual da marca, planilhas, posts de referência etc.
+            Eles serão incluídos no PDF do briefing entregue à equipe.
+          </p>
+
+          {additionalAttachments.length > 0 && (
+            <div className="space-y-2">
+              {additionalAttachments.map((att, i) => (
+                <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-background border border-border">
+                  <Link2 size={14} className="text-primary shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{att.label || 'Sem rótulo'}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{att.url}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 shrink-0"
+                    onClick={() => setAdditionalAttachments(prev => prev.filter((_, idx) => idx !== i))}
+                    aria-label="Remover anexo"
+                  >
+                    <X size={14} />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_2fr_auto] gap-2">
+            <Input
+              value={newAttachLabel}
+              onChange={e => setNewAttachLabel(e.target.value)}
+              placeholder="Rótulo (ex: Manual da marca)"
+              maxLength={80}
+            />
+            <Input
+              value={newAttachUrl}
+              onChange={e => setNewAttachUrl(e.target.value)}
+              placeholder="https://..."
+              type="url"
+              maxLength={500}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                const url = newAttachUrl.trim();
+                if (!url) {
+                  toast.error('Cole o link primeiro');
+                  return;
+                }
+                if (!/^https?:\/\//i.test(url)) {
+                  toast.error('O link deve começar com http:// ou https://');
+                  return;
+                }
+                if (additionalAttachments.length >= 20) {
+                  toast.error('Limite de 20 anexos atingido');
+                  return;
+                }
+                setAdditionalAttachments(prev => [...prev, { label: newAttachLabel.trim(), url }]);
+                setNewAttachLabel('');
+                setNewAttachUrl('');
+              }}
+              className="gap-1.5"
+            >
+              <Plus size={14} /> Adicionar
+            </Button>
+          </div>
         </SectionCard>
 
         {/* ========== ACESSOS ========== */}

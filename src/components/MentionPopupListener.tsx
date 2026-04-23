@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/lib/vpsDb';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -28,6 +28,7 @@ interface MentionNotification {
 export default function MentionPopupListener() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [pending, setPending] = useState<MentionNotification | null>(null);
   const seenIdsRef = useRef<Set<string>>(new Set());
   const startedAtRef = useRef<number>(Date.now());
@@ -111,13 +112,24 @@ export default function MentionPopupListener() {
     const link = pending.link;
     markRead(pending.id);
     setPending(null);
-    if (link) {
-      // internal SPA link
-      if (link.startsWith('/')) {
-        navigate(link);
-      } else {
-        window.open(link, '_blank');
-      }
+    if (!link) return;
+
+    // External link → new tab
+    if (!link.startsWith('/')) {
+      window.open(link, '_blank');
+      return;
+    }
+
+    // Parse target path & query
+    const [targetPath, targetQuery = ''] = link.split('?');
+    const isSameRoute = location.pathname === targetPath;
+
+    if (isSameRoute) {
+      // Same route → replace search params so the highlight effect re-fires
+      // and the right detail sheet opens (not the create-new modal)
+      navigate(`${targetPath}?${targetQuery}`, { replace: true });
+    } else {
+      navigate(link);
     }
   };
 
@@ -156,8 +168,8 @@ export default function MentionPopupListener() {
           <Button variant="ghost" onClick={handleDismiss}>
             Mais tarde
           </Button>
-          <Button onClick={handleGo} className="gap-2">
-            Ver no Kanban
+          <Button onClick={handleGo} className="gap-2" disabled={!pending?.link}>
+            Abrir Kanban
             <ArrowRight size={15} />
           </Button>
         </DialogFooter>

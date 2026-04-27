@@ -4238,6 +4238,30 @@ app.post('/api/active-recordings/:recordingId/stop', async (req, res) => {
           );
         }
       }
+
+      // Roteiros planejados que NÃO foram gravados voltam para "ideias"
+      // (e desvinculam do recording para sumir da captação dessa gravação)
+      const planned = Array.isArray(active.planned_script_ids) ? active.planned_script_ids : [];
+      const completed = new Set(completedScriptIds || []);
+      const notRecorded = planned.filter(id => !completed.has(id));
+      if (notRecorded.length > 0) {
+        await pool.query(
+          `UPDATE content_tasks
+             SET kanban_column = 'ideias',
+                 recording_id = NULL,
+                 drive_link = NULL,
+                 updated_at = NOW()
+           WHERE script_id = ANY($1::uuid[])
+             AND kanban_column IN ('captacao', 'captacao_concluida', 'aguardando_link')`,
+          [notRecorded]
+        );
+        // Garante que os scripts não fiquem marcados como gravados
+        await pool.query(
+          `UPDATE scripts SET recorded = false, recording_id = NULL, updated_at = NOW()
+           WHERE id = ANY($1::uuid[])`,
+          [notRecorded]
+        );
+      }
     }
     res.json({ success: true });
   } catch (e) { console.error('POST /api/active-recordings/stop error:', e); res.status(500).json({ error: e.message }); }

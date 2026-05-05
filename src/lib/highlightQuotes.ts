@@ -47,8 +47,11 @@ export function highlightQuotesForPdf(html: string): string {
   if (!html) return html;
   const cleaned = cleanHtml(html);
   const normalized = normalizeQuotes(cleaned);
+  // IMPORTANTE: usar <span> inline (não <div>), pois esta função roda dentro de <p>
+  // e blocos dentro de parágrafos quebram o DOM ao serem reparsados pelo navegador,
+  // fazendo o conteúdo posterior sumir do PDF.
   return normalized.replace(
     /"([^"]+)"/g,
-    '<div style="background-color:#fef9c3; border:1px solid #eab308; padding:1px 10px 3px; margin:1px 0; border-radius:6px; line-height:1.45; page-break-inside:avoid; break-inside:avoid; box-sizing:border-box; word-wrap:break-word; overflow-wrap:break-word; max-width:100%;">&ldquo;$1&rdquo;</div>'
+    '<span style="background-color:#fef9c3; border:1px solid #eab308; padding:1px 6px; border-radius:4px; box-decoration-break:clone; -webkit-box-decoration-break:clone;">&ldquo;$1&rdquo;</span>'
   );
 }

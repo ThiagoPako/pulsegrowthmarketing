@@ -236,7 +236,15 @@ export default function ContentKanban() {
           .select('*')
           .order('position', { ascending: true });
         if (error) throw error;
-        if (data) setTasks(data as ContentTask[]);
+        if (data) {
+          // Fallback: tarefas sem recording_id presas em 'captacao' voltam visualmente para 'ideias'
+          const normalized = (data as ContentTask[]).map(t =>
+            (t.kanban_column === 'captacao' && !t.recording_id)
+              ? { ...t, kanban_column: 'ideias' }
+              : t
+          );
+          setTasks(normalized);
+        }
         setLoading(false);
         return;
       } catch (err: any) {

@@ -1127,7 +1127,12 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                                       <span className="text-[10px] font-medium text-primary/70">{getUserName(h.user_id)}</span>
                                       <span className="text-[10px] text-muted-foreground/40">·</span>
                                       <span className="text-[10px] text-muted-foreground/50">
-                                        {formatDistanceToNow(new Date(h.created_at), { addSuffix: true, locale: ptBR })}
+                                        {(() => {
+                                          if (!h.created_at) return '';
+                                          const d = new Date(h.created_at);
+                                          if (Number.isNaN(d.getTime())) return '';
+                                          try { return formatDistanceToNow(d, { addSuffix: true, locale: ptBR }); } catch { return ''; }
+                                        })()}
                                       </span>
                                     </div>
                                   </div>
@@ -1253,7 +1258,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                 />
 
                 {/* Scheduled date */}
-                {task.scheduled_recording_date && (
+                {task.scheduled_recording_date && safeFormatDate(task.scheduled_recording_date) !== '—' && (
                   <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted border border-border">
                     <Calendar size={16} className="text-muted-foreground shrink-0" />
                     <div>
@@ -1261,7 +1266,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                         {task.kanban_column === 'acompanhamento' || task.kanban_column === 'agendamentos' ? 'Postagem programada' : 'Data de gravação'}
                       </span>
                       <span className="text-sm font-bold text-foreground">
-                        {format(new Date(task.scheduled_recording_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
+                        {safeFormatDate(task.scheduled_recording_date)}
                         {task.scheduled_recording_time ? ` às ${task.scheduled_recording_time}` : ''}
                       </span>
                     </div>

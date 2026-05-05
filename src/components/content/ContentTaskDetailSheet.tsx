@@ -1127,7 +1127,12 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                                       <span className="text-[10px] font-medium text-primary/70">{getUserName(h.user_id)}</span>
                                       <span className="text-[10px] text-muted-foreground/40">·</span>
                                       <span className="text-[10px] text-muted-foreground/50">
-                                        {formatDistanceToNow(new Date(h.created_at), { addSuffix: true, locale: ptBR })}
+                                        {(() => {
+                                          if (!h.created_at) return '';
+                                          const d = new Date(h.created_at);
+                                          if (Number.isNaN(d.getTime())) return '';
+                                          try { return formatDistanceToNow(d, { addSuffix: true, locale: ptBR }); } catch { return ''; }
+                                        })()}
                                       </span>
                                     </div>
                                   </div>

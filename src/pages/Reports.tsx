@@ -986,7 +986,121 @@ export default function Reports() {
                 </CardContent>
               </Card>
             )}
-          </div>
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-1.5 italic">
+          Custo por vídeo = Total de salários (videomakers + editores) ÷ Total de conteúdos produzidos no período
+        </p>
+
+        {/* Detalhamento de Custos */}
+        <div className="grid lg:grid-cols-2 gap-4 mt-6">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Users size={16} className="text-primary" /> Custo por Colaborador
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {detailedCosts.collaboratorData.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-4">Defina os salários no módulo de Equipe para ver estes dados.</p>
+                ) : (
+                  detailedCosts.collaboratorData.map((c, i) => (
+                    <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 border border-border/50">
+                      <div className="flex items-center gap-2">
+                        <UserAvatar user={c.user} size="sm" />
+                        <div>
+                          <p className="text-xs font-semibold">{c.user.name}</p>
+                          <p className="text-[9px] text-muted-foreground uppercase">{ROLE_LABELS[c.user.role as UserRole] || c.user.role}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-bold text-primary">R$ {c.costPerUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        <p className="text-[9px] text-muted-foreground">{c.units} entregas no período</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Target size={16} className="text-primary" /> Custo Médio por Serviço
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {detailedCosts.roleCosts.filter(r => r.totalUnits > 0).map((r, i) => (
+                  <div key={i} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-medium">{ROLE_LABELS[r.role as UserRole] || r.role}</span>
+                      <span className="font-bold">R$ {r.avgCostPerUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} / un</span>
+                    </div>
+                    <Progress value={detailedCosts.roleCosts.length > 0 ? (r.avgCostPerUnit / Math.max(...detailedCosts.roleCosts.map(x => x.avgCostPerUnit), 1)) * 100 : 0} className="h-1.5" />
+                    <div className="flex justify-between text-[9px] text-muted-foreground">
+                      <span>Total: R$ {r.totalSalary.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      <span>{r.totalUnits} unidades entregues</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Custo por Cliente */}
+        <Card className="mt-4">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <DollarSign size={16} className="text-primary" /> Custo de Produção por Cliente
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Cliente</TableHead>
+                  <TableHead className="text-xs">Composição do Custo</TableHead>
+                  <TableHead className="text-right text-xs">Custo Total Estimado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {detailedCosts.clientCosts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center py-8 text-muted-foreground text-sm italic">
+                      Nenhum custo registrado para o período
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  detailedCosts.clientCosts.map((cc, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: `hsl(${cc.client.color})` }} />
+                          <span className="font-medium text-sm">{cc.client.companyName}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {cc.breakdowns.map((b, bi) => (
+                            <Badge key={bi} variant="outline" className="text-[9px] py-0 h-4 font-normal">
+                              {b.name}: R$ {b.cost.toFixed(0)}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right py-3">
+                        <p className="text-sm font-bold text-primary">R$ {cc.totalCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
 
           {/* Comparison table with overdelivery */}
           {overdelivery && (

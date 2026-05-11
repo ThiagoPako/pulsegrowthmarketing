@@ -20,6 +20,7 @@ interface TeamMember {
   avatarUrl?: string;
   displayName?: string;
   jobTitle?: string;
+  monthlySalary?: number;
 }
 
 interface Props {

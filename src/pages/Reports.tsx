@@ -261,10 +261,11 @@ export default function Reports() {
           clientUnits[t.client_id] = (clientUnits[t.client_id] || 0) + 1;
         });
       } else if (user.role === 'social_media') {
-        const smRecs = filteredSocial.filter(d => d.status === 'postado'); // simplified logic: who is the social media for this client?
-        // Since social_media_deliveries don't have an assigned_to, we check if the client has this user as social media
-        // Wait, clients table doesn't have social_media_id. Let's check the schema.
-        units = 0; // fallback if we can't link
+        const smRecs = filteredSocial.filter(d => (d as any).created_by === user.id && d.status === 'postado');
+        units = smRecs.length;
+        smRecs.forEach(d => {
+          clientUnits[d.client_id] = (clientUnits[d.client_id] || 0) + 1;
+        });
       }
 
       const costPerUnit = units > 0 ? salary / units : 0;

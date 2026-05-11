@@ -4,8 +4,8 @@ import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { useApp } from '@/contexts/AppContext';
 import { highlightQuotes, highlightQuotesForPdf } from '@/lib/highlightQuotes';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
-import type { Recording, Script, RecordingStatus, EventRecording } from '@/types';
-import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS } from '@/types';
+import type { Recording, Script, RecordingStatus, EventRecording, UserRole } from '@/types';
+import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS, ROLE_LABELS } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -16,7 +16,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Square, FileText, Check, Clock, Video, Users as UsersIcon,
   TrendingUp, BarChart3, Undo2, AlertTriangle, Star, Eye, ChevronLeft, Download, Link, ArrowRight,
-  ThumbsDown, Pencil, MessageCircle, Send, UserCheck, Rocket, Hourglass, RefreshCw, Upload, Camera
+  ThumbsDown, Pencil, MessageCircle, Send, UserCheck, Rocket, Hourglass, RefreshCw, Upload, Camera,
+  Scissors
 } from 'lucide-react';
 import LiveRecordingCard from '@/components/videomaker/LiveRecordingCard';
 import FieldworkButton from '@/components/videomaker/FieldworkButton';
@@ -30,6 +31,9 @@ import { VM_SCORE } from '@/lib/scoringSystem';
 import BonusCongratsBanner from '@/components/BonusCongratsBanner';
 import { format, addDays, startOfWeek, startOfMonth, endOfMonth, endOfWeek, isWithinInterval, parseISO, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import EditorDashboard from '@/pages/EditorDashboard';
+import EditorKanban from '@/pages/EditorKanban';
 
 export default function VideomakerDashboard() {
   const {
@@ -37,6 +41,7 @@ export default function VideomakerDashboard() {
     updateRecording, updateScript, startActiveRecording, stopActiveRecording, refetchData,
   } = useApp();
 
+  const [activeTab, setActiveTab] = useState<'recordings' | 'editing' | 'kanban'>('recordings');
   const [scriptsOpen, setScriptsOpen] = useState(false);
   const [scriptsClientId, setScriptsClientId] = useState('');
   const [scriptsRecordingId, setScriptsRecordingId] = useState('');
@@ -541,7 +546,7 @@ export default function VideomakerDashboard() {
     setLocalActiveRecordingId(rec.id);
     startActiveRecording({
       recordingId: rec.id,
-      videomarkerId: vmId,
+      videomakerId: vmId,
       clientId: rec.clientId,
       startedAt: new Date().toISOString(),
       plannedScriptIds: Array.from(selectedScriptIds),

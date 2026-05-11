@@ -6,8 +6,9 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- Create enum
+-- Create enums
 CREATE TYPE app_role AS ENUM ('admin','videomaker','social_media','editor','endomarketing','parceiro','fotografo','designer');
+CREATE TYPE cost_allocation_rule AS ENUM ('approved', 'recorded', 'posted');
 
 -- Table: active_recordings
 CREATE TABLE IF NOT EXISTS active_recordings (
@@ -215,7 +216,8 @@ CREATE TABLE IF NOT EXISTS company_settings (
   editing_deadline_hours INTEGER NOT NULL DEFAULT 48,
   review_deadline_hours INTEGER NOT NULL DEFAULT 24,
   alteration_deadline_hours INTEGER NOT NULL DEFAULT 24,
-  approval_deadline_hours INTEGER NOT NULL DEFAULT 6
+  approval_deadline_hours INTEGER NOT NULL DEFAULT 6,
+  cost_allocation_rule cost_allocation_rule NOT NULL DEFAULT 'approved'::cost_allocation_rule
 );
 
 -- Table: commercial_proposals

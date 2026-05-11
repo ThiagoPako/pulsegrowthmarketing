@@ -1812,8 +1812,8 @@ export default function VideomakerDashboard() {
                 )}
               </Button>
             </motion.div>
+            </div>
           </div>
-        </div>
 
         {storiesUploaded > 0 && (
           <motion.div

@@ -4,8 +4,8 @@ import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { useApp } from '@/contexts/AppContext';
 import { highlightQuotes, highlightQuotesForPdf } from '@/lib/highlightQuotes';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
-import type { Recording, Script, RecordingStatus, EventRecording } from '@/types';
-import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS } from '@/types';
+import type { Recording, Script, RecordingStatus, EventRecording, UserRole } from '@/types';
+import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS, ROLE_LABELS } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -16,7 +16,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Square, FileText, Check, Clock, Video, Users as UsersIcon,
   TrendingUp, BarChart3, Undo2, AlertTriangle, Star, Eye, ChevronLeft, Download, Link, ArrowRight,
-  ThumbsDown, Pencil, MessageCircle, Send, UserCheck, Rocket, Hourglass, RefreshCw, Upload, Camera
+  ThumbsDown, Pencil, MessageCircle, Send, UserCheck, Rocket, Hourglass, RefreshCw, Upload, Camera,
+  Scissors
 } from 'lucide-react';
 import LiveRecordingCard from '@/components/videomaker/LiveRecordingCard';
 import FieldworkButton from '@/components/videomaker/FieldworkButton';
@@ -30,6 +31,9 @@ import { VM_SCORE } from '@/lib/scoringSystem';
 import BonusCongratsBanner from '@/components/BonusCongratsBanner';
 import { format, addDays, startOfWeek, startOfMonth, endOfMonth, endOfWeek, isWithinInterval, parseISO, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import EditorDashboard from '@/pages/EditorDashboard';
+import EditorKanban from '@/pages/EditorKanban';
 
 export default function VideomakerDashboard() {
   const {
@@ -37,6 +41,7 @@ export default function VideomakerDashboard() {
     updateRecording, updateScript, startActiveRecording, stopActiveRecording, refetchData,
   } = useApp();
 
+  const [activeTab, setActiveTab] = useState<'recordings' | 'editing' | 'kanban'>('recordings');
   const [scriptsOpen, setScriptsOpen] = useState(false);
   const [scriptsClientId, setScriptsClientId] = useState('');
   const [scriptsRecordingId, setScriptsRecordingId] = useState('');
@@ -1178,27 +1183,65 @@ export default function VideomakerDashboard() {
   return (
     <div className="space-y-4 sm:space-y-5 max-w-[1400px] px-1 sm:px-0">
       <BonusCongratsBanner />
-      {/* Header with animated rocket */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <motion.div
-            animate={{ y: [0, -6, 0], rotate: [0, -10, 0] }}
-            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-            className="relative"
+      
+      <div className="flex justify-center sm:justify-start mb-2 overflow-x-auto">
+        <div className="bg-secondary/50 p-1 rounded-xl flex gap-1 border border-border/50">
+          <Button
+            variant={activeTab === 'recordings' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveTab('recordings')}
+            className="gap-2 text-xs font-semibold rounded-lg h-9 px-4"
           >
-            <Rocket size={28} className="text-primary -rotate-45" />
-            <motion.div
-              animate={{ opacity: [0.6, 1, 0.4], scale: [0.8, 1.2, 0.6] }}
-              transition={{ duration: 0.5, repeat: Infinity }}
-              className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2.5 h-3 rounded-full bg-gradient-to-t from-warning via-primary to-transparent blur-[2px] rotate-45"
-            />
-          </motion.div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-display font-bold">Olá, {currentUser?.name} 👋</h1>
-            <p className="text-muted-foreground text-xs sm:text-sm">{format(today, "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
-          </div>
+            <Camera size={14} /> Gravações
+          </Button>
+          <Button
+            variant={activeTab === 'editing' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveTab('editing')}
+            className="gap-2 text-xs font-semibold rounded-lg h-9 px-4"
+          >
+            <Scissors size={14} /> Minhas Edições
+          </Button>
+          <Button
+            variant={activeTab === 'kanban' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveTab('kanban')}
+            className="gap-2 text-xs font-semibold rounded-lg h-9 px-4"
+          >
+            <BarChart3 size={14} /> Kanban de Edição
+          </Button>
         </div>
       </div>
+
+      <AnimatePresence mode="wait">
+        {activeTab === 'recordings' ? (
+          <motion.div
+            key="recordings-tab"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="space-y-4 sm:space-y-5"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <motion.div
+                  animate={{ y: [0, -6, 0], rotate: [0, -10, 0] }}
+                  transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+                  className="relative"
+                >
+                  <Rocket size={28} className="text-primary -rotate-45" />
+                  <motion.div
+                    animate={{ opacity: [0.6, 1, 0.4], scale: [0.8, 1.2, 0.6] }}
+                    transition={{ duration: 0.5, repeat: Infinity }}
+                    className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2.5 h-3 rounded-full bg-gradient-to-t from-warning via-primary to-transparent blur-[2px] rotate-45"
+                  />
+                </motion.div>
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-display font-bold">Olá, {currentUser?.name} 👋</h1>
+                  <p className="text-muted-foreground text-xs sm:text-sm">{format(today, "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
+                </div>
+              </div>
+            </div>
 
       {/* Fieldwork activity (external production) */}
       {!activeRecordingId && (
@@ -1807,8 +1850,8 @@ export default function VideomakerDashboard() {
                 )}
               </Button>
             </motion.div>
+            </div>
           </div>
-        </div>
 
         {storiesUploaded > 0 && (
           <motion.div
@@ -2601,8 +2644,29 @@ export default function VideomakerDashboard() {
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
+      </motion.div>
+    ) : activeTab === 'editing' ? (
+      <motion.div
+        key="editing-tab"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+      >
+        <EditorDashboard />
+      </motion.div>
+    ) : (
+      <motion.div
+        key="kanban-tab"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+      >
+        <EditorKanban />
+      </motion.div>
+    )}
+    </AnimatePresence>
     </div>
   );
 }

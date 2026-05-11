@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/vpsDb';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +10,7 @@ import type { UserRole } from '@/types';
 import { EDITOR_SCORE, VM_SCORE, DESIGNER_SCORE, EDITOR_APPROVED_COLUMNS, getSocialDeliveryReferenceDate, getSocialMediaScoreBreakdown, getSocialTaskReferenceDate, getScriptReferenceDate } from '@/lib/scoringSystem';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Clock, Trophy, CheckCircle2, TrendingUp, Film, Palette, BarChart3 } from 'lucide-react';
+import { Clock, Trophy, CheckCircle2, TrendingUp, Film, Palette, BarChart3, DollarSign } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface TeamMember {

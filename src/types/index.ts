@@ -30,6 +30,7 @@ export interface CompanySettings {
   reviewDeadlineEnabled: boolean;
   alterationDeadlineEnabled: boolean;
   approvalDeadlineEnabled: boolean;
+  costAllocationRule?: 'approved' | 'recorded' | 'posted';
 }
 
 export type ContentType = 'reels' | 'story' | 'produto';

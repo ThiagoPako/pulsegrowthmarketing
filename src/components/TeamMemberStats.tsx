@@ -118,6 +118,8 @@ function getBusinessActiveSeconds(start: Date, end: Date, settings: AgencyHoursS
 }
 
 export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
+  const { currentUser } = useApp();
+  const isAdmin = currentUser?.role === 'admin';
   const [period, setPeriod] = useState('current');
   const [stats, setStats] = useState<TaskStats | null>(null);
   const [loading, setLoading] = useState(false);
@@ -514,6 +516,17 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
           <div className="space-y-4">
             {/* KPI Cards - top row */}
             <div className="grid grid-cols-2 gap-2">
+              {isAdmin && member?.monthlySalary > 0 && (
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                  className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-center col-span-2 mb-2">
+                  <DollarSign size={18} className="mx-auto text-emerald-600 mb-1" />
+                  <p className="text-xl font-bold text-emerald-700">
+                    R$ {(stats.totalTasks > 0 ? member.monthlySalary / stats.totalTasks : 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-[10px] text-emerald-600 font-medium uppercase">Custo por entrega (base: R$ {member.monthlySalary})</p>
+                </motion.div>
+              )}
+              
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                 className="p-3 rounded-lg bg-primary/5 border border-primary/20 text-center">
                 <CheckCircle2 size={18} className="mx-auto text-primary mb-1" />

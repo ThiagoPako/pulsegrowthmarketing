@@ -9,8 +9,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket, RotateCcw, CalendarOff, Plus, Send, Loader2 } from 'lucide-react';
+import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket, RotateCcw, CalendarOff, Plus, Send, Loader2, DollarSign } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
 import { supabase as supabaseCloud } from '@/integrations/supabase/client';
 import { ASSISTANT_KEY } from '@/components/ProductionAssistant';
@@ -458,6 +459,35 @@ export default function CompanySettings() {
           {/* Aprovação/Agendamento removido — prazo definido pela Social Media */}
         </div>
       </div>
+      {/* Custos de Produção */}
+      <div className="glass-card p-6 space-y-4">
+        <div className="flex items-center gap-2 text-primary">
+          <DollarSign size={18} />
+          <h2 className="text-base font-semibold">Custos de Produção</h2>
+        </div>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Regra de Rateio de Salários</Label>
+            <Select 
+              value={form.costAllocationRule || 'approved'} 
+              onValueChange={v => setForm({ ...form, costAllocationRule: v as any })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a regra" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="approved">Entregas Aprovadas (Finalizadas)</SelectItem>
+                <SelectItem value="recorded">Entregas Gravadas (Sessions)</SelectItem>
+                <SelectItem value="posted">Entregas Postadas (Social Media)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Define como o sistema divide o salário mensal do colaborador para calcular o custo unitário.
+            </p>
+          </div>
+        </div>
+      </div>
+
 
       {/* Assistente de Produção */}
       <div className="glass-card p-6 space-y-4">

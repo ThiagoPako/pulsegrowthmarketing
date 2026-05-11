@@ -237,36 +237,36 @@ export default function Reports() {
   }, [salaryExpenses, dateRange, stats.totalContent]);
 
   const detailedCosts = useMemo(() => {
-    // 1. Calculate totals per collaborator
+    const rule = settings.costAllocationRule || 'approved';
+    
+    // 1. Calculate totals per collaborator based on selected rule
     const collaboratorData = users.map(user => {
       const salary = user.monthlySalary || 0;
       let units = 0;
       let clientUnits: Record<string, number> = {};
 
-      if (user.role === 'videomaker') {
+      if (rule === 'recorded' && user.role === 'videomaker') {
         const vmRecs = filteredRecords.filter(r => r.videomaker_id === user.id && (r.delivery_status === 'realizada' || r.delivery_status === 'encaixe' || r.delivery_status === 'extra'));
-        units = vmRecs.length; // sessions
-        vmRecs.forEach(r => {
-          clientUnits[r.client_id] = (clientUnits[r.client_id] || 0) + 1;
-        });
-      } else if (user.role === 'editor') {
-        const edTasks = editorTasks.filter(t => t.edited_by === user.id && t.kanban_column === 'aprovado' && t.updated_at >= dateRange.start && t.updated_at <= dateRange.end);
-        units = edTasks.length;
-        edTasks.forEach(t => {
-          clientUnits[t.client_id] = (clientUnits[t.client_id] || 0) + 1;
-        });
-      } else if (user.role === 'designer') {
-        const dTasks = designTasks.filter(t => t.assigned_to === user.id && t.kanban_column === 'aprovado' && t.completed_at && t.completed_at >= dateRange.start && t.completed_at <= dateRange.end);
-        units = dTasks.length;
-        dTasks.forEach(t => {
-          clientUnits[t.client_id] = (clientUnits[t.client_id] || 0) + 1;
-        });
-      } else if (user.role === 'social_media') {
+        units = vmRecs.length;
+        vmRecs.forEach(r => { clientUnits[r.client_id] = (clientUnits[r.client_id] || 0) + 1; });
+      } else if (rule === 'approved') {
+        if (user.role === 'videomaker') {
+          const vmRecs = filteredRecords.filter(r => r.videomaker_id === user.id && (r.delivery_status === 'realizada' || r.delivery_status === 'encaixe' || r.delivery_status === 'extra'));
+          units = vmRecs.length;
+          vmRecs.forEach(r => { clientUnits[r.client_id] = (clientUnits[r.client_id] || 0) + 1; });
+        } else if (user.role === 'editor') {
+          const edTasks = editorTasks.filter(t => t.edited_by === user.id && t.kanban_column === 'aprovado' && t.updated_at >= dateRange.start && t.updated_at <= dateRange.end);
+          units = edTasks.length;
+          edTasks.forEach(t => { clientUnits[t.client_id] = (clientUnits[t.client_id] || 0) + 1; });
+        } else if (user.role === 'designer') {
+          const dTasks = designTasks.filter(t => t.assigned_to === user.id && t.kanban_column === 'aprovado' && t.completed_at && t.completed_at >= dateRange.start && t.completed_at <= dateRange.end);
+          units = dTasks.length;
+          dTasks.forEach(t => { clientUnits[t.client_id] = (clientUnits[t.client_id] || 0) + 1; });
+        }
+      } else if (rule === 'posted') {
         const smRecs = filteredSocial.filter(d => (d as any).created_by === user.id && d.status === 'postado');
         units = smRecs.length;
-        smRecs.forEach(d => {
-          clientUnits[d.client_id] = (clientUnits[d.client_id] || 0) + 1;
-        });
+        smRecs.forEach(d => { clientUnits[d.client_id] = (clientUnits[d.client_id] || 0) + 1; });
       }
 
       const costPerUnit = units > 0 ? salary / units : 0;

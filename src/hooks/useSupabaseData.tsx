@@ -217,6 +217,7 @@ function rowToSettings(r: any): CompanySettings {
     reviewDeadlineEnabled: r.review_deadline_enabled ?? true,
     alterationDeadlineEnabled: r.alteration_deadline_enabled ?? true,
     approvalDeadlineEnabled: r.approval_deadline_enabled ?? true,
+    costAllocationRule: r.cost_allocation_rule || 'approved',
   };
 }
 
@@ -245,6 +246,7 @@ const defaultSettings: CompanySettings = {
   reviewDeadlineEnabled: true,
   alterationDeadlineEnabled: true,
   approvalDeadlineEnabled: true,
+  costAllocationRule: 'approved',
 };
 
 export function useSupabaseData() {

@@ -56,6 +56,7 @@ function profileToUser(profile: Profile): User {
     displayName: profile.display_name || undefined,
     jobTitle: profile.job_title || undefined,
     fontScale: profile.font_scale || undefined,
+    monthlySalary: (profile as any).monthly_salary || 0,
   };
 }
 

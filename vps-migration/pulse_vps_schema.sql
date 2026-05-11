@@ -6,8 +6,9 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- Create enum
+-- Create enums
 CREATE TYPE app_role AS ENUM ('admin','videomaker','social_media','editor','endomarketing','parceiro','fotografo','designer');
+CREATE TYPE cost_allocation_rule AS ENUM ('approved', 'recorded', 'posted');
 
 -- Table: active_recordings
 CREATE TABLE IF NOT EXISTS active_recordings (

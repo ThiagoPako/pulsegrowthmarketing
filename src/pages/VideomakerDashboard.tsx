@@ -546,7 +546,7 @@ export default function VideomakerDashboard() {
     setLocalActiveRecordingId(rec.id);
     startActiveRecording({
       recordingId: rec.id,
-      videomakerId: vmId,
+      videomarkerId: vmId,
       clientId: rec.clientId,
       startedAt: new Date().toISOString(),
       plannedScriptIds: Array.from(selectedScriptIds),

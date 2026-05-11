@@ -47,7 +47,13 @@ export default function CancellationReports() {
           supabase.from('goals').select('*').eq('type', 'crescimento').eq('status', 'em_andamento').limit(1),
         ]);
         if (cancelledRes.data) setCancelledClients(cancelledRes.data as any[]);
-        if (contractsRes.data) setContracts(contractsRes.data as any[]);
+        if (contractsRes.data) {
+          // Numeric columns from VPS arrive as strings — coerce to Number to avoid string concatenation in sums.
+          setContracts((contractsRes.data as any[]).map(c => ({
+            client_id: c.client_id,
+            contract_value: Number(c.contract_value) || 0,
+          })));
+        }
         if (goalsRes.data && goalsRes.data.length > 0) {
           setGrowthTarget(Number((goalsRes.data[0] as any).target_value) || 10);
         }

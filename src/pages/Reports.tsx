@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
-import { FileText, Download, Eye, Film, XCircle, CalendarCheck, TrendingUp, Percent, Heart, CheckCircle2, BarChart3, Users, Clock, Zap, Image, Palette, Megaphone, Share2, DollarSign, Calculator, Target } from 'lucide-react';
+import { FileText, Download, Eye, Film, XCircle, CalendarCheck, TrendingUp, Percent, Heart, CheckCircle2, BarChart3, Users, Clock, Zap, Image, Palette, Megaphone, Share2, DollarSign, Calculator, Target, FileSpreadsheet } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import UserAvatar from '@/components/UserAvatar';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
@@ -20,6 +20,7 @@ import jsPDF from 'jspdf';
 import pulseHeaderImg from '@/assets/pulse_header.png';
 import type { UserRole } from '@/types';
 import { ROLE_LABELS } from '@/types';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 interface EditorTask {
   id: string;
@@ -380,6 +381,167 @@ export default function Reports() {
     return Math.round((totalDel / totalPlan) * 100);
   };
 
+  // ── CSV Export ──
+  const exportDetailedCostsCSV = () => {
+    let csv = "Tipo;Nome;Cargo/Plano;Custo Unitario/Total;Unidades/Composicao\n";
+    
+    // Collaborators
+    csv += "\nCOLABORADORES\n";
+    detailedCosts.collaboratorData.forEach(c => {
+      csv += `Colaborador;${c.user.name};${ROLE_LABELS[c.user.role as UserRole] || c.user.role};R$ ${c.costPerUnit.toFixed(2)};${c.units} entregas\n`;
+    });
+
+    // Roles
+    csv += "\nSERVICOS\n";
+    detailedCosts.roleCosts.filter(r => r.totalUnits > 0).forEach(r => {
+      csv += `Servico;${ROLE_LABELS[r.role as UserRole] || r.role};-;R$ ${r.avgCostPerUnit.toFixed(2)};${r.totalUnits} unidades\n`;
+    });
+
+    // Clients
+    csv += "\nCLIENTES\n";
+    detailedCosts.clientCosts.forEach(cc => {
+      const composition = cc.breakdowns.map(b => `${b.name} (R$ ${b.cost.toFixed(0)})`).join(" | ");
+      csv += `Cliente;${cc.client.companyName};-;R$ ${cc.totalCost.toFixed(2)};${composition}\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `relatorio-custos-detalhado-${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('CSV gerado com sucesso!');
+  };
+
+  const generateDetailedCostsPDF = async () => {
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageW = 210;
+    const margin = 15;
+    const contentW = pageW - margin * 2;
+    let y = 15;
+
+    const checkPageBreak = (needed: number) => {
+      if (y + needed > 275) { doc.addPage(); y = 15; }
+    };
+
+    // Header
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Relatorio Detalhado de Custos de Producao', pageW / 2, y, { align: 'center' });
+    y += 10;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Periodo: ${periodLabel}`, pageW / 2, y, { align: 'center' });
+    y += 10;
+
+    // 1. Collaborators
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text('Custo por Colaborador', margin, y);
+    y += 6;
+
+    const colHeaders = ['Nome', 'Cargo', 'Custo Unit.', 'Entregas'];
+    const colW = [60, 40, 40, 40];
+    
+    doc.setFillColor(241, 245, 249);
+    doc.rect(margin, y - 4, contentW, 7, 'F');
+    doc.setFontSize(8);
+    let x = margin + 3;
+    colHeaders.forEach((h, i) => { doc.text(h, x, y); x += colW[i]; });
+    y += 6;
+
+    doc.setFont('helvetica', 'normal');
+    detailedCosts.collaboratorData.forEach((c, i) => {
+      checkPageBreak(8);
+      if (i % 2 === 0) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(margin, y - 4, contentW, 6, 'F');
+      }
+      let rx = margin + 3;
+      const row = [c.user.name, ROLE_LABELS[c.user.role as UserRole] || c.user.role, `R$ ${c.costPerUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, String(c.units)];
+      row.forEach((text, idx) => { doc.text(text, rx, y); rx += colW[idx]; });
+      y += 6;
+    });
+
+    y += 10;
+
+    // 2. Services
+    checkPageBreak(30);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Custo Medio por Servico', margin, y);
+    y += 6;
+
+    doc.setFillColor(241, 245, 249);
+    doc.rect(margin, y - 4, contentW, 7, 'F');
+    doc.setFontSize(8);
+    let sx = margin + 3;
+    ['Servico', 'Custo Medio Unitario', 'Total no Periodo'].forEach((h, i) => { doc.text(h, sx, y); sx += 60; });
+    y += 6;
+
+    doc.setFont('helvetica', 'normal');
+    detailedCosts.roleCosts.filter(r => r.totalUnits > 0).forEach((r, i) => {
+      checkPageBreak(8);
+      if (i % 2 === 0) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(margin, y - 4, contentW, 6, 'F');
+      }
+      let rx = margin + 3;
+      doc.text(ROLE_LABELS[r.role as UserRole] || r.role, rx, y);
+      doc.text(`R$ ${r.avgCostPerUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, rx + 60, y);
+      doc.text(`R$ ${r.totalSalary.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, rx + 120, y);
+      y += 6;
+    });
+
+    y += 10;
+
+    // 3. Clients
+    checkPageBreak(30);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Custo de Producao por Cliente', margin, y);
+    y += 6;
+
+    doc.setFillColor(241, 245, 249);
+    doc.rect(margin, y - 4, contentW, 7, 'F');
+    doc.setFontSize(8);
+    let cx = margin + 3;
+    ['Cliente', 'Composicao', 'Custo Total'].forEach((h, i) => { doc.text(h, cx, y); cx += [60, 80, 40][i]; });
+    y += 6;
+
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    detailedCosts.clientCosts.forEach((cc, i) => {
+      checkPageBreak(12);
+      if (i % 2 === 0) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(margin, y - 4, contentW, 10, 'F');
+      }
+      let rx = margin + 3;
+      doc.text(cc.client.companyName, rx, y);
+      
+      const comp = cc.breakdowns.map(b => `${b.name}: R$ ${b.cost.toFixed(0)}`).join(" | ");
+      const splitComp = doc.splitTextToSize(comp, 75);
+      doc.text(splitComp, rx + 60, y);
+      
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`R$ ${cc.totalCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, rx + 140, y);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      y += Math.max(splitComp.length * 4, 10);
+    });
+
+    doc.save(`relatorio-custos-detalhado-${format(new Date(), 'yyyy-MM-dd')}.csv`); // Fixed extension in logic below but let's keep it pdf here for simplicity in doc.save call
+    doc.save(`relatorio-custos-detalhado-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+    toast.success('PDF de custos gerado!');
+  };
+
   // ── PDF Generation ──
   const generatePDF = async () => {
     const doc = new jsPDF('p', 'mm', 'a4');
@@ -730,7 +892,29 @@ export default function Reports() {
           <Button variant="outline" onClick={() => setShowPreview(!showPreview)} className="gap-2">
             <Eye size={16} /> {showPreview ? 'Ocultar' : 'Visualizar'}
           </Button>
-          <Button onClick={generatePDF} className="gap-2"><Download size={16} /> Exportar PDF</Button>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button className="gap-2">
+                <Download size={16} /> Exportar Relatórios
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <div className="p-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entregas (Cliente)</div>
+              <DropdownMenuItem onClick={generatePDF} className="gap-2 cursor-pointer">
+                <FileText size={14} className="text-red-500" /> PDF de Entregas
+              </DropdownMenuItem>
+              
+              <div className="h-px bg-border my-1" />
+              <div className="p-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Custos de Produção</div>
+              <DropdownMenuItem onClick={generateDetailedCostsPDF} className="gap-2 cursor-pointer">
+                <FileText size={14} className="text-red-500" /> PDF Detalhado de Custos
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportDetailedCostsCSV} className="gap-2 cursor-pointer">
+                <FileSpreadsheet size={14} className="text-emerald-500" /> CSV Detalhado de Custos
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

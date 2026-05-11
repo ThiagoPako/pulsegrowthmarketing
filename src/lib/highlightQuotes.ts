@@ -1,16 +1,17 @@
 /**
- * Cleans pasted HTML artifacts: removes inline styles and unwraps empty spans.
+ * Limpa artefatos de HTML colado: remove estilos inline e remove spans vazios.
  */
 export function cleanHtml(html: string): string {
-  // Remove style attributes
-  let cleaned = html.replace(/\s*style="[^"]*"/gi, '');
-  // Unwrap empty spans (no attributes left)
+  if (!html) return '';
+  // Remove atributos de estilo, mas preserva a tag
+  let cleaned = html.replace(/\sstyle="[^"]*"/gi, '');
+  // Remove spans que não possuem mais atributos
   cleaned = cleaned.replace(/<span\s*>(.*?)<\/span>/gi, '$1');
   return cleaned;
 }
 
 /**
- * Normalize all types of double quotes (Unicode + HTML entities) to a standard "
+ * Normaliza todos os tipos de aspas duplas (Unicode + entidades HTML) para o padrão "
  */
 function normalizeDoubleQuotes(html: string): string {
   return html
@@ -19,7 +20,7 @@ function normalizeDoubleQuotes(html: string): string {
 }
 
 /**
- * Normalize all types of single quotes/apostrophes to a standard '
+ * Normaliza todos os tipos de aspas simples/apóstrofos para o padrão '
  */
 function normalizeSingleQuotes(html: string): string {
   return html
@@ -32,19 +33,16 @@ function normalizeQuotes(html: string): string {
 }
 
 /**
- * Replace quoted segments using a callback. Handles:
- *  - Double quotes: "..."
- *  - Single quotes: '...'  (only when clearly quoting, not apostrophes inside words)
- *  - Mixed: "...'...'..." or '..."..."...'  → outer wrapper wins.
- *
- * Skips matches inside HTML tags so attributes are not corrupted.
+ * Substitui segmentos entre aspas usando um callback.
+ * Lógica robusta para ignorar aspas dentro de tags HTML e tratar apóstrofos.
  */
 function replaceQuoted(
   html: string,
   wrap: (inner: string, kind: 'double' | 'single') => string
 ): string {
-  // Tokenize: keep HTML tags untouched, only process text segments.
+  // Divide o HTML em tags e texto puro para evitar corromper atributos
   const parts = html.split(/(<[^>]+>)/g);
+  
   for (let i = 0; i < parts.length; i++) {
     const seg = parts[i];
     if (!seg || seg.startsWith('<')) continue;
@@ -54,31 +52,40 @@ function replaceQuoted(
     while (idx < seg.length) {
       const ch = seg[idx];
 
-      // Double-quoted block
+      // Bloco de aspas duplas: "..."
       if (ch === '"') {
         const end = seg.indexOf('"', idx + 1);
         if (end > idx + 1) {
-          out += wrap(seg.slice(idx + 1, end), 'double');
+          // Recursão simples para suportar aspas simples dentro de duplas no mesmo segmento
+          const inner = seg.slice(idx + 1, end);
+          out += wrap(inner, 'double');
           idx = end + 1;
           continue;
         }
       }
 
-      // Single-quoted block — guard against apostrophes (don't, it's, anos'70)
+      // Bloco de aspas simples: '...' (proteção contra apóstrofos como "don't")
       if (ch === "'") {
         const prev = seg[idx - 1] ?? ' ';
+        // Verifica se é início de palavra ou símbolo (limite de palavra)
         const isWordBoundaryStart = !/[A-Za-zÀ-ÿ0-9]/.test(prev);
+        
         if (isWordBoundaryStart) {
-          // Find a closing ' that is followed by non-letter/digit (so it's a quote close, not apostrophe)
           let end = -1;
           for (let j = idx + 1; j < seg.length; j++) {
             if (seg[j] === "'") {
               const next = seg[j + 1] ?? ' ';
-              if (!/[A-Za-zÀ-ÿ0-9]/.test(next)) { end = j; break; }
+              // O fechamento deve ser seguido por espaço, pontuação ou fim de linha
+              if (!/[A-Za-zÀ-ÿ0-9]/.test(next)) {
+                end = j;
+                break;
+              }
             }
           }
+          
           if (end > idx + 1) {
-            out += wrap(seg.slice(idx + 1, end), 'single');
+            const inner = seg.slice(idx + 1, end);
+            out += wrap(inner, 'single');
             idx = end + 1;
             continue;
           }
@@ -94,28 +101,42 @@ function replaceQuoted(
 }
 
 /**
- * Highlights text within quotes (double or single) with a yellow marker effect.
+ * Destaca o texto entre aspas com a tag <mark>.
  */
 export function highlightQuotes(html: string): string {
   if (!html) return html;
-  const normalized = normalizeQuotes(cleanHtml(html));
+  const cleaned = cleanHtml(html);
+  const normalized = normalizeQuotes(cleaned);
+  
   return replaceQuoted(normalized, (inner, kind) => {
     const open = kind === 'double' ? '&ldquo;' : '&lsquo;';
     const close = kind === 'double' ? '&rdquo;' : '&rsquo;';
-    return `<mark style="background-color: #fef9c3; padding: 1px 3px; border-radius: 2px;">${open}${inner}${close}</mark>`;
+    return `<mark style="background-color: #fef9c3; padding: 0.1em 0.2em; border-radius: 2px;">${open}${inner}${close}</mark>`;
   });
 }
 
 /**
- * Same highlight but for PDF rendering. Uses <span> inline so it can live inside <p>
- * without breaking the DOM (blocks inside paragraphs cause silent content loss).
+ * Versão para PDF: utiliza <span> com display:inline-block para garantir o fundo.
  */
 export function highlightQuotesForPdf(html: string): string {
   if (!html) return html;
-  const normalized = normalizeQuotes(cleanHtml(html));
+  const cleaned = cleanHtml(html);
+  const normalized = normalizeQuotes(cleaned);
+
   return replaceQuoted(normalized, (inner, kind) => {
     const open = kind === 'double' ? '&ldquo;' : '&lsquo;';
     const close = kind === 'double' ? '&rdquo;' : '&rsquo;';
-    return `<span style="background-color:#fef9c3; padding: 0.2em 0.1em; margin: 0; border-radius: 2px; box-decoration-break: clone; -webkit-box-decoration-break: clone; display: inline; line-height: 1;">${open}${inner}${close}</span>`;
+    // Estilo otimizado para PDF (evita quebras e garante cobertura do fundo)
+    const style = [
+      'background-color: #fef9c3',
+      'padding: 0.1em 0',
+      'border-radius: 2px',
+      'box-decoration-break: clone',
+      '-webkit-box-decoration-break: clone',
+      'display: inline',
+      'line-height: 1.2'
+    ].join('; ');
+    
+    return `<span style="${style}">${open}${inner}${close}</span>`;
   });
 }

@@ -246,6 +246,7 @@ const defaultSettings: CompanySettings = {
   reviewDeadlineEnabled: true,
   alterationDeadlineEnabled: true,
   approvalDeadlineEnabled: true,
+  costAllocationRule: 'approved',
 };
 
 export function useSupabaseData() {

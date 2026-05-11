@@ -892,7 +892,29 @@ export default function Reports() {
           <Button variant="outline" onClick={() => setShowPreview(!showPreview)} className="gap-2">
             <Eye size={16} /> {showPreview ? 'Ocultar' : 'Visualizar'}
           </Button>
-          <Button onClick={generatePDF} className="gap-2"><Download size={16} /> Exportar PDF</Button>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button className="gap-2">
+                <Download size={16} /> Exportar Relatórios
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <div className="p-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entregas (Cliente)</div>
+              <DropdownMenuItem onClick={generatePDF} className="gap-2 cursor-pointer">
+                <FileText size={14} className="text-red-500" /> PDF de Entregas
+              </DropdownMenuItem>
+              
+              <div className="h-px bg-border my-1" />
+              <div className="p-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Custos de Produção</div>
+              <DropdownMenuItem onClick={generateDetailedCostsPDF} className="gap-2 cursor-pointer">
+                <FileText size={14} className="text-red-500" /> PDF Detalhado de Custos
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportDetailedCostsCSV} className="gap-2 cursor-pointer">
+                <FileSpreadsheet size={14} className="text-emerald-500" /> CSV Detalhado de Custos
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

@@ -2606,8 +2606,29 @@ export default function VideomakerDashboard() {
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
+      </motion.div>
+    ) : activeTab === 'editing' ? (
+      <motion.div
+        key="editing-tab"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+      >
+        <EditorDashboard />
+      </motion.div>
+    ) : (
+      <motion.div
+        key="kanban-tab"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+      >
+        <EditorKanban />
+      </motion.div>
+    )}
+    </AnimatePresence>
     </div>
   );
 }

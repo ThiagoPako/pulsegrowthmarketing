@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket, RotateCcw, CalendarOff, Plus, Send, Loader2 } from 'lucide-react';
+import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket, RotateCcw, CalendarOff, Plus, Send, Loader2, DollarSign } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
 import { supabase as supabaseCloud } from '@/integrations/supabase/client';
 import { ASSISTANT_KEY } from '@/components/ProductionAssistant';

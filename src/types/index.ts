@@ -10,6 +10,7 @@ export interface User {
   displayName?: string;
   jobTitle?: string;
   fontScale?: string;
+  monthlySalary?: number;
 }
 
 export type DayOfWeek = 'segunda' | 'terca' | 'quarta' | 'quinta' | 'sexta' | 'sabado' | 'domingo';

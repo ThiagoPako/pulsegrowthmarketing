@@ -31,12 +31,24 @@ git stash pop || true
 # ============================================
 echo ""
 echo "=== 2. Instalando dependências do projeto ==="
-bun install
+
+# Detectar gerenciador de pacotes (bun > npm)
+if command -v bun &> /dev/null; then
+    PKG_MGR="bun"
+    RUN_CMD="bun run"
+else
+    echo "AVISO: bun não encontrado, usando npm"
+    PKG_MGR="npm"
+    RUN_CMD="npm run"
+fi
+
+cd $PROJECT_DIR
+$PKG_MGR install --legacy-peer-deps 2>/dev/null || $PKG_MGR install || true
 
 cd "$PROJECT_DIR/vps-api-server"
 if [ -f "package.json" ]; then
     echo "=== 2.1. Instalando dependências da API ==="
-    npm install || bun install || true
+    npm install || true
 fi
 
 # ============================================
@@ -45,7 +57,7 @@ fi
 echo ""
 echo "=== 3. Gerando build de produção ==="
 cd $PROJECT_DIR
-bun run build
+$RUN_CMD build
 
 # Copiar build para nginx se necessário
 if [ -d "$PROJECT_DIR/dist" ] && [ -d "$NGINX_WWW" ]; then

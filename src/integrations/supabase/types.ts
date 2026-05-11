@@ -3037,6 +3037,7 @@ export type Database = {
           id: string
           job_title: string | null
           last_seen_at: string | null
+          monthly_salary: number | null
           name: string
           role: Database["public"]["Enums"]["app_role"]
           updated_at: string
@@ -3052,6 +3053,7 @@ export type Database = {
           id: string
           job_title?: string | null
           last_seen_at?: string | null
+          monthly_salary?: number | null
           name: string
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
@@ -3067,6 +3069,7 @@ export type Database = {
           id?: string
           job_title?: string | null
           last_seen_at?: string | null
+          monthly_salary?: number | null
           name?: string
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string

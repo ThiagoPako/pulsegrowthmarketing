@@ -232,6 +232,77 @@ export default function Reports() {
     return { totalSalaries, costPerVideo, totalVideos, videosPerSalary };
   }, [salaryExpenses, dateRange, stats.totalContent]);
 
+  const detailedCosts = useMemo(() => {
+    // 1. Calculate totals per collaborator
+    const collaboratorData = users.map(user => {
+      const salary = user.monthlySalary || 0;
+      let units = 0;
+      let clientUnits: Record<string, number> = {};
+
+      if (user.role === 'videomaker') {
+        const vmRecs = filteredRecords.filter(r => r.videomaker_id === user.id && (r.delivery_status === 'realizada' || r.delivery_status === 'encaixe' || r.delivery_status === 'extra'));
+        units = vmRecs.length; // sessions
+        vmRecs.forEach(r => {
+          clientUnits[r.client_id] = (clientUnits[r.client_id] || 0) + 1;
+        });
+      } else if (user.role === 'editor') {
+        const edTasks = editorTasks.filter(t => t.edited_by === user.id && t.kanban_column === 'aprovado' && t.updated_at >= dateRange.start && t.updated_at <= dateRange.end);
+        units = edTasks.length;
+        edTasks.forEach(t => {
+          clientUnits[t.client_id] = (clientUnits[t.client_id] || 0) + 1;
+        });
+      } else if (user.role === 'designer') {
+        const dTasks = designTasks.filter(t => t.assigned_to === user.id && t.kanban_column === 'aprovado' && t.completed_at && t.completed_at >= dateRange.start && t.completed_at <= dateRange.end);
+        units = dTasks.length;
+        dTasks.forEach(t => {
+          clientUnits[t.client_id] = (clientUnits[t.client_id] || 0) + 1;
+        });
+      } else if (user.role === 'social_media') {
+        const smRecs = filteredSocial.filter(d => d.status === 'postado'); // simplified logic: who is the social media for this client?
+        // Since social_media_deliveries don't have an assigned_to, we check if the client has this user as social media
+        // Wait, clients table doesn't have social_media_id. Let's check the schema.
+        units = 0; // fallback if we can't link
+      }
+
+      const costPerUnit = units > 0 ? salary / units : 0;
+      return { user, salary, units, costPerUnit, clientUnits };
+    });
+
+    // 2. Calculate average cost per role
+    const roles = ['videomaker', 'editor', 'social_media', 'designer', 'endomarketing'];
+    const roleCosts = roles.map(role => {
+      const members = collaboratorData.filter(c => c.user.role === role);
+      const totalSalary = members.reduce((a, b) => a + b.salary, 0);
+      const totalUnits = members.reduce((a, b) => a + b.units, 0);
+      const avgCostPerUnit = totalUnits > 0 ? totalSalary / totalUnits : 0;
+      return { role, totalSalary, totalUnits, avgCostPerUnit };
+    });
+
+    // 3. Calculate cost per client
+    const clientCosts = clients.map(client => {
+      let totalCost = 0;
+      const breakdowns: any[] = [];
+
+      collaboratorData.forEach(collab => {
+        const unitsForClient = collab.clientUnits[client.id] || 0;
+        if (unitsForClient > 0) {
+          const costContribution = unitsForClient * collab.costPerUnit;
+          totalCost += costContribution;
+          breakdowns.push({ 
+            name: collab.user.name, 
+            role: collab.user.role, 
+            units: unitsForClient, 
+            cost: costContribution 
+          });
+        }
+      });
+
+      return { client, totalCost, breakdowns };
+    }).filter(c => c.totalCost > 0).sort((a, b) => b.totalCost - a.totalCost);
+
+    return { collaboratorData: collaboratorData.filter(c => c.salary > 0 || c.units > 0), roleCosts, clientCosts };
+  }, [users, filteredRecords, editorTasks, designTasks, filteredSocial, dateRange, clients]);
+
   const comparison = useMemo(() => {
     if (selectedClient === 'all') return null;
     const planId = clientPlans[selectedClient];

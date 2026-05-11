@@ -1050,6 +1050,9 @@ export type Database = {
           alteration_deadline_hours: number
           approval_deadline_enabled: boolean
           approval_deadline_hours: number
+          cost_allocation_rule:
+            | Database["public"]["Enums"]["cost_allocation_rule"]
+            | null
           editing_deadline_enabled: boolean
           editing_deadline_hours: number
           id: string
@@ -1068,6 +1071,9 @@ export type Database = {
           alteration_deadline_hours?: number
           approval_deadline_enabled?: boolean
           approval_deadline_hours?: number
+          cost_allocation_rule?:
+            | Database["public"]["Enums"]["cost_allocation_rule"]
+            | null
           editing_deadline_enabled?: boolean
           editing_deadline_hours?: number
           id?: string
@@ -1086,6 +1092,9 @@ export type Database = {
           alteration_deadline_hours?: number
           approval_deadline_enabled?: boolean
           approval_deadline_hours?: number
+          cost_allocation_rule?:
+            | Database["public"]["Enums"]["cost_allocation_rule"]
+            | null
           editing_deadline_enabled?: boolean
           editing_deadline_hours?: number
           id?: string
@@ -4220,6 +4229,7 @@ export type Database = {
         | "parceiro"
         | "fotografo"
         | "designer"
+      cost_allocation_rule: "approved" | "recorded" | "posted"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -4357,6 +4367,7 @@ export const Constants = {
         "fotografo",
         "designer",
       ],
+      cost_allocation_rule: ["approved", "recorded", "posted"],
     },
   },
 } as const

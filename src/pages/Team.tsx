@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, KeyRound, Users, Handshake, Trash2, Shield, Lock, Cake, CalendarDays, BarChart3 } from 'lucide-react';
+import { Plus, KeyRound, Users, Handshake, Trash2, Shield, Lock, Cake, CalendarDays, BarChart3, DollarSign } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import { useUserPermissions, AVAILABLE_MODULES } from '@/hooks/useUserPermissions';
 import BirthdayCountdown from '@/components/BirthdayCountdown';
@@ -38,6 +38,7 @@ interface TeamMember {
   jobTitle?: string;
   bio?: string;
   birthday?: string | null;
+  monthlySalary?: number;
 }
 
 interface PartnerInfo {
@@ -89,6 +90,7 @@ export default function Team() {
         jobTitle: p.job_title,
         bio: p.bio,
         birthday: p.birthday,
+        monthlySalary: p.monthly_salary || 0,
       })));
     }
     setLoading(false);
@@ -512,8 +514,33 @@ export default function Team() {
                   )}
                   {currentUser?.role === 'admin' && (
                     <>
+                      {/* Salary input */}
+                      <div className="relative group/salary" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1 bg-secondary/50 rounded-md px-1.5 h-7 border border-transparent focus-within:border-primary/30 focus-within:bg-background transition-all">
+                          <DollarSign size={10} className="text-muted-foreground" />
+                          <Input
+                            type="number"
+                            className="h-6 w-[80px] text-[10px] px-0 bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                            placeholder="Salário"
+                            value={u.monthlySalary || ''}
+                            onChange={async (e) => {
+                              const val = Number(e.target.value) || 0;
+                              setMembers(prev => prev.map(m => m.id === u.id ? { ...m, monthlySalary: val } : m));
+                            }}
+                            onBlur={async (e) => {
+                              const val = Number(e.target.value) || 0;
+                              await supabase.from('profiles').update({ monthly_salary: val } as any).eq('id', u.id);
+                              toast.success('Salário atualizado!');
+                            }}
+                          />
+                        </div>
+                        <p className="absolute -top-6 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground text-[9px] px-1.5 py-0.5 rounded border shadow-sm opacity-0 group-hover/salary:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                          Salário Mensal
+                        </p>
+                      </div>
+
                       {/* Birthday edit */}
-                      <div className="relative">
+                      <div className="relative" onClick={(e) => e.stopPropagation()}>
                         <Input
                           type="date"
                           className="h-7 w-[130px] text-[10px] px-1.5"

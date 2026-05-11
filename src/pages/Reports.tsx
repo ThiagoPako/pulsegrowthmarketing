@@ -10,13 +10,35 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
-import { FileText, Download, Eye, Film, XCircle, CalendarCheck, TrendingUp, Percent, Heart, CheckCircle2, BarChart3, Users, Clock, Zap, Image, Palette, Megaphone, Share2, DollarSign, Calculator } from 'lucide-react';
+import { FileText, Download, Eye, Film, XCircle, CalendarCheck, TrendingUp, Percent, Heart, CheckCircle2, BarChart3, Users, Clock, Zap, Image, Palette, Megaphone, Share2, DollarSign, Calculator, Target } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
+import UserAvatar from '@/components/UserAvatar';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import jsPDF from 'jspdf';
 import pulseHeaderImg from '@/assets/pulse_header.png';
+import type { UserRole } from '@/types';
+import { ROLE_LABELS } from '@/types';
+
+interface EditorTask {
+  id: string;
+  client_id: string;
+  edited_by: string | null;
+  content_type: string;
+  kanban_column: string;
+  approved_at: string | null;
+  updated_at: string;
+}
+
+interface DesignTask {
+  id: string;
+  client_id: string;
+  assigned_to: string | null;
+  kanban_column: string;
+  completed_at: string | null;
+  format_type: string;
+}
 
 interface DeliveryRecord {
   id: string;
@@ -80,6 +102,8 @@ export default function Reports() {
   const { clients, users, settings } = useApp();
   const [records, setRecords] = useState<DeliveryRecord[]>([]);
   const [socialDeliveries, setSocialDeliveries] = useState<SocialDelivery[]>([]);
+  const [editorTasks, setEditorTasks] = useState<EditorTask[]>([]);
+  const [designTasks, setDesignTasks] = useState<DesignTask[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [clientPlans, setClientPlans] = useState<Record<string, string | null>>({});
   const [waitLogs, setWaitLogs] = useState<WaitLog[]>([]);
@@ -91,16 +115,20 @@ export default function Reports() {
   const [showPreview, setShowPreview] = useState(true);
 
   const fetchData = useCallback(async () => {
-    const [rRes, pRes, cRes, sRes, wRes, salCatRes] = await Promise.all([
+    const [rRes, pRes, cRes, sRes, wRes, salCatRes, edRes, dsRes] = await Promise.all([
       supabase.from('delivery_records').select('*').order('date', { ascending: false }),
       supabase.from('plans').select('*'),
       supabase.from('clients').select('id, plan_id'),
       supabase.from('social_media_deliveries').select('*').order('delivered_at', { ascending: false }),
       supabase.from('recording_wait_logs').select('*'),
       supabase.from('expense_categories').select('id, name').ilike('name', '%salário%'),
+      supabase.from('content_tasks').select('id, client_id, edited_by, content_type, kanban_column, approved_at, updated_at'),
+      supabase.from('design_tasks').select('id, client_id, assigned_to, kanban_column, completed_at, format_type'),
     ]);
     if (rRes.data) setRecords(rRes.data as DeliveryRecord[]);
     if (pRes.data) setPlans(pRes.data as Plan[]);
+    if (edRes.data) setEditorTasks(edRes.data as EditorTask[]);
+    if (dsRes.data) setDesignTasks(dsRes.data as DesignTask[]);
     if (cRes.data) {
       const map: Record<string, string | null> = {};
       (cRes.data as any[]).forEach(c => { map[c.id] = c.plan_id; });
@@ -206,6 +234,78 @@ export default function Reports() {
     const videosPerSalary = totalSalaries > 0 ? totalVideos / (totalSalaries / 1000) : 0;
     return { totalSalaries, costPerVideo, totalVideos, videosPerSalary };
   }, [salaryExpenses, dateRange, stats.totalContent]);
+
+  const detailedCosts = useMemo(() => {
+    // 1. Calculate totals per collaborator
+    const collaboratorData = users.map(user => {
+      const salary = user.monthlySalary || 0;
+      let units = 0;
+      let clientUnits: Record<string, number> = {};
+
+      if (user.role === 'videomaker') {
+        const vmRecs = filteredRecords.filter(r => r.videomaker_id === user.id && (r.delivery_status === 'realizada' || r.delivery_status === 'encaixe' || r.delivery_status === 'extra'));
+        units = vmRecs.length; // sessions
+        vmRecs.forEach(r => {
+          clientUnits[r.client_id] = (clientUnits[r.client_id] || 0) + 1;
+        });
+      } else if (user.role === 'editor') {
+        const edTasks = editorTasks.filter(t => t.edited_by === user.id && t.kanban_column === 'aprovado' && t.updated_at >= dateRange.start && t.updated_at <= dateRange.end);
+        units = edTasks.length;
+        edTasks.forEach(t => {
+          clientUnits[t.client_id] = (clientUnits[t.client_id] || 0) + 1;
+        });
+      } else if (user.role === 'designer') {
+        const dTasks = designTasks.filter(t => t.assigned_to === user.id && t.kanban_column === 'aprovado' && t.completed_at && t.completed_at >= dateRange.start && t.completed_at <= dateRange.end);
+        units = dTasks.length;
+        dTasks.forEach(t => {
+          clientUnits[t.client_id] = (clientUnits[t.client_id] || 0) + 1;
+        });
+      } else if (user.role === 'social_media') {
+        const smRecs = filteredSocial.filter(d => (d as any).created_by === user.id && d.status === 'postado');
+        units = smRecs.length;
+        smRecs.forEach(d => {
+          clientUnits[d.client_id] = (clientUnits[d.client_id] || 0) + 1;
+        });
+      }
+
+      const costPerUnit = units > 0 ? salary / units : 0;
+      return { user, salary, units, costPerUnit, clientUnits };
+    });
+
+    // 2. Calculate average cost per role
+    const roles = ['videomaker', 'editor', 'social_media', 'designer', 'endomarketing'];
+    const roleCosts = roles.map(role => {
+      const members = collaboratorData.filter(c => c.user.role === role);
+      const totalSalary = members.reduce((a, b) => a + b.salary, 0);
+      const totalUnits = members.reduce((a, b) => a + b.units, 0);
+      const avgCostPerUnit = totalUnits > 0 ? totalSalary / totalUnits : 0;
+      return { role, totalSalary, totalUnits, avgCostPerUnit };
+    });
+
+    // 3. Calculate cost per client
+    const clientCosts = clients.map(client => {
+      let totalCost = 0;
+      const breakdowns: any[] = [];
+
+      collaboratorData.forEach(collab => {
+        const unitsForClient = collab.clientUnits[client.id] || 0;
+        if (unitsForClient > 0) {
+          const costContribution = unitsForClient * collab.costPerUnit;
+          totalCost += costContribution;
+          breakdowns.push({ 
+            name: collab.user.name, 
+            role: collab.user.role, 
+            units: unitsForClient, 
+            cost: costContribution 
+          });
+        }
+      });
+
+      return { client, totalCost, breakdowns };
+    }).filter(c => c.totalCost > 0).sort((a, b) => b.totalCost - a.totalCost);
+
+    return { collaboratorData: collaboratorData.filter(c => c.salary > 0 || c.units > 0), roleCosts, clientCosts };
+  }, [users, filteredRecords, editorTasks, designTasks, filteredSocial, dateRange, clients]);
 
   const comparison = useMemo(() => {
     if (selectedClient === 'all') return null;
@@ -890,7 +990,121 @@ export default function Reports() {
                 </CardContent>
               </Card>
             )}
-          </div>
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-1.5 italic">
+          Custo por vídeo = Total de salários (videomakers + editores) ÷ Total de conteúdos produzidos no período
+        </p>
+
+        {/* Detalhamento de Custos */}
+        <div className="grid lg:grid-cols-2 gap-4 mt-6">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Users size={16} className="text-primary" /> Custo por Colaborador
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {detailedCosts.collaboratorData.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-4">Defina os salários no módulo de Equipe para ver estes dados.</p>
+                ) : (
+                  detailedCosts.collaboratorData.map((c, i) => (
+                    <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 border border-border/50">
+                      <div className="flex items-center gap-2">
+                        <UserAvatar user={c.user} size="sm" />
+                        <div>
+                          <p className="text-xs font-semibold">{c.user.name}</p>
+                          <p className="text-[9px] text-muted-foreground uppercase">{ROLE_LABELS[c.user.role as UserRole] || c.user.role}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-bold text-primary">R$ {c.costPerUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        <p className="text-[9px] text-muted-foreground">{c.units} entregas no período</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Target size={16} className="text-primary" /> Custo Médio por Serviço
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {detailedCosts.roleCosts.filter(r => r.totalUnits > 0).map((r, i) => (
+                  <div key={i} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-medium">{ROLE_LABELS[r.role as UserRole] || r.role}</span>
+                      <span className="font-bold">R$ {r.avgCostPerUnit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} / un</span>
+                    </div>
+                    <Progress value={detailedCosts.roleCosts.length > 0 ? (r.avgCostPerUnit / Math.max(...detailedCosts.roleCosts.map(x => x.avgCostPerUnit), 1)) * 100 : 0} className="h-1.5" />
+                    <div className="flex justify-between text-[9px] text-muted-foreground">
+                      <span>Total: R$ {r.totalSalary.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      <span>{r.totalUnits} unidades entregues</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Custo por Cliente */}
+        <Card className="mt-4">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <DollarSign size={16} className="text-primary" /> Custo de Produção por Cliente
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Cliente</TableHead>
+                  <TableHead className="text-xs">Composição do Custo</TableHead>
+                  <TableHead className="text-right text-xs">Custo Total Estimado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {detailedCosts.clientCosts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center py-8 text-muted-foreground text-sm italic">
+                      Nenhum custo registrado para o período
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  detailedCosts.clientCosts.map((cc, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: `hsl(${cc.client.color})` }} />
+                          <span className="font-medium text-sm">{cc.client.companyName}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {cc.breakdowns.map((b, bi) => (
+                            <Badge key={bi} variant="outline" className="text-[9px] py-0 h-4 font-normal">
+                              {b.name}: R$ {b.cost.toFixed(0)}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right py-3">
+                        <p className="text-sm font-bold text-primary">R$ {cc.totalCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
 
           {/* Comparison table with overdelivery */}
           {overdelivery && (

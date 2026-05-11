@@ -18,6 +18,25 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import jsPDF from 'jspdf';
 import pulseHeaderImg from '@/assets/pulse_header.png';
 
+interface EditorTask {
+  id: string;
+  client_id: string;
+  edited_by: string | null;
+  content_type: string;
+  kanban_column: string;
+  approved_at: string | null;
+  updated_at: string;
+}
+
+interface DesignTask {
+  id: string;
+  client_id: string;
+  assigned_to: string | null;
+  kanban_column: string;
+  completed_at: string | null;
+  format_type: string;
+}
+
 interface DeliveryRecord {
   id: string;
   recording_id: string | null;
@@ -80,6 +99,8 @@ export default function Reports() {
   const { clients, users, settings } = useApp();
   const [records, setRecords] = useState<DeliveryRecord[]>([]);
   const [socialDeliveries, setSocialDeliveries] = useState<SocialDelivery[]>([]);
+  const [editorTasks, setEditorTasks] = useState<EditorTask[]>([]);
+  const [designTasks, setDesignTasks] = useState<DesignTask[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [clientPlans, setClientPlans] = useState<Record<string, string | null>>({});
   const [waitLogs, setWaitLogs] = useState<WaitLog[]>([]);
@@ -91,16 +112,20 @@ export default function Reports() {
   const [showPreview, setShowPreview] = useState(true);
 
   const fetchData = useCallback(async () => {
-    const [rRes, pRes, cRes, sRes, wRes, salCatRes] = await Promise.all([
+    const [rRes, pRes, cRes, sRes, wRes, salCatRes, edRes, dsRes] = await Promise.all([
       supabase.from('delivery_records').select('*').order('date', { ascending: false }),
       supabase.from('plans').select('*'),
       supabase.from('clients').select('id, plan_id'),
       supabase.from('social_media_deliveries').select('*').order('delivered_at', { ascending: false }),
       supabase.from('recording_wait_logs').select('*'),
       supabase.from('expense_categories').select('id, name').ilike('name', '%salário%'),
+      supabase.from('content_tasks').select('id, client_id, edited_by, content_type, kanban_column, approved_at, updated_at'),
+      supabase.from('design_tasks').select('id, client_id, assigned_to, kanban_column, completed_at, format_type'),
     ]);
     if (rRes.data) setRecords(rRes.data as DeliveryRecord[]);
     if (pRes.data) setPlans(pRes.data as Plan[]);
+    if (edRes.data) setEditorTasks(edRes.data as EditorTask[]);
+    if (dsRes.data) setDesignTasks(dsRes.data as DesignTask[]);
     if (cRes.data) {
       const map: Record<string, string | null> = {};
       (cRes.data as any[]).forEach(c => { map[c.id] = c.plan_id; });

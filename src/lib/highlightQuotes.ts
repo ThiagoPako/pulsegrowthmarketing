@@ -126,15 +126,18 @@ export function highlightQuotesForPdf(html: string): string {
   return replaceQuoted(normalized, (inner, kind) => {
     const open = kind === 'double' ? '&ldquo;' : '&lsquo;';
     const close = kind === 'double' ? '&rdquo;' : '&rsquo;';
-    // Estilo otimizado para PDF (evita quebras e garante cobertura do fundo)
+    // Estilo otimizado para PDF: garante cobertura 100% sem sobrepor linhas.
+    // O uso de em para padding e line-height garante calibração automática com a fonte.
     const style = [
       'background-color: #fef9c3',
-      'padding: 0.1em 0',
+      'padding: 0.15em 0.05em',
+      'margin: 0 -0.05em',
       'border-radius: 2px',
       'box-decoration-break: clone',
       '-webkit-box-decoration-break: clone',
       'display: inline',
-      'line-height: 1.2'
+      'line-height: normal',
+      'vertical-align: baseline'
     ].join('; ');
     
     return `<span style="${style}">${open}${inner}${close}</span>`;

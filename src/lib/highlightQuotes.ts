@@ -116,6 +116,6 @@ export function highlightQuotesForPdf(html: string): string {
   return replaceQuoted(normalized, (inner, kind) => {
     const open = kind === 'double' ? '&ldquo;' : '&lsquo;';
     const close = kind === 'double' ? '&rdquo;' : '&rsquo;';
-    return `<span style="background-color:#fef9c3; padding: 2px 0; margin: 0; border-radius: 2px; box-decoration-break: clone; -webkit-box-decoration-break: clone; display: inline; vertical-align: baseline;">${open}${inner}${close}</span>`;
+    return `<span style="background-color:#fef9c3; padding: 0.2em 0.1em; margin: 0; border-radius: 2px; box-decoration-break: clone; -webkit-box-decoration-break: clone; display: inline; line-height: 1;">${open}${inner}${close}</span>`;
   });
 }

@@ -493,14 +493,14 @@ export default function Scripts() {
       const client = clients.find(c => c.id === script.clientId);
       html += `
         <section data-pdf-role="script">
-          <div data-pdf-role="script-header" style="padding:${i === 0 ? '16' : '14'}px ${pagePadding}px 4px;">
-            ${i > 0 ? '<div style="border-top:2px solid #e5e5e5; margin:0 0 14px;"></div>' : ''}
-            <h1 style="font-size:17px; margin:0 0 3px; line-height:1.3;">${script.title}</h1>
-            <p style="font-size:11px; color:#666; margin:0 0 8px;">
+          <div data-pdf-role="script-header" style="padding:${i === 0 ? '20' : '24'}px ${pagePadding}px 8px;">
+            ${i > 0 ? '<div style="border-top:1px solid #ddd; margin:0 0 20px;"></div>' : ''}
+            <h1 style="font-size:22px; font-weight:700; color:#000; margin:0 0 4px; line-height:1.2;">${script.title}</h1>
+            <p style="font-size:12px; color:#666; margin:0 0 12px; font-weight:500; text-transform:uppercase; letter-spacing:0.02em;">
               ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
             </p>
           </div>
-          <div data-pdf-role="script-body" style="font-size:12.5px; line-height:1.55; text-align:justify; word-break:keep-all; overflow-wrap:break-word; hyphens:none; max-width:100%; box-sizing:border-box; overflow:hidden;">
+          <div data-pdf-role="script-body" style="font-size:14px; line-height:1.6; text-align:left; word-break:break-word; overflow-wrap:break-word; max-width:100%; box-sizing:border-box; overflow:hidden; color:#222;">
             ${highlightQuotesForPdf(script.content)}
           </div>
         </section>

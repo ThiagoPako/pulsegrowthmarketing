@@ -486,7 +486,7 @@ export default function Scripts() {
     sourceRoot.style.cssText = `position:fixed;left:-20000px;top:0;width:${pdfWidthPx}px;background:white;pointer-events:none;z-index:-1;`;
 
     let html = `<div style="font-family:'Segoe UI', Arial, sans-serif; color:#1a1a1a; background:white;">`;
-    html += `<div data-pdf-role="logo" style="margin:0;"><img src="${pulseHeader}" style="width:100%;display:block;" /></div>`;
+    html += `<div data-pdf-role="logo" style="margin:0 0 10px;"><img src="${pulseHeader}" style="width:100%;display:block;" /></div>`;
 
     for (let i = 0; i < selectedScripts.length; i++) {
       const script = selectedScripts[i];

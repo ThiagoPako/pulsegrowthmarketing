@@ -130,14 +130,14 @@ export function highlightQuotesForPdf(html: string): string {
     // O uso de em para padding e line-height garante calibração automática com a fonte.
     const style = [
       'background-color: #fef9c3',
-      'padding: 0.15em 0.05em',
-      'margin: 0 -0.05em',
+      'padding: 0.12em 0.15em',
       'border-radius: 2px',
       'box-decoration-break: clone',
       '-webkit-box-decoration-break: clone',
       'display: inline',
       'line-height: normal',
-      'vertical-align: baseline'
+      'vertical-align: baseline',
+      'color: #1a1a1a'
     ].join('; ');
     
     return `<span style="${style}">${open}${inner}${close}</span>`;

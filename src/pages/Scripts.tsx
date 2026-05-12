@@ -486,21 +486,21 @@ export default function Scripts() {
     sourceRoot.style.cssText = `position:fixed;left:-20000px;top:0;width:${pdfWidthPx}px;background:white;pointer-events:none;z-index:-1;`;
 
     let html = `<div style="font-family:'Segoe UI', Arial, sans-serif; color:#1a1a1a; background:white;">`;
-    html += `<div data-pdf-role="logo" style="margin:0;"><img src="${pulseHeader}" style="width:100%;display:block;" /></div>`;
+    html += `<div data-pdf-role="logo" style="margin:0 0 10px;"><img src="${pulseHeader}" style="width:100%;display:block;" /></div>`;
 
     for (let i = 0; i < selectedScripts.length; i++) {
       const script = selectedScripts[i];
       const client = clients.find(c => c.id === script.clientId);
       html += `
         <section data-pdf-role="script">
-          <div data-pdf-role="script-header" style="padding:${i === 0 ? '16' : '14'}px ${pagePadding}px 4px;">
-            ${i > 0 ? '<div style="border-top:2px solid #e5e5e5; margin:0 0 14px;"></div>' : ''}
-            <h1 style="font-size:17px; margin:0 0 3px; line-height:1.3;">${script.title}</h1>
-            <p style="font-size:11px; color:#666; margin:0 0 8px;">
+          <div data-pdf-role="script-header" style="padding:${i === 0 ? '20' : '24'}px ${pagePadding}px 8px;">
+            ${i > 0 ? '<div style="border-top:1px solid #ddd; margin:0 0 20px;"></div>' : ''}
+            <h1 style="font-size:22px; font-weight:700; color:#000; margin:0 0 4px; line-height:1.2;">${script.title}</h1>
+            <p style="font-size:12px; color:#666; margin:0 0 12px; font-weight:500; text-transform:uppercase; letter-spacing:0.02em;">
               ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
             </p>
           </div>
-          <div data-pdf-role="script-body" style="font-size:12.5px; line-height:1.55; text-align:justify; word-break:keep-all; overflow-wrap:break-word; hyphens:none; max-width:100%; box-sizing:border-box; overflow:hidden;">
+          <div data-pdf-role="script-body" style="font-size:14px; line-height:1.6; text-align:left; word-break:break-word; overflow-wrap:break-word; max-width:100%; box-sizing:border-box; overflow:hidden; color:#222;">
             ${highlightQuotesForPdf(script.content)}
           </div>
         </section>
@@ -596,23 +596,23 @@ export default function Scripts() {
           if (!bodyNodes.length) {
             appendBlock(body);
           } else {
-            // Group consecutive small nodes into combined blocks to reduce gaps
+            // Group nodes to minimize blocks and ensure good spacing
             let accum: Node[] = [];
             const flushAccum = () => {
               if (!accum.length) return;
               const block = document.createElement('div');
-              block.style.cssText = `padding:0 ${pagePadding}px; font-size:12.5px; line-height:1.55; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:justify; word-break:keep-all; overflow-wrap:break-word; hyphens:none;`;
+              block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.6; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; word-break:break-word;`;
               for (const n of accum) {
                 if (n.nodeType === Node.TEXT_NODE) {
                   const p = document.createElement('p');
-                  p.style.cssText = 'margin:0 0 2px; text-align:justify;';
+                  p.style.cssText = 'margin:0 0 6px; text-align:left;';
                   p.textContent = n.textContent ?? '';
                   block.appendChild(p);
                 } else {
                   const cl = (n as HTMLElement).cloneNode(true) as HTMLElement;
-                  cl.style.textAlign = 'justify';
-                  // Reduce margins on paragraphs inside
-                  if (cl.tagName === 'P') cl.style.margin = '0 0 2px';
+                  cl.style.textAlign = 'left';
+                  // Maintain consistent spacing
+                  if (cl.tagName === 'P') cl.style.margin = '0 0 6px';
                   block.appendChild(cl);
                 }
               }
@@ -621,21 +621,20 @@ export default function Scripts() {
             };
 
             for (const node of bodyNodes) {
-              // Mark elements are quote highlights - keep as separate blocks with break-inside avoid
               const el = node as HTMLElement;
               const isQuote = el.nodeType === Node.ELEMENT_NODE && (el.tagName === 'MARK' || el.tagName === 'DIV' && el.style?.backgroundColor);
               
               if (isQuote) {
                 flushAccum();
                 const block = document.createElement('div');
-                block.style.cssText = `padding:0 ${pagePadding}px; font-size:12.5px; line-height:1.55; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:justify; break-inside:avoid; page-break-inside:avoid;`;
+                block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.6; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; break-inside:avoid; page-break-inside:avoid;`;
                 const cl = el.cloneNode(true) as HTMLElement;
                 block.appendChild(cl);
                 appendBlock(block);
               } else {
                 accum.push(node);
-                // Flush every 3 nodes to keep blocks small and avoid clipping
-                if (accum.length >= 3) flushAccum();
+                // Flush larger chunks or on meaningful breaks
+                if (accum.length >= 8) flushAccum();
               }
             }
             flushAccum();

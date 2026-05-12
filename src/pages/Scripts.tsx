@@ -596,23 +596,23 @@ export default function Scripts() {
           if (!bodyNodes.length) {
             appendBlock(body);
           } else {
-            // Group consecutive small nodes into combined blocks to reduce gaps
+            // Group nodes to minimize blocks and ensure good spacing
             let accum: Node[] = [];
             const flushAccum = () => {
               if (!accum.length) return;
               const block = document.createElement('div');
-              block.style.cssText = `padding:0 ${pagePadding}px; font-size:12.5px; line-height:1.55; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:justify; word-break:keep-all; overflow-wrap:break-word; hyphens:none;`;
+              block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.6; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; word-break:break-word;`;
               for (const n of accum) {
                 if (n.nodeType === Node.TEXT_NODE) {
                   const p = document.createElement('p');
-                  p.style.cssText = 'margin:0 0 2px; text-align:justify;';
+                  p.style.cssText = 'margin:0 0 6px; text-align:left;';
                   p.textContent = n.textContent ?? '';
                   block.appendChild(p);
                 } else {
                   const cl = (n as HTMLElement).cloneNode(true) as HTMLElement;
-                  cl.style.textAlign = 'justify';
-                  // Reduce margins on paragraphs inside
-                  if (cl.tagName === 'P') cl.style.margin = '0 0 2px';
+                  cl.style.textAlign = 'left';
+                  // Maintain consistent spacing
+                  if (cl.tagName === 'P') cl.style.margin = '0 0 6px';
                   block.appendChild(cl);
                 }
               }
@@ -621,21 +621,20 @@ export default function Scripts() {
             };
 
             for (const node of bodyNodes) {
-              // Mark elements are quote highlights - keep as separate blocks with break-inside avoid
               const el = node as HTMLElement;
               const isQuote = el.nodeType === Node.ELEMENT_NODE && (el.tagName === 'MARK' || el.tagName === 'DIV' && el.style?.backgroundColor);
               
               if (isQuote) {
                 flushAccum();
                 const block = document.createElement('div');
-                block.style.cssText = `padding:0 ${pagePadding}px; font-size:12.5px; line-height:1.55; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:justify; break-inside:avoid; page-break-inside:avoid;`;
+                block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.6; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; break-inside:avoid; page-break-inside:avoid;`;
                 const cl = el.cloneNode(true) as HTMLElement;
                 block.appendChild(cl);
                 appendBlock(block);
               } else {
                 accum.push(node);
-                // Flush every 3 nodes to keep blocks small and avoid clipping
-                if (accum.length >= 3) flushAccum();
+                // Flush larger chunks or on meaningful breaks
+                if (accum.length >= 8) flushAccum();
               }
             }
             flushAccum();

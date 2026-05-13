@@ -24,7 +24,7 @@ jobs:
           chmod 600 /tmp/github_deploy_key
 
       - name: Execute remote commands via SSH
-        uses: appleboy/ssh-action@v1.2.2
+        uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}

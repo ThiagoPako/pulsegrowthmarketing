@@ -360,8 +360,8 @@ export default function Scripts() {
         }
       }
 
-      // Only create content_task for non-avulso scripts (avulso has no client_id)
-      if (form.clientId) {
+      // Create content_task if it has a client or is an avulso recording
+      if (form.clientId || (form.isAvulso && form.recordingId)) {
         const contentTaskId = crypto.randomUUID();
         const { error } = await supabase.from('content_tasks').insert({
           id: contentTaskId,

@@ -1412,14 +1412,57 @@ export default function Scripts() {
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-[900px] max-h-[90vh] p-0 overflow-hidden bg-zinc-200/50 dark:bg-zinc-900/50 flex flex-col backdrop-blur-sm">
           <DialogHeader className="p-4 bg-white dark:bg-zinc-950 border-b shrink-0">
-            <div className="flex items-center justify-between w-full">
-              <DialogTitle className="flex items-center gap-2">
-                <Eye size={18} className="text-primary" />
-                Pré-visualização do Roteiro (A4)
-              </DialogTitle>
-              <Button onClick={() => viewing && handleDownloadPdf(viewing)} size="sm" className="gap-2">
-                <Download size={16} /> Baixar PDF
-              </Button>
+            <div className="flex flex-col gap-4 w-full">
+              <div className="flex items-center justify-between">
+                <DialogTitle className="flex items-center gap-2">
+                  <Eye size={18} className="text-primary" />
+                  Pré-visualização do Roteiro (A4)
+                </DialogTitle>
+                <Button onClick={() => viewing && handleDownloadPdf(viewing)} size="sm" className="gap-2">
+                  <Download size={16} /> Baixar PDF
+                </Button>
+              </div>
+              
+              <div className="flex flex-wrap items-center gap-6 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-border">
+                <div className="space-y-1.5 flex-1 min-w-[120px]">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <Maximize size={10} /> Margens (px)
+                  </Label>
+                  <Slider 
+                    value={[pdfConfig.padding]} 
+                    min={10} 
+                    max={60} 
+                    step={2} 
+                    onValueChange={([v]) => setPdfConfig(prev => ({ ...prev, padding: v }))} 
+                  />
+                </div>
+                
+                <div className="space-y-1.5 flex-1 min-w-[120px]">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <AlignJustify size={10} /> Espaçamento
+                  </Label>
+                  <Slider 
+                    value={[pdfConfig.lineHeight]} 
+                    min={1.2} 
+                    max={2.5} 
+                    step={0.1} 
+                    onValueChange={([v]) => setPdfConfig(prev => ({ ...prev, lineHeight: v }))} 
+                  />
+                </div>
+
+                <div className="space-y-1.5 flex-1 min-w-[120px]">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                    <Type size={10} /> Tamanho Fonte
+                  </Label>
+                  <Slider 
+                    value={[pdfConfig.fontSize]} 
+                    min={10} 
+                    max={20} 
+                    step={1} 
+                    onValueChange={([v]) => setPdfConfig(prev => ({ ...prev, fontSize: v }))} 
+                  />
+                </div>
+              </div>
             </div>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 scrollbar-thin">

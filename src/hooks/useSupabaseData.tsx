@@ -324,25 +324,32 @@ export function useSupabaseData() {
 
   // ── Polling for data changes (replaces Supabase Realtime) ──
   useEffect(() => {
-    const interval = setInterval(async () => {
-      const token = localStorage.getItem('pulse_jwt');
-      if (!token) return;
-      const [cRes, rRes, tRes, sRes, arRes] = await Promise.all([
-        invokeVpsFunction('clients', { method: 'GET' }),
-        invokeVpsFunction('recordings', { method: 'GET' }),
-        invokeVpsFunction('kanban-tasks', { method: 'GET' }),
-        invokeVpsFunction('scripts', { method: 'GET' }),
-        invokeVpsFunction('active-recordings', { method: 'GET' }),
-      ]);
-      if (cRes.data && !cRes.error) setClients((Array.isArray(cRes.data) ? cRes.data : []).map(rowToClient));
-      if (rRes.data && !rRes.error) setRecordings((Array.isArray(rRes.data) ? rRes.data : []).map(rowToRecording));
-      if (tRes.data && !tRes.error) setTasks((Array.isArray(tRes.data) ? tRes.data : []).map(rowToTask));
-      if (sRes.data && !sRes.error) setScripts((Array.isArray(sRes.data) ? sRes.data : []).map(rowToScript));
-      if (arRes.data && !arRes.error) setActiveRecordings((Array.isArray(arRes.data) ? arRes.data : []).map(rowToActiveRecording));
-    }, 5000);
+    const token = localStorage.getItem('pulse_jwt');
+    if (!token) return;
 
-    return () => clearInterval(interval);
-  }, []);
+    // Realtime subscription for content_tasks
+    const channel = supabase
+      .channel('public:content_tasks')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'content_tasks' },
+        (payload: any) => {
+          console.log('Realtime change received:', payload);
+          fetchAll(); // Refresh everything when a task changes
+        }
+      )
+      .subscribe();
+
+    // Still keep polling as a fallback, but much slower
+    const interval = setInterval(async () => {
+      fetchAll();
+    }, 60000);
+
+    return () => {
+      clearInterval(interval);
+      (channel as any).unsubscribe?.();
+    };
+  }, [fetchAll]);
 
   // ── Bulk insert recordings ──
   const addRecordingsBulk = useCallback(async (recs: Recording[]): Promise<boolean> => {

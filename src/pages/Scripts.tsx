@@ -167,6 +167,9 @@ export default function Scripts() {
       padding: 28,
       lineHeight: 1.75,
       fontSize: 14,
+      minPadding: 15,
+      minLineHeight: 1.3,
+      minFontSize: 10,
     };
   });
 

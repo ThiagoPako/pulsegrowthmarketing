@@ -159,6 +159,7 @@ export default function Scripts() {
     lineHeight: 1.75,
     fontSize: 14,
   });
+  const [overflowWarnings, setOverflowWarnings] = useState<number[]>([]);
 
   const toggleScriptAlerts = (v: boolean) => {
     setScriptAlerts(v);

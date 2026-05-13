@@ -188,7 +188,8 @@ export default function Scripts() {
 
   const clientsLowScripts = useMemo(() => {
     if (!scriptAlerts) return [];
-    const activeClients = clients;
+    // Only show alerts for active clients
+    const activeClients = clients.filter(c => (c as any).status !== 'cancelado');
     return activeClients
       .map(c => {
         const count = scripts.filter(s => s.clientId === c.id && !s.recorded).length;

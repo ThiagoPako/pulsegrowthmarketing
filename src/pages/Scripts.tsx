@@ -472,6 +472,13 @@ export default function Scripts() {
       const prevOverflow = page.style.overflow;
       page.style.overflow = 'visible';
 
+      const isDark = document.documentElement.classList.contains('dark');
+      if (isDark) {
+        document.documentElement.classList.remove('dark');
+        // Force a style recalculation
+        void document.documentElement.offsetHeight;
+      }
+
       const canvas = await html2canvas(page, {
         scale: 2,
         useCORS: true,
@@ -481,6 +488,10 @@ export default function Scripts() {
         windowWidth: page.offsetWidth,
         windowHeight: page.offsetHeight,
       });
+
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+      }
 
       page.style.overflow = prevOverflow;
 
@@ -498,9 +509,10 @@ export default function Scripts() {
     const pdfHeightPx = Math.floor((pdfWidthPx * 297) / 210); // A4 exact height
     const pagePadding = 28;
     const sourceRoot = document.createElement('div');
-    sourceRoot.style.cssText = `position:fixed;left:-20000px;top:0;width:${pdfWidthPx}px;background:white;pointer-events:none;z-index:-1;`;
+    sourceRoot.className = 'light';
+    sourceRoot.style.cssText = `position:fixed;left:-20000px;top:0;width:${pdfWidthPx}px;background:white;pointer-events:none;z-index:-1;color:#1a1a1a;`;
 
-    let html = `<div style="font-family:'Segoe UI', Arial, sans-serif; color:#1a1a1a; background:white;">`;
+    let html = `<div class="light" style="font-family:'Segoe UI', Arial, sans-serif; color:#1a1a1a; background:white;">`;
     html += `<div data-pdf-role="logo" style="margin:0 0 10px;"><img src="${pulseHeader}" style="width:100%;display:block;" /></div>`;
 
     for (let i = 0; i < selectedScripts.length; i++) {
@@ -537,7 +549,8 @@ export default function Scripts() {
     document.body.appendChild(sourceRoot);
 
     const renderRoot = document.createElement('div');
-    renderRoot.style.cssText = `position:fixed;left:-10000px;top:0;width:${pdfWidthPx}px;background:transparent;pointer-events:none;z-index:-1;`;
+    renderRoot.className = 'light';
+    renderRoot.style.cssText = `position:fixed;left:-10000px;top:0;width:${pdfWidthPx}px;background:transparent;pointer-events:none;z-index:-1;color:#1a1a1a;`;
     document.body.appendChild(renderRoot);
 
     try {
@@ -546,7 +559,8 @@ export default function Scripts() {
       const pages: HTMLDivElement[] = [];
       const createPage = () => {
         const page = document.createElement('div');
-        page.style.cssText = `width:${pdfWidthPx}px;height:${pdfHeightPx}px;background:white;box-sizing:border-box;overflow:hidden;position:relative;`;
+        page.className = 'light';
+        page.style.cssText = `width:${pdfWidthPx}px;height:${pdfHeightPx}px;background:white;box-sizing:border-box;overflow:hidden;position:relative;color:#1a1a1a;`;
         renderRoot.appendChild(page);
         pages.push(page);
         return page;
@@ -616,7 +630,8 @@ export default function Scripts() {
             const flushAccum = () => {
               if (!accum.length) return;
               const block = document.createElement('div');
-              block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.6; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; word-break:break-word;`;
+              block.className = 'light';
+              block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.6; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; word-break:break-word; color:#1a1a1a;`;
               for (const n of accum) {
                 if (n.nodeType === Node.TEXT_NODE) {
                   const p = document.createElement('p');
@@ -642,7 +657,8 @@ export default function Scripts() {
               if (isQuote) {
                 flushAccum();
                 const block = document.createElement('div');
-                block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.6; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; break-inside:avoid; page-break-inside:avoid;`;
+                block.className = 'light';
+                block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.6; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; break-inside:avoid; page-break-inside:avoid; color:#1a1a1a;`;
                 const cl = el.cloneNode(true) as HTMLElement;
                 block.appendChild(cl);
                 appendBlock(block);

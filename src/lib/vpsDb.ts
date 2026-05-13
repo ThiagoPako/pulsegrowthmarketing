@@ -354,17 +354,76 @@ class RpcBuilder {
 
 class ChannelBuilder {
   private _name: string;
+  private _callbacks: Array<{ event: string; filter: any; callback: (payload: any) => void }> = [];
+  private _socket: WebSocket | null = null;
 
   constructor(name: string) {
     this._name = name;
   }
 
-  on(_event: string, _filter: any, _callback: (payload: any) => void): this {
+  on(event: string, filter: any, callback: (payload: any) => void): this {
+    this._callbacks.push({ event, filter, callback });
     return this;
   }
 
   subscribe(): this {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) return this;
+
+    // Connect to VPS WebSocket for realtime updates
+    // WS URL structure matches the API base
+    const wsUrl = VPS_API_BASE.replace('http', 'ws') + '/realtime';
+    
+    try {
+      this._socket = new WebSocket(wsUrl);
+
+      this._socket.onopen = () => {
+        if (this._socket?.readyState === WebSocket.OPEN) {
+          this._socket.send(JSON.stringify({
+            type: 'subscribe',
+            channel: this._name,
+            token: token,
+            events: this._callbacks.map(c => ({ event: c.event, filter: c.filter }))
+          }));
+        }
+      };
+
+      this._socket.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.type === 'broadcast' || payload.type === 'postgres_changes') {
+            this._callbacks.forEach(c => {
+              // Simple event matching
+              if (c.event === '*' || c.event === payload.event) {
+                c.callback(payload);
+              }
+            });
+          }
+        } catch (e) {
+          console.error('WS parse error:', e);
+        }
+      };
+
+      this._socket.onclose = () => {
+        // Reconnect logic could be added here
+      };
+
+      this._socket.onerror = (err) => {
+        console.error('WS error:', err);
+      };
+
+    } catch (e) {
+      console.error('WS connection failed:', e);
+    }
+
     return this;
+  }
+
+  unsubscribe() {
+    if (this._socket) {
+      this._socket.close();
+      this._socket = null;
+    }
   }
 }
 

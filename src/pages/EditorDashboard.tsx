@@ -236,10 +236,16 @@ export default function EditorDashboard() {
 
   const fetchTasks = useCallback(async () => {
     const { data } = await supabase.from('content_tasks').select('*')
-      .in('kanban_column', ['edicao', 'revisao', 'alteracao', 'envio', 'agendamentos', 'acompanhamento', 'arquivado'])
-      .order('position', { ascending: true });
+      .in('kanban_column', ['edicao', 'revisao', 'alteracao', 'envio', 'agendamentos', 'acompanhamento', 'arquivado']);
+    
     if (data) {
-      setTasks(data as EditorTask[]);
+      // Sort client-side to be resilient to missing 'position' column
+      const sorted = [...data].sort((a: any, b: any) => {
+        const posA = typeof a.position === 'number' ? a.position : Number.MAX_SAFE_INTEGER;
+        const posB = typeof b.position === 'number' ? b.position : Number.MAX_SAFE_INTEGER;
+        return posA - posB;
+      });
+      setTasks(sorted as EditorTask[]);
       // Refresh active task if exists
       if (activeEditTask) {
         const refreshed = (data as EditorTask[]).find(t => t.id === activeEditTask.id);

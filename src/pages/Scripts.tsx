@@ -738,19 +738,12 @@ export default function Scripts() {
       document.body.removeChild(renderRoot);
       throw error;
     }
-  }, [clients, waitForPdfAssets]);
+  }, [clients, waitForPdfAssets, pdfConfig]);
 
   const handlePreviewPdf = useCallback(async (script: Script) => {
     setPreviewPages([]); 
     setOverflowWarnings([]);
-    let currentPages: HTMLDivElement[] = [];
-    let currentCleanup: () => void = () => {};
     
-    const { pages, cleanup } = await buildPdfPages([script]);
-    currentPages = pages;
-    currentCleanup = cleanup;
-    
-    // Auto-correction logic if there is overflow
     const pdfHeightPx = Math.floor((794 * 297) / 210);
     const safeMaxHeight = pdfHeightPx - 24;
     
@@ -765,24 +758,77 @@ export default function Scripts() {
       });
     };
 
-    if (checkOverflow(currentPages) && !isAutoCorrecting) {
-      setIsAutoCorrecting(true);
-      let tempConfig = { ...pdfConfig };
-      let corrected = false;
+    let currentConfig = { ...pdfConfig };
+    let finalPages: HTMLDivElement[] = [];
+    let hasOverflow = true;
+    let attempts = 0;
+    const maxAttempts = 15;
 
-      // Try reducing line height first (step 0.05)
-      for (let lh = pdfConfig.lineHeight; lh >= 1.4; lh -= 0.05) {
-        tempConfig.lineHeight = parseFloat(lh.toFixed(2));
-        // We need a way to rebuild pages with tempConfig without affecting global state yet
-        // Since buildPdfPages uses pdfConfig from state, we'd need to modify the logic
-        // For simplicity in this context, we'll inform the user and they can use the sliders
-        // But the user asked for "Automatic correction".
+    // Build initial
+    const initialResult = await buildPdfPages([script], currentConfig);
+    finalPages = initialResult.pages;
+    hasOverflow = checkOverflow(finalPages);
+    initialResult.cleanup();
+
+    // Iterative auto-correction if triggered by the user or needing immediate fit
+    // We only auto-correct here if we want it to be "always on" or if we use a flag
+    // The user asked for "Implementar uma correção automática iterativa"
+    
+    const runAutoCorrection = async (config: typeof pdfConfig) => {
+      let tempConfig = { ...config };
+      let currentAttempts = 0;
+      
+      while (currentAttempts < maxAttempts) {
+        const { pages, cleanup } = await buildPdfPages([script], tempConfig);
+        const stillOverflows = checkOverflow(pages);
+        
+        if (!stillOverflows) {
+          cleanup();
+          return { config: tempConfig, pages };
+        }
+        
+        cleanup();
+        
+        // Priority 1: Reduce line height until 1.3
+        if (tempConfig.lineHeight > 1.3) {
+          tempConfig.lineHeight = Math.max(1.3, parseFloat((tempConfig.lineHeight - 0.05).toFixed(2)));
+        } 
+        // Priority 2: Reduce font size until 10
+        else if (tempConfig.fontSize > 10) {
+          tempConfig.fontSize = Math.max(10, tempConfig.fontSize - 1);
+          // Reset line height slightly to allow balance? No, keep it tight.
+        }
+        // Priority 3: Reduce padding slightly?
+        else if (tempConfig.padding > 15) {
+          tempConfig.padding = Math.max(15, tempConfig.padding - 2);
+        } else {
+          break; // Reached limits
+        }
+        
+        currentAttempts++;
       }
+      
+      // Return best attempt if still overflows
+      const final = await buildPdfPages([script], tempConfig);
+      return { config: tempConfig, pages: final.pages, cleanup: final.cleanup };
+    };
+
+    // If we are already in an auto-correcting state (triggered by button)
+    if (isAutoCorrecting) {
+      const result = await runAutoCorrection(currentConfig);
+      setPdfConfig(result.config);
+      finalPages = result.pages;
+      if (result.cleanup) result.cleanup();
       setIsAutoCorrecting(false);
+    } else {
+      // Just use the current pages from the initial build
+      const { pages, cleanup } = await buildPdfPages([script], pdfConfig);
+      finalPages = pages;
+      cleanup();
     }
 
     const warnings: number[] = [];
-    pages.forEach((page, idx) => {
+    finalPages.forEach((page, idx) => {
       const children = Array.from(page.children) as HTMLElement[];
       if (children.length > 0) {
         const last = children[children.length - 1];
@@ -794,10 +840,9 @@ export default function Scripts() {
     });
 
     setOverflowWarnings(warnings);
-    const clonedPages = currentPages.map(p => p.cloneNode(true) as HTMLDivElement);
+    const clonedPages = finalPages.map(p => p.cloneNode(true) as HTMLDivElement);
     setPreviewPages(clonedPages);
     setPreviewOpen(true);
-    currentCleanup();
   }, [buildPdfPages, pdfConfig, isAutoCorrecting]);
 
   // Re-generate preview when config changes

@@ -339,7 +339,7 @@ export function useSupabaseData() {
       if (tRes.data && !tRes.error) setTasks((Array.isArray(tRes.data) ? tRes.data : []).map(rowToTask));
       if (sRes.data && !sRes.error) setScripts((Array.isArray(sRes.data) ? sRes.data : []).map(rowToScript));
       if (arRes.data && !arRes.error) setActiveRecordings((Array.isArray(arRes.data) ? arRes.data : []).map(rowToActiveRecording));
-    }, 30000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, []);

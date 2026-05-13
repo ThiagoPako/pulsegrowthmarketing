@@ -557,7 +557,7 @@ export default function Scripts() {
               ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
             </p>
           </div>
-          <div data-pdf-role="script-body" style="font-size:14px; line-height:1.75; text-align:left; word-break:break-word; overflow-wrap:break-word; max-width:100%; box-sizing:border-box; overflow:hidden; color:#222;">
+          <div data-pdf-role="script-body" style="font-size:${pdfConfig.fontSize}px; line-height:${pdfConfig.lineHeight}; text-align:left; word-break:break-word; overflow-wrap:break-word; max-width:100%; box-sizing:border-box; overflow:hidden; color:#222;">
             ${highlightQuotesForPdf(script.content)}
           </div>
         </section>

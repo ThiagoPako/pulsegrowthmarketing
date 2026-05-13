@@ -843,9 +843,19 @@ export default function SocialMediaDeliveries() {
     supabase.from('content_tasks').select('*')
       .eq('client_id', selectedClientId)
       .eq('kanban_column', 'edicao')
-      .order('editing_priority', { ascending: false })
-      .order('position', { ascending: true })
-      .then(({ data }) => { if (data) setEditingQueueTasks(data); });
+      .then(({ data }) => { 
+        if (data) {
+          const sorted = [...data].sort((a, b) => {
+            if (a.editing_priority !== b.editing_priority) {
+              return a.editing_priority ? -1 : 1;
+            }
+            const posA = typeof a.position === 'number' ? a.position : Number.MAX_SAFE_INTEGER;
+            const posB = typeof b.position === 'number' ? b.position : Number.MAX_SAFE_INTEGER;
+            return posA - posB;
+          });
+          setEditingQueueTasks(sorted);
+        }
+      });
   }, [selectedClientId, deliveries]);
 
   const handleTogglePriorityFromQueue = async (taskId: string, currentPriority: boolean) => {

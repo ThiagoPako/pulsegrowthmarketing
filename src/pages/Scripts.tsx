@@ -1445,6 +1445,12 @@ export default function Scripts() {
               </div>
               
               <div className="flex flex-wrap items-center gap-6 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-border">
+                {overflowWarnings.length > 0 && (
+                  <div className="w-full mb-1 p-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-md flex items-center gap-2 text-amber-700 dark:text-amber-400 text-xs animate-pulse">
+                    <AlertTriangle size={14} />
+                    <strong>Aviso de Corte:</strong> Detectamos possível transbordamento de texto nas páginas: {overflowWarnings.map(i => i + 1).join(', ')}. Reduza a fonte ou as margens.
+                  </div>
+                )}
                 <div className="space-y-1.5 flex-1 min-w-[120px]">
                   <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
                     <Maximize size={10} /> Margens (px)

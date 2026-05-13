@@ -214,10 +214,11 @@ export function useFinancialData() {
         );
         const updated = await supabase.from('revenues').select('*').order('due_date', { ascending: false });
         if (updated.data) {
-          setRevenues(deduplicateRevenues(updated.data as any[]));
+          const deduplicated = deduplicateRevenues(updated.data as any[]);
+          setRevenues(deduplicated.filter(r => activeClientIds.has(r.client_id)));
         }
       } else {
-        setRevenues(uniqueRevenues);
+        setRevenues(uniqueRevenues.filter(r => activeClientIds.has(r.client_id)));
       }
     }
 

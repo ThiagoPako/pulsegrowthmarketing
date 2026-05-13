@@ -370,10 +370,11 @@ export default function Scripts() {
           content_type: form.contentFormat || 'reels',
           kanban_column: kanbanColumn,
           script_id: scriptId,
+          recording_id: form.recordingId || null,
           description: form.directToEditing ? 'Material pronto do cliente — direto para edição' : null,
           created_by: user?.id || null,
           assigned_to: assignedTo,
-          drive_link: form.directToEditing && form.materialLink ? form.materialLink : null,
+          drive_link: (form.directToEditing && form.materialLink) ? form.materialLink : null,
         } as any);
         if (error) console.error('Auto content_task creation error:', error);
 

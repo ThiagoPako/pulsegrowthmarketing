@@ -1380,6 +1380,9 @@ export default function Scripts() {
                 </div>
               )}
               <div className="flex gap-2 mt-4">
+                <Button variant="outline" className="flex-1" onClick={() => handlePreviewPdf(viewing)}>
+                  <Eye size={16} className="mr-2" /> Prévia A4
+                </Button>
                 <Button variant="outline" className="flex-1" onClick={() => handleDownloadPdf(viewing)}>
                   <Download size={16} className="mr-2" /> Baixar PDF
                 </Button>
@@ -1389,6 +1392,37 @@ export default function Scripts() {
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* PDF Preview Modal */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-[900px] max-h-[90vh] p-0 overflow-hidden bg-zinc-200/50 dark:bg-zinc-900/50 flex flex-col backdrop-blur-sm">
+          <DialogHeader className="p-4 bg-white dark:bg-zinc-950 border-b shrink-0">
+            <div className="flex items-center justify-between w-full">
+              <DialogTitle className="flex items-center gap-2">
+                <Eye size={18} className="text-primary" />
+                Pré-visualização do Roteiro (A4)
+              </DialogTitle>
+              <Button onClick={() => viewing && handleDownloadPdf(viewing)} size="sm" className="gap-2">
+                <Download size={16} /> Baixar PDF
+              </Button>
+            </div>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 scrollbar-thin">
+            {previewPages.map((page, idx) => (
+              <div 
+                key={idx}
+                className="mx-auto bg-white shadow-[0_20px_50px_rgba(0,0,0,0.15)] relative overflow-hidden"
+                style={{ 
+                  width: '210mm', 
+                  minHeight: '297mm',
+                  color: '#1a1a1a'
+                }}
+                dangerouslySetInnerHTML={{ __html: page.innerHTML }}
+              />
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -684,7 +684,7 @@ export default function Scripts() {
               for (const n of accum) {
                 if (n.nodeType === Node.TEXT_NODE) {
                   const p = document.createElement('p');
-                  p.style.cssText = `margin:0 0 ${pdfConfig.fontSize/2}px; text-align:left;`;
+                  p.style.cssText = `margin:0 0 ${activeConfig.fontSize/2}px; text-align:left;`;
                   p.textContent = n.textContent ?? '';
                   block.appendChild(p);
                 } else {

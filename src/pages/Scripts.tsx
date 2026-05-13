@@ -538,7 +538,8 @@ export default function Scripts() {
     document.body.appendChild(sourceRoot);
 
     const renderRoot = document.createElement('div');
-    renderRoot.style.cssText = `position:fixed;left:-10000px;top:0;width:${pdfWidthPx}px;background:transparent;pointer-events:none;z-index:-1;`;
+    renderRoot.className = 'light';
+    renderRoot.style.cssText = `position:fixed;left:-10000px;top:0;width:${pdfWidthPx}px;background:transparent;pointer-events:none;z-index:-1;color:#1a1a1a;`;
     document.body.appendChild(renderRoot);
 
     try {

@@ -681,14 +681,14 @@ export default function Scripts() {
                 flushAccum();
                 const block = document.createElement('div');
                 block.className = 'light';
-                block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.6; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; break-inside:avoid; page-break-inside:avoid; color:#1a1a1a;`;
+                block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.75; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; break-inside:avoid; page-break-inside:avoid; color:#1a1a1a;`;
                 const cl = el.cloneNode(true) as HTMLElement;
                 block.appendChild(cl);
                 appendBlock(block);
               } else {
                 accum.push(node);
-                // Flush larger chunks or on meaningful breaks
-                if (accum.length >= 8) flushAccum();
+                // Um nó por bloco para minimizar overflow e evitar cortes de palavras na quebra de página
+                flushAccum();
               }
             }
             flushAccum();

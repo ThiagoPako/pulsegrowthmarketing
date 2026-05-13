@@ -154,11 +154,26 @@ export default function Scripts() {
   const [downloadingBatch, setDownloadingBatch] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPages, setPreviewPages] = useState<HTMLDivElement[]>([]);
-  const [pdfConfig, setPdfConfig] = useState({
-    padding: 28,
-    lineHeight: 1.75,
-    fontSize: 14,
+  const [pdfConfig, setPdfConfig] = useState(() => {
+    const stored = localStorage.getItem('pulse_pdf_config');
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (e) {
+        console.error('Error parsing pdf config', e);
+      }
+    }
+    return {
+      padding: 28,
+      lineHeight: 1.75,
+      fontSize: 14,
+    };
   });
+
+  // Save config changes
+  useEffect(() => {
+    localStorage.setItem('pulse_pdf_config', JSON.stringify(pdfConfig));
+  }, [pdfConfig]);
   const [overflowWarnings, setOverflowWarnings] = useState<number[]>([]);
 
   const toggleScriptAlerts = (v: boolean) => {

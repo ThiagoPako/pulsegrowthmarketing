@@ -159,6 +159,10 @@ export function useFinancialData() {
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
+    // Fetch active clients first to filter related data
+    const activeClientsRes = await supabase.from('clients').select('id').neq('status', 'cancelado');
+    const activeClientIds = new Set((activeClientsRes.data || []).map((c: any) => c.id));
+
     const [cRes, rRes, eRes, catRes, pRes, bRes, cashRes, logRes] = await Promise.all([
       supabase.from('financial_contracts').select('*').order('created_at', { ascending: false }),
       supabase.from('revenues').select('*').order('due_date', { ascending: false }),

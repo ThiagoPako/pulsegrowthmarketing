@@ -552,10 +552,11 @@ export default function Scripts() {
     pdf.save(fileName);
   }, [waitForPdfAssets]);
 
-  const buildPdfPages = useCallback(async (selectedScripts: Script[]) => {
+  const buildPdfPages = useCallback(async (selectedScripts: Script[], configOverride?: typeof pdfConfig) => {
+    const activeConfig = configOverride || pdfConfig;
     const pdfWidthPx = 794;
     const pdfHeightPx = Math.floor((pdfWidthPx * 297) / 210); // A4 exact height
-    const pagePadding = pdfConfig.padding;
+    const pagePadding = activeConfig.padding;
     const sourceRoot = document.createElement('div');
     sourceRoot.className = 'light';
     sourceRoot.style.cssText = `position:fixed;left:-20000px;top:0;width:${pdfWidthPx}px;background:white;pointer-events:none;z-index:-1;color:#1a1a1a;`;
@@ -575,7 +576,7 @@ export default function Scripts() {
               ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
             </p>
           </div>
-          <div data-pdf-role="script-body" style="font-size:${pdfConfig.fontSize}px; line-height:${pdfConfig.lineHeight}; text-align:left; word-break:break-word; overflow-wrap:break-word; max-width:100%; box-sizing:border-box; overflow:hidden; color:#222;">
+          <div data-pdf-role="script-body" style="font-size:${activeConfig.fontSize}px; line-height:${activeConfig.lineHeight}; text-align:left; word-break:break-word; overflow-wrap:break-word; max-width:100%; box-sizing:border-box; overflow:hidden; color:#222;">
             ${highlightQuotesForPdf(script.content)}
           </div>
         </section>
@@ -679,18 +680,18 @@ export default function Scripts() {
               if (!accum.length) return;
               const block = document.createElement('div');
               block.className = 'light';
-              block.style.cssText = `padding:0 ${pagePadding}px; font-size:${pdfConfig.fontSize}px; line-height:${pdfConfig.lineHeight}; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; word-break:break-word; color:#1a1a1a;`;
+              block.style.cssText = `padding:0 ${pagePadding}px; font-size:${activeConfig.fontSize}px; line-height:${activeConfig.lineHeight}; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; word-break:break-word; color:#1a1a1a;`;
               for (const n of accum) {
                 if (n.nodeType === Node.TEXT_NODE) {
                   const p = document.createElement('p');
-                  p.style.cssText = `margin:0 0 ${pdfConfig.fontSize/2}px; text-align:left;`;
+                  p.style.cssText = `margin:0 0 ${activeConfig.fontSize/2}px; text-align:left;`;
                   p.textContent = n.textContent ?? '';
                   block.appendChild(p);
                 } else {
                   const cl = (n as HTMLElement).cloneNode(true) as HTMLElement;
                   cl.style.textAlign = 'left';
                   // Maintain consistent spacing
-                  if (cl.tagName === 'P') cl.style.margin = `0 0 ${pdfConfig.fontSize/2}px`;
+                  if (cl.tagName === 'P') cl.style.margin = `0 0 ${activeConfig.fontSize/2}px`;
                   block.appendChild(cl);
                 }
               }
@@ -706,7 +707,7 @@ export default function Scripts() {
                 flushAccum();
                 const block = document.createElement('div');
                 block.className = 'light';
-                block.style.cssText = `padding:0 ${pagePadding}px; font-size:${pdfConfig.fontSize}px; line-height:${pdfConfig.lineHeight}; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; break-inside:avoid; page-break-inside:avoid; color:#1a1a1a;`;
+                block.style.cssText = `padding:0 ${pagePadding}px; font-size:${activeConfig.fontSize}px; line-height:${activeConfig.lineHeight}; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; break-inside:avoid; page-break-inside:avoid; color:#1a1a1a;`;
                 const cl = el.cloneNode(true) as HTMLElement;
                 block.appendChild(cl);
                 appendBlock(block);
@@ -738,19 +739,12 @@ export default function Scripts() {
       document.body.removeChild(renderRoot);
       throw error;
     }
-  }, [clients, waitForPdfAssets]);
+  }, [clients, waitForPdfAssets, pdfConfig]);
 
   const handlePreviewPdf = useCallback(async (script: Script) => {
     setPreviewPages([]); 
     setOverflowWarnings([]);
-    let currentPages: HTMLDivElement[] = [];
-    let currentCleanup: () => void = () => {};
     
-    const { pages, cleanup } = await buildPdfPages([script]);
-    currentPages = pages;
-    currentCleanup = cleanup;
-    
-    // Auto-correction logic if there is overflow
     const pdfHeightPx = Math.floor((794 * 297) / 210);
     const safeMaxHeight = pdfHeightPx - 24;
     
@@ -765,24 +759,77 @@ export default function Scripts() {
       });
     };
 
-    if (checkOverflow(currentPages) && !isAutoCorrecting) {
-      setIsAutoCorrecting(true);
-      let tempConfig = { ...pdfConfig };
-      let corrected = false;
+    let currentConfig = { ...pdfConfig };
+    let finalPages: HTMLDivElement[] = [];
+    let hasOverflow = true;
+    let attempts = 0;
+    const maxAttempts = 15;
 
-      // Try reducing line height first (step 0.05)
-      for (let lh = pdfConfig.lineHeight; lh >= 1.4; lh -= 0.05) {
-        tempConfig.lineHeight = parseFloat(lh.toFixed(2));
-        // We need a way to rebuild pages with tempConfig without affecting global state yet
-        // Since buildPdfPages uses pdfConfig from state, we'd need to modify the logic
-        // For simplicity in this context, we'll inform the user and they can use the sliders
-        // But the user asked for "Automatic correction".
+    // Build initial
+    const initialResult = await buildPdfPages([script], currentConfig);
+    finalPages = initialResult.pages;
+    hasOverflow = checkOverflow(finalPages);
+    initialResult.cleanup();
+
+    // Iterative auto-correction if triggered by the user or needing immediate fit
+    // We only auto-correct here if we want it to be "always on" or if we use a flag
+    // The user asked for "Implementar uma correção automática iterativa"
+    
+    const runAutoCorrection = async (config: typeof pdfConfig) => {
+      let tempConfig = { ...config };
+      let currentAttempts = 0;
+      
+      while (currentAttempts < maxAttempts) {
+        const { pages, cleanup } = await buildPdfPages([script], tempConfig);
+        const stillOverflows = checkOverflow(pages);
+        
+        if (!stillOverflows) {
+          cleanup();
+          return { config: tempConfig, pages };
+        }
+        
+        cleanup();
+        
+        // Priority 1: Reduce line height until 1.3
+        if (tempConfig.lineHeight > 1.3) {
+          tempConfig.lineHeight = Math.max(1.3, parseFloat((tempConfig.lineHeight - 0.05).toFixed(2)));
+        } 
+        // Priority 2: Reduce font size until 10
+        else if (tempConfig.fontSize > 10) {
+          tempConfig.fontSize = Math.max(10, tempConfig.fontSize - 1);
+          // Reset line height slightly to allow balance? No, keep it tight.
+        }
+        // Priority 3: Reduce padding slightly?
+        else if (tempConfig.padding > 15) {
+          tempConfig.padding = Math.max(15, tempConfig.padding - 2);
+        } else {
+          break; // Reached limits
+        }
+        
+        currentAttempts++;
       }
+      
+      // Return best attempt if still overflows
+      const final = await buildPdfPages([script], tempConfig);
+      return { config: tempConfig, pages: final.pages, cleanup: final.cleanup };
+    };
+
+    // If we are already in an auto-correcting state (triggered by button)
+    if (isAutoCorrecting) {
+      const result = await runAutoCorrection(currentConfig);
+      setPdfConfig(result.config);
+      finalPages = result.pages;
+      if (result.cleanup) result.cleanup();
       setIsAutoCorrecting(false);
+    } else {
+      // Just use the current pages from the initial build
+      const { pages, cleanup } = await buildPdfPages([script], pdfConfig);
+      finalPages = pages;
+      cleanup();
     }
 
     const warnings: number[] = [];
-    pages.forEach((page, idx) => {
+    finalPages.forEach((page, idx) => {
       const children = Array.from(page.children) as HTMLElement[];
       if (children.length > 0) {
         const last = children[children.length - 1];
@@ -794,10 +841,9 @@ export default function Scripts() {
     });
 
     setOverflowWarnings(warnings);
-    const clonedPages = currentPages.map(p => p.cloneNode(true) as HTMLDivElement);
+    const clonedPages = finalPages.map(p => p.cloneNode(true) as HTMLDivElement);
     setPreviewPages(clonedPages);
     setPreviewOpen(true);
-    currentCleanup();
   }, [buildPdfPages, pdfConfig, isAutoCorrecting]);
 
   // Re-generate preview when config changes
@@ -1505,12 +1551,8 @@ export default function Scripts() {
                       variant="outline" 
                       className="h-7 text-[10px] bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-800"
                       onClick={() => {
-                        setPdfConfig(prev => ({
-                          ...prev,
-                          fontSize: Math.max(10, prev.fontSize - 1),
-                          lineHeight: Math.max(1.3, prev.lineHeight - 0.1)
-                        }));
-                        toast.info("Ajustando layout para caber no A4...");
+                        setIsAutoCorrecting(true);
+                        toast.info("Ajustando layout iterativamente para caber no A4...");
                       }}
                     >
                       Corrigir Automaticamente

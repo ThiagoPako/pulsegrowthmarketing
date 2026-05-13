@@ -707,7 +707,7 @@ export default function Scripts() {
                 flushAccum();
                 const block = document.createElement('div');
                 block.className = 'light';
-                block.style.cssText = `padding:0 ${pagePadding}px; font-size:${pdfConfig.fontSize}px; line-height:${pdfConfig.lineHeight}; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; break-inside:avoid; page-break-inside:avoid; color:#1a1a1a;`;
+                block.style.cssText = `padding:0 ${pagePadding}px; font-size:${activeConfig.fontSize}px; line-height:${activeConfig.lineHeight}; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; break-inside:avoid; page-break-inside:avoid; color:#1a1a1a;`;
                 const cl = el.cloneNode(true) as HTMLElement;
                 block.appendChild(cl);
                 appendBlock(block);

@@ -329,58 +329,52 @@ export default function Scripts() {
       let assignedTo: string | null = null;
 
       if (form.directToEditing) {
-        // Check if there are tasks in editing queue
-        const { data: editingTasks } = await supabase
-          .from('content_tasks')
-          .select('id')
-          .eq('kanban_column', 'edicao');
+        // Always go to edicao column
+        kanbanColumn = 'edicao';
         
-        if (!editingTasks || editingTasks.length === 0) {
-          // No tasks in editing → assign to least-busy editor and put in edicao
-          kanbanColumn = 'edicao';
-          const { data: editors } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('role', 'editor');
+        // Find least-busy editor
+        const { data: editors } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('role', 'editor');
+        
+        if (editors && editors.length > 0) {
+          let minTasks = Infinity;
+          let leastBusyEditor: string | null = null;
           
-          if (editors && editors.length > 0) {
-            // Find editor with fewest content_tasks assigned
-            let minTasks = Infinity;
-            let leastBusyEditor: string | null = null;
-            for (const editor of editors) {
-              const { data: editorTasks } = await supabase
-                .from('content_tasks')
-                .select('id')
-                .eq('assigned_to', (editor as any).id)
-                .in('kanban_column', ['edicao', 'revisao']);
-              const count = editorTasks?.length || 0;
-              if (count < minTasks) {
-                minTasks = count;
-                leastBusyEditor = (editor as any).id;
-              }
+          for (const editor of editors) {
+            // Count active tasks for this editor
+            const { data: editorTasks } = await supabase
+              .from('content_tasks')
+              .select('id')
+              .eq('assigned_to', (editor as any).id)
+              .in('kanban_column', ['edicao', 'revisao', 'alteracao']);
+            
+            const count = editorTasks?.length || 0;
+            if (count < minTasks) {
+              minTasks = count;
+              leastBusyEditor = (editor as any).id;
             }
-            assignedTo = leastBusyEditor;
           }
-        } else {
-          // There are tasks in editing → put in waiting (aguardando_edicao)
-          kanbanColumn = 'aguardando_edicao';
+          assignedTo = leastBusyEditor;
         }
       }
 
-      // Only create content_task for non-avulso scripts (avulso has no client_id)
-      if (form.clientId) {
+      // Create content_task if it has a client or is an avulso recording
+      if (form.clientId || (form.isAvulso && form.recordingId)) {
         const contentTaskId = crypto.randomUUID();
         const { error } = await supabase.from('content_tasks').insert({
           id: contentTaskId,
-          client_id: form.clientId,
+          client_id: form.clientId || null,
           title: form.title,
           content_type: form.contentFormat || 'reels',
           kanban_column: kanbanColumn,
           script_id: scriptId,
+          recording_id: form.recordingId || null,
           description: form.directToEditing ? 'Material pronto do cliente — direto para edição' : null,
           created_by: user?.id || null,
           assigned_to: assignedTo,
-          drive_link: form.directToEditing && form.materialLink ? form.materialLink : null,
+          drive_link: (form.directToEditing && form.materialLink) ? form.materialLink : null,
         } as any);
         if (error) console.error('Auto content_task creation error:', error);
 
@@ -390,12 +384,12 @@ export default function Scripts() {
           const ctx = buildSyncContext(
             {
               id: contentTaskId,
-              client_id: form.clientId,
+              client_id: form.clientId || null,
               title: form.title,
               content_type: form.contentFormat || 'reels',
               description: 'Material pronto do cliente — direto para edição',
               script_id: scriptId,
-              recording_id: null,
+              recording_id: form.recordingId || null,
               assigned_to: assignedTo,
               edited_video_link: null,
             },

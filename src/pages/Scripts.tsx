@@ -723,6 +723,7 @@ export default function Scripts() {
   }, [clients, waitForPdfAssets]);
 
   const handlePreviewPdf = useCallback(async (script: Script) => {
+    setPreviewPages([]); // Clear old preview
     const { pages, cleanup } = await buildPdfPages([script]);
     // Clone nodes so they persist after cleanup of temporary DOM roots
     const clonedPages = pages.map(p => p.cloneNode(true) as HTMLDivElement);

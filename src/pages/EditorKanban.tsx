@@ -334,10 +334,17 @@ export default function EditorKanban() {
 
   const fetchTasks = useCallback(async () => {
     const { data } = await supabase.from('content_tasks').select('*')
-      .in('kanban_column', ['edicao', 'revisao', 'alteracao', 'envio'])
-      .order('position', { ascending: true });
+      .in('kanban_column', ['edicao', 'revisao', 'alteracao', 'envio']);
+    
+    // Sort client-side to be resilient to missing 'position' column
+    const sorted = (data || []).sort((a: any, b: any) => {
+      const posA = typeof a.position === 'number' ? a.position : Number.MAX_SAFE_INTEGER;
+      const posB = typeof b.position === 'number' ? b.position : Number.MAX_SAFE_INTEGER;
+      return posA - posB;
+    });
+
     // Filter out approved criativos — they belong exclusively to Traffic Management
-    const filtered = (data || []).filter((t: any) => !(t.content_type === 'criativo' && t.approved_at));
+    const filtered = sorted.filter((t: any) => !(t.content_type === 'criativo' && t.approved_at));
     setTasks(filtered as EditorTask[]);
     setLoading(false);
   }, []);

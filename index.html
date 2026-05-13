@@ -33,6 +33,15 @@
       "sameAs": ["https://instagram.com/ag.pulse"]
     }
     </script>
+    <script>
+      (function() {
+        const path = window.location.pathname;
+        if (path === '/' || path === '/index.html' || path === '') {
+          document.documentElement.classList.remove('dark');
+          document.documentElement.style.colorScheme = 'light';
+        }
+      })();
+    </script>
 </head>
 
   <body>

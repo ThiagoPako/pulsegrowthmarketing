@@ -793,18 +793,17 @@ export default function Scripts() {
         
         cleanup();
         
-        // Priority 1: Reduce line height until 1.3
-        if (tempConfig.lineHeight > 1.3) {
-          tempConfig.lineHeight = Math.max(1.3, parseFloat((tempConfig.lineHeight - 0.05).toFixed(2)));
+        // Priority 1: Reduce line height until minLineHeight
+        if (tempConfig.lineHeight > (tempConfig.minLineHeight || 1.3)) {
+          tempConfig.lineHeight = Math.max(tempConfig.minLineHeight || 1.3, parseFloat((tempConfig.lineHeight - 0.05).toFixed(2)));
         } 
-        // Priority 2: Reduce font size until 10
-        else if (tempConfig.fontSize > 10) {
-          tempConfig.fontSize = Math.max(10, tempConfig.fontSize - 1);
-          // Reset line height slightly to allow balance? No, keep it tight.
+        // Priority 2: Reduce font size until minFontSize
+        else if (tempConfig.fontSize > (tempConfig.minFontSize || 10)) {
+          tempConfig.fontSize = Math.max(tempConfig.minFontSize || 10, tempConfig.fontSize - 1);
         }
-        // Priority 3: Reduce padding slightly?
-        else if (tempConfig.padding > 15) {
-          tempConfig.padding = Math.max(15, tempConfig.padding - 2);
+        // Priority 3: Reduce padding slightly until minPadding
+        else if (tempConfig.padding > (tempConfig.minPadding || 15)) {
+          tempConfig.padding = Math.max(tempConfig.minPadding || 15, tempConfig.padding - 2);
         } else {
           break; // Reached limits
         }

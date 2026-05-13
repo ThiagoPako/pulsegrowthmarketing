@@ -472,6 +472,13 @@ export default function Scripts() {
       const prevOverflow = page.style.overflow;
       page.style.overflow = 'visible';
 
+      const isDark = document.documentElement.classList.contains('dark');
+      if (isDark) {
+        document.documentElement.classList.remove('dark');
+        // Force a style recalculation
+        void document.documentElement.offsetHeight;
+      }
+
       const canvas = await html2canvas(page, {
         scale: 2,
         useCORS: true,
@@ -481,6 +488,10 @@ export default function Scripts() {
         windowWidth: page.offsetWidth,
         windowHeight: page.offsetHeight,
       });
+
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+      }
 
       page.style.overflow = prevOverflow;
 

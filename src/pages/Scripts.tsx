@@ -552,10 +552,11 @@ export default function Scripts() {
     pdf.save(fileName);
   }, [waitForPdfAssets]);
 
-  const buildPdfPages = useCallback(async (selectedScripts: Script[]) => {
+  const buildPdfPages = useCallback(async (selectedScripts: Script[], configOverride?: typeof pdfConfig) => {
+    const activeConfig = configOverride || pdfConfig;
     const pdfWidthPx = 794;
     const pdfHeightPx = Math.floor((pdfWidthPx * 297) / 210); // A4 exact height
-    const pagePadding = pdfConfig.padding;
+    const pagePadding = activeConfig.padding;
     const sourceRoot = document.createElement('div');
     sourceRoot.className = 'light';
     sourceRoot.style.cssText = `position:fixed;left:-20000px;top:0;width:${pdfWidthPx}px;background:white;pointer-events:none;z-index:-1;color:#1a1a1a;`;
@@ -575,7 +576,7 @@ export default function Scripts() {
               ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
             </p>
           </div>
-          <div data-pdf-role="script-body" style="font-size:${pdfConfig.fontSize}px; line-height:${pdfConfig.lineHeight}; text-align:left; word-break:break-word; overflow-wrap:break-word; max-width:100%; box-sizing:border-box; overflow:hidden; color:#222;">
+          <div data-pdf-role="script-body" style="font-size:${activeConfig.fontSize}px; line-height:${activeConfig.lineHeight}; text-align:left; word-break:break-word; overflow-wrap:break-word; max-width:100%; box-sizing:border-box; overflow:hidden; color:#222;">
             ${highlightQuotesForPdf(script.content)}
           </div>
         </section>

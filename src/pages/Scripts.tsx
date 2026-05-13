@@ -550,7 +550,7 @@ export default function Scripts() {
               ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
             </p>
           </div>
-          <div data-pdf-role="script-body" style="font-size:14px; line-height:1.6; text-align:left; word-break:break-word; overflow-wrap:break-word; max-width:100%; box-sizing:border-box; overflow:hidden; color:#222;">
+          <div data-pdf-role="script-body" style="font-size:14px; line-height:1.75; text-align:left; word-break:break-word; overflow-wrap:break-word; max-width:100%; box-sizing:border-box; overflow:hidden; color:#222;">
             ${highlightQuotesForPdf(script.content)}
           </div>
         </section>
@@ -654,7 +654,7 @@ export default function Scripts() {
               if (!accum.length) return;
               const block = document.createElement('div');
               block.className = 'light';
-              block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.6; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; word-break:break-word; color:#1a1a1a;`;
+              block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.75; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; word-break:break-word; color:#1a1a1a;`;
               for (const n of accum) {
                 if (n.nodeType === Node.TEXT_NODE) {
                   const p = document.createElement('p');
@@ -681,14 +681,14 @@ export default function Scripts() {
                 flushAccum();
                 const block = document.createElement('div');
                 block.className = 'light';
-                block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.6; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; break-inside:avoid; page-break-inside:avoid; color:#1a1a1a;`;
+                block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.75; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; break-inside:avoid; page-break-inside:avoid; color:#1a1a1a;`;
                 const cl = el.cloneNode(true) as HTMLElement;
                 block.appendChild(cl);
                 appendBlock(block);
               } else {
                 accum.push(node);
-                // Flush larger chunks or on meaningful breaks
-                if (accum.length >= 8) flushAccum();
+                // Um nó por bloco para minimizar overflow e evitar cortes de palavras na quebra de página
+                flushAccum();
               }
             }
             flushAccum();

@@ -128,14 +128,15 @@ export function highlightQuotesForPdf(html: string): string {
     const close = kind === 'double' ? '&rdquo;' : '&rsquo;';
     // Estilo otimizado para PDF: garante cobertura 100% sem sobrepor linhas.
     // O uso de em para padding e line-height garante calibração automática com a fonte.
+    // Highlight contido na altura da linha: sem padding vertical para não invadir linhas vizinhas.
     const style = [
       'background-color: #fef9c3',
-      'padding: 0.12em 0.15em',
+      'padding: 0 0.18em',
       'border-radius: 2px',
       'box-decoration-break: clone',
       '-webkit-box-decoration-break: clone',
       'display: inline',
-      'line-height: normal',
+      'line-height: inherit',
       'vertical-align: baseline',
       'color: #1a1a1a'
     ].join('; ');

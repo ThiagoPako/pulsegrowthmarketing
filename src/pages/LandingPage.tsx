@@ -1445,13 +1445,33 @@ function ClientLogos() {
 export default function LandingPage() {
   useLayoutEffect(() => {
     const root = document.documentElement;
-    const hadDark = root.classList.contains('dark');
-    root.classList.remove('dark');
-    root.style.colorScheme = 'light';
+    
+    // Function to force light mode
+    const forceLightMode = () => {
+      root.classList.remove('dark');
+      root.style.colorScheme = 'light';
+    };
+
+    // Initial force
+    forceLightMode();
+
+    // Watch for class changes on documentElement
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+          if (root.classList.contains('dark')) {
+            forceLightMode();
+          }
+        }
+      });
+    });
+
+    observer.observe(root, { attributes: true });
 
     return () => {
+      observer.disconnect();
       const currentTheme = localStorage.getItem('pulse_theme');
-      if (currentTheme === 'dark' || (hadDark && !currentTheme)) {
+      if (currentTheme === 'dark') {
         root.classList.add('dark');
         root.style.colorScheme = 'dark';
       }

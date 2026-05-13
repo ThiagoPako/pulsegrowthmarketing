@@ -537,7 +537,7 @@ export default function Scripts() {
   const buildPdfPages = useCallback(async (selectedScripts: Script[]) => {
     const pdfWidthPx = 794;
     const pdfHeightPx = Math.floor((pdfWidthPx * 297) / 210); // A4 exact height
-    const pagePadding = 28;
+    const pagePadding = pdfConfig.padding;
     const sourceRoot = document.createElement('div');
     sourceRoot.className = 'light';
     sourceRoot.style.cssText = `position:fixed;left:-20000px;top:0;width:${pdfWidthPx}px;background:white;pointer-events:none;z-index:-1;color:#1a1a1a;`;

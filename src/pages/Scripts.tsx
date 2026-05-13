@@ -151,6 +151,8 @@ export default function Scripts() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [downloadingBatch, setDownloadingBatch] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewPages, setPreviewPages] = useState<HTMLDivElement[]>([]);
 
   const toggleScriptAlerts = (v: boolean) => {
     setScriptAlerts(v);

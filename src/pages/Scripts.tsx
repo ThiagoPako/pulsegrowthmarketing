@@ -1494,16 +1494,22 @@ export default function Scripts() {
           </DialogHeader>
           <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 scrollbar-thin">
             {previewPages.map((page, idx) => (
-              <div 
-                key={idx}
-                className="mx-auto bg-white shadow-[0_20px_50px_rgba(0,0,0,0.15)] relative overflow-hidden"
-                style={{ 
-                  width: '210mm', 
-                  minHeight: '297mm',
-                  color: '#1a1a1a'
-                }}
-                dangerouslySetInnerHTML={{ __html: page.innerHTML }}
-              />
+              <div key={idx} className="relative group mx-auto">
+                {overflowWarnings.includes(idx) && (
+                  <div className="absolute -top-6 left-0 right-0 text-center text-amber-600 font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-1">
+                    <AlertTriangle size={12} /> Risco de corte no final desta página
+                  </div>
+                )}
+                <div 
+                  className={`bg-white shadow-[0_20px_50px_rgba(0,0,0,0.15)] relative overflow-hidden transition-all ${overflowWarnings.includes(idx) ? 'ring-4 ring-amber-400/50' : ''}`}
+                  style={{ 
+                    width: '210mm', 
+                    minHeight: '297mm',
+                    color: '#1a1a1a'
+                  }}
+                  dangerouslySetInnerHTML={{ __html: page.innerHTML }}
+                />
+              </div>
             ))}
           </div>
         </DialogContent>

@@ -646,7 +646,8 @@ export default function Scripts() {
               if (isQuote) {
                 flushAccum();
                 const block = document.createElement('div');
-                block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.6; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; break-inside:avoid; page-break-inside:avoid;`;
+                block.className = 'light';
+                block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.6; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; break-inside:avoid; page-break-inside:avoid; color:#1a1a1a;`;
                 const cl = el.cloneNode(true) as HTMLElement;
                 block.appendChild(cl);
                 appendBlock(block);

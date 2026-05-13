@@ -12,12 +12,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Prepare SSH key
+        env:
+          SSH_PRIVATE_KEY_B64: ${{ secrets.SSH_PRIVATE_KEY_B64 }}
+        run: |
+          if [ -z "$SSH_PRIVATE_KEY_B64" ]; then
+            echo "::error::A secret SSH_PRIVATE_KEY_B64 não existe ou está vazia."
+            exit 1
+          fi
+          printf '%s' "$SSH_PRIVATE_KEY_B64" | base64 -d > /tmp/github_deploy_key
+          chmod 600 /tmp/github_deploy_key
+
       - name: Execute remote commands via SSH
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          key_path: /tmp/github_deploy_key
           port: 22
           script: |
             cd /var/www/pulsegrowthmarketing

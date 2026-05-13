@@ -159,6 +159,7 @@ export default function Scripts() {
     lineHeight: 1.75,
     fontSize: 14,
   });
+  const [overflowWarnings, setOverflowWarnings] = useState<number[]>([]);
 
   const toggleScriptAlerts = (v: boolean) => {
     setScriptAlerts(v);
@@ -724,8 +725,27 @@ export default function Scripts() {
   }, [clients, waitForPdfAssets]);
 
   const handlePreviewPdf = useCallback(async (script: Script) => {
-    setPreviewPages([]); // Clear old preview
+    setPreviewPages([]); 
+    setOverflowWarnings([]);
     const { pages, cleanup } = await buildPdfPages([script]);
+    
+    // Check for overflow in each page
+    const warnings: number[] = [];
+    const pdfHeightPx = Math.floor((794 * 297) / 210);
+    const safeMaxHeight = pdfHeightPx - 24;
+
+    pages.forEach((page, idx) => {
+      const children = Array.from(page.children) as HTMLElement[];
+      if (children.length > 0) {
+        const last = children[children.length - 1];
+        const usedHeight = last.offsetTop + last.offsetHeight;
+        if (usedHeight > safeMaxHeight) {
+          warnings.push(idx);
+        }
+      }
+    });
+
+    setOverflowWarnings(warnings);
     // Clone nodes so they persist after cleanup of temporary DOM roots
     const clonedPages = pages.map(p => p.cloneNode(true) as HTMLDivElement);
     setPreviewPages(clonedPages);
@@ -1425,6 +1445,12 @@ export default function Scripts() {
               </div>
               
               <div className="flex flex-wrap items-center gap-6 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-border">
+                {overflowWarnings.length > 0 && (
+                  <div className="w-full mb-1 p-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-md flex items-center gap-2 text-amber-700 dark:text-amber-400 text-xs animate-pulse">
+                    <AlertTriangle size={14} />
+                    <strong>Aviso de Corte:</strong> Detectamos possível transbordamento de texto nas páginas: {overflowWarnings.map(i => i + 1).join(', ')}. Reduza a fonte ou as margens.
+                  </div>
+                )}
                 <div className="space-y-1.5 flex-1 min-w-[120px]">
                   <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
                     <Maximize size={10} /> Margens (px)
@@ -1468,16 +1494,22 @@ export default function Scripts() {
           </DialogHeader>
           <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 scrollbar-thin">
             {previewPages.map((page, idx) => (
-              <div 
-                key={idx}
-                className="mx-auto bg-white shadow-[0_20px_50px_rgba(0,0,0,0.15)] relative overflow-hidden"
-                style={{ 
-                  width: '210mm', 
-                  minHeight: '297mm',
-                  color: '#1a1a1a'
-                }}
-                dangerouslySetInnerHTML={{ __html: page.innerHTML }}
-              />
+              <div key={idx} className="relative group mx-auto">
+                {overflowWarnings.includes(idx) && (
+                  <div className="absolute -top-6 left-0 right-0 text-center text-amber-600 font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-1">
+                    <AlertTriangle size={12} /> Risco de corte no final desta página
+                  </div>
+                )}
+                <div 
+                  className={`bg-white shadow-[0_20px_50px_rgba(0,0,0,0.15)] relative overflow-hidden transition-all ${overflowWarnings.includes(idx) ? 'ring-4 ring-amber-400/50' : ''}`}
+                  style={{ 
+                    width: '210mm', 
+                    minHeight: '297mm',
+                    color: '#1a1a1a'
+                  }}
+                  dangerouslySetInnerHTML={{ __html: page.innerHTML }}
+                />
+              </div>
             ))}
           </div>
         </DialogContent>

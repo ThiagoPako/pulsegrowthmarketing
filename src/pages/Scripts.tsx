@@ -384,12 +384,12 @@ export default function Scripts() {
           const ctx = buildSyncContext(
             {
               id: contentTaskId,
-              client_id: form.clientId,
+              client_id: form.clientId || null,
               title: form.title,
               content_type: form.contentFormat || 'reels',
               description: 'Material pronto do cliente — direto para edição',
               script_id: scriptId,
-              recording_id: null,
+              recording_id: form.recordingId || null,
               assigned_to: assignedTo,
               edited_video_link: null,
             },

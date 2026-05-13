@@ -725,8 +725,27 @@ export default function Scripts() {
   }, [clients, waitForPdfAssets]);
 
   const handlePreviewPdf = useCallback(async (script: Script) => {
-    setPreviewPages([]); // Clear old preview
+    setPreviewPages([]); 
+    setOverflowWarnings([]);
     const { pages, cleanup } = await buildPdfPages([script]);
+    
+    // Check for overflow in each page
+    const warnings: number[] = [];
+    const pdfHeightPx = Math.floor((794 * 297) / 210);
+    const safeMaxHeight = pdfHeightPx - 24;
+
+    pages.forEach((page, idx) => {
+      const children = Array.from(page.children) as HTMLElement[];
+      if (children.length > 0) {
+        const last = children[children.length - 1];
+        const usedHeight = last.offsetTop + last.offsetHeight;
+        if (usedHeight > safeMaxHeight) {
+          warnings.push(idx);
+        }
+      }
+    });
+
+    setOverflowWarnings(warnings);
     // Clone nodes so they persist after cleanup of temporary DOM roots
     const clonedPages = pages.map(p => p.cloneNode(true) as HTMLDivElement);
     setPreviewPages(clonedPages);

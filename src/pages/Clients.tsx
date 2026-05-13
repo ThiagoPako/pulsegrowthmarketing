@@ -774,11 +774,10 @@ export default function Clients() {
       // 4. Delete related cash_reserve_movements for deleted revenues
       // (future entries linked to this client that haven't been received)
 
-      toast.success(`${cancelClient.companyName} foi cancelado. Contrato e faturas futuras removidos.`);
       setCancelDialogOpen(false);
       setCancelClient(null);
       setCancelReason('');
-      window.location.reload();
+      await refetchData();
     } catch (err) {
       toast.error('Erro ao cancelar cliente');
     }

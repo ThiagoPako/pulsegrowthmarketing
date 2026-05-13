@@ -472,13 +472,6 @@ export default function Scripts() {
       const prevOverflow = page.style.overflow;
       page.style.overflow = 'visible';
 
-      const isDark = document.documentElement.classList.contains('dark');
-      if (isDark) {
-        document.documentElement.classList.remove('dark');
-        // Force a style recalculation
-        void document.documentElement.offsetHeight;
-      }
-
       const canvas = await html2canvas(page, {
         scale: 2,
         useCORS: true,
@@ -487,11 +480,41 @@ export default function Scripts() {
         height: page.offsetHeight,
         windowWidth: page.offsetWidth,
         windowHeight: page.offsetHeight,
+        onclone: (clonedDoc) => {
+          // Force light mode on the cloned document used for rendering
+          clonedDoc.documentElement.classList.remove('dark');
+          clonedDoc.documentElement.style.colorScheme = 'light';
+          clonedDoc.documentElement.style.backgroundColor = '#ffffff';
+          if (clonedDoc.body) {
+            clonedDoc.body.style.backgroundColor = '#ffffff';
+            clonedDoc.body.style.color = '#1a1a1a';
+          }
+          // Force all text within the PDF source to be dark
+          const allElements = clonedDoc.querySelectorAll('[data-pdf-role], [data-pdf-role] *');
+          allElements.forEach((el) => {
+            const htmlEl = el as HTMLElement;
+            const computed = clonedDoc.defaultView?.getComputedStyle(htmlEl);
+            if (computed) {
+              // Override any light-on-dark text colors
+              const currentColor = computed.color;
+              // If color is white-ish or very light, force dark
+              if (currentColor && /rgb\((2[0-4]\d|25[0-5]),\s*(2[0-4]\d|25[0-5]),\s*(2[0-4]\d|25[0-5])\)/.test(currentColor)) {
+                htmlEl.style.color = '#1a1a1a';
+              }
+            }
+            // Force background transparent unless explicitly white
+            if (!htmlEl.style.backgroundColor || htmlEl.style.backgroundColor === '') {
+              const bg = computed?.backgroundColor;
+              if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+                // If dark background, make transparent
+                if (/rgb\(([0-9]|[1-9]\d|1\d{2}),\s*([0-9]|[1-9]\d|1\d{2}),\s*([0-9]|[1-9]\d|1\d{2})\)/.test(bg)) {
+                  htmlEl.style.backgroundColor = 'transparent';
+                }
+              }
+            }
+          });
+        },
       });
-
-      if (isDark) {
-        document.documentElement.classList.add('dark');
-      }
 
       page.style.overflow = prevOverflow;
 

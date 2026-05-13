@@ -129,7 +129,7 @@ function RichEditor({ content, onChange }: { content: string; onChange: (html: s
 }
 
 export default function Scripts() {
-  const { clients, scripts, recordings, addScript, updateScript, deleteScript } = useApp();
+  const { clients, scripts, recordings, addScript, updateScript, deleteScript, refetchData } = useApp();
   const { user, profile } = useAuth();
   const isEditorRole = profile?.role === 'editor';
   const { clientes: endoClientes } = useEndoClientes();

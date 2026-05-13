@@ -4,7 +4,9 @@ import { supabase as supabaseReal } from '@/integrations/supabase/client';
 
 async function logLoginEntry(userId: string) {
   try {
-    const { data: prof } = await supabase.from('profiles').select('name, role').eq('id', userId).single() as any;
+    const hasVpsToken = typeof window !== 'undefined' && !!localStorage.getItem(TOKEN_KEY);
+    const profileClient = hasVpsToken ? supabase : supabaseReal;
+    const { data: prof } = await profileClient.from('profiles').select('name, role').eq('id', userId).single() as any;
     await supabaseReal.from('login_logs').insert({
       user_id: userId,
       user_name: prof?.name || '',
@@ -51,6 +53,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = useCallback(async (userId: string) => {
+    const hasVpsToken = typeof window !== 'undefined' && !!localStorage.getItem(TOKEN_KEY);
+
+    if (!hasVpsToken) {
+      const { data: sbData, error: sbErr } = await supabaseReal
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      if (sbData && !sbErr) {
+        setProfile(sbData as unknown as Profile);
+      }
+      return;
+    }
+
     // Try VPS first
     const { data, error } = await supabase
       .from('profiles')

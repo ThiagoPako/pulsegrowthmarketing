@@ -2,6 +2,7 @@ import React, { createContext, useContext, useCallback, useState, useEffect } fr
 import { useAuth, type Profile } from '@/hooks/useAuth';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { supabase } from '@/lib/vpsDb';
+import { supabase as supabaseReal } from '@/integrations/supabase/client';
 import { usePresenceHeartbeat } from '@/hooks/usePresence';
 import { generateFixedRecordings } from '@/lib/schedulingUtils';
 import { sendRecordingScheduledNotification } from '@/services/whatsappService';
@@ -80,7 +81,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   
   const [users, setUsers] = useState<User[]>([]);
   useEffect(() => {
-    supabase.from('profiles').select('*').then(({ data: profiles }) => {
+    const hasVpsToken = typeof window !== 'undefined' && !!localStorage.getItem('pulse_jwt');
+    const profileClient = hasVpsToken ? supabase : supabaseReal;
+
+    profileClient.from('profiles').select('*').then(({ data: profiles }) => {
       if (profiles) setUsers(profiles.map((p: any) => profileToUser(p as Profile)));
     });
   }, [profile]);

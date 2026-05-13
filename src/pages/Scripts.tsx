@@ -548,7 +548,8 @@ export default function Scripts() {
       const pages: HTMLDivElement[] = [];
       const createPage = () => {
         const page = document.createElement('div');
-        page.style.cssText = `width:${pdfWidthPx}px;height:${pdfHeightPx}px;background:white;box-sizing:border-box;overflow:hidden;position:relative;`;
+        page.className = 'light';
+        page.style.cssText = `width:${pdfWidthPx}px;height:${pdfHeightPx}px;background:white;box-sizing:border-box;overflow:hidden;position:relative;color:#1a1a1a;`;
         renderRoot.appendChild(page);
         pages.push(page);
         return page;

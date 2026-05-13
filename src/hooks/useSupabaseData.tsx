@@ -275,10 +275,29 @@ export function useSupabaseData() {
       invokeVpsFunction('company-settings', { method: 'GET' }),
       invokeVpsFunction('active-recordings', { method: 'GET' }),
     ]);
-    if (cRes.data && !cRes.error) setClients((Array.isArray(cRes.data) ? cRes.data : []).map(rowToClient));
-    if (rRes.data && !rRes.error) setRecordings((Array.isArray(rRes.data) ? rRes.data : []).map(rowToRecording));
-    if (tRes.data && !tRes.error) setTasks((Array.isArray(tRes.data) ? tRes.data : []).map(rowToTask));
-    if (sRes.data && !sRes.error) setScripts((Array.isArray(sRes.data) ? sRes.data : []).map(rowToScript));
+    if (cRes.data && !cRes.error) {
+      const allClients = (Array.isArray(cRes.data) ? cRes.data : []).map(rowToClient);
+      setClients(allClients);
+    }
+    
+    // Create a set of active client IDs for filtering other data
+    const activeClientIds = new Set(
+      (Array.isArray(cRes.data) ? cRes.data : [])
+        .filter((c: any) => c.status !== 'cancelado')
+        .map((c: any) => c.id)
+    );
+
+    if (rRes.data && !rRes.error) {
+      const allRecordings = (Array.isArray(rRes.data) ? rRes.data : []).map(rowToRecording);
+      // Filter out recordings for canceled clients unless they are not 'agendada' (keep history)
+      setRecordings(allRecordings.filter(r => activeClientIds.has(r.clientId) || r.status !== 'agendada'));
+    }
+    if (tRes.data && !tRes.error) {
+      setTasks((Array.isArray(tRes.data) ? tRes.data : []).map(rowToTask).filter(t => activeClientIds.has(t.clientId)));
+    }
+    if (sRes.data && !sRes.error) {
+      setScripts((Array.isArray(sRes.data) ? sRes.data : []).map(rowToScript).filter(s => activeClientIds.has(s.clientId)));
+    }
     if (setRes.data && !setRes.error && setRes.data) {
       setSettings(rowToSettings(setRes.data));
       setSettingsId(setRes.data.id);

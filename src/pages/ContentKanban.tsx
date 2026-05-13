@@ -233,8 +233,7 @@ export default function ContentKanban() {
       try {
         const { data, error } = await supabase
           .from('content_tasks')
-          .select('*')
-          .order('position', { ascending: true });
+          .select('*');
         if (error) throw error;
         if (data) {
           // Fallback: tarefas sem recording_id presas em 'captacao' voltam visualmente para 'ideias'
@@ -242,7 +241,12 @@ export default function ContentKanban() {
             (t.kanban_column === 'captacao' && !t.recording_id)
               ? { ...t, kanban_column: 'ideias' }
               : t
-          );
+          ).sort((a, b) => {
+            const posA = typeof a.position === 'number' ? a.position : Number.MAX_SAFE_INTEGER;
+            const posB = typeof b.position === 'number' ? b.position : Number.MAX_SAFE_INTEGER;
+            if (posA !== posB) return posA - posB;
+            return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+          });
           setTasks(normalized);
         }
         setLoading(false);

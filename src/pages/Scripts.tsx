@@ -732,6 +732,13 @@ export default function Scripts() {
     cleanup();
   }, [buildPdfPages]);
 
+  // Re-generate preview when config changes
+  useEffect(() => {
+    if (previewOpen && viewing) {
+      handlePreviewPdf(viewing);
+    }
+  }, [pdfConfig, previewOpen]);
+
   const handleDownloadPdf = useCallback(async (script: Script) => {
     const { pages, cleanup } = await buildPdfPages([script]);
 

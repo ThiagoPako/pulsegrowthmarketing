@@ -153,6 +153,11 @@ export default function Scripts() {
   const [downloadingBatch, setDownloadingBatch] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPages, setPreviewPages] = useState<HTMLDivElement[]>([]);
+  const [pdfConfig, setPdfConfig] = useState({
+    padding: 28,
+    lineHeight: 1.75,
+    fontSize: 14,
+  });
 
   const toggleScriptAlerts = (v: boolean) => {
     setScriptAlerts(v);

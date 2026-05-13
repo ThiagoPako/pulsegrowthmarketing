@@ -175,6 +175,7 @@ export default function Scripts() {
     localStorage.setItem('pulse_pdf_config', JSON.stringify(pdfConfig));
   }, [pdfConfig]);
   const [overflowWarnings, setOverflowWarnings] = useState<number[]>([]);
+  const [isAutoCorrecting, setIsAutoCorrecting] = useState(false);
 
   const toggleScriptAlerts = (v: boolean) => {
     setScriptAlerts(v);

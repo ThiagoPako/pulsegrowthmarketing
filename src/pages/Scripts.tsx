@@ -167,6 +167,9 @@ export default function Scripts() {
       padding: 28,
       lineHeight: 1.75,
       fontSize: 14,
+      minPadding: 15,
+      minLineHeight: 1.3,
+      minFontSize: 10,
     };
   });
 
@@ -790,18 +793,17 @@ export default function Scripts() {
         
         cleanup();
         
-        // Priority 1: Reduce line height until 1.3
-        if (tempConfig.lineHeight > 1.3) {
-          tempConfig.lineHeight = Math.max(1.3, parseFloat((tempConfig.lineHeight - 0.05).toFixed(2)));
+        // Priority 1: Reduce line height until minLineHeight
+        if (tempConfig.lineHeight > (tempConfig.minLineHeight || 1.3)) {
+          tempConfig.lineHeight = Math.max(tempConfig.minLineHeight || 1.3, parseFloat((tempConfig.lineHeight - 0.05).toFixed(2)));
         } 
-        // Priority 2: Reduce font size until 10
-        else if (tempConfig.fontSize > 10) {
-          tempConfig.fontSize = Math.max(10, tempConfig.fontSize - 1);
-          // Reset line height slightly to allow balance? No, keep it tight.
+        // Priority 2: Reduce font size until minFontSize
+        else if (tempConfig.fontSize > (tempConfig.minFontSize || 10)) {
+          tempConfig.fontSize = Math.max(tempConfig.minFontSize || 10, tempConfig.fontSize - 1);
         }
-        // Priority 3: Reduce padding slightly?
-        else if (tempConfig.padding > 15) {
-          tempConfig.padding = Math.max(15, tempConfig.padding - 2);
+        // Priority 3: Reduce padding slightly until minPadding
+        else if (tempConfig.padding > (tempConfig.minPadding || 15)) {
+          tempConfig.padding = Math.max(tempConfig.minPadding || 15, tempConfig.padding - 2);
         } else {
           break; // Reached limits
         }
@@ -1560,42 +1562,73 @@ export default function Scripts() {
                   </div>
                 )}
                 <div className="space-y-1.5 flex-1 min-w-[120px]">
-                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
-                    <Maximize size={10} /> Margens (px)
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center justify-between gap-1.5">
+                    <span className="flex items-center gap-1.5"><Maximize size={10} /> Margens</span>
+                    <span className="text-[9px] font-normal opacity-70">mín: {pdfConfig.minPadding || 15}px</span>
                   </Label>
                   <Slider 
                     value={[pdfConfig.padding]} 
-                    min={10} 
+                    min={pdfConfig.minPadding || 10} 
                     max={60} 
                     step={2} 
                     onValueChange={([v]) => setPdfConfig(prev => ({ ...prev, padding: v }))} 
                   />
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[9px] text-muted-foreground whitespace-nowrap">Limite auto:</span>
+                    <Input 
+                      type="number" 
+                      className="h-5 w-12 text-[10px] p-1" 
+                      value={pdfConfig.minPadding || 15}
+                      onChange={e => setPdfConfig(prev => ({ ...prev, minPadding: parseInt(e.target.value) || 10 }))}
+                    />
+                  </div>
                 </div>
                 
                 <div className="space-y-1.5 flex-1 min-w-[120px]">
-                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
-                    <AlignJustify size={10} /> Espaçamento
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center justify-between gap-1.5">
+                    <span className="flex items-center gap-1.5"><AlignJustify size={10} /> Espaço</span>
+                    <span className="text-[9px] font-normal opacity-70">mín: {pdfConfig.minLineHeight || 1.3}</span>
                   </Label>
                   <Slider 
                     value={[pdfConfig.lineHeight]} 
-                    min={1.2} 
+                    min={pdfConfig.minLineHeight || 1.2} 
                     max={2.5} 
                     step={0.1} 
                     onValueChange={([v]) => setPdfConfig(prev => ({ ...prev, lineHeight: v }))} 
                   />
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[9px] text-muted-foreground whitespace-nowrap">Limite auto:</span>
+                    <Input 
+                      type="number" 
+                      step="0.1"
+                      className="h-5 w-12 text-[10px] p-1" 
+                      value={pdfConfig.minLineHeight || 1.3}
+                      onChange={e => setPdfConfig(prev => ({ ...prev, minLineHeight: parseFloat(e.target.value) || 1.0 }))}
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-1.5 flex-1 min-w-[120px]">
-                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
-                    <Type size={10} /> Tamanho Fonte
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center justify-between gap-1.5">
+                    <span className="flex items-center gap-1.5"><Type size={10} /> Fonte</span>
+                    <span className="text-[9px] font-normal opacity-70">mín: {pdfConfig.minFontSize || 10}px</span>
                   </Label>
                   <Slider 
                     value={[pdfConfig.fontSize]} 
-                    min={10} 
-                    max={20} 
+                    min={pdfConfig.minFontSize || 10} 
+                    max={24} 
                     step={1} 
                     onValueChange={([v]) => setPdfConfig(prev => ({ ...prev, fontSize: v }))} 
                   />
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[9px] text-muted-foreground whitespace-nowrap">Limite auto:</span>
+                    <Input 
+                      type="number" 
+                      className="h-5 w-12 text-[10px] p-1" 
+                      value={pdfConfig.minFontSize || 10}
+                      onChange={e => setPdfConfig(prev => ({ ...prev, minFontSize: parseInt(e.target.value) || 8 }))}
+                    />
+                  </div>
                 </div>
               </div>
             </div>

@@ -93,7 +93,7 @@ const STEP_LABELS_SEM_CONTRATO = [
 ];
 
 export default function Clients() {
-  const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient, regenerateScheduleForClient, currentUser } = useApp();
+  const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient, regenerateScheduleForClient, currentUser, refetchData } = useApp();
   const { createOnboardingForClient } = useOnboarding();
   const isDesignerOnly = currentUser?.role === 'designer' || currentUser?.role === 'fotografo';
   const [briefingClient, setBriefingClient] = useState<Client | null>(null);

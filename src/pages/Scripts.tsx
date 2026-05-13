@@ -1551,12 +1551,8 @@ export default function Scripts() {
                       variant="outline" 
                       className="h-7 text-[10px] bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-800"
                       onClick={() => {
-                        setPdfConfig(prev => ({
-                          ...prev,
-                          fontSize: Math.max(10, prev.fontSize - 1),
-                          lineHeight: Math.max(1.3, prev.lineHeight - 0.1)
-                        }));
-                        toast.info("Ajustando layout para caber no A4...");
+                        setIsAutoCorrecting(true);
+                        toast.info("Ajustando layout iterativamente para caber no A4...");
                       }}
                     >
                       Corrigir Automaticamente

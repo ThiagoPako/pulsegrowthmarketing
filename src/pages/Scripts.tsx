@@ -691,7 +691,7 @@ export default function Scripts() {
                   const cl = (n as HTMLElement).cloneNode(true) as HTMLElement;
                   cl.style.textAlign = 'left';
                   // Maintain consistent spacing
-                  if (cl.tagName === 'P') cl.style.margin = `0 0 ${pdfConfig.fontSize/2}px`;
+                  if (cl.tagName === 'P') cl.style.margin = `0 0 ${activeConfig.fontSize/2}px`;
                   block.appendChild(cl);
                 }
               }

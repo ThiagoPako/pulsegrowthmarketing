@@ -365,7 +365,7 @@ export default function Scripts() {
         const contentTaskId = crypto.randomUUID();
         const { error } = await supabase.from('content_tasks').insert({
           id: contentTaskId,
-          client_id: form.clientId,
+          client_id: form.clientId || null,
           title: form.title,
           content_type: form.contentFormat || 'reels',
           kanban_column: kanbanColumn,

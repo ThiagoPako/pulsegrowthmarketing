@@ -498,9 +498,10 @@ export default function Scripts() {
     const pdfHeightPx = Math.floor((pdfWidthPx * 297) / 210); // A4 exact height
     const pagePadding = 28;
     const sourceRoot = document.createElement('div');
-    sourceRoot.style.cssText = `position:fixed;left:-20000px;top:0;width:${pdfWidthPx}px;background:white;pointer-events:none;z-index:-1;`;
+    sourceRoot.className = 'light';
+    sourceRoot.style.cssText = `position:fixed;left:-20000px;top:0;width:${pdfWidthPx}px;background:white;pointer-events:none;z-index:-1;color:#1a1a1a;`;
 
-    let html = `<div style="font-family:'Segoe UI', Arial, sans-serif; color:#1a1a1a; background:white;">`;
+    let html = `<div class="light" style="font-family:'Segoe UI', Arial, sans-serif; color:#1a1a1a; background:white;">`;
     html += `<div data-pdf-role="logo" style="margin:0 0 10px;"><img src="${pulseHeader}" style="width:100%;display:block;" /></div>`;
 
     for (let i = 0; i < selectedScripts.length; i++) {

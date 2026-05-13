@@ -174,12 +174,19 @@ export function useFinancialData() {
       supabase.from('financial_activity_log').select('*').order('created_at', { ascending: false }).limit(50),
     ]);
     // Debug logging removed for production
-    if (cRes.data) setContracts(cRes.data as any);
+    if (cRes.data) {
+      // Exclude contracts of canceled clients from main lists if they don't have recorded activity
+      // But for financial accuracy, we usually keep them if they were active in the period.
+      // However, the user asked to ELIMINATE activity for canceled clients.
+      setContracts((cRes.data as any[]).filter(c => activeClientIds.has(c.client_id) || c.status === 'ativo'));
+    }
     if (eRes.data) setExpenses(eRes.data as any);
     else if (eRes.error) console.error('[useFinancialData] expenses fetch error:', eRes.error);
     if (catRes.data) setCategories(catRes.data as any);
     if (pRes.data?.[0]) setPaymentConfigState(pRes.data[0] as any);
-    if (bRes.data) setBillingMessages(bRes.data as any);
+    if (bRes.data) {
+      setBillingMessages((bRes.data as any[]).filter(m => activeClientIds.has(m.client_id)));
+    }
     if (cashRes.data) setCashMovements(cashRes.data as any);
     if (logRes.data) setActivityLog(logRes.data as any);
 

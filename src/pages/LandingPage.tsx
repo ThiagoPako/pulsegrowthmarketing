@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, useScroll, useTransform, useMotionValue, useSpring, AnimatePresence, useInView } from 'framer-motion';
 import {
@@ -1443,6 +1443,21 @@ function ClientLogos() {
 
 // ─── Main ───────────────────────────────────────────────────
 export default function LandingPage() {
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    const hadDark = root.classList.contains('dark');
+    root.classList.remove('dark');
+    root.style.colorScheme = 'light';
+
+    return () => {
+      const currentTheme = localStorage.getItem('pulse_theme');
+      if (currentTheme === 'dark' || (hadDark && !currentTheme)) {
+        root.classList.add('dark');
+        root.style.colorScheme = 'dark';
+      }
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
       <FacebookPixel />

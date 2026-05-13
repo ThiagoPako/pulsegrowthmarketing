@@ -1493,9 +1493,28 @@ export default function Scripts() {
               
               <div className="flex flex-wrap items-center gap-6 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-border">
                 {overflowWarnings.length > 0 && (
-                  <div className="w-full mb-1 p-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-md flex items-center gap-2 text-amber-700 dark:text-amber-400 text-xs animate-pulse">
-                    <AlertTriangle size={14} />
-                    <strong>Aviso de Corte:</strong> Detectamos possível transbordamento de texto nas páginas: {overflowWarnings.map(i => i + 1).join(', ')}. Reduza a fonte ou as margens.
+                  <div className="w-full mb-1 p-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-md flex items-center justify-between gap-2 text-amber-700 dark:text-amber-400 text-xs">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle size={14} className="animate-pulse" />
+                      <div>
+                        <strong>Aviso de Corte:</strong> Detectamos transbordamento nas páginas: {overflowWarnings.map(i => i + 1).join(', ')}.
+                      </div>
+                    </div>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="h-7 text-[10px] bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-800"
+                      onClick={() => {
+                        setPdfConfig(prev => ({
+                          ...prev,
+                          fontSize: Math.max(10, prev.fontSize - 1),
+                          lineHeight: Math.max(1.3, prev.lineHeight - 0.1)
+                        }));
+                        toast.info("Ajustando layout para caber no A4...");
+                      }}
+                    >
+                      Corrigir Automaticamente
+                    </Button>
                   </div>
                 )}
                 <div className="space-y-1.5 flex-1 min-w-[120px]">

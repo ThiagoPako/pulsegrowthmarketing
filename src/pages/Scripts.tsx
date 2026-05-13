@@ -619,7 +619,8 @@ export default function Scripts() {
             const flushAccum = () => {
               if (!accum.length) return;
               const block = document.createElement('div');
-              block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.6; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; word-break:break-word;`;
+              block.className = 'light';
+              block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.6; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; word-break:break-word; color:#1a1a1a;`;
               for (const n of accum) {
                 if (n.nodeType === Node.TEXT_NODE) {
                   const p = document.createElement('p');

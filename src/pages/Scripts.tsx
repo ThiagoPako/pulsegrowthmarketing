@@ -329,41 +329,34 @@ export default function Scripts() {
       let assignedTo: string | null = null;
 
       if (form.directToEditing) {
-        // Check if there are tasks in editing queue
-        const { data: editingTasks } = await supabase
-          .from('content_tasks')
-          .select('id')
-          .eq('kanban_column', 'edicao');
+        // Always go to edicao column
+        kanbanColumn = 'edicao';
         
-        if (!editingTasks || editingTasks.length === 0) {
-          // No tasks in editing → assign to least-busy editor and put in edicao
-          kanbanColumn = 'edicao';
-          const { data: editors } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('role', 'editor');
+        // Find least-busy editor
+        const { data: editors } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('role', 'editor');
+        
+        if (editors && editors.length > 0) {
+          let minTasks = Infinity;
+          let leastBusyEditor: string | null = null;
           
-          if (editors && editors.length > 0) {
-            // Find editor with fewest content_tasks assigned
-            let minTasks = Infinity;
-            let leastBusyEditor: string | null = null;
-            for (const editor of editors) {
-              const { data: editorTasks } = await supabase
-                .from('content_tasks')
-                .select('id')
-                .eq('assigned_to', (editor as any).id)
-                .in('kanban_column', ['edicao', 'revisao']);
-              const count = editorTasks?.length || 0;
-              if (count < minTasks) {
-                minTasks = count;
-                leastBusyEditor = (editor as any).id;
-              }
+          for (const editor of editors) {
+            // Count active tasks for this editor
+            const { data: editorTasks } = await supabase
+              .from('content_tasks')
+              .select('id')
+              .eq('assigned_to', (editor as any).id)
+              .in('kanban_column', ['edicao', 'revisao', 'alteracao']);
+            
+            const count = editorTasks?.length || 0;
+            if (count < minTasks) {
+              minTasks = count;
+              leastBusyEditor = (editor as any).id;
             }
-            assignedTo = leastBusyEditor;
           }
-        } else {
-          // There are tasks in editing → put in waiting (aguardando_edicao)
-          kanbanColumn = 'aguardando_edicao';
+          assignedTo = leastBusyEditor;
         }
       }
 

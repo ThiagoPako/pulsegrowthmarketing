@@ -93,7 +93,7 @@ const STEP_LABELS_SEM_CONTRATO = [
 ];
 
 export default function Clients() {
-  const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient, regenerateScheduleForClient, currentUser } = useApp();
+  const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient, regenerateScheduleForClient, currentUser, refetchData } = useApp();
   const { createOnboardingForClient } = useOnboarding();
   const isDesignerOnly = currentUser?.role === 'designer' || currentUser?.role === 'fotografo';
   const [briefingClient, setBriefingClient] = useState<Client | null>(null);
@@ -743,19 +743,41 @@ export default function Clients() {
         updated_at: new Date().toISOString(),
       } as any).eq('client_id', cancelClient.id);
 
-      // 3. Delete future unpaid revenues (keep only overdue/paid)
+      // 3. Delete all pending activities (revenues "prevista", and also cleanup other pendencies as requested)
       await supabase.from('revenues').delete()
         .eq('client_id', cancelClient.id)
-        .eq('status', 'prevista');
+        .in('status', ['prevista', 'em_atraso', 'vencido']);
+
+      // 4. Delete future scheduled recordings
+      const today = new Date().toISOString().split('T')[0];
+      await supabase.from('recordings').delete()
+        .eq('client_id', cancelClient.id)
+        .eq('status', 'agendada')
+        .gte('date', today);
+
+      // 5. Delete pending content tasks
+      await supabase.from('content_tasks').delete()
+        .eq('client_id', cancelClient.id)
+        .in('kanban_column', ['ideias', 'aguardando_roteiro', 'roteirizacao', 'aguardando_gravacao']);
+
+      // 6. Delete pending scripts
+      await supabase.from('scripts').delete()
+        .eq('client_id', cancelClient.id)
+        .eq('recorded', false);
+
+      toast.success(`${cancelClient.companyName} cancelado e pendências eliminadas`);
+      setCancelDialogOpen(false);
+      setCancelClient(null);
+      setCancelReason('');
+      await refetchData();
 
       // 4. Delete related cash_reserve_movements for deleted revenues
       // (future entries linked to this client that haven't been received)
 
-      toast.success(`${cancelClient.companyName} foi cancelado. Contrato e faturas futuras removidos.`);
       setCancelDialogOpen(false);
       setCancelClient(null);
       setCancelReason('');
-      window.location.reload();
+      await refetchData();
     } catch (err) {
       toast.error('Erro ao cancelar cliente');
     }

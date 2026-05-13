@@ -159,6 +159,10 @@ export function useFinancialData() {
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
+    // Fetch active clients first to filter related data
+    const activeClientsRes = await supabase.from('clients').select('id').neq('status', 'cancelado');
+    const activeClientIds = new Set((activeClientsRes.data || []).map((c: any) => c.id));
+
     const [cRes, rRes, eRes, catRes, pRes, bRes, cashRes, logRes] = await Promise.all([
       supabase.from('financial_contracts').select('*').order('created_at', { ascending: false }),
       supabase.from('revenues').select('*').order('due_date', { ascending: false }),
@@ -170,12 +174,19 @@ export function useFinancialData() {
       supabase.from('financial_activity_log').select('*').order('created_at', { ascending: false }).limit(50),
     ]);
     // Debug logging removed for production
-    if (cRes.data) setContracts(cRes.data as any);
+    if (cRes.data) {
+      // Exclude contracts of canceled clients from main lists if they don't have recorded activity
+      // But for financial accuracy, we usually keep them if they were active in the period.
+      // However, the user asked to ELIMINATE activity for canceled clients.
+      setContracts((cRes.data as any[]).filter(c => activeClientIds.has(c.client_id) || c.status === 'ativo'));
+    }
     if (eRes.data) setExpenses(eRes.data as any);
     else if (eRes.error) console.error('[useFinancialData] expenses fetch error:', eRes.error);
     if (catRes.data) setCategories(catRes.data as any);
     if (pRes.data?.[0]) setPaymentConfigState(pRes.data[0] as any);
-    if (bRes.data) setBillingMessages(bRes.data as any);
+    if (bRes.data) {
+      setBillingMessages((bRes.data as any[]).filter(m => activeClientIds.has(m.client_id)));
+    }
     if (cashRes.data) setCashMovements(cashRes.data as any);
     if (logRes.data) setActivityLog(logRes.data as any);
 
@@ -203,10 +214,11 @@ export function useFinancialData() {
         );
         const updated = await supabase.from('revenues').select('*').order('due_date', { ascending: false });
         if (updated.data) {
-          setRevenues(deduplicateRevenues(updated.data as any[]));
+          const deduplicated = deduplicateRevenues(updated.data as any[]);
+          setRevenues(deduplicated.filter(r => activeClientIds.has(r.client_id)));
         }
       } else {
-        setRevenues(uniqueRevenues);
+        setRevenues(uniqueRevenues.filter(r => activeClientIds.has(r.client_id)));
       }
     }
 

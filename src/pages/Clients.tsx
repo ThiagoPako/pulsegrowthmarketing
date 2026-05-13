@@ -769,13 +769,7 @@ export default function Clients() {
       setCancelDialogOpen(false);
       setCancelClient(null);
       setCancelReason('');
-      // Use re-fetch from context to update the global state
-      const { refetchData: globalRefetch } = useApp.getState?.() || {}; 
-      // Actually refetchData is already in the destructuring at the top of the component
-      // Let's check the top of the component again.
-      // Wait, I see 'refetchData' is not in the destructuring in the current view of the component?
-      // Ah, line 96: const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient, regenerateScheduleForClient, currentUser } = useApp();
-      // It's missing 'refetchData'.
+      await refetchData();
 
       // 4. Delete related cash_reserve_movements for deleted revenues
       // (future entries linked to this client that haven't been received)

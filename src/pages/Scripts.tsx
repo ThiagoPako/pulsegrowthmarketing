@@ -414,6 +414,8 @@ export default function Scripts() {
               { userId: user?.id, clientName: client?.companyName, clientWhatsapp: client?.whatsapp }
             );
             await syncContentTaskColumnChange('edicao', ctx);
+            // Trigger global refetch to update Kanban and other components immediately
+            refetchData();
           }
         }
       }

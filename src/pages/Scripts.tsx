@@ -662,18 +662,18 @@ export default function Scripts() {
               if (!accum.length) return;
               const block = document.createElement('div');
               block.className = 'light';
-              block.style.cssText = `padding:0 ${pagePadding}px; font-size:14px; line-height:1.75; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; word-break:break-word; color:#1a1a1a;`;
+              block.style.cssText = `padding:0 ${pagePadding}px; font-size:${pdfConfig.fontSize}px; line-height:${pdfConfig.lineHeight}; box-sizing:border-box; max-width:100%; overflow:hidden; text-align:left; word-break:break-word; color:#1a1a1a;`;
               for (const n of accum) {
                 if (n.nodeType === Node.TEXT_NODE) {
                   const p = document.createElement('p');
-                  p.style.cssText = 'margin:0 0 6px; text-align:left;';
+                  p.style.cssText = `margin:0 0 ${pdfConfig.fontSize/2}px; text-align:left;`;
                   p.textContent = n.textContent ?? '';
                   block.appendChild(p);
                 } else {
                   const cl = (n as HTMLElement).cloneNode(true) as HTMLElement;
                   cl.style.textAlign = 'left';
                   // Maintain consistent spacing
-                  if (cl.tagName === 'P') cl.style.margin = '0 0 6px';
+                  if (cl.tagName === 'P') cl.style.margin = `0 0 ${pdfConfig.fontSize/2}px`;
                   block.appendChild(cl);
                 }
               }

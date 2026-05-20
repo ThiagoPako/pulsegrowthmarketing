@@ -124,13 +124,11 @@ export function generateFixedRecordings(
   for (const date of dates) {
     if (client.fullShiftRecording) {
       // Full-shift client: reserve both slots in the preferred shift
-      const shift = client.preferredShift === 'tarde'
-        ? [timeToMinutes(settings.shiftBStart), timeToMinutes(settings.shiftBEnd)]
-        : [timeToMinutes(settings.shiftAStart), timeToMinutes(settings.shiftAEnd)];
+      const slots = client.preferredShift === 'tarde'
+        ? ['14:30', '16:30']
+        : ['08:30', '10:30'];
       
-      const [sStart, sEnd] = shift;
-      for (let t = sStart; t + duration <= sEnd; t += duration + BUFFER_BETWEEN_RECORDINGS) {
-        const timeStr = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+      for (const timeStr of slots) {
         if (!hasConflictCheck(client.videomaker, date, timeStr, allRecs, duration)) {
           const rec: Recording = {
             id: crypto.randomUUID(),

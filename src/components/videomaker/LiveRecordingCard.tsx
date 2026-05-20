@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Square, Clock, Video, FileText, Zap, Rocket, Hourglass, Play, RotateCcw } from 'lucide-react';
+import { Square, Clock, Video, FileText, Zap, Rocket, Hourglass, Play, RotateCcw, Coffee } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/vpsDb';

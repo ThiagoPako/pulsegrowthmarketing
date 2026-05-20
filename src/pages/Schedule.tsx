@@ -1740,7 +1740,7 @@ export default function Schedule() {
                         <p className="text-xs font-semibold text-muted-foreground">Horários Disponíveis</p>
                         <div className="grid grid-cols-3 gap-1.5">
                           {slots.map(slot => {
-                            const conflict = hasConflict(form.videomakerId, form.date, slot);
+                            const conflict = hasConflict(form.videomakerId, form.date, slot, undefined, form.type as RecordingType);
                             return (
                               <button key={slot} disabled={conflict}
                                 onClick={() => setForm({ ...form, startTime: slot })}

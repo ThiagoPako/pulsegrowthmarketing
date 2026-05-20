@@ -415,8 +415,9 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
   const isNow = isLive;
   const isDone = item.status === 'concluida';
   const isCancelled = item.status === 'cancelada';
+  const isRescheduled = item.status === 'remarcada' || item.status === 'remarcado';
 
-  const borderColor = isCancelled ? 'rgba(239,68,68,0.2)' : isDone ? 'rgba(34,197,94,0.2)' : isNow ? `${PULSE_ORANGE}44` : 'rgba(255,255,255,0.06)';
+  const borderColor = isCancelled ? 'rgba(239,68,68,0.2)' : isRescheduled ? 'rgba(245,158,11,0.3)' : isDone ? 'rgba(34,197,94,0.2)' : isNow ? `${PULSE_ORANGE}44` : 'rgba(255,255,255,0.06)';
 
   return (
     <motion.div

@@ -760,8 +760,10 @@ function PostCard({ post }: { post: ScheduledPost }) {
 
 /* ─── YouTube Player (com controle remoto via postMessage) ────────────── */
 function YouTubePlayer({ url, command }: { url: string; command: TvRemoteCommand | null }) {
-  const [unmuted, setUnmuted] = useState(true);
+  const [unmuted, setUnmuted] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  
   const embedUrl = useMemo(() => {
     if (!url) return '';
     const mute = unmuted ? 0 : 1;

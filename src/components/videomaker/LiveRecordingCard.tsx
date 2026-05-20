@@ -36,21 +36,68 @@ export default function LiveRecordingCard({
   onCancel,
 }: LiveRecordingCardProps) {
   const [elapsed, setElapsed] = useState(0);
+  const [isLunchBreak, setIsLunchBreak] = useState(false);
+  const [lunchStartedAt, setLunchStartedAt] = useState<Date | null>(null);
   const [isWaiting, setIsWaiting] = useState(false);
   const [waitLogId, setWaitLogId] = useState<string | null>(null);
   const [waitStartedAt, setWaitStartedAt] = useState<Date | null>(null);
   const [waitElapsed, setWaitElapsed] = useState(0);
   const [totalWaitSeconds, setTotalWaitSeconds] = useState(0);
+  const [totalLunchSeconds, setTotalLunchSeconds] = useState(0);
 
   const totalSeconds = recordingDurationMinutes * 60;
 
+  // LUNCH BREAK AUTO-DETECTION & TIMER
+  useEffect(() => {
+    const checkLunch = () => {
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      
+      // Standard lunch break: 12:00 to 13:30 (adjust if settings provide this info)
+      const isLunchTime = timeStr >= '12:00' && timeStr < '13:30';
+      
+      if (isLunchTime && !isLunchBreak) {
+        setIsLunchBreak(true);
+        setLunchStartedAt(now);
+        toast.info("Horário de almoço detectado. O cronômetro foi pausado automaticamente.", { 
+          icon: '🍲',
+          duration: 5000 
+        });
+      } else if (!isLunchTime && isLunchBreak) {
+        setIsLunchBreak(false);
+        if (lunchStartedAt) {
+          const duration = Math.floor((now.getTime() - lunchStartedAt.getTime()) / 1000);
+          setTotalLunchSeconds(prev => prev + duration);
+        }
+        setLunchStartedAt(null);
+        toast.success("Horário de almoço finalizado. O cronômetro foi retomado.", { icon: '🎬' });
+      }
+    };
+
+    checkLunch();
+    const interval = setInterval(checkLunch, 30000); // Check every 30s
+    return () => clearInterval(interval);
+  }, [isLunchBreak, lunchStartedAt]);
+
   useEffect(() => {
     const start = new Date(startedAt).getTime();
-    const tick = () => setElapsed(Math.floor((Date.now() - start) / 1000));
+    const tick = () => {
+      if (!isLunchBreak && !isWaiting) {
+        const now = Date.now();
+        // Subtract total lunch and wait time from the total elapsed
+        const currentLunchTime = lunchStartedAt ? Math.floor((now - lunchStartedAt.getTime()) / 1000) : 0;
+        const currentWaitTime = waitStartedAt ? Math.floor((now - waitStartedAt.getTime()) / 1000) : 0;
+        
+        const rawElapsed = Math.floor((now - start) / 1000);
+        const adjustedElapsed = rawElapsed - (totalLunchSeconds + currentLunchTime) - (totalWaitSeconds + currentWaitTime);
+        
+        setElapsed(Math.max(0, adjustedElapsed));
+      }
+    };
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [startedAt]);
+  }, [startedAt, isLunchBreak, isWaiting, totalLunchSeconds, lunchStartedAt, totalWaitSeconds, waitStartedAt]);
 
   // Wait timer
   useEffect(() => {
@@ -119,7 +166,9 @@ export default function LiveRecordingCard({
       initial={{ opacity: 0, y: -20, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       className={`relative overflow-hidden rounded-2xl border-2 p-5 ${
-        isWaiting
+        isLunchBreak
+          ? 'border-blue-400 bg-blue-400/5'
+          : isWaiting
           ? 'border-warning bg-warning/5'
           : isOvertime
           ? 'border-destructive bg-destructive/5'
@@ -131,7 +180,7 @@ export default function LiveRecordingCard({
       {/* Animated pulse background */}
       <motion.div
         className={`absolute inset-0 ${
-          isWaiting ? 'bg-warning/5' : isOvertime ? 'bg-destructive/5' : isWarning ? 'bg-warning/5' : 'bg-primary/5'
+          isLunchBreak ? 'bg-blue-400/5' : isWaiting ? 'bg-warning/5' : isOvertime ? 'bg-destructive/5' : isWarning ? 'bg-warning/5' : 'bg-primary/5'
         }`}
         animate={{ opacity: [0.3, 0.6, 0.3] }}
         transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
@@ -142,7 +191,7 @@ export default function LiveRecordingCard({
         {[...Array(5)].map((_, i) => (
           <motion.div
             key={i}
-            className={`absolute w-1 h-1 rounded-full ${isOvertime ? 'bg-destructive/30' : isWaiting ? 'bg-warning/30' : 'bg-primary/30'}`}
+            className={`absolute w-1 h-1 rounded-full ${isOvertime ? 'bg-destructive/30' : isLunchBreak ? 'bg-blue-400/30' : isWaiting ? 'bg-warning/30' : 'bg-primary/30'}`}
             initial={{ x: `${20 + i * 15}%`, y: '100%', opacity: 0 }}
             animate={{
               y: ['-10%', '110%'],
@@ -163,19 +212,21 @@ export default function LiveRecordingCard({
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <motion.div
-              className={`w-3 h-3 rounded-full ${isWaiting ? 'bg-warning' : 'bg-destructive'}`}
+              className={`w-3 h-3 rounded-full ${isLunchBreak ? 'bg-blue-400' : isWaiting ? 'bg-warning' : 'bg-destructive'}`}
               animate={{ scale: [1, 1.3, 1], opacity: [1, 0.6, 1] }}
               transition={{ duration: isWaiting ? 2 : 1.5, repeat: Infinity }}
             />
             <div>
               <div className="flex items-center gap-2">
-                {isWaiting ? (
+                {isLunchBreak ? (
+                  <Coffee size={16} className="text-blue-400" />
+                ) : isWaiting ? (
                   <Hourglass size={16} className="text-warning" />
                 ) : (
                   <Video size={16} className="text-primary" />
                 )}
                 <span className="font-display font-bold text-lg">
-                  {isWaiting ? 'EM ESPERA' : 'GRAVAÇÃO AO VIVO'}
+                  {isLunchBreak ? 'EM ALMOÇO' : isWaiting ? 'EM ESPERA' : 'GRAVAÇÃO AO VIVO'}
                 </span>
                 {isStarClient && (
                   <Badge className="bg-warning/20 text-warning border-warning/40 text-[10px] gap-0.5">
@@ -202,7 +253,7 @@ export default function LiveRecordingCard({
               className={`text-2xl font-mono font-bold tabular-nums ${
                 isWaiting ? 'text-warning' : isOvertime ? 'text-destructive' : isWarning ? 'text-warning' : 'text-foreground'
               }`}
-              animate={isWarning || isOvertime || isWaiting ? { scale: [1, 1.05, 1] } : {}}
+              animate={isWarning || isOvertime || isWaiting || isLunchBreak ? { scale: [1, 1.05, 1] } : {}}
               transition={{ duration: 1, repeat: Infinity }}
             >
               {isOvertime ? '+' : ''}{formatTime(isOvertime ? elapsed - totalSeconds : remaining)}
@@ -212,6 +263,31 @@ export default function LiveRecordingCard({
             </p>
           </div>
         </div>
+
+        {/* Lunch break banner */}
+        <AnimatePresence>
+          {isLunchBreak && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-3 rounded-xl border-2 border-blue-400/40 bg-blue-400/10 p-4"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Coffee size={24} className="text-blue-400" />
+                  <div>
+                    <p className="text-sm font-bold text-blue-400">Horário de Almoço</p>
+                    <p className="text-xs text-muted-foreground">Cronômetro pausado automaticamente</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-sm font-medium text-muted-foreground">Retorno às 13:30</span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Waiting banner */}
         <AnimatePresence>
@@ -258,7 +334,7 @@ export default function LiveRecordingCard({
         {/* Progress bar */}
         <div className="mb-4">
           <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-            <span>Decorrido: {formatTime(elapsed)}{totalWaitSeconds > 0 ? ` (espera: ${formatTime(totalWaitSeconds)})` : ''}</span>
+            <span>Decorrido: {formatTime(elapsed)}{totalWaitSeconds > 0 ? ` (espera: ${formatTime(totalWaitSeconds)})` : ''}{totalLunchSeconds > 0 ? ` (almoço: ${formatTime(totalLunchSeconds)})` : ''}</span>
             <span>Duração: {recordingDurationMinutes}min</span>
           </div>
           <div className="relative h-3 w-full overflow-hidden rounded-full bg-secondary">
@@ -270,20 +346,29 @@ export default function LiveRecordingCard({
               animate={{ width: `${Math.min(progress, 100)}%` }}
               transition={{ duration: 0.5 }}
             />
+            {isLunchBreak && (
+              <motion.div 
+                className="absolute inset-0 bg-blue-400/20"
+                animate={{ opacity: [0.2, 0.4, 0.2] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              />
+            )}
             {/* Rocket icon on progress edge */}
             <motion.div
               className="absolute top-1/2 -translate-y-1/2"
               style={{ left: `${Math.min(progress, 98)}%` }}
-              animate={isWaiting ? { x: [0, 0, 0] } : { x: [0, 2, 0] }}
+              animate={isWaiting || isLunchBreak ? { x: [0, 0, 0] } : { x: [0, 2, 0] }}
               transition={{ duration: 0.5, repeat: Infinity }}
             >
-              {isWaiting ? (
+              {isLunchBreak ? (
+                <Coffee size={12} className="text-blue-400" />
+              ) : isWaiting ? (
                 <Hourglass size={12} className="text-warning" />
               ) : (
                 <Rocket size={12} className={`-rotate-45 ${isOvertime ? 'text-destructive' : isWarning ? 'text-warning' : 'text-primary'}`} />
               )}
             </motion.div>
-            {isWarning && !isOvertime && !isWaiting && (
+            {isWarning && !isOvertime && !isWaiting && !isLunchBreak && (
               <motion.div
                 className="absolute inset-0 bg-warning/20 rounded-full"
                 animate={{ opacity: [0, 0.5, 0] }}
@@ -295,7 +380,7 @@ export default function LiveRecordingCard({
 
         {/* Warning messages */}
         <AnimatePresence>
-          {isWarning && !isOvertime && !isWaiting && (
+          {isWarning && !isOvertime && !isWaiting && !isLunchBreak && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
@@ -308,7 +393,7 @@ export default function LiveRecordingCard({
               </p>
             </motion.div>
           )}
-          {isOvertime && !isWaiting && (
+          {isOvertime && !isWaiting && !isLunchBreak && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
@@ -376,6 +461,7 @@ export default function LiveRecordingCard({
             <Button
               onClick={async () => {
                 if (isWaiting) await handleStopWaiting();
+                if (isLunchBreak) setIsLunchBreak(false);
                 onFinish();
               }}
               className={`w-full gap-2 font-bold text-sm py-4 rounded-xl shadow-lg transition-all ${

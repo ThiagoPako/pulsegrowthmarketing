@@ -1350,6 +1350,16 @@ export default function TvDashboard() {
                         </div>
                       );
 
+                      // Fixed 14:00 - 14:30 Prep block
+                      const prep14StartPx = (14 * 60 - OPERATIONAL_START) * MINUTE_HEIGHT;
+                      const prep14HeightPx = 30 * MINUTE_HEIGHT;
+                      items.push(
+                        <div key="prep-14-break" className="absolute left-0 right-0 pr-1" style={{ top: `${prep14StartPx}px`, height: `${prep14HeightPx}px` }}>
+                          <BufferCard startTime="14:00" type="prep" height={prep14HeightPx} />
+                        </div>
+                      );
+                      addedBuffers.add("14:00");
+
                       const timelineSchedule = schedule.filter(item => {
                         const [h, m] = item.startTime.split(':').map(Number);
                         const t = h * 60 + m;

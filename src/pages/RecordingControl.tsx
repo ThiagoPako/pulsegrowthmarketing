@@ -147,7 +147,8 @@ export default function RecordingControl() {
         if (targetTime && STANDARD_SLOTS.includes(targetTime)) {
           updates.fixed_time = targetTime;
         }
-        await supabase.from('clients').update(updates).eq('id', client.id);
+        await (supabase as any).from('clients').update(updates).eq('id', client.id);
+
       }
 
       toast.success(
